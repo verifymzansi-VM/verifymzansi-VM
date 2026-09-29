@@ -1,4 +1,10 @@
 "use client";
+import {
+  BusinessContactFields,
+  readContactMethods,
+  selectedContacts,
+} from "@/components/post/business-contact-fields";
+import { PostSelect } from "@/components/post/post-select";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
@@ -7,9 +13,6 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2,
-  Phone,
-  Mail,
-  MessageCircle,
   CreditCard,
   Truck,
   Wrench,
@@ -22,9 +25,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
@@ -35,6 +37,7 @@ import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
 import { LocationSelector } from "@/components/ui/location-selector";
 import {
+  ALL_BUSINESS_CATEGORIES,
   BUSINESS_CATEGORIES,
   BUSINESS_TYPE_OPTIONS,
   TOURISM_SUBCATEGORIES,
@@ -43,7 +46,6 @@ import {
   getCategoryDetailFields,
   getDefaultCategoryDetails,
 } from "@/lib/forms/business-category-details";
-import { cn } from "@/lib/utils";
 import { usePlanVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { normalizeCreatePostRuntimeError } from "@/app/post/_lib/create-post-errors";
 import {
@@ -51,6 +53,15 @@ import {
   uploadRequiredBusinessMedia,
   uploadRequiredBusinessVideo,
 } from "@/app/post/_lib/business-media-upload";
+import { CustomerAccessFields } from "@/components/post/customer-access-fields";
+import { BusinessCategoryPicker } from "@/components/post/business-category-picker";
+import {
+  legacyAccessFromRecord,
+  readCustomerAccess,
+  customerAccessSchema,
+  primaryBusinessType,
+  cleanCustomerAccess,
+} from "@/lib/forms/customer-access";
 import { parseServiceAreas, validateBusinessForm } from "@/lib/forms/business-form";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
@@ -60,7 +71,6 @@ import {
   hasBusinessDeliveryAvailable,
   sanitizeBusinessDetailsForSubmission,
 } from "@/lib/forms/business-type-details";
-import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
@@ -122,6 +132,11 @@ export default function EditBusinessPage() {
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [categoryDetails, setCategoryDetails] = useState<Record<string, unknown>>({});
+  // Businesses saved before customer access existed keep their type-specific details.
+  const hadStoredAccess = useRef(false);
+  const categoryAnswers = useRef<
+    Record<string, { subcategory: string; details: Record<string, unknown> }>
+  >({});
 
   // Location
   const [province, setProvince] = useState("");
@@ -137,6 +152,9 @@ export default function EditBusinessPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
+  const contactValues = { phone, whatsapp, email, website };
+  const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
+  const publicContacts = selectedContacts(contactMethods, contactValues);
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
@@ -215,17 +233,35 @@ export default function EditBusinessPage() {
         const b = data.business;
 
         setListingArea(b.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS");
+        hadStoredAccess.current = Boolean(b.category_details?.customer_access);
         setBusinessType(b.business_type || "standalone_shop");
         setBusinessName(b.business_name || "");
         setSlug(b.slug || "");
         setDescription(b.description || "");
         setCategory(b.category || "");
         setSubcategory(b.subcategory || "");
-        setCategoryDetails(
-          b.category_details && typeof b.category_details === "object"
-            ? (b.category_details as Record<string, unknown>)
-            : {}
-        );
+        setCategoryDetails({
+          ...(b.category_details ?? {}),
+          customer_access:
+            b.category_details?.customer_access ??
+            legacyAccessFromRecord({
+              businessType: b.business_type || "standalone_shop",
+              venue: b.business_details?.mall_name || b.business_details?.market_name || "",
+              serviceAreas: b.service_areas?.areas ?? [],
+              deliveryRegions:
+                b.business_details?.type === "online_only"
+                  ? (b.business_details.delivery_regions ?? [])
+                  : [],
+              deliveryAvailable: hasBusinessDeliveryAvailable(
+                b.delivery_options,
+                b.business_details
+              ),
+              nationwide:
+                Array.isArray(b.delivery_options) && b.delivery_options.includes("nationwide"),
+              city: b.location_city || "",
+              hasAddress: Boolean(b.location_address),
+            }),
+        });
         setProvince(b.location_province || "");
         setCity(b.location_city || "");
         setLocationTown(b.location_town || "");
@@ -245,7 +281,10 @@ export default function EditBusinessPage() {
         setExistingVideoThumbnail(b.video_thumbnail || "");
         setExistingGalleryPhotos(b.gallery_photos || []);
         setExistingMallPhotos(
-          b.business_details?.type === "mall_store" ? (b.business_details.mall_photos ?? []) : []
+          b.category_details?.venue_photos ??
+            (b.business_details?.type === "mall_store"
+              ? (b.business_details.mall_photos ?? [])
+              : [])
         );
         setServices(b.services_offered || []);
         setPaymentMethods(b.payment_methods_accepted || []);
@@ -365,18 +404,6 @@ export default function EditBusinessPage() {
     setDeliveryOptions(getNormalizedDeliveryOptions(deliveryAvailable));
   }
 
-  function clearOnlineOnlyDeliveryDetails() {
-    setBusinessDetails((current) => {
-      if (businessType !== "online_only" || current.type !== "online_only") {
-        return current;
-      }
-
-      const { delivery_regions: _deliveryRegions, ...rest } = current;
-      return rest as BusinessDetails;
-    });
-    clearErrors("business_details.delivery_regions");
-  }
-
   async function handleSubmit() {
     if (submissionInFlightRef.current) return;
     submissionInFlightRef.current = true;
@@ -401,16 +428,49 @@ export default function EditBusinessPage() {
         storeNumber: storeNumber.trim(),
         serviceAreasInput,
         mapDirections: mapDirections.trim(),
-        phone: phone.trim(),
-        whatsapp: whatsapp.trim(),
-        email: email.trim(),
-        website: website.trim(),
+        phone: publicContacts.phone.trim(),
+        whatsapp: publicContacts.whatsapp.trim(),
+        email: publicContacts.email.trim(),
+        website: publicContacts.website.trim(),
         socialFacebook: socialFacebook.trim(),
         socialInstagram: socialInstagram.trim(),
         socialTwitter: socialTwitter.trim(),
         socialTiktok: socialTiktok.trim(),
       });
 
+      if (categoryDetails.customer_access) {
+        for (const key of Object.keys(validationErrors))
+          if (
+            key.startsWith("business_details.") ||
+            ["store_number", "service_areas", "map_directions"].includes(key)
+          )
+            delete validationErrors[key];
+        const result = customerAccessSchema.safeParse(categoryDetails.customer_access);
+        if (!result.success)
+          for (const issue of result.error.issues)
+            validationErrors[`customer_access.${issue.path.join(".")}`] = issue.message;
+        if (!contactMethods.length)
+          validationErrors.contact_methods = "Choose at least one contact method.";
+        for (const [method, field] of [
+          ["call", "phone"],
+          ["whatsapp", "whatsapp"],
+          ["email", "email"],
+          ["website", "website"],
+        ] as const) {
+          if (contactMethods.includes(method) && !publicContacts[field].trim())
+            validationErrors[field] = "Enter the details for this contact method, or deselect it.";
+        }
+        const access = readCustomerAccess(categoryDetails.customer_access);
+        if (access.methods.some((method) => method !== "online")) {
+          if (!province) validationErrors.location_province = "Select a province.";
+          if (!city) validationErrors.location_city = "Select a city or town.";
+        }
+        if (access.publishAddress && !locationAddress.trim())
+          validationErrors.location_address =
+            "Enter the visitor address you want to publish, or turn off public address visibility.";
+        if (!description.trim())
+          validationErrors.description = "Tell customers about your business.";
+      }
       if (newGalleryFiles.length > maxPhotos) {
         validationErrors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
       }
@@ -525,7 +585,7 @@ export default function EditBusinessPage() {
 
       // Build operating hours
       const operatingHours: Record<string, string> = {};
-      if (businessType === "market_stall") {
+      if (businessType === "market_stall" && !categoryDetails.customer_access) {
         const td = (businessDetails as unknown as Record<string, unknown>).trading_days as
           string[] | undefined;
         const th = (businessDetails as unknown as Record<string, unknown>).trading_hours as
@@ -567,6 +627,7 @@ export default function EditBusinessPage() {
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
       const body = {
+        contact_methods: contactMethods,
         business_name: businessName,
         slug,
         business_type: businessType,
@@ -579,10 +640,10 @@ export default function EditBusinessPage() {
         location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
         map_directions: mapDirections || undefined,
-        phone: phone || undefined,
-        whatsapp: whatsapp || undefined,
-        email: email || undefined,
-        website: website || undefined,
+        phone: publicContacts.phone || undefined,
+        whatsapp: publicContacts.whatsapp || undefined,
+        email: publicContacts.email || undefined,
+        website: publicContacts.website || undefined,
         logo_url: finalLogoUrl || undefined,
         cover_photo: finalCoverPhoto || undefined,
         cover_video: finalCoverVideo || undefined,
@@ -590,8 +651,16 @@ export default function EditBusinessPage() {
         gallery_photos: finalGalleryPhotos.length > 0 ? finalGalleryPhotos : [],
         services_offered: services,
         service_areas: serviceAreas,
-        business_details: finalBusinessDetails,
-        category_details: Object.keys(categoryDetails).length > 0 ? categoryDetails : undefined,
+        business_details: hadStoredAccess.current ? undefined : finalBusinessDetails,
+        category_details: categoryDetails.customer_access
+          ? {
+              ...categoryDetails,
+              customer_access: cleanCustomerAccess(
+                readCustomerAccess(categoryDetails.customer_access)
+              ),
+              venue_photos: finalMallPhotos,
+            }
+          : categoryDetails,
         operating_hours: operatingHours,
         payment_methods_accepted: paymentMethods,
         delivery_options: normalizedDeliveryOptions,
@@ -745,7 +814,7 @@ export default function EditBusinessPage() {
 
               {/* Basic Information */}
               <div className="space-y-2">
-                <Label htmlFor="businessName">Business Name</Label>
+                <Label htmlFor="businessName">Business Name *</Label>
                 <Input
                   id="businessName"
                   value={businessName}
@@ -755,7 +824,7 @@ export default function EditBusinessPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
+                <Label htmlFor="slug">Custom profile link (Optional)</Label>
                 <Input
                   id="slug"
                   value={slug}
@@ -765,7 +834,7 @@ export default function EditBusinessPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">About your business *</Label>
                 <Textarea
                   id="description"
                   value={description}
@@ -778,12 +847,12 @@ export default function EditBusinessPage() {
               {/* Services Offered (with category suggestions) */}
               <div className="space-y-3">
                 <Label htmlFor="edit-business-service-input" className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Services
-                  Offered
+                  <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> Products
+                  and services (Optional)
                 </Label>
                 {category &&
                   (() => {
-                    const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                    const catDef = ALL_BUSINESS_CATEGORIES.find((c) => c.value === category);
                     const suggestions = catDef?.serviceSuggestions ?? [];
                     const unselected = suggestions.filter((s) => !services.includes(s));
                     if (unselected.length === 0) return null;
@@ -846,57 +915,20 @@ export default function EditBusinessPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Category</Label>
-                {/* If the saved category is not in the picker (e.g. tourism_hospitality
-                    which is now created via /post/create-tourism), show it as a locked badge */}
-                {category && !BUSINESS_CATEGORIES.some((c) => c.value === category) ? (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-sm">
-                      {BUSINESS_CATEGORY_LABELS[
-                        category as keyof typeof BUSINESS_CATEGORY_LABELS
-                      ] ?? category}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">(locked)</span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {BUSINESS_CATEGORIES.map((item) => {
-                      const Icon = item.icon;
-                      const selected = category === item.value;
-                      return (
-                        <button
-                          key={item.value}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => {
-                            setCategory(item.value);
-                            setSubcategory("");
-                            setCategoryDetails(
-                              getDefaultCategoryDetails(item.value as BusinessCategory)
-                            );
-                          }}
-                          className={cn(
-                            "flex min-h-[4.25rem] items-center gap-2.5 rounded-2xl border p-3 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                            selected
-                              ? "border-brand-blue-600 bg-brand-blue-50 ring-1 ring-brand-blue-600 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:ring-brand-blue-400"
-                              : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
-                          )}
-                        >
-                          <Icon
-                            aria-hidden="true"
-                            className={cn(
-                              "h-5 w-5 shrink-0",
-                              selected
-                                ? "text-brand-blue-700 dark:text-brand-blue-300"
-                                : "text-muted-foreground"
-                            )}
-                          />
-                          <span className="font-semibold leading-tight">{item.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <Label required>What does your business mainly do?</Label>
+                <BusinessCategoryPicker
+                  value={category}
+                  onChange={(value) => {
+                    categoryAnswers.current[category] = { subcategory, details: categoryDetails };
+                    setCategory(value);
+                    setSubcategory(categoryAnswers.current[value]?.subcategory ?? "");
+                    setCategoryDetails((current) => ({
+                      ...(categoryAnswers.current[value]?.details ??
+                        getDefaultCategoryDetails(value)),
+                      customer_access: current.customer_access,
+                    }));
+                  }}
+                />
               </div>
 
               {/* Subcategory dropdown */}
@@ -910,8 +942,8 @@ export default function EditBusinessPage() {
                   if (subcats.length === 0) return null;
                   return (
                     <div className="space-y-2">
-                      <Label htmlFor="subcategory">Subcategory</Label>
-                      <select
+                      <Label htmlFor="subcategory">Specific business activity (Optional)</Label>
+                      <PostSelect
                         id="subcategory"
                         aria-label="Subcategory"
                         className={selectClass}
@@ -924,7 +956,7 @@ export default function EditBusinessPage() {
                             {sub.label}
                           </option>
                         ))}
-                      </select>
+                      </PostSelect>
                     </div>
                   );
                 })()}
@@ -1041,7 +1073,7 @@ export default function EditBusinessPage() {
                           return (
                             <div key={field.name} className="space-y-1">
                               <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
-                              <select
+                              <PostSelect
                                 id={`cat-${field.name}`}
                                 className={selectClass}
                                 aria-label={field.label}
@@ -1059,7 +1091,7 @@ export default function EditBusinessPage() {
                                     {opt.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                               {field.description && (
                                 <p className="text-xs text-muted-foreground">{field.description}</p>
                               )}
@@ -1111,112 +1143,40 @@ export default function EditBusinessPage() {
                   setLocationAddress(newLocation.address || "");
                 }}
                 showTown={true}
-                showAddress={true}
+                showAddress={readCustomerAccess(categoryDetails.customer_access).methods.includes(
+                  "visit"
+                )}
+                areaRequired={readCustomerAccess(categoryDetails.customer_access).methods.some(
+                  (method) => method !== "online"
+                )}
+                addressRequired={readCustomerAccess(categoryDetails.customer_access).publishAddress}
                 errors={fieldErrors}
               />
 
-              <BusinessTypeDetailsFields
-                businessType={businessType}
-                businessDetails={businessDetails}
-                onBusinessDetailsChange={(name, value) => {
-                  setBusinessDetails(
-                    (current) => ({ ...current, [name]: value }) as BusinessDetails
-                  );
-                  clearErrors(`business_details.${name}`);
+              <CustomerAccessFields
+                value={readCustomerAccess(categoryDetails.customer_access)}
+                onChange={(access) => {
+                  setCategoryDetails((current) => ({ ...current, customer_access: access }));
+                  setBusinessType(primaryBusinessType(access));
                 }}
-                deliveryAvailable={deliveryOptions.length > 0}
-                onDeliveryAvailableChange={(nextDeliveryAvailable) => {
-                  setDeliveryAvailable(nextDeliveryAvailable);
-                  if (!nextDeliveryAvailable) {
-                    clearOnlineOnlyDeliveryDetails();
-                  }
-                }}
-                storeNumber={storeNumber}
-                onStoreNumberChange={(value) => {
-                  setStoreNumber(value);
-                  clearErrors("store_number");
-                }}
-                serviceAreasInput={serviceAreasInput}
-                onServiceAreasChange={(value) => {
-                  setServiceAreasInput(value);
-                  clearErrors("service_areas");
-                }}
-                mapDirections={mapDirections}
-                onMapDirectionsChange={(value) => {
-                  setMapDirections(value);
-                  clearErrors("map_directions");
-                }}
-                fieldErrors={fieldErrors}
-                selectClassName={selectClass}
               />
 
-              {/* Contact */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-1.5">
-                    <Phone className="h-4 w-4 text-muted-foreground" /> Phone
-                  </Label>
-                  <Input
-                    id="phone"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="082 000 0000"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="whatsapp" className="flex items-center gap-1.5">
-                    <MessageCircle className="h-4 w-4 text-green-600" /> WhatsApp
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="whatsapp"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      value={whatsapp}
-                      onChange={(e) => setWhatsapp(e.target.value)}
-                      placeholder="082 000 0000"
-                    />
-                    {phone && !whatsapp && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setWhatsapp(phone)}
-                        className="shrink-0 text-xs"
-                      >
-                        Copy from phone
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-1.5">
-                    <Mail className="h-4 w-4 text-muted-foreground" /> Email
-                  </Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    spellCheck={false}
-                    autoCapitalize="none"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    id="website"
-                    autoComplete="url"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
+              <BusinessContactFields
+                methods={contactMethods}
+                values={contactValues}
+                errors={fieldErrors}
+                onMethods={(methods) =>
+                  setCategoryDetails((current) => ({ ...current, contact_methods: methods }))
+                }
+                onValue={(field, value) =>
+                  ({
+                    phone: setPhone,
+                    whatsapp: setWhatsapp,
+                    email: setEmail,
+                    website: setWebsite,
+                  })[field](value)
+                }
+              />
 
               {/* Social */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1263,7 +1223,7 @@ export default function EditBusinessPage() {
               </div>
 
               {/* Operating Hours */}
-              {businessType === "market_stall" ? (
+              {businessType === "market_stall" && !categoryDetails.customer_access ? (
                 <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">Operating Hours</p>
                   <p className="mt-1">
@@ -1272,7 +1232,7 @@ export default function EditBusinessPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <Label>Operating Hours</Label>
+                  <Label>Opening hours</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <OperatingHoursInput
                       id="hoursMonFri"
@@ -1308,7 +1268,8 @@ export default function EditBusinessPage() {
                 </div>
               )}
 
-              {businessType !== "online_only" && (
+              {/* Profiles with customer access answer delivery in "How do you serve customers?". */}
+              {businessType !== "online_only" && !categoryDetails.customer_access && (
                 <div className="space-y-3">
                   <Label className="flex items-center gap-2">
                     <Truck className="h-4 w-4 text-muted-foreground" /> Delivery Service
@@ -1339,7 +1300,7 @@ export default function EditBusinessPage() {
                 existingGalleryPhotos.length > 0 ||
                 existingMallPhotos.length > 0) && (
                 <div className="space-y-3">
-                  <Label>Current Media</Label>
+                  <p className="text-sm font-medium">Current media</p>
                   <div className="flex flex-wrap gap-4">
                     {existingLogo && (
                       <div className="space-y-1">
@@ -1462,7 +1423,7 @@ export default function EditBusinessPage() {
 
               {/* Upload new media */}
               <div className="space-y-4">
-                <Label className="text-sm font-medium">Upload New Media</Label>
+                <p className="text-sm font-medium">Upload new media (optional)</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <MediaUpload
@@ -1695,14 +1656,22 @@ export default function EditBusinessPage() {
                       location_city: city || null,
                       location_province: province || null,
                       location_town: locationTown || null,
-                      location_address: locationAddress || null,
-                      phone: phone || null,
-                      whatsapp: whatsapp || null,
-                      email: email || null,
-                      website: website || null,
+                      location_address:
+                        !categoryDetails.customer_access ||
+                        readCustomerAccess(categoryDetails.customer_access).publishAddress
+                          ? locationAddress || null
+                          : null,
+                      phone: publicContacts.phone || null,
+                      whatsapp: publicContacts.whatsapp || null,
+                      email: publicContacts.email || null,
+                      website: publicContacts.website || null,
                       store_number: storeNumber || null,
-                      map_directions: mapDirections || null,
-                      business_details: previewMallDetails,
+                      map_directions:
+                        !categoryDetails.customer_access ||
+                        readCustomerAccess(categoryDetails.customer_access).publishAddress
+                          ? mapDirections || null
+                          : null,
+                      business_details: categoryDetails.customer_access ? null : previewMallDetails,
                       layout_template: layoutTemplate,
                     } as BusinessDetailRecord
                   }

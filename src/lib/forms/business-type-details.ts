@@ -57,16 +57,6 @@ const SUPPORT_RESPONSE_TIME_OPTIONS: SelectOption[] = [
   { value: "Within 2-3 days", label: "Within 2-3 days" },
 ];
 
-export const DAYS_OF_WEEK: SelectOption[] = [
-  { value: "Monday", label: "Monday" },
-  { value: "Tuesday", label: "Tuesday" },
-  { value: "Wednesday", label: "Wednesday" },
-  { value: "Thursday", label: "Thursday" },
-  { value: "Friday", label: "Friday" },
-  { value: "Saturday", label: "Saturday" },
-  { value: "Sunday", label: "Sunday" },
-];
-
 const WALK_IN_POLICY_OPTIONS: SelectOption[] = [
   { value: "walk_ins_welcome", label: "Walk-ins welcome" },
   { value: "appointments_preferred", label: "Appointments preferred" },
@@ -416,8 +406,4 @@ export function sanitizeBusinessDetailsForSubmission(
     ...details,
     delivery_regions: normalizedRegions,
   };
-}
-
-export function stringifyListValue(value: unknown): string {
-  return Array.isArray(value) ? value.join(", ") : "";
 }

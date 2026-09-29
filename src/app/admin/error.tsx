@@ -1,11 +1,14 @@
 "use client";
 
-import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import { useEffect } from "react";
-
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
+import { Button } from "@/components/ui/button";
 
+/**
+ * Shown inside the admin layout, so the header and menu stay in place and
+ * staff can move to another page.
+ */
 export default function AdminError({
   error,
   reset,
@@ -18,43 +21,29 @@ export default function AdminError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-50 w-full border-b bg-background">
-        <div className="container-page flex h-16 items-center">
-          <Link href="/" className="text-lg font-bold">
-            VerifyMzansi
-          </Link>
-        </div>
-      </header>
-      <main
-        id="main-content"
-        className="flex-1 flex flex-col items-center justify-center gap-6 px-4 text-center"
-      >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-          <ShieldAlert className="h-7 w-7 text-destructive" />
-        </div>
-        <div className="max-w-md space-y-2">
-          <h1 className="text-lg sm:text-xl font-display font-bold">Admin Panel Error</h1>
-          <p className="text-sm text-muted-foreground">
-            An error occurred in the admin panel. If this persists, contact the engineering team.
-          </p>
-          {error.digest && <p className="text-xs text-muted-foreground">Ref: {error.digest}</p>}
-        </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button variant="outline" asChild>
-            <Link href="/">Go to homepage</Link>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() =>
-              window.location.assign(new URL("/admin", window.location.origin).toString())
-            }
-          >
-            Reload Admin
-          </Button>
-          <Button onClick={() => reset()}>Retry</Button>
-        </div>
-      </main>
+    <div
+      role="alert"
+      className="flex flex-col items-center justify-center gap-5 px-4 py-16 text-center"
+    >
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+        <ShieldAlert className="h-7 w-7 text-destructive" aria-hidden="true" />
+      </div>
+      <div className="max-w-md space-y-2">
+        <h1 className="font-display text-lg font-bold sm:text-xl">This page could not load</h1>
+        <p className="text-sm text-muted-foreground">
+          Nothing was changed. Try again, or open another page from the menu. If it keeps happening,
+          send the reference below to the platform team.
+        </p>
+        {error.digest && <p className="text-xs text-muted-foreground">Reference: {error.digest}</p>}
+      </div>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button onClick={() => reset()} className="h-11">
+          Try again
+        </Button>
+        <Button variant="outline" asChild className="h-11">
+          <Link href="/admin">Go to admin home</Link>
+        </Button>
+      </div>
     </div>
   );
 }

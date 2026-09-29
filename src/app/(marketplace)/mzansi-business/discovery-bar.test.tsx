@@ -90,7 +90,7 @@ describe("BusinessDiscoveryBar", () => {
 
     render(<BusinessDiscoveryBar />);
 
-    expect(screen.getByText("Fashion & Accessories", { selector: "div" })).toBeInTheDocument();
+    expect(screen.getByText("Clothing & Accessories", { selector: "div" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /remove business category filter/i }));
     expect(setFilter).toHaveBeenCalledWith("businessCategory", undefined);
@@ -151,12 +151,14 @@ describe("BusinessDiscoveryBar", () => {
     useMarketplaceStoreMock.mockImplementation(() => storeState);
 
     const { rerender } = render(<BusinessDiscoveryBar />);
-    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "local draft" } });
+    fireEvent.change(screen.getByLabelText("Find a business"), {
+      target: { value: "local draft" },
+    });
 
     storeState.filters = { ...storeState.filters, query: "synced from store" };
     rerender(<BusinessDiscoveryBar />);
 
-    expect(screen.getByLabelText("Search")).toHaveValue("synced from store");
+    expect(screen.getByLabelText("Find a business")).toHaveValue("synced from store");
   });
 
   it("keeps focus and the typed text when the debounced query commits", () => {
@@ -168,7 +170,7 @@ describe("BusinessDiscoveryBar", () => {
     useMarketplaceStoreMock.mockImplementation(() => ({ filters, setFilter, resetFilters }));
 
     const { rerender } = render(<BusinessDiscoveryBar />);
-    const input = screen.getByLabelText("Search");
+    const input = screen.getByLabelText("Find a business");
     input.focus();
     fireEvent.change(input, { target: { value: "plumb" } });
 
@@ -176,7 +178,7 @@ describe("BusinessDiscoveryBar", () => {
     filters = { ...filters, query: "plumb" };
     rerender(<BusinessDiscoveryBar />);
 
-    expect(screen.getByLabelText("Search")).toBe(input);
+    expect(screen.getByLabelText("Find a business")).toBe(input);
     expect(input).toHaveFocus();
     expect(input).toHaveValue("plumb");
   });
@@ -184,7 +186,7 @@ describe("BusinessDiscoveryBar", () => {
   it("applies the query filter when the search input changes", () => {
     render(<BusinessDiscoveryBar />);
 
-    fireEvent.input(screen.getByLabelText("Search"), { target: { value: "coffee" } });
+    fireEvent.input(screen.getByLabelText("Find a business"), { target: { value: "coffee" } });
 
     return waitFor(() => {
       expect(setFilter).toHaveBeenCalledWith("query", "coffee");
@@ -195,9 +197,8 @@ describe("BusinessDiscoveryBar", () => {
     render(<BusinessDiscoveryBar />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Search")).toBeEnabled();
+      expect(screen.getByLabelText("Find a business")).toBeEnabled();
       expect(screen.getByLabelText("Category")).toBeEnabled();
-      expect(screen.getByLabelText("Business type")).toBeEnabled();
       expect(screen.getByLabelText("Province")).toBeEnabled();
     });
   });

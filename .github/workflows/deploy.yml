@@ -200,6 +200,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
+      # Runs moderation notices, DSAR notices and auth metadata syncs every
+      # minute. Needs OPS_JOBS_SECRET set on this worker and on the app; until
+      # then the app's endpoint refuses its calls and jobs wait in the queue.
+      - name: Deploy Ops Jobs Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config wrangler.ops-jobs.toml
+
       - name: Post-deploy health check
         id: health-check
         env:

@@ -1,3 +1,4 @@
+import { businessCategoryFilterValues } from "@/lib/constants/categories";
 import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import { NextResponse, type NextRequest } from "next/server";
@@ -752,7 +753,7 @@ export async function GET(request: NextRequest) {
         query = query.eq("business_type", businessType);
       }
       if (category) {
-        query = query.eq("category", category);
+        query = query.in("category", businessCategoryFilterValues(category));
       }
       if (subcategory && selectClause.includes("subcategory")) {
         query = query.eq("subcategory", subcategory);

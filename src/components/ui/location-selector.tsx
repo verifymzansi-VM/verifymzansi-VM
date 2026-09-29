@@ -39,6 +39,7 @@ export interface LocationSelectorProps {
   /** Mark address as required (default: false) */
   addressRequired?: boolean;
   disabled?: boolean;
+  areaRequired?: boolean;
   /** Per-field error messages keyed by "province" | "city" | "town" | "address" */
   errors?: Partial<Record<"province" | "city" | "town" | "address", string>>;
   className?: string;
@@ -49,13 +50,14 @@ export function LocationSelector({
   onChange,
   idPrefix,
   provinceLabel = "Province",
-  cityLabel = "City",
+  cityLabel = "City or town",
   showTown = true,
   suggestTownOptions = true,
   showAddress = false,
   townRequired = false,
   addressRequired = false,
   disabled = false,
+  areaRequired = true,
   errors,
   className,
 }: LocationSelectorProps) {
@@ -88,8 +90,8 @@ export function LocationSelector({
         <div className="space-y-1.5">
           <Label htmlFor={provinceId} className="text-sm">
             {provinceLabel}{" "}
-            <span aria-hidden="true" className="text-destructive">
-              *
+            <span className="font-normal text-muted-foreground">
+              ({areaRequired ? "Required" : "Optional"})
             </span>
           </Label>
           <select
@@ -126,8 +128,8 @@ export function LocationSelector({
         <div className="space-y-1.5">
           <Label htmlFor={cityId} className="text-sm">
             {cityLabel}{" "}
-            <span aria-hidden="true" className="text-destructive">
-              *
+            <span className="font-normal text-muted-foreground">
+              ({areaRequired ? "Required" : "Optional"})
             </span>
           </Label>
           <select
@@ -167,13 +169,9 @@ export function LocationSelector({
           <Label htmlFor={townId} className="text-sm">
             Town / Suburb{" "}
             {townRequired ? (
-              <span aria-hidden="true" className="text-destructive">
-                *
-              </span>
+              <span className="font-normal text-muted-foreground">(Required)</span>
             ) : (
-              <span aria-hidden="true" className="font-normal text-muted-foreground">
-                (optional)
-              </span>
+              <span className="font-normal text-muted-foreground">(Optional)</span>
             )}
           </Label>
           <Input
@@ -208,13 +206,9 @@ export function LocationSelector({
           <Label htmlFor={addressId} className="text-sm">
             Detailed Address{" "}
             {addressRequired ? (
-              <span aria-hidden="true" className="text-destructive">
-                *
-              </span>
+              <span className="font-normal text-muted-foreground">(Required)</span>
             ) : (
-              <span aria-hidden="true" className="font-normal text-muted-foreground">
-                (optional)
-              </span>
+              <span className="font-normal text-muted-foreground">(Optional)</span>
             )}
           </Label>
           <Textarea

@@ -282,6 +282,24 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
 }
 
 /**
+ * Rate limit for sensitive staff actions (role changes, bans and suspensions,
+ * KYC overrides, DSAR exports).
+ *
+ * Applies the route's own per-instance limit first, then the shared limiter
+ * with `degradedMode: "block"`: if the shared limiter is unavailable the
+ * action is refused rather than continuing with per-instance counters only.
+ */
+export async function checkSensitiveActionRateLimit(
+  userId: string,
+  action: string,
+  localMaxRequests?: number
+): Promise<RateLimitResult> {
+  const local = checkLocalRateLimit(userId, action, localMaxRequests);
+  if (local.limited) return local;
+  return checkRateLimit({ key: userId, action, degradedMode: "block" });
+}
+
+/**
  * Extract client IP from request headers.
  * Prefers cf-connecting-ip, falls back to x-forwarded-for, then x-real-ip.
  */

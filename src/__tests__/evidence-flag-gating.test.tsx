@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 import { render, screen } from "@testing-library/react";
 
 /**
@@ -12,6 +13,11 @@ import { render, screen } from "@testing-library/react";
 // ── Mocks for Evidence Desk page (RSC) ──────────────────────
 
 const mockRedirect = vi.fn();
+
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
 
 vi.mock("next/navigation", () => ({
   redirect: (...args: unknown[]) => {
@@ -59,6 +65,7 @@ vi.mock("@/hooks/use-toast", () => ({
 
 describe("Feature-flag gating: Evidence Desk", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     mockCreateClient.mockResolvedValue({
       auth: {

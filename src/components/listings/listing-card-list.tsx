@@ -52,6 +52,7 @@ export const ListingCardList = memo(function ListingCardList({
   id,
   title,
   price,
+  category,
   imageUrl,
   posterUrl,
   province,
@@ -149,7 +150,9 @@ export const ListingCardList = memo(function ListingCardList({
 
               {price > 0 ? (
                 <p className="font-display text-sm font-bold tracking-[0.01em] text-foreground">
-                  {formatZARShort(price)}
+                  {category === "jobs_services" && !price
+                    ? "Salary not provided"
+                    : formatZARShort(price)}
                 </p>
               ) : null}
 

@@ -1,719 +1,153 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { NextRequest } from "next/server";
+import type * as DecisionLedger from "@/lib/services/decision-ledger";
 
-const {
-  mockCreateClient,
-  mockCreateAdminClient,
-  mockCreateDecisionRecord,
-  mockCheckLocalRateLimit,
-  mockLogAuditEvent,
-  mockSendAccountEnforcementEmail,
-  mockVerifyStaffActorRoleFromDb,
-  mockGetUserById,
-  mockEnforceSameOriginMutation,
-  mockEnforceCsrfToken,
-} = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
-  mockCreateDecisionRecord: vi.fn(),
-  mockCheckLocalRateLimit: vi.fn(),
-  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-  mockSendAccountEnforcementEmail: vi.fn().mockResolvedValue({ success: true }),
-  mockVerifyStaffActorRoleFromDb: vi.fn(),
-  mockGetUserById: vi.fn(),
-  mockEnforceSameOriginMutation: vi.fn(),
-  mockEnforceCsrfToken: vi.fn(),
+const { guard, moderateReport, rateLimit } = vi.hoisted(() => ({
+  guard: vi.fn(),
+  moderateReport: vi.fn(),
+  rateLimit: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
-vi.mock("@/lib/auth/admin-access", () => ({
-  verifyStaffActorRoleFromDb: mockVerifyStaffActorRoleFromDb,
-}));
-vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
-vi.mock("@/lib/services/email", () => ({
-  sendAccountEnforcementEmail: mockSendAccountEnforcementEmail,
-}));
-vi.mock("@/lib/services/decision-ledger", () => ({
-  createDecisionRecord: mockCreateDecisionRecord,
-}));
-vi.mock("@/lib/utils/mutation-origin", () => ({
-  enforceSameOriginMutation: mockEnforceSameOriginMutation,
-}));
-vi.mock("@/lib/utils/csrf", () => ({
-  enforceCsrfToken: mockEnforceCsrfToken,
-}));
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: mockCheckLocalRateLimit,
+vi.mock("@/lib/utils/admin-route-guard", () => ({ enforceAdminMutationGuard: guard }));
+vi.mock("@/lib/utils/rate-limit", () => ({ checkSensitiveActionRateLimit: rateLimit }));
+vi.mock("@/lib/services/decision-ledger", async (importOriginal) => ({
+  ...(await importOriginal<typeof DecisionLedger>()),
+  moderateReport,
 }));
 
 import { POST } from "@/app/api/admin/flagging/action/route";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
-function createRequest(body: unknown, headers: Record<string, string> = {}) {
-  return {
+const STAFF = "11111111-1111-4111-8111-111111111111";
+const REPORT = "22222222-2222-4222-8222-222222222222";
+
+const request = (body: Record<string, unknown>) =>
+  new Request("https://verifymzansi.com/api/admin/flagging/action", {
     method: "POST",
-    json: async () => body,
-    url: "http://localhost:3000/api/admin/flagging/action",
-    headers: {
-      get(name: string) {
-        return headers[name.toLowerCase()] ?? headers[name] ?? null;
-      },
-    },
-  } as unknown as NextRequest;
-}
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
 describe("POST /api/admin/flagging/action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
-    mockCreateDecisionRecord.mockResolvedValue({ id: "decision-1" });
-    mockEnforceSameOriginMutation.mockReturnValue(null);
-    mockEnforceCsrfToken.mockReturnValue(null);
-    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
-    mockGetUserById.mockResolvedValue({
-      data: {
-        user: {
-          email: "owner@example.com",
-          user_metadata: { full_name: "Owner Person" },
-        },
-      },
-      error: null,
-    });
+    guard.mockResolvedValue({ success: true, user: { id: STAFF }, actorRole: "moderator" });
+    rateLimit.mockResolvedValue({ limited: false });
+    moderateReport.mockResolvedValue({ ok: true, status: "applied", decision_id: "d-1" });
   });
 
-  it("rejects cross-site moderation requests", async () => {
-    mockEnforceSameOriginMutation.mockReturnValue(
-      new Response(JSON.stringify({ error: "Cross-origin request blocked" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      })
-    );
-
-    const res = await POST(
-      createRequest(
-        {
-          reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-          action: "hide",
-        },
-        { origin: "https://evil.example" }
-      )
-    );
-
-    expect(res.status).toBe(403);
+  it("returns the guard's refusal before doing anything", async () => {
+    guard.mockResolvedValue({ success: false, response: new Response(null, { status: 403 }) });
+    expect((await POST(request({ reportId: REPORT, action: "warn" }))).status).toBe(403);
+    expect(moderateReport).not.toHaveBeenCalled();
   });
 
-  it("returns 403 for non-moderators", async () => {
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-      },
-    });
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue(null);
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-      })
-    );
-
-    expect(res.status).toBe(403);
-  });
-
-  it("returns 429 when moderation actions are rate limited", async () => {
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "mod-1" } } }),
-      },
-    });
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
-    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 30 });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-      })
-    );
-
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("30");
-    await expect(res.json()).resolves.toMatchObject({ error: "Too many requests" });
-  });
-
-  it("hides reported content and resolves the report", async () => {
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: "report-1",
-          area: "MZANSI_MARKET",
-          target_type: "listing",
-          target_id: "listing-1",
-        },
-        error: null,
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
-    const listingsEq = vi.fn().mockReturnValue({
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: { owner_id: "owner-1" },
-        error: null,
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
-
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
-        }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: reportsEq,
-            }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "listings") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: listingsEq,
-            }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          };
-        }
-
-        if (table === "moderation_actions") {
-          return {
-            insert: vi.fn().mockResolvedValue({ error: null }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-        reason: "Fraud signal",
-      })
-    );
-
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({
-      success: true,
-      action: "hide",
-      reportStatus: "resolved",
-    });
-    expect(mockLogAuditEvent).toHaveBeenCalled();
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: "mod-1",
-        actorRole: "governance_controller",
-      })
-    );
-  });
-
-  it("sends account enforcement email for warning actions", async () => {
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: "report-1",
-          area: "MZANSI_MARKET",
-          target_type: "account_profile",
-          target_id: "owner-1",
-        },
-        error: null,
-      }),
-    });
-
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
-        }),
-      },
-    });
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({ eq: reportsEq }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "account_profiles") {
-          return {
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          };
-        }
-
-        if (table === "moderation_actions") {
-          return {
-            insert: vi.fn().mockResolvedValue({ error: null }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "warn",
-        reason: "Policy warning",
-      })
-    );
-
-    expect(res.status).toBe(200);
-    expect(mockSendAccountEnforcementEmail).toHaveBeenCalledWith({
-      email: "owner@example.com",
-      accountName: "Owner Person",
+  it("passes the verified actor, never an id from the body", async () => {
+    await POST(request({ reportId: REPORT, action: "warn", reason: "Rude", actorId: "attacker" }));
+    expect(moderateReport).toHaveBeenCalledWith(STAFF, {
+      reportId: REPORT,
       action: "warn",
-      reason: "Policy warning",
-      suspendedUntil: null,
+      reason: "Rude",
+      durationDays: null,
+      emergency: false,
     });
   });
 
-  it("fails closed for sensitive enforcement when decision record creation fails", async () => {
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: "report-1",
-          area: "MZANSI_MARKET",
-          target_type: "account_profile",
-          target_id: "owner-1",
-          status: "open",
-        },
-        error: null,
-      }),
-    });
-    const moderationInsert = vi.fn().mockResolvedValue({ error: null });
-    const accountUpdateEq = vi.fn().mockResolvedValue({ error: null });
-    const rpc = vi.fn().mockResolvedValue({ error: { message: "rpc missing" } });
-    const contentHideEqSecond = vi.fn().mockResolvedValue({ error: null });
-
-    const contentTableMock = {
-      select: vi.fn().mockReturnValue({
-        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: contentHideEqSecond,
-        }),
-      }),
-    };
-
-    mockCreateDecisionRecord.mockRejectedValue(new Error("ledger unavailable"));
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
-        }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({ eq: reportsEq }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "account_profiles") {
-          return {
-            update: vi.fn().mockReturnValue({ eq: accountUpdateEq }),
-          };
-        }
-
-        if (table === "listings" || table === "businesses" || table === "promotions") {
-          return contentTableMock;
-        }
-
-        if (table === "moderation_actions") {
-          return {
-            insert: moderationInsert,
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc,
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "suspend",
-        reason: "Escalation fallback",
-        durationDays: 3,
-      })
-    );
-
-    expect(res.status).toBe(503);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Decision approval workflow unavailable",
-      code: "decision_workflow_unavailable",
-    });
-    expect(mockCreateDecisionRecord).toHaveBeenCalled();
-    expect(moderationInsert).not.toHaveBeenCalled();
-    expect(accountUpdateEq).not.toHaveBeenCalled();
-  });
-
-  it("uses the DB-verified role, not a stale JWT role, for sensitive enforcement approval", async () => {
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: "report-1",
-          area: "MZANSI_MARKET",
-          target_type: "account_profile",
-          target_id: "owner-1",
-          status: "open",
-        },
-        error: null,
-      }),
-    });
-    const recommendedInsert = vi.fn().mockResolvedValue({ error: null });
-
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("moderator");
-    mockCreateDecisionRecord.mockResolvedValue({ id: "decision-1" });
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "admin" } } },
-        }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({ eq: reportsEq }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "moderation_actions") {
-          return {
-            insert: recommendedInsert,
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "ban",
-        reason: "Stale JWT should not approve",
-      })
-    );
-
+  it("reports a ban proposal as waiting for approval", async () => {
+    moderateReport.mockResolvedValue({ ok: true, status: "proposed", decision_id: "d-2" });
+    const res = await POST(request({ reportId: REPORT, action: "ban", reason: "Fraud" }));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({
-      success: true,
-      action: "ban_recommended",
-      status: "pending_approval",
-      decisionRecordId: "decision-1",
+      status: "proposed",
+      decisionId: "d-2",
+      message: expect.stringContaining("approval"),
     });
-    expect(mockCreateDecisionRecord).toHaveBeenCalledWith(
-      expect.objectContaining({
-        recommenderRole: "moderator",
-      })
-    );
-    expect(recommendedInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "ban_recommended",
-        target_owner_id: "owner-1",
-      })
-    );
   });
 
-  it("returns 500 when moderation_actions audit trail insert fails", async () => {
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: "report-1",
-          area: "MZANSI_MARKET",
-          target_type: "listing",
-          target_id: "listing-1",
-        },
-        error: null,
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
+  it("passes emergency containment through and returns the review decision", async () => {
+    moderateReport.mockResolvedValue({
+      ok: true,
+      status: "emergency_applied",
+      decision_id: "d-3",
+      review_decision_id: "d-4",
     });
-    const listingsEq = vi.fn().mockReturnValue({
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: { owner_id: "owner-1" },
-        error: null,
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
-
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
-        }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: reportsEq,
-            }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "listings") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: listingsEq,
-            }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockResolvedValue({ error: null }),
-            }),
-          };
-        }
-
-        if (table === "moderation_actions") {
-          return {
-            insert: vi.fn().mockResolvedValue({
-              error: { message: "moderation_actions insert failed" },
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    });
-
     const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-        reason: "Audit trail failure test",
+      request({
+        reportId: REPORT,
+        action: "suspend",
+        durationDays: 14,
+        emergency: true,
+        reason: "Live fraud",
       })
     );
+    expect(moderateReport).toHaveBeenCalledWith(
+      STAFF,
+      expect.objectContaining({ emergency: true, durationDays: 14 })
+    );
+    await expect(res.json()).resolves.toMatchObject({ reviewDecisionId: "d-4" });
+  });
 
+  it("fails closed on bans and suspensions when the shared limiter refuses", async () => {
+    rateLimit.mockResolvedValue({ limited: true, retryAfter: 30 });
+    expect((await POST(request({ reportId: REPORT, action: "ban", reason: "Fraud" }))).status).toBe(
+      429
+    );
+    expect(rateLimit).toHaveBeenCalledWith(STAFF, "admin:flagging:enforce");
+    expect(moderateReport).not.toHaveBeenCalled();
+  });
+
+  it("does not rate-limit dismissals through the sensitive limiter", async () => {
+    await POST(request({ reportId: REPORT, action: "dismiss", reason: "Not a breach" }));
+    expect(rateLimit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["not_independent", 403],
+    ["already_actioned", 409],
+    ["forbidden", 403],
+    ["target_missing", 404],
+    ["unmappable_hide_target", 422],
+  ])("maps the %s refusal to %i", async (error, status) => {
+    moderateReport.mockResolvedValue({ ok: false, error });
+    const res = await POST(request({ reportId: REPORT, action: "hide" }));
+    expect(res.status).toBe(status);
+    await expect(res.json()).resolves.toMatchObject({ code: error });
+  });
+
+  it("validates the body before calling the database", async () => {
+    expect((await POST(request({ reportId: REPORT, action: "dismiss" }))).status).toBe(400);
+    expect((await POST(request({ reportId: REPORT, action: "suspend", reason: "x" }))).status).toBe(
+      400
+    );
+    expect(
+      (await POST(request({ reportId: REPORT, action: "suspend", durationDays: 45, reason: "x" })))
+        .status
+    ).toBe(400);
+    expect(
+      (await POST(request({ reportId: REPORT, action: "warn", emergency: true, reason: "x" })))
+        .status
+    ).toBe(400);
+    expect(moderateReport).not.toHaveBeenCalled();
+  });
+
+  it("hides database failures behind a 500", async () => {
+    moderateReport.mockRejectedValue(new Error("Decision RPC moderate_report failed"));
+    const res = await POST(request({ reportId: REPORT, action: "warn" }));
     expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Failed to record enforcement action",
-    });
+    expect(await res.text()).not.toContain("moderate_report");
   });
 
-  it("rejects CSRF-invalid moderation requests before DB access", async () => {
-    mockEnforceCsrfToken.mockReturnValue(
-      new Response(JSON.stringify({ error: "CSRF token missing or invalid" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      })
-    );
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-      })
-    );
-
-    expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining("CSRF") });
-    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  it("requires the moderator's claim on the report, and releases it afterwards", async () => {
+    await POST(request({ reportId: REPORT, action: "warn", reason: "Rude" }));
+    expect(checkQueueClaim).toHaveBeenCalledWith(STAFF, { type: "report", id: REPORT });
+    expect(releaseDecidedClaim).toHaveBeenCalledWith(STAFF, { type: "report", id: REPORT });
   });
 
-  it("returns 401 when no user is authenticated", async () => {
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
-      },
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-      })
+  it("stops before acting when someone else holds the report", async () => {
+    vi.mocked(checkQueueClaim).mockResolvedValueOnce(
+      new Response(JSON.stringify({ code: "claimed_by_other" }), { status: 409 }) as never
     );
-
-    expect(res.status).toBe(401);
-  });
-
-  it("returns 404 when report lookup returns null (not found)", async () => {
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: "Row not found", code: "PGRST116" },
-      }),
-    });
-
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
-        }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({ eq: reportsEq }),
-          };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "hide",
-      })
-    );
-
-    expect(res.status).toBe(404);
-  });
-
-  it("returns 404 when owner-targeted enforcement has no account holder", async () => {
-    mockVerifyStaffActorRoleFromDb.mockResolvedValue("governance_controller");
-    const reportsEq = vi.fn().mockReturnValue({
-      single: vi.fn().mockResolvedValue({
-        data: {
-          id: "report-1",
-          area: "MZANSI_MARKET",
-          target_type: "listing",
-          target_id: "listing-1",
-        },
-        error: null,
-      }),
-    });
-    const listingsEq = vi.fn().mockReturnValue({
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: null,
-        error: null,
-      }),
-    });
-
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "mod-1", app_metadata: { role: "moderator" } } },
-        }),
-      },
-    });
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "reports") {
-          return {
-            select: vi.fn().mockReturnValue({ eq: reportsEq }),
-            update: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: "report-1" }], error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        if (table === "listings") {
-          return {
-            select: vi.fn().mockReturnValue({ eq: listingsEq }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-      auth: { admin: { getUserById: mockGetUserById } },
-      rpc: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    const res = await POST(
-      createRequest({
-        reportId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        action: "warn",
-        reason: "Owner missing",
-      })
-    );
-
-    expect(res.status).toBe(404);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Target content not found or has no associated account holder",
-    });
+    const res = await POST(request({ reportId: REPORT, action: "warn", reason: "Rude" }));
+    expect(res.status).toBe(409);
+    expect(moderateReport).not.toHaveBeenCalled();
   });
 });

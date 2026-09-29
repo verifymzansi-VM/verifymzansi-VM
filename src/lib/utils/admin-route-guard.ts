@@ -7,6 +7,7 @@ import {
   verifyStaffActorRoleFromDb,
 } from "@/lib/auth/admin-access";
 import type { Capability } from "@/lib/auth/roles";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
@@ -33,6 +34,7 @@ export async function enforceAdminMutationGuard({
   adminOnly,
   forbiddenMessage,
   rateLimitMessage = "Too many requests. Please try again later.",
+  stepUp = false,
 }: {
   request: Request;
   logger: Logger;
@@ -41,6 +43,8 @@ export async function enforceAdminMutationGuard({
   adminOnly?: boolean;
   forbiddenMessage?: string;
   rateLimitMessage?: string;
+  /** Sensitive action: require a second factor verified in the last 15 minutes. */
+  stepUp?: boolean;
 }): Promise<GuardSuccess | GuardFailure> {
   const originBlock = enforceSameOriginMutation(request, logger);
   if (originBlock) return { success: false, response: originBlock };
@@ -65,6 +69,9 @@ export async function enforceAdminMutationGuard({
   if (!actorRole) {
     return { success: false, response: forbiddenResponse(forbiddenMessage) };
   }
+
+  const mfaBlock = await checkStaffApiMfa(supabase, user.id, { stepUp });
+  if (mfaBlock) return { success: false, response: mfaBlock };
 
   const rateLimit = checkLocalRateLimit(user.id, rateLimitAction);
   if (rateLimit.limited) {

@@ -5,25 +5,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Baby,
   BedDouble,
-  Briefcase,
   Building2,
   CalendarDays,
-  Car,
+  Check,
   ChevronRight,
-  Cog,
-  Globe,
-  House,
   Loader2,
   ShoppingBag,
-  Smartphone,
-  Sofa,
-  Store,
-  Tent,
-  Tractor,
   TreePalm,
-  Truck,
   type LucideIcon,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,6 +26,7 @@ interface PostChoice {
   hint: string;
   icon: LucideIcon;
   href: string;
+  badge?: string;
 }
 
 interface PostArea {
@@ -44,6 +34,10 @@ interface PostArea {
   title: string;
   fitsWhen: string;
   question: string;
+  questionHint?: string;
+  /** What the poster ends up with, in plain words. */
+  youGet?: readonly string[];
+  haveReady?: string;
   icon: LucideIcon;
   tile: string;
   accent: string;
@@ -55,165 +49,101 @@ const POST_AREAS: readonly PostArea[] = [
   {
     id: "market",
     title: "Mzansi Market",
-    fitsWhen: "You have one thing to sell or rent out, or a job to fill.",
-    question: "What is it?",
+    fitsWhen: "Sell an item, list property or advertise a job",
+    question:
+      "Create a listing for something you are selling or renting out, or a vacancy you want to fill.",
+    questionHint: "For example: a phone, a bakkie, a room to rent or a job vacancy.",
     icon: ShoppingBag,
     tile: "area-market-tile",
-    accent: "bg-brand-green-600 dark:bg-brand-green-400",
+    accent: "bg-brand-green-600",
     choices: [
       {
-        label: "Property",
-        hint: "House, flat, room or land",
-        icon: House,
-        href: "/post/create-listing?category=property",
-      },
-      {
-        label: "Vehicle",
-        hint: "Car, bakkie, bike or truck",
-        icon: Car,
-        href: "/post/create-listing?category=vehicles",
-      },
-      {
-        label: "Auto parts",
-        hint: "Spares, tyres, accessories",
-        icon: Cog,
-        href: "/post/create-listing?category=auto_parts",
-      },
-      {
-        label: "Electronics",
-        hint: "Phone, laptop, TV, console",
-        icon: Smartphone,
-        href: "/post/create-listing?category=electronics",
-      },
-      {
-        label: "Home & lifestyle",
-        hint: "Furniture, appliances, fashion",
-        icon: Sofa,
-        href: "/post/create-listing?category=home_lifestyle",
-      },
-      {
-        label: "Baby & kids",
-        hint: "Prams, toys, clothes",
-        icon: Baby,
-        href: "/post/create-listing?category=baby_kids",
-      },
-      {
-        label: "Farming",
-        hint: "Livestock, crops, equipment",
-        icon: Tractor,
-        href: "/post/create-listing?category=farming_agriculture",
-      },
-      {
-        label: "Job or service",
-        hint: "Vacancy or once-off service",
-        icon: Briefcase,
-        href: "/post/create-listing?category=jobs_services",
+        label: "Create a market listing",
+        hint: "Choose your category in the form",
+        icon: ShoppingBag,
+        href: "/post/create-listing",
       },
     ],
   },
   {
     id: "business",
     title: "Mzansi Business",
-    fitsWhen: "You run a business and want customers to find you.",
-    question: "How do customers reach you?",
+    fitsWhen: "Help customers find your business",
+    question:
+      "Create a profile for your shop, practice or services, with contact details, opening hours and photos.",
+    questionHint: "For example: a spaza shop, hair salon, plumber, accountant or online shop.",
     icon: Building2,
     tile: "area-business-tile",
-    accent: "bg-brand-blue-600 dark:bg-brand-blue-400",
+    accent: "bg-brand-blue-600",
     choices: [
       {
-        label: "Own premises",
-        hint: "Shop, office, salon or workshop",
-        icon: Store,
-        href: "/post/create-business?type=standalone_shop",
-      },
-      {
-        label: "From home",
-        hint: "Run from where you live",
-        icon: House,
-        href: "/post/create-business?type=home_business",
-      },
-      {
-        label: "Mobile service",
-        hint: "You travel to your clients",
-        icon: Truck,
-        href: "/post/create-business?type=mobile_service",
-      },
-      {
-        label: "Online only",
-        hint: "Website or social media",
-        icon: Globe,
-        href: "/post/create-business?type=online_only",
-      },
-      {
-        label: "Mall store",
-        hint: "Inside a shopping centre",
+        label: "Create a business profile",
+        hint: "Tell customers what you offer",
         icon: Building2,
-        href: "/post/create-business?type=mall_store",
-      },
-      {
-        label: "Market stall",
-        hint: "Flea or farmers market",
-        icon: Tent,
-        href: "/post/create-business?type=market_stall",
+        href: "/post/create-business",
       },
     ],
   },
   {
     id: "tourism",
     title: "Tourism & Events",
-    fitsWhen: "You host visitors or you're putting on an event.",
-    question: "What are you listing?",
+    fitsWhen: "List a stay, experience or event",
+    question: "Help visitors find accommodation, things to do or an event to attend.",
     icon: TreePalm,
     tile: "area-tourism-tile",
-    accent: "bg-sunset-600 dark:bg-sunset-400",
+    accent: "bg-sunset-600",
     choices: [
       {
-        label: "Stay, tour or attraction",
-        hint: "Guest house, lodge, tours, safaris",
+        label: "List a stay, experience or attraction",
+        hint: "Guest house, tour, safari or visitor attraction",
         icon: BedDouble,
         href: "/post/create-tourism?type=tourism_business",
       },
       {
-        label: "Event",
-        hint: "Festival, gig, market or expo",
+        label: "Create an event",
+        hint: "A festival, workshop, concert or community event",
         icon: CalendarDays,
         href: "/post/create-tourism?type=event",
+        badge: "Free to post",
       },
     ],
   },
 ];
-
-// The mix-ups people hit most often, each with where it belongs.
 const EXAMPLES: readonly { situation: string; destination: string; href: string }[] = [
   {
-    situation: "Selling your own car",
-    destination: "Market · Vehicle",
-    href: "/post/create-listing?category=vehicles",
+    situation: "Selling a cake mixer",
+    destination: "Market",
+    href: "/post/create-listing?category=home_lifestyle",
   },
   {
-    situation: "You own a car dealership",
-    destination: "Business · Own premises",
-    href: "/post/create-business?type=standalone_shop",
+    situation: "Advertising a baking business",
+    destination: "Business",
+    href: "/post/create-business?category=food_dining",
   },
   {
-    situation: "Renting out a flat by the month",
-    destination: "Market · Property",
+    situation: "Advertising a baking workshop on a particular date",
+    destination: "Event",
+    href: "/post/create-tourism?type=event",
+  },
+  {
+    situation: "Renting out a residential flat",
+    destination: "Market",
     href: "/post/create-listing?category=property",
   },
   {
-    situation: "Renting out rooms by the night",
-    destination: "Tourism · Stay",
+    situation: "Advertising holiday accommodation",
+    destination: "Tourism",
     href: "/post/create-tourism?type=tourism_business",
   },
   {
-    situation: "Hiring staff for your shop",
-    destination: "Market · Job or service",
-    href: "/post/create-listing?category=jobs_services",
+    situation: "Advertising a venue for hire",
+    destination: "Business",
+    href: "/post/create-business?category=events_entertainment",
   },
   {
-    situation: "You're a plumber or electrician",
-    destination: "Business · Mobile service",
-    href: "/post/create-business?type=mobile_service",
+    situation: "Advertising a concert at that venue",
+    destination: "Event",
+    href: "/post/create-tourism?type=event",
   },
 ];
 
@@ -359,7 +289,7 @@ export function PostCreateClient({
             <section
               key={area.id}
               aria-labelledby={headingId}
-              className="surface-card relative overflow-hidden p-4 sm:p-5 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-6"
+              className="surface-card relative overflow-hidden p-4 sm:p-5 lg:grid lg:grid-cols-[18rem_1fr] lg:gap-6"
             >
               <span
                 aria-hidden="true"
@@ -378,14 +308,34 @@ export function PostCreateClient({
                     {area.title}
                   </h2>
                   <p className="mt-1 text-sm text-foreground/80">{area.fitsWhen}</p>
+                  {area.youGet ? (
+                    <ul className="mt-3 space-y-1.5 text-sm text-foreground/80">
+                      {area.youGet.map((item) => (
+                        <li key={item} className="flex gap-2">
+                          <Check
+                            aria-hidden="true"
+                            className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
+                          />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {area.haveReady ? (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground/80">Have ready: </span>
+                      {area.haveReady}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
               <div className="mt-4 lg:mt-0">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {area.question}
-                </p>
-                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <p className="text-sm leading-6 text-foreground">{area.question}</p>
+                {area.questionHint ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{area.questionHint}</p>
+                ) : null}
+                <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {area.choices.map((choice) => {
                     const ChoiceIcon = choice.icon;
                     const isPending = pendingHref === choice.href;
@@ -411,8 +361,13 @@ export function PostCreateClient({
                             )}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-semibold text-foreground">
+                            <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                               {choice.label}
+                              {choice.badge ? (
+                                <span className="rounded-full bg-brand-green-600/10 px-1.5 py-px text-[11px] font-semibold text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-green-300">
+                                  {choice.badge}
+                                </span>
+                              ) : null}
                             </span>
                             <span className="block text-xs text-muted-foreground">
                               {isPending ? "Opening form..." : choice.hint}
@@ -435,7 +390,7 @@ export function PostCreateClient({
 
       <details className="surface-card group p-4 sm:p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
-          Not sure where it fits? See common examples
+          Not sure where to post?
           <ChevronRight
             aria-hidden="true"
             className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"

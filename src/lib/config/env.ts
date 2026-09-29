@@ -71,8 +71,6 @@ const envSchema = z.object({
   IP_HASH_SECRET: z.string().min(32, "IP_HASH_SECRET must be at least 32 characters").optional(),
 
   // ── Geocoding (Nominatim for GPS reverse lookup) ──────────
-  GEOCODING_API_URL: z.string().url().default("https://nominatim.openstreetmap.org"),
-  NOMINATIM_USER_AGENT: z.string().default("verifymzansi/1.0"),
 
   // ── Africa's Talking (required for OTP) ───────────────────
   AFRICASTALKING_API_KEY: z.string().min(1, "AFRICASTALKING_API_KEY is required for OTP delivery"),
@@ -163,8 +161,6 @@ function _createFallbackEnv(): Env {
     ID_ENCRYPTION_KEY: process.env.ID_ENCRYPTION_KEY || "INVALID_BUILD_PLACEHOLDER_ID_KEY___",
     HMAC_SECRET: process.env.HMAC_SECRET || "INVALID_BUILD_PLACEHOLDER_HMAC_SEC_",
     IP_HASH_SECRET: process.env.IP_HASH_SECRET,
-    GEOCODING_API_URL: process.env.GEOCODING_API_URL || "https://nominatim.openstreetmap.org",
-    NOMINATIM_USER_AGENT: process.env.NOMINATIM_USER_AGENT || "verifymzansi/1.0",
     AFRICASTALKING_API_KEY: process.env.AFRICASTALKING_API_KEY || "",
     AFRICASTALKING_USERNAME: process.env.AFRICASTALKING_USERNAME || "",
     AFRICASTALKING_SENDER_ID: process.env.AFRICASTALKING_SENDER_ID,

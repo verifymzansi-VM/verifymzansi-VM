@@ -328,7 +328,9 @@ export function ListingDetailContent({
                   </p>
                 ) : (
                   <p className="font-display text-2xl font-bold leading-none tracking-tight text-brand-green">
-                    Price on request
+                    {listing.category === "jobs_services"
+                      ? "Salary not provided"
+                      : "Price on request"}
                   </p>
                 )}
                 {listing.price_negotiable ? (

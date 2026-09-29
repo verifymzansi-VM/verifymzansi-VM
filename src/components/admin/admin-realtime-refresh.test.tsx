@@ -46,11 +46,31 @@ describe("AdminRealtimeRefresh", () => {
       new: { status: "open" },
     });
 
-    vi.advanceTimersByTime(399);
+    // The page was rendered moments ago, so the refresh waits out the minimum gap.
+    vi.advanceTimersByTime(9_999);
     expect(mockRefresh).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("merges a burst of events into one refresh, at most every 10 seconds", () => {
+    render(<AdminRealtimeRefresh />);
+    const onEvent = realtimeOptions.find((option) => option.table === "reports")?.onEvent as (
+      payload: Record<string, unknown>
+    ) => void;
+
+    vi.advanceTimersByTime(60_000);
+    for (let i = 0; i < 50; i++) onEvent({ eventType: "INSERT", new: { status: "open" } });
+    vi.advanceTimersByTime(400);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(2_000);
+    onEvent({ eventType: "INSERT", new: { status: "open" } });
+    vi.advanceTimersByTime(7_999);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    expect(mockRefresh).toHaveBeenCalledTimes(2);
   });
 
   it("refreshes when staff receive a pending edit notification", () => {
@@ -59,7 +79,7 @@ describe("AdminRealtimeRefresh", () => {
     expect(subscription?.event).toBe("INSERT");
     const onEvent = subscription?.onEvent as (payload: Record<string, unknown>) => void;
     onEvent({ eventType: "INSERT", new: { href: "/admin/moderation" } });
-    vi.advanceTimersByTime(400);
+    vi.advanceTimersByTime(10_000);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 

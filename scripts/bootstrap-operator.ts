@@ -5,7 +5,7 @@ import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
-type OperatorRole = "admin" | "moderator";
+type OperatorRole = "admin" | "governance_controller" | "moderator";
 
 type Args = {
   email: string | null;
@@ -14,6 +14,7 @@ type Args = {
   role: OperatorRole;
   envFile: string | null;
   confirmProject: string | null;
+  reason: string | null;
 };
 
 type ExistingUser = {
@@ -39,7 +40,7 @@ function printUsage(): void {
   console.log("Bootstrap a live operator account");
   console.log("");
   console.log(
-    "Usage: pnpm bootstrap:operator -- --email=<email> --password=<password> --display-name=<name> --role=<admin|moderator> --confirm-project=<project-ref> [--env-file=.env.local]"
+    "Usage: pnpm bootstrap:operator -- --email=<email> --password=<password> --display-name=<name> --role=<admin|governance_controller|moderator> --reason=<why> --confirm-project=<project-ref> [--env-file=.env.local]"
   );
   console.log("");
 }
@@ -54,7 +55,7 @@ function takeOptionValue(argv: string[], index: number, flag: string): string {
 }
 
 function parseRole(value: string): OperatorRole {
-  if (value === "admin" || value === "moderator") {
+  if (value === "admin" || value === "governance_controller" || value === "moderator") {
     return value;
   }
 
@@ -68,6 +69,7 @@ function parseArgs(argv: string[]): Args {
     displayName: null,
     role: "admin",
     envFile: null,
+    reason: null,
     confirmProject: null,
   };
 
@@ -131,6 +133,17 @@ function parseArgs(argv: string[]): Args {
 
     if (arg.startsWith("--env-file=")) {
       args.envFile = arg.slice("--env-file=".length);
+      continue;
+    }
+
+    if (arg === "--reason") {
+      args.reason = takeOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--reason=")) {
+      args.reason = arg.slice("--reason=".length);
       continue;
     }
 
@@ -206,39 +219,25 @@ function getProjectRef(supabaseUrl: string): string {
 }
 
 async function findUserByEmail(admin: AdminClient, email: string): Promise<ExistingUser | null> {
-  let page = 1;
+  const { data: userId, error } = await admin.rpc("auth_user_id_by_email", { p_email: email });
+  if (error) throw error;
+  if (typeof userId !== "string") return null;
 
-  while (true) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) {
-      throw error;
-    }
-
-    const user = (data.users ?? []).find(
-      (candidate) => (candidate.email ?? "").toLowerCase() === email.toLowerCase()
-    );
-
-    if (user) {
-      return {
-        id: user.id,
-        email: user.email ?? null,
-        user_metadata:
-          user.user_metadata && typeof user.user_metadata === "object"
-            ? (user.user_metadata as Record<string, unknown>)
-            : null,
-        app_metadata:
-          user.app_metadata && typeof user.app_metadata === "object"
-            ? (user.app_metadata as Record<string, unknown>)
-            : null,
-      };
-    }
-
-    if ((data.users ?? []).length < 200) {
-      return null;
-    }
-
-    page += 1;
-  }
+  const { data, error: readError } = await admin.auth.admin.getUserById(userId);
+  if (readError || !data.user) throw readError ?? new Error(`Auth user ${userId} not found`);
+  const user = data.user;
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    user_metadata:
+      user.user_metadata && typeof user.user_metadata === "object"
+        ? (user.user_metadata as Record<string, unknown>)
+        : null,
+    app_metadata:
+      user.app_metadata && typeof user.app_metadata === "object"
+        ? (user.app_metadata as Record<string, unknown>)
+        : null,
+  };
 }
 
 async function upsertAccountProfile(
@@ -269,6 +268,10 @@ async function main(): Promise<void> {
   const email = requireArg("--email", args.email).toLowerCase();
   const password = requireArg("--password", args.password);
   const displayName = requireArg("--display-name", args.displayName);
+  const reason = requireArg("--reason", args.reason);
+  if (reason.length < 10) {
+    throw new Error("--reason must explain the provisioning in at least 10 characters.");
+  }
   const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
   const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
   const projectRef = getProjectRef(supabaseUrl);
@@ -330,6 +333,20 @@ async function main(): Promise<void> {
   }
 
   await upsertAccountProfile(admin, userId, displayName);
+
+  // staff_roles is the only authority for staff access; app_metadata.role
+  // above is a UI hint. This also writes role history and an audit row.
+  const { data: previousRole, error: provisionError } = await admin.rpc(
+    "provision_staff_role_by_owner",
+    { p_target: userId, p_role: args.role, p_reason: reason }
+  );
+  if (provisionError) {
+    throw provisionError;
+  }
+  console.log(
+    `Staff role: ${String(previousRole)} -> ${args.role} (audited as owner provisioning)`
+  );
+  console.log("New staff must set up two-step verification within 7 days.");
 
   console.log(`Project: ${projectRef}`);
   console.log(`User ID: ${userId}`);

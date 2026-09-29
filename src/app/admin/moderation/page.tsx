@@ -1,10 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { requireStaff } from "@/lib/auth/require-staff";
+import { roleHasCapability } from "@/lib/auth/admin-access";
+import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
+import { QueueClaimBar, QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { ModerationQueueClient } from "./moderation-queue-client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isStaff } from "@/lib/auth/roles";
 import { createLogger } from "@/lib/utils/logger";
 import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
 
@@ -15,57 +16,117 @@ export const metadata = {
   description: "Review and moderate flagged content, listings, and user reports.",
 };
 
+const SHOWN_PER_TYPE = 50;
+
+type Read<T> = { data: T[] | null; error: { message: string } | null; count?: number | null };
+
+/**
+ * Join the oldest waiting rows with the rows the viewer holds (which may lie
+ * beyond the limit), keeping the true total from the first read.
+ */
+function withClaimed<T extends { id: string }>(oldest: Read<T>, claimed: Read<T>): Read<T> {
+  if (oldest.error || claimed.error) {
+    return { data: null, error: oldest.error ?? claimed.error, count: null };
+  }
+  const byId = new Map<string, T>();
+  for (const row of [...(oldest.data ?? []), ...(claimed.data ?? [])]) byId.set(row.id, row);
+  return { data: [...byId.values()], error: null, count: oldest.count ?? null };
+}
+
 function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString();
 }
 
 export default async function AdminModerationPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user || !isStaff(user)) {
-    redirect("/dashboard");
-  }
+  const { user, role } = await requireStaff("queue:view");
 
   const admin = createAdminClient();
 
-  // Fetch all content pending moderation across all areas
-  const [listingsResult, businessesResult, promotionsResult, editRequestsResult] =
-    await Promise.all([
-      admin
-        .from("listings")
-        .select(
-          "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required"
-        )
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(50),
-      admin
-        .from("businesses")
-        .select(
-          "id, business_name, business_type, status, created_at, owner_id, area, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details"
-        )
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(50),
-      admin
-        .from("promotions")
-        .select(
-          "id, title, status, created_at, category, category_key, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type"
-        )
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(50),
-      admin
-        .from("content_edit_requests")
-        .select(
-          "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at"
-        )
-        .eq("status", "pending")
-        .order("created_at", { ascending: true })
-        .limit(50),
-    ]);
+  // The oldest waiting items of each kind with their true totals, plus the
+  // items the viewer holds, even beyond the limit.
+  const myClaimed = await getMyClaimedItems(user.id, "content");
+  const mine = (type: string) => myClaimed.filter((c) => c.type === type).map((c) => c.id);
+  /** No extra query when the viewer holds nothing of this kind. */
+  const NONE = Promise.resolve({ data: [] as never[], error: null });
+  const LISTING_FIELDS =
+    "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required" as const;
+  const BUSINESS_FIELDS =
+    "id, business_name, business_type, status, created_at, owner_id, area, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details" as const;
+  const PROMOTION_FIELDS =
+    "id, title, status, created_at, category, category_key, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type" as const;
+  const EDIT_FIELDS =
+    "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at" as const;
+
+  const [
+    listingsOldest,
+    businessesOldest,
+    promotionsOldest,
+    editsOldest,
+    listingsMine,
+    businessesMine,
+    promotionsMine,
+    editsMine,
+  ] = await Promise.all([
+    admin
+      .from("listings")
+      .select(LISTING_FIELDS, { count: "exact" })
+      .eq("status", "pending_moderation")
+      .order("created_at", { ascending: true })
+      .limit(SHOWN_PER_TYPE),
+    admin
+      .from("businesses")
+      .select(BUSINESS_FIELDS, { count: "exact" })
+      .eq("status", "pending_moderation")
+      .order("created_at", { ascending: true })
+      .limit(SHOWN_PER_TYPE),
+    admin
+      .from("promotions")
+      .select(PROMOTION_FIELDS, { count: "exact" })
+      .eq("status", "pending_moderation")
+      .order("created_at", { ascending: true })
+      .limit(SHOWN_PER_TYPE),
+    admin
+      .from("content_edit_requests")
+      .select(EDIT_FIELDS, { count: "exact" })
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(SHOWN_PER_TYPE),
+    mine("listing").length
+      ? admin
+          .from("listings")
+          .select(LISTING_FIELDS)
+          .eq("status", "pending_moderation")
+          .in("id", mine("listing"))
+      : NONE,
+    mine("business").length
+      ? admin
+          .from("businesses")
+          .select(BUSINESS_FIELDS)
+          .eq("status", "pending_moderation")
+          .in("id", mine("business"))
+      : NONE,
+    mine("promotion").length
+      ? admin
+          .from("promotions")
+          .select(PROMOTION_FIELDS)
+          .eq("status", "pending_moderation")
+          .in("id", mine("promotion"))
+      : NONE,
+    mine("content_edit").length
+      ? admin
+          .from("content_edit_requests")
+          .select(EDIT_FIELDS)
+          .eq("status", "pending")
+          .in("id", mine("content_edit"))
+      : NONE,
+  ]);
+  const listingsResult = withClaimed(listingsOldest, listingsMine);
+  const businessesResult = withClaimed(businessesOldest, businessesMine);
+  const promotionsResult = withClaimed(promotionsOldest, promotionsMine);
+  const editRequestsResult = withClaimed(editsOldest, editsMine);
+  const totalWaiting = [listingsResult, businessesResult, promotionsResult, editRequestsResult]
+    .map((r) => r.count ?? r.data?.length ?? 0)
+    .reduce((a, b) => a + b, 0);
 
   const pendingListings = listingsResult.data ?? [];
   const pendingBusinesses = businessesResult.data ?? [];
@@ -160,7 +221,22 @@ export default async function AdminModerationPage() {
     ...editItems,
   ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-  const totalPending = allItems.length;
+  const shownCount = allItems.length;
+  const [claims, myClaims] = await Promise.all([
+    getClaimsForItems(
+      user.id,
+      allItems.map((item) => ({
+        type:
+          "isEditRequest" in item && item.isEditRequest
+            ? ("content_edit" as const)
+            : "contentType" in item && item.contentType
+              ? item.contentType
+              : ("listing" as const),
+        id: item.id,
+      }))
+    ),
+    countMyClaims(user.id, "content"),
+  ]);
 
   return (
     <div className="min-w-0 w-full max-w-full space-y-6 overflow-x-hidden">
@@ -170,7 +246,7 @@ export default async function AdminModerationPage() {
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Moderation" }]}
       >
         <Badge variant="outline" className="gap-1">
-          {totalPending} Pending
+          {totalWaiting} pending
         </Badge>
       </PageHeader>
 
@@ -183,7 +259,27 @@ export default async function AdminModerationPage() {
         </div>
       )}
 
-      <ModerationQueueClient items={allItems} />
+      {totalWaiting > shownCount && (
+        <p className="text-sm text-muted-foreground">
+          Showing {shownCount} of {totalWaiting} waiting items: the oldest {SHOWN_PER_TYPE} of each
+          kind, plus any you hold. Claiming always takes the oldest first, including those not
+          shown.
+        </p>
+      )}
+
+      <QueueClaimBar
+        queue="content"
+        myClaims={myClaims}
+        canClaim={roleHasCapability(role, "queue:claim")}
+      />
+
+      <QueueClaimsProvider
+        claims={claims}
+        mustClaim={role === "moderator"}
+        canFree={roleHasCapability(role, "decision:approve")}
+      >
+        <ModerationQueueClient items={allItems} />
+      </QueueClaimsProvider>
     </div>
   );
 }

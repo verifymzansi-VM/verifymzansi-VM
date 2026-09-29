@@ -9,7 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useMarketplaceStore } from "@/stores";
-import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import {
+  ALL_BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORIES,
+  BUSINESS_TYPE_OPTIONS,
+} from "@/lib/constants/categories";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 
 export function BusinessDiscoveryBar() {
@@ -65,6 +69,7 @@ export function BusinessDiscoveryBar() {
   const hasActiveFilters = [
     filters.query,
     filters.businessCategory,
+    filters.businessSubcategory,
     filters.businessType,
     filters.province,
     filters.city,
@@ -75,7 +80,7 @@ export function BusinessDiscoveryBar() {
     <section className="space-y-5 rounded-2xl border border-border/70 bg-background/95 p-5 elev-sm">
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="business-search">Search</Label>
+          <Label htmlFor="business-search">Find a business</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -111,6 +116,14 @@ export function BusinessDiscoveryBar() {
             }
           >
             <option value="">All categories</option>
+            {filters.businessCategory &&
+              !BUSINESS_CATEGORIES.some((c) => c.value === filters.businessCategory) && (
+                <option value={filters.businessCategory}>
+                  {ALL_BUSINESS_CATEGORIES.find((c) => c.value === filters.businessCategory)
+                    ?.label ?? filters.businessCategory}{" "}
+                  (previous category)
+                </option>
+              )}
             {BUSINESS_CATEGORIES.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -119,30 +132,27 @@ export function BusinessDiscoveryBar() {
           </select>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="business-type">Business type</Label>
-          <select
-            id="business-type"
-            aria-label="Business type"
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
-            value={filters.businessType || ""}
-            disabled={!isInteractive}
-            onChange={(event) =>
-              setFilter(
-                "businessType",
-                event.target.value ? (event.target.value as typeof filters.businessType) : undefined
-              )
-            }
-          >
-            <option value="">All types</option>
-            {BUSINESS_TYPE_OPTIONS.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
+        {filters.businessCategory && (
+          <div className="space-y-1.5">
+            <Label htmlFor="business-subcategory">Specific business activity</Label>
+            <select
+              id="business-subcategory"
+              value={filters.businessSubcategory || ""}
+              disabled={!isInteractive}
+              className="h-11 w-full rounded-md border border-input bg-background px-3"
+              onChange={(e) => setFilter("businessSubcategory", e.target.value || undefined)}
+            >
+              <option value="">All activities</option>
+              {ALL_BUSINESS_CATEGORIES.find(
+                (c) => c.value === filters.businessCategory
+              )?.subcategories.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="business-province">Province</Label>
           <select
@@ -166,7 +176,7 @@ export function BusinessDiscoveryBar() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="business-city">City</Label>
+          <Label htmlFor="business-city">City or town</Label>
           <select
             id="business-city"
             aria-label="City"
@@ -205,7 +215,10 @@ export function BusinessDiscoveryBar() {
           )}
           {filters.businessCategory && (
             <Badge variant="secondary" className="gap-1">
-              {BUSINESS_CATEGORIES.find((item) => item.value === filters.businessCategory)?.label}
+              {ALL_BUSINESS_CATEGORIES.find((item) => item.value === filters.businessCategory)
+                ?.label ?? filters.businessCategory}
+              {!BUSINESS_CATEGORIES.some((item) => item.value === filters.businessCategory) &&
+                " (previous category)"}
               <button
                 type="button"
                 className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -217,9 +230,27 @@ export function BusinessDiscoveryBar() {
               </button>
             </Badge>
           )}
+          {filters.businessSubcategory && (
+            <Badge variant="secondary" className="gap-1">
+              {ALL_BUSINESS_CATEGORIES.flatMap((c) => c.subcategories).find(
+                (c) => c.value === filters.businessSubcategory
+              )?.label ?? filters.businessSubcategory}
+              <button
+                type="button"
+                className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove specific business activity filter"
+                disabled={!isInteractive}
+                onClick={() => setFilter("businessSubcategory", undefined)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
           {filters.businessType && (
             <Badge variant="secondary" className="gap-1">
-              {BUSINESS_TYPE_OPTIONS.find((item) => item.value === filters.businessType)?.label}
+              {BUSINESS_TYPE_OPTIONS.find((item) => item.value === filters.businessType)?.label ??
+                filters.businessType}{" "}
+              (previous filter)
               <button
                 type="button"
                 className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

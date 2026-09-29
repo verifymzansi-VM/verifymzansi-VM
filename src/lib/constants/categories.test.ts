@@ -3,8 +3,8 @@ import { CATEGORIES, getCategory, isValidCategoryForArea } from "./categories";
 import type { ListingCategory } from "@/types/enums";
 
 describe("categories", () => {
-  it("exports 8 categories", () => {
-    expect(CATEGORIES).toHaveLength(8);
+  it("exports 11 categories", () => {
+    expect(CATEGORIES).toHaveLength(11);
   });
 
   it("every category has required fields", () => {

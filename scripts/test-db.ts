@@ -3,11 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { printSchemaVerificationResult, verifySupabaseSchema } from "./check-supabase-schema";
 import { resolveDbTestTarget } from "./db-test-target";
-const REQUIRED_FEATURE_FLAG_KEYS = [
-  "kyc_v2_flow",
-  "kyc_gps_location",
-  "kyc_evidence_desk",
-] as const;
+const REQUIRED_FEATURE_FLAG_KEYS = ["kyc_v2_flow", "kyc_evidence_desk"] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {

@@ -1,22 +1,17 @@
 "use client";
+import { PostSelect } from "@/components/post/post-select";
+import { EventDateFields } from "@/components/post/event-date-fields";
+import { eventTimeToIso } from "@/lib/forms/event-time";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import {
-  BedDouble,
-  CalendarDays,
-  Camera,
-  ClipboardList,
-  Eye,
-  MapPin,
-  TreePalm,
-} from "lucide-react";
+import { Camera, ClipboardList, Eye, MapPin, TreePalm } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -52,7 +47,6 @@ import {
   EVENT_AGE_RESTRICTIONS,
   EVENT_ACCESSIBILITY_OPTIONS,
 } from "@/lib/constants/categories";
-import { cn } from "@/lib/utils";
 import { PhotoOrderList } from "@/components/post/photo-order-list";
 import {
   PostDraftStatus,
@@ -84,7 +78,6 @@ import {
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
-import { getDefaultEventDates } from "@/lib/post-drafts/defaults";
 import type { TourismDraftData } from "@/lib/post-drafts/storage";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
@@ -101,17 +94,17 @@ const SELECT_CLASS =
 
 const STEPS: PostFormStep[] = [
   {
-    label: "Type & Basics",
+    label: "About your listing",
     icon: TreePalm,
     description: "Type, name and category",
   },
-  { label: "Details", icon: ClipboardList, description: "What guests should know" },
+  { label: "Visitor details", icon: ClipboardList, description: "What guests should know" },
   {
     label: "Location & Contact",
     icon: MapPin,
     description: "Address, contact and hours",
   },
-  { label: "Media & Review", icon: Camera, description: "Photos, video and review" },
+  { label: "Photos & review", icon: Camera, description: "Photos, video and review" },
 ];
 
 const FIELD_IDS: Record<string, string> = {
@@ -131,6 +124,9 @@ const FIELD_IDS: Record<string, string> = {
   province: "province",
   city: "city",
   contactMethods: "tourism-contact-methods",
+  joinMethods: "tourism-join-methods",
+  meetingPoint: "meetingPoint",
+  pickupAreas: "pickupAreas",
   phone: "phone",
   whatsapp: "whatsapp",
   email: "email",
@@ -177,6 +173,9 @@ const FIELD_LABELS: Record<string, string> = {
   locationAddress: "Street address",
   locationTown: "Suburb / town",
   contactMethods: "Contact methods",
+  joinMethods: "How visitors join",
+  meetingPoint: "Meeting point",
+  pickupAreas: "Pickup areas",
   phone: "Phone",
   whatsapp: "WhatsApp",
   email: "Email",
@@ -232,6 +231,9 @@ function getStepForFieldKey(key: string): number {
     normalizedKey === "province" ||
     normalizedKey === "city" ||
     normalizedKey === "contactMethods" ||
+    normalizedKey === "joinMethods" ||
+    normalizedKey === "meetingPoint" ||
+    normalizedKey === "pickupAreas" ||
     normalizedKey === "phone" ||
     normalizedKey === "whatsapp" ||
     normalizedKey === "email" ||
@@ -372,6 +374,9 @@ function CreateTourismContent() {
   const [languagesSpoken, setLanguagesSpoken] = useState("");
   const [cancellationPolicy, setCancellationPolicy] = useState("");
   const [bookingUrl, setBookingUrl] = useState("");
+  const [joinMethods, setJoinMethods] = useState<string[]>([]);
+  const [meetingPoint, setMeetingPoint] = useState("");
+  const [pickupAreas, setPickupAreas] = useState("");
   const [petsAllowed, setPetsAllowed] = useState(false);
   const [smokingAllowed, setSmokingAllowed] = useState(false);
   /* ── Category-specific tourism state ─────────────────────── */
@@ -408,6 +413,8 @@ function CreateTourismContent() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [priceZar, setPriceZar] = useState("");
+  const [entryChoice, setEntryChoice] = useState<"free" | "paid" | "">("");
+  const paidPriceRef = useRef("");
   const [negotiable, setNegotiable] = useState(false);
   const [venueName, setVenueName] = useState("");
   const [venueCapacity, setVenueCapacity] = useState("");
@@ -513,90 +520,9 @@ function CreateTourismContent() {
     });
   }, [profile, province, city]);
 
-  // Default event dates
-  useEffect(() => {
-    if (listingType !== "event") return;
-    const defaults = getDefaultEventDates(startDate, endDate);
-    queueMicrotask(() => {
-      if (!startDate) setStartDate(defaults.startDate);
-      if (!endDate) setEndDate(defaults.endDate);
-    });
-  }, [listingType, startDate, endDate]);
-
   // Reset category-specific fields when subcategory changes
-  const prevGroupRef = useRef<string>("");
-  const prevSubcategoryRef = useRef<string>("");
-  useEffect(() => {
-    const prevSubcategory = prevSubcategoryRef.current;
-    prevSubcategoryRef.current = subcategory;
-
-    const newGroup = TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory] ?? "";
-    const prevGroup = prevGroupRef.current;
-    prevGroupRef.current = newGroup;
-    // Skip on first render
-    if (!prevGroup) return;
-
-    queueMicrotask(() => {
-      // Same-group subcategory changes can still invalidate group-specific choices.
-      if (prevGroup === newGroup) {
-        if (prevGroup === "C" && prevSubcategory && prevSubcategory !== subcategory) {
-          setActivityTypes([]);
-          if (
-            prevSubcategory === "adventure_activities" ||
-            subcategory !== "adventure_activities"
-          ) {
-            setDifficultyLevel("");
-            setEquipmentProvided(false);
-          }
-        }
-        return;
-      }
-
-      // Reset accommodation fields (Group A/B)
-      if (prevGroup === "A" || prevGroup === "B") {
-        setStarRating("");
-        setNumberOfRooms("");
-        setAccommodationTypes([]);
-        setCheckInTime("");
-        setCheckOutTime("");
-        setMealOptions([]);
-        setPetsAllowed(false);
-        setSmokingAllowed(false);
-      }
-      // Reset spa fields (Group B)
-      if (prevGroup === "B") setTreatmentTypes([]);
-      // Reset tour fields (Group C)
-      if (prevGroup === "C") {
-        setActivityTypes([]);
-        setTourDuration("");
-        setMaxGroupSize("");
-        setDifficultyLevel("");
-        setEquipmentProvided(false);
-        setWhatsIncluded("");
-        setTourismAgeRestriction("");
-      }
-      // Reset travel agency fields (Group D)
-      if (prevGroup === "D") {
-        setServicesOffered([]);
-        setTourismSpecializations([]);
-      }
-      // Reset attraction fields (Group E)
-      if (prevGroup === "E") {
-        setGuidedTours(false);
-        setAudioGuide(false);
-        setVisitDuration("");
-        setTourismAgeRestriction("");
-      }
-      // Reset car rental fields (Group F)
-      if (prevGroup === "F") {
-        setVehicleTypes([]);
-        setDeliveryCollection(false);
-        setMinDriverAge("");
-        setInsuranceIncluded(false);
-        setGpsAvailable(false);
-      }
-    });
-  }, [subcategory]);
+  // Keep compatible answers when temporarily changing activity; the payload builder
+  // includes only fields belonging to the selected activity.
 
   // Restore draft
   useEffect(() => {
@@ -604,9 +530,22 @@ function CreateTourismContent() {
     void Promise.resolve(restoreDraft()).then((draft) => {
       if (!draft) return;
       const d = draft.data;
+      // An explicit route (for example ?type=event) never receives answers from a
+      // draft of the other listing type.
+      if (requestedListingType && d.listingType && d.listingType !== requestedListingType) {
+        toast({
+          title: "You have another unfinished draft",
+          description:
+            d.listingType === "event"
+              ? "Your unfinished event draft will be replaced as you fill in this form."
+              : "Your unfinished stay, experience or attraction draft will be replaced as you fill in this form.",
+        });
+        return;
+      }
       queueMicrotask(() => {
         setStep(draft.step);
-        if (d.listingType) setListingType(d.listingType as TourismListingType);
+        if (d.listingType && !requestedListingType)
+          setListingType(d.listingType as TourismListingType);
         if (d.title) setTitle(d.title);
         if (d.description) setDescription(d.description);
         if (d.subcategory) setSubcategory(d.subcategory);
@@ -664,6 +603,9 @@ function CreateTourismContent() {
         if (d.city) setCity(d.city);
         if (d.locationTown) setLocationTown(d.locationTown);
         if (d.locationAddress) setLocationAddress(d.locationAddress);
+        if (d.joinMethods?.length) setJoinMethods(d.joinMethods);
+        if (d.meetingPoint) setMeetingPoint(d.meetingPoint);
+        if (d.pickupAreas) setPickupAreas(d.pickupAreas);
         if (d.contactMethods?.length) setContactMethods(d.contactMethods);
         if (d.phone) setPhone(d.phone);
         if (d.whatsapp) setWhatsapp(d.whatsapp);
@@ -738,6 +680,9 @@ function CreateTourismContent() {
       city,
       locationTown,
       locationAddress,
+      joinMethods,
+      meetingPoint,
+      pickupAreas,
       contactMethods,
       phone,
       whatsapp,
@@ -821,6 +766,9 @@ function CreateTourismContent() {
     city,
     locationTown,
     locationAddress,
+    joinMethods,
+    meetingPoint,
+    pickupAreas,
     contactMethods,
     phone,
     whatsapp,
@@ -897,6 +845,39 @@ function CreateTourismContent() {
     );
   }
 
+  /** Visitor access for the selected tourism activity; inactive answers are left out. */
+  function buildTourismAccess() {
+    const hasAddress = Boolean(locationAddress.trim());
+    if (fieldGroup === "D" || fieldGroup === "F") {
+      return hasAddress
+        ? {
+            version: 2,
+            methods: ["visit", "online"],
+            premises: "standalone_shop",
+            publishAddress: true,
+          }
+        : { version: 2, methods: ["online"], publishAddress: false };
+    }
+    if (fieldGroup === "C") {
+      const methods: string[] = [];
+      if (joinMethods.includes("meeting_point") || hasAddress) methods.push("visit");
+      if (joinMethods.includes("pickup")) methods.push("travel");
+      return {
+        version: 2,
+        methods: methods.length ? methods : ["online"],
+        ...(methods.includes("visit") ? { premises: "standalone_shop" } : {}),
+        ...(methods.includes("travel") ? { serviceAreas: pickupAreas.trim() } : {}),
+        publishAddress: hasAddress,
+      };
+    }
+    return {
+      version: 2,
+      methods: ["visit"],
+      premises: "standalone_shop",
+      publishAddress: hasAddress,
+    };
+  }
+
   function validateStep(targetStep: number) {
     const errors = validateTourismStep(
       targetStep,
@@ -947,6 +928,9 @@ function CreateTourismContent() {
         ticketsUrl,
         locationAddress,
         locationTown,
+        joinMethods,
+        meetingPoint,
+        pickupAreas,
       },
       photoFiles.length,
       videoFiles.length
@@ -983,8 +967,8 @@ function CreateTourismContent() {
       if (checkInTime) categoryDetails.check_in_time = checkInTime;
       if (checkOutTime) categoryDetails.check_out_time = checkOutTime;
       if (mealOptions.length) categoryDetails.meal_options = mealOptions;
-      categoryDetails.pets_allowed = petsAllowed;
-      categoryDetails.smoking_allowed = smokingAllowed;
+      categoryDetails.pets_allowed = petsAllowed || undefined;
+      categoryDetails.smoking_allowed = smokingAllowed || undefined;
     }
     // Group B extra: Spa
     if (group === "B") {
@@ -996,7 +980,7 @@ function CreateTourismContent() {
       if (tourDuration) categoryDetails.tour_duration = tourDuration;
       if (maxGroupSize) categoryDetails.max_group_size = Number(maxGroupSize);
       if (difficultyLevel) categoryDetails.difficulty_level = difficultyLevel;
-      categoryDetails.equipment_provided = equipmentProvided;
+      categoryDetails.equipment_provided = equipmentProvided || undefined;
       if (whatsIncluded) categoryDetails.whats_included = whatsIncluded;
       if (tourismAgeRestriction) categoryDetails.age_restriction = tourismAgeRestriction;
     }
@@ -1007,18 +991,18 @@ function CreateTourismContent() {
     }
     // Group E: Attractions
     if (group === "E") {
-      categoryDetails.guided_tours = guidedTours;
-      categoryDetails.audio_guide = audioGuide;
+      categoryDetails.guided_tours = guidedTours || undefined;
+      categoryDetails.audio_guide = audioGuide || undefined;
       if (visitDuration) categoryDetails.visit_duration = visitDuration;
       if (tourismAgeRestriction) categoryDetails.age_restriction = tourismAgeRestriction;
     }
     // Group F: Car Rental
     if (group === "F") {
       if (vehicleTypes.length) categoryDetails.vehicle_types = vehicleTypes;
-      categoryDetails.delivery_collection = deliveryCollection;
+      categoryDetails.delivery_collection = deliveryCollection || undefined;
       if (minDriverAge) categoryDetails.min_driver_age = Number(minDriverAge);
-      categoryDetails.insurance_included = insuranceIncluded;
-      categoryDetails.gps_available = gpsAvailable;
+      categoryDetails.insurance_included = insuranceIncluded || undefined;
+      categoryDetails.gps_available = gpsAvailable || undefined;
     }
     // Shared fields
     if (priceRange) categoryDetails.price_range = priceRange;
@@ -1030,10 +1014,13 @@ function CreateTourismContent() {
     if (bookingUrl) categoryDetails.booking_url = normalizeUserEnteredUrl(bookingUrl);
 
     // SA tourism additions
-    if (tgcsaGrading) categoryDetails.tgcsa_grading = tgcsaGrading;
-    if (minimumStayNights) categoryDetails.minimum_stay_nights = Number(minimumStayNights);
-    if (childPolicy) categoryDetails.child_policy = childPolicy;
-    if (seasonalPricing) categoryDetails.seasonal_pricing = seasonalPricing;
+    if ((group === "A" || group === "B") && tgcsaGrading)
+      categoryDetails.tgcsa_grading = tgcsaGrading;
+    if ((group === "A" || group === "B") && minimumStayNights)
+      categoryDetails.minimum_stay_nights = Number(minimumStayNights);
+    if ((group === "A" || group === "B") && childPolicy) categoryDetails.child_policy = childPolicy;
+    if ((group === "A" || group === "B") && seasonalPricing)
+      categoryDetails.seasonal_pricing = seasonalPricing;
     if (nearbyAttractions) categoryDetails.nearby_attractions = nearbyAttractions;
 
     return categoryDetails;
@@ -1146,7 +1133,7 @@ function CreateTourismContent() {
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-|-$/g, "")
-            .slice(0, 80) +
+            .slice(0, 48) +
           "-" +
           Date.now().toString(36);
 
@@ -1187,13 +1174,14 @@ function CreateTourismContent() {
           website: website || undefined,
           social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
           operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
-          category_details: categoryDetails,
-          contact_methods: contactMethods,
-          business_details: {
-            type: "standalone_shop" as const,
-            street_address: locationAddress || "",
-            suburb: locationTown || "",
+          category_details: {
+            ...categoryDetails,
+            ...(fieldGroup === "C" && joinMethods.includes("meeting_point")
+              ? { meeting_point: meetingPoint.trim() }
+              : {}),
+            customer_access: buildTourismAccess(),
           },
+          contact_methods: contactMethods,
           termsAccepted,
 
           trialDays,
@@ -1284,14 +1272,14 @@ function CreateTourismContent() {
         if (eventType) eventDetails.event_type = eventType;
         if (venueName) eventDetails.venue_name = venueName;
         if (venueCapacity) eventDetails.venue_capacity = Number(venueCapacity);
-        if (ticketTiers.length) eventDetails.ticket_tiers = ticketTiers;
-        if (ticketsUrl) eventDetails.tickets_url = ticketsUrl;
+        if (Number(priceZar) > 0 && ticketTiers.length) eventDetails.ticket_tiers = ticketTiers;
+        if (Number(priceZar) > 0 && ticketsUrl) eventDetails.tickets_url = ticketsUrl;
         if (ageRestriction) eventDetails.age_restriction = ageRestriction;
         if (dressCode) eventDetails.dress_code = dressCode;
         if (lineup) eventDetails.lineup = lineup;
-        eventDetails.parking_available = parkingAvailable;
+        eventDetails.parking_available = parkingAvailable || undefined;
         if (eventAccessibility.length) eventDetails.accessibility = eventAccessibility;
-        eventDetails.food_drinks_available = foodDrinksAvailable;
+        eventDetails.food_drinks_available = foodDrinksAvailable || undefined;
         if (bringYourOwn) eventDetails.bring_your_own = bringYourOwn;
 
         // SA event additions
@@ -1303,6 +1291,7 @@ function CreateTourismContent() {
         const body = {
           title: title.trim(),
           description: description.trim(),
+          form_version: 2,
           promotion_type: "event" as const,
           category_key: "tourism_hospitality" as const,
           price_zar: priceZar ? parseFloat(priceZar) : undefined,
@@ -1320,8 +1309,8 @@ function CreateTourismContent() {
           media_height: mediaDimensions?.height,
           focal_x: focalPoint.x,
           focal_y: focalPoint.y,
-          start_date: startDate ? new Date(startDate).toISOString() : undefined,
-          end_date: endDate ? new Date(endDate).toISOString() : undefined,
+          start_date: startDate ? eventTimeToIso(startDate) : undefined,
+          end_date: endDate ? eventTimeToIso(endDate, true) : undefined,
           business_id: businessId || undefined,
           event_details: Object.keys(eventDetails).length > 0 ? eventDetails : undefined,
           termsAccepted,
@@ -1434,7 +1423,8 @@ function CreateTourismContent() {
   function handleDiscardDraft() {
     discardDraft();
     setStep(0);
-    setListingType("tourism_business");
+    // Discarding keeps the route the owner chose (for example ?type=event).
+    setListingType(requestedListingType ?? "tourism_business");
     setTitle("");
     setDescription("");
     setSubcategory("");
@@ -1514,40 +1504,6 @@ function CreateTourismContent() {
     setHoursSat("");
     setHoursSun("");
     setLogoFiles([]);
-  }
-
-  function resetEventSpecificFields() {
-    setEventType("");
-    setStartDate("");
-    setEndDate("");
-    setPriceZar("");
-    setNegotiable(false);
-    setVenueName("");
-    setVenueCapacity("");
-    setTicketTiers([]);
-    setTicketsUrl("");
-    setAgeRestriction("");
-    setDressCode("");
-    setLineup("");
-    setParkingAvailable(false);
-    setEventAccessibility([]);
-    setFoodDrinksAvailable(false);
-    setBringYourOwn("");
-  }
-
-  function handleListingTypeChange(nextType: TourismListingType) {
-    if (nextType === listingType) return;
-    const confirmed = window.confirm(
-      "Switching type will clear industry-specific details. Shared fields like title, description, location, contact, and media will stay. Continue?"
-    );
-    if (!confirmed) return;
-    if (nextType === "event") {
-      resetTourismSpecificFields();
-    } else {
-      resetEventSpecificFields();
-    }
-    setListingType(nextType);
-    clearErrors("listingType");
   }
 
   function renderPreview() {
@@ -1648,8 +1604,8 @@ function CreateTourismContent() {
     if (eventType) previewEventDetails.event_type = eventType;
     if (venueName) previewEventDetails.venue_name = venueName;
     if (venueCapacity) previewEventDetails.venue_capacity = Number(venueCapacity);
-    if (ticketTiers.length) previewEventDetails.ticket_tiers = ticketTiers;
-    if (ticketsUrl) previewEventDetails.tickets_url = ticketsUrl;
+    if (Number(priceZar) > 0 && ticketTiers.length) previewEventDetails.ticket_tiers = ticketTiers;
+    if (Number(priceZar) > 0 && ticketsUrl) previewEventDetails.tickets_url = ticketsUrl;
     if (ageRestriction) previewEventDetails.age_restriction = ageRestriction;
     if (dressCode) previewEventDetails.dress_code = dressCode;
     if (lineup) previewEventDetails.lineup = lineup;
@@ -1683,8 +1639,8 @@ function CreateTourismContent() {
       location_town: locationTown || null,
       location_address: locationAddress || null,
       contact_methods: contactMethods,
-      start_date: startDate ? new Date(startDate).toISOString() : null,
-      end_date: endDate ? new Date(endDate).toISOString() : null,
+      start_date: startDate ? eventTimeToIso(startDate) : null,
+      end_date: endDate ? eventTimeToIso(endDate, true) : null,
       boost_until: null,
       featured_until: null,
       view_count: null,
@@ -1780,8 +1736,22 @@ function CreateTourismContent() {
                 ]}
                 badgeLabel="Tourism & Events"
                 area="tourism"
-                guideDescription="Choose a place or an event first. The form adapts to it."
-                steps={STEPS}
+                guideDescription="Describe what visitors can expect. Use the question-mark help to understand a choice."
+                steps={STEPS.map((s, i) =>
+                  listingType === "event"
+                    ? {
+                        ...s,
+                        label: [
+                          "About your event",
+                          "When, where & entry",
+                          "Contact & visitor information",
+                          "Photos & review",
+                        ][i],
+                      }
+                    : s
+                )}
+                onStepChange={setStep}
+                onFieldError={(key) => focusFirstError({ [key]: fieldErrors[key] })}
                 currentStep={step}
                 error={formError}
                 fieldErrors={fieldErrors}
@@ -1880,71 +1850,11 @@ function CreateTourismContent() {
                 {/* ── Step 0: Type & Basics ── */}
                 {step === 0 && (
                   <div className="space-y-6">
-                    {/* Listing type selector */}
-                    <fieldset
-                      id="listing-type-group"
-                      tabIndex={-1}
-                      className="rounded-2xl focus:outline-none"
-                    >
-                      <legend className="mb-3 text-base font-semibold">
-                        What are you listing? *
-                      </legend>
-                      <div className="grid grid-cols-2 gap-2.5">
-                        {(
-                          [
-                            {
-                              value: "tourism_business" as const,
-                              label: "Tourism Business",
-                              desc: "Stays, tours, attractions",
-                              icon: BedDouble,
-                            },
-                            {
-                              value: "event" as const,
-                              label: "Event",
-                              desc: "Festivals, gigs, markets",
-                              icon: CalendarDays,
-                            },
-                          ] as const
-                        ).map((opt) => (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => handleListingTypeChange(opt.value)}
-                            aria-pressed={listingType === opt.value}
-                            className={cn(
-                              "flex min-h-[5.5rem] flex-col items-start gap-2 rounded-2xl border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                              listingType === opt.value
-                                ? "border-sunset-600 bg-sunset-50 ring-1 ring-sunset-600 dark:border-sunset-400 dark:bg-sunset-950/40 dark:ring-sunset-400"
-                                : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
-                            )}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                "flex h-9 w-9 items-center justify-center rounded-xl",
-                                listingType === opt.value
-                                  ? "bg-sunset-600 text-white dark:bg-sunset-400 dark:text-sunset-950"
-                                  : "bg-muted text-foreground/70"
-                              )}
-                            >
-                              <opt.icon className="h-[18px] w-[18px]" />
-                            </span>
-                            <span>
-                              <span className="block text-sm font-semibold">{opt.label}</span>
-                              <span className="block text-xs text-muted-foreground">
-                                {opt.desc}
-                              </span>
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </fieldset>
-
                     {/* Title */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="title">
-                          {listingType === "event" ? "Event Title" : "Business Name"} *
+                          {listingType === "event" ? "Event name" : "Business Name"} *
                         </Label>
                         <span className="text-xs text-muted-foreground">{title.length}/120</span>
                       </div>
@@ -1998,8 +1908,8 @@ function CreateTourismContent() {
                     {/* Subcategory (tourism business) */}
                     {listingType === "tourism_business" && (
                       <div className="space-y-2">
-                        <Label htmlFor="subcategory">Tourism Category *</Label>
-                        <select
+                        <Label htmlFor="subcategory">Tourism category *</Label>
+                        <PostSelect
                           id="subcategory"
                           value={subcategory}
                           onChange={(e) => {
@@ -2007,15 +1917,40 @@ function CreateTourismContent() {
                             clearErrors("subcategory");
                           }}
                           className={SELECT_CLASS}
-                          aria-label="Tourism Category"
+                          aria-label="Tourism category"
                         >
                           <option value="">Select a category...</option>
-                          {TOURISM_SUBCATEGORIES.map((s) => (
-                            <option key={s.value} value={s.value}>
-                              {s.label}
-                            </option>
+                          {[
+                            [
+                              "Accommodation",
+                              [
+                                "hotel_resort",
+                                "guest_house_bnb",
+                                "lodge_game_lodge",
+                                "backpackers_hostel",
+                                "self_catering",
+                                "campground_caravan",
+                              ],
+                            ],
+                            [
+                              "Tours & Experiences",
+                              ["tour_operator", "safari_wildlife", "adventure_activities"],
+                            ],
+                            ["Attractions", ["cultural_heritage", "tourist_attraction"]],
+                            ["Travel Services", ["travel_agency", "car_rental_tourism"]],
+                            ["Wellness Retreats", ["spa_wellness_retreat"]],
+                          ].map(([label, values]) => (
+                            <optgroup key={label as string} label={label as string}>
+                              {TOURISM_SUBCATEGORIES.filter((s) =>
+                                (values as string[]).includes(s.value)
+                              ).map((s) => (
+                                <option key={s.value} value={s.value}>
+                                  {s.label}
+                                </option>
+                              ))}
+                            </optgroup>
                           ))}
-                        </select>
+                        </PostSelect>
                         {fieldErrors.subcategory && (
                           <p className="inline-form-error">{fieldErrors.subcategory}</p>
                         )}
@@ -2025,8 +1960,8 @@ function CreateTourismContent() {
                     {/* Event type (event) */}
                     {listingType === "event" && (
                       <div className="space-y-2">
-                        <Label htmlFor="eventType">Event Type *</Label>
-                        <select
+                        <Label htmlFor="eventType">Event category *</Label>
+                        <PostSelect
                           id="eventType"
                           value={eventType}
                           onChange={(e) => {
@@ -2034,7 +1969,7 @@ function CreateTourismContent() {
                             clearErrors("eventType");
                           }}
                           className={SELECT_CLASS}
-                          aria-label="Event Type"
+                          aria-label="Event category"
                         >
                           <option value="">Select an event type...</option>
                           {EVENT_TYPES.map((t) => (
@@ -2042,7 +1977,7 @@ function CreateTourismContent() {
                               {t.label}
                             </option>
                           ))}
-                        </select>
+                        </PostSelect>
                         {fieldErrors.eventType && (
                           <p className="inline-form-error">{fieldErrors.eventType}</p>
                         )}
@@ -2068,16 +2003,16 @@ function CreateTourismContent() {
                           <>
                             {/* Star rating */}
                             <div className="space-y-2">
-                              <Label htmlFor="starRating">Star Rating</Label>
+                              <Label htmlFor="starRating">Official star grading</Label>
                               <p className="text-xs text-muted-foreground">
                                 Official grading (1–5 stars), if applicable.
                               </p>
-                              <select
+                              <PostSelect
                                 id="starRating"
                                 value={starRating}
                                 onChange={(e) => setStarRating(e.target.value)}
                                 className={SELECT_CLASS}
-                                aria-label="Star Rating"
+                                aria-label="Official star grading"
                               >
                                 <option value="">Not rated</option>
                                 {[1, 2, 3, 4, 5].map((n) => (
@@ -2085,7 +2020,7 @@ function CreateTourismContent() {
                                     {"★".repeat(n)} {n} Star{n > 1 ? "s" : ""}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                               {fieldErrors.starRating && (
                                 <p className="inline-form-error">{fieldErrors.starRating}</p>
                               )}
@@ -2259,7 +2194,7 @@ function CreateTourismContent() {
                               <p className="text-xs text-muted-foreground">
                                 Typical length of the tour or experience.
                               </p>
-                              <select
+                              <PostSelect
                                 id="tourDuration"
                                 value={tourDuration}
                                 onChange={(e) => setTourDuration(e.target.value)}
@@ -2272,7 +2207,7 @@ function CreateTourismContent() {
                                     {d.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
 
                             {/* Max group size */}
@@ -2298,7 +2233,7 @@ function CreateTourismContent() {
                                 <p className="text-xs text-muted-foreground">
                                   Physical effort required for this activity.
                                 </p>
-                                <select
+                                <PostSelect
                                   id="difficultyLevel"
                                   value={difficultyLevel}
                                   onChange={(e) => setDifficultyLevel(e.target.value)}
@@ -2311,7 +2246,7 @@ function CreateTourismContent() {
                                       {d.label}
                                     </option>
                                   ))}
-                                </select>
+                                </PostSelect>
                               </div>
                             )}
 
@@ -2349,7 +2284,7 @@ function CreateTourismContent() {
                               <p className="text-xs text-muted-foreground">
                                 Minimum age requirement, if any.
                               </p>
-                              <select
+                              <PostSelect
                                 id="tourismAgeRestriction"
                                 value={tourismAgeRestriction}
                                 onChange={(e) => setTourismAgeRestriction(e.target.value)}
@@ -2362,7 +2297,7 @@ function CreateTourismContent() {
                                     {a.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
                           </>
                         )}
@@ -2444,7 +2379,7 @@ function CreateTourismContent() {
                               <p className="text-xs text-muted-foreground">
                                 How long a typical visit takes.
                               </p>
-                              <select
+                              <PostSelect
                                 id="visitDuration"
                                 value={visitDuration}
                                 onChange={(e) => setVisitDuration(e.target.value)}
@@ -2457,7 +2392,7 @@ function CreateTourismContent() {
                                     {d.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
 
                             {/* Age restriction */}
@@ -2466,7 +2401,7 @@ function CreateTourismContent() {
                               <p className="text-xs text-muted-foreground">
                                 Minimum age requirement, if any.
                               </p>
-                              <select
+                              <PostSelect
                                 id="tourismAgeRestrictionAttr"
                                 value={tourismAgeRestriction}
                                 onChange={(e) => setTourismAgeRestriction(e.target.value)}
@@ -2479,7 +2414,7 @@ function CreateTourismContent() {
                                     {a.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
                           </>
                         )}
@@ -2567,7 +2502,7 @@ function CreateTourismContent() {
                               <p className="text-xs text-muted-foreground">
                                 Gives visitors a quick idea of your pricing.
                               </p>
-                              <select
+                              <PostSelect
                                 id="priceRange"
                                 value={priceRange}
                                 onChange={(e) => setPriceRange(e.target.value)}
@@ -2580,7 +2515,7 @@ function CreateTourismContent() {
                                     {r.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
 
                             {/* Amenities (not for D/F) */}
@@ -2626,7 +2561,7 @@ function CreateTourismContent() {
                               <p className="text-xs text-muted-foreground">
                                 Your standard terms for cancellations and refunds.
                               </p>
-                              <select
+                              <PostSelect
                                 id="cancellationPolicy"
                                 value={cancellationPolicy}
                                 onChange={(e) => setCancellationPolicy(e.target.value)}
@@ -2639,7 +2574,7 @@ function CreateTourismContent() {
                                     {c.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
 
                             {/* Booking URL */}
@@ -2670,7 +2605,7 @@ function CreateTourismContent() {
                               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="space-y-1">
                                   <Label htmlFor="tgcsaGrading">TGCSA Grading</Label>
-                                  <select
+                                  <PostSelect
                                     id="tgcsaGrading"
                                     aria-label="TGCSA Grading"
                                     className="w-full rounded-md border px-3 py-2 text-sm"
@@ -2683,7 +2618,7 @@ function CreateTourismContent() {
                                     <option value="3_star">3 Stars</option>
                                     <option value="4_star">4 Stars</option>
                                     <option value="5_star">5 Stars</option>
-                                  </select>
+                                  </PostSelect>
                                   <p className="text-xs text-muted-foreground">
                                     Tourism Grading Council SA rating.
                                   </p>
@@ -2705,7 +2640,7 @@ function CreateTourismContent() {
 
                               <div className="space-y-1">
                                 <Label htmlFor="childPolicy">Child Policy</Label>
-                                <select
+                                <PostSelect
                                   id="childPolicy"
                                   aria-label="Child policy"
                                   className="w-full rounded-md border px-3 py-2 text-sm"
@@ -2717,7 +2652,7 @@ function CreateTourismContent() {
                                   <option value="children_over_6">Children Over 6</option>
                                   <option value="children_over_12">Children Over 12</option>
                                   <option value="adults_only">Adults Only</option>
-                                </select>
+                                </PostSelect>
                               </div>
 
                               <div className="space-y-1">
@@ -2747,45 +2682,18 @@ function CreateTourismContent() {
                     ) : (
                       /* ── Event details ── */
                       <>
-                        {/* Start / End date */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="start_date">Start Date *</Label>
-                            <Input
-                              id="start_date"
-                              type="date"
-                              value={startDate}
-                              onChange={(e) => {
-                                setStartDate(e.target.value);
-                                clearErrors("startDate");
-                              }}
-                              aria-invalid={!!fieldErrors.startDate}
-                            />
-                            {fieldErrors.startDate && (
-                              <p className="inline-form-error">{fieldErrors.startDate}</p>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="end_date">End Date</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Leave blank for single-day events.
-                            </p>
-                            <Input
-                              id="end_date"
-                              type="date"
-                              value={endDate}
-                              onChange={(e) => {
-                                setEndDate(e.target.value);
-                                clearErrors("endDate");
-                              }}
-                              aria-invalid={!!fieldErrors.endDate}
-                            />
-                            {fieldErrors.endDate && (
-                              <p className="inline-form-error">{fieldErrors.endDate}</p>
-                            )}
-                          </div>
-                        </div>
-
+                        <EventDateFields
+                          start={startDate}
+                          end={endDate}
+                          onStart={setStartDate}
+                          onEnd={setEndDate}
+                        />
+                        {fieldErrors.startDate && (
+                          <p className="inline-form-error">{fieldErrors.startDate}</p>
+                        )}
+                        {fieldErrors.endDate && (
+                          <p className="inline-form-error">{fieldErrors.endDate}</p>
+                        )}
                         {/* Venue */}
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
@@ -2819,133 +2727,167 @@ function CreateTourismContent() {
                           </div>
                         </div>
 
-                        {/* Price */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="priceZar">Ticket / Entry Price (ZAR)</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Enter 0 for free events. This is the standard ticket price.
-                            </p>
-                            <Input
-                              id="priceZar"
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={priceZar}
-                              onChange={(e) => {
-                                setPriceZar(e.target.value);
-                                clearErrors("priceZar");
+                        <fieldset className="space-y-2">
+                          <legend>Entry (Required)</legend>
+                          <p className="text-sm text-muted-foreground">
+                            Free to post describes the listing fee. Free entry means visitors do not
+                            pay to attend.
+                          </p>
+                          <label className="mr-4 inline-flex min-h-11 items-center gap-2">
+                            <input
+                              type="radio"
+                              name="entry"
+                              checked={priceZar === "0"}
+                              onChange={() => {
+                                if (Number(priceZar) > 0) paidPriceRef.current = priceZar;
+                                setEntryChoice("free");
+                                setPriceZar("0");
+                                setNegotiable(false);
                               }}
-                              placeholder="0.00 = Free"
-                              aria-invalid={!!fieldErrors.priceZar}
                             />
-                            {fieldErrors.priceZar && (
-                              <p className="inline-form-error">{fieldErrors.priceZar}</p>
-                            )}
-                          </div>
-                          <div className="flex items-end pb-1">
-                            <label className="flex items-center gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={negotiable}
-                                onChange={(e) => setNegotiable(e.target.checked)}
-                                className="rounded border-gray-300"
-                              />
-                              Price negotiable
-                            </label>
-                          </div>
-                        </div>
-
-                        {/* Ticket tiers */}
-                        <fieldset className="space-y-3">
-                          <legend className="text-sm font-medium">Ticket Tiers</legend>
-                          <p className="text-xs text-muted-foreground">
-                            Add pricing tiers (e.g. General, VIP, Early Bird). Up to 10.
-                          </p>
-                          {ticketTiers.map((tier, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <Input
-                                value={tier.name}
-                                onChange={(e) => {
-                                  const next = [...ticketTiers];
-                                  next[i] = { ...next[i], name: e.target.value };
-                                  setTicketTiers(next);
-                                }}
-                                placeholder="Tier name (e.g. VIP)"
-                                className="flex-1"
-                              />
-                              <Input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={
-                                  tier.price_cents !== null ? String(tier.price_cents / 100) : ""
-                                }
-                                onChange={(e) => {
-                                  const next = [...ticketTiers];
-                                  const v = e.target.value;
-                                  next[i] = {
-                                    ...next[i],
-                                    price_cents: v ? Math.round(parseFloat(v) * 100) : null,
-                                  };
-                                  setTicketTiers(next);
-                                }}
-                                placeholder="Price (ZAR)"
-                                className="w-28"
-                              />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setTicketTiers((t) => t.filter((_, j) => j !== i))}
-                              >
-                                ✕
-                              </Button>
-                            </div>
-                          ))}
-                          {ticketTiers.length < 10 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setTicketTiers((t) => [...t, { name: "", price_cents: null }])
+                            Free entry
+                          </label>
+                          <label className="inline-flex min-h-11 items-center gap-2">
+                            <input
+                              type="radio"
+                              name="entry"
+                              checked={
+                                (entryChoice === "paid" && priceZar !== "0") || Number(priceZar) > 0
                               }
-                            >
-                              + Add tier
-                            </Button>
-                          )}
+                              onChange={() => {
+                                setEntryChoice("paid");
+                                setPriceZar(paidPriceRef.current);
+                                setNegotiable(false);
+                              }}
+                            />
+                            Paid entry
+                          </label>
                         </fieldset>
+                        {(entryChoice === "paid" || Number(priceZar) > 0) && priceZar !== "0" && (
+                          <>
+                            {/* Price */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="priceZar" required={priceZar !== "0"}>
+                                  Starting entry price (ZAR)
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                  Enter the lowest standard price for paid entry.
+                                </p>
+                                <Input
+                                  id="priceZar"
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  disabled={priceZar === "0"}
+                                  value={priceZar}
+                                  onChange={(e) => {
+                                    setPriceZar(e.target.value);
+                                    clearErrors("priceZar");
+                                  }}
+                                  placeholder="0.00 = Free"
+                                  aria-invalid={!!fieldErrors.priceZar}
+                                />
+                                {fieldErrors.priceZar && (
+                                  <p className="inline-form-error">{fieldErrors.priceZar}</p>
+                                )}
+                              </div>
+                            </div>
+                            {/* Ticket tiers */}
+                            <fieldset className="space-y-3">
+                              <legend className="text-sm font-medium">Ticket Tiers</legend>
+                              <p className="text-xs text-muted-foreground">
+                                Add pricing tiers (e.g. General, VIP, Early Bird). Up to 10.
+                              </p>
+                              {ticketTiers.map((tier, i) => (
+                                <div key={i} className="flex items-center gap-2">
+                                  <Input
+                                    value={tier.name}
+                                    onChange={(e) => {
+                                      const next = [...ticketTiers];
+                                      next[i] = { ...next[i], name: e.target.value };
+                                      setTicketTiers(next);
+                                    }}
+                                    placeholder="Tier name (e.g. VIP)"
+                                    className="flex-1"
+                                  />
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    value={
+                                      tier.price_cents !== null
+                                        ? String(tier.price_cents / 100)
+                                        : ""
+                                    }
+                                    onChange={(e) => {
+                                      const next = [...ticketTiers];
+                                      const v = e.target.value;
+                                      next[i] = {
+                                        ...next[i],
+                                        price_cents: v ? Math.round(parseFloat(v) * 100) : null,
+                                      };
+                                      setTicketTiers(next);
+                                    }}
+                                    placeholder="Price (ZAR)"
+                                    className="w-28"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setTicketTiers((t) => t.filter((_, j) => j !== i))
+                                    }
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ))}
+                              {ticketTiers.length < 10 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    setTicketTiers((t) => [...t, { name: "", price_cents: null }])
+                                  }
+                                >
+                                  + Add tier
+                                </Button>
+                              )}
+                            </fieldset>
 
-                        {/* Tickets URL */}
-                        <div className="space-y-2">
-                          <Label htmlFor="ticketsUrl">Tickets URL</Label>
-                          <p className="text-xs text-muted-foreground">
-                            Link where attendees can purchase tickets online.
-                          </p>
-                          <Input
-                            id="ticketsUrl"
-                            type="url"
-                            value={ticketsUrl}
-                            onChange={(e) => {
-                              setTicketsUrl(e.target.value);
-                              clearErrors("ticketsUrl");
-                            }}
-                            placeholder="https://www.webtickets.co.za/..."
-                            aria-invalid={!!fieldErrors.ticketsUrl}
-                          />
-                          {fieldErrors.ticketsUrl && (
-                            <p className="inline-form-error">{fieldErrors.ticketsUrl}</p>
-                          )}
-                        </div>
-
+                            {/* Tickets URL */}
+                            <div className="space-y-2">
+                              <Label htmlFor="ticketsUrl">Tickets URL</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Link where attendees can purchase tickets online.
+                              </p>
+                              <Input
+                                id="ticketsUrl"
+                                type="url"
+                                value={ticketsUrl}
+                                onChange={(e) => {
+                                  setTicketsUrl(e.target.value);
+                                  clearErrors("ticketsUrl");
+                                }}
+                                placeholder="https://www.webtickets.co.za/..."
+                                aria-invalid={!!fieldErrors.ticketsUrl}
+                              />
+                              {fieldErrors.ticketsUrl && (
+                                <p className="inline-form-error">{fieldErrors.ticketsUrl}</p>
+                              )}
+                            </div>
+                          </>
+                        )}
                         {/* Age restriction */}
                         <div className="space-y-2">
                           <Label htmlFor="ageRestriction">Age Restriction</Label>
                           <p className="text-xs text-muted-foreground">
                             Minimum age for attendees, if any.
                           </p>
-                          <select
+                          <PostSelect
                             id="ageRestriction"
                             value={ageRestriction}
                             onChange={(e) => setAgeRestriction(e.target.value)}
@@ -2958,7 +2900,7 @@ function CreateTourismContent() {
                                 {a.label}
                               </option>
                             ))}
-                          </select>
+                          </PostSelect>
                         </div>
 
                         {/* Dress code */}
@@ -3053,7 +2995,7 @@ function CreateTourismContent() {
                           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-1">
                               <Label htmlFor="recurring">Recurring</Label>
-                              <select
+                              <PostSelect
                                 id="recurring"
                                 aria-label="Recurring"
                                 className="w-full rounded-md border px-3 py-2 text-sm"
@@ -3065,12 +3007,12 @@ function CreateTourismContent() {
                                 <option value="weekly">Weekly</option>
                                 <option value="monthly">Monthly</option>
                                 <option value="annual">Annual</option>
-                              </select>
+                              </PostSelect>
                             </div>
 
                             <div className="space-y-1">
                               <Label htmlFor="rainPolicy">Rain Policy</Label>
-                              <select
+                              <PostSelect
                                 id="rainPolicy"
                                 aria-label="Rain policy"
                                 className="w-full rounded-md border px-3 py-2 text-sm"
@@ -3084,7 +3026,7 @@ function CreateTourismContent() {
                                 <option value="moved_indoors">Moved Indoors</option>
                                 <option value="postponed">Postponed</option>
                                 <option value="refunded">Refunded</option>
-                              </select>
+                              </PostSelect>
                             </div>
                           </div>
 
@@ -3128,15 +3070,125 @@ function CreateTourismContent() {
                       }}
                       showTown
                       showAddress
+                      townRequired={
+                        listingType === "tourism_business" &&
+                        ["A", "B", "E"].includes(TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory])
+                      }
+                      addressRequired={
+                        listingType === "tourism_business" &&
+                        ["A", "B", "E"].includes(TOURISM_SUBCATEGORY_FIELD_GROUPS[subcategory])
+                      }
                       errors={{
                         province: fieldErrors.province,
                         city: fieldErrors.city,
                       }}
                     />
 
+                    {listingType === "tourism_business" && fieldGroup === "C" && (
+                      <fieldset id="tourism-join-methods" className="space-y-3">
+                        <legend className="text-sm font-medium">
+                          How do visitors join your tour or experience? (Required)
+                        </legend>
+                        <p className="text-sm text-muted-foreground">
+                          Choose all that apply. You do not need to publish an office address.
+                        </p>
+                        {(
+                          [
+                            [
+                              "meeting_point",
+                              "At a meeting point",
+                              "For example, outside a museum or at a car park where the tour starts.",
+                            ],
+                            [
+                              "pickup",
+                              "I collect visitors",
+                              "For example, from hotels or guest houses in the areas you list.",
+                            ],
+                          ] as const
+                        ).map(([value, label, hint]) => (
+                          <label
+                            key={value}
+                            className="flex min-h-11 items-start gap-2 rounded-xl border p-3 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={label}
+                              checked={joinMethods.includes(value)}
+                              onChange={() => {
+                                toggleArrayItem(setJoinMethods, value);
+                                clearErrors("joinMethods", "meetingPoint", "pickupAreas");
+                              }}
+                              className="mt-1 rounded border-gray-300"
+                            />
+                            <span>
+                              <span className="block font-medium">{label}</span>
+                              <span className="text-muted-foreground">{hint}</span>
+                            </span>
+                          </label>
+                        ))}
+                        {fieldErrors.joinMethods && (
+                          <p className="inline-form-error">{fieldErrors.joinMethods}</p>
+                        )}
+                        {joinMethods.includes("meeting_point") && (
+                          <div className="space-y-2">
+                            <Label htmlFor="meetingPoint" required>
+                              Meeting point
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              This is shown publicly so visitors can find you.
+                            </p>
+                            <Input
+                              id="meetingPoint"
+                              value={meetingPoint}
+                              onChange={(e) => {
+                                setMeetingPoint(e.target.value);
+                                clearErrors("meetingPoint");
+                              }}
+                              maxLength={200}
+                              placeholder="e.g. Outside the Hector Pieterson Museum, Soweto"
+                              aria-invalid={!!fieldErrors.meetingPoint}
+                            />
+                            {fieldErrors.meetingPoint && (
+                              <p className="inline-form-error">{fieldErrors.meetingPoint}</p>
+                            )}
+                          </div>
+                        )}
+                        {joinMethods.includes("pickup") && (
+                          <div className="space-y-2">
+                            <Label htmlFor="pickupAreas" required>
+                              Pickup areas
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              Separate places with commas, such as Sandton, Rosebank.
+                            </p>
+                            <Input
+                              id="pickupAreas"
+                              value={pickupAreas}
+                              onChange={(e) => {
+                                setPickupAreas(e.target.value);
+                                clearErrors("pickupAreas");
+                              }}
+                              maxLength={2000}
+                              aria-invalid={!!fieldErrors.pickupAreas}
+                            />
+                            {fieldErrors.pickupAreas && (
+                              <p className="inline-form-error">{fieldErrors.pickupAreas}</p>
+                            )}
+                          </div>
+                        )}
+                      </fieldset>
+                    )}
+
                     {/* Contact methods */}
                     <fieldset id="tourism-contact-methods" className="space-y-2">
-                      <legend className="text-sm font-medium">Contact Methods *</legend>
+                      <legend className="text-sm font-medium">
+                        How should people contact you? (Required)
+                      </legend>
+                      <p className="text-sm text-muted-foreground">
+                        {listingType === "event"
+                          ? "Choose all that apply."
+                          : "Choose all that apply. Phone and WhatsApp show the number you enter. The contact form sends enquiries to your VerifyMzansi inbox."}
+                      </p>
                       <div className="flex flex-wrap gap-3">
                         {(["call", "whatsapp", "form"] as const).map((method) => (
                           <label key={method} className="flex items-center gap-2 text-sm">
@@ -3166,123 +3218,140 @@ function CreateTourismContent() {
                       )}
                     </fieldset>
 
-                    {/* Phone & WhatsApp */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
-                        <Input
-                          id="phone"
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => {
-                            setPhone(e.target.value);
-                            clearErrors("phone");
-                          }}
-                          placeholder="071 234 5678"
-                          aria-invalid={!!fieldErrors.phone}
-                        />
-                        {fieldErrors.phone && (
-                          <p className="inline-form-error">{fieldErrors.phone}</p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="whatsapp">WhatsApp Number</Label>
-                        <Input
-                          id="whatsapp"
-                          type="tel"
-                          value={whatsapp}
-                          onChange={(e) => {
-                            setWhatsapp(e.target.value);
-                            clearErrors("whatsapp");
-                          }}
-                          placeholder="071 234 5678"
-                          aria-invalid={!!fieldErrors.whatsapp}
-                        />
-                        {fieldErrors.whatsapp && (
-                          <p className="inline-form-error">{fieldErrors.whatsapp}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Email & Website */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          value={email}
-                          onChange={(e) => {
-                            setEmail(e.target.value);
-                            clearErrors("email");
-                          }}
-                          placeholder="info@business.co.za"
-                          aria-invalid={!!fieldErrors.email}
-                        />
-                        {fieldErrors.email && (
-                          <p className="inline-form-error">{fieldErrors.email}</p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="website">Website</Label>
-                        <Input
-                          id="website"
-                          type="url"
-                          value={website}
-                          onChange={(e) => {
-                            setWebsite(e.target.value);
-                            clearErrors("website");
-                          }}
-                          placeholder="https://www.yoursite.co.za"
-                          aria-invalid={!!fieldErrors.website}
-                        />
-                        {fieldErrors.website && (
-                          <p className="inline-form-error">{fieldErrors.website}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Social links */}
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium">Social Media (optional)</p>
-                      {[
-                        [
-                          "socialFacebook",
-                          "Facebook URL",
-                          socialFacebook,
-                          setSocialFacebook,
-                        ] as const,
-                        [
-                          "socialInstagram",
-                          "Instagram URL",
-                          socialInstagram,
-                          setSocialInstagram,
-                        ] as const,
-                        [
-                          "socialTwitter",
-                          "X / Twitter URL",
-                          socialTwitter,
-                          setSocialTwitter,
-                        ] as const,
-                        ["socialTiktok", "TikTok URL", socialTiktok, setSocialTiktok] as const,
-                      ].map(([key, label, value, setter]) => (
-                        <div key={key} className="space-y-1">
-                          <Input
-                            id={key}
-                            value={value}
-                            onChange={(e) => {
-                              setter(e.target.value);
-                              clearErrors(key);
-                            }}
-                            placeholder={label}
-                            aria-invalid={!!fieldErrors[key]}
-                          />
-                          {fieldErrors[key] && (
-                            <p className="inline-form-error">{fieldErrors[key]}</p>
-                          )}
+                    {listingType === "event" ? (
+                      <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                        Phone and WhatsApp use the number on your VerifyMzansi account. Contact form
+                        enquiries go to your VerifyMzansi inbox. You can change your account number
+                        in your profile.
+                      </p>
+                    ) : (
+                      <>
+                        {/* Phone & WhatsApp */}
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="phone" required={contactMethods.includes("call")}>
+                              Phone Number
+                            </Label>
+                            <Input
+                              id="phone"
+                              type="tel"
+                              value={phone}
+                              onChange={(e) => {
+                                setPhone(e.target.value);
+                                clearErrors("phone");
+                              }}
+                              placeholder="071 234 5678"
+                              aria-invalid={!!fieldErrors.phone}
+                            />
+                            {fieldErrors.phone && (
+                              <p className="inline-form-error">{fieldErrors.phone}</p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label
+                              htmlFor="whatsapp"
+                              required={contactMethods.includes("whatsapp")}
+                            >
+                              WhatsApp Number
+                            </Label>
+                            <Input
+                              id="whatsapp"
+                              type="tel"
+                              value={whatsapp}
+                              onChange={(e) => {
+                                setWhatsapp(e.target.value);
+                                clearErrors("whatsapp");
+                              }}
+                              placeholder="071 234 5678"
+                              aria-invalid={!!fieldErrors.whatsapp}
+                            />
+                            {fieldErrors.whatsapp && (
+                              <p className="inline-form-error">{fieldErrors.whatsapp}</p>
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+
+                        {/* Email & Website */}
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={email}
+                              onChange={(e) => {
+                                setEmail(e.target.value);
+                                clearErrors("email");
+                              }}
+                              placeholder="info@business.co.za"
+                              aria-invalid={!!fieldErrors.email}
+                            />
+                            {fieldErrors.email && (
+                              <p className="inline-form-error">{fieldErrors.email}</p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="website">Website</Label>
+                            <Input
+                              id="website"
+                              type="url"
+                              value={website}
+                              onChange={(e) => {
+                                setWebsite(e.target.value);
+                                clearErrors("website");
+                              }}
+                              placeholder="https://www.yoursite.co.za"
+                              aria-invalid={!!fieldErrors.website}
+                            />
+                            {fieldErrors.website && (
+                              <p className="inline-form-error">{fieldErrors.website}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Social links */}
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium">Social Media (optional)</p>
+                          {[
+                            [
+                              "socialFacebook",
+                              "Facebook URL",
+                              socialFacebook,
+                              setSocialFacebook,
+                            ] as const,
+                            [
+                              "socialInstagram",
+                              "Instagram URL",
+                              socialInstagram,
+                              setSocialInstagram,
+                            ] as const,
+                            [
+                              "socialTwitter",
+                              "X / Twitter URL",
+                              socialTwitter,
+                              setSocialTwitter,
+                            ] as const,
+                            ["socialTiktok", "TikTok URL", socialTiktok, setSocialTiktok] as const,
+                          ].map(([key, label, value, setter]) => (
+                            <div key={key} className="space-y-1">
+                              <Input
+                                id={key}
+                                value={value}
+                                onChange={(e) => {
+                                  setter(e.target.value);
+                                  clearErrors(key);
+                                }}
+                                placeholder={label}
+                                aria-invalid={!!fieldErrors[key]}
+                              />
+                              {fieldErrors[key] && (
+                                <p className="inline-form-error">{fieldErrors[key]}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
 
                     {/* Operating hours (tourism business only) */}
                     {listingType === "tourism_business" && (

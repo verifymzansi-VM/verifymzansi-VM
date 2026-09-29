@@ -16,9 +16,6 @@ describe("services index barrel", () => {
     // Audit
     expect(typeof services.logAuditEvent).toBe("function");
 
-    // Enforcement
-    expect(typeof services.enforceAction).toBe("function");
-
     // Consent
     expect(typeof services.updateConsent).toBe("function");
     expect(typeof services.getConsents).toBe("function");

@@ -166,6 +166,36 @@ describe("rate-limiter worker", () => {
     });
   });
 
+  it("caps manual location at ten attempts per account without blocking another account", async () => {
+    const { env } = createWorkerEnv();
+    for (let attempt = 0; attempt < 10; attempt++) {
+      expect(
+        (
+          await rateLimiterWorker.fetch(
+            createWorkerRequest("verification:manual-location", "user-1"),
+            env as never
+          )
+        ).status
+      ).toBe(200);
+    }
+    expect(
+      (
+        await rateLimiterWorker.fetch(
+          createWorkerRequest("verification:manual-location", "user-1"),
+          env as never
+        )
+      ).status
+    ).toBe(429);
+    expect(
+      (
+        await rateLimiterWorker.fetch(
+          createWorkerRequest("verification:manual-location", "user-2"),
+          env as never
+        )
+      ).status
+    ).toBe(200);
+  });
+
   it("stores generic fallback counters per tier instead of reusing one key", async () => {
     const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
 

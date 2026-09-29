@@ -19,6 +19,13 @@ import { CheckCircle, XCircle, Package, Eye, FolderX } from "lucide-react";
 import { ModerationPreviewPanel, type ModerationItem } from "./moderation-preview-panel";
 import { ContentDecisionDialog } from "@/components/admin/content-decision-dialog";
 import { useContentDecision } from "@/components/admin/use-content-decision";
+import { ClaimBadge, ClaimGate } from "@/components/admin/queue-claims";
+import type { ClaimItemType } from "@/lib/services/queue-claims";
+
+/** Which queue claim covers a moderation item. */
+function claimTypeOf(item: ModerationItem): ClaimItemType {
+  return item.isEditRequest ? "content_edit" : (item.contentType ?? "listing");
+}
 
 interface ModerationQueueClientProps {
   items: ModerationItem[];
@@ -176,56 +183,71 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
                     </p>
                   )}
                 </div>
-                <div className="col-span-2 min-w-0 w-full max-w-full flex flex-wrap justify-start gap-1 border-t border-border/60 pt-3 lg:justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 min-w-0 text-xs gap-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openPreview(item);
-                    }}
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    Review
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 min-w-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openReview(item, "approve");
-                    }}
-                  >
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Approve</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 min-w-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openWrongCategory(item);
-                    }}
-                  >
-                    <FolderX className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Wrong category</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 min-w-0 text-destructive hover:bg-destructive/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openReview(item, "reject");
-                    }}
-                  >
-                    <XCircle className="h-4 w-4 mr-1" />
-                    <span className="text-xs">Reject</span>
-                  </Button>
-                </div>
+                <ClaimGate type={claimTypeOf(item)} id={item.id}>
+                  {(claim) => (
+                    <div className="col-span-2 min-w-0 w-full max-w-full space-y-1">
+                      <div className="col-span-2 min-w-0 w-full max-w-full flex flex-wrap justify-start gap-1 border-t border-border/60 pt-3 lg:justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 min-w-0 text-xs gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPreview(item);
+                          }}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          Review
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 min-w-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                          disabled={claim.blocked}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openReview(item, "approve");
+                          }}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          <span className="text-xs">Approve</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 min-w-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                          disabled={claim.blocked}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openWrongCategory(item);
+                          }}
+                        >
+                          <FolderX className="h-4 w-4 mr-1" />
+                          <span className="text-xs">Wrong category</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 min-w-0 text-destructive hover:bg-destructive/10"
+                          disabled={claim.blocked}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openReview(item, "reject");
+                          }}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          <span className="text-xs">Reject</span>
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <ClaimBadge type={claimTypeOf(item)} id={item.id} />
+                        {claim.blockedReason && (
+                          <p className="text-[11px] text-muted-foreground">{claim.blockedReason}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </ClaimGate>
               </div>
             </CardContent>
           </Card>

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { staffGuard } from "@/test/staff-guard";
 import AdminReportsPage from "./page";
 
 const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted(() => ({
@@ -8,6 +9,11 @@ const { mockGetUser, mockSessionFrom, mockAdminFrom, redirectMock } = vi.hoisted
   mockAdminFrom: vi.fn(),
   redirectMock: vi.fn(),
 }));
+
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
@@ -24,13 +30,9 @@ vi.mock("@/lib/supabase/admin", () => ({
   })),
 }));
 
-vi.mock("@/lib/auth/roles", () => ({
-  isStaff: vi.fn(() => true),
-  isModeratorOrAdmin: vi.fn(() => true),
-}));
-
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));
 
 vi.mock("@/components/layout/page-header", () => ({
@@ -55,57 +57,77 @@ vi.mock("./reports-client", () => ({
 
 describe("AdminReportsPage", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
       data: { user: { id: "moderator-1", app_metadata: { role: "moderator" } } },
     });
   });
 
-  it("reads reports through the admin client after auth gating", async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({
-            data: [
-              {
-                id: "report-1",
-                status: "open",
-                target_id: "listing-1",
-                target_type: "listing",
-                area: "MZANSI_MARKET",
-                category: "scam",
-                severity: "high",
-                description: "Suspicious listing",
-                screenshot_url: null,
-                reporter_user_id: null,
-                reporter_ip_hash: "hash",
-                assigned_to: null,
-                resolved_at: null,
-                created_at: "2026-03-17T10:00:00.000Z",
-                updated_at: "2026-03-17T10:00:00.000Z",
-              },
-            ],
-          }),
-        }),
-      }),
+  /** Reports by status: open, in progress, and recently closed. */
+  function reportsByStatus(byStatus: Record<string, unknown[]>, openCount?: number) {
+    mockAdminFrom.mockImplementation(() => {
+      let status = "";
+      const q: Record<string, unknown> = {};
+      q.select = vi.fn(() => q);
+      q.eq = vi.fn((_col: string, value: string) => {
+        status = value;
+        return q;
+      });
+      q.in = vi.fn(() => {
+        status = "closed";
+        return q;
+      });
+      q.order = vi.fn(() => q);
+      q.limit = vi.fn(async () => ({
+        data: byStatus[status] ?? [],
+        count: status === "open" ? (openCount ?? (byStatus.open ?? []).length) : null,
+        error: null,
+      }));
+      return q;
+    });
+  }
+
+  const report = (id: string, status: string) => ({
+    id,
+    status,
+    target_id: "listing-1",
+    target_type: "listing",
+    area: "MZANSI_MARKET",
+    category: "scam",
+    severity: "high",
+    description: "Suspicious listing",
+    reporter_user_id: null,
+    created_at: "2026-03-17T10:00:00.000Z",
+    updated_at: "2026-03-17T10:00:00.000Z",
+  });
+
+  it("loads open, in-progress and recently closed reports through the admin client", async () => {
+    reportsByStatus({
+      open: [report("report-1", "open")],
+      in_progress: [report("report-2", "in_progress")],
+      closed: [report("report-3", "resolved")],
     });
 
     render(await AdminReportsPage());
 
     expect(mockSessionFrom).not.toHaveBeenCalled();
     expect(mockAdminFrom).toHaveBeenCalledWith("reports");
-    expect(screen.getByTestId("reports-client")).toHaveTextContent("1 reports");
-    expect(screen.getByText("1 Open")).toBeInTheDocument();
+    expect(screen.getByTestId("reports-client")).toHaveTextContent("3 reports");
+    expect(screen.getByText("1 open")).toBeInTheDocument();
+  });
+
+  it("says when more open reports exist than are shown", async () => {
+    reportsByStatus({ open: [report("report-1", "open")] }, 260);
+
+    render(await AdminReportsPage());
+
+    expect(screen.getByText("260 open")).toBeInTheDocument();
+    expect(screen.getByText(/Showing the first 1 of 260 open reports/)).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no reports", async () => {
-    mockAdminFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue({ data: [] }),
-        }),
-      }),
-    });
+    reportsByStatus({});
 
     render(await AdminReportsPage());
 

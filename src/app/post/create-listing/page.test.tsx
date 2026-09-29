@@ -207,9 +207,9 @@ describe("CreateListingPage", () => {
     const stepNav = screen.getByRole("navigation", { name: "Mzansi Market creation steps" });
 
     expect(screen.getByText("Quick guide")).toBeInTheDocument();
-    expect(within(stepNav).getAllByText("Details").length).toBeGreaterThan(0);
-    expect(within(stepNav).getAllByText("Price & Location").length).toBeGreaterThan(0);
-    expect(within(stepNav).getAllByText("Media").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("What are you listing?").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Price, location & contact").length).toBeGreaterThan(0);
+    expect(within(stepNav).getAllByText("Photos & review").length).toBeGreaterThan(0);
   });
 
   it("preselects the category chosen on the post chooser", async () => {
@@ -239,13 +239,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -259,13 +261,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -307,13 +311,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -379,13 +385,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -439,13 +447,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -492,13 +502,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -557,13 +569,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -647,13 +661,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -704,13 +720,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -754,13 +772,15 @@ describe("CreateListingPage", () => {
     render(<CreateListingPage />);
 
     fireEvent.click(screen.getByText("Select Electronics"));
-    fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Used iPhone 15" } });
-    fireEvent.change(screen.getByLabelText("Description *"), {
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
       target: { value: "A clean listing description with enough detail to continue." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    fireEvent.change(screen.getByLabelText(/(Asking Price|Monthly Rent) \(ZAR\) \*/), {
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
       target: { value: "1500" },
     });
     fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
@@ -815,9 +835,9 @@ describe("CreateListingPage", () => {
       render(<CreateListingPage />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Title *")).toHaveValue("Saved iPhone 15");
+        expect(screen.getByLabelText("Title (Required)")).toHaveValue("Saved iPhone 15");
       });
-      expect(screen.getByLabelText("Description *")).toHaveValue(
+      expect(screen.getByLabelText("Description (Required)")).toHaveValue(
         "A draft description from last session."
       );
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
@@ -828,13 +848,13 @@ describe("CreateListingPage", () => {
       render(<CreateListingPage />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Title *")).toHaveValue("Saved iPhone 15");
+        expect(screen.getByLabelText("Title (Required)")).toHaveValue("Saved iPhone 15");
       });
 
       fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
 
-      expect(screen.getByLabelText("Title *")).toHaveValue("");
-      expect(screen.getByLabelText("Description *")).toHaveValue("");
+      expect(screen.getByLabelText("Title (Required)")).toHaveValue("");
+      expect(screen.getByLabelText("Description (Required)")).toHaveValue("");
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
     });
 
@@ -843,7 +863,7 @@ describe("CreateListingPage", () => {
       render(<CreateListingPage />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Title *")).toHaveValue("Saved iPhone 15");
+        expect(screen.getByLabelText("Title (Required)")).toHaveValue("Saved iPhone 15");
       });
 
       fireEvent.click(screen.getByRole("button", { name: "Next" }));

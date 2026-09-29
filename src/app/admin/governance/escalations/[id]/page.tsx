@@ -1,6 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
+import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,14 +18,7 @@ interface Props {
 export default async function DecisionDetailPage({ params }: Props) {
   const { id } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !hasCapability(user, "decision:approve")) {
-    redirect("/admin");
-  }
+  const { user, role } = await requireStaff("decision:approve");
 
   const admin = createAdminClient();
 
@@ -141,7 +133,7 @@ export default async function DecisionDetailPage({ params }: Props) {
         </CardContent>
       </Card>
 
-      {/* Actions — only while the decision is still open */}
+      {/* Actions — while the decision is open, or to retry a failed execution */}
       {(decision.status === "pending_approval" || decision.status === "escalated") && (
         <Card>
           <CardHeader>
@@ -153,7 +145,30 @@ export default async function DecisionDetailPage({ params }: Props) {
           <CardContent>
             <DecisionActionButtons
               decisionId={decision.id}
-              actionCategory={decision.action_category}
+              payloadVersion={decision.payload_version ?? 1}
+              mode={decision.recommender_id === user.id ? "withdraw" : "decide"}
+            />
+          </CardContent>
+        </Card>
+      )}
+      {decision.status === "approved" && decision.execution_status === "failed" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Update failed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DecisionActionButtons
+              decisionId={decision.id}
+              payloadVersion={decision.payload_version ?? 1}
+              mode="retry"
+              blockedReason={
+                role === "admin"
+                  ? null
+                  : "An admin can retry this update. It has been reported to them."
+              }
             />
           </CardContent>
         </Card>

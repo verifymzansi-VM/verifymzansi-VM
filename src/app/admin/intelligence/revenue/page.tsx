@@ -1,6 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { hasCapability } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,153 +9,77 @@ import {
   type ChartDatum,
 } from "@/components/admin/intelligence-panels";
 import { TrendingUp, DollarSign, CreditCard, ArrowUpRight } from "lucide-react";
+import { createLogger } from "@/lib/utils/logger";
 
 export const metadata = {
   title: "Revenue & Costs — Intelligence",
   description: "Financial overview and transaction analytics.",
 };
 
-type PaymentRow = {
-  amount_cents?: unknown;
-  status?: unknown;
-  area?: unknown;
-  created_at?: unknown;
-};
-
-type InvoiceRow = {
-  amount_cents?: unknown;
-  vat_cents?: unknown;
-  total_cents?: unknown;
-};
-
-const PAYMENT_PAGE_SIZE = 1000;
-
-function cents(value: unknown) {
-  return Number(value) || 0;
+/** From revenue_summary() (20260929130000_admin_list_helpers.sql). */
+interface RevenueSummary {
+  transactions: number;
+  completed_count: number;
+  completed_cents: number;
+  failed_count: number;
+  failed_cents: number;
+  pending_cents: number;
+  by_area: Array<{ area: string; cents: number }>;
+  by_month: Array<{ month: string; cents: number }>;
+  invoice_vat_cents: number;
+  invoice_total_cents: number;
 }
 
 function formatRand(centsValue: number) {
   return `R ${(centsValue / 100).toFixed(2)}`;
 }
 
-function monthKey(value: unknown) {
-  if (typeof value !== "string") {
-    return "Recorded";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Recorded";
-  }
-
-  return date.toLocaleDateString("en-ZA", { month: "short", year: "2-digit" });
-}
-
-function sumRows(rows: PaymentRow[], predicate: (row: PaymentRow) => boolean) {
-  return rows.reduce((sum, row) => (predicate(row) ? sum + cents(row.amount_cents) : sum), 0);
-}
-
-async function fetchPaymentRowsByStatus(
-  admin: ReturnType<typeof createAdminClient>,
-  status: "complete" | "failed" | "pending"
-) {
-  const rows: PaymentRow[] = [];
-
-  for (let offset = 0; ; offset += PAYMENT_PAGE_SIZE) {
-    const { data } = await admin
-      .from("payments")
-      .select("amount_cents,status,area,created_at")
-      .eq("status", status)
-      .order("created_at", { ascending: true })
-      .range(offset, offset + PAYMENT_PAGE_SIZE - 1);
-    const pageRows = ((data as PaymentRow[] | null | undefined) ?? []) as PaymentRow[];
-    rows.push(...pageRows);
-
-    if (pageRows.length < PAYMENT_PAGE_SIZE) {
-      break;
-    }
-  }
-
-  return rows;
-}
-
-async function fetchInvoiceRows(admin: ReturnType<typeof createAdminClient>) {
-  const rows: InvoiceRow[] = [];
-
-  for (let offset = 0; ; offset += PAYMENT_PAGE_SIZE) {
-    const { data } = await admin
-      .from("invoices")
-      .select("amount_cents,vat_cents,total_cents")
-      .range(offset, offset + PAYMENT_PAGE_SIZE - 1);
-    const pageRows = ((data as InvoiceRow[] | null | undefined) ?? []) as InvoiceRow[];
-    rows.push(...pageRows);
-
-    if (pageRows.length < PAYMENT_PAGE_SIZE) {
-      break;
-    }
-  }
-
-  return rows;
+function monthLabel(month: string) {
+  return new Date(`${month}-01T12:00:00+02:00`).toLocaleDateString("en-ZA", {
+    month: "short",
+    year: "2-digit",
+    timeZone: "Africa/Johannesburg",
+  });
 }
 
 export default async function IntelligenceRevenuePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  await requireStaff("bi:view");
 
-  if (!user || !hasCapability(user, "bi:view")) {
-    redirect("/admin");
+  // Totals are summed in the database; the page never reads payment rows.
+  const { data, error } = await createAdminClient().rpc("revenue_summary");
+  if (error || !data) {
+    createLogger("IntelligenceRevenue").error("Revenue summary failed", {
+      error: error?.message ?? "no data",
+    });
+    return (
+      <p role="alert">
+        Revenue could not be loaded. Refresh to try again. This does not mean there was no revenue.
+      </p>
+    );
   }
+  const summary = data as RevenueSummary;
 
-  const admin = createAdminClient();
-
-  const [
-    { count: totalTransactions },
-    completedPaymentRows,
-    failedPaymentRows,
-    pendingPaymentRows,
-    invoiceRows,
-  ] = await Promise.all([
-    admin.from("payments").select("*", { count: "exact", head: true }),
-    fetchPaymentRowsByStatus(admin, "complete"),
-    fetchPaymentRowsByStatus(admin, "failed"),
-    fetchPaymentRowsByStatus(admin, "pending"),
-    fetchInvoiceRows(admin),
-  ]);
-
-  const total = totalTransactions ?? 0;
-  const completed = completedPaymentRows.length;
-  const failed = failedPaymentRows.length;
-  const totalRevenue =
-    completedPaymentRows.reduce((sum, payment) => sum + cents(payment.amount_cents), 0) ?? 0;
+  const total = summary.transactions;
+  const completed = summary.completed_count;
+  const failed = summary.failed_count;
+  const totalRevenue = summary.completed_cents;
   const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const failedValue = sumRows(failedPaymentRows, () => true);
-  const pendingValue = sumRows(pendingPaymentRows, () => true);
-  const vatLiability = invoiceRows.reduce((sum, invoice) => sum + cents(invoice.vat_cents), 0);
-  const invoiceGross = invoiceRows.reduce((sum, invoice) => sum + cents(invoice.total_cents), 0);
+  const failedValue = summary.failed_cents;
+  const pendingValue = summary.pending_cents;
+  const vatLiability = summary.invoice_vat_cents;
+  const invoiceGross = summary.invoice_total_cents;
   const avgOrderValue = completed > 0 ? Math.round(totalRevenue / completed) : 0;
-  const completedByArea = completedPaymentRows.reduce<Record<string, number>>((acc, row) => {
-    const area = typeof row.area === "string" ? row.area.replaceAll("_", " ") : "Unclassified";
-    acc[area] = (acc[area] ?? 0) + cents(row.amount_cents);
-    return acc;
-  }, {});
-  const revenueMix: ChartDatum[] = Object.entries(completedByArea).map(([label, value], index) => ({
-    label,
-    value,
-    caption: formatRand(value),
+  const revenueMix: ChartDatum[] = summary.by_area.map(({ area, cents }, index) => ({
+    label: area.replaceAll("_", " "),
+    value: cents,
+    caption: formatRand(cents),
     tone: (["emerald", "sky", "violet", "amber"] as const)[index % 4],
   }));
-  const monthlyRevenueMap = completedPaymentRows.reduce<Record<string, number>>((acc, row) => {
-    const key = monthKey(row.created_at);
-    acc[key] = (acc[key] ?? 0) + cents(row.amount_cents);
-    return acc;
-  }, {});
   const monthlyRevenue: ChartDatum[] =
-    Object.entries(monthlyRevenueMap).length > 0
-      ? Object.entries(monthlyRevenueMap).map(([label, value]) => ({
-          label,
-          value: Math.round(value / 100),
+    summary.by_month.length > 0
+      ? summary.by_month.map(({ month, cents }) => ({
+          label: monthLabel(month),
+          value: Math.round(cents / 100),
           tone: "emerald",
         }))
       : [{ label: "No revenue", value: 0, tone: "slate" }];
@@ -242,7 +164,7 @@ export default async function IntelligenceRevenuePage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ColumnChartPanel
           title="Revenue trend"
-          description="Completed payment value grouped by recorded month."
+          description="Completed payment value by month, last 12 months."
           data={monthlyRevenue}
           valuePrefix="R "
         />

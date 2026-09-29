@@ -4,7 +4,7 @@ import path from "node:path";
 /**
  * Authenticated end-to-end walkthrough of the account verification wizard:
  * phone OTP → ID details + camera capture → selfie camera capture →
- * location + GPS confirmation → submission complete.
+ * province and city confirmation → submission complete.
  *
  * Runs only on Chromium with a fake camera device. Uses the Playwright stub
  * server (auth, database, storage, SMS all stubbed) plus the test-only
@@ -52,14 +52,13 @@ test.use({
   launchOptions: {
     args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
   },
-  permissions: ["camera", "geolocation"],
-  geolocation: { latitude: -26.2041, longitude: 28.0473, accuracy: 25 },
+  permissions: ["camera"],
 });
 
 test.describe("Verification wizard (authenticated)", () => {
   test.skip(({ browserName }) => browserName !== "chromium", "Fake camera requires Chromium");
 
-  test("full flow: OTP → ID camera → selfie camera → GPS location → submitted", async ({
+  test("full flow: OTP → ID camera → selfie camera → province and city → submitted", async ({
     page,
   }) => {
     // ── Arrange: authenticated persona with a clean, unverified profile ──
@@ -178,34 +177,36 @@ test.describe("Verification wizard (authenticated)", () => {
 
     await page.getByRole("button", { name: /^continue$/i }).click();
 
-    // ── Step 4: Location + GPS confirmation ─────────────────────────────
-    await expect(page.getByRole("heading", { name: /step 4: verify your address/i })).toBeVisible({
+    // ── Step 4: Province and city ─────────────────────────────
+    await expect(
+      page.getByRole("heading", { name: /step 4: confirm your province and city/i })
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     await page.locator("#province").selectOption("Gauteng");
     await page.locator("#city").selectOption("Johannesburg");
 
-    await page.getByRole("button", { name: /verify address with gps/i }).click();
-    await expect(page.getByText(/address verified by gps/i)).toBeVisible({ timeout: 30_000 });
-
-    // The review panel must reflect the GPS-verified address before saving —
-    // it should never say "Not set" while a verified address is in the form.
-    await expect(page.getByText(/gps verified — not saved yet/i)).toBeVisible();
-    await shot(page, "step4-gps-verified");
-
-    await page.getByRole("button", { name: /save address & finish/i }).click();
+    await page.getByRole("button", { name: /detect province and city/i }).click();
+    await expect(
+      page.getByText(/could not detect|detection is unavailable|location suggested/i)
+    ).toBeVisible();
+    await expect(page.locator("#province")).toHaveValue("Gauteng");
+    await expect(page.locator("#city")).toHaveValue("Johannesburg");
+    await expect(page.locator("#town")).toHaveCount(0);
+    await shot(page, "step4-province-city");
+    await page.getByRole("button", { name: /save location & finish/i }).click();
 
     // ── Done ────────────────────────────────────────────────────────────
     // Both the page header (h1) and the completion card (h2) use this title.
     await expect(
-      page.getByRole("heading", { name: "Verification Submitted", level: 2 })
+      page.getByRole("heading", { name: /Verification submitted/i, level: 2 })
     ).toBeVisible({ timeout: 30_000 });
 
     // The admin-review state must be announced exactly once — the duplicate
     // amber banner was removed in favour of the single gold banner.
     await expect(page.getByText("Verification pending admin review.")).toHaveCount(0);
-    await expect(page.getByText(/your verification is in admin review/i)).toHaveCount(1);
+    await expect(page.getByText(/your identity documents are in admin review/i)).toHaveCount(1);
     await shot(page, "step5-submitted");
   });
 });

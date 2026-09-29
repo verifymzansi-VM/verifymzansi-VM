@@ -1,333 +1,160 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateAdminClient, mockLogAuditEvent, mockLoggerError } = vi.hoisted(() => ({
-  mockCreateAdminClient: vi.fn(),
-  mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
-  mockLoggerError: vi.fn(),
+const { mockRpc, mockFrom, mockLogAuditEvent } = vi.hoisted(() => ({
+  mockRpc: vi.fn(),
+  mockFrom: vi.fn(),
+  mockLogAuditEvent: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: mockCreateAdminClient,
+  createAdminClient: () => ({ rpc: mockRpc, from: mockFrom }),
 }));
-
-vi.mock("@/lib/services/audit", () => ({
-  logAuditEvent: mockLogAuditEvent,
-}));
-
-vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: mockLoggerError,
-  }),
-}));
+vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 
 import {
   approveDecision,
-  createAppeal,
-  createDecisionRecord,
+  decisionRefusalResponse,
+  escalateDecision,
   getPendingDecisions,
-  recordRoleChange,
+  liftRestriction,
+  markDecisionExecution,
+  moderateReport,
   rejectDecision,
   resolveAppeal,
+  submitAppeal,
 } from "@/lib/services/decision-ledger";
 
-function createEqSingle(data: unknown, error: unknown = null) {
-  return vi.fn().mockReturnValue({
-    single: vi.fn().mockResolvedValue({ data, error }),
-  });
-}
+const ACTOR = "11111111-1111-4111-8111-111111111111";
+const DECISION = "22222222-2222-4222-8222-222222222222";
 
-describe("decision-ledger service", () => {
+describe("decision ledger", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRpc.mockResolvedValue({ data: { ok: true, status: "applied" }, error: null });
   });
 
-  it("creates a decision record and appends an event plus audit entry", async () => {
-    const decisionInsert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({
-          data: { id: "decision-1", correlation_id: "corr-1" },
-          error: null,
-        }),
-      }),
-    });
-    const eventInsert = vi.fn().mockResolvedValue({ error: null });
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "decision_records") {
-          return { insert: decisionInsert };
-        }
-        if (table === "decision_record_events") {
-          return { insert: eventInsert };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
+  it("passes the verified actor and inputs to each transactional RPC", async () => {
+    await moderateReport(ACTOR, { reportId: DECISION, action: "ban", reason: "Scam" });
+    expect(mockRpc).toHaveBeenLastCalledWith("moderate_report", {
+      p_actor: ACTOR,
+      p_report: DECISION,
+      p_action: "ban",
+      p_reason: "Scam",
+      p_duration_days: null,
+      p_emergency: false,
     });
 
-    const result = await createDecisionRecord({
-      caseType: "report",
-      caseId: "report-1",
-      actionCategory: "account_suspend",
-      recommenderId: "mod-1",
-      recommenderRole: "moderator",
-      recommendation: "suspend",
-      rationale: "Clear fraud pattern",
-      evidenceRefs: ["report-1"],
-      beforeState: { status: "open" },
+    await approveDecision(ACTOR, DECISION, 3, "Looks right");
+    expect(mockRpc).toHaveBeenLastCalledWith("approve_decision", {
+      p_actor: ACTOR,
+      p_decision: DECISION,
+      p_payload_version: 3,
+      p_note: "Looks right",
     });
 
-    expect(result).toEqual({ id: "decision-1", correlation_id: "corr-1" });
-    expect(decisionInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        case_type: "report",
-        case_id: "report-1",
-        action_category: "account_suspend",
-        status: "pending_approval",
-      })
+    await rejectDecision(ACTOR, DECISION, "No");
+    expect(mockRpc).toHaveBeenLastCalledWith("reject_decision", {
+      p_actor: ACTOR,
+      p_decision: DECISION,
+      p_note: "No",
+    });
+
+    await liftRestriction(ACTOR, DECISION, "Served early");
+    expect(mockRpc).toHaveBeenLastCalledWith("lift_restriction", {
+      p_actor: ACTOR,
+      p_restriction: DECISION,
+      p_reason: "Served early",
+    });
+
+    await submitAppeal(ACTOR, DECISION, "I did not post this listing");
+    expect(mockRpc).toHaveBeenLastCalledWith("submit_appeal", {
+      p_user: ACTOR,
+      p_decision: DECISION,
+      p_reason: "I did not post this listing",
+      p_evidence: [],
+    });
+
+    await resolveAppeal(
+      ACTOR,
+      DECISION,
+      "partially_overturned",
+      "Shorter is fair",
+      "2026-10-01T00:00:00Z"
     );
-    expect(eventInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        decision_id: "decision-1",
-        actor_id: "mod-1",
-        actor_role: "moderator",
-        event_type: "recommended",
-      })
-    );
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: "mod-1",
-        actorRole: "moderator",
-        action: "decision_recommended",
-      })
-    );
+    expect(mockRpc).toHaveBeenLastCalledWith("resolve_appeal", {
+      p_actor: ACTOR,
+      p_appeal: DECISION,
+      p_outcome: "partially_overturned",
+      p_rationale: "Shorter is fair",
+      p_shorten_to: "2026-10-01T00:00:00Z",
+    });
   });
 
-  it("approves a pending decision and records the approval event", async () => {
-    const updateEq = vi.fn().mockReturnValue({
-      in: vi.fn().mockReturnValue({
-        select: vi.fn().mockResolvedValue({ data: [{ id: "decision-1" }], error: null }),
-      }),
+  it("returns refusals from the database as data", async () => {
+    mockRpc.mockResolvedValue({ data: { ok: false, error: "not_independent" }, error: null });
+    await expect(approveDecision(ACTOR, DECISION, 1, "x")).resolves.toEqual({
+      ok: false,
+      error: "not_independent",
     });
-    const eventInsert = vi.fn().mockResolvedValue({ error: null });
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "decision_records") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: createEqSingle({
-                id: "decision-1",
-                status: "pending_approval",
-                case_type: "report",
-                case_id: "report-1",
-                recommender_id: "mod-1",
-              }),
-            }),
-            update: vi.fn().mockReturnValue({ eq: updateEq }),
-          };
-        }
-        if (table === "decision_record_events") {
-          return { insert: eventInsert };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
-
-    const result = await approveDecision({
-      decisionId: "decision-1",
-      approverId: "gov-1",
-      approverRole: "governance_controller",
-      rationale: "Meets approval threshold",
-      afterState: { account_status: "suspended" },
-    });
-
-    expect(result).toEqual({ decisionId: "decision-1", status: "approved" });
-    expect(updateEq).toHaveBeenCalledWith("id", "decision-1");
-    expect(eventInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        decision_id: "decision-1",
-        event_type: "approved",
-      })
-    );
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "decision_approved",
-        actorRole: "governance_controller",
-      })
-    );
   });
 
-  it("returns null when rejecting an already-finalized decision", async () => {
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn(() => ({
-        select: vi.fn().mockReturnValue({
-          eq: createEqSingle({
-            id: "decision-1",
-            status: "approved",
-            case_type: "report",
-            case_id: "report-1",
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockReturnValue({
-              select: vi.fn().mockResolvedValue({ data: [], error: null }),
-            }),
-          }),
-        }),
-      })),
-    });
-
-    const result = await rejectDecision({
-      decisionId: "decision-1",
-      approverId: "gov-1",
-      approverRole: "governance_controller",
-      rationale: "Late rejection",
-    });
-
-    expect(result).toBeNull();
+  it("throws on transport errors so routes return a 500", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "connection lost" } });
+    await expect(
+      moderateReport(ACTOR, { reportId: DECISION, action: "warn", reason: null })
+    ).rejects.toThrow("Decision RPC moderate_report failed");
   });
 
-  it("creates an appeal and audits the submission", async () => {
-    const decisionUpdateEq = vi.fn().mockResolvedValue({ error: null });
-    const appealInsert = vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({ data: { id: "appeal-1" }, error: null }),
-      }),
-    });
+  it("maps refusal codes to statuses and plain messages", async () => {
+    const res = decisionRefusalResponse("not_independent");
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: "not_independent" });
+    expect(decisionRefusalResponse("expired").status).toBe(410);
+    expect(decisionRefusalResponse("something_new").status).toBe(400);
+  });
 
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "decision_records") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: "decision-1", parent_decision_id: null },
-                  error: null,
-                }),
-              }),
-            }),
-            update: vi.fn().mockReturnValue({ eq: decisionUpdateEq }),
-          };
-        }
-        if (table === "appeal_cases") {
-          return { insert: appealInsert };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
+  it("records execution outcomes without throwing", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: "down" } });
+    await expect(markDecisionExecution(DECISION, false, "timeout")).resolves.toBeUndefined();
+    expect(mockRpc).toHaveBeenCalledWith("mark_decision_execution", {
+      p_decision: DECISION,
+      p_ok: false,
+      p_error: "timeout",
     });
+  });
 
-    const result = await createAppeal({
-      decisionId: "decision-1",
-      appellantId: "user-1",
-      reason: "New supporting evidence",
-      evidenceRefs: ["artifact-1"],
-    });
-
-    expect(result).toEqual({ id: "appeal-1" });
-    expect(decisionUpdateEq).toHaveBeenCalledWith("id", "decision-1");
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: "user-1",
-        actorRole: "member",
-        action: "appeal_submitted",
-      })
+  it("escalates only pending, non-role decisions and audits it", async () => {
+    const select = vi.fn().mockResolvedValue({ data: [{ id: DECISION }], error: null });
+    const neq = vi.fn(() => ({ select }));
+    const inFn = vi.fn(() => ({ neq }));
+    const eq = vi.fn(() => ({ in: inFn }));
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockFrom.mockImplementation((table: string) =>
+      table === "decision_records" ? { update: vi.fn(() => ({ eq })) } : { insert }
     );
-  });
-
-  it("resolves an appeal and writes the correct audit action", async () => {
-    const updateEq = vi.fn().mockReturnValue({
-      in: vi.fn().mockReturnValue({
-        select: vi.fn().mockResolvedValue({ data: [{ id: "appeal-1" }], error: null }),
-      }),
-    });
-
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "appeal_cases") {
-          return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
-
-    const result = await resolveAppeal({
-      appealId: "appeal-1",
-      reviewerId: "gov-1",
-      reviewerRole: "governance_controller",
-      status: "upheld",
-      rationale: "Original decision stands",
-      outcomeDetail: { note: "confirmed" },
-    });
-
-    expect(result).toEqual({ appealId: "appeal-1", status: "upheld" });
-    expect(updateEq).toHaveBeenCalledWith("id", "appeal-1");
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: "gov-1",
-        action: "appeal_upheld",
-      })
-    );
-  });
-
-  it("records role changes and throws when history insert fails", async () => {
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "role_assignments_history") {
-          return {
-            insert: vi.fn().mockResolvedValue({ error: { message: "insert failed" } }),
-          };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
 
     await expect(
-      recordRoleChange({
-        targetUserId: "user-1",
-        previousRole: "moderator",
-        newRole: "governance_controller",
-        assignedBy: "admin-1",
-        assignerRole: "admin",
-        reason: "Promotion",
+      escalateDecision({
+        decisionId: DECISION,
+        actorId: ACTOR,
+        actorRole: "moderator",
+        reason: "Unsure",
       })
-    ).rejects.toThrow("Failed to record role change");
-
-    expect(mockLoggerError).toHaveBeenCalledWith(
-      "Failed to record role change",
-      expect.objectContaining({ error: "insert failed" })
+    ).resolves.toEqual({ decisionId: DECISION, status: "escalated" });
+    expect(neq).toHaveBeenCalledWith("case_type", "staff_role");
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ event_type: "escalated" }));
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "decision_escalated" })
     );
   });
 
-  it("fetches pending decisions ordered by status set", async () => {
-    const limit = vi.fn().mockResolvedValue({
-      data: [{ id: "decision-1", status: "pending_approval" }],
-      error: null,
-    });
+  it("lists pending decisions without staff role changes", async () => {
+    const limit = vi.fn().mockResolvedValue({ data: [{ id: DECISION }], error: null });
+    const neq = vi.fn(() => ({ order: vi.fn(() => ({ limit })) }));
+    mockFrom.mockReturnValue({ select: vi.fn(() => ({ in: vi.fn(() => ({ neq })) })) });
 
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "decision_records") {
-          return {
-            select: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit,
-                }),
-              }),
-            }),
-          };
-        }
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
-
-    const result = await getPendingDecisions(25);
-
-    expect(result).toEqual([{ id: "decision-1", status: "pending_approval" }]);
+    await expect(getPendingDecisions(25)).resolves.toEqual([{ id: DECISION }]);
+    expect(neq).toHaveBeenCalledWith("case_type", "staff_role");
     expect(limit).toHaveBeenCalledWith(25);
   });
 });

@@ -72,15 +72,15 @@ async function completeListingCreate(page: Page) {
   await categoryOption.click();
   await page.locator('[data-listing-attribute="device_type"]').selectOption("Smartphone");
   await page.locator('[data-listing-attribute="brand"]').fill("Apple");
-  await page.getByLabel(/^Title \*$/).fill(listingTitle);
+  await page.getByLabel(/^Title/).fill(listingTitle);
   await page
-    .getByLabel(/^Description \*$/)
+    .getByLabel(/^Description/)
     .fill("Playwright listing description with enough detail to satisfy the validation rules.");
   await page.getByRole("button", { name: "Next" }).click();
-  await page.getByLabel(/Price \(ZAR\)/i).fill("18500");
+  await page.getByLabel(/^Asking price/i).fill("18500");
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
   await page.getByLabel(/^City/i).selectOption("Johannesburg");
-  await page.getByLabel(/Town \/ Suburb/i).fill("Sandton");
+  await page.getByLabel(/^Town \/ Suburb/i).fill("Sandton");
   await page.getByRole("button", { name: "Next" }).click();
   await uploaderFor(page, /^Photos \(max/i).setInputFiles(IMAGE_FIXTURE);
   await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
@@ -107,32 +107,26 @@ async function completeListingCreate(page: Page) {
 
 async function completeBusinessCreate(page: Page) {
   const businessName = `Playwright Business Studio ${RUN_SUFFIX}`;
-  const businessSlug = `playwright-business-studio-${RUN_SUFFIX}`;
   const businessesHeading = page.getByRole("heading", { name: "Mzansi Business" });
   const businessHeading = page.getByRole("heading", { name: businessName }).first();
-  const businessTypeLabel = page
-    .locator("label")
-    .filter({ hasText: /Standalone Shop|Own Premises/i });
+  const nameField = page.getByLabel(/^Business Name/);
   await page.goto("/post/create-business");
-  await enterPostingForm(page, businessTypeLabel);
-  await businessTypeLabel.click();
-  await page.getByLabel(/Business Name/i).fill(businessName);
-  await page.getByText("Advanced: customise your link", { exact: true }).click();
-  await page.getByLabel(/URL Slug/i).fill(businessSlug);
-  // Step 1 validation requires a business overview (>= 20 chars).
+  await enterPostingForm(page, nameField);
+  await discardDraftIfPresent(page);
+  await nameField.fill(businessName);
   await page
-    .getByLabel(/About Your Business/i)
+    .getByLabel(/^About Your Business/)
     .fill("A Playwright e2e test business with enough detail to satisfy validation rules.");
-  await page
-    .getByRole("button", { name: /fashion/i })
-    .first()
-    .click();
-  await page.getByLabel(/Street address/i).fill("24 Vilakazi Street");
-  await page.getByLabel(/Suburb/i).fill("Orlando West");
-  await page.getByRole("button", { name: "Next" }).click();
-  await page.getByLabel(/Province/i).selectOption("Gauteng");
-  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Clothing/ }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Customers visit me", exact: true }).check();
+  await page.getByLabel(/^Where do customers visit you/).selectOption("standalone_shop");
+  await page.getByLabel("Province", { exact: true }).selectOption("Gauteng");
+  await page.getByLabel("City or town", { exact: true }).selectOption("Johannesburg");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Email", exact: true }).check();
+  await page.getByLabel(/^Email Address/).fill("owner@example.com");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
   await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
 
@@ -167,33 +161,23 @@ async function completeBusinessCreate(page: Page) {
 
 async function completePromotionCreate(page: Page) {
   const promotionTitle = `Playwright Weekend Deal ${RUN_SUFFIX}`;
-  const eventTypeButton = page.getByRole("button", { name: /Event/i }).first();
-  const titleField = page.getByLabel(/Event Title|Title/i);
-  await page.goto("/post/create-tourism");
-  await enterPostingForm(page, eventTypeButton);
-  page.once("dialog", (dialog) => dialog.accept());
-  await eventTypeButton.click();
-  if (!(await titleField.isVisible().catch(() => false))) {
-    const discardDraftButton = page.getByRole("button", { name: /Discard draft/i });
-    if (await discardDraftButton.isVisible().catch(() => false)) {
-      await discardDraftButton.click();
-    }
-    page.once("dialog", (dialog) => dialog.accept());
-    await eventTypeButton.click();
-  }
-  await titleField.waitFor({ state: "visible", timeout: 15_000 });
-  await page.getByLabel(/Event Type/i).selectOption({ index: 1 });
+  const titleField = page.getByLabel(/^Event name/);
+  await page.goto("/post/create-tourism?type=event");
+  await enterPostingForm(page, titleField);
+  await discardDraftIfPresent(page);
   await titleField.fill(promotionTitle);
+  await page.getByLabel(/^Event category/).selectOption({ index: 1 });
   await page
-    .getByLabel(/Event Details|Description/i)
+    .getByLabel(/^Description/)
     .fill("Playwright promotion description with enough detail to satisfy the validation rules.");
-  await page.getByRole("button", { name: "Next" }).click();
-  await page.getByLabel(/^Start Date/i).fill("2026-12-15");
-  await page.getByLabel(/^End Date/i).fill("2026-12-16");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByLabel(/^Start date/).fill("2099-12-15");
+  await page.getByLabel(/^Start time/).fill("18:00");
+  await page.getByLabel("Free entry").check();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
-  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel(/^City/i).selectOption("Johannesburg");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Upload photos/i).setInputFiles(IMAGE_FIXTURE);
   await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
 
@@ -237,15 +221,16 @@ test.describe("Posting flows in Chromium", () => {
       electronicsCategoryLocator(page)
     );
 
-    const businessTypeLabel = page
-      .locator("label")
-      .filter({ hasText: /Standalone Shop|Own Premises/i });
-    await expectFirstStepValidationGate(page, "/post/create-business", businessTypeLabel);
+    await expectFirstStepValidationGate(
+      page,
+      "/post/create-business",
+      page.getByLabel(/^Business Name/)
+    );
 
     await expectFirstStepValidationGate(
       page,
-      "/post/create-tourism",
-      page.locator("#listing-type-group")
+      "/post/create-tourism?type=tourism_business",
+      page.getByLabel(/^Business Name|^Listing name/)
     );
   });
 
@@ -258,10 +243,10 @@ test.describe("Posting flows in Chromium", () => {
 
     await page.goto(`/post/edit-listing/${listingId}`);
     // Wait for existing listing data to populate before editing
-    await expect(page.getByLabel(/^Title \*$/)).toHaveValue(new RegExp(createdTitle), {
+    await expect(page.getByLabel(/^Title/)).toHaveValue(new RegExp(createdTitle), {
       timeout: 15_000,
     });
-    await page.getByLabel(/^Title \*$/).fill(editedTitle);
+    await page.getByLabel(/^Title/).fill(editedTitle);
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/listings/${listingId}`) &&
@@ -307,7 +292,7 @@ test.describe("Posting flows in Chromium", () => {
     await expect(page.getByText(promotionTitle).first()).toBeVisible();
 
     await page.goto(`/post/edit-tourism/${promotionId}`);
-    await page.getByLabel(/Event Title|Title/i).fill(updatedPromotionTitle);
+    await page.getByLabel(/^(Event name|Title)/).fill(updatedPromotionTitle);
     const updatePromise = page.waitForResponse(
       (response) =>
         response.url().includes(`/api/promotions/${promotionId}`) &&

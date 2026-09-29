@@ -35,14 +35,8 @@ vi.mock("@/lib/account/ensure-profile", () => ({
 }));
 
 import {
-  getAdminDashboardStats,
-  getAreaCardCounts,
-  getDashboardKycQueue,
-  getExtendedPlatformStats,
   getPendingVerificationGroups,
   getPendingVerifications,
-  getPendingModerationCount,
-  getDashboardAreaSummary,
   getRecentOtpAttempts,
   getRecentActivity,
   getAreaReports,
@@ -50,262 +44,11 @@ import {
   getActionsToday,
 } from "./admin-queries";
 
-type DashboardSummaryMockRow = {
-  area?: string | null;
-  category?: string | null;
-  promotion_type?: string | null;
-  status?: string | null;
-};
-
-function createDashboardSummaryTableMock(
-  table: string,
-  rowsByTable: Record<string, DashboardSummaryMockRow[]>
-) {
-  const filters: Array<
-    | { op: "eq" | "neq"; column: keyof DashboardSummaryMockRow; value: string }
-    | { op: "or"; expression: string }
-  > = [];
-  let selected = "*";
-  let head = false;
-
-  const applyFilters = () =>
-    (rowsByTable[table] || []).filter((row) =>
-      filters.every((filter) => {
-        if (filter.op === "eq") return row[filter.column] === filter.value;
-        if (filter.op === "neq") return row[filter.column] !== filter.value;
-        if (
-          filter.op === "or" &&
-          filter.expression === "area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"
-        ) {
-          return row.area === "PROMOTIONS_EVENTS" || row.category === "tourism_hospitality";
-        }
-
-        return true;
-      })
-    );
-
-  const builder = {
-    select(fields: string, options?: { head?: boolean }) {
-      selected = fields;
-      head = Boolean(options?.head);
-      return builder;
-    },
-    eq(column: keyof DashboardSummaryMockRow, value: string) {
-      filters.push({ op: "eq", column, value });
-      return builder;
-    },
-    neq(column: keyof DashboardSummaryMockRow, value: string) {
-      filters.push({ op: "neq", column, value });
-      return builder;
-    },
-    or(expression: string) {
-      filters.push({ op: "or", expression });
-      return builder;
-    },
-    limit() {
-      return builder;
-    },
-    then(
-      resolve: (value: { count: number | null; data: DashboardSummaryMockRow[] | null }) => void
-    ) {
-      const rows = applyFilters();
-      resolve({
-        count: head ? rows.length : null,
-        data: head
-          ? null
-          : rows.map((row) =>
-              selected === "promotion_type"
-                ? { promotion_type: row.promotion_type }
-                : { category: row.category }
-            ),
-      });
-    },
-  };
-
-  return builder;
-}
-
 describe("admin-queries", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUserById.mockResolvedValue({ data: { user: null }, error: null });
     mockEnsureAccountProfile.mockResolvedValue(null);
-  });
-
-  describe("getAdminDashboardStats", () => {
-    it("returns aggregated stats from all tables", async () => {
-      mockFrom.mockReturnValue(createChainableMock({ count: 5 }));
-
-      const stats = await getAdminDashboardStats();
-
-      expect(stats.totalAccounts).toBe(5);
-      expect(stats.totalMembers).toBe(5);
-      expect(stats.totalListings).toBe(5);
-      expect(stats.openReports).toBe(5);
-      expect(typeof stats.pendingVerifications).toBe("number");
-      expect(stats.pendingModeration).toBe(35);
-    });
-
-    it("defaults counts to 0 when null", async () => {
-      mockFrom.mockReturnValue(createChainableMock({ count: null }));
-
-      const stats = await getAdminDashboardStats();
-
-      expect(stats.totalAccounts).toBe(0);
-      expect(stats.totalMembers).toBe(0);
-      expect(stats.openReports).toBe(0);
-      expect(stats.pendingModeration).toBe(0);
-    });
-
-    it("sums pending moderation across listings, businesses, tourism businesses, and promotions", async () => {
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "listings") {
-          return createChainableMock({ count: 4 });
-        }
-
-        if (table === "businesses") {
-          return createChainableMock({ count: 3 });
-        }
-
-        if (table === "promotions") {
-          return createChainableMock({ count: 2 });
-        }
-
-        return createChainableMock({ count: 1 });
-      });
-
-      const stats = await getAdminDashboardStats();
-
-      expect(stats.pendingModeration).toBe(15);
-    });
-  });
-
-  describe("getPendingModerationCount", () => {
-    it("counts pending live edits in the total and their respective area cards", async () => {
-      mockFrom.mockImplementation((table: string) =>
-        createDashboardSummaryTableMock(table, {
-          content_edit_requests: [
-            { area: "MZANSI_MARKET", status: "pending" },
-            { area: "MZANSI_BUSINESS", status: "pending" },
-            { area: "PROMOTIONS_EVENTS", status: "pending" },
-            { area: "PROMOTIONS_EVENTS", status: "pending" },
-            { area: "MZANSI_MARKET", status: "approved" },
-            { area: "MZANSI_BUSINESS", status: "rejected" },
-          ],
-        })
-      );
-      await expect(getPendingModerationCount()).resolves.toBe(4);
-      const counts = await getAreaCardCounts();
-      expect(counts.MZANSI_MARKET.pendingContent).toBe(1);
-      expect(counts.MZANSI_BUSINESS.pendingContent).toBe(1);
-      expect(counts.PROMOTIONS_EVENTS.pendingContent).toBe(2);
-    });
-    it("returns the combined moderation backlog across all public content areas", async () => {
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "listings") {
-          return createChainableMock({ count: 7 });
-        }
-
-        if (table === "businesses") {
-          return createChainableMock({ count: 5 });
-        }
-
-        if (table === "promotions") {
-          return createChainableMock({ count: 4 });
-        }
-
-        return createChainableMock({ count: 0 });
-      });
-
-      await expect(getPendingModerationCount()).resolves.toBe(21);
-    });
-  });
-
-  describe("getDashboardAreaSummary", () => {
-    it("groups tourism businesses under Tourism & Events instead of Mzansi Business", async () => {
-      mockFrom.mockImplementation((table: string) =>
-        createDashboardSummaryTableMock(table, {
-          listings: [],
-          businesses: [
-            {
-              area: "MZANSI_BUSINESS",
-              category: "tourism_hospitality",
-              status: "live",
-            },
-            {
-              area: "MZANSI_BUSINESS",
-              category: "tourism_hospitality",
-              status: "live",
-            },
-            {
-              area: "MZANSI_BUSINESS",
-              category: "tourism_hospitality",
-              status: "live",
-            },
-          ],
-          promotions: [],
-        })
-      );
-
-      const result = await getDashboardAreaSummary();
-
-      expect(result.MZANSI_BUSINESS.totalPosted).toBe(0);
-      expect(result.MZANSI_BUSINESS.liveCount).toBe(0);
-      expect(result.MZANSI_BUSINESS.topCategory).toBeNull();
-      expect(result.PROMOTIONS_EVENTS.totalPosted).toBe(3);
-      expect(result.PROMOTIONS_EVENTS.liveCount).toBe(3);
-      expect(result.PROMOTIONS_EVENTS.topCategory).toBe("tourism_hospitality");
-    });
-  });
-
-  describe("getAreaCardCounts", () => {
-    it("returns per-area flag and content counts", async () => {
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "reports") {
-          return createChainableMock({
-            data: [
-              { target_type: "listing" },
-              { target_type: "account_profile" },
-              { target_type: "listing" },
-              { target_type: "business_profile" },
-            ],
-          });
-        }
-        // Content tables: resolve with count
-        return createChainableMock({ count: 2 });
-      });
-
-      const counts = await getAreaCardCounts();
-
-      expect(counts.MZANSI_MARKET.pendingFlags).toBe(3);
-      expect(counts.MZANSI_BUSINESS.pendingFlags).toBe(1);
-    });
-
-    it("keeps pending tourism businesses in the Tourism & Events content count", async () => {
-      let businessQueryCount = 0;
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "reports") {
-          return createChainableMock({ data: [] });
-        }
-        if (table === "listings") {
-          return createChainableMock({ count: 1 });
-        }
-        if (table === "businesses") {
-          businessQueryCount += 1;
-          return createChainableMock({ count: businessQueryCount === 1 ? 3 : 2 });
-        }
-        if (table === "promotions") {
-          return createChainableMock({ count: 4 });
-        }
-        return createChainableMock({ count: 0 });
-      });
-
-      const counts = await getAreaCardCounts();
-
-      expect(counts.MZANSI_MARKET.pendingContent).toBe(1);
-      expect(counts.MZANSI_BUSINESS.pendingContent).toBe(3);
-      expect(counts.PROMOTIONS_EVENTS.pendingContent).toBe(6);
-    });
   });
 
   describe("getPendingVerifications", () => {
@@ -406,72 +149,82 @@ describe("admin-queries", () => {
       expect(result[0].primary_step_type).toBe("id_doc");
     });
 
-    it("repairs missing display names using ensureAccountProfile fallback", async () => {
-      const steps = [
-        {
-          id: "s1",
-          user_id: "u-repair",
-          step_type: "id_doc",
-          status: "pending",
-          created_at: "2024-01-03T00:00:00.000Z",
-          reviewed_at: null,
-          risk_level: null,
-          risk_score: null,
-          auto_status: null,
-        },
-      ];
-
+    it("never writes from a staff page: a missing name shows as New Member", async () => {
       let callCount = 0;
       mockFrom.mockImplementation(() => {
         callCount += 1;
         if (callCount === 1) {
-          return createChainableMock({ data: steps });
-        }
-
-        if (callCount === 2) {
           return createChainableMock({
             data: [
               {
-                user_id: "u-repair",
-                display_name: "   ",
-                account_verification_status: "pending_review",
+                id: "s1",
+                user_id: "u-blank",
+                step_type: "id_doc",
+                status: "pending",
+                created_at: "2024-01-03T00:00:00.000Z",
+                reviewed_at: null,
+                risk_level: null,
+                risk_score: null,
+                auto_status: null,
               },
             ],
           });
         }
-
         return createChainableMock({
-          data: [
-            {
-              user_id: "u-repair",
-              display_name: "Recovered Name",
-              account_verification_status: "pending_review",
-            },
-          ],
+          data: [{ user_id: "u-blank", display_name: "   ", account_verification_status: null }],
         });
-      });
-
-      mockGetUserById.mockResolvedValue({
-        data: {
-          user: {
-            id: "u-repair",
-            email: "recovered@example.com",
-            user_metadata: { display_name: "Recovered Name" },
-          },
-        },
-        error: null,
-      });
-      mockEnsureAccountProfile.mockResolvedValue({
-        id: "profile-repair",
-        display_name: "Recovered Name",
       });
 
       const result = await getPendingVerificationGroups();
 
-      expect(mockGetUserById).toHaveBeenCalledWith("u-repair");
-      expect(mockEnsureAccountProfile).toHaveBeenCalledTimes(1);
-      expect(result).toHaveLength(1);
-      expect(result[0].account_display_name).toBe("Recovered Name");
+      expect(mockGetUserById).not.toHaveBeenCalled();
+      expect(mockEnsureAccountProfile).not.toHaveBeenCalled();
+      expect(result[0].account_display_name).toBe("New Member");
+    });
+
+    it("includes the steps a moderator holds even beyond the limit", async () => {
+      const queries: Array<{ in?: unknown[]; limit?: number }> = [];
+      mockFrom.mockImplementation((table: string) => {
+        const record: { in?: unknown[]; limit?: number } = {};
+        if (table === "verification_steps") queries.push(record);
+        const builder: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "neq", "order"]) builder[m] = () => builder;
+        builder.in = (_col: string, values: unknown[]) => {
+          record.in = values;
+          return builder;
+        };
+        builder.limit = (n: number) => {
+          record.limit = n;
+          return builder;
+        };
+        builder.then = (resolve: (v: unknown) => void) =>
+          resolve({
+            data:
+              table !== "verification_steps"
+                ? []
+                : [
+                    {
+                      id: record.in ? "claimed" : "oldest",
+                      user_id: "u1",
+                      step_type: "id_doc",
+                      created_at: "2024-01-01",
+                    },
+                  ],
+            error: null,
+          });
+        return builder;
+      });
+
+      const result = await getPendingVerifications(1, { includeIds: ["claimed"] });
+
+      expect(result.map((s) => s.id).sort()).toEqual(["claimed", "oldest"]);
+      expect(queries.some((q) => q.limit === 1)).toBe(true);
+      expect(queries.some((q) => (q.in as string[] | undefined)?.includes("claimed"))).toBe(true);
+    });
+
+    it("throws instead of reporting an empty queue when the read fails", async () => {
+      mockFrom.mockReturnValue(createChainableMock({ data: null, error: { message: "timeout" } }));
+      await expect(getPendingVerificationGroups()).rejects.toThrow("could not be read");
     });
   });
 
@@ -526,44 +279,6 @@ describe("admin-queries", () => {
     });
   });
 
-  describe("getDashboardKycQueue", () => {
-    it("prefers account verification status when present", async () => {
-      const steps = [
-        {
-          id: "k1",
-          user_id: "u1",
-          step_type: "location",
-          status: "pending",
-          created_at: "2024-01-01",
-        },
-      ];
-      const profiles = [
-        {
-          user_id: "u1",
-          display_name: "Ayanda",
-          account_verification_status: "verified",
-          account_status: "active",
-          strikes: 1,
-        },
-      ];
-
-      let callCount = 0;
-      mockFrom.mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) {
-          return createChainableMock({ data: steps });
-        }
-        return createChainableMock({ data: profiles });
-      });
-
-      const result = await getDashboardKycQueue();
-      expect(result).toHaveLength(1);
-      expect(result[0].account_display_name).toBe("Ayanda");
-      expect(result[0].account_verification_status).toBe("verified");
-      expect(result[0].account_strikes).toBe(1);
-    });
-  });
-
   describe("getRecentActivity", () => {
     it("returns audit log entries", async () => {
       const entries = [
@@ -585,45 +300,28 @@ describe("admin-queries", () => {
   });
 
   describe("getAreaReports", () => {
-    it("fetches reports by area target type", async () => {
-      mockFrom.mockReturnValue(
-        createChainableMock({ data: [{ id: "r1", status: "open", target_type: "listing" }] })
-      );
-
-      const result = await getAreaReports("MZANSI_MARKET");
-      expect(result).toHaveLength(1);
-      expect(mockFrom).toHaveBeenCalledWith("reports");
-    });
-
-    it("prefers the explicit report area over the target type", async () => {
-      mockFrom.mockReturnValue(
-        createChainableMock({
-          data: [
-            { id: "r1", status: "open", target_type: "listing", area: "MZANSI_BUSINESS" },
-            { id: "r2", status: "open", target_type: "listing", area: "MZANSI_MARKET" },
-          ],
-        })
-      );
-
-      const result = await getAreaReports("MZANSI_MARKET");
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe("r2");
-    });
-
-    it("includes business-profile and storefront reports in the Mzansi Business area", async () => {
-      mockFrom.mockReturnValue(
-        createChainableMock({
-          data: [
-            { id: "r1", status: "open", target_type: "business" },
-            { id: "r2", status: "open", target_type: "business_profile" },
-            { id: "r3", status: "open", target_type: "storefront" },
-            { id: "r4", status: "open", target_type: "listing" },
-          ],
-        })
-      );
+    it("filters by area in the database, not after a shared limit", async () => {
+      const eq = vi.fn();
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "in", "order", "limit"]) builder[m] = () => builder;
+      builder.eq = (...args: unknown[]) => {
+        eq(...args);
+        return builder;
+      };
+      builder.then = (resolve: (v: unknown) => void) =>
+        resolve({ data: [{ id: "r1", area: "MZANSI_BUSINESS" }], error: null });
+      mockFrom.mockReturnValue(builder);
 
       const result = await getAreaReports("MZANSI_BUSINESS");
-      expect(result.map((r) => r.id)).toEqual(["r1", "r2", "r3"]);
+
+      expect(mockFrom).toHaveBeenCalledWith("reports");
+      expect(eq).toHaveBeenCalledWith("area", "MZANSI_BUSINESS");
+      expect(result).toHaveLength(1);
+    });
+
+    it("throws when reports cannot be read", async () => {
+      mockFrom.mockReturnValue(createChainableMock({ data: null, error: { message: "timeout" } }));
+      await expect(getAreaReports("MZANSI_MARKET")).rejects.toThrow("could not be read");
     });
   });
 
@@ -716,42 +414,6 @@ describe("admin-queries", () => {
       mockFrom.mockReturnValue(createChainableMock({ data: [] }));
       const counts = await getActionsToday();
       expect(counts).toEqual({});
-    });
-  });
-
-  describe("getExtendedPlatformStats", () => {
-    it("counts verified accounts through the neutral-or-legacy verification fields", async () => {
-      mockFrom.mockReturnValue(createChainableMock({ count: 7 }));
-
-      const stats = await getExtendedPlatformStats();
-
-      expect(stats.verifiedAccounts).toBe(7);
-      expect(stats.verifiedMembers).toBe(7);
-      expect(stats.bannedAccounts).toBe(7);
-      expect(stats.bannedMembers).toBe(7);
-    });
-
-    it("aggregates live and hidden content across listings, businesses, and promotions", async () => {
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "listings") {
-          return createChainableMock({ count: 4 });
-        }
-
-        if (table === "businesses") {
-          return createChainableMock({ count: 3 });
-        }
-
-        if (table === "promotions") {
-          return createChainableMock({ count: 2 });
-        }
-
-        return createChainableMock({ count: 1 });
-      });
-
-      const stats = await getExtendedPlatformStats();
-
-      expect(stats.liveListings).toBe(9);
-      expect(stats.hiddenListings).toBe(9);
     });
   });
 });

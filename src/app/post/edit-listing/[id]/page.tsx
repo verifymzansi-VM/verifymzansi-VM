@@ -1,4 +1,5 @@
 "use client";
+import { PostSelect } from "@/components/post/post-select";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
@@ -7,7 +8,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Loader2, X, Phone, MessageCircle, Mail, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-scaffold";
 import { Header } from "@/components/layout/header";
@@ -297,9 +298,14 @@ export default function EditListingPage() {
     });
   }
 
+  // Answers for each category are kept while the owner compares categories, so
+  // switching back restores them. Only the selected category's answers are saved.
+  const categoryAnswers = useRef<Record<string, typeof categoryAttributes>>({});
+
   function handleCategoryChange(cat: ListingCategory) {
+    if (category) categoryAnswers.current[category] = categoryAttributes;
     setCategory(cat);
-    setCategoryAttributes({});
+    setCategoryAttributes(categoryAnswers.current[cat] ?? {});
     clearErrors("category");
     setFieldErrors((current) => {
       const next = { ...current };
@@ -355,7 +361,10 @@ export default function EditListingPage() {
       Object.assign(errors, validateListingAttributes(category, categoryAttributes));
     }
 
-    if (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+    if (
+      (category !== "jobs_services" || price) &&
+      (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0)
+    ) {
       errors.price_zar = "Enter a valid price.";
     }
     if (!province) errors.province = "Select a province.";
@@ -365,7 +374,8 @@ export default function EditListingPage() {
     }
 
     const totalPhotos = existingPhotos.length + newPhotoFiles.length;
-    if (totalPhotos === 0) errors.images = "Upload at least one photo.";
+    if (category !== "jobs_services" && totalPhotos === 0)
+      errors.images = "Upload at least one photo.";
     if (totalPhotos > maxPhotos) {
       errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
     }
@@ -408,7 +418,7 @@ export default function EditListingPage() {
         return;
       }
 
-      const numPrice = parseFloat(price);
+      const numPrice = price ? parseFloat(price) : 0;
       const normalizedAttributes = category
         ? coerceListingAttributes(category, categoryAttributes)
         : {};
@@ -470,7 +480,10 @@ export default function EditListingPage() {
           price_zar: numPrice,
           negotiable,
           category: mapListingCategory(category),
-          condition: condition || undefined,
+          condition:
+            category === "jobs_services" || category === "auto_parts"
+              ? undefined
+              : condition || undefined,
           attributes: normalizedAttributes,
           province: province || "",
           city: city || "",
@@ -619,23 +632,25 @@ export default function EditListingPage() {
                     <p className="inline-form-error">{fieldErrors.category}</p>
                   )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="condition">Condition</Label>
-                    <select
-                      id="condition"
-                      aria-label="Condition"
-                      className="flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
-                      value={condition}
-                      onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
-                    >
-                      <option value="">Condition not specified</option>
-                      {LISTING_CONDITIONS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {category !== "jobs_services" && category !== "auto_parts" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="condition">Condition</Label>
+                      <PostSelect
+                        id="condition"
+                        aria-label="Condition"
+                        className="flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
+                        value={condition}
+                        onChange={(e) => setCondition(e.target.value as ListingCondition | "")}
+                      >
+                        <option value="">Condition not specified</option>
+                        {LISTING_CONDITIONS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </PostSelect>
+                    </div>
+                  )}
 
                   {/* ── Title ──────────────────────────────────── */}
                   <div className="space-y-2">
@@ -679,10 +694,18 @@ export default function EditListingPage() {
                   </div>
                 </PostFormSection>
 
-                <PostFormSection title="Price and area">
+                <PostFormSection
+                  title={category === "jobs_services" ? "Salary and area" : "Price and area"}
+                >
                   {/* ── Price ──────────────────────────────────── */}
                   <div className="space-y-2">
-                    <Label htmlFor="price">Price (ZAR) *</Label>
+                    <Label htmlFor="price" required={category !== "jobs_services"}>
+                      {category === "property" && categoryAttributes.listing_intent === "rent"
+                        ? "Monthly Rent (ZAR) *"
+                        : category === "jobs_services"
+                          ? "Salary (ZAR) (Optional)"
+                          : "Asking price (ZAR) *"}
+                    </Label>
                     <div className="flex flex-col xs:flex-row gap-3">
                       <Input
                         id="price"
@@ -695,24 +718,26 @@ export default function EditListingPage() {
                           setPrice(e.target.value);
                           clearErrors("price_zar");
                         }}
-                        required
+                        required={category !== "jobs_services"}
                         className={cn("flex-1", fieldErrors.price_zar && "border-destructive")}
                         aria-invalid={!!fieldErrors.price_zar}
                       />
-                      <button
-                        type="button"
-                        aria-pressed={negotiable}
-                        onClick={() => setNegotiable((v) => !v)}
-                        className={cn(
-                          "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                          negotiable
-                            ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
-                            : "border-input bg-card text-foreground/80 hover:border-foreground/30"
-                        )}
-                      >
-                        {negotiable && <Check className="h-4 w-4" aria-hidden="true" />}
-                        Negotiable
-                      </button>
+                      {category !== "jobs_services" && (
+                        <button
+                          type="button"
+                          aria-pressed={negotiable}
+                          onClick={() => setNegotiable((v) => !v)}
+                          className={cn(
+                            "flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            negotiable
+                              ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
+                              : "border-input bg-card text-foreground/80 hover:border-foreground/30"
+                          )}
+                        >
+                          {negotiable && <Check className="h-4 w-4" aria-hidden="true" />}
+                          Negotiable
+                        </button>
+                      )}
                     </div>
                     {fieldErrors.price_zar && (
                       <p className="inline-form-error">{fieldErrors.price_zar}</p>

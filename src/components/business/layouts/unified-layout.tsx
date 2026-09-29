@@ -1,4 +1,5 @@
 "use client";
+import { CustomerAccessSummary } from "@/components/business/customer-access-summary";
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 
@@ -139,6 +140,12 @@ function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
   }
 
   return facts;
+}
+
+/** Profiles saved with explicit contact methods only show the inbox when the owner chose it. */
+function acceptsInboxEnquiries(categoryDetails: unknown): boolean {
+  const methods = (categoryDetails as { contact_methods?: unknown } | null)?.contact_methods;
+  return !Array.isArray(methods) || methods.includes("form");
 }
 
 /* ── Self-reported business profile extras (category_details.business_profile) ── */
@@ -964,6 +971,10 @@ export function UnifiedLayout({
         />
       ) : null}
 
+      <CustomerAccessSummary
+        value={business.category_details?.customer_access}
+        meetingPoint={business.category_details?.meeting_point}
+      />
       <BusinessDetailsAccordion
         business={business}
         businessType={businessType}
@@ -1098,7 +1109,7 @@ export function UnifiedLayout({
                   phone={business.phone}
                   whatsapp={business.whatsapp}
                   showPhoneButton={true}
-                  showMessageButton={true}
+                  showMessageButton={acceptsInboxEnquiries(business.category_details)}
                   messageIcon={MessageSquare}
                   config={{
                     targetId: business.id,

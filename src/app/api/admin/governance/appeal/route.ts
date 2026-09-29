@@ -1,26 +1,32 @@
 import { NextResponse } from "next/server";
-import { resolveAppeal } from "@/lib/services/decision-ledger";
+import { z } from "zod";
+import { decisionRefusalResponse, resolveAppeal } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
-import { z } from "zod";
 import { uuidSchema } from "@/lib/validations/shared";
-import type { AppealStatus } from "@/types/enums";
 
 const log = createLogger("GovernanceAppeal");
 
-const appealResolveSchema = z.object({
-  appealId: uuidSchema,
-  status: z.enum(["upheld", "overturned", "partially_overturned", "dismissed"]),
-  rationale: z.string().min(1).max(2000),
-  outcomeDetail: z.record(z.string(), z.unknown()).optional(),
-});
+const appealResolveSchema = z
+  .object({
+    appealId: uuidSchema,
+    status: z.enum(["upheld", "overturned", "partially_overturned", "dismissed"]),
+    rationale: z.string().trim().min(10).max(2000),
+    /** For a partial overturn: the new end of the suspension. */
+    shortenTo: z.string().datetime({ offset: true }).optional(),
+  })
+  .refine((body) => body.status !== "partially_overturned" || body.shortenTo, {
+    message: "Choose the new end date for a partial overturn",
+    path: ["shortenTo"],
+  });
 
 /**
  * POST /api/admin/governance/appeal
  *
- * Governance controller resolves an appeal case.
- * Requires appeal:decide capability.
+ * Decide an appeal. The reviewer must not have taken part in the decision
+ * being appealed. Overturning lifts only that decision's restrictions and
+ * restores only the content it hid; a partial overturn shortens a suspension.
  */
 export async function POST(request: Request) {
   try {
@@ -32,37 +38,22 @@ export async function POST(request: Request) {
     });
     if (!guard.success) return guard.response;
 
-    const bodyResult = await parseAndValidateJsonRequest(request, appealResolveSchema, {
+    const body = await parseAndValidateJsonRequest(request, appealResolveSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
       includeValidationDetails: false,
     });
-    if (!bodyResult.success) {
-      return bodyResult.response;
-    }
+    if (!body.success) return body.response;
 
-    const { appealId, status, rationale, outcomeDetail } = bodyResult.data;
+    const { appealId, status, rationale, shortenTo } = body.data;
+    const result = await resolveAppeal(guard.user.id, appealId, status, rationale, shortenTo);
+    if (!result.ok) return decisionRefusalResponse(result.error);
 
-    const result = await resolveAppeal({
+    return NextResponse.json({
+      status,
       appealId,
-      reviewerId: guard.user.id,
-      reviewerRole: guard.actorRole,
-      status: status as Extract<
-        AppealStatus,
-        "upheld" | "overturned" | "partially_overturned" | "dismissed"
-      >,
-      rationale,
-      outcomeDetail,
+      restrictionsChanged: result.restrictions_changed,
     });
-
-    if (!result) {
-      return NextResponse.json(
-        { error: "Appeal not found or not in resolvable state" },
-        { status: 409 }
-      );
-    }
-
-    return NextResponse.json({ status, appealId });
   } catch (err) {
     logApiError(log, "Unexpected error", err);
     return internalApiError();

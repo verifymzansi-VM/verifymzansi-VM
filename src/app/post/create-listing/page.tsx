@@ -1,4 +1,5 @@
 "use client";
+import { PostSelect } from "@/components/post/post-select";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { ListingQualityHint } from "@/components/post/listing-quality-hint";
@@ -8,7 +9,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Camera, Check, Eye, FileText, Inbox, Mail, MessageCircle, Phone, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -59,13 +60,17 @@ import { ListingDetailContent } from "@/components/listings/listing-detail-conte
 import { readMediaDimensions } from "@/lib/utils/media-metadata";
 
 const STEPS: PostFormStep[] = [
-  { label: "Details", icon: FileText, description: "Category, title and description" },
   {
-    label: "Price & Location",
-    icon: Tag,
-    description: "Price, area and contact",
+    label: "What are you listing?",
+    icon: FileText,
+    description: "Category, title and description",
   },
-  { label: "Media", icon: Camera, description: "Photos, video and review" },
+  {
+    label: "Price, location & contact",
+    icon: Tag,
+    description: "Price, area and how buyers reach you",
+  },
+  { label: "Photos & review", icon: Camera, description: "Photos, video and review" },
 ];
 
 const FIELD_SELECT_CLASS =
@@ -219,6 +224,7 @@ const INITIAL_UPLOAD_STATUSES: UploadStatuses = {
 
 export default function CreateListingPage() {
   const { user, profile, isLoading } = useAuth();
+  const categoryAnswers = useRef<Record<string, Record<string, string | boolean | string[]>>>({});
   const [step, setStep] = useState(0);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -521,7 +527,10 @@ export default function CreateListingPage() {
     }
 
     if (targetStep === 1) {
-      if (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+      if (
+        (category !== "jobs_services" || price) &&
+        (!price || Number.isNaN(parseFloat(price)) || parseFloat(price) < 0)
+      ) {
         errors.price_zar = "Enter a valid price.";
       }
       if (!province) errors.province = "Select a province.";
@@ -544,7 +553,8 @@ export default function CreateListingPage() {
     }
 
     if (targetStep === 2) {
-      if (photoFiles.length === 0) errors.images = "Upload at least one photo.";
+      if (category !== "jobs_services" && photoFiles.length === 0)
+        errors.images = "Upload at least one photo.";
       if (photoFiles.length > maxPhotos) {
         errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
       }
@@ -560,9 +570,11 @@ export default function CreateListingPage() {
   }
 
   function handleCategoryChange(nextCategory: ListingCategory) {
+    categoryAnswers.current[category] = categoryAttributes;
     setCategory(nextCategory);
     setCategoryAttributes(
-      nextCategory === "vehicles" ? { year: String(new Date().getFullYear()) } : {}
+      categoryAnswers.current[nextCategory] ??
+        (nextCategory === "vehicles" ? { year: String(new Date().getFullYear()) } : {})
     );
     clearErrors("category");
   }
@@ -705,10 +717,13 @@ export default function CreateListingPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim(),
-          price_zar: parseFloat(price),
-          negotiable,
+          price_zar: price ? parseFloat(price) : 0,
+          negotiable: category === "jobs_services" ? false : negotiable,
           category: mapListingCategory(category),
-          condition: condition || undefined,
+          condition:
+            category === "jobs_services" || category === "auto_parts"
+              ? undefined
+              : condition || undefined,
           attributes: normalizedAttributes,
           province,
           city,
@@ -977,6 +992,8 @@ export default function CreateListingPage() {
                 area="market"
                 guideDescription="Pick a category first. We only ask for what matters."
                 steps={STEPS}
+                onStepChange={setStep}
+                onFieldError={(key) => focusFirstError({ [key]: fieldErrors[key] })}
                 currentStep={step}
                 completeness={listingCompleteness}
                 aside={renderPreviewAside()}
@@ -1067,36 +1084,48 @@ export default function CreateListingPage() {
                     {fieldErrors.category && (
                       <p className="inline-form-error">{fieldErrors.category}</p>
                     )}
+                    {category === "jobs_services" && (
+                      <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+                        Jobs are for vacancies you want to fill. If you offer a service, such as
+                        plumbing or hairdressing, customers find you more easily through a{" "}
+                        <Link href="/post/create-business" className="font-medium underline">
+                          business profile
+                        </Link>
+                        .
+                      </p>
+                    )}
 
                     <PostFormSection title="Describe it">
-                      <div className="space-y-2">
-                        <Label htmlFor="condition">Condition</Label>
-                        <select
-                          id="condition"
-                          aria-label="Condition"
-                          className={FIELD_SELECT_CLASS}
-                          value={condition}
-                          onChange={(event) => {
-                            setCondition(event.target.value as ListingCondition | "");
-                            // Auto-focus the title field after selecting condition
-                            requestAnimationFrame(() => {
-                              const el = document.getElementById("title");
-                              if (el) {
-                                el.focus();
-                                el.scrollIntoView({ behavior: "smooth", block: "center" });
-                              }
-                            });
-                          }}
-                        >
-                          <option value="">Condition not specified</option>
-                          {LISTING_CONDITIONS.map((item) => (
-                            <option key={item.value} value={item.value}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-muted-foreground">Optional, but helpful.</p>
-                      </div>
+                      {category !== "jobs_services" && category !== "auto_parts" && (
+                        <div className="space-y-2">
+                          <Label htmlFor="condition">Condition</Label>
+                          <PostSelect
+                            id="condition"
+                            aria-label="Condition"
+                            className={FIELD_SELECT_CLASS}
+                            value={condition}
+                            onChange={(event) => {
+                              setCondition(event.target.value as ListingCondition | "");
+                              // Auto-focus the title field after selecting condition
+                              requestAnimationFrame(() => {
+                                const el = document.getElementById("title");
+                                if (el) {
+                                  el.focus();
+                                  el.scrollIntoView({ behavior: "smooth", block: "center" });
+                                }
+                              });
+                            }}
+                          >
+                            <option value="">Condition not specified</option>
+                            {LISTING_CONDITIONS.map((item) => (
+                              <option key={item.value} value={item.value}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </PostSelect>
+                          <p className="text-xs text-muted-foreground">Optional, but helpful.</p>
+                        </div>
+                      )}
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -1167,10 +1196,16 @@ export default function CreateListingPage() {
 
                 {step === 1 && (
                   <div className="space-y-6">
-                    <PostFormSection title="Price">
+                    <PostFormSection
+                      title={category === "jobs_services" ? "Salary (Optional)" : "Price"}
+                    >
                       <div className="space-y-2">
-                        <Label htmlFor="price">
-                          {isPropertyRentListing ? "Monthly Rent (ZAR) *" : "Asking Price (ZAR) *"}
+                        <Label htmlFor="price" required={category !== "jobs_services"}>
+                          {isPropertyRentListing
+                            ? "Monthly Rent (ZAR) *"
+                            : category === "jobs_services"
+                              ? "Salary (ZAR) (Optional)"
+                              : "Asking price (ZAR) *"}
                         </Label>
                         <div className="flex flex-col xs:flex-row gap-3">
                           <div className="relative flex-1">
@@ -1194,23 +1229,25 @@ export default function CreateListingPage() {
                             />
                           </div>
 
-                          <label
-                            className={cn(
-                              "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
-                              negotiable
-                                ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
-                                : "border-input bg-card text-foreground/80 hover:border-foreground/30"
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={negotiable}
-                              onChange={(event) => setNegotiable(event.target.checked)}
-                              className="sr-only"
-                            />
-                            {negotiable ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
-                            Negotiable
-                          </label>
+                          {category !== "jobs_services" && (
+                            <label
+                              className={cn(
+                                "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
+                                negotiable
+                                  ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
+                                  : "border-input bg-card text-foreground/80 hover:border-foreground/30"
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={negotiable}
+                                onChange={(event) => setNegotiable(event.target.checked)}
+                                className="sr-only"
+                              />
+                              {negotiable ? <Check className="h-4 w-4" aria-hidden="true" /> : null}
+                              Negotiable
+                            </label>
+                          )}
                         </div>
                         {fieldErrors.price_zar && (
                           <p className="inline-form-error">{fieldErrors.price_zar}</p>
@@ -1300,7 +1337,11 @@ export default function CreateListingPage() {
                         <MediaUpload
                           id="listing-images-input"
                           label={`Photos (max ${maxPhotos})`}
-                          description="Required. Your first photo becomes the public hero image and marketplace card cover."
+                          description={
+                            category === "jobs_services"
+                              ? "Optional for job vacancies."
+                              : "Required. Your first photo becomes the public cover."
+                          }
                           error={fieldErrors.images}
                           maxFiles={maxPhotos}
                           files={photoFiles}

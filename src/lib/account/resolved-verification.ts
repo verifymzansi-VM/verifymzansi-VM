@@ -30,18 +30,9 @@ type VerificationStepRow = {
   location_city?: string | null;
   location_town?: string | null;
   phone_verified_at?: string | null;
-  gps_mismatch?: { province: boolean; city: boolean } | null;
-  gps_resolved_province?: string | null;
-  gps_resolved_city?: string | null;
-  gps_confidence?: string | null;
 };
 
-type VerificationStepDbRow = Omit<
-  VerificationStepRow,
-  "gps_mismatch" | "gps_resolved_province" | "gps_resolved_city" | "gps_confidence"
-> & {
-  metadata?: Record<string, unknown> | null;
-};
+type VerificationStepDbRow = VerificationStepRow;
 
 type PendingArtifactRow = {
   step_type?: string | null;
@@ -61,24 +52,7 @@ function readStringField(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
-function readGpsMismatch(value: unknown): { province: boolean; city: boolean } | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const mismatch = value as Record<string, unknown>;
-  const province = mismatch.province;
-  const city = mismatch.city;
-
-  if (typeof province !== "boolean" || typeof city !== "boolean") {
-    return null;
-  }
-
-  return { province, city };
-}
-
 function mapVerificationStepRow(step: VerificationStepDbRow): VerificationStepRow {
-  const metadata = step.metadata ?? null;
   const phoneVerifiedAt = readStringField(step.phone_verified_at);
 
   return {
@@ -94,10 +68,6 @@ function mapVerificationStepRow(step: VerificationStepDbRow): VerificationStepRo
     location_city: step.location_city,
     location_town: step.location_town,
     phone_verified_at: step.phone_verified_at,
-    gps_mismatch: readGpsMismatch(metadata?.mismatch),
-    gps_resolved_province: readStringField(metadata?.gps_province),
-    gps_resolved_city: readStringField(metadata?.gps_city),
-    gps_confidence: readStringField(metadata?.confidence),
   };
 }
 
@@ -247,7 +217,7 @@ export async function resolveAccountVerification(
     const stepsResult = await client
       .from("verification_steps")
       .select(
-        "step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at, location_method, location_province, location_city, location_town, phone_verified_at, metadata"
+        "step_type, status, reviewed_at, reason_code, reason_note, risk_level, submitted_at, location_method, location_province, location_city, location_town, phone_verified_at"
       )
       .eq("user_id", userId);
 

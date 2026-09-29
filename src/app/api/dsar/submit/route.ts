@@ -111,10 +111,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "CAPTCHA service unavailable" }, { status: 503 });
     }
 
-    // ── Calculate due date (POPIA: 30 days) ──────────────────
-    const dueBy = new Date();
-    dueBy.setDate(dueBy.getDate() + 30);
-
     // ── Insert DSAR record ───────────────────────────────────
     const admin = createAdminClient();
 
@@ -133,15 +129,20 @@ export async function POST(request: NextRequest) {
           .filter(Boolean)
           .join(" | "),
         status: "submitted",
-        due_by: dueBy.toISOString(),
+        // The database sets due_by and legal_basis from dsar_deadline_rules;
+        // this placeholder satisfies the column and is always replaced.
+        due_by: new Date().toISOString(),
+        subject_user_id: user.id,
+        identity_check: "session",
       })
-      .select("id")
+      .select("id, due_by")
       .single();
 
     if (insertError || !dsarRecord) {
       log.error("Insert error", { error: insertError?.message ?? "No data returned" });
       return NextResponse.json({ error: "Failed to submit request" }, { status: 500 });
     }
+    const dueBy = new Date(dsarRecord.due_by);
 
     // ── Audit log (best-effort) ────────────────────────────────
     try {

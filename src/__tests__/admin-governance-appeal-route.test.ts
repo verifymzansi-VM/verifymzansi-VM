@@ -1,185 +1,109 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as DecisionLedger from "@/lib/services/decision-ledger";
 
-const {
-  mockCreateClient,
-  mockVerifyCapabilityRoleFromDb,
-  mockResolveAppeal,
-  mockEnforceSameOriginMutation,
-  mockEnforceCsrfToken,
-  mockCheckLocalRateLimit,
-  mockLogApiError,
-} = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockVerifyCapabilityRoleFromDb: vi.fn(),
-  mockResolveAppeal: vi.fn(),
-  mockEnforceSameOriginMutation: vi.fn(),
-  mockEnforceCsrfToken: vi.fn(),
-  mockCheckLocalRateLimit: vi.fn(),
-  mockLogApiError: vi.fn(),
+const { guard, resolveAppeal } = vi.hoisted(() => ({ guard: vi.fn(), resolveAppeal: vi.fn() }));
+
+vi.mock("@/lib/utils/admin-route-guard", () => ({ enforceAdminMutationGuard: guard }));
+vi.mock("@/lib/services/decision-ledger", async (importOriginal) => ({
+  ...(await importOriginal<typeof DecisionLedger>()),
+  resolveAppeal,
 }));
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: mockCreateClient,
-}));
-
-vi.mock("@/lib/auth/admin-access", () => ({
-  verifyCapabilityRoleFromDb: mockVerifyCapabilityRoleFromDb,
-}));
-
-vi.mock("@/lib/services/decision-ledger", () => ({
-  resolveAppeal: mockResolveAppeal,
-}));
-
-vi.mock("@/lib/utils/mutation-origin", () => ({
-  enforceSameOriginMutation: mockEnforceSameOriginMutation,
-}));
-
-vi.mock("@/lib/utils/csrf", () => ({
-  enforceCsrfToken: mockEnforceCsrfToken,
-}));
-
-vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: mockCheckLocalRateLimit,
-}));
-
-vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
-vi.mock("@/lib/utils/api", async () => {
-  const actual = await vi.importActual("@/lib/utils/api");
-  return {
-    ...actual,
-    logApiError: mockLogApiError,
-  };
-});
 
 import { POST } from "@/app/api/admin/governance/appeal/route";
 
-function createRequest(body: unknown, headers?: HeadersInit) {
-  return new Request("http://localhost:3000/api/admin/governance/appeal", {
+const GOV = "11111111-1111-4111-8111-111111111111";
+const APPEAL = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+
+const request = (body: Record<string, unknown>) =>
+  new Request("http://localhost:3000/api/admin/governance/appeal", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(headers ?? {}),
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-}
 
 describe("POST /api/admin/governance/appeal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockEnforceSameOriginMutation.mockReturnValue(null);
-    mockEnforceCsrfToken.mockReturnValue(null);
-    mockCheckLocalRateLimit.mockReturnValue({ limited: false });
-    mockVerifyCapabilityRoleFromDb.mockResolvedValue("governance_controller");
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "gov-1", app_metadata: { role: "governance_controller" } } },
-        }),
-      },
+    guard.mockResolvedValue({
+      success: true,
+      user: { id: GOV },
+      actorRole: "governance_controller",
     });
+    resolveAppeal.mockResolvedValue({ ok: true, status: "overturned", restrictions_changed: 1 });
   });
 
-  it("returns 403 when capability verification fails", async () => {
-    mockVerifyCapabilityRoleFromDb.mockResolvedValue(null);
+  it("requires appeal:decide", async () => {
+    guard.mockResolvedValue({ success: false, response: new Response(null, { status: 403 }) });
+    expect(
+      (await POST(request({ appealId: APPEAL, status: "upheld", rationale: "Evidence holds" })))
+        .status
+    ).toBe(403);
+    expect(guard).toHaveBeenCalledWith(expect.objectContaining({ capability: "appeal:decide" }));
+  });
 
+  it("resolves with the verified reviewer and reports what changed", async () => {
     const res = await POST(
-      createRequest({
-        appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        status: "upheld",
-        rationale: "Reviewed",
+      request({ appealId: APPEAL, status: "overturned", rationale: "ID was stolen" })
+    );
+    expect(res.status).toBe(200);
+    expect(resolveAppeal).toHaveBeenCalledWith(
+      GOV,
+      APPEAL,
+      "overturned",
+      "ID was stolen",
+      undefined
+    );
+    await expect(res.json()).resolves.toMatchObject({ restrictionsChanged: 1 });
+  });
+
+  it("needs a new end date for a partial overturn", async () => {
+    const missing = await POST(
+      request({
+        appealId: APPEAL,
+        status: "partially_overturned",
+        rationale: "Too long for a first offence",
       })
     );
+    expect(missing.status).toBe(400);
 
+    const shortenTo = "2026-10-05T10:00:00.000Z";
+    await POST(
+      request({
+        appealId: APPEAL,
+        status: "partially_overturned",
+        rationale: "Too long for a first offence",
+        shortenTo,
+      })
+    );
+    expect(resolveAppeal).toHaveBeenCalledWith(
+      GOV,
+      APPEAL,
+      "partially_overturned",
+      "Too long for a first offence",
+      shortenTo
+    );
+  });
+
+  it("refuses a reviewer who took part in the decision", async () => {
+    resolveAppeal.mockResolvedValue({ ok: false, error: "not_independent" });
+    const res = await POST(
+      request({ appealId: APPEAL, status: "overturned", rationale: "ID was stolen" })
+    );
     expect(res.status).toBe(403);
   });
 
-  it("uses the DB-verified role for appeal resolution", async () => {
-    mockVerifyCapabilityRoleFromDb.mockResolvedValue("admin");
-    mockResolveAppeal.mockResolvedValue({
-      appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-      status: "dismissed",
-    });
-
-    const res = await POST(
-      createRequest({
-        appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        status: "dismissed",
-        rationale: "DB role wins",
-      })
-    );
-
-    expect(res.status).toBe(200);
-    expect(mockResolveAppeal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reviewerRole: "admin",
-      })
-    );
+  it("requires a real rationale", async () => {
+    expect(
+      (await POST(request({ appealId: APPEAL, status: "upheld", rationale: "ok" }))).status
+    ).toBe(400);
+    expect(resolveAppeal).not.toHaveBeenCalled();
   });
 
-  it("returns 429 when locally rate limited", async () => {
-    mockCheckLocalRateLimit.mockReturnValue({ limited: true, retryAfter: 30 });
-
-    const res = await POST(
-      createRequest({
-        appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        status: "upheld",
-        rationale: "Reviewed",
-      })
-    );
-
-    expect(res.status).toBe(429);
-    expect(res.headers.get("Retry-After")).toBe("30");
-  });
-
-  it("resolves an appeal", async () => {
-    mockResolveAppeal.mockResolvedValue({
-      appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-      status: "overturned",
-    });
-
-    const res = await POST(
-      createRequest({
-        appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        status: "overturned",
-        rationale: "New evidence accepted",
-        outcomeDetail: { newAction: "warning" },
-      })
-    );
-
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ status: "overturned" });
-    expect(mockResolveAppeal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        reviewerId: "gov-1",
-        reviewerRole: "governance_controller",
-        status: "overturned",
-        rationale: "New evidence accepted",
-        outcomeDetail: { newAction: "warning" },
-      })
-    );
-  });
-
-  it("returns 500 when the service throws unexpectedly", async () => {
-    mockResolveAppeal.mockRejectedValue(new Error("db offline"));
-
-    const res = await POST(
-      createRequest({
-        appealId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
-        status: "dismissed",
-        rationale: "No change",
-      })
-    );
-
-    expect(res.status).toBe(500);
-    expect(mockLogApiError).toHaveBeenCalled();
+  it("returns 500 when the database fails", async () => {
+    resolveAppeal.mockRejectedValue(new Error("Decision RPC resolve_appeal failed"));
+    expect(
+      (await POST(request({ appealId: APPEAL, status: "upheld", rationale: "Evidence holds" })))
+        .status
+    ).toBe(500);
   });
 });

@@ -88,6 +88,7 @@ describe("EditPromotionPage", () => {
       video_thumbnail: string;
       business_id: string | null;
       event_details: Record<string, unknown>;
+      price_cents: number | null;
     }> = {}
   ) => ({
     id: "promotion-1",
@@ -107,7 +108,7 @@ describe("EditPromotionPage", () => {
     videos: [],
     video_thumbnail: "",
     business_id: "business-1",
-    event_details: {},
+    event_details: { event_type: "market_expo" },
     ...overrides,
   });
 
@@ -117,6 +118,7 @@ describe("EditPromotionPage", () => {
       videos: string[];
       video_thumbnail: string;
       business_id: string | null;
+      price_cents: number | null;
     }> = {}
   ) {
     global.fetch = vi
@@ -150,6 +152,26 @@ describe("EditPromotionPage", () => {
     mockEditPromotionFetch();
   });
 
+  it("keeps a saved free event as free entry and lets it be saved", async () => {
+    mockEditPromotionFetch({ price_cents: 0 });
+    render(<EditPromotionPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Night Market")).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText("Free entry")).toBeChecked();
+    expect(screen.queryByLabelText(/Starting entry price/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+    const payload = JSON.parse(
+      (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body as string
+    );
+    expect(payload.price_zar).toBe(0);
+  });
+
   it("hydrates saved promotion details and sends normalized payload on save", async () => {
     render(<EditPromotionPage />);
 
@@ -170,7 +192,7 @@ describe("EditPromotionPage", () => {
       expect.objectContaining({ layoutMode: "review" })
     );
 
-    fireEvent.change(screen.getByLabelText("Tickets URL"), {
+    fireEvent.change(screen.getByLabelText(/Tickets URL/), {
       target: { value: "https:// tickets.example.com/night-market" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));

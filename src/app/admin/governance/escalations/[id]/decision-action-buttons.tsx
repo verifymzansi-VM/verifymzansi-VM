@@ -6,74 +6,136 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle, Loader2, XCircle } from "lucide-react";
+import { CheckCircle, Loader2, RotateCw, XCircle } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-
-/** Categories that require a secondary approver (mirrors the API route). */
-const DUAL_APPROVAL_CATEGORIES: ReadonlySet<string> = new Set([
-  "kyc_override",
-  "account_ban",
-  "data_deletion",
-  "role_change",
-  "policy_exception",
-]);
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 interface DecisionActionButtonsProps {
   decisionId: string;
-  actionCategory: string;
+  /** The proposal version on screen; approval is refused if it has changed. */
+  payloadVersion: number;
+  /**
+   * "decide" while pending; "withdraw" for the person who proposed it;
+   * "retry" for an approved decision whose execution failed.
+   */
+  mode?: "decide" | "withdraw" | "retry";
+  /** Shown instead of the buttons when this viewer cannot decide. */
+  blockedReason?: string | null;
 }
 
-export function DecisionActionButtons({ decisionId, actionCategory }: DecisionActionButtonsProps) {
+type Action = "approve" | "reject" | "escalate" | "retry_execution";
+
+export function DecisionActionButtons({
+  decisionId,
+  payloadVersion,
+  mode = "decide",
+  blockedReason = null,
+}: DecisionActionButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rationale, setRationale] = useState("");
-  const [secondaryApproverId, setSecondaryApproverId] = useState("");
 
-  const requiresDualApproval = DUAL_APPROVAL_CATEGORIES.has(actionCategory);
-
-  async function handleDecision(action: "approve" | "reject" | "escalate") {
+  async function send(action: Action) {
     setError(null);
-
-    if (!rationale.trim()) {
-      setError("A rationale is required.");
+    if (action !== "retry_execution" && !rationale.trim()) {
+      setError("Write a short rationale for the audit trail.");
       return;
     }
-    if (action === "approve" && requiresDualApproval && !secondaryApproverId.trim()) {
-      setError("This category requires a secondary approver ID.");
-      return;
-    }
-
     setSubmitting(action);
-
     try {
+      const body =
+        action === "retry_execution"
+          ? { action, decisionId }
+          : action === "approve"
+            ? { action, decisionId, payloadVersion, rationale: rationale.trim() }
+            : { action, decisionId, rationale: rationale.trim() };
       const res = await fetch("/api/admin/governance/decide", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          decisionId,
-          action,
-          rationale: rationale.trim(),
-          ...(action === "approve" && secondaryApproverId.trim()
-            ? { secondaryApproverId: secondaryApproverId.trim() }
-            : {}),
-        }),
+        body: JSON.stringify(body),
       });
-
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Failed (${res.status})`);
+        if (data.code === "mfa_required" || data.code === "step_up_required") {
+          router.push(
+            staffVerifyHref(data.verifyUrl, `/admin/governance/escalations/${decisionId}`)
+          );
+          return;
+        }
+        throw new Error(data.error || "The decision could not be saved. Try again.");
       }
-
-      startTransition(() => {
-        router.refresh();
-      });
+      startTransition(() => router.refresh());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "The decision could not be saved. Try again.");
     } finally {
       setSubmitting(null);
     }
+  }
+
+  if (blockedReason) {
+    return <p className="text-sm text-muted-foreground">{blockedReason}</p>;
+  }
+
+  const busy = isPending || submitting !== null;
+  const spinner = (action: Action, icon: React.ReactNode) =>
+    submitting === action ? <Loader2 className="h-4 w-4 animate-spin" /> : icon;
+
+  if (mode === "retry") {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm">
+          This decision was approved but its effect could not be applied. Retrying is safe: work
+          already done is not repeated.
+        </p>
+        <Button size="sm" className="gap-1" onClick={() => send("retry_execution")} disabled={busy}>
+          {spinner("retry_execution", <RotateCw className="h-4 w-4" />)}
+          Retry the update
+        </Button>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (mode === "withdraw") {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          You proposed this, so someone else must approve or reject it. You can withdraw it.
+        </p>
+        <div className="space-y-1.5">
+          <Label htmlFor={`decision-rationale-${decisionId}`} className="text-sm font-medium">
+            Why are you withdrawing it?
+          </Label>
+          <Textarea
+            id={`decision-rationale-${decisionId}`}
+            value={rationale}
+            onChange={(e) => setRationale(e.target.value)}
+            rows={2}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={() => send("reject")}
+          disabled={busy}
+        >
+          {spinner("reject", <XCircle className="h-4 w-4" />)}
+          Withdraw proposal
+        </Button>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -86,72 +148,43 @@ export function DecisionActionButtons({ decisionId, actionCategory }: DecisionAc
           id={`decision-rationale-${decisionId}`}
           value={rationale}
           onChange={(e) => setRationale(e.target.value)}
-          placeholder="Explain the decision for the audit trail..."
+          placeholder="Explain the decision for the audit trail"
           rows={3}
         />
       </div>
 
-      {requiresDualApproval && (
-        <div className="space-y-1.5">
-          <Label htmlFor={`decision-secondary-${decisionId}`} className="text-sm font-medium">
-            Secondary approver ID (required for {actionCategory})
-          </Label>
-          <input
-            id={`decision-secondary-${decisionId}`}
-            type="text"
-            value={secondaryApproverId}
-            onChange={(e) => setSecondaryApproverId(e.target.value)}
-            placeholder="UUID of a second governance approver"
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-          />
-        </div>
-      )}
-
       <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          className="gap-1"
-          onClick={() => handleDecision("approve")}
-          disabled={isPending || submitting !== null}
-        >
-          {submitting === "approve" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle className="h-4 w-4" />
-          )}
-          Approve
+        <Button size="sm" className="gap-1" onClick={() => send("approve")} disabled={busy}>
+          {spinner("approve", <CheckCircle className="h-4 w-4" />)}
+          Approve and apply
         </Button>
         <Button
           size="sm"
           variant="destructive"
           className="gap-1"
-          onClick={() => handleDecision("reject")}
-          disabled={isPending || submitting !== null}
+          onClick={() => send("reject")}
+          disabled={busy}
         >
-          {submitting === "reject" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <XCircle className="h-4 w-4" />
-          )}
+          {spinner("reject", <XCircle className="h-4 w-4" />)}
           Reject
         </Button>
         <Button
           size="sm"
           variant="outline"
           className="gap-1"
-          onClick={() => handleDecision("escalate")}
-          disabled={isPending || submitting !== null}
+          onClick={() => send("escalate")}
+          disabled={busy}
         >
-          {submitting === "escalate" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ShieldAlert className="h-4 w-4" />
-          )}
+          {spinner("escalate", <ShieldAlert className="h-4 w-4" />)}
           Escalate
         </Button>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

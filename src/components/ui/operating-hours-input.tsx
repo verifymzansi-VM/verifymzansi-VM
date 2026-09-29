@@ -21,6 +21,7 @@ const TIME_SLOTS: string[] = Array.from({ length: 48 }, (_, i) => {
 /** Compose a display string from structured values. */
 export function formatHoursValue(open: string, close: string, closed: boolean): string {
   if (closed) return "Closed";
+  if (open === "appointment") return "By appointment";
   if (open && close) return `${open} - ${close}`;
   return "";
 }
@@ -29,6 +30,8 @@ export function formatHoursValue(open: string, close: string, closed: boolean): 
 export function parseHoursValue(raw: string): { open: string; close: string; closed: boolean } {
   if (!raw) return { open: "", close: "", closed: false };
   const trimmed = raw.trim();
+  if (/^(by appointment|appointment.only)$/i.test(trimmed))
+    return { open: "appointment", close: "", closed: false };
   if (/^closed$/i.test(trimmed)) return { open: "", close: "", closed: true };
 
   // Match "HH:MM - HH:MM"
@@ -105,7 +108,21 @@ export function OperatingHoursInput({
         )}
       </div>
 
-      {!closed && (
+      {!hideClosed && (
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={!closed && open === "appointment"}
+            onChange={(e) => {
+              onClosedChange(false);
+              onOpenChange(e.target.checked ? "appointment" : "");
+              onCloseChange("");
+            }}
+          />
+          By appointment only
+        </label>
+      )}
+      {!closed && open !== "appointment" && (
         <div className="flex items-center gap-2">
           <select
             id={`${id}-open`}
@@ -114,7 +131,7 @@ export function OperatingHoursInput({
             value={open}
             onChange={(e) => onOpenChange(e.target.value)}
           >
-            <option value="">Open</option>
+            <option value="">Opening time — not provided</option>
             {TIME_SLOTS.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -131,7 +148,7 @@ export function OperatingHoursInput({
             value={close}
             onChange={(e) => onCloseChange(e.target.value)}
           >
-            <option value="">Close</option>
+            <option value="">Closing time — not provided</option>
             {TIME_SLOTS.map((t) => (
               <option key={t} value={t}>
                 {t}

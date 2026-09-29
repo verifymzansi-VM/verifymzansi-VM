@@ -14,6 +14,7 @@ import type { Report } from "@/types/database";
 
 interface ReportsClientProps {
   reports: Report[];
+  canEnforceDirectly?: boolean;
 }
 
 const STATUS_FILTERS: readonly ReportStatusFilter[] = [
@@ -24,7 +25,7 @@ const STATUS_FILTERS: readonly ReportStatusFilter[] = [
   "dismissed",
 ];
 
-export function ReportsClient({ reports }: ReportsClientProps) {
+export function ReportsClient({ reports, canEnforceDirectly = false }: ReportsClientProps) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>("all");
 
@@ -60,7 +61,11 @@ export function ReportsClient({ reports }: ReportsClientProps) {
           <h3 className="text-sm font-medium text-muted-foreground mb-2">
             Open Reports ({openReports.length})
           </h3>
-          <FlaggingQueueTable reports={openReports} onActionComplete={() => router.refresh()} />
+          <FlaggingQueueTable
+            reports={openReports}
+            onActionComplete={() => router.refresh()}
+            canEnforceDirectly={canEnforceDirectly}
+          />
         </div>
       )}
 

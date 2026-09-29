@@ -533,6 +533,20 @@ export interface DsarCase {
   processed_by: string | null;
   created_at: string;
   updated_at: string;
+  /** Linked account of the data subject, when resolved. */
+  subject_user_id: string | null;
+  received_at: string;
+  /** The deadline rule this case follows (dsar_deadline_rules.source). */
+  legal_basis: string | null;
+  extended_due_at: string | null;
+  /** Generated: extended_due_at if set, else due_by. */
+  effective_due_at: string;
+  extension_reason: string | null;
+  extension_notified_at: string | null;
+  assigned_to: string | null;
+  /** "session": requested while signed in; "manual": staff intake. */
+  identity_check: "session" | "manual";
+  intake_by: string | null;
 }
 
 /* ── Consent Records ─────────────────────────────────────── */

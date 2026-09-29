@@ -1,174 +1,215 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyAdminActorRoleFromDb } from "@/lib/auth/admin-access";
-import { getRoleFromUser } from "@/lib/auth/roles";
-import { recordRoleChange } from "@/lib/services/decision-ledger";
 import { createLogger } from "@/lib/utils/logger";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { enforceCsrfToken } from "@/lib/utils/csrf";
+import { reportCriticalIncident } from "@/lib/utils/alerts";
+import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
+import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import {
   internalApiError,
   logApiError,
   parseAndValidateJsonRequest,
-  unauthorizedResponse,
-  forbiddenResponse,
   rateLimitResponse,
 } from "@/lib/utils/api";
-import { z } from "zod";
 
 const log = createLogger("GovernanceRoles");
 
-const ASSIGNABLE_ROLES = ["moderator", "governance_controller", "member"] as const;
+const reasonSchema = z.string().trim().min(5).max(500);
+const noteSchema = z.string().trim().max(500).optional();
 
-const roleAssignSchema = z.object({
-  targetEmail: z.string().email().max(254),
-  newRole: z.enum(ASSIGNABLE_ROLES),
-  reason: z.string().min(5).max(500).trim(),
-});
+const roleChangeSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("propose"),
+    targetEmail: z.string().trim().email().max(254),
+    newRole: z.enum(["moderator", "governance_controller", "admin", "member"]),
+    reason: reasonSchema,
+  }),
+  z.object({
+    action: z.literal("approve"),
+    decisionId: z.string().uuid(),
+    payloadVersion: z.number().int().min(1),
+    note: noteSchema,
+  }),
+  z.object({
+    action: z.literal("reject"),
+    decisionId: z.string().uuid(),
+    note: noteSchema,
+  }),
+]);
+
+type RpcResult =
+  | {
+      ok: true;
+      status: "proposed" | "applied" | "rejected" | "withdrawn";
+      decision_id?: string;
+      target_user_id?: string;
+      previous_role?: string;
+      new_role?: string;
+    }
+  | { ok: false; error: string };
+
+/** Map a refusal from the role-change RPCs to an HTTP status and message. */
+const REFUSALS: Record<string, [number, string]> = {
+  forbidden: [403, "Your role cannot make this change."],
+  not_independent: [
+    403,
+    "Someone other than the proposer and the person affected must approve this change.",
+  ],
+  self_change: [400, "You cannot change your own role."],
+  reason_required: [400, "Give a reason of at least 5 characters."],
+  invalid_role: [400, "Choose a valid role."],
+  target_not_found: [404, "No account uses that email address."],
+  no_change: [409, "This person already has that role."],
+  pending_exists: [409, "A change for this person is already waiting for approval."],
+  not_found: [404, "That role change could not be found."],
+  not_pending: [409, "That role change has already been decided."],
+  expired: [410, "That proposal expired. Propose the change again."],
+  payload_changed: [409, "The proposal changed after you opened it. Refresh and review it again."],
+  stale: [409, "This person's role changed after the proposal was made, so it was cancelled."],
+  proposer_lost_authority: [
+    409,
+    "The person who proposed this no longer has the authority to, so it was cancelled.",
+  ],
+};
 
 /**
  * POST /api/admin/governance/roles
  *
- * Admin-only endpoint to assign or revoke staff roles.
+ * Propose, approve or reject a staff role change. Policy is enforced in the
+ * database (see 20260927110100_staff_role_changes.sql): promotions need an
+ * independent approver, admin demotions apply immediately, a governor may
+ * propose removing a moderator, and nobody changes their own role.
  *
- * Security layers (in order):
- *   L1 — Same-origin enforcement
- *   L2 — CSRF double-submit
- *   L3 — DB-verified admin role
- *   L4 — Rate limit (5/min)
+ * Every action needs a second factor verified in the last 15 minutes.
  */
 export async function POST(request: Request) {
   try {
-    // L1: Same-origin check
-    const originBlock = enforceSameOriginMutation(request, log);
-    if (originBlock) return originBlock;
+    const guard = await enforceAdminMutationGuard({
+      request,
+      logger: log,
+      rateLimitAction: "admin:role:review",
+      capability: "role:review",
+      stepUp: true,
+    });
+    if (!guard.success) return guard.response;
 
-    // L2: CSRF double-submit check
-    const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    const rl = await checkSensitiveActionRateLimit(guard.user.id, "admin:role:assign", 5);
+    if (rl.limited) return rateLimitResponse(rl.retryAfter ?? 60);
 
-    // Auth: Get current user
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return unauthorizedResponse();
-    }
-
-    // L3: DB-verified admin role check (guards against stale JWTs and non-admin staff)
-    const verifiedAdminRole = await verifyAdminActorRoleFromDb(user);
-    if (!verifiedAdminRole) {
-      log.warn("Role assign rejected: actor is not a DB-verified admin", { actorId: user.id });
-      return forbiddenResponse();
-    }
-
-    // L4: Tight rate limit — max 5 role changes per minute
-    const rl = checkLocalRateLimit(user.id, "admin:role:assign", 5);
-    if (rl.limited) {
-      return rateLimitResponse(rl.retryAfter ?? 60);
-    }
-
-    // Parse and validate request body
-    const bodyResult = await parseAndValidateJsonRequest(request, roleAssignSchema, {
+    const body = await parseAndValidateJsonRequest(request, roleChangeSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
       includeValidationDetails: false,
     });
-    if (!bodyResult.success) {
-      return bodyResult.response;
-    }
+    if (!body.success) return body.response;
 
-    const { targetEmail, newRole, reason } = bodyResult.data;
-
-    // Block self-role-change (prevent admin from locking themselves out)
-    const targetNormalized = targetEmail.toLowerCase().trim();
-    if (user.email?.toLowerCase().trim() === targetNormalized) {
-      return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
-    }
-
-    // Lookup target user by email using admin API
     const admin = createAdminClient();
-    // Search through all users for exact email match
-    let targetUser: { id: string; email?: string; app_metadata?: Record<string, unknown> } | null =
-      null;
-    const perPage = 200;
-    for (let page = 1; page <= 50; page += 1) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-      if (error) {
-        log.error("Failed to list users during target lookup", { error: error.message });
+    const actorId = guard.user.id;
+    let rpc: { data: unknown; error: { message: string } | null };
+
+    if (body.data.action === "propose") {
+      const { data: targetId, error: lookupError } = await admin.rpc("auth_user_id_by_email", {
+        p_email: body.data.targetEmail,
+      });
+      if (lookupError) {
+        log.error("Role change target lookup failed", { error: lookupError.message });
         return internalApiError();
       }
-
-      const users = data?.users ?? [];
-      const found = users.find((u) => u.email?.toLowerCase().trim() === targetNormalized);
-      if (found) {
-        targetUser = found;
-        break;
+      if (typeof targetId !== "string") {
+        return NextResponse.json({ error: REFUSALS.target_not_found[1] }, { status: 404 });
       }
-      if (users.length < perPage) break;
-    }
-
-    if (!targetUser) {
-      return NextResponse.json({ error: "Target user not found" }, { status: 404 });
-    }
-
-    // Read current role
-    const currentRole = getRoleFromUser({
-      app_metadata: targetUser.app_metadata ?? {},
-      is_anonymous: false,
-    });
-
-    // Idempotency guard: return 409 if already the requested role
-    const effectiveNewRole = newRole === "member" ? null : newRole;
-    const effectiveCurrentRole = currentRole === "member" || !currentRole ? null : currentRole;
-    if (effectiveNewRole === effectiveCurrentRole) {
-      return NextResponse.json({ error: "User already has the requested role" }, { status: 409 });
-    }
-
-    // Execute the role change
-    const roleForMetadata = newRole === "member" ? "member" : newRole;
-    const { error: updateError } = await admin.auth.admin.updateUserById(targetUser.id, {
-      app_metadata: { ...targetUser.app_metadata, role: roleForMetadata },
-    });
-
-    if (updateError) {
-      log.error("Failed to update user role", {
-        targetUserId: targetUser.id,
-        error: updateError.message,
+      rpc = await admin.rpc("propose_staff_role_change", {
+        p_actor: actorId,
+        p_target: targetId,
+        p_role: body.data.newRole,
+        p_reason: body.data.reason,
       });
+    } else if (body.data.action === "approve") {
+      rpc = await admin.rpc("approve_staff_role_change", {
+        p_actor: actorId,
+        p_decision: body.data.decisionId,
+        p_payload_version: body.data.payloadVersion,
+        p_note: body.data.note ?? null,
+      });
+    } else {
+      rpc = await admin.rpc("reject_staff_role_change", {
+        p_actor: actorId,
+        p_decision: body.data.decisionId,
+        p_note: body.data.note ?? null,
+      });
+    }
+
+    if (rpc.error) {
+      if (rpc.error.message.includes("last active admin")) {
+        return NextResponse.json(
+          { error: "The last active admin cannot be removed. Add another admin first." },
+          { status: 409 }
+        );
+      }
+      log.error("Role change RPC failed", { action: body.data.action, error: rpc.error.message });
       return internalApiError();
     }
 
-    // Record in audit trail
-    await recordRoleChange({
-      targetUserId: targetUser.id,
-      previousRole: currentRole,
-      newRole: roleForMetadata,
-      assignedBy: user.id,
-      assignerRole: verifiedAdminRole,
-      reason,
-    });
+    const result = rpc.data as RpcResult;
+    if (!result.ok) {
+      const [status, message] = REFUSALS[result.error] ?? [400, "This role change was refused."];
+      return NextResponse.json({ error: message, code: result.error }, { status });
+    }
 
-    log.info("Role assigned successfully", {
-      actorId: user.id,
-      targetUserId: targetUser.id,
-      previousRole: currentRole,
-      newRole: roleForMetadata,
-    });
+    // staff_roles is the authority and is already committed. The JWT role is
+    // only a UI hint, so a failed sync is reported, not returned as an error.
+    let metadataSynced = true;
+    if (result.status === "applied" && result.target_user_id && result.new_role) {
+      metadataSynced = await syncRoleMetadata(
+        admin,
+        result.target_user_id,
+        result.new_role,
+        result.decision_id
+      );
+    }
 
-    // No PII (email) in response body
     return NextResponse.json({
-      status: "ok",
-      targetUserId: targetUser.id,
-      previousRole: currentRole,
-      newRole: roleForMetadata,
+      status: result.status,
+      decisionId: result.decision_id ?? null,
+      previousRole: result.previous_role ?? null,
+      newRole: result.new_role ?? null,
+      metadataSynced,
     });
   } catch (err) {
-    logApiError(log, "role assignment", err);
+    logApiError(log, "role change", err);
     return internalApiError();
+  }
+}
+
+async function syncRoleMetadata(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  role: string,
+  decisionId: string | undefined
+): Promise<boolean> {
+  try {
+    const { data, error: readError } = await admin.auth.admin.getUserById(userId);
+    if (readError || !data?.user) throw new Error(readError?.message ?? "user not found");
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      app_metadata: { ...data.user.app_metadata, role },
+    });
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (err) {
+    // Queue a durable retry; the ops-jobs runner keeps trying and raises a
+    // critical ops event if it never succeeds.
+    await admin.rpc("enqueue_operation_job", {
+      p_key: `auth_metadata_sync:${userId}:${decisionId ?? role}`,
+      p_kind: "auth_metadata_sync",
+      p_payload: { user_id: userId, role },
+      p_decision: decisionId ?? null,
+    });
+    reportCriticalIncident("GovernanceRoles", "Role changed but auth metadata sync failed", {
+      userId,
+      role,
+      decisionId: decisionId ?? null,
+      error: err instanceof Error ? err.message : "unknown",
+    });
+    return false;
   }
 }

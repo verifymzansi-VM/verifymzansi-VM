@@ -16,6 +16,7 @@ import {
   diffRemovedMediaUrls,
   queuePublicMediaCleanup,
 } from "@/lib/services/media-cleanup";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const log = createLogger("AdminContentEditDecide");
 
@@ -115,6 +116,9 @@ export async function POST(request: Request) {
     }
 
     const { requestId, decision, reason } = bodyResult.data;
+    const claimItem = { type: "content_edit", id: requestId } as const;
+    const claimBlock = await checkQueueClaim(guard.user.id, claimItem);
+    if (claimBlock) return claimBlock;
     const admin = createAdminClient();
 
     const { data: requestRow, error: requestError } = await admin
@@ -200,6 +204,7 @@ export async function POST(request: Request) {
         href: config.dashboardHref,
       });
 
+      await releaseDecidedClaim(guard.user.id, claimItem);
       return NextResponse.json({ success: true, decision });
     }
 

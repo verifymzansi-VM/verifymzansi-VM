@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { TrialManagement } from "@/components/admin/trial-management";
 
 export const metadata = { title: "Free Posts & Trials" };
@@ -10,12 +8,7 @@ export default async function TrialManagementPage({
 }: {
   searchParams: Promise<{ account?: string }>;
 }) {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "trials:manage"))) redirect("/admin");
+  const { user } = await requireStaff("trials:manage");
   const admin = createAdminClient();
   const params = await searchParams;
   const search = typeof params.account === "string" ? params.account.trim().slice(0, 254) : "";

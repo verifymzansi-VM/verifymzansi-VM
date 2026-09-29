@@ -24,7 +24,7 @@ import {
  * don't show anything additional.
  */
 const CATEGORY_DETAIL_FIELDS: Partial<Record<BusinessCategory, BusinessDetailsFieldConfig[]>> = {
-  health_beauty: [
+  health_medical: [
     {
       name: "practice_number",
       label: "Practice number",
@@ -366,7 +366,11 @@ export function getCategoryDetailFields(
   category: BusinessCategory | null | undefined
 ): BusinessDetailsFieldConfig[] {
   if (!category) return [];
-  return CATEGORY_DETAIL_FIELDS[category] ?? [];
+  return (
+    CATEGORY_DETAIL_FIELDS[
+      category === "automotive_services" ? "automotive_transport" : category
+    ] ?? []
+  );
 }
 
 /** Build a default empty object for a given category's extra fields. */
@@ -378,7 +382,7 @@ export function getDefaultCategoryDetails(
   for (const f of fields) {
     switch (f.kind) {
       case "checkbox":
-        defaults[f.name] = false;
+        defaults[f.name] = undefined;
         break;
       case "number":
         defaults[f.name] = undefined;

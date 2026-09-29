@@ -4,6 +4,25 @@ import { vi } from "vitest";
 // Mock out `server-only` so server modules can be imported in jsdom tests
 vi.mock("server-only", () => ({}));
 
+// Staff MFA is enforced on every back-office API route. Route tests default to
+// a session that satisfies it; src/lib/auth/staff-mfa-guard.test.ts and the
+// step-up assertions in route tests cover the real behaviour.
+vi.mock("@/lib/auth/staff-mfa-guard", () => ({
+  checkStaffApiMfa: vi.fn(async () => null),
+}));
+
+// Queue claims are enforced on every decision route. Route tests default to
+// an actor who holds the claim; src/lib/services/queue-claims.test.ts and
+// the claim assertions in route tests cover the real behaviour.
+vi.mock("@/lib/services/queue-claims", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  checkQueueClaim: vi.fn(async () => null),
+  releaseDecidedClaim: vi.fn(async () => undefined),
+  getClaimsForItems: vi.fn(async () => ({})),
+  countMyClaims: vi.fn(async () => 0),
+  getMyClaimedItems: vi.fn(async () => []),
+}));
+
 // Mock next/font/google — the font loader only runs at Next.js build time;
 // under vitest it returns undefined unless mocked.
 vi.mock("next/font/google", () => {

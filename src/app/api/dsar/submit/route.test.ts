@@ -95,7 +95,7 @@ describe("POST /api/dsar/submit", () => {
         insert: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
             single: vi.fn().mockResolvedValue({
-              data: { id: "case-12345678" },
+              data: { id: "case-12345678", due_by: "2026-10-28T10:00:00.000Z" },
               error: null,
             }),
           }),
@@ -129,5 +129,11 @@ describe("POST /api/dsar/submit", () => {
       href: "/admin/dsar",
       excludeUserId: "member-1",
     });
+    // The due date comes from the database's deadline rules, not the route.
+    expect(mockSendDsarSubmissionEmail).toHaveBeenCalledWith(
+      "nomsa@example.com",
+      expect.stringMatching(/^DSAR-/),
+      "2026-10-28T10:00:00.000Z"
+    );
   });
 });

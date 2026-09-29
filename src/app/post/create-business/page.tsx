@@ -1,5 +1,21 @@
 "use client";
+import {
+  BusinessContactFields,
+  readContactMethods,
+  selectedContacts,
+} from "@/components/post/business-contact-fields";
+import { PostSelect } from "@/components/post/post-select";
 
+import { CustomerAccessFields } from "@/components/post/customer-access-fields";
+import {
+  legacyAccess,
+  readCustomerAccess,
+  customerAccessSchema,
+  primaryBusinessType,
+  cleanCustomerAccess,
+} from "@/lib/forms/customer-access";
+import { BusinessCategoryPicker } from "@/components/post/business-category-picker";
+import { FieldHelp } from "@/components/post/field-help";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
@@ -11,20 +27,16 @@ import {
   ChevronDown,
   CreditCard,
   FileText,
-  Globe,
-  Mail,
   MapPin,
-  MessageCircle,
   Phone,
   Plus,
   Store,
-  Truck,
   Wrench,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -37,7 +49,11 @@ import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { PlanGate, usePlanVideoAllowed, usePlanMaxPhotos } from "@/components/billing/plan-gate";
 import { LocationSelector, type LocationValue } from "@/components/ui/location-selector";
-import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
+import {
+  ALL_BUSINESS_CATEGORIES,
+  BUSINESS_CATEGORIES,
+  BUSINESS_TYPE_OPTIONS,
+} from "@/lib/constants/categories";
 import {
   getCategoryDetailFields,
   getDefaultCategoryDetails,
@@ -67,9 +83,7 @@ import {
   coerceBusinessDetails,
   getNormalizedDeliveryOptions,
   getDefaultBusinessDetails,
-  sanitizeBusinessDetailsForSubmission,
 } from "@/lib/forms/business-type-details";
-import { BusinessTypeDetailsFields } from "@/components/business/business-type-details-fields";
 import type { BusinessDetails } from "@/types/business-details";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import { BusinessLayoutRouter } from "@/components/business/layouts/business-layout-router";
@@ -88,13 +102,18 @@ import { readMediaDimensions } from "@/lib/utils/media-metadata";
 const SELECT_CLASS =
   "flex h-11 w-full rounded-xl border border-input bg-card px-3.5 py-2 text-base shadow-xs transition-colors hover:border-foreground/30 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 sm:h-10 sm:text-sm";
 const STEPS: PostFormStep[] = [
-  { label: "Details", icon: FileText, description: "How you trade, name and services" },
   {
-    label: "Location & Contact",
-    icon: MapPin,
-    description: "Address, contact and hours",
+    label: "About your business",
+    icon: FileText,
+    description: "Name, main activity and what you offer",
   },
-  { label: "Media & Review", icon: Camera, description: "Photos, video and review" },
+  {
+    label: "Location & customer access",
+    icon: MapPin,
+    description: "Where and how you serve customers",
+  },
+  { label: "Contact & opening hours", icon: Phone, description: "How customers get in touch" },
+  { label: "Photos & review", icon: Camera, description: "Check what customers will see" },
 ];
 
 const PAYMENT_METHOD_OPTIONS = [
@@ -180,7 +199,10 @@ const BUSINESS_FIELD_LABELS: Record<string, string> = {
 
 function getFieldId(key: string | undefined): string | undefined {
   if (!key) return undefined;
+  if (key === "contact_methods") return "business-contact-methods";
   if (FIELD_IDS[key]) return FIELD_IDS[key];
+  if (key.startsWith("customer_access") || key.startsWith("category_details.customer_access"))
+    return "business-type-group";
   if (key.startsWith("business_details.")) {
     return `business-detail-${key.split(".")[1]}`;
   }
@@ -189,25 +211,29 @@ function getFieldId(key: string | undefined): string | undefined {
 
 function getStepForFieldKey(key: string): number {
   if (
-    key === "logo_url" ||
-    key === "cover_photo" ||
-    key === "gallery_photos" ||
-    key === "cover_video" ||
-    key === "video_thumbnail" ||
-    key === "termsAccepted"
-  ) {
-    return 2;
-  }
-
+    [
+      "logo_url",
+      "cover_photo",
+      "gallery_photos",
+      "cover_video",
+      "video_thumbnail",
+      "termsAccepted",
+    ].includes(key)
+  )
+    return 3;
   if (
-    key === "location_province" ||
-    key === "location_city" ||
-    STEP_CONTACT_FIELDS.includes(key as (typeof STEP_CONTACT_FIELDS)[number]) ||
-    STEP_SOCIAL_FIELDS.includes(key as (typeof STEP_SOCIAL_FIELDS)[number])
-  ) {
+    key.startsWith("location_") ||
+    key.startsWith("customer_access") ||
+    key.startsWith("category_details.customer_access")
+  )
     return 1;
-  }
-
+  if (key === "contact_methods") return 2;
+  if (
+    [...STEP_CONTACT_FIELDS, ...STEP_SOCIAL_FIELDS].includes(
+      key as (typeof STEP_CONTACT_FIELDS)[number]
+    )
+  )
+    return 2;
   return 0;
 }
 
@@ -217,7 +243,7 @@ function getStepForServerErrors(errors: Record<string, string>): number {
     return 0;
   }
 
-  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 2);
+  return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 3);
 }
 
 function generateSlug(name: string): string {
@@ -252,6 +278,12 @@ function CreateBusinessContent() {
     rawType && BUSINESS_TYPE_OPTIONS.some((o) => o.value === rawType)
       ? (rawType as BusinessType)
       : "";
+  // The post chooser can also preselect what kind of business it is.
+  const rawCategory = searchParams.get("category");
+  const initialCategory =
+    rawCategory && ALL_BUSINESS_CATEGORIES.some((c) => c.value === rawCategory)
+      ? (rawCategory as BusinessCategory)
+      : "";
   const [step, setStep] = useState(0);
   const [businessType, setBusinessType] = useState<BusinessType | "">(initialType);
   const [businessDetails, setBusinessDetails] = useState<BusinessDetails | null>(
@@ -261,9 +293,14 @@ function CreateBusinessContent() {
   const [slug, setSlug] = useState("");
   const [slugManual, setSlugManual] = useState(false);
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<BusinessCategory | "">("");
+  const [category, setCategory] = useState<BusinessCategory | "">(initialCategory);
   const [subcategory, setSubcategory] = useState("");
-  const [categoryDetails, setCategoryDetails] = useState<Record<string, unknown>>({});
+  const categoryAnswers = useRef<
+    Record<string, { subcategory: string; details: Record<string, unknown> }>
+  >({});
+  const [categoryDetails, setCategoryDetails] = useState<Record<string, unknown>>(() =>
+    initialCategory ? getDefaultCategoryDetails(initialCategory) : {}
+  );
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [locationTown, setLocationTown] = useState("");
@@ -275,9 +312,12 @@ function CreateBusinessContent() {
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
+  const contactValues = { phone, whatsapp, email, website };
+  const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
+  const publicContacts = selectedContacts(contactMethods, contactValues);
   const [hoursMonFri, setHoursMonFri] = useState({ open: "", close: "", closed: false });
   const [hoursSat, setHoursSat] = useState({ open: "", close: "", closed: false });
-  const [hoursSun, setHoursSun] = useState({ open: "", close: "", closed: true });
+  const [hoursSun, setHoursSun] = useState({ open: "", close: "", closed: false });
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
@@ -464,11 +504,17 @@ function CreateBusinessContent() {
         setSubcategory(
           typeof restoredData.subcategory === "string" ? restoredData.subcategory : ""
         );
-        setCategoryDetails(
-          restoredData.categoryDetails && typeof restoredData.categoryDetails === "object"
-            ? (restoredData.categoryDetails as Record<string, unknown>)
-            : {}
-        );
+        setCategoryDetails({
+          ...(restoredData.categoryDetails ?? {}),
+          customer_access: restoredData.categoryDetails?.customer_access ?? {
+            ...(restoredType ? legacyAccess(restoredType) : readCustomerAccess(undefined)),
+            venue:
+              restoredData.businessDetails?.mall_name ||
+              restoredData.businessDetails?.market_name ||
+              "",
+            serviceAreas: restoredData.serviceAreasInput || "",
+          },
+        });
         setProvince(restoredData.province ?? "");
         setCity(restoredData.city ?? "");
         setLocationTown(restoredData.locationTown ?? "");
@@ -620,12 +666,6 @@ function CreateBusinessContent() {
     });
   }
 
-  function clearErrorPrefix(prefix: string) {
-    setFieldErrors((current) =>
-      Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(prefix)))
-    );
-  }
-
   function focusFirstError(errors: Record<string, string>, targetStep = step) {
     const businessDetailKeys = Object.keys(errors).filter((key) =>
       key.startsWith("business_details.")
@@ -674,22 +714,6 @@ function CreateBusinessContent() {
     );
   }
 
-  function setDeliveryAvailable(deliveryAvailable: boolean) {
-    setDeliveryOptions(getNormalizedDeliveryOptions(deliveryAvailable));
-  }
-
-  function clearOnlineOnlyDeliveryDetails() {
-    setBusinessDetails((current) => {
-      if (businessType !== "online_only" || !current || current.type !== "online_only") {
-        return current;
-      }
-
-      const { delivery_regions: _deliveryRegions, ...rest } = current;
-      return rest as BusinessDetails;
-    });
-    clearErrors("business_details.delivery_regions");
-  }
-
   function validateStep(targetStep: number) {
     const errors: Record<string, string> = {};
     const businessValidationErrors = validateBusinessForm({
@@ -698,17 +722,16 @@ function CreateBusinessContent() {
       storeNumber: storeNumber.trim(),
       serviceAreasInput,
       mapDirections: mapDirections.trim(),
-      phone: phone.trim(),
-      whatsapp: whatsapp.trim(),
-      email: email.trim(),
-      website: website.trim(),
+      phone: publicContacts.phone.trim(),
+      whatsapp: publicContacts.whatsapp.trim(),
+      email: publicContacts.email.trim(),
+      website: publicContacts.website.trim(),
       socialFacebook: socialFacebook.trim(),
       socialInstagram: socialInstagram.trim(),
       socialTwitter: socialTwitter.trim(),
       socialTiktok: socialTiktok.trim(),
     });
     if (targetStep === 0) {
-      if (!businessType) errors.business_type = "Choose a business type.";
       if (!businessName.trim()) errors.business_name = "Enter a business name.";
       else if (businessName.trim().length < 2)
         errors.business_name = "Business name must be at least 2 characters.";
@@ -718,23 +741,31 @@ function CreateBusinessContent() {
         errors.slug = "Use lowercase letters, numbers, and hyphens only.";
       if (!category) errors.category = "Select a category.";
       if (!description.trim()) errors.description = "Tell customers about your business.";
-      else if (description.trim().length < 20)
-        errors.description = "Description must be at least 20 characters.";
-      for (const [key, message] of Object.entries(businessValidationErrors)) {
-        if (
-          key === "store_number" ||
-          key === "service_areas" ||
-          key === "map_directions" ||
-          key.startsWith("business_details.")
-        ) {
-          errors[key] = message;
-        }
-      }
     }
     if (targetStep === 1) {
-      if (businessType !== "online_only") {
+      const access = readCustomerAccess(categoryDetails.customer_access);
+      const result = customerAccessSchema.safeParse(access);
+      if (!result.success)
+        for (const issue of result.error.issues)
+          errors[`customer_access.${issue.path.join(".")}`] = issue.message;
+      if (access.publishAddress && !locationAddress.trim())
+        errors.location_address =
+          "Enter the visitor address you want to publish, or turn off public address visibility.";
+      if (access.methods.some((m) => m !== "online")) {
         if (!province) errors.location_province = "Select a province.";
         if (!city) errors.location_city = "Select a city.";
+      }
+    }
+    if (targetStep === 2) {
+      if (!contactMethods.length) errors.contact_methods = "Choose at least one contact method.";
+      for (const [method, field] of [
+        ["call", "phone"],
+        ["whatsapp", "whatsapp"],
+        ["email", "email"],
+        ["website", "website"],
+      ] as const) {
+        if (contactMethods.includes(method) && !publicContacts[field].trim())
+          errors[field] = "Enter the details for this contact method, or deselect it.";
       }
       for (const field of STEP_CONTACT_FIELDS) {
         if (businessValidationErrors[field]) {
@@ -747,7 +778,7 @@ function CreateBusinessContent() {
         }
       }
     }
-    if (targetStep === 2) {
+    if (targetStep === 3) {
       if (galleryFiles.length > maxPhotos) {
         errors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
       }
@@ -761,7 +792,7 @@ function CreateBusinessContent() {
 
   /** Scroll to top and focus the first field of the target step */
   function scrollToStepTop(targetStep: number) {
-    const firstFieldByStep = ["business-type-group", "province", "business-logo"];
+    const firstFieldByStep = ["businessName", "business-type-group", "phone", "business-logo"];
     requestAnimationFrame(() => {
       document
         .getElementById("post-form-top")
@@ -805,7 +836,7 @@ function CreateBusinessContent() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submissionInFlightRef.current) return;
-    const stepErrors = [0, 1, 2].map((index) => validateStep(index));
+    const stepErrors = STEPS.map((_, index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
     if (firstInvalidStep !== -1) {
       setStep(firstInvalidStep);
@@ -847,7 +878,7 @@ function CreateBusinessContent() {
         ? readMediaDimensions(primaryMediaFile)
         : Promise.resolve(null);
 
-      const [logoUrls, [coverUrls, galleryUrls, mallPhotoUrls], videoUrl] =
+      const [logoUrls, [coverUrls, galleryUrls, _mallPhotoUrls], videoUrl] =
         await settleMediaUploads([
           uploadRequiredBusinessMedia({
             files: logoFile,
@@ -910,7 +941,7 @@ function CreateBusinessContent() {
       if (socialTwitter) socialLinks.twitter = socialTwitter;
       if (socialTiktok) socialLinks.tiktok = socialTiktok;
       const operatingHours: Record<string, string> = {};
-      if (businessType === "market_stall") {
+      if (businessType === "market_stall" && !categoryDetails.customer_access) {
         const td = (businessDetails as unknown as Record<string, unknown>).trading_days as
           string[] | undefined;
         const th = (businessDetails as unknown as Record<string, unknown>).trading_hours as
@@ -939,19 +970,13 @@ function CreateBusinessContent() {
               areas: parseServiceAreas(serviceAreasInput),
             }
           : undefined;
-      const normalizedBusinessDetails = businessType
-        ? coerceBusinessDetails(businessType, businessDetails)
-        : undefined;
-      const deliveryAvailable = deliveryOptions.length > 0;
-      const finalBusinessDetails =
-        normalizedBusinessDetails?.type === "mall_store"
-          ? { ...normalizedBusinessDetails, mall_photos: mallPhotoUrls }
-          : normalizedBusinessDetails
-            ? sanitizeBusinessDetailsForSubmission(normalizedBusinessDetails, deliveryAvailable)
-            : undefined;
+      const deliveryAvailable = readCustomerAccess(
+        categoryDetails.customer_access
+      ).methods.includes("delivery");
       const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
       const mediaDimensions = await mediaDimensionsPromise;
       const body = {
+        contact_methods: contactMethods,
         business_name: businessName.trim(),
         slug: (slug || generateSlug(businessName)).trim(),
         business_type: businessType,
@@ -964,10 +989,10 @@ function CreateBusinessContent() {
         location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
         map_directions: mapDirections || undefined,
-        phone: phone || undefined,
-        whatsapp: whatsapp || undefined,
-        email: email || undefined,
-        website: website || undefined,
+        phone: publicContacts.phone || undefined,
+        whatsapp: publicContacts.whatsapp || undefined,
+        email: publicContacts.email || undefined,
+        website: publicContacts.website || undefined,
         logo_url: logoUrls[0] || undefined,
         cover_photo: finalCoverPhoto || undefined,
         cover_video: finalCoverVideo || undefined,
@@ -975,8 +1000,11 @@ function CreateBusinessContent() {
         gallery_photos: galleryUrls.length > 0 ? galleryUrls : undefined,
         services_offered: services.length > 0 ? services : undefined,
         service_areas: serviceAreas,
-        business_details: finalBusinessDetails,
-        category_details: Object.keys(categoryDetails).length > 0 ? categoryDetails : undefined,
+        business_details: undefined,
+        category_details: {
+          ...categoryDetails,
+          customer_access: cleanCustomerAccess(readCustomerAccess(categoryDetails.customer_access)),
+        },
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
         payment_methods_accepted: paymentMethods.length > 0 ? paymentMethods : undefined,
         delivery_options:
@@ -1036,17 +1064,17 @@ function CreateBusinessContent() {
           const lower = message.toLowerCase();
           if (lower.includes("photo")) {
             const errors = { gallery_photos: message };
-            setStep(2);
+            setStep(3);
             setFieldErrors(errors);
-            setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+            setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
             focusFirstError(errors, 2);
             return;
           }
           if (lower.includes("video")) {
             const errors = { cover_video: message };
-            setStep(2);
+            setStep(3);
             setFieldErrors(errors);
-            setFormError(`Please fix 1 field on Step 3 — ${STEPS[2].label}.`);
+            setFormError(`Please fix 1 field on Step 4 — ${STEPS[3].label}.`);
             focusFirstError(errors, 2);
             return;
           }
@@ -1077,7 +1105,7 @@ function CreateBusinessContent() {
     } catch (error: unknown) {
       const uploadFailure = getBusinessMediaUploadErrorState(error);
       if (uploadFailure) {
-        setStep(2);
+        setStep(3);
         setFieldErrors(uploadFailure.fieldErrors);
         setFormError(uploadFailure.formError);
         focusFirstError(uploadFailure.fieldErrors, 2);
@@ -1089,7 +1117,7 @@ function CreateBusinessContent() {
         error.message === "Business logo upload failed. Retry the selected image."
       ) {
         const fieldErrors = { logo_url: error.message };
-        setStep(2);
+        setStep(3);
         setFieldErrors(fieldErrors);
         setFormError(
           "Selected business media could not be uploaded. Retry the highlighted files and try again."
@@ -1116,9 +1144,9 @@ function CreateBusinessContent() {
     setSlug("");
     setSlugManual(false);
     setDescription("");
-    setCategory("");
+    setCategory(initialCategory);
     setSubcategory("");
-    setCategoryDetails({});
+    setCategoryDetails(initialCategory ? getDefaultCategoryDetails(initialCategory) : {});
     setProvince(profile?.location_province ?? "");
     setCity(profile?.location_city ?? "");
     setLocationTown("");
@@ -1169,16 +1197,9 @@ function CreateBusinessContent() {
         tiktok: socialTiktok,
       }).filter(([, value]) => value.trim().length > 0)
     );
-    const previewBusinessDetails = businessType
-      ? coerceBusinessDetails(businessType, businessDetails)
-      : businessDetails;
-    const deliveryAvailable = deliveryOptions.length > 0;
-    const previewMallDetails =
-      previewBusinessDetails?.type === "mall_store"
-        ? { ...previewBusinessDetails, mall_photos: mallPhotoPreviewUrls }
-        : previewBusinessDetails
-          ? sanitizeBusinessDetailsForSubmission(previewBusinessDetails, deliveryAvailable)
-          : previewBusinessDetails;
+    const deliveryAvailable = readCustomerAccess(categoryDetails.customer_access).methods.includes(
+      "delivery"
+    );
     const normalizedDeliveryOptions = getNormalizedDeliveryOptions(deliveryAvailable);
 
     // Mirror the API payload builder: profile extras are stored under
@@ -1231,14 +1252,18 @@ function CreateBusinessContent() {
       location_city: city || null,
       location_province: province || null,
       location_town: locationTown || null,
-      location_address: locationAddress || null,
-      phone: phone || null,
-      whatsapp: whatsapp || null,
-      email: email || null,
-      website: website || null,
+      location_address: readCustomerAccess(categoryDetails.customer_access).publishAddress
+        ? locationAddress || null
+        : null,
+      phone: publicContacts.phone || null,
+      whatsapp: publicContacts.whatsapp || null,
+      email: publicContacts.email || null,
+      website: publicContacts.website || null,
       store_number: storeNumber || null,
-      map_directions: mapDirections || null,
-      business_details: previewMallDetails,
+      map_directions: readCustomerAccess(categoryDetails.customer_access).publishAddress
+        ? mapDirections || null
+        : null,
+      business_details: null,
       layout_template: layoutTemplate,
     };
 
@@ -1313,8 +1338,10 @@ function CreateBusinessContent() {
                 badgeLabel="Mzansi Business"
                 area="business"
                 aside={renderPreviewAside()}
-                guideDescription="Start with how you trade. The form adapts to it."
+                guideDescription="Tell customers what you offer. Required fields are marked; you can leave optional fields blank."
                 steps={STEPS}
+                onStepChange={setStep}
+                onFieldError={(key) => focusFirstError({ [key]: fieldErrors[key] })}
                 currentStep={step}
                 error={formError}
                 fieldErrors={fieldErrors}
@@ -1387,143 +1414,6 @@ function CreateBusinessContent() {
               >
                 {step === 0 && (
                   <div className="space-y-6">
-                    <PostFormSection title="How do you trade? *">
-                      <div
-                        id="business-type-group"
-                        tabIndex={-1}
-                        className="space-y-3 rounded-2xl focus:outline-none"
-                      >
-                        <div
-                          role="radiogroup"
-                          aria-label="Business type"
-                          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                        >
-                          {BUSINESS_TYPE_OPTIONS.map((option) => {
-                            const Icon = option.icon;
-                            const isSelected = businessType === option.value;
-                            return (
-                              <label
-                                key={option.value}
-                                className={cn(
-                                  "relative flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
-                                  isSelected
-                                    ? "border-brand-blue-600 bg-brand-blue-50 ring-1 ring-brand-blue-600 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:ring-brand-blue-400"
-                                    : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
-                                )}
-                              >
-                                <input
-                                  type="radio"
-                                  name="business-type"
-                                  value={option.value}
-                                  checked={isSelected}
-                                  onChange={() => {
-                                    setBusinessType(option.value);
-                                    setBusinessDetails(getDefaultBusinessDetails(option.value));
-                                    if (option.value !== "mall_store") {
-                                      setStoreNumber("");
-                                      setMallPhotoFiles([]);
-                                    }
-                                    if (option.value !== "mobile_service") {
-                                      setServiceAreasInput("");
-                                    }
-                                    if (
-                                      ![
-                                        "mall_store",
-                                        "standalone_shop",
-                                        "home_business",
-                                        "market_stall",
-                                      ].includes(option.value)
-                                    ) {
-                                      setMapDirections("");
-                                    }
-                                    clearErrors(
-                                      "business_type",
-                                      "store_number",
-                                      "service_areas",
-                                      "map_directions"
-                                    );
-                                    clearErrorPrefix("business_details.");
-                                    // Auto-focus the business name field after selecting a business type
-                                    requestAnimationFrame(() => {
-                                      const el = document.getElementById("businessName");
-                                      if (el) {
-                                        el.focus();
-                                        el.scrollIntoView({ behavior: "smooth", block: "center" });
-                                      }
-                                    });
-                                  }}
-                                  className="sr-only"
-                                />
-                                <span
-                                  aria-hidden="true"
-                                  className={cn(
-                                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-                                    isSelected
-                                      ? "bg-brand-blue-600 text-white dark:bg-brand-blue-400 dark:text-brand-blue-950"
-                                      : "bg-muted text-foreground/70"
-                                  )}
-                                >
-                                  <Icon className="h-[18px] w-[18px]" />
-                                </span>
-                                <span className="min-w-0">
-                                  <span className="block text-sm font-semibold text-foreground">
-                                    {option.label}
-                                  </span>
-                                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                                    {option.description}
-                                  </span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {fieldErrors.business_type && (
-                          <p className="inline-form-error">{fieldErrors.business_type}</p>
-                        )}
-                      </div>
-
-                      {businessType && businessDetails && (
-                        <BusinessTypeDetailsFields
-                          businessType={businessType}
-                          businessDetails={businessDetails}
-                          onBusinessDetailsChange={(name, value) => {
-                            setBusinessDetails((current) => {
-                              const next = coerceBusinessDetails(
-                                businessType,
-                                current ?? getDefaultBusinessDetails(businessType)
-                              );
-                              return { ...next, [name]: value } as BusinessDetails;
-                            });
-                            clearErrors(`business_details.${name}`);
-                          }}
-                          deliveryAvailable={deliveryOptions.length > 0}
-                          onDeliveryAvailableChange={(nextDeliveryAvailable) => {
-                            setDeliveryAvailable(nextDeliveryAvailable);
-                            if (!nextDeliveryAvailable) {
-                              clearOnlineOnlyDeliveryDetails();
-                            }
-                          }}
-                          storeNumber={storeNumber}
-                          onStoreNumberChange={(value) => {
-                            setStoreNumber(value);
-                            clearErrors("store_number");
-                          }}
-                          serviceAreasInput={serviceAreasInput}
-                          onServiceAreasChange={(value) => {
-                            setServiceAreasInput(value);
-                            clearErrors("service_areas");
-                          }}
-                          mapDirections={mapDirections}
-                          onMapDirectionsChange={(value) => {
-                            setMapDirections(value);
-                            clearErrors("map_directions");
-                          }}
-                          fieldErrors={fieldErrors}
-                          selectClassName={SELECT_CLASS}
-                        />
-                      )}
-                    </PostFormSection>
-
                     <PostFormSection title="Name and category">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -1554,7 +1444,7 @@ function CreateBusinessContent() {
                           Advanced: customise your link
                         </summary>
                         <div className="space-y-2 pb-3">
-                          <Label htmlFor="slug">URL Slug</Label>
+                          <Label htmlFor="slug">Custom profile link (Optional)</Label>
                           <Input
                             id="slug"
                             value={slug}
@@ -1579,49 +1469,24 @@ function CreateBusinessContent() {
                       </details>
 
                       <div className="space-y-2">
-                        <p id="business-category-label" className="text-sm font-medium">
-                          Category *
-                        </p>
-                        <div
-                          role="group"
-                          aria-labelledby="business-category-label"
-                          className="grid grid-cols-2 gap-2 sm:grid-cols-3"
-                        >
-                          {BUSINESS_CATEGORIES.map((item) => {
-                            const Icon = item.icon;
-                            const selected = category === item.value;
-                            return (
-                              <button
-                                key={item.value}
-                                type="button"
-                                aria-pressed={selected}
-                                onClick={() => {
-                                  setCategory(item.value);
-                                  setSubcategory("");
-                                  setCategoryDetails(getDefaultCategoryDetails(item.value));
-                                  clearErrors("category");
-                                }}
-                                className={cn(
-                                  "flex min-h-[4.25rem] items-center gap-2.5 rounded-2xl border p-3 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                                  selected
-                                    ? "border-brand-blue-600 bg-brand-blue-50 ring-1 ring-brand-blue-600 dark:border-brand-blue-400 dark:bg-brand-blue-950/40 dark:ring-brand-blue-400"
-                                    : "border-border bg-card hover:border-foreground/25 hover:bg-muted/50"
-                                )}
-                              >
-                                <Icon
-                                  aria-hidden="true"
-                                  className={cn(
-                                    "h-5 w-5 shrink-0",
-                                    selected
-                                      ? "text-brand-blue-700 dark:text-brand-blue-300"
-                                      : "text-muted-foreground"
-                                  )}
-                                />
-                                <span className="font-semibold leading-tight">{item.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <BusinessCategoryPicker
+                          value={category}
+                          onChange={(value) => {
+                            categoryAnswers.current[category] = {
+                              subcategory,
+                              details: categoryDetails,
+                            };
+                            setCategory(value);
+                            setSubcategory(categoryAnswers.current[value]?.subcategory ?? "");
+                            setCategoryDetails((current) => ({
+                              ...(categoryAnswers.current[value]?.details ??
+                                getDefaultCategoryDetails(value)),
+                              customer_access: current.customer_access,
+                              contact_methods: current.contact_methods,
+                            }));
+                            clearErrors("category");
+                          }}
+                        />
                         {fieldErrors.category && (
                           <p className="inline-form-error">{fieldErrors.category}</p>
                         )}
@@ -1630,14 +1495,16 @@ function CreateBusinessContent() {
                       {/* Subcategory dropdown */}
                       {category &&
                         (() => {
-                          const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                          const catDef = ALL_BUSINESS_CATEGORIES.find((c) => c.value === category);
                           if (!catDef || catDef.subcategories.length === 0) return null;
                           return (
                             <div className="space-y-2">
-                              <Label htmlFor="subcategory">Subcategory</Label>
-                              <select
+                              <Label htmlFor="subcategory">
+                                Specific business activity (Optional)
+                              </Label>
+                              <PostSelect
                                 id="subcategory"
-                                aria-label="Subcategory"
+                                aria-label="Specific business activity"
                                 className={cn(SELECT_CLASS)}
                                 value={subcategory}
                                 onChange={(event) => setSubcategory(event.target.value)}
@@ -1648,7 +1515,7 @@ function CreateBusinessContent() {
                                     {sub.label}
                                   </option>
                                 ))}
-                              </select>
+                              </PostSelect>
                             </div>
                           );
                         })()}
@@ -1750,7 +1617,7 @@ function CreateBusinessContent() {
                                   return (
                                     <div key={field.name} className="space-y-1">
                                       <Label htmlFor={`cat-${field.name}`}>{field.label}</Label>
-                                      <select
+                                      <PostSelect
                                         id={`cat-${field.name}`}
                                         className={SELECT_CLASS}
                                         aria-label={field.label}
@@ -1770,7 +1637,7 @@ function CreateBusinessContent() {
                                             {opt.label}
                                           </option>
                                         ))}
-                                      </select>
+                                      </PostSelect>
                                       {field.description && (
                                         <p className="text-xs text-muted-foreground">
                                           {field.description}
@@ -1836,12 +1703,14 @@ function CreateBusinessContent() {
                       <div className="space-y-3">
                         <Label htmlFor="business-service-input" className="flex items-center gap-2">
                           <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                          Services Offered
+                          Products and services (Optional)
                         </Label>
                         {/* Category-based quick-add suggestions */}
                         {category &&
                           (() => {
-                            const catDef = BUSINESS_CATEGORIES.find((c) => c.value === category);
+                            const catDef = ALL_BUSINESS_CATEGORIES.find(
+                              (c) => c.value === category
+                            );
                             const suggestions = catDef?.serviceSuggestions ?? [];
                             const unselected = suggestions.filter((s) => !services.includes(s));
                             if (unselected.length === 0) return null;
@@ -1908,7 +1777,7 @@ function CreateBusinessContent() {
                     </PostFormSection>
 
                     {/* SA market fields */}
-                    <PostFormSection title="More about your business" optional>
+                    <PostFormSection title="Additional business information" optional>
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-1">
                           <Label htmlFor="yearEstablished">Year Established</Label>
@@ -1925,7 +1794,7 @@ function CreateBusinessContent() {
 
                         <div className="space-y-1">
                           <Label htmlFor="numberOfEmployees">Number of Employees</Label>
-                          <select
+                          <PostSelect
                             id="numberOfEmployees"
                             aria-label="Number of employees"
                             className={SELECT_CLASS}
@@ -1939,13 +1808,19 @@ function CreateBusinessContent() {
                             <option value="11_50">11 – 50</option>
                             <option value="51_200">51 – 200</option>
                             <option value="200_plus">200+</option>
-                          </select>
+                          </PostSelect>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <Label htmlFor="cipcRegistration">CIPC Registration</Label>
+                          <Label htmlFor="cipcRegistration">
+                            Company registration number (CIPC) (Optional)
+                          </Label>
+                          <FieldHelp label="company registration number">
+                            Add your company registration number if you have one. You can leave this
+                            blank.
+                          </FieldHelp>
                           <Input
                             id="cipcRegistration"
                             value={cipcRegistration}
@@ -1960,7 +1835,7 @@ function CreateBusinessContent() {
 
                         <div className="space-y-1">
                           <Label htmlFor="bbbeeLevel">B-BBEE Level</Label>
-                          <select
+                          <PostSelect
                             id="bbbeeLevel"
                             aria-label="B-BBEE level"
                             className={SELECT_CLASS}
@@ -1978,7 +1853,7 @@ function CreateBusinessContent() {
                             <option value="level_8">Level 8</option>
                             <option value="non_compliant">Non-Compliant</option>
                             <option value="exempt">Exempt (EME)</option>
-                          </select>
+                          </PostSelect>
                         </div>
                       </div>
 
@@ -2008,6 +1883,25 @@ function CreateBusinessContent() {
 
                 {step === 1 && (
                   <div className="space-y-6">
+                    <PostFormSection title="Location & customer access">
+                      <CustomerAccessFields
+                        value={readCustomerAccess(categoryDetails.customer_access)}
+                        onChange={(access) => {
+                          setCategoryDetails((current) => ({
+                            ...current,
+                            customer_access: access,
+                          }));
+                          setBusinessType(primaryBusinessType(access));
+                        }}
+                      />
+                      {Object.entries(fieldErrors)
+                        .filter(([key]) => key.startsWith("customer_access"))
+                        .map(([key, message]) => (
+                          <p key={key} className="inline-form-error">
+                            {message}
+                          </p>
+                        ))}
+                    </PostFormSection>
                     <PostFormSection
                       title="Where to find you"
                       optional={businessType === "online_only"}
@@ -2018,6 +1912,12 @@ function CreateBusinessContent() {
                       }
                     >
                       <LocationSelector
+                        areaRequired={readCustomerAccess(
+                          categoryDetails.customer_access
+                        ).methods.some((m) => m !== "online")}
+                        addressRequired={
+                          readCustomerAccess(categoryDetails.customer_access).publishAddress
+                        }
                         value={locationValue}
                         onChange={(v) => {
                           setProvince(v.province);
@@ -2027,7 +1927,9 @@ function CreateBusinessContent() {
                           clearErrors("location_province", "location_city");
                         }}
                         showTown
-                        showAddress
+                        showAddress={readCustomerAccess(
+                          categoryDetails.customer_access
+                        ).methods.includes("visit")}
                         errors={
                           businessType === "online_only"
                             ? {}
@@ -2038,120 +1940,29 @@ function CreateBusinessContent() {
                         }
                       />
                     </PostFormSection>
-
-                    <PostFormSection title="How customers reach you">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="phone" className="flex items-center gap-2">
-                            <Phone className="h-4 w-4 text-muted-foreground" />
-                            Phone Number
-                          </Label>
-                          <Input
-                            id="phone"
-                            inputMode="tel"
-                            autoComplete="tel"
-                            value={phone}
-                            onChange={(event) => {
-                              setPhone(event.target.value);
-                              clearErrors("phone");
-                            }}
-                            placeholder="082 000 0000"
-                            className={cn(fieldErrors.phone && "border-destructive")}
-                          />
-                          {fieldErrors.phone && (
-                            <p className="inline-form-error">{fieldErrors.phone}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="whatsapp" className="flex items-center gap-2">
-                            <MessageCircle
-                              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
-                              aria-hidden="true"
-                            />
-                            WhatsApp
-                          </Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="whatsapp"
-                              inputMode="tel"
-                              autoComplete="tel"
-                              value={whatsapp}
-                              onChange={(event) => {
-                                setWhatsapp(event.target.value);
-                                clearErrors("whatsapp");
-                              }}
-                              placeholder="082 000 0000"
-                              className={cn(fieldErrors.whatsapp && "border-destructive")}
-                            />
-                            {phone && !whatsapp && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setWhatsapp(phone);
-                                  clearErrors("whatsapp");
-                                }}
-                                className="h-11 shrink-0 text-xs"
-                              >
-                                Copy from phone
-                              </Button>
-                            )}
-                          </div>
-                          {fieldErrors.whatsapp && (
-                            <p className="inline-form-error">{fieldErrors.whatsapp}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="email" className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            Email Address
-                          </Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            inputMode="email"
-                            autoComplete="email"
-                            value={email}
-                            onChange={(event) => {
-                              setEmail(event.target.value);
-                              clearErrors("email");
-                            }}
-                            placeholder="contact@business.co.za"
-                            className={cn(fieldErrors.email && "border-destructive")}
-                          />
-                          {fieldErrors.email && (
-                            <p className="inline-form-error">{fieldErrors.email}</p>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="website" className="flex items-center gap-2">
-                            <Globe className="h-4 w-4 text-muted-foreground" />
-                            Website
-                          </Label>
-                          <Input
-                            id="website"
-                            autoComplete="url"
-                            value={website}
-                            onChange={(event) => {
-                              setWebsite(event.target.value);
-                              clearErrors("website");
-                            }}
-                            placeholder="https://www.yourbusiness.co.za"
-                            className={cn(fieldErrors.website && "border-destructive")}
-                          />
-                          {fieldErrors.website && (
-                            <p className="inline-form-error">{fieldErrors.website}</p>
-                          )}
-                        </div>
-                      </div>
-                    </PostFormSection>
+                  </div>
+                )}
+                {step === 2 && (
+                  <div className="space-y-6">
+                    <BusinessContactFields
+                      methods={contactMethods}
+                      values={contactValues}
+                      errors={fieldErrors}
+                      onMethods={(methods) =>
+                        setCategoryDetails((current) => ({ ...current, contact_methods: methods }))
+                      }
+                      onValue={(field, value) =>
+                        ({
+                          phone: setPhone,
+                          whatsapp: setWhatsapp,
+                          email: setEmail,
+                          website: setWebsite,
+                        })[field](value)
+                      }
+                    />
 
                     <PostFormSection title="Operating hours">
-                      {businessType === "market_stall" ? (
+                      {businessType === "market_stall" && !categoryDetails.customer_access ? (
                         <p className="rounded-xl bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
                           We use the trading days and hours from the previous step.
                         </p>
@@ -2192,29 +2003,6 @@ function CreateBusinessContent() {
                         </div>
                       )}
                     </PostFormSection>
-
-                    {businessType !== "online_only" && (
-                      <div className="space-y-3">
-                        <p className="flex items-center gap-2 text-sm font-medium">
-                          <Truck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                          Delivery Service
-                        </p>
-                        <label
-                          htmlFor="delivery-available"
-                          className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-input bg-card px-3 py-2.5 text-sm"
-                        >
-                          <input
-                            id="delivery-available"
-                            type="checkbox"
-                            aria-label="Delivery available"
-                            checked={deliveryOptions.length > 0}
-                            onChange={(event) => setDeliveryAvailable(event.target.checked)}
-                            className="h-4 w-4 rounded accent-brand-blue-600"
-                          />
-                          <span className="font-medium">Delivery available</span>
-                        </label>
-                      </div>
-                    )}
 
                     <details className="group rounded-2xl border border-border bg-muted/30 px-4">
                       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
@@ -2314,7 +2102,7 @@ function CreateBusinessContent() {
                   </div>
                 )}
 
-                {step === 2 && (
+                {step === 3 && (
                   <div className="space-y-6">
                     <PostFormSection
                       title="Photos and video"

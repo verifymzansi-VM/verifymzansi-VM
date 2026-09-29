@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
+import { PageHeader } from "@/components/layout/page-header";
 import {
   PartnersPanel,
   type AdminCommission,
@@ -13,19 +12,15 @@ export const metadata = { title: "Partners & Commission" };
 export const dynamic = "force-dynamic";
 
 export default async function PartnersAdminPage() {
-  const client = await createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) redirect("/login");
-  if (!(await verifyCapabilityFromDb(user, "partners:manage"))) redirect("/admin");
+  await requireStaff("partners:manage");
 
   const admin = createAdminClient();
-  const [partners, commissions, acquisition, settings] = await Promise.all([
+  const [partners, commissions, settings] = await Promise.all([
     admin
       .from("partners")
       .select("id, user_id, code, status, commission_bps")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(500),
     admin
       .from("commissions")
       .select(
@@ -33,41 +28,58 @@ export default async function PartnersAdminPage() {
       )
       .order("created_at", { ascending: false })
       .limit(200),
-    admin.from("account_acquisition").select("partner_id").not("partner_id", "is", null),
     admin.from("commercial_settings").select("key, value"),
   ]);
   if (partners.error || commissions.error) throw new Error("Unable to load partners");
 
   const partnerRows = partners.data ?? [];
-  const profiles = partnerRows.length
-    ? await admin
-        .from("account_profiles")
-        .select("user_id, display_name")
-        .in(
-          "user_id",
-          partnerRows.map((p) => p.user_id)
-        )
-    : { data: [] as Array<{ user_id: string; display_name: string | null }> };
   const paymentIds = (commissions.data ?? []).map((c) => c.payment_id);
-  const payments = paymentIds.length
-    ? await admin.from("payments").select("id, status").in("id", paymentIds)
-    : { data: [] as Array<{ id: string; status: string }> };
+  // Names, referral counts and payment states in one read each.
+  const [profiles, referralCounts, payments] = await Promise.all([
+    partnerRows.length
+      ? admin
+          .from("account_profiles")
+          .select("user_id, display_name")
+          .in(
+            "user_id",
+            partnerRows.map((p) => p.user_id)
+          )
+      : Promise.resolve({ data: [] as Array<{ user_id: string; display_name: string | null }> }),
+    partnerRows.length
+      ? admin.rpc("partner_referral_counts", { p_ids: partnerRows.map((p) => p.id) })
+      : Promise.resolve({ data: [] }),
+    paymentIds.length
+      ? admin.from("payments").select("id, status").in("id", paymentIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; status: string }> }),
+  ]);
+  const nameByUser = new Map((profiles.data ?? []).map((p) => [p.user_id, p.display_name]));
+  const referralsByPartner = new Map(
+    ((referralCounts.data ?? []) as Array<{ partner_id: string; referrals: number }>).map((r) => [
+      r.partner_id,
+      r.referrals,
+    ])
+  );
+  const codeByPartner = new Map(partnerRows.map((p) => [p.id, p.code]));
+  const statusByPayment = new Map((payments.data ?? []).map((pay) => [pay.id, pay.status]));
 
   const rows: AdminPartner[] = partnerRows.map((p) => ({
     ...p,
-    displayName:
-      (profiles.data ?? []).find((profile) => profile.user_id === p.user_id)?.display_name ?? null,
-    referrals: (acquisition.data ?? []).filter((a) => a.partner_id === p.id).length,
+    displayName: nameByUser.get(p.user_id) ?? null,
+    referrals: referralsByPartner.get(p.id) ?? 0,
   }));
   const commissionRows: AdminCommission[] = (commissions.data ?? []).map((c) => ({
     ...c,
-    partnerCode: partnerRows.find((p) => p.id === c.partner_id)?.code ?? "?",
-    paymentStatus: (payments.data ?? []).find((pay) => pay.id === c.payment_id)?.status ?? null,
+    partnerCode: codeByPartner.get(c.partner_id) ?? "?",
+    paymentStatus: statusByPayment.get(c.payment_id) ?? null,
   }));
 
   return (
-    <div className="space-y-6 p-4">
-      <h1 className="text-2xl font-bold">Partners &amp; Commission</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title="Partners & Commission"
+        description="Partner codes, referred accounts and the commission each payment earns."
+        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Partners & Commission" }]}
+      />
       <PartnersPanel
         partners={rows}
         commissions={commissionRows}

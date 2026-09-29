@@ -8,6 +8,10 @@ import type {
 type SearchParamsLike = Pick<URLSearchParams, "get" | "forEach">;
 
 const VALID_LISTING_CATEGORIES = new Set<ListingCategory>([
+  "clothing_accessories",
+  "sports_hobbies",
+  "other_items",
+
   "property",
   "vehicles",
   "auto_parts",
@@ -27,6 +31,15 @@ const VALID_LISTING_CONDITIONS = new Set<ListingCondition>([
 ]);
 
 const VALID_BUSINESS_CATEGORIES = new Set<BusinessCategory>([
+  "health_medical",
+  "beauty_personal",
+  "fitness_wellness",
+  "cleaning_garden",
+  "automotive_services",
+  "transport_storage",
+  "pets_animals",
+  "community_personal",
+
   "fashion_accessories",
   "electronics_tech",
   "groceries_essentials",

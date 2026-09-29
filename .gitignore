@@ -75,6 +75,7 @@ docs/*
 !docs/showroom-artwork.md
 !docs/introductory-trial-strategy.md
 !docs/verification-capture-review.md
+!docs/location-confirmation.md
 !docs/video-upload-r2-design.md
 !docs/payment-fulfillment-rollout.md
 !docs/domain-email-gmail-setup.md
@@ -83,6 +84,9 @@ docs/*
 !docs/DESIGN-SYSTEM.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md
+!docs/admin-access-inventory.md
+!docs/runbooks/
+!docs/runbooks/admin-provisioning.md
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/

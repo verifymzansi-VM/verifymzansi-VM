@@ -121,7 +121,6 @@ describe("VerificationPage", () => {
   let verificationUploadResponse: ReturnType<typeof jsonResponse>;
   let manualLocationResponse: ReturnType<typeof jsonResponse>;
   let gpsResponse: ReturnType<typeof jsonResponse>;
-  let gpsSaveResponse: ReturnType<typeof jsonResponse> | null;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -164,7 +163,6 @@ describe("VerificationPage", () => {
     verificationUploadResponse = jsonResponse({ success: true }, 200);
     manualLocationResponse = jsonResponse({ success: true }, 200);
     gpsResponse = jsonResponse({ success: true }, 200);
-    gpsSaveResponse = null;
 
     (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(new URLSearchParams());
 
@@ -188,10 +186,7 @@ describe("VerificationPage", () => {
       if (url.includes("/api/verification/location/manual")) {
         return Promise.resolve(manualLocationResponse);
       }
-      if (url.includes("/api/verification/location/gps")) {
-        if (!url.includes("preview=1") && gpsSaveResponse) {
-          return Promise.resolve(gpsSaveResponse);
-        }
+      if (url.includes("/api/verification/location/detect")) {
         return Promise.resolve(gpsResponse);
       }
       return Promise.resolve(jsonResponse({}, 200));
@@ -221,7 +216,7 @@ describe("VerificationPage", () => {
           { step_type: "phone", status: "approved" },
           { step_type: "id_doc", status: "pending" },
           { step_type: "selfie", status: "pending" },
-          { step_type: "location", status: "pending" },
+          { step_type: "location", status: "approved" },
         ],
       }),
       200
@@ -234,11 +229,9 @@ describe("VerificationPage", () => {
         screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
       ).toBeGreaterThan(0);
     });
-    expect(
-      screen.getByText(/Everything was submitted to admin.*pending review/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Your location is approved.*pending review/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Pending Review/i).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /Save Address/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Save location/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Return to Posting/i })).toHaveAttribute(
       "href",
@@ -417,7 +410,7 @@ describe("VerificationPage", () => {
       ).toBeGreaterThan(0);
     });
     expect(
-      screen.getByText(/Everything was submitted to admin\. Your application is pending review\./i)
+      screen.getByText(/Your location is approved\. Your identity documents are pending review\./i)
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: /Step 1: Phone \+ OTP/i })
@@ -458,10 +451,10 @@ describe("VerificationPage", () => {
     });
 
     expect(
-      screen.queryByRole("heading", { name: /Step 4: Verify Your Address/i })
+      screen.queryByRole("heading", { name: /Step 4: Confirm your province and city/i })
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/Select Your Location/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Save Address/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Save location/i })).not.toBeInTheDocument();
   });
 
   it("does not let duplicate approved step rows hide a resubmission state", async () => {
@@ -678,11 +671,67 @@ describe("VerificationPage", () => {
     await waitFor(() => {
       expect(screen.getAllByText(/Verification Submitted/i).length).toBeGreaterThan(0);
     });
-    expect(screen.getByText(/Everything was submitted to admin/i)).toBeInTheDocument();
+    expect(screen.getByText(/Your location is approved/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Selfie: pending/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Location: approved/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("heading", { name: /Step 4: Verify Your Address/i })
+      screen.queryByRole("heading", { name: /Step 4: Confirm your province and city/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to location confirmation after selfie resubmission when legacy location is pending", async () => {
+    sessionResponse = jsonResponse(
+      {
+        sessionId: "session-selfie-resubmit-location-approved",
+        completedSteps: ["phone", "id_doc", "location"],
+        pendingSteps: [],
+        requiredSteps: ["phone", "id_doc", "selfie", "location"],
+        finalizedAt: "2026-05-23T12:00:00.000Z",
+        phoneVerifiedAt: "2026-05-23T11:50:00.000Z",
+      },
+      200
+    );
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "rejected",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "rejected" },
+          { step_type: "location", status: "pending" },
+        ],
+      }),
+      200
+    );
+
+    render(<VerificationPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /Step 3: Selfie/i })).toBeInTheDocument();
+    });
+
+    statusResponse = jsonResponse(
+      buildStatusPayload({
+        accountVerificationStatus: "pending_review",
+        steps: [
+          { step_type: "phone", status: "approved" },
+          { step_type: "id_doc", status: "approved" },
+          { step_type: "selfie", status: "pending", submitted_at: "2026-05-24T08:00:00.000Z" },
+          { step_type: "location", status: "pending" },
+        ],
+      }),
+      200
+    );
+
+    await openCameraAndUseFileFallback(
+      new File(["fake-selfie"], "selfie.jpg", { type: "image/jpeg" })
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    await screen.findByRole("heading", { name: /Step 4: Confirm your province and city/i });
+    expect(screen.getByRole("button", { name: /Save location/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /Verification submitted/i })
     ).not.toBeInTheDocument();
   });
 
@@ -782,7 +831,7 @@ describe("VerificationPage", () => {
           { step_type: "phone", status: "approved" },
           { step_type: "id_doc", status: "pending" },
           { step_type: "selfie", status: "pending" },
-          { step_type: "location", status: "pending" },
+          { step_type: "location", status: "approved" },
         ],
       }),
       200
@@ -1011,7 +1060,7 @@ describe("VerificationPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: /Step 4: Verify Your Address/i })
+        screen.getByRole("heading", { name: /Step 4: Confirm your province and city/i })
       ).toBeInTheDocument();
     });
 
@@ -1113,7 +1162,7 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Save location/i })).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText(/^Province$/i), {
@@ -1122,10 +1171,7 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.change(screen.getByLabelText(/Town \/ Suburb/i), {
-      target: { value: "Soweto" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
@@ -1135,7 +1181,7 @@ describe("VerificationPage", () => {
         })
       );
     });
-    expect(screen.getByRole("button", { name: /Save Address/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Save location/i })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 
@@ -1166,7 +1212,7 @@ describe("VerificationPage", () => {
     render(<VerificationPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Save location/i })).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText(/^Province$/i), {
@@ -1175,10 +1221,7 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.change(screen.getByLabelText(/Town \/ Suburb/i), {
-      target: { value: "Soweto" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
 
     await waitFor(() => {
       expect(
@@ -1189,18 +1232,13 @@ describe("VerificationPage", () => {
     expect(screen.queryByRole("button", { name: /Submit Verification/i })).not.toBeInTheDocument();
   });
 
-  it("lets users open GPS before saving the address", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
+  async function openLocationStep() {
+    sessionResponse = jsonResponse({
+      sessionId: "session-1",
+      completedSteps: ["phone", "id_doc", "selfie"],
+      requiredSteps: ["phone", "id_doc", "selfie", "location"],
+      phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
+    });
     statusResponse = jsonResponse(
       buildStatusPayload({
         steps: [
@@ -1208,417 +1246,76 @@ describe("VerificationPage", () => {
           { step_type: "id_doc", status: "approved" },
           { step_type: "selfie", status: "approved" },
         ],
-      }),
-      200
-    );
-
-    render(<VerificationPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText(/^Province$/i), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText(/^City$/i), {
-      target: { value: "Johannesburg" },
-    });
-
-    const gpsButton = await screen.findByRole("button", { name: /Verify Address with GPS/i });
-    const saveButton = screen.getByRole("button", { name: /Save Address/i });
-
-    expect(gpsButton.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING
-    );
-    expect(screen.getByText(/Four quick checks/i)).toBeInTheDocument();
-    expect(screen.getByText(/Review Before Saving/i)).toBeInTheDocument();
-  });
-
-  it("estimates the address with GPS before saving without persisting the location step", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
-    statusResponse = jsonResponse(
-      buildStatusPayload({
-        steps: [
-          { step_type: "phone", status: "approved" },
-          { step_type: "id_doc", status: "approved" },
-          { step_type: "selfie", status: "approved" },
-        ],
-      }),
-      200
-    );
-    gpsResponse = jsonResponse(
-      {
-        success: true,
-        preview: true,
-        persisted: false,
-        verified: true,
-        confidence: "high",
-        resolvedProvince: "Gauteng",
-        resolvedCity: "Johannesburg",
-      },
-      200
-    );
-    manualLocationResponse = jsonResponse({ success: true }, 200);
-
-    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
-      success({
-        coords: {
-          latitude: -26.2041,
-          longitude: 28.0473,
-          accuracy: 12,
-        } as GeolocationCoordinates,
-        timestamp: Date.now(),
-      } as GeolocationPosition)
-    );
-    Object.defineProperty(global.navigator, "geolocation", {
-      configurable: true,
-      value: {
-        getCurrentPosition: mockGetCurrentPosition,
-      },
-    });
-
-    render(<VerificationPage />);
-
-    const estimateButton = await screen.findByRole("button", {
-      name: /Estimate Address with GPS/i,
-    });
-
-    fireEvent.click(estimateButton);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/^Province$/i)).toHaveValue("Gauteng");
-      expect(screen.getByLabelText(/^City$/i)).toHaveValue("Johannesburg");
-    });
-
-    expect(
-      fetchCalls().some(([input]) =>
-        String(input).includes("/api/verification/location/gps?preview=1")
-      )
-    ).toBe(true);
-    expect(fetchCalls().some(([input]) => String(input) === "/api/verification/location/gps")).toBe(
-      false
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
-      ).toBeGreaterThan(0);
-    });
-    expect(
-      fetchCalls().some(([input]) => String(input).includes("/api/verification/location/manual"))
-    ).toBe(true);
-  });
-
-  it("shows a verified address state after successful GPS confirmation", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
-    statusResponse = jsonResponse(
-      buildStatusPayload({
-        steps: [
-          { step_type: "phone", status: "approved" },
-          { step_type: "id_doc", status: "approved" },
-          { step_type: "selfie", status: "approved" },
-        ],
-      }),
-      200
-    );
-    manualLocationResponse = jsonResponse({ success: true }, 200);
-    gpsResponse = jsonResponse(
-      {
-        success: true,
-        preview: true,
-        persisted: false,
-        verified: true,
-        confidence: "high",
-        resolvedProvince: "Gauteng",
-        resolvedCity: "Johannesburg",
-        mismatch: { province: false, city: false },
-      },
-      200
-    );
-    gpsSaveResponse = jsonResponse(
-      {
-        success: true,
-        verified: true,
-        confidence: "high",
-        resolvedProvince: "Gauteng",
-        resolvedCity: "Johannesburg",
-        mismatch: { province: false, city: false },
-      },
-      200
-    );
-
-    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
-      success({
-        coords: {
-          latitude: -26.2041,
-          longitude: 28.0473,
-          accuracy: 12,
-        } as GeolocationCoordinates,
-        timestamp: Date.now(),
-      } as GeolocationPosition)
-    );
-    Object.defineProperty(global.navigator, "geolocation", {
-      configurable: true,
-      value: {
-        getCurrentPosition: mockGetCurrentPosition,
-      },
-    });
-
-    render(<VerificationPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText(/^Province$/i), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText(/^City$/i), {
-      target: { value: "Johannesburg" },
-    });
-    fireEvent.change(screen.getByLabelText(/Town \/ Suburb/i), {
-      target: { value: "Soweto" },
-    });
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
-      expect(screen.getByText(/GPS matches the province and city/i)).toBeInTheDocument();
-    });
-
-    expect(
-      fetchCalls().some(([input]) =>
-        String(input).includes("/api/verification/location/gps?preview=1")
-      )
-    ).toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
-      ).toBeGreaterThan(0);
-    });
-
-    expect(fetchCalls().some(([input]) => String(input) === "/api/verification/location/gps")).toBe(
-      true
-    );
-    const gpsSaveCall = fetchCalls().find(
-      ([input]) => String(input) === "/api/verification/location/gps"
-    );
-    expect(JSON.parse(String(gpsSaveCall?.[1]?.body))).toEqual(
-      expect.objectContaining({
-        declaredProvince: "Gauteng",
-        declaredCity: "Johannesburg",
-        declaredTown: "Soweto",
       })
     );
-    expect(
-      fetchCalls().some(([input]) => String(input).includes("/api/verification/location/manual"))
-    ).toBe(false);
-  });
-
-  it("shows the explicit email-confirmation blocker when GPS verification is rejected", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
-    );
-    statusResponse = jsonResponse(
-      buildStatusPayload({
-        steps: [
-          { step_type: "phone", status: "approved" },
-          { step_type: "id_doc", status: "approved" },
-          { step_type: "selfie", status: "approved" },
-        ],
-      }),
-      200
-    );
-    manualLocationResponse = jsonResponse({ success: true }, 200);
-    gpsResponse = jsonResponse(
-      {
-        error: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_MESSAGE,
-        code: VERIFICATION_EMAIL_CONFIRMATION_REQUIRED_CODE,
-      },
-      403
-    );
-    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
-      success({
-        coords: {
-          latitude: -26.2041,
-          longitude: 28.0473,
-          accuracy: 12,
-        } as GeolocationCoordinates,
-        timestamp: Date.now(),
-      } as GeolocationPosition)
-    );
-    Object.defineProperty(global.navigator, "geolocation", {
-      configurable: true,
-      value: {
-        getCurrentPosition: mockGetCurrentPosition,
-      },
-    });
-
     render(<VerificationPage />);
+    await screen.findByRole("button", { name: /Save location/i });
+  }
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText(/^Province$/i), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText(/^City$/i), {
-      target: { value: "Johannesburg" },
-    });
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
-
-    await waitFor(() => {
-      expect(
-        fetchCalls().some(([input]) => String(input).includes("/api/verification/location/gps"))
-      ).toBe(true);
+  it("suggests province and city without submitting or requesting GPS", async () => {
+    gpsResponse = jsonResponse({ detected: true, province: "Gauteng", city: "Johannesburg" });
+    await openLocationStep();
+    expect(screen.queryByLabelText(/Town \/ Suburb/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Detect province and city/i }));
+    await waitFor(() => expect(screen.getByLabelText(/^City$/i)).toHaveValue("Johannesburg"));
+    expect(screen.getByLabelText(/^Province$/i)).toHaveValue("Gauteng");
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+    expect(fetchCalls().some(([url]) => String(url).includes("location/manual"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
+    await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Confirm your email first",
-          description: VERIFICATION_EMAIL_CONFIRMATION_BLOCKER_DESCRIPTION,
-        })
-      );
-    });
-    expect(screen.getByRole("button", { name: /Verify Address with GPS/i })).toBeDisabled();
+        expect.objectContaining({ title: "Location approved" })
+      )
+    );
+    const saved = fetchCalls().find(([url]) => String(url).includes("location/manual"));
+    expect(JSON.parse(saved![1].body)).toEqual({ province: "Gauteng", city: "Johannesburg" });
   });
 
-  it("falls back to manual save when GPS confirmation cannot be persisted", async () => {
-    sessionResponse = jsonResponse(
-      {
-        sessionId: "session-1",
-        completedSteps: ["phone", "id_doc", "selfie"],
-        pendingSteps: [],
-        requiredSteps: ["phone", "id_doc", "selfie", "location"],
-        finalizedAt: null,
-        phoneVerifiedAt: "2026-03-08T11:00:00.000Z",
-      },
-      200
+  it.each([200, 503])("allows manual selection when detection fails (%s)", async (status) => {
+    gpsResponse = jsonResponse({ detected: false, province: null, city: null }, status);
+    await openLocationStep();
+    fireEvent.click(screen.getByRole("button", { name: /Detect province and city/i }));
+    await screen.findByText(/We could not detect your province and city/i);
+    fireEvent.change(screen.getByLabelText(/^Province$/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Location approved" })
+      )
     );
+  });
+
+  it("reopens legacy pending location for self-service approval", async () => {
+    sessionResponse = jsonResponse({
+      sessionId: "legacy",
+      finalizedAt: "2026-09-01",
+      phoneVerifiedAt: "2026-09-01",
+      completedSteps: ["phone"],
+      pendingSteps: ["id_doc", "selfie", "location"],
+    });
     statusResponse = jsonResponse(
       buildStatusPayload({
+        accountVerificationStatus: "pending_review",
         steps: [
           { step_type: "phone", status: "approved" },
-          { step_type: "id_doc", status: "approved" },
-          { step_type: "selfie", status: "approved" },
+          { step_type: "id_doc", status: "pending" },
+          { step_type: "selfie", status: "pending" },
+          { step_type: "location", status: "pending" },
         ],
-      }),
-      200
+      })
     );
-    gpsResponse = jsonResponse(
-      {
-        success: true,
-        preview: true,
-        persisted: false,
-        verified: true,
-        confidence: "high",
-        resolvedProvince: "Gauteng",
-        resolvedCity: "Johannesburg",
-        mismatch: { province: false, city: false },
-      },
-      200
-    );
-    gpsSaveResponse = jsonResponse(
-      {
-        success: true,
-        persisted: false,
-        warning: "Failed to save location verification",
-        verified: false,
-      },
-      200
-    );
-    manualLocationResponse = jsonResponse({ success: true }, 200);
-
-    const mockGetCurrentPosition = vi.fn((success: PositionCallback) =>
-      success({
-        coords: {
-          latitude: -26.2041,
-          longitude: 28.0473,
-          accuracy: 12,
-        } as GeolocationCoordinates,
-        timestamp: Date.now(),
-      } as GeolocationPosition)
-    );
-    Object.defineProperty(global.navigator, "geolocation", {
-      configurable: true,
-      value: {
-        getCurrentPosition: mockGetCurrentPosition,
-      },
-    });
-
     render(<VerificationPage />);
-
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Save Address/i })).toBeInTheDocument();
-    });
-
-    fireEvent.change(screen.getByLabelText(/^Province$/i), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText(/^City$/i), {
-      target: { value: "Johannesburg" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Verify Address with GPS/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Address verified by GPS/i)).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("heading", { name: /Verification Submitted/i }).length
-      ).toBeGreaterThan(0);
-    });
-
-    expect(fetchCalls().some(([input]) => String(input) === "/api/verification/location/gps")).toBe(
-      true
+    await screen.findByRole("button", { name: /Save location/i });
+    fireEvent.change(screen.getByLabelText(/^Province$/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City$/i), { target: { value: "Johannesburg" } });
+    expect(screen.getByRole("button", { name: /Save location/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Location approved" })
+      )
     );
-    expect(
-      fetchCalls().some(([input]) => String(input).includes("/api/verification/location/manual"))
-    ).toBe(true);
   });
 
   it("stays on completion after saving location when prior document steps are already persisted", async () => {
@@ -1648,7 +1345,7 @@ describe("VerificationPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("heading", { name: /Step 4: Verify Your Address/i })
+        screen.getByRole("heading", { name: /Step 4: Confirm your province and city/i })
       ).toBeInTheDocument();
     });
 
@@ -1658,7 +1355,7 @@ describe("VerificationPage", () => {
     fireEvent.change(screen.getByLabelText(/^City$/i), {
       target: { value: "Johannesburg" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Save Address/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Save location/i }));
 
     await waitFor(() => {
       expect(

@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useRealtime } from "@/hooks/use-realtime";
 
 const REFRESH_DEBOUNCE_MS = 400;
+/**
+ * With many staff online, every refresh re-runs the layout and page reads for
+ * each of them. Events arriving faster than this are merged into one refresh.
+ */
+const MIN_REFRESH_INTERVAL_MS = 10_000;
 const FALLBACK_REFRESH_MS = 120_000;
 const FOCUS_REFRESH_STALE_MS = 30_000;
 const DSAR_ACTIVE_STATUSES = new Set(["submitted", "in_progress"]);
@@ -68,13 +73,13 @@ export function AdminRealtimeRefresh() {
   }, [router]);
 
   const scheduleRefresh = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    timeoutRef.current = setTimeout(() => {
-      refresh();
-    }, REFRESH_DEBOUNCE_MS);
+    // One refresh is already due: this event will be included in it.
+    if (timeoutRef.current) return;
+    const wait = Math.max(
+      REFRESH_DEBOUNCE_MS,
+      lastRefreshAtRef.current + MIN_REFRESH_INTERVAL_MS - Date.now()
+    );
+    timeoutRef.current = setTimeout(refresh, wait);
   };
 
   useEffect(() => {

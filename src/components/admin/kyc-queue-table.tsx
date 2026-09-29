@@ -36,6 +36,7 @@ import { KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { ClaimBadge, ClaimGate } from "./queue-claims";
 
 interface VerificationStep {
   id: string;
@@ -383,68 +384,80 @@ export function KycQueueTable({
                                 </p>
                               </div>
                             </div>
-                            <div className="flex gap-1 flex-shrink-0 flex-wrap">
-                              {canViewStep && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
-                                  onClick={() => void handleRowViewClick(step)}
-                                  title="View"
-                                  aria-label={`View ${stepLabel}`}
-                                  disabled={isViewingStep}
-                                >
-                                  {isViewingStep ? (
-                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                  ) : (
-                                    <Eye className="h-4 w-4 mr-1" />
+                            <ClaimGate type="verification_step" id={step.id}>
+                              {(claim) => (
+                                <div className="flex flex-col items-end gap-1">
+                                  <ClaimBadge type="verification_step" id={step.id} />
+                                  <div className="flex gap-1 flex-shrink-0 flex-wrap">
+                                    {canViewStep && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                                        onClick={() => void handleRowViewClick(step)}
+                                        title="View"
+                                        aria-label={`View ${stepLabel}`}
+                                        disabled={isViewingStep}
+                                      >
+                                        {isViewingStep ? (
+                                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                        ) : (
+                                          <Eye className="h-4 w-4 mr-1" />
+                                        )}
+                                        <span className="hidden sm:inline text-xs">View</span>
+                                      </Button>
+                                    )}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                                      onClick={() =>
+                                        canViewStep
+                                          ? handleComparisonClick(
+                                              group.user_id,
+                                              group.account_display_name || group.user_id
+                                            )
+                                          : openReview(step, "approved")
+                                      }
+                                      disabled={loading || claim.blocked}
+                                      title={canViewStep ? "Review evidence" : "Approve"}
+                                    >
+                                      <CheckCircle className="h-4 w-4 mr-1" />
+                                      <span className="text-xs">
+                                        {canViewStep ? "Review" : "Approve"}
+                                      </span>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-destructive hover:bg-destructive/10"
+                                      onClick={() => openReview(step, "rejected")}
+                                      disabled={loading || claim.blocked}
+                                      title="Reject"
+                                    >
+                                      <XCircle className="h-4 w-4 mr-1" />
+                                      <span className="hidden sm:inline text-xs">Reject</span>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                                      onClick={() => openReview(step, "needs_resubmission")}
+                                      disabled={loading || claim.blocked}
+                                      title="Resubmit"
+                                    >
+                                      <RotateCcw className="h-4 w-4 mr-1" />
+                                      <span className="hidden sm:inline text-xs">Resubmit</span>
+                                    </Button>
+                                  </div>
+                                  {claim.blockedReason && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {claim.blockedReason}
+                                    </p>
                                   )}
-                                  <span className="hidden sm:inline text-xs">View</span>
-                                </Button>
+                                </div>
                               )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
-                                onClick={() =>
-                                  canViewStep
-                                    ? handleComparisonClick(
-                                        group.user_id,
-                                        group.account_display_name || group.user_id
-                                      )
-                                    : openReview(step, "approved")
-                                }
-                                disabled={loading}
-                                title={canViewStep ? "Review evidence" : "Approve"}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                <span className="text-xs">
-                                  {canViewStep ? "Review" : "Approve"}
-                                </span>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 text-destructive hover:bg-destructive/10"
-                                onClick={() => openReview(step, "rejected")}
-                                disabled={loading}
-                                title="Reject"
-                              >
-                                <XCircle className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline text-xs">Reject</span>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                                onClick={() => openReview(step, "needs_resubmission")}
-                                disabled={loading}
-                                title="Resubmit"
-                              >
-                                <RotateCcw className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline text-xs">Resubmit</span>
-                              </Button>
-                            </div>
+                            </ClaimGate>
                           </div>
                         );
                       })}

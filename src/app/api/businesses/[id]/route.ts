@@ -55,7 +55,7 @@ import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visib
 
 const log = createLogger("BusinessDetail");
 const BUSINESS_DETAIL_SELECT = `
-  id, owner_id, business_type, business_name, slug, description, category, logo_url,
+  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details, logo_url,
   cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city,
   location_town, location_address,
   store_number, map_directions, phone, whatsapp, email, website, social_links,

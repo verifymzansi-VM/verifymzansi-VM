@@ -1,234 +1,124 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import { getRoleFromUser, isStaff } from "@/lib/auth/roles";
-import {
-  getAdminDashboardStats,
-  getDashboardReports,
-  getExtendedPlatformStats,
-  getDashboardAreaSummary,
-  getAreaCardCounts,
-  getVerificationStepCounts,
-  getSiteVisitStats,
-  EMPTY_SITE_VISIT_STATS,
-  type AdminDashboardStats,
-  type VerificationStepCounts,
-} from "@/lib/utils/admin-queries";
-import { calculateSlaState } from "@/lib/utils/sla";
-import type { ReportSeverity } from "@/types/enums";
-import { RoleCommandCenter, AreaDashboardCard } from "@/components/admin/dashboard-cards";
-import {
-  TrafficSection,
-  DecisionsSection,
-  GrowthTrustSection,
-} from "@/components/admin/strategy-dashboard";
+import { Suspense } from "react";
+import { requireStaff } from "@/lib/auth/require-staff";
+import { roleHasCapability } from "@/lib/auth/admin-access";
+import { HOME_TITLES } from "@/lib/admin/nav";
+import { getStaffDashboard } from "@/lib/services/staff-dashboard";
 import { PageHeader } from "@/components/layout/page-header";
+import {
+  DashboardUnavailable,
+  formatCount,
+  QueueOverview,
+  SectionHeading,
+  StatCard,
+} from "@/components/admin/home/home-cards";
+import { MyShiftPanel } from "@/components/admin/home/my-shift-panel";
+import {
+  DecisionsPanel,
+  OversightPanel,
+  PlatformPanel,
+  TeamPanel,
+} from "@/components/admin/home/decision-panels";
+import { TrafficPanel, TrafficPanelSkeleton } from "@/components/admin/home/traffic-panel";
 
 export const metadata = {
-  title: "Admin Dashboard",
-  description: "VerifyMzansi admin overview — pending verifications, reports, and platform stats.",
+  title: "Admin",
+  description: "Your VerifyMzansi staff home: the work waiting for you.",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  moderator: "Moderator",
-  governance_controller: "Governance",
-  admin: "Admin",
-};
+const DESCRIPTIONS = {
+  moderator: "Claim work, keep it moving, and hand anything serious up for a decision.",
+  governance_controller:
+    "Escalations, appeals, restrictions and data requests that need your decision.",
+  admin: "Platform health, the team, and everything waiting for a decision.",
+} as const;
 
-const ROLE_VARIANTS: Record<string, "secondary" | "destructive" | "outline"> = {
-  moderator: "secondary",
-  governance_controller: "outline",
-  admin: "destructive",
-};
+export default async function AdminHomePage() {
+  const { user, role } = await requireStaff();
+  const dashboard = await getStaffDashboard(user.id);
 
-export default async function AdminPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const role = getRoleFromUser(user);
-  if (!isStaff(user) || !role) redirect("/dashboard");
-
-  const isAdminRole = role === "admin";
-  const isGovernance = role === "governance_controller";
-  const dashboardRole =
-    role === "admin" || role === "governance_controller" || role === "moderator"
-      ? role
-      : "moderator";
-  const roleLabel = ROLE_LABELS[role] ?? role;
-  const roleBadgeVariant = ROLE_VARIANTS[role] ?? "secondary";
-
-  const EMPTY_STATS: AdminDashboardStats = {
-    totalAccounts: 0,
-    totalMembers: 0,
-    totalListings: 0,
-    openReports: 0,
-    supportRequests: 0,
-    pendingVerifications: 0,
-    activeSuspensions: 0,
-    pendingModeration: 0,
-  };
-  const EMPTY_STEP_COUNTS: VerificationStepCounts = {
-    phone: 0,
-    id_doc: 0,
-    selfie: 0,
-    total: 0,
-  };
-  const EMPTY_AREA = {
-    totalPosted: 0,
-    pendingReview: 0,
-    liveCount: 0,
-    rejectedCount: 0,
-    topCategory: null,
-    categoryBreakdown: [],
-  };
-  const EMPTY_AREA_COUNTS = { pendingFlags: 0, pendingContent: 0 };
-
-  const settled = await Promise.allSettled([
-    getAdminDashboardStats(),
-    getDashboardReports(10),
-    isAdminRole || isGovernance ? getExtendedPlatformStats() : Promise.resolve(null),
-    getDashboardAreaSummary(),
-    getAreaCardCounts(),
-    getVerificationStepCounts(),
-    isAdminRole ? getSiteVisitStats() : Promise.resolve(EMPTY_SITE_VISIT_STATS),
-  ]);
-
-  const stats = settled[0].status === "fulfilled" ? settled[0].value : EMPTY_STATS;
-  const reports = settled[1].status === "fulfilled" ? settled[1].value : [];
-  const extended = settled[2].status === "fulfilled" ? settled[2].value : null;
-  const areaSummary =
-    settled[3].status === "fulfilled"
-      ? settled[3].value
-      : { MZANSI_MARKET: EMPTY_AREA, MZANSI_BUSINESS: EMPTY_AREA, PROMOTIONS_EVENTS: EMPTY_AREA };
-  const areaCounts =
-    settled[4].status === "fulfilled"
-      ? settled[4].value
-      : {
-          MZANSI_MARKET: EMPTY_AREA_COUNTS,
-          MZANSI_BUSINESS: EMPTY_AREA_COUNTS,
-          PROMOTIONS_EVENTS: EMPTY_AREA_COUNTS,
-        };
-  const stepCounts = settled[5].status === "fulfilled" ? settled[5].value : EMPTY_STEP_COUNTS;
-  const siteVisits = settled[6].status === "fulfilled" ? settled[6].value : EMPTY_SITE_VISIT_STATS;
-
-  // ── Compute health status ──────────────────────────────────
-  const breachedReports = reports.filter((r) => {
-    const sla = calculateSlaState(r.created_at, r.severity as ReportSeverity);
-    return sla.state === "breached";
-  });
-
-  const healthStatus =
-    breachedReports.length > 0
-      ? "critical"
-      : stats.pendingVerifications >= 30 ||
-          stats.openReports > 0 ||
-          stats.supportRequests > 0 ||
-          stats.pendingModeration >= 20
-        ? "warning"
-        : "healthy";
-
-  const totalAccounts = stats.totalAccounts;
-  const verifiedAccounts = extended?.verifiedAccounts ?? 0;
-  const verifiedPct =
-    isAdminRole && extended && totalAccounts > 0
-      ? Math.round((verifiedAccounts / totalAccounts) * 100)
-      : null;
-
-  const totalPendingContent =
-    areaCounts.MZANSI_MARKET.pendingContent +
-    areaCounts.MZANSI_BUSINESS.pendingContent +
-    areaCounts.PROMOTIONS_EVENTS.pendingContent;
-
-  // ── Admin gets the redesigned Strategy Dashboard ───────────
-  if (isAdminRole) {
-    return (
-      <div className="space-y-8">
-        <PageHeader
-          title="Strategy Dashboard"
-          description="Traffic, growth, and the decisions that need attention — one view for management."
-          breadcrumbs={[{ label: "Admin" }]}
-        >
-          <Badge variant={roleBadgeVariant}>{roleLabel}</Badge>
-          <Badge
-            variant={
-              healthStatus === "healthy"
-                ? "outline"
-                : healthStatus === "warning"
-                  ? "secondary"
-                  : "destructive"
-            }
-          >
-            {healthStatus === "healthy"
-              ? "Healthy"
-              : healthStatus === "warning"
-                ? "Needs attention"
-                : "Urgent"}
-          </Badge>
-        </PageHeader>
-
-        <TrafficSection visits={siteVisits} />
-
-        <DecisionsSection
-          stats={stats}
-          stepCounts={stepCounts}
-          breachedReportCount={breachedReports.length}
-          pendingContent={totalPendingContent}
-        />
-
-        <GrowthTrustSection stats={stats} extended={extended} visits={siteVisits} />
-      </div>
-    );
-  }
-
-  // ── Moderator / governance keep the operational command center ──
   return (
-    <div className="space-y-5">
-      {/* ── Header ──────────────────────────────────────────── */}
-      <PageHeader title={`${roleLabel} Command Center`} breadcrumbs={[{ label: "Admin" }]}>
-        <Badge variant={roleBadgeVariant}>{roleLabel}</Badge>
-      </PageHeader>
-
-      <RoleCommandCenter
-        role={dashboardRole}
-        healthStatus={healthStatus}
-        stats={stats}
-        verifiedPct={verifiedPct}
-        reports={reports}
-        breachedReportCount={breachedReports.length}
-        areaSummary={areaSummary}
-        areaCounts={areaCounts}
-        stepCounts={stepCounts}
-        extended={extended}
+    <div className="space-y-8">
+      <PageHeader
+        title={HOME_TITLES[role]}
+        description={DESCRIPTIONS[role]}
+        breadcrumbs={[{ label: "Admin" }]}
       />
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold">Area workload</h2>
-          <p className="text-xs text-muted-foreground">
-            Marketplace, business, and tourism queues show content state and flag pressure together.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <AreaDashboardCard
-            area="MZANSI_MARKET"
-            stats={areaSummary.MZANSI_MARKET}
-            flagCount={areaCounts.MZANSI_MARKET.pendingFlags}
-          />
-          <AreaDashboardCard
-            area="MZANSI_BUSINESS"
-            stats={areaSummary.MZANSI_BUSINESS}
-            flagCount={areaCounts.MZANSI_BUSINESS.pendingFlags}
-          />
-          <AreaDashboardCard
-            area="PROMOTIONS_EVENTS"
-            stats={areaSummary.PROMOTIONS_EVENTS}
-            flagCount={areaCounts.PROMOTIONS_EVENTS.pendingFlags}
-          />
-        </div>
-      </section>
+      {!dashboard ? (
+        <DashboardUnavailable />
+      ) : (
+        <>
+          {"shift" in dashboard && (
+            <section className="space-y-3" aria-labelledby="home-shift">
+              <div id="home-shift" className="flex flex-wrap items-end justify-between gap-2">
+                <SectionHeading
+                  title="Your items"
+                  description="Only you can decide items you hold. Release what you cannot finish."
+                />
+                {dashboard.shift && (
+                  <p className="text-sm text-muted-foreground">
+                    {formatCount(dashboard.shift.actions_today)} actions today
+                    {dashboard.shift.escalations_open > 0 &&
+                      ` · ${formatCount(dashboard.shift.escalations_open)} of your escalations waiting`}
+                  </p>
+                )}
+              </div>
+              {dashboard.shift ? (
+                <MyShiftPanel
+                  claims={dashboard.shift.claims}
+                  canClaim={roleHasCapability(role, "queue:claim")}
+                />
+              ) : (
+                <StatCard label="Your items" value={null} />
+              )}
+            </section>
+          )}
+
+          {role === "admin" && (
+            <PlatformPanel
+              platform={dashboard.platform}
+              retention={dashboard.retention}
+              breachedReports={dashboard.queues.reports?.breached}
+            />
+          )}
+
+          {"decisions" in dashboard && (
+            <DecisionsPanel
+              decisions={dashboard.decisions}
+              restrictions={dashboard.restrictions}
+              dsar={dashboard.dsar}
+            />
+          )}
+
+          <section className="space-y-3" aria-labelledby="home-queues">
+            <div id="home-queues">
+              <SectionHeading
+                title="Queues"
+                description={
+                  role === "moderator"
+                    ? "Most urgent first when you claim."
+                    : "What moderators are working through."
+                }
+              />
+            </div>
+            <QueueOverview queues={dashboard.queues} />
+          </section>
+
+          {"oversight" in dashboard && <OversightPanel oversight={dashboard.oversight} />}
+
+          {role === "admin" && (
+            <>
+              <TeamPanel
+                platform={dashboard.platform}
+                roleChanges={dashboard.decisions?.role_changes_pending}
+              />
+              <Suspense fallback={<TrafficPanelSkeleton />}>
+                <TrafficPanel />
+              </Suspense>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

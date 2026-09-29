@@ -15,6 +15,15 @@ import type { LayoutTemplate } from "./layout-templates";
  * - **professional** — info-first, structured credentials layout
  */
 export const CATEGORY_LAYOUT_MAP: Record<BusinessCategory, LayoutTemplate> = {
+  health_medical: "professional",
+  beauty_personal: "professional",
+  fitness_wellness: "professional",
+  cleaning_garden: "professional",
+  automotive_services: "professional",
+  transport_storage: "professional",
+  pets_animals: "professional",
+  community_personal: "professional",
+
   fashion_accessories: "cinematic",
   health_beauty: "cinematic",
   food_dining: "cinematic",
@@ -45,6 +54,15 @@ export const CATEGORY_CTA_CONFIG: Record<
     galleryHeading: string;
   }
 > = {
+  health_medical: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  beauty_personal: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  fitness_wellness: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  cleaning_garden: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  automotive_services: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  transport_storage: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  pets_animals: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+  community_personal: { servicesHeading: "Products & services", galleryHeading: "Photos" },
+
   fashion_accessories: {
     primaryCta: "Shop Collection",
     servicesHeading: "Our Range",

@@ -96,6 +96,9 @@ const LISTING_CATEGORY_UI_TO_DB: Record<string, string> = {
   jobs_services: "jobs_services",
   farming_agriculture: "farming_agriculture",
   baby_kids: "baby_kids",
+  clothing_accessories: "clothing_accessories",
+  sports_hobbies: "sports_hobbies",
+  other_items: "other_items",
 };
 
 /** DB enum value → UI slug (reverse of above). */

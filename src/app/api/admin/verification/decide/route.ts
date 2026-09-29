@@ -7,30 +7,27 @@ import {
 } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { logAuditEvent } from "@/lib/services/audit";
 import { adminVerificationDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { createNotification } from "@/lib/notifications";
-import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import { checkLocalRateLimit, checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
-import {
-  sendVerificationApprovedEmail,
-  sendVerificationRejectedEmail,
-  sendVerificationResubmissionEmail,
-} from "@/lib/services/email";
-import { summarizeVerification } from "@/lib/account/verification-summary";
-import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
-import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
+import { applyVerificationDecision, isHighRiskStep } from "@/lib/services/verification-decision";
+import { decisionRefusalResponse } from "@/lib/services/decision-ledger";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 
 const log = createLogger("AdminVerification");
-const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
+const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" };
 
 /**
  * POST /api/admin/verification/decide
- * Process a KYC verification step decision (approve/reject/needs_resubmission).
+ *
+ * Decide a KYC verification step (approve / reject / needs_resubmission).
+ * Approving a high- or critical-risk step is an override: it is proposed
+ * here and applied only when another governor or admin approves it on the
+ * escalations page. Nobody decides their own verification.
  */
 export async function POST(request: Request) {
   try {
@@ -39,544 +36,126 @@ export async function POST(request: Request) {
     const csrfBlock = enforceCsrfToken(request, log);
     if (csrfBlock) return csrfBlock;
 
-    // Auth check
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    if (!user) return unauthorizedResponse();
 
-    if (!user) {
-      return unauthorizedResponse();
-    }
+    const actorRole = await verifyStaffActorRoleFromDb(user);
+    if (!actorRole) return forbiddenResponse();
 
-    const actorRole = (await verifyStaffActorRoleFromDb(user)) ?? undefined;
-    if (!actorRole) {
-      return forbiddenResponse();
-    }
+    const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+    if (mfaBlock) return mfaBlock;
 
     const rl = checkLocalRateLimit(user.id, "admin:verification:decide");
-    if (rl.limited) {
-      return rateLimitResponse(rl.retryAfter ?? 60);
-    }
+    if (rl.limited) return rateLimitResponse(rl.retryAfter ?? 60);
 
     const bodyResult = await parseAndValidateJsonRequest(request, adminVerificationDecideSchema, {
       invalidJsonMessage: "Invalid JSON payload",
       validationErrorMessage: "Invalid request",
       includeValidationDetails: false,
     });
-    if (!bodyResult.success) {
-      return bodyResult.response;
-    }
+    if (!bodyResult.success) return bodyResult.response;
 
     const { stepId, decision, reasonCode, reasonNote, overrideReasonCode } = bodyResult.data;
-
     const admin = createAdminClient();
 
-    // Get the verification step
     const { data: step, error: stepError } = await admin
       .from("verification_steps")
       .select("*")
       .eq("id", stepId)
       .single();
-
     if (stepError || !step) {
       return NextResponse.json({ error: "Verification step not found" }, { status: 404 });
     }
 
-    // If approving a high/critical risk step, override reason is required
-    if (
-      decision === "approved" &&
-      (step.risk_level === "high" || step.risk_level === "critical") &&
-      !overrideReasonCode
-    ) {
+    if (step.user_id === user.id) {
       return NextResponse.json(
-        { error: "Override reason code is required when approving high-risk steps" },
-        { status: 400 }
+        { error: "Someone else must review your own verification.", code: "not_independent" },
+        { status: 403 }
       );
     }
 
-    if (decision === "approved" && step.step_type === "id_doc" && step.id_number_hmac) {
-      const { data: idConflict, error: idConflictError } = await admin
-        .from("verification_steps")
-        .select("id, user_id")
-        .eq("step_type", "id_doc")
-        .eq("status", "approved")
-        .eq("id_number_hmac", step.id_number_hmac)
-        .neq("user_id", step.user_id)
-        .limit(1)
-        .maybeSingle();
+    const claimBlock = await checkQueueClaim(user.id, { type: "verification_step", id: step.id });
+    if (claimBlock) return claimBlock;
 
-      if (idConflictError) {
-        log.error("Failed to verify ID ownership conflict before approval", {
-          stepId,
-          error: idConflictError.message,
-        });
-        return NextResponse.json({ error: "Failed to validate ID ownership" }, { status: 500 });
-      }
-
-      if (idConflict) {
+    if (decision === "approved" && isHighRiskStep(step)) {
+      if (!overrideReasonCode) {
         return NextResponse.json(
-          { error: ID_NUMBER_IN_USE_ERROR, code: "id_number_duplicate" },
-          { status: 409 }
+          { error: "Override reason code is required when approving high-risk steps" },
+          { status: 400 }
         );
       }
-    }
 
-    // Update the verification step
-    const updateData: Record<string, unknown> = {
-      status: decision,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-    };
+      // Proposing an override is sensitive: recent second factor, and fail
+      // closed without the shared limiter.
+      const stepUpBlock = await checkStaffApiMfa(supabase, user.id, { stepUp: true });
+      if (stepUpBlock) return stepUpBlock;
+      const overrideRl = await checkSensitiveActionRateLimit(
+        user.id,
+        "admin:verification:override"
+      );
+      if (overrideRl.limited) return rateLimitResponse(overrideRl.retryAfter ?? 60);
 
-    if (decision !== "approved") {
-      updateData.reason_code = reasonCode;
-      updateData.reason_note = reasonNote || null;
-    } else {
-      // Clear stale rejection metadata from any previous decision on this step
-      updateData.reason_code = null;
-      updateData.reason_note = null;
-    }
-
-    if (overrideReasonCode) {
-      updateData.override_reason_code = overrideReasonCode;
-    }
-
-    // CAS guard: only update steps that are still in a reviewable state.
-    // Prevents two admins from overwriting each other's decisions.
-    const { data: updatedRows, error: updateError } = await admin
-      .from("verification_steps")
-      .update(updateData)
-      .eq("id", stepId)
-      .in("status", ["pending", "needs_resubmission"])
-      .select("id");
-
-    if (updateError) {
-      const isApprovedIdConflict =
-        updateError.code === "23505" &&
-        (updateError.message?.includes("idx_verification_steps_unique_approved_id_hmac") ?? false);
-
-      if (isApprovedIdConflict) {
+      const { data, error } = await admin.rpc("propose_kyc_override", {
+        p_actor: user.id,
+        p_step: step.id,
+        p_user: step.user_id,
+        p_risk_level: step.risk_level,
+        p_override_reason: overrideReasonCode,
+        p_note: reasonNote ?? null,
+      });
+      if (error) {
+        log.error("KYC override proposal failed", { stepId, error: error.message });
         return NextResponse.json(
-          { error: ID_NUMBER_IN_USE_ERROR, code: "id_number_duplicate" },
-          { status: 409 }
+          { error: "Internal server error" },
+          { status: 500, headers: NO_STORE }
         );
       }
-
-      log.error("Failed to update verification step", {
-        stepId,
-        decision,
-        error: updateError.message,
-        code: updateError.code,
-        details: updateError.details,
-        hint: updateError.hint,
-      });
-      return NextResponse.json({ error: "Failed to update verification step" }, { status: 500 });
-    }
-
-    if (!updatedRows?.length) {
-      return NextResponse.json(
-        { error: "Step already reviewed or no longer in a reviewable state" },
-        { status: 409 }
-      );
-    }
-
-    // Sync the latest artifact status to match the step decision.
-    // NOTE: PostgREST ignores .order()/.limit() on UPDATE, so we SELECT
-    // the latest artifact first, then update by its specific ID.
-    const artifactStatus =
-      decision === "approved"
-        ? "approved"
-        : decision === "needs_resubmission"
-          ? "needs_resubmission"
-          : "rejected";
-
-    const { data: latestArtifact, error: artifactFetchErr } = await admin
-      .from("kyc_artifacts")
-      .select("id")
-      .eq("user_id", step.user_id)
-      .eq("step_type", step.step_type)
-      .in("status", ["pending", "needs_resubmission"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (artifactFetchErr) {
-      log.warn("Failed to fetch latest artifact for status sync (non-fatal)", {
-        stepId,
-        error: artifactFetchErr.message,
-      });
-    }
-
-    if (latestArtifact) {
-      const { error: artifactSyncError } = await admin
-        .from("kyc_artifacts")
-        .update({ status: artifactStatus })
-        .eq("id", latestArtifact.id);
-
-      if (artifactSyncError) {
-        log.warn("Failed to sync artifact status (non-fatal)", {
-          error: artifactSyncError.message,
-          stepId,
-          decision,
-        });
-      }
-    }
-
-    // If approved, check if all 4 steps are now approved → update the account to verified
-    if (decision === "approved") {
-      const { data: allSteps, error: allStepsErr } = await admin
-        .from("verification_steps")
-        .select("step_type, status, reviewed_at")
-        .eq("user_id", step.user_id);
-
-      if (allStepsErr) {
-        log.warn("Failed to fetch all verification steps (non-fatal)", {
-          userId: step.user_id,
-          error: allStepsErr.message,
-        });
-      }
-
-      const approvedSteps = (allSteps || []).filter((s) => s.status === "approved");
-      // Location is self-service (auto-approved) so it will already be in the
-      // approved set by the time admin reviews id_doc / selfie.
-      const requiredSteps = ["phone", "id_doc", "selfie", "location"];
-      const allApproved = requiredSteps.every((reqStep) =>
-        approvedSteps.some((s) => s.step_type === reqStep)
-      );
-      const identityAdminReviewed = ["id_doc", "selfie"].every((identityStep) =>
-        approvedSteps.some(
-          (s) =>
-            s.step_type === identityStep &&
-            typeof s.reviewed_at === "string" &&
-            s.reviewed_at.trim().length > 0
-        )
-      );
-
-      if (allApproved && identityAdminReviewed) {
-        // ── Propagate legal name from id_doc step → seller_profiles ──
-        const idDocStep = (allSteps || []).find(
-          (s) => s.step_type === "id_doc" && s.status === "approved"
-        );
-
-        const legalNamePatch: Record<string, unknown> = {
-          account_verification_status: "verified",
-        };
-
-        if (idDocStep) {
-          // Fetch first_name / last_name from the id_doc verification step
-          const { data: idDocDetail } = await admin
-            .from("verification_steps")
-            .select("first_name, last_name")
-            .eq("user_id", step.user_id)
-            .eq("step_type", "id_doc")
-            .maybeSingle();
-
-          if (idDocDetail?.first_name && idDocDetail?.last_name) {
-            const fullLegalName = `${idDocDetail.first_name} ${idDocDetail.last_name}`;
-            legalNamePatch.legal_first_name = idDocDetail.first_name;
-            legalNamePatch.legal_last_name = idDocDetail.last_name;
-            legalNamePatch.display_name = fullLegalName;
-            legalNamePatch.legal_name_locked_at = new Date().toISOString();
-
-            log.info("Propagating legal name from verified ID to profile", {
-              userId: step.user_id,
-              legalNamePropagated: true,
-            });
-          }
-        }
-
-        const { error: profileErr } = await admin
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .update(legalNamePatch)
-          .eq("user_id", step.user_id);
-        if (profileErr) {
-          log.error("Failed to update account profile after approval", {
-            error: profileErr.message,
-            userId: step.user_id,
-          });
-          return NextResponse.json(
-            { error: "Failed to propagate verification status" },
-            { status: 500 }
-          );
-        }
-
-        // Set purge_after = NOW + 30 days on all KYC artifacts for this user
-        const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-        const { error: purgeErr } = await admin
-          .from("kyc_artifacts")
-          .update({ purge_after: purgeAfter })
-          .eq("user_id", step.user_id)
-          .is("purge_after", null);
-
-        if (purgeErr) {
-          log.error("Failed to schedule KYC artifact purge", {
-            userId: step.user_id,
-            error: purgeErr.message,
-          });
-        } else {
-          try {
-            await logAuditEvent({
-              actorId: user.id,
-              actorRole,
-              action: "kyc_purge_scheduled",
-              targetType: "account_profile",
-              targetId: step.user_id,
-              metadata: {
-                purge_after: purgeAfter,
-                step_count: approvedSteps.length,
-                owner_user_id: step.user_id,
+      const result = data as { ok: boolean; error?: string; decision_id?: string };
+      if (!result.ok) {
+        return result.error === "pending_exists"
+          ? NextResponse.json(
+              {
+                error: "An override for this step is already waiting for approval.",
+                code: "pending_exists",
               },
-            });
-          } catch (auditErr) {
-            log.error("Audit log failed (non-fatal)", {
-              error: auditErr instanceof Error ? auditErr.message : "Unknown",
-            });
-          }
-        }
-      } else {
-        const nextVerificationStatus = summarizeVerification(
-          "incomplete",
-          allSteps ?? []
-        ).accountVerificationStatus;
-        const { error: pendingErr } = await admin
-          .from(ACCOUNT_PROFILE_WRITE_TABLE)
-          .update({
-            account_verification_status: nextVerificationStatus,
-          })
-          .eq("user_id", step.user_id)
-          .in("account_verification_status", ["incomplete", "pending_review", "rejected"]);
-        if (pendingErr) {
-          log.error("Failed to update account verification status after approval", {
-            error: pendingErr.message,
-            userId: step.user_id,
-            nextVerificationStatus,
-          });
-        }
+              { status: 409 }
+            )
+          : decisionRefusalResponse(result.error ?? "forbidden");
       }
-    } else if (decision === "rejected") {
-      // Include "verified" so that rejecting a step on a verified account
-      // properly downgrades the account status (prevents verified + rejected step desync).
-      const { error: rejectErr } = await admin
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .update({
-          account_verification_status: "rejected",
-        })
-        .eq("user_id", step.user_id)
-        .in("account_verification_status", [
-          "incomplete",
-          "pending_review",
-          "rejected",
-          "verified",
-        ]);
-      if (rejectErr) {
-        log.error("Failed to set account status to rejected", {
-          error: rejectErr.message,
-          userId: step.user_id,
-        });
-        return NextResponse.json(
-          { error: "Failed to update account verification status" },
-          { status: 500 }
-        );
-      }
-    } else {
-      // needs_resubmission should become incomplete/actionable so the user sees the fix path.
-      // Include "verified" so re-review of a step on a verified account is handled.
-      const { error: resubErr } = await admin
-        .from(ACCOUNT_PROFILE_WRITE_TABLE)
-        .update({
-          account_verification_status: "incomplete",
-        })
-        .eq("user_id", step.user_id)
-        .in("account_verification_status", [
-          "incomplete",
-          "pending_review",
-          "rejected",
-          "verified",
-        ]);
-      if (resubErr) {
-        log.error("Failed to set account to incomplete for resubmission", {
-          error: resubErr.message,
-          userId: step.user_id,
-        });
-      }
-    }
-
-    // Log audit event (best-effort)
-    const auditAction =
-      decision === "approved"
-        ? "verification_approved"
-        : decision === "needs_resubmission"
-          ? "verification_resubmission_requested"
-          : "verification_rejected";
-
-    try {
-      await logAuditEvent({
-        actorId: user.id,
-        actorRole,
-        action: auditAction as
-          "verification_approved" | "verification_rejected" | "verification_resubmission_requested",
-        targetType: "verification_step",
-        targetId: stepId,
-        metadata: {
-          step_type: step.step_type,
+      await releaseDecidedClaim(user.id, { type: "verification_step", id: step.id });
+      return NextResponse.json(
+        {
+          success: true,
           decision,
-          reasonCode,
-          reasonNote,
-          overrideReasonCode,
-          risk_level: step.risk_level,
-          risk_score: step.risk_score,
-          owner_user_id: step.user_id,
+          status: "proposed",
+          decisionId: result.decision_id,
+          message: "High-risk approval sent for a second reviewer to confirm.",
         },
-      });
-    } catch (auditErr) {
-      log.error("Audit log failed (non-fatal)", {
-        error: auditErr instanceof Error ? auditErr.message : "Unknown",
-      });
+        { status: 202, headers: NO_STORE }
+      );
     }
 
-    // Notify the account holder about the verification decision
-    try {
-      const stepLabel =
-        step.step_type === "id_doc"
-          ? "ID Document"
-          : step.step_type === "selfie"
-            ? "Selfie"
-            : step.step_type === "location"
-              ? "Location"
-              : step.step_type === "phone"
-                ? "Phone"
-                : step.step_type;
-      // Lowercase label for inline use — preserves "ID" casing
-      const stepLabelInline = step.step_type === "id_doc" ? "ID document" : stepLabel.toLowerCase();
-
-      if (decision === "approved") {
-        await createNotification({
-          userId: step.user_id,
-          type: "success",
-          title: `${stepLabel} verification approved`,
-          message: `Your ${stepLabelInline} verification step has been approved.`,
-          href: "/verification",
-        });
-      } else if (decision === "needs_resubmission") {
-        await createNotification({
-          userId: step.user_id,
-          type: "warning",
-          title: `${stepLabel} needs resubmission`,
-          message: reasonNote
-            ? `Please resubmit your ${stepLabelInline}: ${reasonNote.slice(0, 80)}`
-            : `Please resubmit your ${stepLabelInline} verification.`,
-          href: "/verification",
-        });
-      } else {
-        await createNotification({
-          userId: step.user_id,
-          type: "error",
-          title: `${stepLabel} verification rejected`,
-          message: reasonNote
-            ? reasonNote.slice(0, 100)
-            : `Your ${stepLabelInline} verification was not accepted.`,
-          href: "/verification",
-        });
-      }
-    } catch (notifErr) {
-      log.warn("Failed to send notification (non-fatal)", {
-        error: notifErr instanceof Error ? notifErr.message : "Unknown",
-      });
+    const applied = await applyVerificationDecision({
+      step,
+      decision,
+      reasonCode,
+      reasonNote,
+      overrideReasonCode,
+      reviewerId: user.id,
+      reviewerRole: actorRole,
+    });
+    if (!applied.ok) {
+      return NextResponse.json(
+        { error: applied.error, ...(applied.code ? { code: applied.code } : {}) },
+        { status: applied.status }
+      );
     }
 
-    // Send transactional email for verification decisions (best-effort, non-blocking)
-    try {
-      const recipient = await getAuthAdminUserSummary(admin, step.user_id);
-      const recipientEmail = recipient.email;
-      if (recipientEmail) {
-        const accountName = recipient.accountName;
-
-        if (decision === "approved") {
-          scheduleBackgroundTask(
-            (async () => {
-              const result = await sendVerificationApprovedEmail(recipientEmail, accountName);
-              await logAuditEvent({
-                actorId: user.id,
-                actorRole,
-                action: result.success ? "communication_email_sent" : "communication_email_failed",
-                targetType: "account_profile",
-                targetId: step.user_id,
-                metadata: {
-                  template: "verification_approved",
-                  channel: "email",
-                  error: result.error,
-                  owner_user_id: step.user_id,
-                },
-              });
-            })(),
-            "verification approved email"
-          );
-        } else if (decision === "needs_resubmission") {
-          const reasonText = reasonNote || reasonCode || "Please review and resubmit your details.";
-          scheduleBackgroundTask(
-            (async () => {
-              const result = await sendVerificationResubmissionEmail(
-                recipientEmail,
-                accountName,
-                reasonText
-              );
-              await logAuditEvent({
-                actorId: user.id,
-                actorRole,
-                action: result.success ? "communication_email_sent" : "communication_email_failed",
-                targetType: "account_profile",
-                targetId: step.user_id,
-                metadata: {
-                  template: "verification_resubmission",
-                  channel: "email",
-                  error: result.error,
-                  owner_user_id: step.user_id,
-                },
-              });
-            })(),
-            "verification resubmission email"
-          );
-        } else {
-          const reasonText =
-            reasonNote || reasonCode || "Your submission did not meet verification requirements.";
-          scheduleBackgroundTask(
-            (async () => {
-              const result = await sendVerificationRejectedEmail(
-                recipientEmail,
-                accountName,
-                reasonText
-              );
-              await logAuditEvent({
-                actorId: user.id,
-                actorRole,
-                action: result.success ? "communication_email_sent" : "communication_email_failed",
-                targetType: "account_profile",
-                targetId: step.user_id,
-                metadata: {
-                  template: "verification_rejected",
-                  channel: "email",
-                  error: result.error,
-                  owner_user_id: step.user_id,
-                },
-              });
-            })(),
-            "verification rejected email"
-          );
-        }
-      }
-    } catch (emailLookupErr) {
-      log.warn("Failed to resolve verification email recipient", {
-        userId: step.user_id,
-        error: emailLookupErr instanceof Error ? emailLookupErr.message : "Unknown",
-      });
-    }
-
-    return NextResponse.json(
-      { success: true, decision },
-      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
-    );
+    await releaseDecidedClaim(user.id, { type: "verification_step", id: step.id });
+    return NextResponse.json({ success: true, decision }, { headers: NO_STORE });
   } catch (err) {
     log.error("Verification decide failed", {
       error: err instanceof Error ? err.message : "Unknown error",
@@ -584,7 +163,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500, headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+      { status: 500, headers: NO_STORE }
     );
   }
 }

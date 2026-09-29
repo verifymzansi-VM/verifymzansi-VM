@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { buildVerificationSessionResumePatch } from "@/lib/services/verification-state";
+import { citiesMatch, normalizeProvinceName } from "@/lib/constants/sa-provinces";
 type QueryClient = Pick<SupabaseClient, "from">;
 
 type VerificationSessionRow = {
@@ -44,10 +45,7 @@ type RouteLogger = {
 type EnsureResult =
   | {
       accountVerificationStatus: string | null;
-      finalizedLocationConfirmation: boolean;
       preserveFinalizedSession: boolean;
-      savedLocationProvince: string | null;
-      savedLocationCity: string | null;
     }
   | { response: NextResponse };
 
@@ -56,7 +54,7 @@ type EnsureArgs = {
   profileClient: QueryClient;
   userId: string;
   logger: RouteLogger;
-  allowFinalizedLocationConfirmation?: boolean;
+  submittedLocation?: { province: string; city: string };
 };
 
 type PersistArgs = {
@@ -68,12 +66,6 @@ type PersistArgs = {
   currentAccountVerificationStatus: string | null;
   profileUpdateErrorMessage: string;
   preserveFinalizedSession?: boolean;
-  /**
-   * When false, the account profile's location fields are left untouched
-   * (e.g. a block-severity GPS mismatch must not overwrite the declared
-   * address before admin review). Defaults to true.
-   */
-  persistProfileLocation?: boolean;
 };
 
 async function finalizeVerificationSessionIfReady(
@@ -139,7 +131,7 @@ export async function ensureLocationVerificationWritable({
   profileClient,
   userId,
   logger,
-  allowFinalizedLocationConfirmation = false,
+  submittedLocation,
 }: EnsureArgs): Promise<EnsureResult> {
   const { data: existingSession, error: sessionFetchErr } = await adminClient
     .from("verification_sessions")
@@ -161,10 +153,7 @@ export async function ensureLocationVerificationWritable({
     };
   }
 
-  let finalizedLocationConfirmation = false;
   let preserveFinalizedSession = false;
-  let savedLocationProvince: string | null = null;
-  let savedLocationCity: string | null = null;
 
   const { data: profile, error: profileErr } = await profileClient
     .from(ACCOUNT_PROFILE_WRITE_TABLE)
@@ -210,18 +199,29 @@ export async function ensureLocationVerificationWritable({
   const locationIsSubmitted =
     existingLocationStep?.status === "approved" || existingLocationStep?.status === "pending";
 
+  // Allow pending legacy locations to be confirmed without an admin. An identical
+  // approved submission can be retried if the session/profile write previously failed.
+  const canResumeSubmission = Boolean(
+    submittedLocation &&
+    (existingLocationStep?.status === "pending" ||
+      (existingLocationStep?.status === "approved" &&
+        normalizeProvinceName(existingLocationStep.location_province) ===
+          submittedLocation.province &&
+        citiesMatch(
+          submittedLocation.province,
+          existingLocationStep.location_city,
+          submittedLocation.city
+        )))
+  );
+
   if (existingVerificationSession?.finalized_at) {
-    if (allowFinalizedLocationConfirmation && existingLocationStep?.location_method === "manual") {
-      finalizedLocationConfirmation = true;
-      savedLocationProvince = accountProfile.location_province ?? null;
-      savedLocationCity = accountProfile.location_city ?? null;
-    }
+    if (canResumeSubmission) preserveFinalizedSession = true;
 
     if (!locationIsSubmitted && accountProfile.account_verification_status !== "verified") {
       preserveFinalizedSession = true;
     }
 
-    if (!finalizedLocationConfirmation && !preserveFinalizedSession) {
+    if (!preserveFinalizedSession) {
       return {
         response: NextResponse.json(
           { error: "Verification session is already finalized" },
@@ -231,7 +231,7 @@ export async function ensureLocationVerificationWritable({
     }
   }
 
-  if (locationIsSubmitted && !finalizedLocationConfirmation) {
+  if (locationIsSubmitted && !canResumeSubmission) {
     return {
       response: NextResponse.json(
         { error: "Location has already been submitted" },
@@ -242,10 +242,7 @@ export async function ensureLocationVerificationWritable({
 
   return {
     accountVerificationStatus: accountProfile.account_verification_status ?? null,
-    finalizedLocationConfirmation,
     preserveFinalizedSession,
-    savedLocationProvince,
-    savedLocationCity,
   };
 }
 
@@ -258,7 +255,6 @@ export async function persistLocationVerificationLifecycle({
   currentAccountVerificationStatus,
   profileUpdateErrorMessage,
   preserveFinalizedSession = false,
-  persistProfileLocation = true,
 }: PersistArgs): Promise<NextResponse | null> {
   const submittedAt = new Date().toISOString();
   const sessionPatch = preserveFinalizedSession
@@ -274,19 +270,22 @@ export async function persistLocationVerificationLifecycle({
     .from("verification_sessions")
     .upsert(sessionPatch, { onConflict: "user_id" });
   if (sessionErr) {
-    logger.error("Failed to update verification session (non-fatal)", {
+    logger.error("Failed to update verification session", {
       error: sessionErr.message,
       userId,
     });
+    return NextResponse.json(
+      { error: "Unable to save location session. Please retry." },
+      { status: 500 }
+    );
   }
 
   await finalizeVerificationSessionIfReady(adminClient, userId, logger);
 
-  const profilePatch: Record<string, unknown> = {};
-  if (persistProfileLocation) {
-    profilePatch.location_province = locationProvince;
-    profilePatch.location_city = locationCity;
-  }
+  const profilePatch: Record<string, unknown> = {
+    location_province: locationProvince,
+    location_city: locationCity,
+  };
 
   const { data: allSteps, error: allStepsErr } = await adminClient
     .from("verification_steps")
@@ -294,10 +293,14 @@ export async function persistLocationVerificationLifecycle({
     .eq("user_id", userId);
 
   if (allStepsErr) {
-    logger.warn("Failed to fetch verification steps (non-fatal)", {
+    logger.warn("Failed to fetch verification steps", {
       userId,
       error: allStepsErr.message,
     });
+    return NextResponse.json(
+      { error: "Unable to update verification status. Please retry." },
+      { status: 500 }
+    );
   }
 
   const verificationSummary = summarizeVerification(

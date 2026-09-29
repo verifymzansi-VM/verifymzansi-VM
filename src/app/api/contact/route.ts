@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       .select(
         withOwnerColumn(
           parsedBody.data.targetType === "business"
-            ? "id, owner_id, title:business_name, status, expires_at, created_at"
+            ? "id, owner_id, title:business_name, status, contact_methods:category_details->contact_methods, expires_at, created_at"
             : "id, owner_id, title, status, contact_methods, expires_at, created_at",
           ownerColumn
         )

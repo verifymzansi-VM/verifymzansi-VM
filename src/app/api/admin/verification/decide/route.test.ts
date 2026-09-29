@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
+import type * as RateLimitModule from "@/lib/utils/rate-limit";
 
 // ── Hoisted mocks ────────────────────────────────────────────
 
@@ -15,7 +16,9 @@ const {
   mockSendVerificationApprovedEmail,
   mockSendVerificationRejectedEmail,
   mockSendVerificationResubmissionEmail,
+  mockCheckSensitiveActionRateLimit,
 } = vi.hoisted(() => ({
+  mockCheckSensitiveActionRateLimit: vi.fn(),
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockCreateNotification: vi.fn(),
@@ -76,6 +79,11 @@ vi.mock("@/lib/utils/logger", () => ({
 
 vi.mock("@/lib/utils/mutation-origin", () => ({
   enforceSameOriginMutation: mockEnforceSameOriginMutation,
+}));
+
+vi.mock("@/lib/utils/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof RateLimitModule>()),
+  checkSensitiveActionRateLimit: mockCheckSensitiveActionRateLimit,
 }));
 
 vi.mock("@/lib/utils/csrf", () => ({
@@ -183,6 +191,7 @@ const baseStep = {
 describe("POST /api/admin/verification/decide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckSensitiveActionRateLimit.mockResolvedValue({ limited: false });
     mockCreateAdminClient.mockReturnValue({
       from: mockFrom,
       auth: {
@@ -293,59 +302,20 @@ describe("POST /api/admin/verification/decide", () => {
     expect(data.error).toContain("Override reason code is required");
   });
 
-  it("allows approving high-risk step with override reason", async () => {
+  it("refuses a high-risk override when the shared limiter blocks it", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+    mockCheckSensitiveActionRateLimit.mockResolvedValue({ limited: true, retryAfter: 60 });
 
     const highRiskStep = { ...baseStep, risk_level: "high", risk_score: 65 };
-    const profileUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        in: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
-
-    const updateMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        in: vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
-        }),
-      }),
-    });
-
-    let artifactLookupReturned = false;
     mockFrom.mockImplementation((table: string) => {
       if (table === "verification_steps") {
         return {
-          select: vi.fn().mockImplementation((...args: unknown[]) => {
-            if (args[0] === "*") {
-              return {
-                eq: vi.fn().mockReturnValue({
-                  single: vi.fn().mockResolvedValue({ data: highRiskStep, error: null }),
-                }),
-              };
-            }
-
-            return {
-              eq: vi.fn().mockResolvedValue({
-                data: [{ step_type: "phone", status: "approved" }],
-                error: null,
-              }),
-            };
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: highRiskStep, error: null }),
+            }),
           }),
-          update: updateMock,
         };
-      }
-      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-        return {
-          update: profileUpdate,
-        };
-      }
-      if (table === "kyc_artifacts") {
-        if (!artifactLookupReturned) {
-          artifactLookupReturned = true;
-          return artifactLookupChain();
-        }
-
-        return artifactStatusUpdateChain();
       }
       return {};
     });
@@ -357,10 +327,79 @@ describe("POST /api/admin/verification/decide", () => {
         overrideReasonCode: "verified_in_person",
       })
     );
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.success).toBe(true);
-    expect(data.decision).toBe("approved");
+    expect(response.status).toBe(429);
+    expect(mockCheckSensitiveActionRateLimit).toHaveBeenCalledWith(
+      ADMIN_UUID,
+      "admin:verification:override"
+    );
+  });
+
+  it("turns a high-risk approval into an override for a second reviewer", async () => {
+    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+
+    const highRiskStep = { ...baseStep, risk_level: "high", risk_score: 65 };
+    const update = vi.fn();
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "verification_steps") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: highRiskStep, error: null }),
+            }),
+          }),
+          update,
+        };
+      }
+      return {};
+    });
+    const rpc = vi.fn().mockResolvedValue({
+      data: { ok: true, status: "proposed", decision_id: "decision-1" },
+      error: null,
+    });
+    mockCreateAdminClient.mockReturnValue({ from: mockFrom, rpc });
+
+    const response = await POST(
+      createMockRequest({
+        stepId: STEP_UUID,
+        decision: "approved",
+        overrideReasonCode: "verified_in_person",
+      })
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      status: "proposed",
+      decisionId: "decision-1",
+    });
+    expect(rpc).toHaveBeenCalledWith("propose_kyc_override", {
+      p_actor: ADMIN_UUID,
+      p_step: STEP_UUID,
+      p_user: MEMBER_UUID,
+      p_risk_level: "high",
+      p_override_reason: "verified_in_person",
+      p_note: null,
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to let staff review their own verification", async () => {
+    mockAuth({ id: MEMBER_UUID, app_metadata: { role: "moderator" } });
+    mockFrom.mockImplementation((table: string) =>
+      table === "verification_steps"
+        ? {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: baseStep, error: null }),
+              }),
+            }),
+          }
+        : {}
+    );
+
+    const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "not_independent" });
   });
 
   it("approves step and checks all-4-steps completion", async () => {

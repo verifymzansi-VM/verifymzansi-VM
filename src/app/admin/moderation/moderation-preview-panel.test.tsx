@@ -249,7 +249,7 @@ describe("ModerationPreviewPanel", () => {
     );
 
     expect(screen.getByText("Mobile Service")).toBeInTheDocument();
-    expect(screen.getByText("Trade & Maintenance")).toBeInTheDocument();
+    expect(screen.getByText("Building & Trade Services")).toBeInTheDocument();
     expect(screen.getByText("25 km")).toBeInTheDocument();
     expect(screen.getByText("Available")).toBeInTheDocument();
     expect(screen.getByText("Soweto")).toBeInTheDocument();

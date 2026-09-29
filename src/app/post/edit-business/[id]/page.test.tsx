@@ -188,10 +188,9 @@ describe("EditBusinessPage", () => {
     render(<EditBusinessPage />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Noordwyk")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Home Business")).toBeInTheDocument();
     expect(screen.getByText("Profile preview")).toBeInTheDocument();
     expect(screen.getByTestId("layout-router")).toBeInTheDocument();
     expect(businessLayoutRouterSpy).toHaveBeenLastCalledWith(
@@ -239,6 +238,7 @@ describe("EditBusinessPage", () => {
             category: "health_beauty",
             location_province: "Gauteng",
             location_city: "Johannesburg",
+            phone: "0821234567",
             logo_url: "",
             cover_photo: "",
             cover_video: "",
@@ -331,16 +331,10 @@ describe("EditBusinessPage", () => {
     render(<EditBusinessPage />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("https://orders.example.com")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Mzansi Online")).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText(/Yes, this business offers delivery/i)).toBeChecked();
-    expect(screen.getByLabelText(/Delivery areas/i)).toHaveValue("Nationwide");
-    expect(screen.queryByText(/^Delivery Service$/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText(/No, delivery is not available/i));
-
-    expect(screen.queryByLabelText(/Delivery areas/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /I deliver orders/i })).toBeChecked();
 
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
@@ -351,10 +345,13 @@ describe("EditBusinessPage", () => {
     const secondCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
     const payload = JSON.parse(secondCall[1].body as string);
 
-    expect(payload.delivery_options).toEqual([]);
-    expect(payload.business_details).toEqual({
+    expect(payload.delivery_options).toEqual(["delivery"]);
+    expect(payload.category_details.customer_access).toMatchObject({
+      methods: expect.arrayContaining(["online", "delivery"]),
+      nationwide: true,
+    });
+    expect(payload.business_details).toMatchObject({
       type: "online_only",
-      primary_order_channel: "website",
       order_url: "https://orders.example.com",
       support_response_time: "Within 2 hours",
     });
@@ -377,7 +374,7 @@ describe("EditBusinessPage", () => {
             location_city: "Johannesburg",
             store_number: null,
             map_directions: "",
-            phone: "",
+            phone: "0821234567",
             whatsapp: "",
             email: "",
             website: "",
@@ -415,7 +412,7 @@ describe("EditBusinessPage", () => {
     render(<EditBusinessPage />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Noordwyk")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Profile Photos \(up to 5\)/i }));
@@ -453,7 +450,7 @@ describe("EditBusinessPage", () => {
               location_city: "Johannesburg",
               store_number: null,
               map_directions: "",
-              phone: "",
+              phone: "0821234567",
               whatsapp: "",
               email: "",
               website: "",
@@ -494,7 +491,7 @@ describe("EditBusinessPage", () => {
     render(<EditBusinessPage />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Noordwyk")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Video \(1 max\)/i }));

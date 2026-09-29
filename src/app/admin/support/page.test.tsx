@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as AdminAccess from "@/lib/auth/admin-access";
+import { staffGuard } from "@/test/staff-guard";
 import { render, screen } from "@testing-library/react";
 
 const { getUser, verifyStaff, createAdmin, range, auditLimit, query } = vi.hoisted(() => {
@@ -14,20 +16,33 @@ const { getUser, verifyStaff, createAdmin, range, auditLimit, query } = vi.hoist
   };
   return { getUser: vi.fn(), verifyStaff: vi.fn(), createAdmin: vi.fn(), range, auditLimit, query };
 });
+vi.mock(
+  "@/lib/auth/require-staff",
+  async () => (await import("@/test/staff-guard")).staffGuardModule
+);
+
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { getUser } }) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: createAdmin }));
-vi.mock("@/lib/auth/admin-access", () => ({ verifyStaffActorRoleFromDb: verifyStaff }));
+vi.mock("@/lib/auth/admin-access", async (importOriginal) => ({
+  ...(await importOriginal<typeof AdminAccess>()),
+  verifyStaffActorRoleFromDb: verifyStaff,
+}));
 vi.mock("next/navigation", () => ({
   redirect: () => {
     throw new Error("redirect");
   },
 }));
-vi.mock("./support-inbox-client", () => ({ SupportInboxClient: () => <div>Saved requests</div> }));
+vi.mock("./support-inbox-client", () => ({
+  SupportInboxClient: ({ canRespond }: { canRespond: boolean }) => (
+    <div data-can-respond={String(canRespond)}>Saved requests</div>
+  ),
+}));
 
 import Page from "./page";
 
 describe("Support inbox", () => {
   beforeEach(() => {
+    staffGuard.reset();
     vi.clearAllMocks();
     getUser.mockResolvedValue({ data: { user: { id: "staff" } } });
     verifyStaff.mockResolvedValue("admin");
@@ -39,7 +54,7 @@ describe("Support inbox", () => {
   });
 
   it("does not expose submissions when a staff role was revoked", async () => {
-    verifyStaff.mockResolvedValue(null);
+    staffGuard.deny("staff");
     await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow("redirect");
     expect(createAdmin).not.toHaveBeenCalled();
   });
@@ -67,5 +82,30 @@ describe("Support inbox", () => {
     expect(query.eq).toHaveBeenCalledWith("id", id);
     expect(range).toHaveBeenCalledWith(0, 0);
     expect(screen.getByRole("link", { name: "View all support requests" })).toBeInTheDocument();
+  });
+
+  it("lets governors read the inbox without update controls", async () => {
+    range.mockResolvedValue({
+      data: [
+        {
+          id: "s1",
+          name: "A",
+          email: "a@example.com",
+          message: "Help",
+          status: "new",
+          created_at: "x",
+        },
+      ],
+      count: 1,
+      error: null,
+    });
+    staffGuard.as("governance_controller");
+    render(await Page({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByText("Saved requests")).toHaveAttribute("data-can-respond", "false");
+    expect(screen.getByText(/Moderators and admins update their status/)).toBeInTheDocument();
+
+    staffGuard.as("moderator");
+    render(await Page({ searchParams: Promise.resolve({}) }));
+    expect(screen.getAllByText("Saved requests")[1]).toHaveAttribute("data-can-respond", "true");
   });
 });

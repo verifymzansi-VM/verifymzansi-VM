@@ -8,8 +8,8 @@
  * Actions:
  * - { action: "reset", persona } — clears the persona's verification state
  *   (steps, sessions, OTP challenges/logs, risk signals) and reverts the
- *   profile to an unverified member. Also enables the kyc_v2_flow and
- *   kyc_gps_location feature flags in the stub store.
+ *   profile to an unverified member. Also enables the kyc_v2_flow
+ *   feature flag in the stub store.
  * - { action: "seed_otp", persona, phone, otp } — replaces the persona's
  *   pending OTP challenge for that phone with one whose PBKDF2 hash matches
  *   the given plaintext OTP, so the browser flow can submit a known code
@@ -103,7 +103,7 @@ function resetVerificationState(userId: string) {
   );
   writePlaywrightTableRows("account_profiles", profiles);
 
-  const enabledFlags = ["kyc_v2_flow", "kyc_gps_location"];
+  const enabledFlags = ["kyc_v2_flow"];
   const flags = listPlaywrightTableRows("feature_flags").filter(
     (row) => !enabledFlags.includes(String(row.key))
   );

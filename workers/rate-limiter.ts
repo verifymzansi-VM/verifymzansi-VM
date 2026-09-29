@@ -113,6 +113,24 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 3600 }, // 5 per hour per email
   ],
 
+  // ── Sensitive staff actions (fail closed when the limiter is down) ──
+  "admin:role:assign": [
+    { limit: 5, ttl: 60 },
+    { limit: 20, ttl: 3600 },
+  ],
+  "admin:flagging:enforce": [
+    { limit: 10, ttl: 60 },
+    { limit: 100, ttl: 3600 },
+  ],
+  "admin:verification:override": [
+    { limit: 10, ttl: 60 },
+    { limit: 60, ttl: 3600 },
+  ],
+  "admin:dsar:export": [
+    { limit: 10, ttl: 60 },
+    { limit: 50, ttl: 3600 },
+  ],
+
   // ── OTP ──────────────────────────────────────────────
   // The app always sends action "otp:send" (keyed by `${user.id}:${phone}`)
   // — mirror the dedicated OTP tier cadence below so it does not fall back
@@ -143,7 +161,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 60, ttl: 3600 }, // 60 per hour
   ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
-  "verification:gps": [{ limit: 10, ttl: 60 }],
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
   "verify-buyer": [
     { limit: 10, ttl: 60 }, // 10 per minute

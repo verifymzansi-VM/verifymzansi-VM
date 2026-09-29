@@ -74,12 +74,12 @@ async function completeMobileListingCreate(page: Page) {
   await categoryOption.click();
   await page.locator('[data-listing-attribute="device_type"]').selectOption("Smartphone");
   await page.locator('[data-listing-attribute="brand"]').fill("Samsung");
-  await page.getByLabel(/^Title \*$/).fill(listingTitle);
+  await page.getByLabel(/^Title/).fill(listingTitle);
   await page
-    .getByLabel(/^Description \*$/)
+    .getByLabel(/^Description/)
     .fill("Mobile Chrome listing description with enough detail for the validation rules.");
   await page.getByRole("button", { name: "Next" }).click();
-  await page.getByLabel(/Price \(ZAR\)/i).fill("9999");
+  await page.getByLabel(/^Asking price/i).fill("9999");
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
   await page.getByLabel(/^City/i).selectOption("Johannesburg");
   await page.getByRole("button", { name: "Next" }).click();
@@ -90,31 +90,24 @@ async function completeMobileListingCreate(page: Page) {
 
 async function completeMobileBusinessCreate(page: Page) {
   const businessName = `Mobile Chrome Business ${RUN_SUFFIX}`;
-  const businessSlug = `mobile-chrome-business-${RUN_SUFFIX}`;
-  const businessTypeLabel = page
-    .locator("label")
-    .filter({ hasText: /Standalone Shop|Own Premises/i });
+  const nameField = page.getByLabel(/^Business Name/);
 
   await page.goto("/post/create-business");
-  await enterPostingForm(page, businessTypeLabel);
-  await businessTypeLabel.click();
-  await page.getByLabel(/Business Name/i).fill(businessName);
-  await page.getByText("Advanced: customise your link", { exact: true }).click();
-  await page.getByLabel(/URL Slug/i).fill(businessSlug);
-  // Step 1 validation requires a business overview (>= 20 chars).
+  await enterPostingForm(page, nameField);
+  await nameField.fill(businessName);
   await page
-    .getByLabel(/About Your Business/i)
+    .getByLabel(/^About Your Business/)
     .fill("A mobile Playwright e2e test business with enough detail to satisfy validation.");
-  await page
-    .getByRole("button", { name: /fashion/i })
-    .first()
-    .click();
-  await page.getByLabel(/Street address/i).fill("12 Bree Street");
-  await page.getByLabel(/Suburb/i).fill("CBD");
-  await page.getByRole("button", { name: "Next" }).click();
-  await page.getByLabel(/Province/i).selectOption("Gauteng");
-  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: /^Clothing/ }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Customers visit me", exact: true }).check();
+  await page.getByLabel(/^Where do customers visit you/).selectOption("standalone_shop");
+  await page.getByLabel("Province", { exact: true }).selectOption("Gauteng");
+  await page.getByLabel("City or town", { exact: true }).selectOption("Johannesburg");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Email", exact: true }).check();
+  await page.getByLabel(/^Email Address/).fill("owner@example.com");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Profile photos/i).setInputFiles(IMAGE_FIXTURE);
   await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
   await completeSubmission(page, BUSINESS_DASHBOARD_URL, /^Your Content$|^Mzansi Business$/i);
@@ -122,34 +115,23 @@ async function completeMobileBusinessCreate(page: Page) {
 
 async function completeMobilePromotionCreate(page: Page) {
   const promotionTitle = `Mobile Chrome Promotion ${RUN_SUFFIX}`;
-  const eventTypeButton = page.getByRole("button", { name: /Event/i }).first();
-  const titleField = page.getByLabel(/Event Title|Title/i);
+  const titleField = page.getByLabel(/^Event name/);
 
-  await page.goto("/post/create-tourism");
-  await enterPostingForm(page, eventTypeButton);
-  page.once("dialog", (dialog) => dialog.accept());
-  await eventTypeButton.click();
-  if (!(await titleField.isVisible().catch(() => false))) {
-    const discardDraftButton = page.getByRole("button", { name: /Discard draft/i });
-    if (await discardDraftButton.isVisible().catch(() => false)) {
-      await discardDraftButton.click();
-    }
-    page.once("dialog", (dialog) => dialog.accept());
-    await eventTypeButton.click();
-  }
-  await titleField.waitFor({ state: "visible", timeout: 15_000 });
-  await page.getByLabel(/Event Type/i).selectOption({ index: 1 });
+  await page.goto("/post/create-tourism?type=event");
+  await enterPostingForm(page, titleField);
   await titleField.fill(promotionTitle);
+  await page.getByLabel(/^Event category/).selectOption({ index: 1 });
   await page
-    .getByLabel(/Event Details|Description/i)
+    .getByLabel(/^Description/)
     .fill("Mobile Chrome promotion description with enough detail for the validation rules.");
-  await page.getByRole("button", { name: "Next" }).click();
-  await page.getByLabel(/^Start Date/i).fill("2026-12-15");
-  await page.getByLabel(/^End Date/i).fill("2026-12-16");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByLabel(/^Start date/).fill("2099-12-15");
+  await page.getByLabel(/^Start time/).fill("18:00");
+  await page.getByLabel("Free entry").check();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByLabel(/^Province/i).selectOption("Gauteng");
-  await page.getByLabel(/^City(?: \/ Town)?$/i).selectOption("Johannesburg");
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByLabel(/^City/i).selectOption("Johannesburg");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await uploaderFor(page, /^Upload photos/i).setInputFiles(IMAGE_FIXTURE);
   await page.getByRole("checkbox", { name: /I accept the VerifyMzansi posting terms/i }).check();
   await completeSubmission(page, PROMOTION_DASHBOARD_URL, /^Your Content$|^Tourism & Events$/i);

@@ -105,18 +105,15 @@ describe("POST /api/dsar/submit", () => {
   });
 
   it("submits a DSAR case successfully", async () => {
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        insert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" },
-              error: null,
-            }),
-          }),
+    const insert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: { id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", due_by: "2026-10-28T10:00:00.000Z" },
+          error: null,
         }),
       }),
     });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
 
     const res = await POST(
       createRequest({
@@ -141,10 +138,14 @@ describe("POST /api/dsar/submit", () => {
         action: "dsar_requested",
       })
     );
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ subject_user_id: "user-123", identity_check: "session" })
+    );
+    // The due date comes from the database's deadline rules.
     expect(mockSendDsarSubmissionEmail).toHaveBeenCalledWith(
       "nomsa@example.com",
       expect.stringContaining("DSAR-"),
-      expect.any(String)
+      "2026-10-28T10:00:00.000Z"
     );
   });
 

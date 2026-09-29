@@ -158,12 +158,6 @@ describe("CreateBusinessPage", () => {
     fireEvent.click(screen.getByLabelText(/I accept the VerifyMzansi posting terms/i));
   }
 
-  async function selectBusinessType(name: RegExp) {
-    await act(async () => {
-      fireEvent.click(screen.getByRole("radio", { name }));
-    });
-  }
-
   function fillCoreBusinessFields({
     businessName = "Nomsa Fashion",
     slug = "nomsa-fashion",
@@ -172,7 +166,7 @@ describe("CreateBusinessPage", () => {
     fireEvent.change(screen.getByLabelText(/Business Name/i), {
       target: { value: businessName },
     });
-    fireEvent.change(screen.getByLabelText(/URL Slug/i), {
+    fireEvent.change(screen.getByLabelText(/^Custom profile link/i), {
       target: { value: slug },
     });
     // Description is required (min 20 chars) since the create-flow unification.
@@ -184,41 +178,28 @@ describe("CreateBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: new RegExp(catDef.label, "i") }));
   }
 
-  function fillStandaloneStepOneDetails() {
-    fireEvent.change(screen.getByLabelText(/Street address/i), {
-      target: { value: "24 Vilakazi Street" },
-    });
-    fireEvent.change(screen.getByLabelText(/Suburb/i), {
-      target: { value: "Orlando West" },
-    });
-  }
-
-  function fillOnlineOnlyStepOneDetails() {
-    fireEvent.change(screen.getByLabelText(/Primary order channel/i), {
-      target: { value: "website" },
-    });
-    fireEvent.change(screen.getByLabelText(/Order URL/i), {
-      target: { value: "https://orders.example.com" },
-    });
-  }
-
   async function completeStandaloneStepOne() {
-    await selectBusinessType(/Own Premises/i);
     fillCoreBusinessFields();
-    fillStandaloneStepOneDetails();
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+  }
+
+  async function completeAccessStep() {
+    fireEvent.click(screen.getByRole("checkbox", { name: "Customers visit me" }));
+    fireEvent.change(screen.getByLabelText(/Where do customers visit you/), {
+      target: { value: "standalone_shop" },
     });
+    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText(/^City or town$/i), {
+      target: { value: "Johannesburg" },
+    });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Phone calls" }));
+    fireEvent.change(screen.getByLabelText(/Phone Number/i), { target: { value: "0821234567" } });
   }
 
   async function completeLocationStep() {
-    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/^City$/i), {
-      target: { value: "Johannesburg" },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    });
+    await completeAccessStep();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Next" })));
   }
 
   function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
@@ -229,132 +210,53 @@ describe("CreateBusinessPage", () => {
     };
   }
 
-  it.each([
-    [/Mall Store/i, /Store Number/i],
-    [/Own Premises/i, /Street address/i],
-    [/Home Business/i, /Service suburb/i],
-    [/Mobile Service/i, /Service Areas/i],
-    [/Online Only/i, /Primary order channel/i],
-    [/Market Stall/i, /Market name/i],
-  ])("renders type-specific fields immediately on step 1 for %s", async (typeName, fieldLabel) => {
+  it("asks about the business before customer access", async () => {
     render(<CreateBusinessPage />);
-
-    await selectBusinessType(typeName);
-
-    expect(screen.getByLabelText(fieldLabel)).toBeInTheDocument();
-    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
-  });
-
-  it("switching business types replaces fields and clears stale type-specific errors", async () => {
-    render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Own Premises/i);
-    fillCoreBusinessFields();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect((await screen.findAllByText("Street address is required.")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("Suburb is required.")).length).toBeGreaterThan(0);
-
-    await selectBusinessType(/Online Only/i);
-
-    expect(await screen.findByLabelText(/Primary order channel/i)).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.queryByLabelText(/Street address/i)).not.toBeInTheDocument();
-      expect(screen.queryByText("Street address is required.")).not.toBeInTheDocument();
-      expect(screen.queryByText("Suburb is required.")).not.toBeInTheDocument();
-    });
-  });
-
-  it("requires store number for mall stores on step 1", async () => {
-    render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Mall Store/i);
-    fillCoreBusinessFields({ businessName: "Mall Biz", slug: "mall-biz" });
-    fireEvent.change(screen.getByLabelText(/Mall name/i), {
-      target: { value: "Maponya Mall" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(screen.getAllByText("Store number is required for mall stores.").length).toBeGreaterThan(
-      0
-    );
-    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
-  });
-
-  it("requires mall name for mall stores on step 1", async () => {
-    render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Mall Store/i);
-    fillCoreBusinessFields({ businessName: "Mall Biz", slug: "mall-biz" });
-    fireEvent.change(screen.getByLabelText(/Store Number/i), {
-      target: { value: "12A" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(screen.getAllByText("Mall name is required.").length).toBeGreaterThan(0);
-  });
-
-  it("requires service areas for mobile services on step 1", async () => {
-    render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Mobile Service/i);
-    fillCoreBusinessFields({
-      businessName: "FixFast",
-      slug: "fixfast",
-      category: "trade_maintenance",
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(screen.getAllByText("Add at least one service area.").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
-  });
-
-  it("allows online-only businesses to continue without delivery-region details", async () => {
-    render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Online Only/i);
-    fillCoreBusinessFields({
-      businessName: "Mzansi Online",
-      slug: "mzansi-online",
-      category: "electronics_tech",
-    });
-    fillOnlineOnlyStepOneDetails();
-
-    expect(screen.getByLabelText(/No, delivery is not available/i)).toBeChecked();
-    expect(screen.queryByLabelText(/Delivery areas/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
-  });
-
-  it("reveals online-only delivery areas only after delivery is enabled", async () => {
-    render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Online Only/i);
-    fillCoreBusinessFields({
-      businessName: "Mzansi Online",
-      slug: "mzansi-online",
-      category: "electronics_tech",
-    });
-    fillOnlineOnlyStepOneDetails();
-
-    expect(screen.queryByLabelText(/Delivery areas/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText(/Yes, this business offers delivery/i));
-
-    expect(screen.getByLabelText(/Delivery areas/i)).toBeInTheDocument();
-  });
-
-  it("step 2 no longer renders the business type details block", async () => {
-    render(<CreateBusinessPage />);
-
+    expect(
+      screen.getByRole("group", { name: /What does your business mainly do/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Customers visit me" })).not.toBeInTheDocument();
     await completeStandaloneStepOne();
+    expect(screen.getByRole("checkbox", { name: "Customers visit me" })).toBeInTheDocument();
+    expect(screen.getByText(/Step 2 of 4/i)).toBeInTheDocument();
+  });
 
-    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Street address/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Walk-in policy/i)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Province/i)).toBeInTheDocument();
+  it("preselects a category-specific link", async () => {
+    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new URLSearchParams("category=beauty_personal")
+    );
+    render(<CreateBusinessPage />);
+    expect(screen.getByRole("button", { name: /Beauty & Personal Care/ })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  it("retains an ambiguous legacy category until the owner chooses", async () => {
+    (useSearchParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new URLSearchParams("category=health_beauty")
+    );
+    render(<CreateBusinessPage />);
+    expect(
+      screen.getByText(/previous category; choose a more specific category/)
+    ).toBeInTheDocument();
+  });
+
+  it("requires service areas when the business travels to customers", async () => {
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    fireEvent.click(screen.getByRole("checkbox", { name: "I travel to customers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getAllByText("Add at least one service area.").length).toBeGreaterThan(0);
+  });
+
+  it("allows online consulting without a physical address or checkout URL", async () => {
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    fireEvent.click(screen.getByRole("checkbox", { name: "I sell or provide services online" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Order URL/)).not.toBeInTheDocument();
   });
 
   it("progresses through the wizard and shows the review step", async () => {
@@ -364,7 +266,7 @@ describe("CreateBusinessPage", () => {
     await completeLocationStep();
 
     expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
-    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 4 of 4/i)).toBeInTheDocument();
     expect(businessLayoutRouterSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ layoutMode: "review" })
     );
@@ -381,7 +283,7 @@ describe("CreateBusinessPage", () => {
     await completeStandaloneStepOne();
     await completeLocationStep();
 
-    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 4 of 4/i)).toBeInTheDocument();
     expect(screen.getByText("Business logo (optional)")).toBeInTheDocument();
     expect(screen.getByText("Cover photo (optional)")).toBeInTheDocument();
     expect(screen.getByText(/Profile photos \(up to 5\)/i)).toBeInTheDocument();
@@ -715,39 +617,33 @@ describe("CreateBusinessPage", () => {
     );
   });
 
-  it("renders subtype-specific details in the shared review preview", async () => {
+  it("reviews the structured customer access choices", async () => {
     render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Home Business/i);
-    fillCoreBusinessFields({
-      businessName: "Nomsa Home Studio",
-      slug: "nomsa-home-studio",
-      category: "health_beauty",
-    });
-    fireEvent.change(screen.getByLabelText(/Service suburb/i), {
-      target: { value: "Noordwyk" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
+    await completeStandaloneStepOne();
     await completeLocationStep();
-
-    expect(screen.getByText(/Profile preview/i)).toBeInTheDocument();
-    expect(screen.getByText("Nomsa Home Studio")).toBeInTheDocument();
+    expect(businessLayoutRouterSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        business: expect.objectContaining({
+          category_details: expect.objectContaining({
+            customer_access: expect.objectContaining({ methods: ["visit"] }),
+          }),
+        }),
+      })
+    );
   });
 
   it("blocks advancing and final submit when optional social URLs are invalid", async () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
+    await completeAccessStep();
 
-    // "Optional extras" (social links) now lives on Step 2 (Location & Contact).
-    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
+    // "Optional extras" (social links) now lives on Step 3 (Location & Contact).
+    expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
 
     // Fill required location fields so only the social URL error remains.
-    fireEvent.change(screen.getByLabelText(/Province/i), { target: { value: "Gauteng" } });
-    fireEvent.change(screen.getByLabelText(/^City$/i), { target: { value: "Johannesburg" } });
 
     fireEvent.click(screen.getByText("Optional extras"));
     fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
@@ -761,10 +657,10 @@ describe("CreateBusinessPage", () => {
 
     expect(screen.getAllByText("Enter a valid Facebook URL.").length).toBeGreaterThan(0);
     const alerts = screen.getAllByRole("alert");
-    expect(alerts.some((el) => el.textContent?.includes("Please fix 1 field on Step 2"))).toBe(
+    expect(alerts.some((el) => el.textContent?.includes("Please fix 1 field on Step 3"))).toBe(
       true
     );
-    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -772,8 +668,9 @@ describe("CreateBusinessPage", () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
+    await completeAccessStep();
 
-    expect(screen.getByText(/Step 2 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
     const details = screen.getByText("Optional extras").closest("details");
     expect(details).not.toHaveAttribute("open");
   });
@@ -800,7 +697,7 @@ describe("CreateBusinessPage", () => {
       0
     );
     expect(screen.getByText(/Please fix 1 field on Step 1/i)).toBeInTheDocument();
-    expect(screen.getByText(/Step 1 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -822,8 +719,8 @@ describe("CreateBusinessPage", () => {
     expect(
       (await screen.findAllByText("Maximum 5 gallery photos allowed on your plan")).length
     ).toBeGreaterThan(0);
-    expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 4 of 4/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -845,8 +742,8 @@ describe("CreateBusinessPage", () => {
     expect(
       (await screen.findAllByText("Video upload is not available on your current plan.")).length
     ).toBeGreaterThan(0);
-    expect(screen.getByText(/Please fix 1 field on Step 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
+    expect(screen.getByText(/Step 4 of 4/i)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -915,48 +812,17 @@ describe("CreateBusinessPage", () => {
     );
   });
 
-  it("submits online-only delivery areas only when delivery is enabled and hides the duplicate step-3 prompt", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
-    });
-
+  it("keeps delivery areas separate from online customer access", async () => {
     render(<CreateBusinessPage />);
-
-    await selectBusinessType(/Online Only/i);
-    fillCoreBusinessFields({
-      businessName: "Mzansi Online",
-      slug: "mzansi-online",
-      category: "electronics_tech",
-    });
-    fillOnlineOnlyStepOneDetails();
-    fireEvent.click(screen.getByLabelText(/Yes, this business offers delivery/i));
-    fireEvent.change(screen.getByLabelText(/Delivery areas/i), {
-      target: { value: "Johannesburg, Pretoria" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    await completeLocationStep();
-
-    expect(screen.queryByText(/^Delivery Service$/i)).not.toBeInTheDocument();
-    acceptBusinessTerms();
-
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-    });
-
-    const submitCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    const payload = JSON.parse(submitCall[1].body as string);
-
-    expect(payload.delivery_options).toEqual(["delivery"]);
-    expect(payload.business_details).toMatchObject({
-      type: "online_only",
-      primary_order_channel: "website",
-      order_url: "https://orders.example.com",
-      delivery_regions: ["Johannesburg", "Pretoria"],
-    });
+    await completeStandaloneStepOne();
+    fireEvent.click(screen.getByRole("checkbox", { name: "I sell or provide services online" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "I deliver orders" }));
+    expect(screen.getByLabelText(/Delivery areas/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Delivery areas/), { target: { value: "Soweto" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "I deliver orders" }));
+    expect(screen.queryByLabelText(/Delivery areas/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "I deliver orders" }));
+    expect(screen.getByLabelText(/Delivery areas/)).toHaveValue("Soweto");
   });
 
   describe("draft restore", () => {
@@ -1015,7 +881,7 @@ describe("CreateBusinessPage", () => {
       render(<CreateBusinessPage />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Business Name *")).toHaveValue("Saved Boutique");
+        expect(screen.getByLabelText(/Business Name/)).toHaveValue("Saved Boutique");
       });
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft restored" }));
     });
@@ -1025,12 +891,12 @@ describe("CreateBusinessPage", () => {
       render(<CreateBusinessPage />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Business Name *")).toHaveValue("Saved Boutique");
+        expect(screen.getByLabelText(/Business Name/)).toHaveValue("Saved Boutique");
       });
 
       fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
 
-      expect(screen.getByLabelText("Business Name *")).toHaveValue("");
+      expect(screen.getByLabelText(/Business Name/)).toHaveValue("");
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Draft discarded" }));
     });
   });

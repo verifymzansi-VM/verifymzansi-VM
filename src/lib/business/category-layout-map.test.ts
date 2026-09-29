@@ -7,8 +7,8 @@ import {
 import type { BusinessCategory } from "@/types/enums";
 
 describe("CATEGORY_LAYOUT_MAP", () => {
-  it("maps all 13 categories", () => {
-    expect(Object.keys(CATEGORY_LAYOUT_MAP)).toHaveLength(13);
+  it("maps all 21 categories (13 legacy + 8 new)", () => {
+    expect(Object.keys(CATEGORY_LAYOUT_MAP)).toHaveLength(21);
   });
 
   it("assigns cinematic to visual categories", () => {
