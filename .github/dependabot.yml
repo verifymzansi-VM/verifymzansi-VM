@@ -11,6 +11,12 @@ updates:
       - "verifymzansi-a11y"
     labels:
       - "dependencies"
+    ignore:
+      # jscpd 5 is a native rewrite that counts clones differently and
+      # changed its JSON report, so the duplication budget
+      # (scripts/check-jscpd-budget.ts) would need rebuilding. Stay on 4.x.
+      - dependency-name: "jscpd"
+        update-types: ["version-update:semver-major"]
     # Group minor and patch updates to reduce PR noise
     groups:
       production-deps:
