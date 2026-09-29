@@ -30,20 +30,3 @@ export function FieldHelp({ label, children }: { label: string; children: ReactN
     </div>
   );
 }
-
-export function SelectionHelp({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint: string;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <p className="text-sm text-muted-foreground">{hint}</p>
-      <FieldHelp label={label}>{children}</FieldHelp>
-    </div>
-  );
-}

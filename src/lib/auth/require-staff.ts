@@ -19,7 +19,7 @@ export type StaffSession =
  * the page share it). Role and account status come from the database; the
  * JWT role is never trusted.
  */
-export const getStaffSession = cache(async (): Promise<StaffSession> => {
+const getStaffSession = cache(async (): Promise<StaffSession> => {
   const supabase = await createClient();
   const {
     data: { user },

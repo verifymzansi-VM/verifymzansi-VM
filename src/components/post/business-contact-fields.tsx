@@ -4,7 +4,7 @@ import { FieldHelp } from "./field-help";
 import { Input } from "@/components/ui/input";
 import { PostLabel } from "./post-label";
 
-export const BUSINESS_CONTACT_CHOICES = [
+const BUSINESS_CONTACT_CHOICES = [
   {
     method: "call",
     field: "phone",

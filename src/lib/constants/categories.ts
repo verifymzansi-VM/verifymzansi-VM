@@ -1503,12 +1503,6 @@ const automotiveActivities = LEGACY_BUSINESS_CATEGORIES.find(
 )!.subcategories;
 for (const activity of automotiveActivities)
   movedActivities[activity.value] ??= "automotive_services";
-export function migrateBusinessCategory(
-  category: BusinessCategory,
-  activity?: string | null
-): BusinessCategory {
-  return (activity && movedActivities[activity]) || category;
-}
 const newCategoryKeys: BusinessCategory[] = [
   "health_medical",
   "beauty_personal",
@@ -1591,7 +1585,7 @@ export const ALL_BUSINESS_CATEGORIES = [
     (c) => !BUSINESS_CATEGORIES.some((n) => n.value === c.value)
   ),
 ];
-export const BUSINESS_CATEGORY_SYNONYMS: Record<string, string> = {
+const BUSINESS_CATEGORY_SYNONYMS: Record<string, string> = {
   beauty_personal: "braids braiding weave wig nails haircut barber salon hairdresser makeup lashes",
   health_medical: "doctor gp clinic medical dentist chemist pharmacy nurse physio optician",
   fitness_wellness: "gym trainer yoga pilates spa massage boxing",

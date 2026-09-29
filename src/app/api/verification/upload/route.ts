@@ -27,9 +27,9 @@ import {
 } from "@/lib/utils/sa-id-validation";
 import { cleanupPersistedKycUpload, cleanupUploadedR2Object } from "./_lib/kyc-upload-cleanup";
 import { analyzeKycUploadFile } from "./_lib/kyc-file-analysis";
+import { ID_NUMBER_IN_USE_ERROR } from "@/lib/services/verification-decision";
 
 const log = createLogger("VerificationUpload");
-const ID_NUMBER_IN_USE_ERROR = "This ID number is already linked to another account.";
 const ID_NUMBER_DUPLICATE_CODE = "id_number_duplicate";
 
 /**

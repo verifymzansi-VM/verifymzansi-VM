@@ -171,7 +171,7 @@ const RESTRICTED_ACCOUNT_ALLOWED: ReadonlyArray<{ prefix: string; methods?: read
   { prefix: "/api/auth/sign-out" },
 ];
 
-export function isAllowedForRestrictedAccount(pathname: string, method: string): boolean {
+function isAllowedForRestrictedAccount(pathname: string, method: string): boolean {
   return RESTRICTED_ACCOUNT_ALLOWED.some(
     ({ prefix, methods }) =>
       (pathname === prefix || pathname.startsWith(`${prefix}/`)) &&

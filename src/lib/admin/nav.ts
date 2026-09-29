@@ -71,7 +71,7 @@ export interface NavItem {
   flag?: "kyc_evidence_desk";
 }
 
-export const NAV_SECTION_LABELS: Record<NavSectionId, string> = {
+const NAV_SECTION_LABELS: Record<NavSectionId, string> = {
   home: "Home",
   queues: "Queues",
   areas: "Marketplace areas",
@@ -333,7 +333,7 @@ export interface NavSectionView {
   items: NavItem[];
 }
 
-export function canSeeNavItem(role: StaffRole, item: NavItem): boolean {
+function canSeeNavItem(role: StaffRole, item: NavItem): boolean {
   // The pure role → capability map; this module is also used in the browser.
   return (
     item.capability === null ||
