@@ -145,7 +145,7 @@
     "resend": "^6.30.0",
     "server-only": "^0.0.1",
     "sharp": "^0.35.4",
-    "svix": "^1.92.2",
+    "svix": "^2.5.0",
     "tailwind-merge": "^3.7.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.6.5",
