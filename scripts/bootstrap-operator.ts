@@ -246,6 +246,9 @@ async function upsertAccountProfile(
   userId: string,
   displayName: string
 ): Promise<void> {
+  // Create the profile only if missing. An existing profile is left alone:
+  // overwriting it would reset verification status, and display_name is
+  // locked once the person is identity-verified.
   const { error } = await admin.from("account_profiles").upsert(
     {
       user_id: userId,
@@ -253,7 +256,7 @@ async function upsertAccountProfile(
       account_verification_status: "incomplete",
       account_status: "active",
     },
-    { onConflict: "user_id" }
+    { onConflict: "user_id", ignoreDuplicates: true }
   );
 
   if (error) {
