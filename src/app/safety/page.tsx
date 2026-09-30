@@ -12,6 +12,7 @@ import {
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BrandShield, BrandShieldAlert } from "@/components/shared/brand-shield";
+import { brandOutlineButtonClassName } from "@/components/brand";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
 import { Button } from "@/components/ui/button";
 import { SAFETY_RULES as safetyRules } from "@/lib/constants/safety-rules";
@@ -77,7 +78,7 @@ export default function SafetyCentrePage() {
               <Button asChild variant="trust-verified" size="lg">
                 <Link href="/contact?topic=fraud_report">Report a problem</Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
+              <Button asChild variant="outline" size="lg" className={brandOutlineButtonClassName}>
                 <a href="#emergency">Emergency numbers</a>
               </Button>
             </>

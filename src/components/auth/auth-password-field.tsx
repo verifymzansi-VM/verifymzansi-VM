@@ -55,7 +55,7 @@ export function AuthPasswordField({
     .join(" ");
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="flex min-h-5 items-center justify-between gap-3">
         <Label htmlFor={id} className="text-sm font-semibold text-foreground">
           {label}

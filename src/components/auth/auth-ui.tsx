@@ -4,11 +4,11 @@ import { BrandShield } from "@/components/shared/brand-shield";
 import { cn } from "@/lib/utils";
 
 /**
- * Shared class for auth inputs: 48px tall on every breakpoint (comfortable to
- * tap, and never below the 44px e2e minimum) with 16px text so iOS Safari does
+ * Shared class for auth inputs: 44px tall (the e2e touch-target minimum, kept
+ * compact so the sign-in form fits one phone screen) with 16px text so iOS Safari does
  * not zoom the page when a field gains focus.
  */
-export const authInputClassName = "h-12 sm:h-12 rounded-xl text-base sm:text-[15px]";
+export const authInputClassName = "h-11 rounded-xl text-base sm:text-[15px]";
 
 /** Page heading block for auth screens: one h1 plus a short, helpful line. */
 export function AuthPageHeader({
@@ -23,15 +23,15 @@ export function AuthPageHeader({
   align?: "start" | "center";
 }) {
   return (
-    <div className={cn("space-y-2", align === "center" && "text-center")}>
+    <div className={cn("space-y-1", align === "center" && "text-center")}>
       {icon ? (
         <div className={cn("mb-4 flex", align === "center" && "justify-center")}>{icon}</div>
       ) : null}
-      <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-foreground sm:text-[2rem]">
+      <h1 className="font-display text-[1.5rem] font-bold leading-tight tracking-tight text-foreground sm:text-[1.625rem]">
         {title}
       </h1>
       {description ? (
-        <p className="text-[15px] leading-6 text-muted-foreground">{description}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
       ) : null}
     </div>
   );

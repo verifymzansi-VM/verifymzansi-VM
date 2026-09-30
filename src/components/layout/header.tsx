@@ -215,7 +215,7 @@ function HeaderInner({
               size="md"
               variant="transparent"
               priority
-              imageClassName="drop-shadow-[0_10px_20px_rgba(15,23,42,0.08)] transition-transform duration-200 group-hover:scale-105"
+              imageClassName="transition-transform duration-200 group-hover:scale-105"
             />
           </Link>
         </div>

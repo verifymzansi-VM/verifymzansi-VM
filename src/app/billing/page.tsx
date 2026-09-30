@@ -6,6 +6,7 @@ import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { getCommercialSettings } from "@/lib/commercial/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RetailPricing } from "@/components/billing/retail-pricing";
+import { BrandSurface } from "@/components/brand";
 import { PageHeader } from "@/components/layout/page-header";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
@@ -33,15 +34,16 @@ export default async function BillingPage() {
     <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
       <main id="main-content" className="flex-1 scroll-mt-24 bg-background">
-        <section className="border-b border-border/60 bg-hero-mesh">
-          <div className="container-page py-6 sm:py-8">
+        <BrandSurface as="section">
+          <div className="container-page pb-9 pt-6 sm:pb-11 sm:pt-8">
             <PageHeader
               title="Choose your plan"
               description="One reusable posting slot, paid once."
               breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Billing" }]}
+              tone="inverse"
             />
           </div>
-        </section>
+        </BrandSurface>
 
         <div className="container-page space-y-10 py-8 sm:py-10">
           <TrialPolicy trials={trials} variant="banner" />

@@ -5,6 +5,7 @@ import { Building2, Rocket, ShoppingBag, Sparkles, Star, TreePalm, Zap } from "l
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { BRAND_SHIELD_SRC, BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
 import { TrustStrip } from "@/components/layout/trust-strip";
 import { Button } from "@/components/ui/button";
 import { VerifiedTick } from "@/components/trust/verified-tick";
@@ -160,24 +161,17 @@ export default function AdvertisePage() {
       <Header />
       <main id="main-content" className="min-h-screen scroll-mt-24 bg-background">
         {/* ── Hero ─────────────────────────────────────────── */}
-        <section
-          aria-labelledby="advertise-title"
-          className="bg-hero-mesh relative overflow-hidden border-b border-border/60"
-        >
-          <div
-            aria-hidden="true"
-            className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05] dark:invert [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
-          />
+        <BrandSurface as="section" aria-labelledby="advertise-title">
           <div className="container-page relative grid items-center gap-10 pb-10 pt-6 sm:pt-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-14 lg:pb-16 lg:pt-10">
             <div className="min-w-0">
-              <Breadcrumbs items={[{ label: "Advertise" }]} />
+              <Breadcrumbs items={[{ label: "Advertise" }]} tone="inverse" />
               <h1
                 id="advertise-title"
-                className="mt-4 font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-foreground sm:text-5xl"
+                className="mt-4 font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl"
               >
-                Advertise on VerifyMzansi
+                Advertise on <span className="text-brand-gold-300">VerifyMzansi</span>
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+              <p className="mt-4 max-w-xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
                 Reach buyers, customers and guests on a marketplace where every poster is
                 ID-reviewed.
               </p>
@@ -190,11 +184,16 @@ export default function AdvertisePage() {
                 >
                   <Link href="/post/create">Choose a post type</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="h-12 rounded-full px-6">
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className={cn("h-12 rounded-full px-6", brandOutlineButtonClassName)}
+                >
                   <Link href="/pricing">View pricing</Link>
                 </Button>
               </div>
-              <p className="mt-4 text-sm text-muted-foreground">First post free. Plans from R50.</p>
+              <p className="mt-4 text-sm text-white/65">First post free. Plans from R50.</p>
             </div>
 
             {/* Visual: a post with the extras applied */}
@@ -202,15 +201,18 @@ export default function AdvertisePage() {
               className="relative mx-auto hidden w-full max-w-[440px] lg:block"
               aria-hidden="true"
             >
-              <div className="overflow-hidden rounded-[28px] border border-border/70 bg-card shadow-2xl">
-                <div className="relative aspect-[4/3]">
+              <div className="overflow-hidden rounded-[28px] border border-white/10 bg-card shadow-2xl">
+                <div className="relative flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-brand-green-700 via-brand-green-800 to-brand-green-900">
+                  <div className="mzansi-pattern absolute inset-0 opacity-[0.08] invert" />
+                  <div className="absolute h-40 w-40 rounded-full bg-brand-gold-400/25 blur-3xl" />
                   <Image
-                    src="/images/showrooms/market-v2-mobile.avif"
+                    src={BRAND_SHIELD_SRC}
                     alt=""
-                    fill
-                    sizes="440px"
+                    width={144}
+                    height={144}
+                    sizes="144px"
                     priority
-                    className="object-cover"
+                    className="relative h-36 w-36 object-contain drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
                   />
                   <div className="absolute left-3 top-3 flex gap-2">
                     <span className="inline-flex items-center gap-1 rounded-full bg-brand-gold px-2.5 py-1 text-xs font-bold text-brand-gold-950 shadow-sm">
@@ -233,7 +235,7 @@ export default function AdvertisePage() {
                   </p>
                 </div>
               </div>
-              <div className="absolute -right-6 top-[52%] flex items-center gap-3 rounded-2xl border border-border/70 bg-card/95 px-4 py-3 shadow-xl backdrop-blur">
+              <div className="absolute -right-6 top-[52%] flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-xl">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-green-600 text-white">
                   <Rocket className="h-5 w-5" />
                 </span>
@@ -244,7 +246,7 @@ export default function AdvertisePage() {
               </div>
             </div>
           </div>
-        </section>
+        </BrandSurface>
 
         <TrustStrip variant="green" title="Trusted posting categories" />
 

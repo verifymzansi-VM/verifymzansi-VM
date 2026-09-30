@@ -189,14 +189,14 @@ export default function ForgotPasswordPage() {
         />
 
         <div className="flex flex-col gap-3">
-          <Button asChild variant="trust-verified" size="lg" className="h-12 w-full text-[15px]">
+          <Button asChild variant="trust-verified" size="lg" className="h-11 w-full text-[15px]">
             <Link href="/login">Back to sign in</Link>
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="lg"
-            className="h-12 w-full text-[15px]"
+            className="h-11 w-full text-[15px]"
             onClick={handleTryAgain}
           >
             Use a different email
@@ -244,7 +244,7 @@ export default function ForgotPasswordPage() {
         <Button
           type="submit"
           size="lg"
-          className="h-12 w-full text-[15px]"
+          className="h-11 w-full text-[15px]"
           variant="trust-verified"
           disabled={!isInteractive || isSubmitting || captchaUnavailable}
           aria-busy={isSubmitting || undefined}

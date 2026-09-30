@@ -20,7 +20,7 @@ export function AuthEmailField({
   label?: string;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <Label htmlFor="email" className="text-sm font-semibold text-foreground">
         {label}
       </Label>

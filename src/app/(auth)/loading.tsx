@@ -15,17 +15,17 @@ export default function AuthLoading() {
           <Skeleton className="h-8 w-60" />
           <Skeleton className="h-4 w-full max-w-xs" />
         </div>
-        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-11 w-full rounded-xl" />
         <Skeleton className="mx-auto h-3 w-40" />
         <div className="space-y-2">
           <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-11 w-full rounded-xl" />
         </div>
         <div className="space-y-2">
           <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-11 w-full rounded-xl" />
         </div>
-        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-11 w-full rounded-xl" />
       </div>
     </div>
   );

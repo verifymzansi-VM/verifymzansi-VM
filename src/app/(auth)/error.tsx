@@ -40,13 +40,13 @@ export default function AuthError({
           type="button"
           variant="trust-verified"
           size="lg"
-          className="h-12 w-full gap-2 text-[15px]"
+          className="h-11 w-full gap-2 text-[15px]"
           onClick={() => reset()}
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           Try again
         </Button>
-        <Button asChild variant="outline" size="lg" className="h-12 w-full text-[15px]">
+        <Button asChild variant="outline" size="lg" className="h-11 w-full text-[15px]">
           <Link href="/">Go to homepage</Link>
         </Button>
       </div>

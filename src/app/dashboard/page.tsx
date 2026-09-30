@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
+import { cn } from "@/lib/utils";
+import { BRAND_SHIELD_SRC, BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
 import { Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerifiedTick } from "@/components/trust/verified-tick";
@@ -366,43 +369,58 @@ export default async function DashboardPage() {
       <EmailConfirmedToast />
 
       {/* ───── Greeting + primary actions ───── */}
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-foreground sm:text-[2.25rem]">
-            Hi, {firstName}
+      <BrandSurface
+        as="header"
+        className="flex flex-col gap-5 rounded-3xl px-5 pb-7 pt-6 sm:flex-row sm:items-end sm:justify-between sm:px-8 sm:pb-9 sm:pt-8"
+      >
+        <Image
+          src={BRAND_SHIELD_SRC}
+          alt=""
+          aria-hidden="true"
+          width={160}
+          height={160}
+          sizes="160px"
+          className="pointer-events-none absolute -right-6 -top-6 h-40 w-40 object-contain opacity-[0.12] sm:right-6 sm:top-1/2 sm:-translate-y-1/2 sm:opacity-20"
+        />
+        <div className="relative min-w-0">
+          <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-white sm:text-[2.25rem]">
+            Hi, <span className="text-brand-gold-300">{firstName}</span>
           </h1>
           {isVerified ? (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-green-50 py-1 pl-1.5 pr-2.5 font-semibold text-brand-green-700 ring-1 ring-inset ring-brand-green/20 dark:bg-brand-green-500/15 dark:text-brand-green-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-1.5 pr-2.5 font-semibold text-white ring-1 ring-inset ring-white/15">
                 <VerifiedTick decorative className="h-4 w-4" />
                 <span>Verified</span>
               </span>
-              <span className="text-muted-foreground">
-                {VERIFICATION_LEVEL_LABELS[verificationLevel]}
-              </span>
+              <span className="text-white/70">{VERIFICATION_LEVEL_LABELS[verificationLevel]}</span>
             </p>
-          ) : null}
+          ) : (
+            <p className="mt-2 text-sm text-white/70">Welcome to your dashboard.</p>
+          )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+        <div className="relative grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:pr-40">
           <Button
             asChild
-            variant="trust-verified"
-            className="h-11 gap-1.5 rounded-full px-5 font-semibold"
+            className="h-11 gap-1.5 rounded-full bg-brand-gold-300 px-5 font-semibold text-brand-gold-950 hover:bg-brand-gold-200"
           >
             <Link href="/post/create">
               <Plus aria-hidden="true" className="h-4 w-4" />
               New post
             </Link>
           </Button>
-          <Button asChild variant="outline" className="h-11 gap-1.5 rounded-full px-5">
+          <Button
+            asChild
+            variant="outline"
+            className={cn("h-11 gap-1.5 rounded-full px-5", brandOutlineButtonClassName)}
+          >
             <Link href="/dashboard/listings">
-              <Zap aria-hidden="true" className="h-4 w-4 text-brand-gold-600" />
+              <Zap aria-hidden="true" className="h-4 w-4 text-brand-gold-300" />
               Boost a post
             </Link>
           </Button>
         </div>
-      </header>
+      </BrandSurface>
 
       <VerificationStatusCard
         status={verStatus}

@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { BrandSurface } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -312,23 +313,22 @@ export function SiteSearch({
 
   return (
     <div>
-      <section
-        aria-labelledby="search-page-title"
-        className="relative overflow-hidden border-b border-border/60 bg-hero-mesh"
-      >
-        <div
-          aria-hidden="true"
-          className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05] dark:invert [mask-image:linear-gradient(to_left,black,transparent_70%)]"
-        />
-        <div className="container-page relative py-6 sm:py-9">
+      <BrandSurface as="section" aria-labelledby="search-page-title">
+        <div className="container-page relative pb-8 pt-6 sm:pb-11 sm:pt-9">
           <h1
             id="search-page-title"
-            className="break-words font-display text-[1.75rem] font-bold leading-[1.1] tracking-tight text-foreground sm:text-[2.25rem]"
+            className="break-words font-display text-[1.75rem] font-bold leading-[1.1] tracking-tight text-white sm:text-[2.25rem]"
           >
-            {isSearching ? <>Results for “{query}”</> : "Search VerifyMzansi"}
+            {isSearching ? (
+              <>Results for “{query}”</>
+            ) : (
+              <>
+                Search <span className="text-brand-gold-300">VerifyMzansi</span>
+              </>
+            )}
           </h1>
           {isSearching ? null : (
-            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            <p className="mt-2 text-sm text-white/75 sm:text-base">
               Listings, businesses, stays, events and help pages.
             </p>
           )}
@@ -383,7 +383,7 @@ export function SiteSearch({
                   className="h-4 w-4 transition-transform duration-200 group-open/filters:rotate-180 motion-reduce:transition-none"
                 />
               </summary>
-              <div className="mt-3 grid gap-4 rounded-2xl border border-border/70 bg-card p-4 elev-xs sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+              <div className="mt-3 grid gap-4 rounded-2xl border border-border/70 bg-card p-4 text-foreground elev-xs sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
                 <div>
                   <label htmlFor="site-search-city" className="mb-1.5 block text-sm font-medium">
                     Location (optional)
@@ -433,7 +433,7 @@ export function SiteSearch({
                 <li>
                   <Link
                     href={searchHref({ q: query, org })}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-brand-green/10 py-1 pl-3 pr-2 text-sm font-medium text-brand-green-800 transition-colors hover:bg-brand-green/15 dark:bg-brand-green/15 dark:text-brand-green-200"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white/10 py-1 pl-3 pr-2 text-sm font-medium text-white transition-colors hover:bg-white/15"
                   >
                     <MapPin aria-hidden="true" className="h-3.5 w-3.5" />
                     {city}
@@ -446,7 +446,7 @@ export function SiteSearch({
                 <li>
                   <Link
                     href={searchHref({ q: query, city })}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-brand-blue/10 py-1 pl-3 pr-2 text-sm font-medium text-brand-blue-800 transition-colors hover:bg-brand-blue/15 dark:bg-brand-blue/20 dark:text-brand-blue-200"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-white/10 py-1 pl-3 pr-2 text-sm font-medium text-white transition-colors hover:bg-white/15"
                   >
                     {orgName}
                     <X aria-hidden="true" className="h-4 w-4" />
@@ -494,7 +494,7 @@ export function SiteSearch({
             </nav>
           ) : null}
         </div>
-      </section>
+      </BrandSurface>
 
       <div className="container-page py-8 sm:py-10">
         {query && !hasSearchableText ? (

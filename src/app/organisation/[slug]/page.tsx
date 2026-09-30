@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { Building2, Globe, Mail, MapPin, Phone } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { BrandSurface } from "@/components/brand";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,8 +186,8 @@ export default async function OrganisationPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
       <main id="main-content" className="flex-1 scroll-mt-24">
-        <section className="border-b border-warm-200/70 bg-hero-mesh dark:border-warm-800/60">
-          <div className="container-page space-y-4 py-6 sm:py-8">
+        <BrandSurface as="section">
+          <div className="container-page space-y-4 pb-9 pt-6 sm:pb-11 sm:pt-8">
             <PageHeader
               title={`${org.name} Business Network`}
               description={org.programme_description ?? org.description ?? undefined}
@@ -194,6 +195,7 @@ export default async function OrganisationPage({
                 { label: "Mzansi Business", href: "/mzansi-business" },
                 { label: org.name },
               ]}
+              tone="inverse"
             />
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               {logo ? (
@@ -206,14 +208,16 @@ export default async function OrganisationPage({
                   unoptimized
                 />
               ) : (
-                <span className="flex h-16 w-16 items-center justify-center rounded-xl border bg-card">
-                  <Building2 aria-hidden="true" className="h-7 w-7 text-muted-foreground" />
+                <span className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/15 bg-white/10">
+                  <Building2 aria-hidden="true" className="h-7 w-7 text-white/70" />
                 </span>
               )}
-              <div className="space-y-1 text-sm">
+              <div className="space-y-1 text-sm text-white/90">
                 <p className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{org.organisation_type.replace(/_/g, " ")}</Badge>
-                  <Badge variant="secondary">
+                  <Badge variant="outline" className="border-white/25 text-white">
+                    {org.organisation_type.replace(/_/g, " ")}
+                  </Badge>
+                  <Badge variant="secondary" className="bg-brand-gold-300 text-brand-gold-950">
                     {PROGRAMME_STATUS_LABELS[org.programme_status] ?? "Programme"}
                   </Badge>
                   <span>
@@ -223,7 +227,7 @@ export default async function OrganisationPage({
                     <span>· {counts.sponsoredCount} with sponsored visibility</span>
                   ) : null}
                 </p>
-                <p className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                <p className="flex flex-wrap gap-x-4 gap-y-1 text-white/70">
                   {org.service_area || org.province ? (
                     <span className="inline-flex items-center gap-1">
                       <MapPin aria-hidden="true" className="h-3.5 w-3.5" />
@@ -262,13 +266,13 @@ export default async function OrganisationPage({
                 </p>
               </div>
             </div>
-            <p className="max-w-3xl text-xs text-muted-foreground">
+            <p className="max-w-3xl text-xs text-white/60">
               “{org.affiliation_wording}” means {org.name} has confirmed the business participates
               in its programme. It is not a guarantee by the organisation. Identity checks are done
               separately by VerifyMzansi.
             </p>
           </div>
-        </section>
+        </BrandSurface>
 
         <div className="container-page space-y-6 py-6 sm:py-8">
           <form

@@ -5,6 +5,7 @@ import { BillingFaq } from "@/components/billing/billing-faq";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { BrandSurface } from "@/components/brand";
 import { RetailPricing } from "@/components/billing/retail-pricing";
 import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
@@ -68,30 +69,23 @@ export default async function PricingPage() {
       />
 
       <main id="main-content" className="flex-1 scroll-mt-24">
-        <section
-          aria-labelledby="pricing-title"
-          className="bg-hero-mesh relative overflow-hidden border-b border-border/60"
-        >
-          <div
-            aria-hidden="true"
-            className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05] dark:invert [mask-image:linear-gradient(to_bottom,black,transparent_85%)]"
-          />
+        <BrandSurface as="section" aria-labelledby="pricing-title">
           <div className="container-page relative grid items-center gap-8 pb-10 pt-6 sm:pt-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-14 lg:pb-14 lg:pt-10">
             <div className="min-w-0">
-              <Breadcrumbs items={[{ label: "Pricing" }]} />
+              <Breadcrumbs items={[{ label: "Pricing" }]} tone="inverse" />
               <h1
                 id="pricing-title"
-                className="mt-4 font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-foreground sm:text-5xl"
+                className="mt-4 font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl"
               >
-                Start free. Then one simple price.
+                Start free. <span className="text-brand-gold-300">Then one simple price.</span>
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
+              <p className="mt-4 max-w-xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
                 Your first post is free. After that, the same price in every section.
               </p>
-              <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-foreground/85">
+              <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-white/90">
                 {HERO_POINTS.map(({ icon: Icon, label }) => (
                   <li key={label} className="flex items-center gap-2.5">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-brand-green-700 dark:text-brand-green-300">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-gold-300/15 text-brand-gold-300">
                       <Icon className="h-4 w-4" aria-hidden="true" />
                     </span>
                     {label}
@@ -101,7 +95,7 @@ export default async function PricingPage() {
             </div>
             <TrialPolicy trials={settings?.trials} className="w-full lg:ml-auto lg:max-w-md" />
           </div>
-        </section>
+        </BrandSurface>
 
         <section
           id="plans"

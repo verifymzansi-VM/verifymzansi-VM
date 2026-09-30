@@ -384,7 +384,7 @@ export default function RegisterPage() {
         <Button
           type="submit"
           size="lg"
-          className="h-12 w-full text-[15px]"
+          className="h-11 w-full text-[15px]"
           variant="trust-verified"
           disabled={!isInteractive || isSubmitting || captchaUnavailable || Boolean(turnstileError)}
           aria-busy={isSubmitting || undefined}

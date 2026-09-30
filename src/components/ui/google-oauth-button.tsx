@@ -89,7 +89,7 @@ export function GoogleOAuthButton({ mode }: GoogleOAuthButtonProps) {
       type="button"
       variant="outline"
       size="lg"
-      className="h-12 w-full gap-3 bg-card text-[15px] font-semibold"
+      className="h-11 w-full gap-3 bg-card text-[15px] font-semibold"
       disabled={isLoading}
       aria-busy={isLoading || undefined}
       onClick={handleGoogleSignIn}

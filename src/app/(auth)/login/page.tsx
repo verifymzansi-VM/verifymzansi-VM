@@ -398,7 +398,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       {emailConfirmed && (
         <AuthNotice tone="success" icon={<MailCheck />} title="Email confirmed!" role="status">
           <p>Your email address has been verified. You can now sign in to your account.</p>
@@ -431,7 +431,7 @@ export default function LoginPage() {
 
       <AuthDivider>or</AuthDivider>
 
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
         <AuthEmailField
           inputProps={register("email")}
           errorMessage={errors.email?.message}
@@ -478,7 +478,7 @@ export default function LoginPage() {
         <Button
           type="submit"
           size="lg"
-          className="h-12 w-full text-[15px]"
+          className="h-11 w-full text-[15px]"
           variant="trust-verified"
           disabled={!isInteractive || isSubmitting || captchaUnavailable || turnstileError}
           aria-busy={isSubmitting || undefined}
@@ -488,7 +488,7 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="text-center text-[15px] text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         New here?{" "}
         <Link
           href="/register"

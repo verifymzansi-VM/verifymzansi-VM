@@ -148,13 +148,13 @@ export default function ResetPasswordPage() {
           </div>
           <div className="space-y-2">
             <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-11 w-full rounded-xl" />
           </div>
           <div className="space-y-2">
             <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-11 w-full rounded-xl" />
           </div>
-          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-11 w-full rounded-xl" />
         </div>
       </div>
     );
@@ -185,13 +185,13 @@ export default function ResetPasswordPage() {
             type="button"
             variant="trust-verified"
             size="lg"
-            className="h-12 w-full gap-2 text-[15px]"
+            className="h-11 w-full gap-2 text-[15px]"
             onClick={() => void checkSession()}
           >
             <RotateCw className="h-4 w-4" aria-hidden="true" />
             Retry
           </Button>
-          <Button asChild variant="ghost" size="lg" className="h-12 w-full gap-2 text-[15px]">
+          <Button asChild variant="ghost" size="lg" className="h-11 w-full gap-2 text-[15px]">
             <Link href="/login">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to sign in
@@ -216,10 +216,10 @@ export default function ResetPasswordPage() {
           description="Request a new link to reset your password."
         />
         <div className="flex flex-col gap-3">
-          <Button asChild variant="trust-verified" size="lg" className="h-12 w-full text-[15px]">
+          <Button asChild variant="trust-verified" size="lg" className="h-11 w-full text-[15px]">
             <Link href="/forgot-password">Request a new link</Link>
           </Button>
-          <Button asChild variant="ghost" size="lg" className="h-12 w-full gap-2 text-[15px]">
+          <Button asChild variant="ghost" size="lg" className="h-11 w-full gap-2 text-[15px]">
             <Link href="/login">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Back to sign in
@@ -279,7 +279,7 @@ export default function ResetPasswordPage() {
         <Button
           type="submit"
           size="lg"
-          className="h-12 w-full text-[15px]"
+          className="h-11 w-full text-[15px]"
           variant="trust-verified"
           disabled={isSubmitting}
           aria-busy={isSubmitting || undefined}
