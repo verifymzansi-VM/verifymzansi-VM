@@ -29,6 +29,7 @@ async function hasValidRecoverySession(
   return Boolean(
     data.claims.amr?.some(
       (method) =>
+        typeof method !== "string" &&
         method.method === "recovery" &&
         Number.isFinite(method.timestamp) &&
         method.timestamp <= now &&

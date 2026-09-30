@@ -94,6 +94,7 @@ function createSupabaseAuthClient(overrides?: {
   user?: Record<string, unknown> | null;
   getUserError?: { message: string } | null;
   updateUserError?: { message: string } | null;
+  amr?: Array<string | { method: string; timestamp: number }>;
 }) {
   const user =
     overrides && Object.prototype.hasOwnProperty.call(overrides, "user")
@@ -102,6 +103,26 @@ function createSupabaseAuthClient(overrides?: {
 
   return {
     auth: {
+      getClaims: vi.fn().mockResolvedValue({
+        data: {
+          claims: {
+            sub: user?.id,
+            amr:
+              overrides?.amr ??
+              (user?.recovery_sent_at
+                ? [
+                    {
+                      method: "recovery",
+                      timestamp: Math.floor(
+                        new Date(String(user.recovery_sent_at)).getTime() / 1000
+                      ),
+                    },
+                  ]
+                : ["password"]),
+          },
+        },
+        error: null,
+      }),
       getUser: vi.fn().mockResolvedValue({
         data: { user },
         error: overrides?.getUserError ?? null,
@@ -152,7 +173,7 @@ describe("GET /api/auth/reset-password", () => {
     await expect(response.json()).resolves.toEqual({ valid: true });
   });
 
-  it("returns valid:true when the callback recovery marker matches the user", async () => {
+  it("rejects a callback cookie without signed recovery proof", async () => {
     mockCreateClient.mockResolvedValue(
       createSupabaseAuthClient({ user: { id: "user-1", recovery_sent_at: null } })
     );
@@ -160,7 +181,7 @@ describe("GET /api/auth/reset-password", () => {
     const response = await GET(createGetRequest({ vm_password_recovery: "user-1" }));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ valid: true });
+    await expect(response.json()).resolves.toEqual({ valid: false });
   });
 
   it("returns 500 when session check throws", async () => {
@@ -255,9 +276,10 @@ describe("POST /api/auth/reset-password", () => {
     });
   });
 
-  it("updates password when callback recovery marker matches the user", async () => {
+  it("updates password with signed recovery proof even without an email timestamp", async () => {
     const client = createSupabaseAuthClient({
       user: { id: "user-1", email: "user@example.com", recovery_sent_at: null },
+      amr: ["password", { method: "recovery", timestamp: Math.floor(Date.now() / 1000) }],
     });
     mockCreateClient.mockResolvedValue(client);
 
