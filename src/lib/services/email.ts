@@ -407,7 +407,8 @@ export async function sendDsarExtensionEmail(
   email: string,
   reference: string,
   newDueIso: string,
-  reason: string
+  reason: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const dueDate = new Date(newDueIso).toLocaleDateString("en-ZA", {
@@ -446,7 +447,7 @@ Reason: ${reason}
 If you do not agree with this extension, you may complain to the Information Regulator.
 
 Learn more: ${appUrl}/dsar`;
-  return sendEmail({ to: email, subject, html, text });
+  return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
 export async function sendDsarCompletedEmail(
@@ -705,6 +706,7 @@ export async function sendModerationNoticeEmail(params: {
   reason?: string | null;
   endsAt?: string | null;
   decisionId: string;
+  idempotencyKey?: string;
 }): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const copy = NOTICE_COPY[params.template];
@@ -750,6 +752,7 @@ export async function sendModerationNoticeEmail(params: {
     subject: `VerifyMzansi account update - ${copy.title}`,
     html,
     text,
+    idempotencyKey: params.idempotencyKey,
   });
 }
 

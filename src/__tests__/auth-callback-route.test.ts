@@ -7,6 +7,7 @@ const {
   mockVerifyOtp,
   mockFrom,
   mockAdminFrom,
+  mockSignOut,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockVerifyOtp: vi.fn(),
   mockFrom: vi.fn(),
   mockAdminFrom: vi.fn(),
+  mockSignOut: vi.fn().mockResolvedValue({ error: null }),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,13 +31,18 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 import { GET } from "@/app/(auth)/auth/callback/route";
+import { verifyRecoveryProof } from "@/lib/auth/password-recovery";
 
 describe("GET /auth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCreateClient.mockResolvedValue({
       from: mockFrom,
-      auth: { exchangeCodeForSession: mockExchangeCodeForSession, verifyOtp: mockVerifyOtp },
+      auth: {
+        exchangeCodeForSession: mockExchangeCodeForSession,
+        verifyOtp: mockVerifyOtp,
+        signOut: mockSignOut,
+      },
     });
     mockCreateAdminClient.mockReturnValue({
       from: mockAdminFrom,
@@ -117,10 +124,12 @@ describe("GET /auth/callback", () => {
   });
 
   it("verifies token-hash recovery links and redirects to the reset password page", async () => {
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "isolated-test-signing-key");
     mockVerifyOtp.mockResolvedValue({
       error: null,
       data: {
         session: {
+          access_token: `header.${Buffer.from(JSON.stringify({ sub: "user-1", session_id: "session-1" })).toString("base64url")}.signature`,
           user: {
             id: "user-1",
             email: "user@example.com",
@@ -139,6 +148,10 @@ describe("GET /auth/callback", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://verifymzansi.com/reset-password");
     expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: "hash", type: "recovery" });
+    const proof = response.cookies.get("vm_password_recovery")?.value;
+    expect(verifyRecoveryProof(proof, "user-1", "session-1")).toBe(true);
+    expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+    vi.unstubAllEnvs();
   });
 
   it("sends failed recovery token-hash links back to forgot password", async () => {
@@ -230,11 +243,14 @@ describe("GET /auth/callback", () => {
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === "account_profiles") {
         return {
-          select: vi.fn().mockReturnValue({
+          select: vi.fn().mockImplementation((columns: string) => ({
             eq: vi.fn().mockReturnValue({
-              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: columns === "account_status" ? { account_status: "active" } : null,
+                error: null,
+              }),
             }),
-          }),
+          })),
           upsert: mockUpsert.mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
@@ -268,6 +284,73 @@ describe("GET /auth/callback", () => {
       { onConflict: "user_id" }
     );
     expect(mockUserScopedUpsert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["database error", { data: null, error: { code: "08006" } }],
+    ["missing profile", { data: null, error: null }],
+  ])("clears returning OAuth sessions when status lookup has %s", async (_label, statusResult) => {
+    if (_label === "database error") {
+      mockSignOut.mockRejectedValueOnce(new Error("session cleanup unavailable"));
+    }
+    mockExchangeCodeForSession.mockResolvedValue({
+      error: null,
+      data: { session: { user: { id: "oauth-user", app_metadata: { provider: "google" } } } },
+    });
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({ maybeSingle: async () => ({ data: { user_id: "oauth-user" }, error: null }) }),
+      }),
+    });
+    mockAdminFrom.mockReturnValue({
+      select: (columns: string) => ({
+        eq: () => ({
+          maybeSingle: async () =>
+            columns === "account_status"
+              ? statusResult
+              : { data: { id: "profile-id", display_name: "OAuth User" }, error: null },
+        }),
+      }),
+    });
+    const response = await GET(
+      new Request("https://verifymzansi.com/auth/callback?code=test-code&next=%2Fdashboard")
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://verifymzansi.com/login?error=auth_unavailable"
+    );
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+
+  it("blocks banned OAuth accounts even when initial lookup misclassifies them as new", async () => {
+    mockExchangeCodeForSession.mockResolvedValue({
+      error: null,
+      data: { session: { user: { id: "oauth-user", app_metadata: { provider: "google" } } } },
+    });
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: "08006" } }) }),
+      }),
+    });
+    mockAdminFrom.mockReturnValue({
+      select: (columns: string) => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data:
+              columns === "account_status"
+                ? { account_status: "banned" }
+                : { id: "profile-id", display_name: "OAuth User" },
+            error: null,
+          }),
+        }),
+      }),
+    });
+    const response = await GET(
+      new Request("https://verifymzansi.com/auth/callback?code=test-code&next=%2Fdashboard")
+    );
+    expect(response.headers.get("location")).toBe(
+      "https://verifymzansi.com/login?error=account_suspended"
+    );
+    expect(mockSignOut).toHaveBeenCalled();
   });
 
   it("clears pending email and marks the latest email change as applied when the confirmed email matches", async () => {

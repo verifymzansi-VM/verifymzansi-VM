@@ -9,26 +9,33 @@ import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createLogger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
+import {
+  createRecoveryProof,
+  PASSWORD_RECOVERY_COOKIE,
+  PASSWORD_RECOVERY_MAX_AGE_SECONDS,
+} from "@/lib/auth/password-recovery";
 
 const log = createLogger("AuthCallback");
-const PASSWORD_RECOVERY_COOKIE = "vm_password_recovery";
-const PASSWORD_RECOVERY_COOKIE_MAX_AGE = 60 * 60;
 
 function isSecureOrigin(origin: string): boolean {
   return origin.startsWith("https://");
 }
 
-function redirectAfterAuth(origin: string, path: string, recoveryUserId?: string): NextResponse {
+function redirectAfterAuth(
+  origin: string,
+  path: string,
+  recoveryProof?: string | null
+): NextResponse {
   const response = NextResponse.redirect(`${origin}${path}`);
-  if (recoveryUserId && path.startsWith("/reset-password")) {
+  if (recoveryProof && path.split("?")[0] === "/reset-password") {
     response.cookies.set({
       name: PASSWORD_RECOVERY_COOKIE,
-      value: recoveryUserId,
+      value: recoveryProof,
       httpOnly: true,
       sameSite: "lax",
       secure: isSecureOrigin(origin),
       path: "/",
-      maxAge: PASSWORD_RECOVERY_COOKIE_MAX_AGE,
+      maxAge: PASSWORD_RECOVERY_MAX_AGE_SECONDS,
     });
   }
   return response;
@@ -205,14 +212,28 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/login?error=profile_creation_failed`);
       }
 
-      // Block login for suspended/banned/deleted accounts
-      if (!isNewOAuthUser) {
+      // Re-read status for every OAuth admission. A failed initial profile
+      // lookup must not classify a returning restricted account as new.
+      {
         const adminForStatus = createAdminClient();
-        const { data: statusProfile } = await adminForStatus
+        const { data: statusProfile, error: statusError } = await adminForStatus
           .from("account_profiles")
           .select("account_status")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        if (statusError || !statusProfile?.account_status) {
+          log.warn("OAuth login blocked: account status unavailable", {
+            userId: user.id,
+            code: statusError?.code,
+          });
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            log.warn("Failed to clear OAuth session after account status lookup failure");
+          }
+          return NextResponse.redirect(`${origin}/login?error=auth_unavailable`);
+        }
 
         const accountStatus = statusProfile?.account_status;
         if (
@@ -241,7 +262,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${next || "/"}`);
     }
 
-    return redirectAfterAuth(origin, next, user?.id);
+    return redirectAfterAuth(origin, next);
   }
 
   if (tokenHash && type) {
@@ -278,7 +299,13 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${confirmedPath}`);
     }
 
-    return redirectAfterAuth(origin, next, user?.id);
+    // verifyOtp uses the generic `otp` AMR even for recovery. Record the
+    // successful redemption in a signed proof tied to this exact session.
+    const recoveryProof =
+      type === "recovery" && user?.id && data?.session?.access_token
+        ? createRecoveryProof(user.id, data.session.access_token)
+        : null;
+    return redirectAfterAuth(origin, next, recoveryProof);
   }
 
   // No code parameter — redirect to login

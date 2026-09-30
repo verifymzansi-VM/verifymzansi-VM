@@ -26,6 +26,7 @@ interface OperationJob {
   kind: "email_notice" | "auth_metadata_sync" | "storage_delete";
   payload: Record<string, unknown>;
   attempts: number;
+  locked_until: string;
   decision_id: string | null;
 }
 
@@ -58,6 +59,7 @@ async function sendDsarExtensionNotice(job: OperationJob): Promise<void> {
     .eq("id", caseId)
     .maybeSingle();
   if (readError) throw new Error(`Could not read the case: ${readError.message}`);
+  if (!current) throw new Error("Data request case no longer exists");
   // Already sent on an earlier attempt: never email the requester twice.
   if (current?.extension_notified_at) return;
 
@@ -65,18 +67,24 @@ async function sendDsarExtensionNotice(job: OperationJob): Promise<void> {
     email,
     `DSAR-${caseId.slice(0, 8).toUpperCase()}`,
     due,
-    reason
+    reason,
+    `operation-job/${job.id}`
   );
   if (!result.success) throw new Error(result.error ?? "Email provider refused the notice");
 
-  const { error } = await admin
+  const { data: recorded, error } = await admin
     .from("dsar_cases")
     .update({ extension_notified_at: new Date().toISOString() })
-    .eq("id", caseId);
-  if (error) {
-    // The email went out. Failing the job would send it again on retry, so
-    // record the gap instead; the case keeps showing "notice pending".
-    log.error("DSAR extension notice sent but not recorded", { caseId, error: error.message });
+    .eq("id", caseId)
+    .select("id")
+    .maybeSingle();
+  if (error || !recorded) {
+    // Retry with the same provider key so a temporary database failure does
+    // not permanently leave the requester notice unrecorded. Resend dedupes
+    // this key for 24 hours; delayed/manual retries can still resend the email.
+    throw new Error(
+      `DSAR extension notice sent but not recorded: ${error?.message ?? "case not updated"}`
+    );
   }
 }
 
@@ -96,6 +104,11 @@ async function sendNotice(job: OperationJob): Promise<void> {
 
   const admin = createAdminClient();
   const recipient = await getAuthAdminUserSummary(admin, userId);
+  if (recipient.errorMessage) {
+    // An unavailable auth service is not proof that the account has no email.
+    // Keep the notice queued so the normal job backoff can recover delivery.
+    throw new Error(`Could not look up notice recipient: ${recipient.errorMessage}`);
+  }
   if (!recipient.email) {
     // Deleted accounts or accounts without email: nothing to send.
     log.info("Notice skipped: no email address", { jobId: job.id, template });
@@ -109,6 +122,7 @@ async function sendNotice(job: OperationJob): Promise<void> {
     reason: str(job.payload.reason) ?? str(job.payload.rationale),
     endsAt: str(job.payload.suspended_until),
     decisionId,
+    idempotencyKey: `operation-job/${job.id}`,
   });
 
   await logAuditEvent({
@@ -176,6 +190,12 @@ export async function runOperationJobs(limit = 20): Promise<RunSummary> {
   const summary: RunSummary = { claimed: jobs.length, succeeded: 0, retrying: 0, dead: 0 };
 
   for (const job of jobs) {
+    // Sequential batches can outlive the lease of their later jobs. Leave those
+    // effects for a fresh claim instead of starting work with stale ownership.
+    if (!job.locked_until || Date.parse(job.locked_until) <= Date.now()) {
+      log.warn("Operation job lease expired before execution", { jobId: job.id });
+      continue;
+    }
     let failure: string | null = null;
     try {
       await HANDLERS[job.kind](job);
@@ -193,6 +213,8 @@ export async function runOperationJobs(limit = 20): Promise<RunSummary> {
       p_job: job.id,
       p_ok: failure === null,
       p_error: failure,
+      p_attempt: job.attempts,
+      p_locked_until: job.locked_until,
     });
     if (completeError) {
       // The lock expires and the job is claimed again; handlers are idempotent.
@@ -201,7 +223,10 @@ export async function runOperationJobs(limit = 20): Promise<RunSummary> {
     }
     if (outcome === "succeeded") summary.succeeded += 1;
     else if (outcome === "dead") summary.dead += 1;
-    else summary.retrying += 1;
+    else if (outcome === "retrying") summary.retrying += 1;
+    else {
+      log.warn("Operation job claim was superseded", { jobId: job.id, attempt: job.attempts });
+    }
   }
 
   return summary;

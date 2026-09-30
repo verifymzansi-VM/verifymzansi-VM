@@ -35,6 +35,12 @@ jobs:
           SMOKE_BASE_URL: ${{ secrets.PRODUCTION_APP_URL }}
         run: pnpm run test:smoke
 
+      - name: Check production dependency readiness
+        if: steps.check-url.outputs.skip != 'true'
+        env:
+          APP_URL: ${{ secrets.PRODUCTION_APP_URL }}
+        run: pnpm exec tsx scripts/check-deployment-health.ts
+
   worker-health:
     runs-on: ubuntu-latest
     steps:

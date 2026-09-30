@@ -302,8 +302,8 @@ async function probeRateLimiter(
   // Live authenticated probe: the app sends RATE_LIMITER_API_KEY while the
   // worker requires WORKER_API_KEY — a pairing mismatch 401s every call and
   // silently degrades the app to per-isolate limits. The worker checks the
-  // bearer token before parsing the body, so a harmless read-only check
-  // proves the shared secret matches on any non-401 response.
+  // bearer token before parsing the body. Require a successful read-only
+  // response so outages and edge challenges cannot pass deployment readiness.
   const timeoutMs = Number(process.env.OTP_RATE_LIMITER_TIMEOUT_MS) || 2500;
   try {
     const controller = new AbortController();
@@ -336,20 +336,36 @@ async function probeRateLimiter(
       };
     }
 
+    if (!response.ok) {
+      return {
+        status: "degraded",
+        detail: `Shared rate limiter probe returned HTTP ${response.status}`,
+        failedChecks: ["Rate limiter availability"],
+      };
+    }
+
+    const payload = await response.json();
+    if (payload?.ok !== true) {
+      return {
+        status: "degraded",
+        detail: "Shared rate limiter probe did not return a successful check",
+        failedChecks: ["Rate limiter response"],
+      };
+    }
+
     return {
       status: "ok",
       detail: "Shared rate limiter authenticated probe succeeded",
     };
   } catch (error) {
-    // Network/timeout failures stay lenient so health does not flap on
-    // transient worker unavailability.
     const message = error instanceof Error ? error.message : "Unknown error";
-    logger.warn("Rate limiter authenticated probe unreachable; skipping live check", {
+    logger.warn("Rate limiter authenticated probe unavailable", {
       error: message,
     });
     return {
-      status: "ok",
-      detail: "Shared rate limiter env is present (live probe unreachable)",
+      status: "degraded",
+      detail: "Shared rate limiter live probe unreachable or invalid",
+      failedChecks: ["Rate limiter availability"],
     };
   }
 }

@@ -83,12 +83,15 @@ docs/*
 !docs/RUNBOOK.md
 !docs/production-readiness-review-2026-09-30.md
 !docs/production-readiness-follow-up-2026-09-30.md
+!docs/production-readiness-audit-2026-10-01.md
+!docs/branch-protection.md
 !docs/DESIGN-SYSTEM.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md
 !docs/admin-access-inventory.md
 !docs/runbooks/
 !docs/runbooks/admin-provisioning.md
+!docs/runbooks/production-audit-rollout-2026-10-01.md
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/

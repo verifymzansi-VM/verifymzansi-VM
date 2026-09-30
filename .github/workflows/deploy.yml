@@ -25,6 +25,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     # Automatic deployment must come from successful CI on this repository's main push.
     if: >-
       ${{ github.event_name != 'workflow_run' ||
@@ -72,6 +75,11 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Require successful CI for the exact deployment commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOY_TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Normalize deploy env aliases
         env:
           RAW_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

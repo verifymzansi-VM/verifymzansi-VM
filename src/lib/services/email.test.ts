@@ -24,9 +24,31 @@ import {
   sendContactFormNotification,
   sendSupportRequestNotification,
   sendSupportAcknowledgement,
+  sendModerationNoticeEmail,
+  sendDsarExtensionEmail,
 } from "./email";
 
 describe("email service", () => {
+  it("passes durable job keys to Resend for repeatable notices", async () => {
+    await sendModerationNoticeEmail({
+      email: "user@example.com",
+      accountName: "Thando",
+      template: "account_ban",
+      decisionId: "decision-1",
+      idempotencyKey: "operation-job/job-1",
+    });
+    await sendDsarExtensionEmail(
+      "user@example.com",
+      "DSAR-12345678",
+      "2026-11-01T00:00:00Z",
+      "Records in two systems",
+      "operation-job/job-2"
+    );
+    expect(mockSend.mock.calls.map(([, options]) => options.idempotencyKey)).toEqual([
+      "operation-job/job-1",
+      "operation-job/job-2",
+    ]);
+  });
   it("routes enquiry replies to the buyer rather than support", async () => {
     await sendContactFormNotification(
       "seller@example.com",

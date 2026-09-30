@@ -57,6 +57,7 @@ vi.mock("@/lib/services/email", () => ({
 }));
 
 import { GET, POST } from "./route";
+import { createRecoveryProof } from "@/lib/auth/password-recovery";
 
 function createRequest(body: unknown, cookieValues: Record<string, string> = {}): NextRequest {
   const payload = typeof body === "string" ? body : JSON.stringify(body);
@@ -107,6 +108,7 @@ function createSupabaseAuthClient(overrides?: {
         data: {
           claims: {
             sub: user?.id,
+            session_id: "session-1",
             amr:
               overrides?.amr ??
               (user?.recovery_sent_at
@@ -138,6 +140,22 @@ function createSupabaseAuthClient(overrides?: {
 describe("GET /api/auth/reset-password", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("accepts OTP recovery only with a signed proof of redemption for this session", async () => {
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "isolated-test-signing-key");
+    const accessToken = `header.${Buffer.from(JSON.stringify({ sub: "user-1", session_id: "session-1" })).toString("base64url")}.signature`;
+    const proof = createRecoveryProof("user-1", accessToken)!;
+    mockCreateClient.mockResolvedValue(
+      createSupabaseAuthClient({
+        amr: [{ method: "otp", timestamp: Math.floor(Date.now() / 1000) }],
+      })
+    );
+    const denied = await GET(createGetRequest({ vm_password_recovery: "user-1" }));
+    expect(await denied.json()).toEqual({ valid: false });
+    const allowed = await GET(createGetRequest({ vm_password_recovery: proof }));
+    expect(await allowed.json()).toEqual({ valid: true });
+    vi.unstubAllEnvs();
   });
 
   it("returns valid:false when session user is missing", async () => {
@@ -204,6 +222,27 @@ describe("POST /api/auth/reset-password", () => {
     mockCreateClient.mockResolvedValue(createSupabaseAuthClient());
     mockIsPwnedPassword.mockResolvedValue(false);
     mockSendPasswordChangeNotification.mockResolvedValue({ success: true });
+  });
+
+  it("completes a token-hash recovery with OTP AMR and signed session proof", async () => {
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "isolated-test-signing-key");
+    const accessToken = `header.${Buffer.from(JSON.stringify({ sub: "user-1", session_id: "session-1" })).toString("base64url")}.signature`;
+    const proof = createRecoveryProof("user-1", accessToken)!;
+    const client = createSupabaseAuthClient({
+      amr: [{ method: "otp", timestamp: Math.floor(Date.now() / 1000) }],
+    });
+    mockCreateClient.mockResolvedValue(client);
+    const response = await POST(
+      createRequest(
+        { password: "NewPassword123!", confirmPassword: "NewPassword123!" },
+        { vm_password_recovery: proof }
+      )
+    );
+    expect(response.status).toBe(200);
+    expect(client.auth.updateUser).toHaveBeenCalledWith({ password: "NewPassword123!" });
+    expect(client.auth.signOut).toHaveBeenCalled();
+    expect(response.cookies.get("vm_password_recovery")?.value).toBe("");
+    vi.unstubAllEnvs();
   });
 
   it("rejects cross-origin requests before rate-limit", async () => {

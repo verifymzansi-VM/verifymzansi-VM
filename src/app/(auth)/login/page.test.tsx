@@ -101,6 +101,27 @@ describe("LoginPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("preserves the destination while removing the email confirmation flag", async () => {
+    window.history.pushState(
+      { preserved: true },
+      "",
+      "/login?confirmed=true&returnUrl=%2Fverification"
+    );
+    document.cookie = `vm_csrf=${"c".repeat(64)}; path=/`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }))
+    );
+    render(<LoginPage />);
+    await waitFor(() => expect(window.location.search).toBe("?returnUrl=%2Fverification"));
+    expect(window.history.state).toEqual({ preserved: true });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "nomsa@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "StrongPass123!" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/verification"));
+    vi.unstubAllGlobals();
+  });
+
   it("tells people where they will land when a returnUrl is present", async () => {
     window.history.pushState({}, "", "/login?returnUrl=%2Fverification");
 

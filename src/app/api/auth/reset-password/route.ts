@@ -8,32 +8,44 @@ import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 import {
+  PASSWORD_RECOVERY_COOKIE,
+  PASSWORD_RECOVERY_MAX_AGE_SECONDS,
+  verifyRecoveryProof,
+} from "@/lib/auth/password-recovery";
+import {
   isPwnedPassword,
   PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR,
   PWNED_PASSWORD_ERROR,
 } from "@/lib/security/pwned-passwords";
 
 const log = createLogger("ResetPassword");
-const PASSWORD_RECOVERY_COOKIE = "vm_password_recovery";
-const PASSWORD_RECOVERY_MAX_AGE_SECONDS = 60 * 60;
 
 async function hasValidRecoverySession(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string
+  userId: string,
+  request: NextRequest
 ): Promise<boolean> {
-  // A sent email and a caller-controlled cookie do not prove link redemption.
-  // Supabase signs the recovery authentication method into the session JWT.
+  // PKCE sessions carry a signed recovery AMR. Token-hash redemption uses
+  // generic OTP AMR, so it also needs our signed, session-bound callback proof.
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data || data.claims.sub !== userId) return false;
   const now = Math.floor(Date.now() / 1000);
-  return Boolean(
-    data.claims.amr?.some(
-      (method) =>
-        typeof method !== "string" &&
-        method.method === "recovery" &&
-        Number.isFinite(method.timestamp) &&
-        method.timestamp <= now &&
-        now - method.timestamp <= PASSWORD_RECOVERY_MAX_AGE_SECONDS
+  return (
+    verifyRecoveryProof(
+      request.cookies?.get(PASSWORD_RECOVERY_COOKIE)?.value,
+      userId,
+      data.claims.session_id,
+      now
+    ) ||
+    Boolean(
+      data.claims.amr?.some(
+        (method) =>
+          typeof method !== "string" &&
+          method.method === "recovery" &&
+          Number.isFinite(method.timestamp) &&
+          method.timestamp <= now &&
+          now - method.timestamp <= PASSWORD_RECOVERY_MAX_AGE_SECONDS
+      )
     )
   );
 }
@@ -56,7 +68,7 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
-    if (!(await hasValidRecoverySession(supabase, user.id))) {
+    if (!(await hasValidRecoverySession(supabase, user.id, _request))) {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
@@ -111,7 +123,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(await hasValidRecoverySession(supabase, user.id))) {
+    if (!(await hasValidRecoverySession(supabase, user.id, request))) {
       return NextResponse.json(
         { error: "Your reset link has expired or is invalid. Please request a new one." },
         { status: 401 }

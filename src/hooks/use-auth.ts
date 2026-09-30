@@ -22,6 +22,9 @@ const PROFILE_FETCH_RETRY_DELAYS_MS = [150, 400] as const;
  * visitors without a Supabase session cookie skip the download entirely.
  */
 let supabaseClientPromise: Promise<SupabaseClient> | null = null;
+// All hook consumers write to the same store. A newer session lookup or
+// sign-out must invalidate older requests across consumers, not only one hook.
+let authRequestVersion = 0;
 
 function getSupabaseClient(): Promise<SupabaseClient> {
   if (!supabaseClientPromise) {
@@ -96,6 +99,7 @@ export async function signOutBrowserSession(): Promise<boolean> {
  * away, so the previous account's data can never be shown to the next user.
  */
 export async function clearClientAccountState(): Promise<void> {
+  authRequestVersion += 1;
   useAuthStore.getState().reset();
   // Clear notification store to prevent cross-account data leak
   const { clearAll: clearNotifications } = (
@@ -208,6 +212,8 @@ export function useAuth() {
       // same data without triggering duplicate Supabase round-trips.
       if (fetchedRef.current && !options?.force) return;
       fetchedRef.current = true;
+      const requestVersion = ++authRequestVersion;
+      const isCurrentRequest = () => requestVersion === authRequestVersion;
 
       // Anonymous fast path: no persisted session cookie means no user, so
       // skip loading the Supabase bundle and the network round-trip.
@@ -220,15 +226,21 @@ export function useAuth() {
       setLoading(true);
       try {
         const supabase = await getSupabaseClient();
+        if (!isCurrentRequest()) return;
         const {
           data: { user: authUser },
         } = await supabase.auth.getUser();
+        if (!isCurrentRequest()) return;
 
         if (!authUser) {
           reset();
           return;
         }
 
+        if (useAuthStore.getState().user?.id !== authUser.id) {
+          setProfile(null);
+          useAuthStore.getState().setTrustLevel(0);
+        }
         setUser({
           id: authUser.id,
           email: authUser.email || "",
@@ -238,6 +250,7 @@ export function useAuth() {
 
         try {
           const accountProfile = await fetchAccountProfileWithRetry(supabase, authUser.id);
+          if (!isCurrentRequest()) return;
 
           if (accountProfile) {
             setProfile(accountProfile);
@@ -245,6 +258,7 @@ export function useAuth() {
             setProfile(null);
           }
         } catch (profileError) {
+          if (!isCurrentRequest()) return;
           setProfile(null);
           log.warn("Failed to fetch account profile after retries", {
             userId: authUser.id,
@@ -252,12 +266,13 @@ export function useAuth() {
           });
         }
       } catch (err) {
+        if (!isCurrentRequest()) return;
         log.error("Failed to fetch user", {
           error: err instanceof Error ? err.message : String(err),
         });
         reset();
       } finally {
-        setLoading(false);
+        if (isCurrentRequest()) setLoading(false);
       }
     },
     [fetchAccountProfileWithRetry, reset, setLoading, setProfile, setUser]
@@ -276,22 +291,30 @@ export function useAuth() {
     let subscription: { unsubscribe: () => void } | null = null;
 
     // Subscribe to auth state changes (session refresh, sign-out in other tabs, etc.)
-    void getSupabaseClient().then((supabase) => {
-      if (cancelled) return;
-      const { data } = supabase.auth.onAuthStateChange(
-        (event: AuthChangeEvent, session: Session | null) => {
-          if (session?.user) {
-            void fetchUser({ force: true });
-          } else {
-            // If user was previously authenticated and session was lost, reset store.
-            // Don't redirect here — let signOut() or middleware handle navigation
-            // to avoid race conditions with the explicit signOut callback.
-            reset();
+    void getSupabaseClient()
+      .then((supabase) => {
+        if (cancelled) return;
+        const { data } = supabase.auth.onAuthStateChange(
+          (event: AuthChangeEvent, session: Session | null) => {
+            if (session?.user) {
+              void fetchUser({ force: true });
+            } else {
+              // If user was previously authenticated and session was lost, reset store.
+              // Don't redirect here — let signOut() or middleware handle navigation
+              // to avoid race conditions with the explicit signOut callback.
+              authRequestVersion += 1;
+              reset();
+            }
           }
-        }
-      );
-      subscription = data.subscription;
-    });
+        );
+        subscription = data.subscription;
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        log.warn("Failed to subscribe to auth state", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
     return () => {
       cancelled = true;

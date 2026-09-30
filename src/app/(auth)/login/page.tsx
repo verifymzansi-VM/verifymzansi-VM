@@ -125,7 +125,13 @@ export default function LoginPage() {
       queueMicrotask(() => {
         setEmailConfirmedVisible(true);
         // Clean URL to prevent re-flash on refresh/back navigation
-        window.history.replaceState({}, "", window.location.pathname);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("confirmed");
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${url.pathname}${url.search}${url.hash}`
+        );
       });
     }
 

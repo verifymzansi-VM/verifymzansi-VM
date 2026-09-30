@@ -159,7 +159,7 @@ describe("getLaunchHealthSnapshot", () => {
     expect(snapshot.checks.rateLimiter.failedChecks).toContain("RATE_LIMITER_API_KEY");
   });
 
-  it("stays lenient when the rate limiter probe hits a network error", async () => {
+  it("degrades when the rate limiter probe hits a network error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT")));
     vi.mocked(createAdminClient).mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -172,8 +172,33 @@ describe("getLaunchHealthSnapshot", () => {
 
     const snapshot = await getLaunchHealthSnapshot();
 
-    expect(snapshot.checks.rateLimiter.status).toBe("ok");
+    expect(snapshot.checks.rateLimiter.status).toBe("degraded");
     expect(snapshot.checks.rateLimiter.detail).toContain("unreachable");
+  });
+
+  it.each([
+    [403, '{"allowed":true}'],
+    [429, '{"allowed":false}'],
+    [500, '{"allowed":true}'],
+    [503, '{"allowed":true}'],
+    [200, "<html>edge challenge</html>"],
+    [200, '{"allowed":false}'],
+    [200, '{"allowed":true}'],
+  ])("degrades for an unsuccessful rate limiter response (%s, %s)", async (status, body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status })));
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }),
+    } as never);
+    vi.mocked(getAuditFailureCount).mockReturnValue(0);
+
+    const snapshot = await getLaunchHealthSnapshot();
+
+    expect(snapshot.checks.rateLimiter.status).toBe("degraded");
+    expect(snapshot.status).toBe("degraded");
   });
 
   it("sends an authenticated read-only probe to the rate limiter worker", async () => {

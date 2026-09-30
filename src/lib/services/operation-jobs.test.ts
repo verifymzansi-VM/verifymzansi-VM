@@ -28,7 +28,9 @@ vi.mock("@/lib/supabase/admin", () => ({
     auth: { admin: { getUserById, updateUserById } },
     from: (table: string) => ({
       select: () => ({ eq: () => ({ maybeSingle: () => tableRow(table) }) }),
-      update: (values: unknown) => ({ eq: () => tableUpdate(table, values) }),
+      update: (values: unknown) => ({
+        eq: () => ({ select: () => ({ maybeSingle: () => tableUpdate(table, values) }) }),
+      }),
     }),
   }),
 }));
@@ -45,6 +47,7 @@ const notice = {
   id: "job-1",
   kind: "email_notice",
   attempts: 1,
+  locked_until: "2099-01-01T00:00:00Z",
   decision_id: "decision-1",
   payload: {
     template: "account_ban",
@@ -67,7 +70,7 @@ describe("runOperationJobs", () => {
     sendNotice.mockResolvedValue({ success: true });
     sendDsarExtension.mockResolvedValue({ success: true });
     tableRow.mockResolvedValue({ data: null, error: null });
-    tableUpdate.mockResolvedValue({ error: null });
+    tableUpdate.mockResolvedValue({ data: { id: "case-1" }, error: null });
   });
 
   it("sends a notice with the reason and reports success", async () => {
@@ -86,11 +89,14 @@ describe("runOperationJobs", () => {
       reason: "Fraud",
       endsAt: null,
       decisionId: "decision-1",
+      idempotencyKey: "operation-job/job-1",
     });
     expect(rpc).toHaveBeenCalledWith("complete_operation_job", {
       p_job: "job-1",
       p_ok: true,
       p_error: null,
+      p_attempt: 1,
+      p_locked_until: "2099-01-01T00:00:00Z",
     });
   });
 
@@ -102,6 +108,8 @@ describe("runOperationJobs", () => {
       p_job: "job-1",
       p_ok: false,
       p_error: "rate limited",
+      p_attempt: 1,
+      p_locked_until: "2099-01-01T00:00:00Z",
     });
   });
 
@@ -109,6 +117,31 @@ describe("runOperationJobs", () => {
     jobs([notice], "dead");
     sendNotice.mockResolvedValue({ success: false, error: "bounced" });
     await expect(runOperationJobs()).resolves.toMatchObject({ dead: 1 });
+  });
+
+  it("does not execute effects whose batch lease expired", async () => {
+    jobs([{ ...notice, locked_until: "2000-01-01T00:00:00Z" }]);
+    await expect(runOperationJobs()).resolves.toEqual({
+      claimed: 1,
+      succeeded: 0,
+      retrying: 0,
+      dead: 0,
+    });
+    expect(sendNotice).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("complete_operation_job", expect.anything());
+  });
+
+  it("does not count a rejected stale completion as a retry", async () => {
+    jobs([notice], "succeeded");
+    rpc.mockImplementation(async (fn: string) =>
+      fn === "claim_operation_jobs" ? { data: [notice], error: null } : { data: null, error: null }
+    );
+    await expect(runOperationJobs()).resolves.toEqual({
+      claimed: 1,
+      succeeded: 0,
+      retrying: 0,
+      dead: 0,
+    });
   });
 
   it("treats accounts without an email as done", async () => {
@@ -120,6 +153,40 @@ describe("runOperationJobs", () => {
       "complete_operation_job",
       expect.objectContaining({ p_ok: true })
     );
+  });
+
+  it("retries recipient lookup failures instead of silently losing the notice", async () => {
+    jobs([notice], "retrying");
+    userSummary.mockResolvedValue({
+      email: null,
+      accountName: "there",
+      errorMessage: "Auth service unavailable",
+    });
+    await expect(runOperationJobs()).resolves.toMatchObject({ succeeded: 0, retrying: 1 });
+    expect(sendNotice).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("complete_operation_job", {
+      p_job: "job-1",
+      p_ok: false,
+      p_error: "Could not look up notice recipient: Auth service unavailable",
+      p_attempt: 1,
+      p_locked_until: "2099-01-01T00:00:00Z",
+    });
+  });
+
+  it("reuses the email key when a sent notice's completion write is lost", async () => {
+    rpc.mockImplementation(async (fn: string) =>
+      fn === "claim_operation_jobs"
+        ? { data: [notice], error: null }
+        : { data: null, error: { message: "connection lost" } }
+    );
+    await runOperationJobs();
+    jobs([{ ...notice, attempts: 2 }]);
+    await runOperationJobs();
+    expect(sendNotice).toHaveBeenCalledTimes(2);
+    expect(sendNotice.mock.calls.map(([params]) => params.idempotencyKey)).toEqual([
+      "operation-job/job-1",
+      "operation-job/job-1",
+    ]);
   });
 
   it("rejects unknown templates instead of sending something wrong", async () => {
@@ -138,6 +205,7 @@ describe("runOperationJobs", () => {
         id: "job-2",
         kind: "auth_metadata_sync",
         attempts: 1,
+        locked_until: "2099-01-01T00:00:00Z",
         decision_id: null,
         payload: { user_id: "u", role: "member" },
       },
@@ -159,6 +227,7 @@ describe("runOperationJobs", () => {
         id: "job-3",
         kind: "auth_metadata_sync",
         attempts: 2,
+        locked_until: "2099-01-01T00:00:00Z",
         decision_id: null,
         payload: { user_id: "u", role: "moderator" },
       },
@@ -174,41 +243,64 @@ describe("runOperationJobs", () => {
     expect(updateUserById).toHaveBeenCalledWith("u", { app_metadata: { role: "member" } });
   });
 
-  it("never emails a data-request extension twice", async () => {
-    const extension = {
-      id: "job-4",
-      kind: "email_notice",
-      attempts: 2,
-      decision_id: null,
-      payload: {
-        template: "dsar_extension",
-        case_id: "11111111-2222-4333-8444-555555555555",
-        email: "subject@example.com",
-        due: "2026-11-01T00:00:00Z",
-        reason: "Records are held in two systems",
-      },
-    };
-    jobs([extension]);
-    tableRow.mockResolvedValue({
-      data: { extension_notified_at: "2026-10-01T00:00:00Z" },
-      error: null,
-    });
-    const already = await runOperationJobs();
-    expect(sendDsarExtension).not.toHaveBeenCalled();
-    expect(already.succeeded).toBe(1);
+  it.each(["database error", "zero updated rows"])(
+    "retries an unrecorded DSAR extension after %s with the same provider key",
+    async (mode) => {
+      const extension = {
+        id: "job-4",
+        kind: "email_notice",
+        attempts: 2,
+        locked_until: "2099-01-01T00:00:00Z",
+        decision_id: null,
+        payload: {
+          template: "dsar_extension",
+          case_id: "11111111-2222-4333-8444-555555555555",
+          email: "subject@example.com",
+          due: "2026-11-01T00:00:00Z",
+          reason: "Records are held in two systems",
+        },
+      };
+      jobs([extension]);
+      tableRow.mockResolvedValue({
+        data: { extension_notified_at: "2026-10-01T00:00:00Z" },
+        error: null,
+      });
+      const already = await runOperationJobs();
+      expect(sendDsarExtension).not.toHaveBeenCalled();
+      expect(already.succeeded).toBe(1);
 
-    // Sent, but recording it failed: the job still succeeds so it is not resent.
-    tableRow.mockResolvedValue({ data: { extension_notified_at: null }, error: null });
-    tableUpdate.mockResolvedValue({ error: { message: "timeout" } });
-    rpc.mockImplementation(async (fn: string, args?: { p_ok?: boolean }) =>
-      fn === "claim_operation_jobs"
-        ? { data: [extension], error: null }
-        : { data: args?.p_ok ? "succeeded" : "retrying", error: null }
-    );
-    const sent = await runOperationJobs();
-    expect(sendDsarExtension).toHaveBeenCalledTimes(1);
-    expect(sent.succeeded).toBe(1);
-  });
+      // Sent, but recording it failed: retry delivery/recording with the same key.
+      tableRow.mockResolvedValue({ data: { extension_notified_at: null }, error: null });
+      tableUpdate.mockResolvedValue(
+        mode === "database error"
+          ? { data: null, error: { message: "timeout" } }
+          : { data: null, error: null }
+      );
+      rpc.mockImplementation(async (fn: string, args?: { p_ok?: boolean }) =>
+        fn === "claim_operation_jobs"
+          ? { data: [extension], error: null }
+          : { data: args?.p_ok ? "succeeded" : "retrying", error: null }
+      );
+      const sent = await runOperationJobs();
+      expect(sendDsarExtension).toHaveBeenCalledTimes(1);
+      expect(sent.succeeded).toBe(0);
+      expect(sent.retrying).toBe(1);
+      expect(rpc).toHaveBeenLastCalledWith(
+        "complete_operation_job",
+        expect.objectContaining({
+          p_ok: false,
+          p_error: expect.stringContaining("DSAR extension notice sent but not recorded"),
+        })
+      );
+      tableUpdate.mockResolvedValue({ data: { id: extension.payload.case_id }, error: null });
+      const recovered = await runOperationJobs();
+      expect(recovered.succeeded).toBe(1);
+      expect(sendDsarExtension.mock.calls.map((args) => args[4])).toEqual([
+        "operation-job/job-4",
+        "operation-job/job-4",
+      ]);
+    }
+  );
 
   it("throws when jobs cannot be claimed", async () => {
     rpc.mockResolvedValue({ data: null, error: { message: "down" } });
