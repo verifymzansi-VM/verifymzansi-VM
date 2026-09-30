@@ -4,6 +4,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { unauthorizedResponse, badRequestResponse, internalApiError } from "@/lib/utils/api";
+import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 
 const logger = createLogger("Drafts");
 
@@ -63,12 +64,11 @@ export async function PUT(request: NextRequest) {
 
   let body: unknown;
   try {
-    const raw = await request.text();
-    if (raw.length > MAX_DRAFT_BODY_BYTES) {
+    body = JSON.parse(await readBoundedRequestText(request, MAX_DRAFT_BODY_BYTES));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
       return NextResponse.json({ error: "Payload too large" }, { status: 413 });
     }
-    body = JSON.parse(raw);
-  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
@@ -81,10 +81,10 @@ export async function PUT(request: NextRequest) {
   if (typeof flow !== "string" || !VALID_FLOWS.has(flow)) {
     return NextResponse.json({ error: "Invalid flow" }, { status: 400 });
   }
-  if (typeof step !== "number" || step < 0) {
+  if (typeof step !== "number" || !Number.isInteger(step) || step < 0 || step > 2_147_483_647) {
     return NextResponse.json({ error: "Invalid step" }, { status: 400 });
   }
-  if (!data || typeof data !== "object") {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
     return badRequestResponse("Invalid data");
   }
 

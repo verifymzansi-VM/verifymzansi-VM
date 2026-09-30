@@ -11,17 +11,6 @@ const eslintConfig = [
       "@typescript-eslint": tseslint.plugin,
     },
     rules: {
-      // TypeScript strict rules
-      "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/consistent-type-imports": [
-        "warn",
-        { prefer: "type-imports", fixStyle: "inline-type-imports" },
-      ],
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
-      ],
-
       // Console hygiene
       "no-console": ["error", { allow: ["warn", "error"] }],
 
@@ -40,6 +29,21 @@ const eslintConfig = [
       "jsx-a11y/no-noninteractive-element-interactions": "error",
       "jsx-a11y/label-has-associated-control": "error",
       "jsx-a11y/interactive-supports-focus": "error",
+    },
+  },
+  {
+    files: ["**/*.{ts,tsx,mts,cts}"],
+    languageOptions: { parser: tseslint.parser },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/consistent-type-imports": [
+        "warn",
+        { prefer: "type-imports", fixStyle: "inline-type-imports" },
+      ],
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
 ];

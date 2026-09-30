@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import type { output, ZodTypeAny } from "zod";
 import { toFieldErrorMap } from "@/lib/validations/zod-errors";
 import type { Logger } from "@/lib/utils/logger";
+import { readBoundedRequestText } from "@/lib/utils/request-body";
 
 type JsonRequestLike =
-  | Pick<Request, "text">
+  | (Pick<Request, "text"> & Partial<Pick<Request, "body" | "headers">>)
   | {
       json: () => Promise<unknown>;
     };
@@ -58,7 +59,7 @@ function coerceEntriesToObject(source: KeyValueEntrySource): Record<string, unkn
  * Safely parse a JSON request body, returning null if invalid
  * to prevent uncaught 500 errors on the server.
  *
- * @param maxBytes Maximum text length to accept (default 256 KiB). Returns null for oversized bodies.
+ * @param maxBytes Maximum UTF-8 body bytes to accept (default 256 KiB).
  */
 export async function parseJsonRequest<T = Record<string, unknown>>(
   request: JsonRequestLike,
@@ -66,14 +67,16 @@ export async function parseJsonRequest<T = Record<string, unknown>>(
 ): Promise<T | null> {
   try {
     if ("text" in request && typeof request.text === "function") {
-      const text = await request.text();
+      const text = await readBoundedRequestText(request, maxBytes);
       if (!text) return null;
-      if (text.length > maxBytes) return null;
       return JSON.parse(text) as T;
     }
 
     if ("json" in request && typeof request.json === "function") {
-      return (await request.json()) as T;
+      const value = await request.json();
+      const serialized = JSON.stringify(value);
+      if (!serialized || new TextEncoder().encode(serialized).byteLength > maxBytes) return null;
+      return value as T;
     }
 
     return null;

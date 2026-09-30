@@ -29,6 +29,7 @@ import {
   type PaymentReceiptDetails,
 } from "@/lib/services/email";
 import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
+import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
@@ -271,7 +272,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rawBody = await request.text();
+    let rawBody: string;
+    try {
+      rawBody = await readBoundedRequestText(request, 256 * 1024);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+      }
+      throw error;
+    }
     const webhookSecret = process.env.OZOW_WEBHOOK_SECRET;
     const isProduction = process.env.NODE_ENV === "production";
 

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 
 const log = createLogger("CSP");
 
@@ -57,15 +58,11 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 415 });
   }
 
-  const rawBody = await request.text();
-  if (rawBody.length > MAX_BODY_SIZE) {
-    return new NextResponse(null, { status: 413 });
-  }
-
   let parsed: unknown;
   try {
-    parsed = JSON.parse(rawBody);
-  } catch {
+    parsed = JSON.parse(await readBoundedRequestText(request, MAX_BODY_SIZE));
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) return new NextResponse(null, { status: 413 });
     return new NextResponse(null, { status: 400 });
   }
 
@@ -86,14 +83,28 @@ export async function POST(request: NextRequest) {
   }
 
   log.warn("CSP violation", {
-    blockedUri: parsedReport.data["blocked-uri"],
+    blockedUri: sanitizeReportUri(parsedReport.data["blocked-uri"]),
     violatedDirective: parsedReport.data["violated-directive"],
-    documentUri: parsedReport.data["document-uri"],
+    documentUri: sanitizeReportUri(parsedReport.data["document-uri"]),
     effectiveDirective: parsedReport.data["effective-directive"],
-    sourceFile: parsedReport.data["source-file"],
+    sourceFile: sanitizeReportUri(parsedReport.data["source-file"]),
     lineNumber: parsedReport.data["line-number"],
     ip,
   });
 
   return new NextResponse(null, { status: 204 });
+}
+
+/** Reports can include recovery tokens, email addresses and inline data in URLs. */
+function sanitizeReportUri(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (["inline", "eval", "self", "none"].includes(value)) return value;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? `${url.origin}${url.pathname}`
+      : url.protocol;
+  } catch {
+    return "invalid-uri";
+  }
 }

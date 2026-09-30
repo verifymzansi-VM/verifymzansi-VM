@@ -1,136 +1,56 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi } from "vitest";
-import {
-  findProviderResultByRef,
-  updateProviderResult,
-  getArtifactStepType,
-  getVerificationStepForUserAndType,
-  updateVerificationStepRiskDecision,
-} from "./kyc-webhook-store";
+import { describe, expect, it, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyKycProviderWebhook } from "./kyc-webhook-store";
 
-function createMockClient() {
-  const single = vi.fn();
-  const maybeSingle = vi.fn();
-  const eqInner = vi.fn().mockReturnValue({ single, maybeSingle });
-  const eq = vi.fn().mockReturnValue({ eq: eqInner, single, maybeSingle });
-  const select = vi.fn().mockReturnValue({ eq });
-
-  const updateEq = vi.fn();
-  const update = vi.fn().mockReturnValue({ eq: updateEq });
-
-  const from = vi.fn().mockReturnValue({ select, update });
-
-  return { from, select, eq, eqInner, single, maybeSingle, update, updateEq };
+const payload = { provider_ref: "ref-1", status: "approved" as const };
+function client(data: unknown, error: { message: string } | null = null) {
+  const rpc = vi.fn().mockResolvedValue({ data, error });
+  return { rpc, admin: { rpc } as unknown as Pick<SupabaseClient, "rpc"> };
 }
 
-describe("findProviderResultByRef", () => {
-  it("returns data when provider result found", async () => {
-    const client = createMockClient();
-    const row = {
-      id: "pr-1",
-      artifact_id: "a-1",
-      user_id: "u-1",
-      provider_status: "approved",
-      updated_at: null,
-    };
-    client.maybeSingle.mockResolvedValue({ data: row, error: null });
-
-    const result = await findProviderResultByRef(client as any, "ref-123");
-    expect(result).toEqual(row);
-    expect(client.from).toHaveBeenCalledWith("kyc_provider_results");
+describe("applyKycProviderWebhook", () => {
+  it.each(["applied", "duplicate"])("returns the committed %s outcome", async (outcome) => {
+    const { admin, rpc } = client({ outcome, provider_result_id: "result-1" });
+    expect(await applyKycProviderWebhook(admin, payload)).toEqual({
+      outcome,
+      provider_result_id: "result-1",
+    });
+    expect(rpc).toHaveBeenCalledWith("apply_kyc_provider_webhook", {
+      p_provider_ref: "ref-1",
+      p_status: "approved",
+      p_scores: {},
+      p_ocr_payload: null,
+      p_raw_response: null,
+    });
   });
-
-  it("returns null when not found", async () => {
-    const client = createMockClient();
-    client.maybeSingle.mockResolvedValue({ data: null, error: null });
-
-    const result = await findProviderResultByRef(client as any, "ref-miss");
-    expect(result).toBeNull();
-  });
-
-  it("returns null on error", async () => {
-    const client = createMockClient();
-    client.maybeSingle.mockResolvedValue({ data: null, error: { code: "42501" } });
-
-    const result = await findProviderResultByRef(client as any, "ref-err");
-    expect(result).toBeNull();
-  });
-});
-
-describe("updateProviderResult", () => {
-  it("succeeds without error", async () => {
-    const client = createMockClient();
-    client.updateEq.mockResolvedValue({ error: null });
-
+  it("distinguishes a missing reference from a database failure", async () => {
+    expect(await applyKycProviderWebhook(client({ outcome: "unknown" }).admin, payload)).toEqual({
+      outcome: "unknown",
+    });
     await expect(
-      updateProviderResult(client as any, "pr-1", { provider_status: "completed" })
-    ).resolves.not.toThrow();
-    expect(client.from).toHaveBeenCalledWith("kyc_provider_results");
+      applyKycProviderWebhook(client(null, { message: "Database unavailable" }).admin, payload)
+    ).rejects.toThrow("KYC callback transaction failed");
   });
-
-  it("throws on error", async () => {
-    const client = createMockClient();
-    client.updateEq.mockResolvedValue({ error: { message: "permission denied" } });
-
-    await expect(
-      updateProviderResult(client as any, "pr-1", { provider_status: "completed" })
-    ).rejects.toThrow("updateProviderResult failed: permission denied");
+  it("rejects unexpected RPC results instead of acknowledging unfinished work", async () => {
+    await expect(applyKycProviderWebhook(client(null).admin, payload)).rejects.toThrow(
+      "Invalid KYC callback"
+    );
   });
-});
-
-describe("getArtifactStepType", () => {
-  it("returns step_type when found", async () => {
-    const client = createMockClient();
-    client.maybeSingle.mockResolvedValue({ data: { step_type: "identity" } });
-
-    const result = await getArtifactStepType(client as any, "art-1");
-    expect(result).toBe("identity");
-  });
-
-  it("returns null when not found", async () => {
-    const client = createMockClient();
-    client.maybeSingle.mockResolvedValue({ data: null });
-
-    const result = await getArtifactStepType(client as any, "art-miss");
-    expect(result).toBeNull();
-  });
-});
-
-describe("getVerificationStepForUserAndType", () => {
-  it("returns step when found", async () => {
-    const client = createMockClient();
-    const step = { id: "s-1", status: "pending", risk_score: 0.3 };
-    client.maybeSingle.mockResolvedValue({ data: step });
-
-    const result = await getVerificationStepForUserAndType(client as any, "u-1", "identity");
-    expect(result).toEqual(step);
-  });
-
-  it("returns null when no step exists", async () => {
-    const client = createMockClient();
-    client.maybeSingle.mockResolvedValue({ data: null });
-
-    const result = await getVerificationStepForUserAndType(client as any, "u-2", "location");
-    expect(result).toBeNull();
-  });
-});
-
-describe("updateVerificationStepRiskDecision", () => {
-  it("succeeds silently on success", async () => {
-    const client = createMockClient();
-    client.updateEq.mockResolvedValue({ error: null });
-
-    await expect(
-      updateVerificationStepRiskDecision(client as any, "s-1", { risk_score: 0.9 })
-    ).resolves.not.toThrow();
-  });
-
-  it("throws on error", async () => {
-    const client = createMockClient();
-    client.updateEq.mockResolvedValue({ error: { message: "constraint violation" } });
-
-    await expect(
-      updateVerificationStepRiskDecision(client as any, "s-1", { risk_score: 0.9 })
-    ).rejects.toThrow("updateVerificationStepRiskDecision failed");
+  it("passes provider metadata to the transaction", async () => {
+    const { admin, rpc } = client({ outcome: "applied", provider_result_id: "result-1" });
+    await applyKycProviderWebhook(admin, {
+      ...payload,
+      scores: { liveness_score: 80 },
+      ocr_payload: { document: "test" },
+      raw_response: { decision: true },
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "apply_kyc_provider_webhook",
+      expect.objectContaining({
+        p_scores: { liveness_score: 80 },
+        p_ocr_payload: { document: "test" },
+        p_raw_response: { decision: true },
+      })
+    );
   });
 });

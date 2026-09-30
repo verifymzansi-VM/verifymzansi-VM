@@ -510,6 +510,66 @@ await as(admin, "admin", async () => {
   );
 });
 await db.exec(read("20260930110000_staff_rls_mfa.sql"));
+// Minimal organisation fixture allows the entire privilege migration to run;
+// its full RLS/column behavior is exercised by test-commercial-model.mjs.
+await db.exec(`CREATE TABLE public.organisations(id uuid PRIMARY KEY, is_public boolean, programme_status text);
+CREATE FUNCTION public.organisation_id_is_listed(p_org uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+  SELECT EXISTS (SELECT 1 FROM organisations WHERE id=p_org AND is_public)
+$$;
+REVOKE ALL ON FUNCTION public.organisation_id_is_listed(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.organisation_id_is_listed(uuid) TO anon, authenticated, service_role;`);
+await db.exec(read("20260930180000_role_predicates_security_invoker.sql"));
+await db.exec(read("20260930180000_role_predicates_security_invoker.sql"));
+for (const signature of ["has_role(text)", "has_any_role(text[])"])
+  assert.equal(
+    await scalar(`SELECT prosecdef FROM pg_proc WHERE oid=$1::regprocedure`, [signature]),
+    false,
+    `${signature} runs with caller privileges`
+  );
+assert.equal(
+  await scalar(
+    `SELECT prosecdef FROM pg_proc WHERE oid='public.current_staff_role()'::regprocedure`
+  ),
+  true,
+  "current_staff_role retains the required privileged MFA boundary"
+);
+for (const role of ["anon", "authenticated", "service_role"])
+  for (const signature of ["has_role(text)", "has_any_role(text[])", "current_staff_role()"])
+    assert.equal(
+      await scalar(`SELECT has_function_privilege($1,$2,'EXECUTE')`, [role, signature]),
+      true,
+      `${role} keeps EXECUTE on ${signature}`
+    );
+await db.exec("SET ROLE anon");
+try {
+  assert.equal(await scalar(`SELECT public.has_role('admin')`), false, "anon has no admin role");
+  assert.equal(
+    await scalar(`SELECT public.has_any_role(ARRAY['admin','moderator'])`),
+    false,
+    "anon has no staff role"
+  );
+  await assert.rejects(db.query(`SELECT public.staff_role_of($1)`, [admin]), /permission denied/);
+} finally {
+  await db.exec("RESET ROLE");
+}
+const invokerMember = await person("member");
+await as(invokerMember, "admin", async () => {
+  await db.query(`SELECT set_config('test.jwt',$1,false)`, [
+    JSON.stringify({ aal: "aal2", app_metadata: { role: "admin" } }),
+  ]);
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    false,
+    "forged AAL2 JWT cannot grant admin"
+  );
+  assert.equal(
+    await scalar(`SELECT public.has_any_role(ARRAY['admin','moderator'])`),
+    false,
+    "forged AAL2 JWT cannot grant staff"
+  );
+  await assert.rejects(db.query(`SELECT public.staff_role_of($1)`, [admin]), /permission denied/);
+});
 await as(admin, "admin", async () => {
   assert.equal(
     await scalar(`SELECT public.current_staff_role()`),

@@ -161,6 +161,29 @@ describe("PUT /api/drafts", () => {
     expect(res.status).toBe(400);
   });
 
+  it.each([0.5, 2_147_483_648])(
+    "rejects a step outside the database integer range: %s",
+    async (step) => {
+      const res = await PUT(createPUTRequest({ flow: "listing", step, data: {} }));
+      expect(res.status).toBe(400);
+      expect(mockFrom).not.toHaveBeenCalled();
+    }
+  );
+
+  it("rejects arrays as draft data", async () => {
+    const res = await PUT(createPUTRequest({ flow: "listing", step: 1, data: [] }));
+    expect(res.status).toBe(400);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("rejects a multibyte draft exceeding 64 KiB", async () => {
+    const res = await PUT(
+      createPUTRequest({ flow: "listing", step: 1, data: { title: "é".repeat(33 * 1024) } })
+    );
+    expect(res.status).toBe(413);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
   it("returns 400 for missing data", async () => {
     const res = await PUT(createPUTRequest({ flow: "listing", step: 1 }));
     expect(res.status).toBe(400);

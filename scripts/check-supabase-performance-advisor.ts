@@ -3,6 +3,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
+import {
+  classifyLint,
+  type AdvisorLint,
+  type IndexMetadataRow,
+} from "./lib/supabase-performance-classification";
 
 type Args = {
   envFile: string | null;
@@ -18,37 +23,6 @@ type ProjectResponse = {
 
 type PerformanceAdvisorResponse = {
   lints?: AdvisorLint[];
-};
-
-type AdvisorLint = {
-  name: string;
-  title: string;
-  level: string;
-  categories?: string[];
-  description?: string;
-  detail?: string;
-  remediation?: string;
-  metadata?: Record<string, unknown>;
-};
-
-type IndexMetadataRow = {
-  schema_name: string;
-  table_name: string;
-  index_name: string;
-  index_columns: string[];
-  is_partial: boolean;
-  matching_foreign_keys: string[];
-};
-
-type ClassifiedLint = {
-  lint: AdvisorLint;
-  state: "actionable" | "accepted";
-  reason: string;
-};
-
-const acceptedApplicationIndexes: Record<string, string> = {
-  idx_account_profiles_suspended_active:
-    "Partial guardrail for suspended-account checks used by auth gates and admin intelligence pages.",
 };
 
 function printUsage(): void {
@@ -230,11 +204,6 @@ async function fetchManagementApi<T>(
   return (await response.json()) as T;
 }
 
-function extractIndexName(lint: AdvisorLint): string | null {
-  const match = lint.detail?.match(/Index \\?`([^`\\]+)\\?`/u);
-  return match?.[1] ?? null;
-}
-
 async function fetchIndexMetadata(
   token: string,
   projectRef: string
@@ -271,13 +240,16 @@ async function fetchIndexMetadata(
               table_class.relname AS table_name,
               index_class.relname AS index_name,
               index_record.indpred IS NOT NULL AS is_partial,
+              index_record.indisvalid AS is_valid,
+              index_record.indnkeyatts AS index_key_count,
+              pg_get_expr(index_record.indpred, index_record.indrelid) AS index_predicate,
               ARRAY(
                 SELECT attribute_record.attname
                 FROM unnest(index_record.indkey) WITH ORDINALITY AS key_record(attnum, ordinality)
-                JOIN pg_attribute AS attribute_record
+                LEFT JOIN pg_attribute AS attribute_record
                   ON attribute_record.attrelid = table_class.oid
                   AND attribute_record.attnum = key_record.attnum
-                WHERE key_record.attnum > 0
+                WHERE key_record.ordinality <= index_record.indnkeyatts
                 ORDER BY key_record.ordinality
               ) AS index_columns
             FROM pg_index AS index_record
@@ -293,8 +265,11 @@ async function fetchIndexMetadata(
             indexes.schema_name,
             indexes.table_name,
             indexes.index_name,
-            indexes.index_columns,
+            to_jsonb(indexes.index_columns) AS index_columns,
             indexes.is_partial,
+            indexes.is_valid,
+            indexes.index_key_count,
+            indexes.index_predicate,
             COALESCE(
               jsonb_agg(foreign_keys.constraint_name ORDER BY foreign_keys.constraint_name)
                 FILTER (WHERE foreign_keys.constraint_name IS NOT NULL),
@@ -310,7 +285,10 @@ async function fetchIndexMetadata(
             indexes.table_name,
             indexes.index_name,
             indexes.index_columns,
-            indexes.is_partial
+            indexes.is_partial,
+            indexes.is_valid,
+            indexes.index_key_count,
+            indexes.index_predicate
           ORDER BY indexes.schema_name, indexes.table_name, indexes.index_name;
         `,
       }),
@@ -318,53 +296,6 @@ async function fetchIndexMetadata(
   );
 
   return new Map(rows.map((row) => [row.index_name, row]));
-}
-
-function classifyLint(
-  lint: AdvisorLint,
-  indexMetadata: Map<string, IndexMetadataRow>
-): ClassifiedLint {
-  if (lint.name !== "unused_index") {
-    return {
-      lint,
-      state: "actionable",
-      reason: "This performance finding is not part of the accepted unused-index baseline.",
-    };
-  }
-
-  const indexName = extractIndexName(lint);
-  if (!indexName) {
-    return {
-      lint,
-      state: "actionable",
-      reason: "The advisor finding did not include a parseable index name.",
-    };
-  }
-
-  const acceptedApplicationReason = acceptedApplicationIndexes[indexName];
-  if (acceptedApplicationReason) {
-    return {
-      lint,
-      state: "accepted",
-      reason: acceptedApplicationReason,
-    };
-  }
-
-  const metadata = indexMetadata.get(indexName);
-  if (metadata && !metadata.is_partial && metadata.matching_foreign_keys.length > 0) {
-    return {
-      lint,
-      state: "accepted",
-      reason: `Keeps foreign key checks indexed for ${metadata.matching_foreign_keys.join(", ")}.`,
-    };
-  }
-
-  return {
-    lint,
-    state: "actionable",
-    reason:
-      "Unused index is not recognized as a foreign-key support index or documented application guardrail.",
-  };
 }
 
 async function main(): Promise<void> {

@@ -261,6 +261,21 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 ### KYC Provider Webhook Secret
 
+Before deploying the callback handler, apply
+`20260930170000_atomic_kyc_provider_webhook.sql` through the normal backed-up
+migration workflow (`pnpm supabase:db:push:safe`). Run `pnpm test:kyc:db`
+locally first. The service-only `apply_kyc_provider_webhook` RPC commits
+provider evidence, pending-step risk and audit in one transaction. Missing
+migrations or failed writes return HTTP 500 so the provider retries; duplicates
+return HTTP 200 without replaying risk changes. Staff-decided steps and uploads
+replaced in the verification session are preserved. Callback bodies are limited
+to 256 KiB and HMAC signatures must be exactly 64 hexadecimal characters.
+
+This migration does not replay callbacks previously acknowledged by the old
+handler. If a real asynchronous provider was used, reconcile its delivery
+history against pending verification cases and retry affected events through the
+provider after deployment. Keep manual review active during reconciliation.
+
 1. Rotate the KYC provider webhook signing secret in the provider dashboard.
 2. Update `KYC_WEBHOOK_SECRET` in Cloudflare Pages or Worker secrets.
 3. Run `pnpm validate:launch-env` and `pnpm preflight:prod` before deploy.
@@ -464,6 +479,16 @@ LIMIT 48;
 ## Deployment & Rollback
 
 ### Standard Deployment
+
+For the 30 September 2026 audit changes, run `pnpm test:kyc:db`,
+`pnpm test:staff-roles:db` and `pnpm test:commercial:db`, then apply the pending
+migrations through `pnpm supabase:db:push:safe` before deploying the
+application. `20260930170000_atomic_kyc_provider_webhook.sql` supplies the
+callback RPC; `20260930180000_role_predicates_security_invoker.sql` removes
+unnecessary elevation from three caller-scoped predicates while preserving their
+grants. The latter requires the preceding staff MFA and organisation
+column-privacy migrations. After rollout, rerun both strict Supabase advisors
+and the production smoke checks; retained findings still require review.
 
 ```bash
 # 1. Run the blocking launch gate

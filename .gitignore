@@ -81,6 +81,7 @@ docs/*
 !docs/domain-email-gmail-setup.md
 !.github/**/*.md
 !docs/RUNBOOK.md
+!docs/production-readiness-review-2026-09-30.md
 !docs/DESIGN-SYSTEM.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md

@@ -60,6 +60,18 @@ function validateCloudflareConfig() {
   const errors = [];
   const warnings = [];
 
+  // Node.js middleware/proxy support is experimental and unmaintained in
+  // OpenNext. Stop before modifying source or build environment files.
+  const proxyPath = path.join(repoRoot, "src", "proxy.ts");
+  const middlewarePath = path.join(repoRoot, "src", "middleware.ts");
+  if (fs.existsSync(proxyPath)) {
+    errors.push(
+      fs.existsSync(middlewarePath)
+        ? "Both src/proxy.ts and src/middleware.ts exist. Resolve the conflicting entrypoints before building; Cloudflare uses src/middleware.ts. No source files were changed."
+        : "src/proxy.ts uses Node.js middleware, which is not officially supported by OpenNext for Cloudflare. Review and migrate its behavior to src/middleware.ts before building. No source files were changed."
+    );
+  }
+
   const wranglerToml = readText(wranglerTomlPath);
   if (!wranglerToml) {
     errors.push(`Missing required Cloudflare config: ${wranglerTomlPath}`);
@@ -85,7 +97,7 @@ function validateCloudflareConfig() {
 
   if (wranglerToml) {
     if (!/main\s*=\s*"workers\/open-next-entry\.mjs"/.test(wranglerToml)) {
-      errors.push("wrangler.toml must set main = \"workers/open-next-entry.mjs\".");
+      errors.push('wrangler.toml must set main = "workers/open-next-entry.mjs".');
     }
 
     const requiredBindings = [
@@ -96,7 +108,9 @@ function validateCloudflareConfig() {
     ];
 
     for (const { name, className } of requiredBindings) {
-      const bindingPattern = new RegExp(`name\\s*=\\s*"${name}"\\s*,\\s*class_name\\s*=\\s*"${className}"`);
+      const bindingPattern = new RegExp(
+        `name\\s*=\\s*"${name}"\\s*,\\s*class_name\\s*=\\s*"${className}"`
+      );
       if (!bindingPattern.test(wranglerToml)) {
         errors.push(`wrangler.toml is missing Durable Object binding ${name} -> ${className}.`);
       }
@@ -104,7 +118,12 @@ function validateCloudflareConfig() {
   }
 
   if (openNextEntry) {
-    const requiredExports = ["DOQueueHandler", "DOShardedTagCache", "BucketCachePurge", "RateLimiterDO"];
+    const requiredExports = [
+      "DOQueueHandler",
+      "DOShardedTagCache",
+      "BucketCachePurge",
+      "RateLimiterDO",
+    ];
     for (const exportName of requiredExports) {
       if (!new RegExp(`export\\s*\\{[^}]*\\b${exportName}\\b[^}]*\\}`).test(openNextEntry)) {
         errors.push(`workers/open-next-entry.mjs must re-export ${exportName}.`);
@@ -152,22 +171,9 @@ function writeProductionEnvOverride() {
   }
 }
 
-function removeLegacyProxyEntrypoint() {
-  // Next.js 16 proxy.ts forces Node.js runtime, which is incompatible with
-  // Cloudflare Workers (edge). The preflight replaces it with middleware.ts
-  // (edge-compatible) so the OpenNext build succeeds.
-  const legacyProxyPath = path.join(repoRoot, "src", "proxy.ts");
-  if (!fs.existsSync(legacyProxyPath)) {
-    return;
-  }
-
-  fs.rmSync(legacyProxyPath, { force: true });
-  console.log("✓ Removed src/proxy.ts (Node.js runtime) — src/middleware.ts (edge) will be used for Cloudflare.");
-}
-
 function ensureMiddlewareForCloudflare() {
-  // After removing proxy.ts the build needs middleware.ts so the CSP and
-  // security-header logic actually runs on Cloudflare's edge runtime.
+  // The build needs middleware.ts so the CSP and security-header logic
+  // actually runs on Cloudflare's edge runtime.
   const middlewarePath = path.join(repoRoot, "src", "middleware.ts");
   if (fs.existsSync(middlewarePath)) {
     return;
@@ -223,10 +229,6 @@ if (validateOnly) {
   process.exit(0);
 }
 
-writeProductionEnvOverride();
-removeLegacyProxyEntrypoint();
-ensureMiddlewareForCloudflare();
-
 if (platform === "win32") {
   console.error(`
 ╔══════════════════════════════════════════════════════════════╗
@@ -254,6 +256,9 @@ if (platform === "win32") {
 `);
   process.exit(1);
 }
+
+writeProductionEnvOverride();
+ensureMiddlewareForCloudflare();
 
 // On Linux/macOS/WSL — all good
 if (isWSL()) {

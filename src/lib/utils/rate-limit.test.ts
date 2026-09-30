@@ -61,6 +61,17 @@ describe("rate-limit", () => {
       expect(result.retryAfter).toBe(30);
     });
 
+    it("does not log raw identifiers from rate-limit keys", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({ status: 429, json: async () => ({ retryAfter: 30 }) })
+      );
+      await checkRateLimit({ key: "private-person@example.com", action: "auth:lockout" });
+      expect(warn).toHaveBeenCalled();
+      expect(JSON.stringify(warn.mock.calls)).not.toContain("private-person@example.com");
+    });
+
     it("defaults retryAfter to 60 when worker does not provide it", async () => {
       vi.stubGlobal(
         "fetch",

@@ -6,31 +6,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { logAuditEvent } from "@/lib/services/audit";
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import {
-  findProviderResultByRef,
-  getArtifactStepType,
-  getVerificationStepForUserAndType,
-  updateProviderResult,
-  updateVerificationStepRiskDecision,
-} from "@/lib/services/kyc-webhook-store";
+import { applyKycProviderWebhook } from "@/lib/services/kyc-webhook-store";
+import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("KycWebhook");
-
-function isE2eLoggingContext(): boolean {
-  const runtimeMode = (process.env.VERIFYMZANSI_RUNTIME_MODE || "").toLowerCase();
-  return (
-    runtimeMode === "e2e" ||
-    runtimeMode === "playwright" ||
-    runtimeMode === "test" ||
-    process.env.PLAYWRIGHT_E2E_AUTH === "1" ||
-    process.env.PLAYWRIGHT_TEST_MODE === "1"
-  );
-}
 
 /**
  * Expected webhook payload shape (provider-agnostic).
@@ -103,6 +86,7 @@ function isExplicitLocalUnsignedWebhookBypass(request: NextRequest): boolean {
   const runtimeIsProduction = runtimeMode === "production";
   return (
     process.env.NODE_ENV === "development" &&
+    process.env.ENVIRONMENT !== "production" &&
     !runtimeIsProduction &&
     isTruthy(process.env.ENABLE_DEV_KYC_WEBHOOK_BYPASS) &&
     ["localhost", "127.0.0.1"].includes(request.nextUrl.hostname)
@@ -151,8 +135,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "KYC webhook temporarily unavailable" }, { status: 503 });
     }
 
+    let rawBody: string;
+    try {
+      rawBody = await readBoundedRequestText(request, 256 * 1024);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+      }
+      throw error;
+    }
     if (webhookSecret) {
-      const rawBody = await request.text();
       const signature = request.headers.get("x-webhook-signature");
 
       if (!signature) {
@@ -160,7 +152,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate signature is hex-encoded before comparison
-      if (!/^[a-f0-9]+$/i.test(signature)) {
+      if (!/^[a-f0-9]{64}$/i.test(signature)) {
         log.warn("Webhook signature is not valid hex encoding");
         return NextResponse.json({ error: "Invalid webhook signature format" }, { status: 401 });
       }
@@ -195,7 +187,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Explicitly allowed local/test-only bypass when a webhook secret is not configured.
       try {
-        body = await request.json();
+        body = JSON.parse(rawBody);
       } catch {
         return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
       }
@@ -236,154 +228,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ acknowledged: true, warning: "Test mode — no DB" });
     }
 
-    const adminClient = createAdminClient();
-    const providerResult = await findProviderResultByRef(
-      adminClient as never,
-      payloadData.provider_ref
-    );
-
-    if (!providerResult) {
-      if (isE2eLoggingContext()) {
-        log.info("No provider result found for ref", { providerRef: payloadData.provider_ref });
-      } else {
-        log.warn("No provider result found for ref", { providerRef: payloadData.provider_ref });
-      }
-      // Return 200 anyway to prevent webhook retries for unknown refs
-      return NextResponse.json({
-        acknowledged: true,
-        warning: "Unknown provider reference",
-      });
+    const result = await applyKycProviderWebhook(createAdminClient(), payloadData);
+    if (result.outcome === "unknown") {
+      log.warn("No provider result found for ref", { providerRef: payloadData.provider_ref });
+      return NextResponse.json({ acknowledged: true, warning: "Unknown provider reference" });
     }
-
-    // ── Idempotency: skip if this provider result was already processed ──
-    // A provider result that has left `pending` is terminal for webhook purposes:
-    // accepting a later webhook with a DIFFERENT status would let a replayed or
-    // forged callback flip an already-recorded decision (e.g. approved -> rejected)
-    // while the linked step is still pending. The guard is therefore status-agnostic.
-    const alreadyFinalized = providerResult.provider_status !== "pending";
-    const recentlyUpdated =
-      providerResult.updated_at &&
-      new Date().getTime() - new Date(providerResult.updated_at).getTime() < 2000;
-
-    if (alreadyFinalized || recentlyUpdated) {
-      log.info("Skipping webhook processing — already finalized or recently updated", {
-        providerRef: payloadData.provider_ref,
-        alreadyFinalized,
-        recentlyUpdated,
-      });
-      return NextResponse.json({
-        acknowledged: true,
-        duplicate: true,
-        skipped_reason: alreadyFinalized ? "already_finalized" : "recently_updated",
-        provider_result_id: providerResult.id,
-      });
-    }
-
-    // Update provider result with new data
-    const updateData: Record<string, unknown> = {
-      provider_status: payloadData.status,
-    };
-
-    if (payloadData.scores) {
-      if (payloadData.scores.face_match_score !== undefined) {
-        updateData.face_match_score = payloadData.scores.face_match_score;
-      }
-      if (payloadData.scores.liveness_score !== undefined) {
-        updateData.liveness_score = payloadData.scores.liveness_score;
-      }
-      if (payloadData.scores.doc_auth_score !== undefined) {
-        updateData.doc_auth_score = payloadData.scores.doc_auth_score;
-      }
-    }
-
-    if (payloadData.ocr_payload) {
-      updateData.ocr_payload = payloadData.ocr_payload;
-    }
-
-    if (payloadData.raw_response) {
-      updateData.raw_response = payloadData.raw_response;
-    }
-
-    await updateProviderResult(adminClient as never, providerResult.id, updateData);
-
-    // Recalculate risk on the linked verification step
-    const artifactStepType = await getArtifactStepType(
-      adminClient as never,
-      providerResult.artifact_id
-    );
-
-    if (artifactStepType) {
-      // Get all risk signals for this user+step
-      const step = await getVerificationStepForUserAndType(
-        adminClient as never,
-        providerResult.user_id,
-        artifactStepType
-      );
-
-      if (step) {
-        if (step.status !== "pending") {
-          log.info("Skipping KYC webhook step update for already-decided step", {
-            providerRef: payloadData.provider_ref,
-            stepId: step.id,
-            stepStatus: step.status,
-          });
-        } else {
-          // Map provider status to auto_status
-          const autoStatus =
-            payloadData.status === "approved"
-              ? "approved"
-              : payloadData.status === "rejected"
-                ? "rejected"
-                : "needs_manual_review";
-
-          // Bump risk score if provider rejected
-          let additionalRisk = 0;
-          if (payloadData.status === "rejected") {
-            additionalRisk = 30;
-          }
-
-          const newRiskScore = Math.min((step.risk_score || 0) + additionalRisk, 100);
-          const newRiskLevel =
-            newRiskScore <= 25
-              ? "low"
-              : newRiskScore <= 50
-                ? "medium"
-                : newRiskScore <= 75
-                  ? "high"
-                  : "critical";
-
-          await updateVerificationStepRiskDecision(adminClient as never, step.id, {
-            auto_status: autoStatus,
-            risk_score: newRiskScore,
-            risk_level: newRiskLevel,
-          });
-        }
-      }
-    }
-
-    // Audit log (best-effort)
-    try {
-      await logAuditEvent({
-        actorId: "system",
-        actorRole: "system",
-        action: "kyc_provider_webhook_received",
-        targetType: "kyc_provider_result",
-        targetId: providerResult.id,
-        metadata: {
-          provider_ref: payloadData.provider_ref,
-          status: payloadData.status,
-          user_id: providerResult.user_id,
-        },
-      });
-    } catch (auditErr) {
-      log.error("Audit log failed (non-fatal)", {
-        error: auditErr instanceof Error ? auditErr.message : "Unknown",
-      });
-    }
-
     return NextResponse.json({
       acknowledged: true,
-      provider_result_id: providerResult.id,
+      provider_result_id: result.provider_result_id,
+      ...(result.outcome === "duplicate"
+        ? { duplicate: true, skipped_reason: "already_finalized" }
+        : {}),
     });
   } catch (err) {
     log.error("Unexpected error", {

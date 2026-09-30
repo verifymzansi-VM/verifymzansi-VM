@@ -1,7 +1,7 @@
 /**
  * Generic rate-limit check against the Cloudflare rate-limiter worker.
  *
- * Fails open — if the worker is unreachable the request proceeds.
+ * Uses a local fallback, or fails closed for sensitive actions.
  */
 
 import { createLogger } from "@/lib/utils/logger";
@@ -189,7 +189,7 @@ export function getClientRateLimitKey(request: Request): string {
  * Returns `{ limited: true, retryAfter }` if the request should be blocked,
  * or `{ limited: false }` if the request should proceed.
  *
- * Fails open: if the worker is unavailable or errors, returns `{ limited: false }`.
+ * Uses the configured degraded mode when the worker is unavailable or errors.
  */
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const url = process.env.OTP_RATE_LIMITER_URL;
@@ -244,7 +244,8 @@ export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitR
         const data = (await res.json().catch(() => ({}))) as {
           retryAfter?: number;
         };
-        logger.warn("Rate limited", { action: opts.action, key: opts.key });
+        // Keys can be raw email addresses, phone numbers or IPs.
+        logger.warn("Rate limited", { action: opts.action });
         return { limited: true, retryAfter: data.retryAfter ?? 60 };
       }
 

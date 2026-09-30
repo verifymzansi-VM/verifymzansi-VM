@@ -1,116 +1,34 @@
-type ProviderResultRow = {
-  id: string;
-  artifact_id: string;
-  user_id: string;
-  provider_status: string;
-  updated_at: string | null;
-};
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-type VerificationArtifactRow = {
-  step_type: string;
-};
+type WebhookResult =
+  { outcome: "unknown" } | { outcome: "applied" | "duplicate"; provider_result_id: string };
 
-type VerificationStepRow = {
-  id: string;
-  status: string;
-  risk_score: number | null;
-};
-
-type KycWebhookStoreClient = {
-  from: (table: string) => {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string
-      ) => {
-        eq: (
-          column: string,
-          value: string
-        ) => {
-          single: () => Promise<{ data: VerificationStepRow | null }>;
-          maybeSingle: () => Promise<{ data: VerificationStepRow | null }>;
-        };
-        single: () => Promise<{
-          data: ProviderResultRow | VerificationArtifactRow | VerificationStepRow | null;
-          error?: { code?: string } | null;
-        }>;
-        maybeSingle: () => Promise<{
-          data: ProviderResultRow | VerificationArtifactRow | VerificationStepRow | null;
-          error?: { code?: string } | null;
-        }>;
-      };
-    };
-    update: (value: Record<string, unknown>) => {
-      eq: (column: string, value: string) => Promise<{ error?: { message?: string } | null }>;
-    };
-  };
-};
-
-export async function findProviderResultByRef(
-  adminClient: KycWebhookStoreClient,
-  providerRef: string
-): Promise<ProviderResultRow | null> {
-  const { data, error } = await adminClient
-    .from("kyc_provider_results")
-    .select("id, artifact_id, user_id, provider_status, updated_at")
-    .eq("provider_ref", providerRef)
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
+/** PostgreSQL commits callback evidence, step risk and audit under a row lock. */
+export async function applyKycProviderWebhook(
+  admin: Pick<SupabaseClient, "rpc">,
+  payload: {
+    provider_ref: string;
+    status: "approved" | "rejected" | "needs_manual_review";
+    scores?: Record<string, number>;
+    ocr_payload?: Record<string, unknown>;
+    raw_response?: Record<string, unknown>;
   }
-
-  return data as ProviderResultRow;
-}
-
-export async function updateProviderResult(
-  adminClient: KycWebhookStoreClient,
-  providerResultId: string,
-  updateData: Record<string, unknown>
-): Promise<void> {
-  const { error } = await adminClient
-    .from("kyc_provider_results")
-    .update(updateData)
-    .eq("id", providerResultId);
-  if (error) throw new Error(`updateProviderResult failed: ${error.message}`);
-}
-
-export async function getArtifactStepType(
-  adminClient: KycWebhookStoreClient,
-  artifactId: string
-): Promise<string | null> {
-  const { data } = await adminClient
-    .from("kyc_artifacts")
-    .select("step_type")
-    .eq("id", artifactId)
-    .maybeSingle();
-
-  return (data as VerificationArtifactRow | null)?.step_type ?? null;
-}
-
-export async function getVerificationStepForUserAndType(
-  adminClient: KycWebhookStoreClient,
-  userId: string,
-  stepType: string
-): Promise<VerificationStepRow | null> {
-  const { data } = await adminClient
-    .from("verification_steps")
-    .select("id, status, risk_score")
-    .eq("user_id", userId)
-    .eq("step_type", stepType)
-    .maybeSingle();
-
-  return (data as VerificationStepRow | null) ?? null;
-}
-
-export async function updateVerificationStepRiskDecision(
-  adminClient: KycWebhookStoreClient,
-  stepId: string,
-  updateData: Record<string, unknown>
-): Promise<void> {
-  const { error } = await adminClient
-    .from("verification_steps")
-    .update(updateData)
-    .eq("id", stepId);
-  if (error) throw new Error(`updateVerificationStepRiskDecision failed: ${error.message}`);
+): Promise<WebhookResult> {
+  const { data, error } = await admin.rpc("apply_kyc_provider_webhook", {
+    p_provider_ref: payload.provider_ref,
+    p_status: payload.status,
+    p_scores: payload.scores ?? {},
+    p_ocr_payload: payload.ocr_payload ?? null,
+    p_raw_response: payload.raw_response ?? null,
+  });
+  // Outages and missing migrations must trigger provider retries.
+  if (error) throw new Error(`KYC callback transaction failed: ${error.message}`);
+  if (data?.outcome === "unknown") return { outcome: "unknown" };
+  if (
+    (data?.outcome === "applied" || data?.outcome === "duplicate") &&
+    typeof data.provider_result_id === "string"
+  ) {
+    return { outcome: data.outcome, provider_result_id: data.provider_result_id };
+  }
+  throw new Error("Invalid KYC callback transaction result");
 }

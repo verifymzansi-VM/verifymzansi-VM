@@ -35,14 +35,15 @@ function isStrictMode(): boolean {
   return cliStrict || envStrict;
 }
 
-function getTrackedFiles(): string[] {
-  const result = spawnSync(gitBin, ["ls-files"], {
+function getSourceFiles(): string[] {
+  // Include new source files before staging, while respecting ignored local credentials.
+  const result = spawnSync(gitBin, ["ls-files", "--cached", "--others", "--exclude-standard"], {
     encoding: "utf8",
     stdio: "pipe",
     maxBuffer: GIT_MAX_BUFFER_BYTES,
   });
-  if (result.error) {
-    console.error("Failed to run git ls-files:", result.error.message);
+  if (result.error || result.status !== 0) {
+    console.error("Failed to run git ls-files:", result.error?.message ?? "non-zero exit status");
     process.exit(1);
   }
   return (result.stdout || "").split(/\r?\n/).filter(Boolean);
@@ -59,8 +60,11 @@ function getIgnoredSensitiveFiles(): string[] {
     }
   );
 
-  if (result.error) {
-    console.error("Failed to enumerate ignored files for strict scan:", result.error.message);
+  if (result.error || result.status !== 0) {
+    console.error(
+      "Failed to enumerate ignored files for strict scan:",
+      result.error?.message ?? "non-zero exit status"
+    );
     process.exit(1);
   }
 
@@ -82,7 +86,7 @@ function shouldSkipFile(path: string): boolean {
 }
 
 const strictMode = isStrictMode();
-const candidateFiles = new Set(getTrackedFiles());
+const candidateFiles = new Set(getSourceFiles());
 
 if (strictMode) {
   for (const file of getIgnoredSensitiveFiles()) {
@@ -133,7 +137,7 @@ if (findings.length > 0) {
 }
 
 if (strictMode) {
-  process.stdout.write("Strict secret scan mode enabled (tracked + ignored sensitive dirs).\n");
+  process.stdout.write("Strict secret scan mode enabled (source + ignored sensitive dirs).\n");
 }
 
 process.stdout.write("Secret scan passed.\n");

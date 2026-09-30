@@ -84,6 +84,19 @@ describe("csrf utilities", () => {
     expect(response?.status).toBe(403);
   });
 
+  it("does not log query strings containing recovery tokens", () => {
+    const warn = vi.fn();
+    enforceCsrfToken(
+      { url: "https://verifymzansi.com/api/test?code=recovery-secret", headers: new Headers() },
+      { warn }
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ path: "/api/test" })
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("recovery-secret");
+  });
+
   it("sets a readable CSRF cookie when the request does not already have one", () => {
     const request = new NextRequest("https://verifymzansi.com/");
     const response = NextResponse.next();

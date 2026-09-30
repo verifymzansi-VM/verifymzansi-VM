@@ -1524,12 +1524,68 @@ await test("organisation internals are private; directory sponsorship honours it
   await migration("20260930150000_organisation_directory_sponsored_window.sql");
   await migration("20260930150000_organisation_directory_sponsored_window.sql");
 
+  // Supabase auth/flag fixtures needed by the real MFA-aware role migration.
+  await db.exec(`CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql AS $$
+    SELECT coalesce(nullif(current_setting('test.jwt',true),''),'{}')::jsonb $$;
+    GRANT EXECUTE ON FUNCTION auth.jwt() TO anon, authenticated, service_role;
+    CREATE TABLE auth.mfa_factors(user_id uuid, status text);
+    CREATE TABLE public.feature_flags(key text PRIMARY KEY, enabled boolean);
+    INSERT INTO feature_flags VALUES ('staff_mfa_enforced',true);`);
+  await migration("20260930110000_staff_rls_mfa.sql");
+  await migration("20260930180000_role_predicates_security_invoker.sql");
+  await migration("20260930180000_role_predicates_security_invoker.sql");
+  for (const signature of [
+    "has_role(text)",
+    "has_any_role(text[])",
+    "organisation_id_is_listed(uuid)",
+  ]) {
+    assert.equal(
+      (await scalar(`SELECT prosecdef FROM pg_proc WHERE oid=$1::regprocedure`, [signature]))
+        .prosecdef,
+      false,
+      `${signature} no longer elevates privileges`
+    );
+    assert.equal(
+      (
+        await scalar(
+          `SELECT count(*)::int AS grants FROM pg_proc p,
+        LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE p.oid=$1::regprocedure AND a.grantee=0 AND a.privilege_type='EXECUTE'`,
+          [signature]
+        )
+      ).grants,
+      0,
+      `${signature} is not executable by PUBLIC`
+    );
+    for (const role of ["anon", "authenticated", "service_role"])
+      assert.equal(
+        (
+          await scalar(`SELECT has_function_privilege($1,$2,'EXECUTE') AS allowed`, [
+            role,
+            signature,
+          ])
+        ).allowed,
+        true,
+        `${role} retains EXECUTE on ${signature}`
+      );
+  }
+
   for (const [role, uid] of [
     ["anon", ""],
     ["authenticated", ownerA],
     ["authenticated", orgAdmin],
   ]) {
     await as(role, uid, async () => {
+      assert.equal(
+        (await scalar(`SELECT organisation_id_is_listed($1) AS listed`, [org])).listed,
+        true,
+        "the public-column lookup works through organisations RLS"
+      );
+      assert.equal(
+        (await scalar(`SELECT organisation_id_is_listed($1) AS listed`, [uuid()])).listed,
+        false,
+        "unknown organisations fail closed"
+      );
       await rejects(db.query(privateOrgRead, [org]), /permission denied/);
       await rejects(db.query(privateAffRead, [affA]), /permission denied/);
       for (const col of ["created_by", "contract_id", "admin_limit", "sponsored_capacity"])
@@ -1574,8 +1630,38 @@ await test("organisation internals are private; directory sponsorship honours it
       );
     });
   }
+  // Every lifecycle status retains the exact public-listing predicate.
+  for (const status of [
+    "invited",
+    "founding_trial",
+    "active_paid",
+    "affiliation_only",
+    "suspended",
+    "ended",
+  ]) {
+    await db.query(`UPDATE organisations SET programme_status=$2 WHERE id=$1`, [org, status]);
+    await as("anon", "", async () => {
+      assert.equal(
+        (await scalar(`SELECT organisation_id_is_listed($1) AS listed`, [org])).listed,
+        ["founding_trial", "active_paid", "affiliation_only"].includes(status),
+        `${status} matches the existing listed predicate`
+      );
+    });
+  }
+  await db.query(`UPDATE organisations SET programme_status='active_paid' WHERE id=$1`, [org]);
   // Private organisations remain hidden from the public affiliation branch.
   await db.query(`UPDATE organisations SET is_public=false WHERE id=$1`, [org]);
+  for (const [role, uid] of [
+    ["anon", ""],
+    ["authenticated", ownerA],
+  ])
+    await as(role, uid, async () =>
+      assert.equal(
+        (await scalar(`SELECT organisation_id_is_listed($1) AS listed`, [org])).listed,
+        false,
+        "private organisations cannot satisfy the public predicate"
+      )
+    );
   await as("anon", "", async () =>
     assert.equal(
       (await db.query(`SELECT id FROM organisation_affiliations WHERE id=$1`, [affA])).rows.length,

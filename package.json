@@ -26,7 +26,7 @@
     "video:still:promo": "remotion still remotion/index.ts VerifyMzansiPublicPromo output/verifymzansi-public-promo-poster.png --frame=390",
     "brand:assets": "node scripts/generate-brand-assets.js && node scripts/generate-final-icons.js",
     "build:cloudflare": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm secret-scan:strict && node scripts/patch-opennext-og-paths.js",
-    "preview:cloudflare": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm secret-scan:strict && pnpm exec wrangler dev",
+    "preview:cloudflare": "pnpm build:cloudflare && pnpm exec wrangler dev",
     "deploy": "pnpm validate:launch-env && pnpm build:cloudflare && pnpm exec opennextjs-cloudflare deploy --env production",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "pnpm exec eslint src",
@@ -46,7 +46,7 @@
     "emails:auth-templates": "tsx scripts/generate-auth-email-templates.ts",
     "secret-scan:strict": "tsx scripts/secret-scan.ts --strict",
     "test": "pnpm test:blocking",
-    "test:blocking": "tsx scripts/run-vitest.ts blocking && pnpm test:trials && pnpm test:commercial:db && pnpm test:payments:db && pnpm test:media:db && pnpm test:visits:db && pnpm test:staff-roles:db && pnpm test:decisions:db && pnpm test:queue-claims:db && pnpm test:dsar:db && pnpm test:dashboard:db && pnpm test:admin-lists:db",
+    "test:blocking": "tsx scripts/run-vitest.ts blocking && pnpm test:trials && pnpm test:commercial:db && pnpm test:payments:db && pnpm test:media:db && pnpm test:visits:db && pnpm test:staff-roles:db && pnpm test:decisions:db && pnpm test:queue-claims:db && pnpm test:dsar:db && pnpm test:dashboard:db && pnpm test:admin-lists:db && pnpm test:kyc:db",
     "stability:check": "pnpm lint --max-warnings=0 && pnpm typecheck && pnpm test:smoke && pnpm test:blocking && pnpm build && pnpm audit --prod",
     "test:all": "pnpm test:blocking && pnpm test:coverage:core && pnpm exec playwright test",
     "test:deep": "pnpm test:coverage:core && pnpm exec playwright test",
@@ -110,7 +110,8 @@
     "test:queue-claims:db": "node scripts/test-queue-claims.mjs",
     "test:dsar:db": "node scripts/test-dsar-operations.mjs",
     "test:dashboard:db": "node scripts/test-staff-dashboard.mjs",
-    "test:admin-lists:db": "node scripts/test-admin-list-helpers.mjs"
+    "test:admin-lists:db": "node scripts/test-admin-list-helpers.mjs",
+    "test:kyc:db": "node scripts/test-kyc-webhook.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
