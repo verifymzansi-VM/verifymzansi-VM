@@ -10,6 +10,8 @@ import {
   detailList,
   escapeHtml,
   isSafeHttpUrl,
+  messageBox,
+  noteBox,
   paragraph,
   sanitizeAppUrl,
 } from "@/lib/services/email-template";
@@ -453,9 +455,7 @@ export async function sendDsarCompletedEmail(
   summary?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const summaryHtml = summary
-    ? `<div class="details"><strong>Summary:</strong><br>${escapeHtml(summary)}</div>`
-    : "";
+  const summaryHtml = summary ? noteBox(`<strong>Summary:</strong><br>${escapeHtml(summary)}`) : "";
   const subject = `VerifyMzansi data request completed (${reference})`;
   const html = brandedEmail({
     tone: "success",
@@ -484,9 +484,7 @@ export async function sendDsarRejectedEmail(
   notes?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const notesHtml = notes
-    ? `<div class="details"><strong>Reason:</strong><br>${escapeHtml(notes)}</div>`
-    : "";
+  const notesHtml = notes ? noteBox(`<strong>Reason:</strong><br>${escapeHtml(notes)}`) : "";
   const subject = `VerifyMzansi data request update (${reference})`;
   const html = brandedEmail({
     tone: "danger",
@@ -556,7 +554,7 @@ export async function sendContactFormNotification(
         ["From", buyerName],
         ["Email", buyerEmail],
       ])}
-      <div class="message-box">${escapeHtml(message)}</div>
+      ${messageBox(message)}
       ${paragraph(`Reply directly to this email to respond to ${buyerName}.`)}
     `,
     cta: { label: "View all leads", href: `${appUrl}/dashboard/leads`, tone: "info" },

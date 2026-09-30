@@ -43,6 +43,7 @@
     "payments:audit": "tsx scripts/payment-security-audit.ts",
     "licenses:check": "tsx scripts/check-licenses.ts",
     "secret-scan": "tsx scripts/secret-scan.ts",
+    "emails:auth-templates": "tsx scripts/generate-auth-email-templates.ts",
     "secret-scan:strict": "tsx scripts/secret-scan.ts --strict",
     "test": "pnpm test:blocking",
     "test:blocking": "tsx scripts/run-vitest.ts blocking && pnpm test:trials && pnpm test:commercial:db && pnpm test:payments:db && pnpm test:media:db && pnpm test:visits:db && pnpm test:staff-roles:db && pnpm test:decisions:db && pnpm test:queue-claims:db && pnpm test:dsar:db && pnpm test:dashboard:db && pnpm test:admin-lists:db",
