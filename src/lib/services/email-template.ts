@@ -29,7 +29,7 @@ const DEFAULT_APP_URL = "https://verifymzansi.com";
  * Brand palette, mirrored from tailwind.config.ts. Email clients cannot read
  * CSS variables, so the hex values live here.
  */
-export const EMAIL_COLORS = {
+const EMAIL_COLORS = {
   green950: "#03241d",
   green900: "#073f32",
   green700: "#08624a",
