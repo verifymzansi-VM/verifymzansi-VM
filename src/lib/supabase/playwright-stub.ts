@@ -695,6 +695,18 @@ export function createPlaywrightStubSupabaseClient(
       return new PlaywrightQueryBuilder(table);
     },
     async rpc(fn: string, params?: Record<string, unknown>) {
+      if (fn === "apply_kyc_provider_webhook") {
+        const result = listPlaywrightTableRows("kyc_provider_results").find(
+          (row) => row.provider_ref === params?.p_provider_ref
+        );
+        if (!result) return { data: { outcome: "unknown" }, error: null };
+        // Known callbacks need the transactional SQL implementation. Fail closed
+        // rather than reporting success without updating evidence, risk and audit.
+        return {
+          data: null,
+          error: { message: "Known KYC callbacks require the database integration suite" },
+        };
+      }
       if (fn === "fulfill_ozow_payment") return fulfillPlaywrightPayment(params);
       if (fn === "increment_otp_attempt") {
         // Mirrors public.increment_otp_attempt: count every attempt on an
