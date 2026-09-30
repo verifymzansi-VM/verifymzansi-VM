@@ -307,7 +307,10 @@ describe("POST /api/media/upload-url", () => {
   it("returns a signed upload URL for valid requests", async () => {
     process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
     const insert = vi.fn().mockResolvedValue({ error: null });
-    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert }),
+      rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
+    });
 
     mockCreateClient.mockResolvedValue({
       auth: {
@@ -367,10 +370,71 @@ describe("POST /api/media/upload-url", () => {
     );
   });
 
+  it.each([
+    ["PT413", 413],
+    ["PT503", 503],
+  ])("returns no credentials when tracking rejects with %s", async (code, status) => {
+    vi.stubEnv("R2_PUBLIC_URL", "https://media.verifymzansi.com");
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { id: "profile-1" }, error: null }) }),
+        }),
+      }),
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        insert: vi
+          .fn()
+          .mockResolvedValue({ error: { code, message: "internal accounting detail" } }),
+      }),
+      rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
+    });
+    const response = await POST(
+      createRequest({ filename: "clip.mp4", contentType: "video/mp4", size: 2048 })
+    );
+    const body = await response.json();
+    expect(response.status).toBe(status);
+    expect(body.uploadUrl).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("internal accounting detail");
+    expect(body.code).toBe(
+      code === "PT413" ? "storage_quota_exceeded" : "storage_quota_unavailable"
+    );
+  });
+
+  it("does not issue upload credentials when the storage usage lookup fails", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }) },
+      from: () => ({
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { id: "profile-1" }, error: null }) }),
+        }),
+      }),
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn(),
+      rpc: vi.fn().mockRejectedValue(new Error("usage lookup unavailable")),
+    });
+    const response = await POST(
+      createRequest({
+        filename: "clip.mp4",
+        contentType: "video/mp4",
+        size: 2048,
+        area: "listing_video",
+      })
+    );
+    expect(response.status).toBe(503);
+    expect(mockGeneratePresignedUploadUrl).not.toHaveBeenCalled();
+  });
+
   it("accepts every configured upload area for video direct uploads", async () => {
     process.env.R2_PUBLIC_URL = "https://media.verifymzansi.com";
     const insert = vi.fn().mockResolvedValue({ error: null });
-    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert }),
+      rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
+    });
 
     mockCreateClient.mockResolvedValue({
       auth: {

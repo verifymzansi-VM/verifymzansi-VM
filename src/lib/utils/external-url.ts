@@ -22,8 +22,13 @@ export function normalizeUserEnteredUrlInput(value: unknown): unknown {
 
 export function isValidUserEnteredUrl(value: string): boolean {
   try {
-    new URL(normalizeUserEnteredUrl(value));
-    return true;
+    const url = new URL(normalizeUserEnteredUrl(value));
+    return (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password
+    );
   } catch {
     return false;
   }

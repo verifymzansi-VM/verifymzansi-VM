@@ -443,6 +443,72 @@ describe("POST /api/auth/login", () => {
     expect(mockRecordDistributedFailedLogin).toHaveBeenCalledWith("bad@test.com");
   });
 
+  it("persists the distributed failed attempt before returning an auth failure", async () => {
+    mockAuth({ data: { user: null }, error: { message: "Invalid login credentials" } });
+    let finish!: () => void;
+    mockRecordDistributedFailedLogin.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    let completed = false;
+    const response = POST(
+      createRequest({ email: "bad@test.com", password: "wrong", turnstileToken: "tok" })
+    ).then((result) => {
+      completed = true;
+      return result;
+    });
+    await vi.waitFor(() => expect(mockRecordDistributedFailedLogin).toHaveBeenCalled());
+    expect(completed).toBe(false);
+    finish();
+    expect((await response).status).toBe(401);
+  });
+
+  it.each([
+    { data: null, error: { message: "database unavailable" } },
+    { data: null, error: null },
+  ])("ends the new session when account status cannot be verified: %j", async (result) => {
+    const signOut = vi.fn().mockResolvedValue({ error: null });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        signInWithPassword: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+        signOut,
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => result }) }) }),
+    });
+    const response = await POST(
+      createRequest({ email: "member@test.com", password: "validPass123", turnstileToken: "tok" })
+    );
+    expect(response.status).toBe(503);
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(await response.text()).not.toContain("database unavailable");
+  });
+
+  it("ends a new session if the authoritative user lookup fails after sign-in", async () => {
+    const signOut = vi.fn().mockResolvedValue({ error: null });
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        signInWithPassword: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: null }, error: { message: "auth unavailable" } }),
+        signOut,
+      },
+    });
+    const response = await POST(
+      createRequest({ email: "member@test.com", password: "validPass123", turnstileToken: "tok" })
+    );
+    expect(response.status).toBe(503);
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
   it("blocks suspended accounts post-login and signs the user out", async () => {
     const mockSignOut = vi.fn().mockResolvedValue({ error: null });
     mockCreateClient.mockResolvedValue({

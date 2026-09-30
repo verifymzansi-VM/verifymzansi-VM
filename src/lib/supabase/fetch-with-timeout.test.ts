@@ -9,6 +9,10 @@ function hangingFetch() {
   return vi.fn(
     (_input: RequestInfo | URL, init?: RequestInit) =>
       new Promise<Response>((_resolve, reject) => {
+        if (init?.signal?.aborted) {
+          reject(init.signal.reason);
+          return;
+        }
         init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
       })
   );
@@ -36,6 +40,41 @@ describe("createTimeoutFetch", () => {
     });
     controller.abort(new Error("caller aborted"));
     await expect(pending).rejects.toThrow("caller aborted");
+  });
+
+  it("honours cancellation carried by a Request input", async () => {
+    vi.stubGlobal("fetch", hangingFetch());
+    const controller = new AbortController();
+    const request = new Request("https://example.supabase.co/rest/v1/x", {
+      signal: controller.signal,
+    });
+    const pending = createTimeoutFetch(10_000)(request);
+    controller.abort(new Error("request cancelled"));
+    await expect(pending).rejects.toThrow("request cancelled");
+  });
+
+  it("keeps the deadline when AbortSignal.any is unavailable", async () => {
+    const nativeAbortSignal = AbortSignal;
+    vi.stubGlobal("AbortSignal", { timeout: (ms: number) => nativeAbortSignal.timeout(ms) });
+    vi.stubGlobal("fetch", hangingFetch());
+    const controller = new AbortController();
+    await expect(
+      createTimeoutFetch(20)("https://example.supabase.co/rest/v1/x", { signal: controller.signal })
+    ).rejects.toMatchObject({ name: "TimeoutError" });
+  });
+
+  it("preserves a caller abort and removes fallback listeners", async () => {
+    const nativeAbortSignal = AbortSignal;
+    vi.stubGlobal("AbortSignal", { timeout: (ms: number) => nativeAbortSignal.timeout(ms) });
+    vi.stubGlobal("fetch", hangingFetch());
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, "removeEventListener");
+    const pending = createTimeoutFetch(10_000)("https://example.supabase.co/rest/v1/x", {
+      signal: controller.signal,
+    });
+    controller.abort(new Error("caller cancelled"));
+    await expect(pending).rejects.toThrow("caller cancelled");
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 });
 

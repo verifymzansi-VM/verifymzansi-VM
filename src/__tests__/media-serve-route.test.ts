@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockSend } = vi.hoisted(() => ({
@@ -35,8 +35,10 @@ function createRequest(headers: Record<string, string> = {}) {
 }
 
 describe("GET /api/media/serve/[...key]", () => {
+  afterEach(() => vi.unstubAllGlobals());
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSend.mockReset();
     process.env.R2_ACCOUNT_ID = "account";
     process.env.R2_ACCESS_KEY_ID = "access";
     process.env.R2_SECRET_ACCESS_KEY = "secret";
@@ -94,6 +96,7 @@ describe("GET /api/media/serve/[...key]", () => {
     });
 
     expect(res.status).toBe(400);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
   });
 
   it("forces SVG downloads and adds defensive CSP", async () => {
@@ -101,7 +104,15 @@ describe("GET /api/media/serve/[...key]", () => {
       ContentType: "image/svg+xml",
       ETag: '"etag-1"',
       Body: {
-        transformToByteArray: vi.fn().mockResolvedValue(new Uint8Array([60, 115, 118, 103, 62])),
+        transformToWebStream: vi.fn().mockImplementation(
+          () =>
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new Uint8Array([60, 115, 118, 103, 62]));
+                controller.close();
+              },
+            })
+        ),
       },
     });
 
@@ -121,7 +132,15 @@ describe("GET /api/media/serve/[...key]", () => {
       ContentType: "text/html",
       ETag: '"etag-html"',
       Body: {
-        transformToByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+        transformToWebStream: vi.fn().mockImplementation(
+          () =>
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new Uint8Array([1, 2, 3]));
+                controller.close();
+              },
+            })
+        ),
       },
     });
 
@@ -142,10 +161,12 @@ describe("GET /api/media/serve/[...key]", () => {
       body: new ReadableStream(),
       arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
     };
-    (process.env as unknown as Record<string, unknown>).PUBLIC_BUCKET = {
-      get: vi.fn().mockResolvedValue(obj),
-      head: vi.fn().mockResolvedValue(obj),
-    };
+    vi.stubGlobal("env", {
+      PUBLIC_BUCKET: {
+        get: vi.fn().mockResolvedValue(obj),
+        head: vi.fn().mockResolvedValue(obj),
+      },
+    });
 
     const res = await GET(createRequest(), {
       params: Promise.resolve({ key: ["media", "listing", "abc", "1730000-photo.jpg"] }),
@@ -177,13 +198,104 @@ describe("GET /api/media/serve/[...key]", () => {
     expect(res.headers.get("Accept-Ranges")).toBe("bytes");
   });
 
+  it("streams images without buffering the whole R2 object", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const arrayBuffer = vi.fn();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+    vi.stubGlobal("env", {
+      PUBLIC_BUCKET: {
+        get: async () => ({ size: bytes.length, etag: '"image"', body, arrayBuffer }),
+        head: vi.fn(),
+      },
+    });
+    const response = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "photo.jpg"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Length")).toBe("3");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("releases the R2 body on a conditional cache hit", async () => {
+    const cancel = vi.fn();
+    vi.stubGlobal("env", {
+      PUBLIC_BUCKET: {
+        get: async () => ({ size: 3, etag: '"image"', body: new ReadableStream({ cancel }) }),
+        head: vi.fn(),
+      },
+    });
+    const response = await GET(createRequest({ "if-none-match": '"image"' }), {
+      params: Promise.resolve({ key: ["media", "photo.jpg"] }),
+    });
+    expect(response.status).toBe(304);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("ETag")).toBe('"image"');
+  });
+
+  it("releases the S3 body on a conditional cache hit", async () => {
+    const cancel = vi.fn();
+    mockSend.mockResolvedValue({
+      ETag: '"image"',
+      Body: {
+        transformToWebStream: () => new ReadableStream({ cancel }),
+      },
+    });
+    const response = await GET(createRequest({ "if-none-match": '"image"' }), {
+      params: Promise.resolve({ key: ["media", "photo.jpg"] }),
+    });
+    expect(response.status).toBe(304);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects a successful variant fallback and releases discarded streams", async () => {
+    const discarded = vi.fn();
+    mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
+      if (command.input.Key.endsWith(".jpg")) throw new Error("temporary storage failure");
+      if (command.input.Key.endsWith(".jpeg") || command.input.Key.endsWith(".png")) {
+        return {
+          Body: {
+            transformToWebStream: () =>
+              new ReadableStream({
+                start(controller) {
+                  controller.enqueue(new Uint8Array([1, 2, 3]));
+                },
+                cancel: command.input.Key.endsWith(".png") ? discarded : undefined,
+              }),
+          },
+        };
+      }
+      throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
+    });
+    const response = await GET(createRequest(), {
+      params: Promise.resolve({ key: ["media", "photo.w400.webp"] }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/jpeg");
+    expect(discarded).toHaveBeenCalledTimes(1);
+    await response.body?.cancel();
+  });
+
   it("briefly caches an original served while a responsive variant is missing", async () => {
     mockSend.mockImplementation(async (command: { input: { Key: string } }) => {
       if (command.input.Key.endsWith(".jpg")) {
         return {
           ContentType: "image/jpeg",
           Body: {
-            transformToByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+            transformToWebStream: vi.fn().mockImplementation(
+              () =>
+                new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(new Uint8Array([1, 2, 3]));
+                    controller.close();
+                  },
+                })
+            ),
           },
         };
       }
@@ -224,6 +336,7 @@ describe("GET /api/media/serve/[...key]", () => {
     });
 
     expect(res.status).toBe(503);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
   });
 
   it("returns 429 when rate-limited", async () => {
@@ -234,6 +347,7 @@ describe("GET /api/media/serve/[...key]", () => {
     });
 
     expect(res.status).toBe(429);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     expect(res.headers.get("Retry-After")).toBe("60");
   });
 });

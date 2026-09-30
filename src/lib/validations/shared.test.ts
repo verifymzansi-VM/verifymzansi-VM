@@ -12,7 +12,29 @@ import {
   createBoundedIntegerSchema,
   createBooleanFlagSchema,
   createNonNegativeNumberSchema,
+  externalUrlSchema,
+  externalUrlOrEmptySchema,
 } from "./shared";
+
+describe("external URL ingress", () => {
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,test",
+    "file:///tmp/test",
+    "https://user:pass@example.com",
+  ])("rejects unsafe URLs in required and optional fields: %s", (value) => {
+    expect(externalUrlSchema().safeParse(value).success).toBe(false);
+    expect(externalUrlOrEmptySchema().safeParse(value).success).toBe(false);
+  });
+
+  it("preserves normalization, blank optional values, and length limits", () => {
+    expect(externalUrlSchema().parse(" www.example.co.za ")).toBe("https://www.example.co.za");
+    expect(externalUrlOrEmptySchema().parse(" ")).toBe("");
+    expect(externalUrlOrEmptySchema().parse(undefined)).toBeUndefined();
+    expect(externalUrlSchema("Invalid", 10).safeParse("https://example.com").success).toBe(false);
+    expect(externalUrlSchema().safeParse("").success).toBe(false);
+  });
+});
 
 // ── SA Phone Schema ─────────────────────────────────────────────────────────
 

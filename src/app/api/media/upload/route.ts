@@ -191,19 +191,25 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Per-account storage quota (admin setting) ──────────
-    const quotaError = await (async () => {
-      try {
-        return await checkStorageQuota(
-          getAdmin(),
-          user.id,
-          files.reduce((sum, file) => sum + file.size, 0),
-          uploadLimits.quotaBytes,
-          uploadLimits.quotaMb
-        );
-      } catch {
-        return null;
-      }
-    })();
+    let quotaError: string | null;
+    try {
+      quotaError = await checkStorageQuota(
+        getAdmin(),
+        user.id,
+        files.reduce((sum, file) => sum + file.size, 0),
+        uploadLimits.quotaBytes,
+        uploadLimits.quotaMb
+      );
+    } catch {
+      log.error("Media storage quota check unavailable", { userId: user.id });
+      return NextResponse.json(
+        {
+          error: "Unable to verify media storage allowance. Please try again shortly.",
+          code: "storage_quota_unavailable",
+        },
+        { status: 503 }
+      );
+    }
     if (quotaError) {
       return NextResponse.json({ error: quotaError }, { status: 413 });
     }
@@ -213,6 +219,7 @@ export async function POST(request: NextRequest) {
     const uploadedUrls: string[] = [];
     const errors: string[] = [];
     let hadUploadFailure = false;
+    let failureStatus = 500;
 
     for (const file of files) {
       const isImage = IMAGE_TYPES.has(file.type);
@@ -318,6 +325,47 @@ export async function POST(request: NextRequest) {
           file: uploadFile,
           contentType: file.type,
         });
+        // Persist before advertising the URL or generating derived objects.
+        // The database quota trigger arbitrates simultaneous uploads here.
+        const trackErr = await Promise.resolve(
+          getAdmin().from("media_uploads").insert({
+            user_id: user.id,
+            r2_key: key,
+            bucket,
+            url: result.url,
+            content_type: file.type,
+            file_size: uploadFile.size,
+            area,
+            validated_at: new Date().toISOString(),
+          })
+        ).then(
+          ({ error }) => error,
+          (error: unknown) => ({
+            message: error instanceof Error ? error.message : "Tracking unavailable",
+            code: undefined,
+          })
+        );
+        if (trackErr) {
+          hadUploadFailure = true;
+          failureStatus = trackErr.code === "PT413" ? 413 : trackErr.code === "PT503" ? 503 : 500;
+          log.error("Failed to track media upload — cleaning up orphaned R2 object", {
+            key,
+            error: trackErr.message,
+            userId: user.id,
+          });
+          try {
+            await deleteFromR2(bucket, key);
+          } catch (cleanupErr) {
+            log.error("Failed to clean up orphaned R2 object", {
+              key,
+              error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown",
+            });
+          }
+          errors.push(
+            `"${file.name}": ${trackErr.code === "PT413" ? "media storage allowance exceeded" : "upload tracking failed"}`
+          );
+          continue;
+        }
         uploadedUrls.push(result.url);
 
         // Generate responsive WebP variants (best-effort). Cloudflare Image
@@ -356,40 +404,6 @@ export async function POST(request: NextRequest) {
             });
           }
         }
-
-        // Track upload for orphan detection — blocking to ensure R2/DB consistency.
-        // This route validates inline (magic bytes, malware scan, EXIF strip)
-        // before storage, so the row is marked validated at insert time.
-        // file_size records the post-strip size so the row matches the stored object.
-        const { error: trackErr } = await getAdmin().from("media_uploads").insert({
-          user_id: user.id,
-          r2_key: key,
-          bucket,
-          url: result.url,
-          content_type: file.type,
-          file_size: uploadFile.size,
-          area,
-          validated_at: new Date().toISOString(),
-        });
-
-        if (trackErr) {
-          log.error("Failed to track media upload — cleaning up orphaned R2 object", {
-            key,
-            error: trackErr.message,
-            userId: user.id,
-          });
-          // Remove the R2 object to prevent orphans without DB records
-          try {
-            await deleteFromR2(bucket, key);
-          } catch (cleanupErr) {
-            log.error("Failed to clean up orphaned R2 object", {
-              key,
-              error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown",
-            });
-          }
-          errors.push(`"${file.name}": upload tracking failed`);
-          continue;
-        }
       } catch (err) {
         log.error(`Failed to upload ${file.name}`, {
           traceId,
@@ -400,6 +414,7 @@ export async function POST(request: NextRequest) {
           error: err instanceof Error ? err.message : "Unknown error",
         });
         hadUploadFailure = true;
+        failureStatus = 500;
         errors.push(`"${file.name}": upload failed`);
       }
     }
@@ -413,7 +428,7 @@ export async function POST(request: NextRequest) {
         urls: uploadedUrls,
         errors: hasErrors ? errors : undefined,
       },
-      { status: allFailed ? (hadUploadFailure ? 500 : 400) : hasErrors ? 207 : 200 }
+      { status: allFailed ? (hadUploadFailure ? failureStatus : 400) : hasErrors ? 207 : 200 }
     );
   } catch (err) {
     log.error("Unexpected error", {

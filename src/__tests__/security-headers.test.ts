@@ -264,12 +264,13 @@ describe("withSecurityHeaders", () => {
     expect(response.headers.get("Permissions-Policy")).toContain("camera=(self)");
   });
 
-  it("pins immutable caching on public media proxy responses", () => {
+  it("lets the public media handler choose caching from its response outcome", () => {
     const request = createRequest("/api/media/serve/media/listing/example.jpg");
     const proxyResponse = NextResponse.next();
     const response = withSecurityHeaders(request, proxyResponse);
 
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+    expect(response.headers.has("Cache-Control")).toBe(false);
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 
   it("prevents successful document responses from being cached", () => {

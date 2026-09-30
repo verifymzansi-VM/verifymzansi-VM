@@ -3,7 +3,8 @@ import { POST as uploadMedia } from "@/app/api/media/upload/route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { type NextRequest } from "next/server";
-import { uploadToR2 } from "@/lib/services/storage";
+import { uploadToR2, deleteFromR2, generateStorageKey } from "@/lib/services/storage";
+import { generateImageVariants } from "@/lib/services/image-variants";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -17,6 +18,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/services/storage", () => ({
   generateStorageKey: vi.fn().mockReturnValue("mock-key"),
   uploadToR2: vi.fn(),
+  deleteFromR2: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/lib/services/image-variants", () => ({
+  generateImageVariants: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -155,13 +160,126 @@ describe("Media Upload Routes", () => {
     vi.clearAllMocks();
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     adminInsert.mockResolvedValue({ error: null });
+    vi.mocked(deleteFromR2).mockResolvedValue(undefined);
+    vi.mocked(generateImageVariants).mockResolvedValue([]);
     vi.mocked(createAdminClient).mockReturnValue({
       from: vi.fn().mockReturnValue({ insert: adminInsert }),
+      rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
     } as never);
     vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   });
 
   describe("POST /api/media/upload", () => {
+    it.each([
+      [{ message: "database unavailable" }, 500],
+      [{ message: "internal quota detail", code: "PT413" }, 413],
+      [{ message: "internal settings detail", code: "PT503" }, 503],
+    ])(
+      "does not return an untracked URL or create variants on tracking failure: %j",
+      async (error, status) => {
+        mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+        mockSupabase.from.mockReturnValue({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+        });
+        adminInsert.mockResolvedValue({ error });
+        vi.mocked(uploadToR2).mockResolvedValue({
+          url: "https://example.com/deleted.jpg",
+        } as never);
+        const response = await uploadMedia(
+          createFormDataRequest([
+            new File(
+              [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1])],
+              "photo.jpg",
+              { type: "image/jpeg" }
+            ),
+          ])
+        );
+        const body = await response.json();
+        expect(response.status).toBe(status);
+        expect(body.success).toBe(false);
+        expect(body.urls).toEqual([]);
+        expect(deleteFromR2).toHaveBeenCalledWith("verifymzansi-public", "mock-key");
+        expect(generateImageVariants).not.toHaveBeenCalled();
+        expect(JSON.stringify(body)).not.toContain(error.message);
+      }
+    );
+
+    it("cleans up an object when the tracking request rejects", async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+      });
+      adminInsert.mockRejectedValue(new Error("network failure"));
+      vi.mocked(uploadToR2).mockResolvedValue({ url: "https://example.com/deleted.jpg" } as never);
+      const response = await uploadMedia(
+        createFormDataRequest([
+          new File(
+            [new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1])],
+            "photo.jpg",
+            { type: "image/jpeg" }
+          ),
+        ])
+      );
+      expect(response.status).toBe(500);
+      expect((await response.json()).urls).toEqual([]);
+      expect(deleteFromR2).toHaveBeenCalledTimes(1);
+      expect(generateImageVariants).not.toHaveBeenCalled();
+    });
+    it("returns only tracked URLs when a later file loses the quota race", async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+      });
+      adminInsert
+        .mockResolvedValueOnce({ error: null })
+        .mockResolvedValueOnce({ error: { code: "PT413", message: "quota exceeded" } });
+      vi.mocked(generateStorageKey)
+        .mockReturnValueOnce("kept-key")
+        .mockReturnValueOnce("deleted-key");
+      vi.mocked(uploadToR2)
+        .mockResolvedValueOnce({ url: "https://example.com/kept.jpg" } as never)
+        .mockResolvedValueOnce({ url: "https://example.com/deleted.jpg" } as never);
+      const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
+      const response = await uploadMedia(
+        createFormDataRequest([
+          new File([bytes], "kept.jpg", { type: "image/jpeg" }),
+          new File([bytes], "deleted.jpg", { type: "image/jpeg" }),
+        ])
+      );
+      expect(response.status).toBe(207);
+      expect((await response.json()).urls).toEqual(["https://example.com/kept.jpg"]);
+      expect(deleteFromR2).toHaveBeenCalledExactlyOnceWith("verifymzansi-public", "deleted-key");
+      expect(generateImageVariants).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects an upload before storage writes if the usage lookup fails", async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" }, error: null }),
+      });
+      vi.mocked(createAdminClient).mockReturnValue({
+        from: vi.fn(),
+        rpc: vi
+          .fn()
+          .mockResolvedValue({ data: null, error: { message: "sensitive database detail" } }),
+      } as never);
+      const file = new File([new Uint8Array([0xff, 0xd8, 0xff])], "photo.jpg", {
+        type: "image/jpeg",
+      });
+      const response = await uploadMedia(createFormDataRequest([file]));
+      expect(response.status).toBe(503);
+      expect(vi.mocked(uploadToR2)).not.toHaveBeenCalled();
+      expect(await response.text()).not.toContain("sensitive database detail");
+    });
+
     it("rejects unauthenticated uploads", async () => {
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: null } });
 

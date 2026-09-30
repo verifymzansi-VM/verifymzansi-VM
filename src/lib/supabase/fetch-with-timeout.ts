@@ -8,11 +8,37 @@
  */
 const SUPABASE_FETCH_TIMEOUT_MS = 15_000;
 
-function combineSignals(timeout: AbortSignal, caller?: AbortSignal | null): AbortSignal {
-  if (!caller) return timeout;
+function combineSignals(
+  timeout: AbortSignal,
+  caller?: AbortSignal | null
+): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  if (!caller) return { signal: timeout, cleanup: () => {} };
   const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any;
-  // Runtimes without AbortSignal.any keep the caller's own cancellation.
-  return typeof anyFn === "function" ? anyFn.call(AbortSignal, [caller, timeout]) : caller;
+  if (typeof anyFn === "function") {
+    return { signal: anyFn.call(AbortSignal, [caller, timeout]), cleanup: () => {} };
+  }
+
+  // Older runtimes must still enforce the deadline when a caller has supplied
+  // cancellation. Preserve the first abort reason and release both listeners.
+  const controller = new AbortController();
+  const onCallerAbort = () => controller.abort(caller.reason);
+  const onTimeoutAbort = () => controller.abort(timeout.reason);
+  if (caller.aborted) onCallerAbort();
+  else if (timeout.aborted) onTimeoutAbort();
+  else {
+    caller.addEventListener("abort", onCallerAbort, { once: true });
+    timeout.addEventListener("abort", onTimeoutAbort, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      caller.removeEventListener("abort", onCallerAbort);
+      timeout.removeEventListener("abort", onTimeoutAbort);
+    },
+  };
 }
 
 /**
@@ -22,9 +48,13 @@ function combineSignals(timeout: AbortSignal, caller?: AbortSignal | null): Abor
  * runtime/test replacements of fetch keep working.
  */
 export function createTimeoutFetch(timeoutMs: number = SUPABASE_FETCH_TIMEOUT_MS): typeof fetch {
-  return (input: RequestInfo | URL, init?: RequestInit) =>
-    globalThis.fetch(input, {
-      ...init,
-      signal: combineSignals(AbortSignal.timeout(timeoutMs), init?.signal),
-    });
+  return async (input: RequestInfo | URL, init?: RequestInit) => {
+    const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    const combined = combineSignals(AbortSignal.timeout(timeoutMs), callerSignal);
+    try {
+      return await globalThis.fetch(input, { ...init, signal: combined.signal });
+    } finally {
+      combined.cleanup();
+    }
+  };
 }

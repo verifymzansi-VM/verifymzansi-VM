@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -130,13 +131,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    void createNotification({
-      userId: user.id,
-      type: "warning",
-      title: "Subscription cancelled",
-      message: "Your active subscription was cancelled. Your paid features are now disabled.",
-      href: "/billing",
-    }).catch((err: unknown) => log.warn("Cancel notification failed", { error: String(err) }));
+    scheduleBackgroundTask(
+      createNotification({
+        userId: user.id,
+        type: "warning",
+        title: "Subscription cancelled",
+        message: "Your active subscription was cancelled. Your paid features are now disabled.",
+        href: "/billing",
+      }).catch((err: unknown) => log.warn("Cancel notification failed", { error: String(err) })),
+      "owner notification"
+    );
 
     return NextResponse.json({ success: true, entitlementId: entitlement.id });
   } catch (error) {

@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -142,19 +143,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const admin = createAdminClient();
         const rpc = admin.rpc?.bind(admin);
         if (rpc) {
-          Promise.resolve(
-            rpc("record_content_view", {
-              p_target_id: id,
-              p_target_type: "promotion",
-              p_viewer_key: viewerKey,
-              p_viewer_user_id: user?.id ?? null,
-              p_viewer_ip_hash: null,
-            })
-          )
-            .then(({ error }) => {
-              if (error) log.warn("View count increment failed", { id, error: error.message });
-            })
-            .catch((err: unknown) => log.warn("View count RPC error", { id, error: String(err) }));
+          scheduleBackgroundTask(
+            Promise.resolve(
+              rpc("record_content_view", {
+                p_target_id: id,
+                p_target_type: "promotion",
+                p_viewer_key: viewerKey,
+                p_viewer_user_id: user?.id ?? null,
+                p_viewer_ip_hash: null,
+              })
+            )
+              .then(({ error }) => {
+                if (error) log.warn("View count increment failed", { id, error: error.message });
+              })
+              .catch((err: unknown) =>
+                log.warn("View count RPC error", { id, error: String(err) })
+              ),
+            "promotion view tracking"
+          );
         }
       } catch (viewError) {
         log.warn("View count tracking setup failed", {
@@ -417,13 +423,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
 
       if (shouldSendOwnerLifecycleNotifications()) {
-        void createNotification({
-          userId: user.id,
-          type: "warning",
-          title: "Tourism & Event edit submitted for review",
-          message: `\"${data.title}\" will stay live with its current approved details until this edit is approved.`,
-          href: "/dashboard/tourism-events",
-        });
+        scheduleBackgroundTask(
+          createNotification({
+            userId: user.id,
+            type: "warning",
+            title: "Tourism & Event edit submitted for review",
+            message: `\"${data.title}\" will stay live with its current approved details until this edit is approved.`,
+            href: "/dashboard/tourism-events",
+          }),
+          "owner notification"
+        );
       }
 
       return contentEditSubmittedResponse(id, existing.approved_edit_count);
@@ -493,17 +502,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      void createNotification({
-        userId: user.id,
-        type: shouldMoveBackToModeration ? "warning" : "info",
-        title: shouldMoveBackToModeration
-          ? "Tourism & Event post moved to review"
-          : "Tourism & Event post updated",
-        message: shouldMoveBackToModeration
-          ? `\"${data.title}\" was updated and is now pending moderation.`
-          : `\"${data.title}\" was updated successfully.`,
-        href: "/dashboard/tourism-events",
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: shouldMoveBackToModeration ? "warning" : "info",
+          title: shouldMoveBackToModeration
+            ? "Tourism & Event post moved to review"
+            : "Tourism & Event post updated",
+          message: shouldMoveBackToModeration
+            ? `\"${data.title}\" was updated and is now pending moderation.`
+            : `\"${data.title}\" was updated successfully.`,
+          href: "/dashboard/tourism-events",
+        }),
+        "owner notification"
+      );
     }
 
     return NextResponse.json({ success: true });

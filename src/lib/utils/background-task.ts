@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { createLogger } from "./logger";
 
 const log = createLogger("BackgroundTask");
@@ -5,10 +6,10 @@ const log = createLogger("BackgroundTask");
 /**
  * Schedule fire-and-forget async work so it survives the HTTP response.
  *
- * On Cloudflare Workers (OpenNext), unawaited promises are not guaranteed to
- * complete once the response is sent, so the task is registered with the
- * execution context's `waitUntil`. Outside Workers (dev/test) there is no
- * execution context, so the task simply runs detached with failures logged.
+ * Next.js registers the promise synchronously through `after`, which OpenNext
+ * connects to the Cloudflare request's `waitUntil`. Registration must happen
+ * before returning the response, including on the first request in an isolate.
+ * Outside a Next.js request (scripts/tests), the observed task runs detached.
  */
 export function scheduleBackgroundTask(task: Promise<unknown>, label = "background task"): void {
   // Always observe rejections so a failed task never surfaces as an
@@ -20,16 +21,16 @@ export function scheduleBackgroundTask(task: Promise<unknown>, label = "backgrou
     });
   });
 
-  void (async () => {
-    try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const { ctx } = await getCloudflareContext({ async: true });
-      if (ctx && typeof ctx.waitUntil === "function") {
-        ctx.waitUntil(observed);
-      }
-    } catch {
-      // Not running on Cloudflare Workers — the detached task above already
-      // logs failures, so there is nothing more to do.
+  try {
+    after(observed);
+  } catch (error) {
+    // Tests and scripts have no Next.js request scope. In production, surface
+    // failed registration so lost request lifetime protection is observable.
+    if (process.env.NODE_ENV === "production") {
+      log.error("Background task registration failed", {
+        label,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
-  })();
+  }
 }

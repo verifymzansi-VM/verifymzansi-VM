@@ -229,14 +229,32 @@ export async function POST(request: NextRequest) {
       // signed out immediately so they never hold a valid session.
       const {
         data: { user },
+        error: currentUserError,
       } = await supabase.auth.getUser();
+      if (currentUserError || !user) {
+        await supabase.auth.signOut();
+        log.warn("Login session verification unavailable");
+        return NextResponse.json(
+          { error: "Unable to verify your session. Please try again shortly." },
+          { status: 503 }
+        );
+      }
       if (user) {
         const adminClient = createAdminClient();
-        const { data: accountProfile } = await adminClient
+        const { data: accountProfile, error: profileError } = await adminClient
           .from("account_profiles")
           .select("account_status")
           .eq("user_id", user.id)
           .maybeSingle();
+
+        if (profileError || !accountProfile) {
+          await supabase.auth.signOut();
+          log.warn("Login account status unavailable", { userId: user.id });
+          return NextResponse.json(
+            { error: "Unable to verify account status. Please try again shortly." },
+            { status: 503 }
+          );
+        }
 
         const accountStatus = accountProfile?.account_status;
         if (
@@ -261,7 +279,7 @@ export async function POST(request: NextRequest) {
       // Record failed attempt for ALL auth errors including email-not-confirmed
       // to prevent lockout bypass via unconfirmed accounts.
       recordFailedLogin(parsedBody.data.email);
-      recordDistributedFailedLogin(parsedBody.data.email).catch((err) => {
+      await recordDistributedFailedLogin(parsedBody.data.email).catch((err) => {
         log.warn("Distributed lockout recording failed", {
           email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
           error: err instanceof Error ? err.message : String(err),

@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -597,22 +598,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      void createNotification({
-        userId: user.id,
-        type: "info",
-        title: "Tourism & Event post submitted",
-        message: `\"${data.title}\" was submitted for review.`,
-        href: "/dashboard/tourism-events",
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: "info",
+          title: "Tourism & Event post submitted",
+          message: `\"${data.title}\" was submitted for review.`,
+          href: "/dashboard/tourism-events",
+        }),
+        "owner notification"
+      );
     }
 
-    void notifyStaffForAdminEvent({
-      capability: "queue:view",
-      title: "New tourism or event submission",
-      message: `\"${data.title}\" is waiting in the moderation queue.`,
-      href: "/admin/tourism-events",
-      excludeUserId: user.id,
-    });
+    scheduleBackgroundTask(
+      notifyStaffForAdminEvent({
+        capability: "queue:view",
+        title: "New tourism or event submission",
+        message: `\"${data.title}\" is waiting in the moderation queue.`,
+        href: "/admin/tourism-events",
+        excludeUserId: user.id,
+      }),
+      "staff notification"
+    );
 
     return NextResponse.json({ success: true, promotion: { id: promotion.id } }, { status: 201 });
   } catch (err) {

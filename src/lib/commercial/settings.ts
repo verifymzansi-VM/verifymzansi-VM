@@ -204,24 +204,33 @@ export async function getMediaUploadLimits(client: SettingsReader): Promise<{
 
 /**
  * Per-account storage quota. Returns an error message when the new upload
- * would exceed it; fails open if usage cannot be read (uploads are still
- * size-limited and cleaned up as orphans).
+ * would exceed it. Unavailable or malformed usage must block uploads rather
+ * than silently treating the account as empty.
  */
 export async function checkStorageQuota(
-  admin: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown }> },
+  admin: {
+    rpc: (
+      fn: string,
+      args: Record<string, unknown>
+    ) => PromiseLike<{ data: unknown; error?: unknown }>;
+  },
   userId: string,
   incomingBytes: number,
   quotaBytes: number,
   quotaMb: number
 ): Promise<string | null> {
-  try {
-    const { data } = await admin.rpc("media_storage_used", { p_user: userId });
-    const used = typeof data === "number" ? data : Number(data ?? 0);
-    if (Number.isFinite(used) && used + incomingBytes > quotaBytes) {
-      return `Your media storage allowance (${quotaMb} MB) is full. Remove unused posts or contact VerifyMzansi.`;
-    }
-  } catch {
-    return null;
+  const { data, error } = await admin.rpc("media_storage_used", { p_user: userId });
+  const used =
+    typeof data === "number"
+      ? data
+      : typeof data === "string" && /^\d+$/.test(data)
+        ? Number(data)
+        : NaN;
+  if (error || !Number.isSafeInteger(used) || used < 0) {
+    throw new Error("Media storage usage is unavailable");
+  }
+  if (used + incomingBytes > quotaBytes) {
+    return `Your media storage allowance (${quotaMb} MB) is full. Remove unused posts or contact VerifyMzansi.`;
   }
   return null;
 }

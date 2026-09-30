@@ -2,7 +2,7 @@ import { z } from "zod";
 import { validateSaIdFull } from "@/lib/utils/sa-id-validation";
 import { sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
-import { normalizeUserEnteredUrlInput } from "@/lib/utils/external-url";
+import { isValidUserEnteredUrl, normalizeUserEnteredUrlInput } from "@/lib/utils/external-url";
 
 function trimStringInput(value: unknown): unknown {
   return typeof value === "string" ? value.trim() : value;
@@ -121,12 +121,21 @@ export const optionalUuidSchema = z.preprocess(trimToUndefined, uuidSchema.optio
 export function externalUrlOrEmptySchema(message = "Enter a valid URL", max = 2000) {
   return z.preprocess(
     normalizeUserEnteredUrlInput,
-    z.string().url(message).max(max).optional().or(z.literal(""))
+    z
+      .string()
+      .url(message)
+      .max(max)
+      .refine(isValidUserEnteredUrl, message)
+      .optional()
+      .or(z.literal(""))
   );
 }
 
 export function externalUrlSchema(message = "Enter a valid URL", max = 2000) {
-  return z.preprocess(normalizeUserEnteredUrlInput, z.string().url(message).max(max));
+  return z.preprocess(
+    normalizeUserEnteredUrlInput,
+    z.string().url(message).max(max).refine(isValidUserEnteredUrl, message)
+  );
 }
 
 const provinceSchema = z.string().min(1, "Province is required").max(50);

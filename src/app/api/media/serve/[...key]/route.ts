@@ -284,7 +284,11 @@ async function serveViaR2Binding(
 
   // 304 Not Modified
   if (ifNoneMatch && ifNoneMatch === obj.etag) {
-    return new NextResponse(null, { status: 304 });
+    await obj.body.cancel();
+    return new NextResponse(null, {
+      status: 304,
+      headers: { ETag: obj.etag, "Cache-Control": "public, max-age=31536000, immutable" },
+    });
   }
 
   const contentType = MIME_MAP[ext] || obj.httpMetadata?.contentType || "application/octet-stream";
@@ -305,15 +309,12 @@ async function serveViaR2Binding(
     });
   }
 
-  // Image → buffer for Content-Length accuracy
-  const buffer = await obj.arrayBuffer();
-
   const isSvg = ext === "svg";
   const disposition = isSvg
     ? `attachment; filename="${deriveFilename(key)}"`
     : `inline; filename="${deriveFilename(key)}"`;
 
-  return new NextResponse(buffer, {
+  return new NextResponse(obj.body, {
     status: 200,
     headers: {
       "Content-Type": contentType,
@@ -478,7 +479,11 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
 
     // Support 304 Not Modified
     if (ifNoneMatch && response.ETag && ifNoneMatch === response.ETag) {
-      return new NextResponse(null, { status: 304 });
+      await response.Body.transformToWebStream().cancel();
+      return new NextResponse(null, {
+        status: 304,
+        headers: { ETag: response.ETag, "Cache-Control": "public, max-age=31536000, immutable" },
+      });
     }
 
     // Prefer the extension-derived MIME over stored metadata (see note above).
@@ -504,9 +509,9 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
       });
     }
 
-    // For non-video files (images), buffer is fine (they're small)
-    const bodyBytes = await response.Body.transformToByteArray();
-    const buffer = Buffer.from(bodyBytes);
+    // Stream images as well as video. R2 metadata supplies the content length;
+    // buffering each original and fallback probe multiplies isolate memory use.
+    const body = response.Body.transformToWebStream();
 
     // SVG files can contain embedded scripts — force download instead of inline rendering
     const isSvg = ext === "svg";
@@ -514,11 +519,13 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
       ? `attachment; filename="${deriveFilename(key)}"`
       : `inline; filename="${deriveFilename(key)}"`;
 
-    return new NextResponse(buffer, {
+    return new NextResponse(body, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Length": String(buffer.length),
+        ...(response.ContentLength != null
+          ? { "Content-Length": String(response.ContentLength) }
+          : {}),
         "Cache-Control": "public, max-age=31536000, immutable",
         "Content-Disposition": disposition,
         ...(response.ETag ? { ETag: response.ETag } : {}),
@@ -542,7 +549,7 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
   }
 }
 
-export async function GET(
+async function getMediaResponse(
   request: NextRequest,
   { params }: { params: Promise<{ key: string[] }> }
 ) {
@@ -600,11 +607,17 @@ export async function GET(
           serveMediaForKey(request, `${stem}.${originalExt}`)
         )
       );
-      const hit = probes.find((probe) => probe.status !== 404);
+      // A failure probing one extension must not hide an existing original.
+      const hit =
+        probes.find((probe) => probe.ok || probe.status === 304) ??
+        probes.find((probe) => probe.status !== 404);
+      await Promise.allSettled(
+        probes.filter((probe) => probe !== hit).map((probe) => probe.body?.cancel())
+      );
       if (hit) {
         // The original can be replaced by a generated variant at this URL.
         // Do not cache the temporary fallback as immutable for a year.
-        if (hit.ok) {
+        if (hit.ok || hit.status === 304) {
           hit.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
         }
         return hit;
@@ -612,5 +625,14 @@ export async function GET(
     }
   }
 
+  return response;
+}
+
+export async function GET(request: NextRequest, context: { params: Promise<{ key: string[] }> }) {
+  const response = await getMediaResponse(request, context);
+  // Errors, throttling and redirects must not inherit immutable asset caching.
+  if (!response.headers.has("Cache-Control")) {
+    response.headers.set("Cache-Control", "private, no-store");
+  }
   return response;
 }

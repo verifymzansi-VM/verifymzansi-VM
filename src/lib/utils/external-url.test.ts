@@ -25,6 +25,20 @@ describe("normalizeUserEnteredUrl", () => {
 });
 
 describe("isValidUserEnteredUrl", () => {
+  it.each([
+    "javascript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "file:///etc/passwd",
+    "ftp://example.com/file",
+    "https://user:password@example.com",
+  ])("rejects unsafe or credential-bearing external links: %s", (value) => {
+    expect(isValidUserEnteredUrl(value)).toBe(false);
+  });
+
+  it.each(["https://example.com/path?q=1#section", "http://example.co.za"])(
+    "accepts web links: %s",
+    (value) => expect(isValidUserEnteredUrl(value)).toBe(true)
+  );
   it("accepts bare domains and rejects words", () => {
     expect(isValidUserEnteredUrl("www.example.co.za")).toBe(true);
     expect(isValidUserEnteredUrl("not-a-url")).toBe(false);

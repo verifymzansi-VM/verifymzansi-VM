@@ -695,6 +695,12 @@ export function createPlaywrightStubSupabaseClient(
       return new PlaywrightQueryBuilder(table);
     },
     async rpc(fn: string, params?: Record<string, unknown>) {
+      if (fn === "media_storage_used") {
+        const used = listPlaywrightTableRows("media_uploads")
+          .filter((row) => row.user_id === params?.p_user)
+          .reduce((total, row) => total + Number(row.file_size ?? 0), 0);
+        return { data: used, error: null };
+      }
       if (fn === "apply_kyc_provider_webhook") {
         const result = listPlaywrightTableRows("kyc_provider_results").find(
           (row) => row.provider_ref === params?.p_provider_ref

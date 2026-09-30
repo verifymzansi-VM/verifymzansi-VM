@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { createClient } from "@/lib/supabase/server";
@@ -173,17 +174,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const admin = createAdminClient();
         const rpc = admin.rpc?.bind(admin);
         if (rpc) {
-          void rpc("record_content_view", {
-            p_target_id: id,
-            p_target_type: "business",
-            p_viewer_key: viewerKey,
-            p_viewer_user_id: currentUser?.id ?? null,
-            p_viewer_ip_hash: null,
-          }).then(({ error: viewErr }) => {
-            if (viewErr) {
-              log.warn("View tracking failed", { error: viewErr.message, businessId: id });
-            }
-          });
+          scheduleBackgroundTask(
+            Promise.resolve(
+              rpc("record_content_view", {
+                p_target_id: id,
+                p_target_type: "business",
+                p_viewer_key: viewerKey,
+                p_viewer_user_id: currentUser?.id ?? null,
+                p_viewer_ip_hash: null,
+              }).then(({ error: viewErr }) => {
+                if (viewErr) {
+                  log.warn("View tracking failed", { error: viewErr.message, businessId: id });
+                }
+              })
+            ),
+            "content view tracking"
+          );
         }
       } catch (viewError) {
         log.warn("View tracking setup failed", {
@@ -423,13 +429,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
 
       if (shouldSendOwnerLifecycleNotifications()) {
-        void createNotification({
-          userId: user.id,
-          type: "warning",
-          title: "Business profile edit submitted for review",
-          message: `\"${data.business_name}\" will stay live with its current approved details until this edit is approved.`,
-          href: "/dashboard/businesses",
-        });
+        scheduleBackgroundTask(
+          createNotification({
+            userId: user.id,
+            type: "warning",
+            title: "Business profile edit submitted for review",
+            message: `\"${data.business_name}\" will stay live with its current approved details until this edit is approved.`,
+            href: "/dashboard/businesses",
+          }),
+          "owner notification"
+        );
       }
 
       return contentEditSubmittedResponse(id, existing.approved_edit_count);
@@ -498,13 +507,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      void createNotification({
-        userId: user.id,
-        type: "info",
-        title: "Business profile updated",
-        message: `\"${data.business_name}\" was updated successfully.`,
-        href: "/dashboard/businesses",
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: "info",
+          title: "Business profile updated",
+          message: `\"${data.business_name}\" was updated successfully.`,
+          href: "/dashboard/businesses",
+        }),
+        "owner notification"
+      );
     }
 
     return NextResponse.json({ success: true });

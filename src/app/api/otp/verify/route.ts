@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
@@ -458,16 +459,19 @@ export async function POST(request: NextRequest) {
     await markSiblingChallengesVerified(adminSupabase, user.id, phone, challenge.id, nowIso);
 
     // Non-blocking security confirmation so users can spot unauthorized phone changes.
-    void sendSms({
-      to: phone,
-      message:
-        "VerifyMzansi: Your phone number was verified successfully. If this was not you, contact support immediately.",
-    }).catch((smsError) => {
-      log.warn("Failed to send post-verification security SMS", {
-        userId: user.id,
-        error: smsError instanceof Error ? smsError.message : "Unknown error",
-      });
-    });
+    scheduleBackgroundTask(
+      sendSms({
+        to: phone,
+        message:
+          "VerifyMzansi: Your phone number was verified successfully. If this was not you, contact support immediately.",
+      }).catch((smsError) => {
+        log.warn("Failed to send post-verification security SMS", {
+          userId: user.id,
+          error: smsError instanceof Error ? smsError.message : "Unknown error",
+        });
+      }),
+      "phone verification security SMS"
+    );
 
     return NextResponse.json({ success: true, verified: true }, { headers: NO_CACHE_HEADERS });
   } catch (err) {

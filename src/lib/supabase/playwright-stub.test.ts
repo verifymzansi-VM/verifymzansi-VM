@@ -3,6 +3,13 @@ import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-st
 import { applyKycProviderWebhook } from "@/lib/services/kyc-webhook-store";
 
 describe("createPlaywrightStubSupabaseClient", () => {
+  it("returns a numeric zero storage usage for an account without tracked uploads", async () => {
+    const client = createPlaywrightStubSupabaseClient();
+    expect(await client.rpc("media_storage_used", { p_user: crypto.randomUUID() })).toEqual({
+      data: 0,
+      error: null,
+    });
+  });
   it("acknowledges an unknown KYC reference through the callback transaction contract", async () => {
     const client = createPlaywrightStubSupabaseClient();
     await expect(

@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { businessCategoryFilterValues } from "@/lib/constants/categories";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
@@ -438,22 +439,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      void createNotification({
-        userId: user.id,
-        type: "info",
-        title: "Business profile submitted",
-        message: `\"${data.business_name}\" was submitted for review.`,
-        href: "/dashboard/businesses",
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: "info",
+          title: "Business profile submitted",
+          message: `\"${data.business_name}\" was submitted for review.`,
+          href: "/dashboard/businesses",
+        }),
+        "owner notification"
+      );
     }
 
-    void notifyStaffForAdminEvent({
-      capability: "queue:view",
-      title: "New business submission",
-      message: `\"${data.business_name}\" is waiting in the moderation queue.`,
-      href: "/admin/businesses",
-      excludeUserId: user.id,
-    });
+    scheduleBackgroundTask(
+      notifyStaffForAdminEvent({
+        capability: "queue:view",
+        title: "New business submission",
+        message: `\"${data.business_name}\" is waiting in the moderation queue.`,
+        href: "/admin/businesses",
+        excludeUserId: user.id,
+      }),
+      "staff notification"
+    );
 
     return NextResponse.json({ success: true, business: { id: business.id } }, { status: 201 });
   } catch (err) {

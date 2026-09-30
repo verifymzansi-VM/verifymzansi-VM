@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -342,13 +343,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
 
       if (shouldSendOwnerLifecycleNotifications()) {
-        void createNotification({
-          userId: user.id,
-          type: "warning",
-          title: "Listing edit submitted for review",
-          message: `\"${data.title}\" will stay live with its current approved details until this edit is approved.`,
-          href: "/dashboard/listings",
-        });
+        scheduleBackgroundTask(
+          createNotification({
+            userId: user.id,
+            type: "warning",
+            title: "Listing edit submitted for review",
+            message: `\"${data.title}\" will stay live with its current approved details until this edit is approved.`,
+            href: "/dashboard/listings",
+          }),
+          "owner notification"
+        );
       }
 
       return contentEditSubmittedResponse(listingId, listing.approved_edit_count);
@@ -446,15 +450,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const movedBackToReview =
         updateRecord.status === "pending_moderation" &&
         ["live", "approved"].includes(listing.status);
-      void createNotification({
-        userId: user.id,
-        type: movedBackToReview ? "warning" : "info",
-        title: movedBackToReview ? "Listing moved to review" : "Listing updated",
-        message: movedBackToReview
-          ? `\"${data.title}\" was updated and is now pending moderation.`
-          : `\"${data.title}\" was updated successfully.`,
-        href: "/dashboard/listings",
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: movedBackToReview ? "warning" : "info",
+          title: movedBackToReview ? "Listing moved to review" : "Listing updated",
+          message: movedBackToReview
+            ? `\"${data.title}\" was updated and is now pending moderation.`
+            : `\"${data.title}\" was updated successfully.`,
+          href: "/dashboard/listings",
+        }),
+        "owner notification"
+      );
     }
 
     return NextResponse.json({ id: listingId, message: "Listing updated successfully" });

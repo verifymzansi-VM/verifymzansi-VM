@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -835,22 +836,28 @@ export async function POST(request: NextRequest) {
     });
 
     if (shouldSendOwnerLifecycleNotifications()) {
-      void createNotification({
-        userId: user.id,
-        type: "info",
-        title: "Listing submitted",
-        message: `\"${data.title}\" was submitted for review.`,
-        href: "/dashboard/listings",
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: "info",
+          title: "Listing submitted",
+          message: `\"${data.title}\" was submitted for review.`,
+          href: "/dashboard/listings",
+        }),
+        "owner notification"
+      );
     }
 
-    void notifyStaffForAdminEvent({
-      capability: "queue:view",
-      title: "New listing submission",
-      message: `\"${data.title}\" is waiting in the moderation queue.`,
-      href: "/admin/moderation",
-      excludeUserId: user.id,
-    });
+    scheduleBackgroundTask(
+      notifyStaffForAdminEvent({
+        capability: "queue:view",
+        title: "New listing submission",
+        message: `\"${data.title}\" is waiting in the moderation queue.`,
+        href: "/admin/moderation",
+        excludeUserId: user.id,
+      }),
+      "staff notification"
+    );
 
     return NextResponse.json(
       {

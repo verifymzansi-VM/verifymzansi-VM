@@ -194,13 +194,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const quotaError = await (async () => {
-      try {
-        return await checkStorageQuota(getAdmin(), user.id, size, quotaBytes, quotaMb);
-      } catch {
-        return null;
-      }
-    })();
+    let quotaError: string | null;
+    try {
+      quotaError = await checkStorageQuota(getAdmin(), user.id, size, quotaBytes, quotaMb);
+    } catch {
+      log.error("Media storage quota check unavailable", { userId: user.id });
+      return NextResponse.json(
+        {
+          error: "Unable to verify media storage allowance. Please try again shortly.",
+          code: "storage_quota_unavailable",
+        },
+        { status: 503 }
+      );
+    }
     if (quotaError) {
       return NextResponse.json({ error: quotaError }, { status: 413 });
     }
@@ -251,6 +257,19 @@ export async function POST(request: NextRequest) {
         key,
         error: trackError.message,
       });
+      if (trackError.code === "PT413" || trackError.code === "PT503") {
+        return NextResponse.json(
+          {
+            error:
+              trackError.code === "PT413"
+                ? "Your media storage allowance is full. Remove unused media and try again."
+                : "Unable to verify media storage allowance. Please try again shortly.",
+            code:
+              trackError.code === "PT413" ? "storage_quota_exceeded" : "storage_quota_unavailable",
+          },
+          { status: trackError.code === "PT413" ? 413 : 503 }
+        );
+      }
       return NextResponse.json(
         { error: "Failed to track upload", code: "upload_tracking_failed", traceId },
         { status: 500, headers: { "x-upload-trace-id": traceId } }

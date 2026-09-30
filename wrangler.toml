@@ -250,6 +250,8 @@ id = "247144b6d9b1406093351378a57c62fa"
 [env.staging.vars]
 NODE_ENV = "production"
 ENVIRONMENT = "staging"
+STRICT_ENV_STARTUP_BLOCK = "1"
+KYC_PROVIDER = "manual"
 VERIFYMZANSI_RUNTIME_MODE = "development"
 VERIFYMZANSI_VALIDATION_MODE = "development"
 NEXT_PUBLIC_APP_URL = "https://staging.verifymzansi.com"

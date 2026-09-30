@@ -15,7 +15,9 @@ const envArg = args.find((arg) => arg.startsWith("--env="));
 const workerArg = args.find((arg) => arg.startsWith("--name="));
 
 const targetEnv = envArg ? envArg.slice("--env=".length) : "";
-const workerName = workerArg ? workerArg.slice("--name=".length) : "verifymzansi";
+// Let Wrangler resolve the configured environment's name unless explicitly overridden.
+// A default --name would override env.staging.name and inspect production instead.
+const workerName = workerArg ? workerArg.slice("--name=".length) : undefined;
 
 const requiredSecrets = [
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -77,7 +79,10 @@ const forbiddenProductionSecrets = [
 ];
 
 function buildWranglerCommand(commandParts) {
-  const parts = ["pnpm", "exec", "wrangler", ...commandParts, "--name", workerName];
+  const parts = ["pnpm", "exec", "wrangler", ...commandParts];
+  if (workerName) {
+    parts.push("--name", workerName);
+  }
   if (envArg) {
     parts.push("--env", targetEnv);
   }
@@ -98,7 +103,9 @@ async function main() {
   const deployments = await runWranglerJson(["deployments", "list"]);
   const versionIds = activeVersionIds(deployments);
   let failed = false;
-  console.log(`Cloudflare Worker secret check: ${workerName} (${targetEnv || "production"})`);
+  console.log(
+    `Cloudflare Worker secret check: ${workerName || "configured Worker"} (${targetEnv || "production"})`
+  );
   for (const versionId of versionIds) {
     const version = await runWranglerJson(["versions", "view", versionId]);
     const result = inspectSecretBindings(

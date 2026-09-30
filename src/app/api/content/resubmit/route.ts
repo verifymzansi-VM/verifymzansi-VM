@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -306,13 +307,16 @@ export async function POST(request: Request) {
         MZANSI_BUSINESS: "/dashboard/businesses",
         PROMOTIONS_EVENTS: "/dashboard/tourism-events",
       };
-      void createNotification({
-        userId: user.id,
-        type: "info",
-        title: "Content resubmitted",
-        message: "Your content has been resubmitted and is pending moderation.",
-        href: hrefByArea[area],
-      });
+      scheduleBackgroundTask(
+        createNotification({
+          userId: user.id,
+          type: "info",
+          title: "Content resubmitted",
+          message: "Your content has been resubmitted and is pending moderation.",
+          href: hrefByArea[area],
+        }),
+        "owner notification"
+      );
     }
 
     return NextResponse.json({ success: true });

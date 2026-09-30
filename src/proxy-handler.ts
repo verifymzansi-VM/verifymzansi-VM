@@ -11,6 +11,7 @@ import {
   type CachedProfile,
 } from "@/lib/middleware/auth-gates";
 import { createLogger } from "@/lib/utils/logger";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const logger = createLogger("Proxy");
@@ -171,6 +172,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      global: { fetch: createTimeoutFetch() },
       cookies: {
         get(name: string) {
           return request.cookies.get(name)?.value;

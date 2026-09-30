@@ -1,3 +1,4 @@
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportSchema } from "@/lib/validations/contact";
@@ -109,13 +110,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    void notifyStaffForAdminEvent({
-      capability: "queue:view",
-      title: "New report submitted",
-      message: "A new report is waiting in the reports queue.",
-      href: "/admin/reports",
-      excludeUserId: user?.id ?? undefined,
-    });
+    scheduleBackgroundTask(
+      notifyStaffForAdminEvent({
+        capability: "queue:view",
+        title: "New report submitted",
+        message: "A new report is waiting in the reports queue.",
+        href: "/admin/reports",
+        excludeUserId: user?.id ?? undefined,
+      }),
+      "staff notification"
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
