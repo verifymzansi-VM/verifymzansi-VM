@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ImagePlus, X, Film, RotateCcw } from "lucide-react";
+import { Film, ImagePlus, Play, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,7 @@ const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
 const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
+const VIDEO_URL_PATTERN = /\.(mp4|webm|ogg|mov)(?:[?#]|$)/i;
 
 /** Map MIME types to a canonical extension for files missing one (e.g. Android content-picker). */
 const MIME_TO_EXT: Record<string, string> = {
@@ -86,6 +87,22 @@ async function stabiliseFile(file: File): Promise<File | null> {
   return null;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/** Already-uploaded media shown alongside newly picked files (edit forms). */
+export interface ExistingMediaItem {
+  url: string;
+  /** Defaults to a file-extension check on the URL */
+  isVideo?: boolean;
+  /** Accessible name, e.g. "Photo 2" */
+  label?: string;
+}
+
+export type MediaPreviewShape = "square" | "portrait" | "wide";
+
 interface MediaUploadProps {
   /** Stable id used to associate label, hint, error, and input */
   id?: string;
@@ -103,9 +120,9 @@ interface MediaUploadProps {
   maxSizeLabel?: string;
   /** Called when files are rejected client-side */
   onRejectedFiles?: (messages: string[]) => void;
-  /** Maximum number of files allowed */
+  /** Maximum number of items allowed, counting `existing` items */
   maxFiles?: number;
-  /** Currently selected files */
+  /** Currently selected (not yet uploaded) files */
   files: File[];
   /** Callback when files change */
   onChange: (files: File[]) => void;
@@ -113,13 +130,31 @@ interface MediaUploadProps {
   accept?: string;
   /** If true, disables the upload dropzone and file input */
   disabled?: boolean;
+  /** Already-saved media, shown first in the same grid */
+  existing?: ExistingMediaItem[];
+  /** Remove a saved item; the remove button is hidden when omitted */
+  onRemoveExisting?: (index: number) => void;
+  /** Thumbnail shape. Defaults to square. Use "wide" for banners. */
+  previewShape?: MediaPreviewShape;
 }
 
-interface PreviewItem {
-  file: File;
-  url: string;
-  isVideo: boolean;
-}
+type Tile =
+  | { kind: "existing"; key: string; url: string; isVideo: boolean; name: string; index: number }
+  | {
+      kind: "file";
+      key: string;
+      url: string;
+      isVideo: boolean;
+      name: string;
+      file: File;
+      index: number;
+    };
+
+const SHAPE_CLASS: Record<MediaPreviewShape, string> = {
+  square: "aspect-square",
+  portrait: "aspect-[4/5]",
+  wide: "aspect-[16/9]",
+};
 
 export function MediaUpload({
   id,
@@ -135,6 +170,9 @@ export function MediaUpload({
   onChange,
   accept,
   disabled = false,
+  existing = [],
+  onRemoveExisting,
+  previewShape = "square",
 }: MediaUploadProps) {
   const generatedId = useId();
   const inputId = id ?? `media-upload-${generatedId}`;
@@ -143,14 +181,18 @@ export function MediaUpload({
   const rejectedId = `${inputId}-rejected`;
   const errorId = `${inputId}-error`;
   const [isDragOver, setIsDragOver] = useState(false);
-  const [failedPreviews, setFailedPreviews] = useState<Set<number>>(new Set());
+  const [failedPreviews, setFailedPreviews] = useState<Set<string>>(new Set());
   const [rejectedMessages, setRejectedMessages] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const isSingleFileMode = maxFiles === 1;
+  const isVideoOnly = accept?.startsWith("video/") ?? false;
+  const isImageOnly = accept?.startsWith("image/") ?? false;
+  const noun = isVideoOnly ? "video" : isImageOnly ? "photo" : "photo or video";
+  const pluralNoun = isVideoOnly ? "videos" : isImageOnly ? "photos" : "photos or videos";
 
   // Derive previews from files — no setState-in-effect needed
-  const previews = useMemo<PreviewItem[]>(
+  const filePreviews = useMemo(
     () =>
       files.map((file) => ({
         file,
@@ -163,9 +205,41 @@ export function MediaUpload({
   // Clean up blob URLs when previews change
   useEffect(() => {
     return () => {
-      previews.forEach((p) => URL.revokeObjectURL(p.url));
+      filePreviews.forEach((p) => URL.revokeObjectURL(p.url));
     };
-  }, [previews]);
+  }, [filePreviews]);
+
+  const tiles = useMemo<Tile[]>(
+    () => [
+      ...existing.map((item, index) => ({
+        kind: "existing" as const,
+        key: `existing-${item.url}`,
+        url: item.url,
+        isVideo: item.isVideo ?? VIDEO_URL_PATTERN.test(item.url),
+        name: item.label ?? `${isVideoOnly ? "Video" : "Photo"} ${index + 1}`,
+        index,
+      })),
+      ...filePreviews.map((item, index) => ({
+        kind: "file" as const,
+        key: `file-${item.url}`,
+        url: item.url,
+        isVideo: item.isVideo,
+        name: item.file.name,
+        file: item.file,
+        index,
+      })),
+    ],
+    [existing, filePreviews, isVideoOnly]
+  );
+
+  // In a single slot a freshly picked file supersedes the saved one.
+  const singleTile = tiles.find((tile) => tile.kind === "file") ?? tiles[0];
+  const totalCount = isSingleFileMode
+    ? Math.min(1, existing.length + files.length)
+    : existing.length + files.length;
+  const remaining = Math.max(0, maxFiles - totalCount);
+  // A single-file slot can always be swapped for a new pick.
+  const canAdd = !disabled && maxFiles > 0 && (remaining > 0 || isSingleFileMode);
 
   const validateAndAdd = useCallback(
     async (incoming: FileList | File[]) => {
@@ -253,17 +327,18 @@ export function MediaUpload({
         valid.push(normalized);
       }
 
-      // Enforce max count
+      // Enforce max count (saved items count toward the limit)
       const existingFiles = isSingleFileMode ? [] : files;
-      const total = existingFiles.length + valid.length;
-      if (total > maxFiles) {
+      const capacity = Math.max(0, maxFiles - existing.length - existingFiles.length);
+      const slots = isSingleFileMode ? maxFiles : capacity;
+      if (valid.length > slots) {
         rejectFile(
           "Too many files",
-          `You can upload at most ${maxFiles} files. ${total - maxFiles} file(s) were not added.`
+          `You can add at most ${maxFiles} ${maxFiles === 1 ? noun : pluralNoun}. ${valid.length - slots} file(s) were not added.`
         );
       }
 
-      const allowed = valid.slice(0, maxFiles - existingFiles.length);
+      const allowed = valid.slice(0, slots);
       if (allowed.length > 0) {
         onChange([...existingFiles, ...allowed]);
       }
@@ -272,8 +347,24 @@ export function MediaUpload({
         onRejectedFiles?.(rejected);
       }
     },
-    [accept, files, isSingleFileMode, maxFiles, onChange, onRejectedFiles, toast, disabled]
+    [
+      accept,
+      existing.length,
+      files,
+      isSingleFileMode,
+      maxFiles,
+      noun,
+      onChange,
+      onRejectedFiles,
+      pluralNoun,
+      toast,
+      disabled,
+    ]
   );
+
+  const openPicker = useCallback(() => {
+    if (!disabled) inputRef.current?.click();
+  }, [disabled]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -310,12 +401,17 @@ export function MediaUpload({
     [files, onChange]
   );
 
-  const remaining = maxFiles - files.length;
-  const defaultAcceptedLabel = accept?.startsWith("video/")
+  const removeTile = (tile: Tile) => {
+    if (tile.kind === "file") removeFile(tile.index);
+    else onRemoveExisting?.(tile.index);
+  };
+
+  const defaultAcceptedLabel = isVideoOnly
     ? "Videos (MP4, WebM, MOV) up to 50 MB"
-    : accept?.startsWith("image/")
+    : isImageOnly
       ? "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB"
       : "Images (JPG, PNG, WebP, GIF, AVIF, HEIC) up to 5 MB; videos (MP4, WebM, MOV) up to 50 MB";
+  const guidance = [acceptedLabel ?? defaultAcceptedLabel, maxSizeLabel].filter(Boolean).join("; ");
   const describedBy = [
     description ? descriptionId : null,
     countId,
@@ -325,169 +421,282 @@ export function MediaUpload({
     .filter(Boolean)
     .join(" ");
 
+  const dragHandlers = {
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (!disabled) setIsDragOver(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragOver(false);
+    },
+    onDrop: handleDrop,
+  };
+
+  const renderMedia = (tile: Tile, fit: "cover" | "contain" = "cover") => {
+    const fitClass = fit === "cover" ? "object-cover" : "object-contain";
+    if (tile.isVideo) {
+      return (
+        <div className="relative h-full w-full bg-black">
+          <video
+            src={tile.url}
+            className={cn("h-full w-full", fitClass)}
+            muted
+            playsInline
+            preload="metadata"
+          />
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white">
+              <Play className="h-4 w-4 translate-x-px fill-current" aria-hidden="true" />
+            </span>
+          </span>
+        </div>
+      );
+    }
+    if (failedPreviews.has(tile.key)) {
+      return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-center">
+          <ImagePlus className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <span className="text-[11px] leading-tight text-muted-foreground">
+            Preview unavailable
+          </span>
+          <span className="sr-only">{`Preview unavailable for "${tile.name}"`}</span>
+        </div>
+      );
+    }
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/no-noninteractive-element-interactions */
+      <img
+        src={tile.url}
+        alt={tile.name}
+        className={cn("h-full w-full", fitClass)}
+        width={200}
+        height={200}
+        onError={() => setFailedPreviews((prev) => new Set(prev).add(tile.key))}
+      />
+    );
+  };
+
+  const uploadIcon = isVideoOnly ? (
+    <Film className="h-5 w-5" aria-hidden="true" />
+  ) : (
+    <ImagePlus className="h-5 w-5" aria-hidden="true" />
+  );
+
   return (
-    <div className="space-y-2">
-      <label
-        htmlFor={inputId}
-        className="block text-sm font-semibold leading-snug text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-      >
-        {label}
-      </label>
+    <div className="space-y-2" {...dragHandlers}>
+      <div className="flex items-start justify-between gap-3">
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-semibold leading-snug text-foreground"
+        >
+          {label}
+        </label>
+        {!isSingleFileMode && maxFiles > 0 && (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+              totalCount > 0
+                ? "bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-green-200"
+                : "bg-muted text-muted-foreground"
+            )}
+            aria-hidden="true"
+          >
+            {totalCount} / {maxFiles}
+          </span>
+        )}
+      </div>
       {description && (
         <p id={descriptionId} className="text-xs leading-5 text-muted-foreground">
           {description}
         </p>
       )}
+      <p id={countId} className="sr-only">
+        {totalCount} of {maxFiles} added. {remaining} remaining.
+      </p>
 
-      {/* Preview grid */}
-      {previews.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {previews.map((item, idx) => (
-            <div
-              key={`${item.file.name}-${idx}`}
-              className="group relative aspect-[9/16] overflow-hidden rounded-xl border border-border bg-muted"
-            >
-              {item.isVideo ? (
-                <div className="relative w-full h-full">
-                  <video
-                    src={item.url}
-                    className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                    <Film className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              ) : failedPreviews.has(idx) ? (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-2 text-center">
-                  <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-[10px] text-muted-foreground leading-tight">
-                    Preview unavailable
-                  </span>
-                  <span className="text-[9px] text-muted-foreground/70 leading-tight truncate max-w-full">
-                    {`Preview unavailable for "${item.file.name}"`}
-                  </span>
-                </div>
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/no-noninteractive-element-interactions */
-                <img
-                  src={item.url}
-                  alt={item.file.name}
-                  className="w-full h-full object-cover"
-                  width={200}
-                  height={200}
-                  onError={() => setFailedPreviews((prev) => new Set(prev).add(idx))}
-                />
-              )}
-              {idx === 0 && previews.length > 1 && (
-                <span className="absolute bottom-1.5 left-1.5 rounded-full bg-brand-green-700 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-                  Cover
-                </span>
-              )}
-              <div className="absolute right-1 top-1 flex gap-1">
-                {isSingleFileMode && (
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => inputRef.current?.click()}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
-                    aria-label={`Replace ${item.file.name}`}
-                  >
-                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => removeFile(idx)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition-colors hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50 sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
-                  aria-label={`Remove ${item.file.name}`}
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <input
+        id={inputId}
+        ref={inputRef}
+        type="file"
+        accept={accept || ALL_ACCEPT}
+        multiple={maxFiles > 1}
+        disabled={disabled}
+        onChange={handleFileInput}
+        className="sr-only"
+        tabIndex={-1}
+        aria-describedby={describedBy || undefined}
+        aria-invalid={Boolean(error) || undefined}
+      />
 
-      {/* Drop zone */}
-      {(remaining > 0 || isSingleFileMode) && (
-        <div
-          role="button"
-          tabIndex={0}
+      {tiles.length === 0 ? (
+        /* ── Empty: one obvious place to click or drop ── */
+        <button
+          type="button"
+          disabled={disabled || maxFiles <= 0}
+          onClick={openPicker}
           aria-describedby={describedBy || undefined}
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (!disabled) setIsDragOver(true);
-          }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => {
-            if (!disabled) inputRef.current?.click();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              if (!disabled) inputRef.current?.click();
-            }
-          }}
           className={cn(
-            "rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            disabled ? "cursor-not-allowed border-border bg-muted/40 opacity-60" : "cursor-pointer",
-            isDragOver && !disabled
-              ? "border-brand-green-500 bg-brand-green-50 dark:bg-brand-green-950/40"
-              : !disabled
-                ? "border-border bg-muted/30 hover:border-brand-green-500/60 hover:bg-brand-green-50/50 dark:hover:bg-brand-green-950/20"
-                : "",
+            "flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none",
+            disabled || maxFiles <= 0
+              ? "cursor-not-allowed border-border bg-muted/40 opacity-60"
+              : isDragOver
+                ? "border-brand-green-500 bg-brand-green-50 dark:bg-brand-green-950/40"
+                : "border-border bg-muted/30 hover:border-brand-green-500/60 hover:bg-brand-green-50/50 dark:hover:bg-brand-green-950/20",
             error && !isDragOver && "border-destructive/60"
           )}
         >
-          <span
-            aria-hidden="true"
-            className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-card text-foreground/70 shadow-xs ring-1 ring-border"
-          >
-            {accept?.startsWith("video/") ? (
-              <Film className="h-5 w-5" />
-            ) : (
-              <ImagePlus className="h-5 w-5" />
-            )}
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green-600 text-white shadow-sm">
+            {uploadIcon}
           </span>
-          <p className="text-sm font-semibold text-foreground">
+          <span className="text-sm font-semibold text-foreground">
             {disabled
               ? "Uploads disabled for your current plan"
-              : remaining > 0
-                ? "Tap to choose files, or drag them here"
-                : "Replace selected file"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {acceptedLabel ?? defaultAcceptedLabel}
-            {maxSizeLabel ? `; ${maxSizeLabel}` : ""}
-          </p>
-          <p id={countId} className="mt-0.5 text-xs text-muted-foreground">
-            {files.length} selected. {remaining} of {maxFiles} remaining.
-          </p>
-          {recommendedAspect && (
-            <p className="mt-1.5 text-xs text-muted-foreground">{recommendedAspect}</p>
+              : isSingleFileMode
+                ? `Add ${noun}`
+                : `Add ${pluralNoun}`}
+          </span>
+          {!disabled && (
+            <span className="text-xs text-muted-foreground">
+              Tap to choose from your device, or drag {isSingleFileMode ? "it" : "them"} here
+            </span>
           )}
-
-          <input
-            id={inputId}
-            ref={inputRef}
-            type="file"
-            accept={accept || ALL_ACCEPT}
-            multiple={maxFiles > 1}
-            disabled={disabled}
-            onChange={handleFileInput}
-            className="hidden"
-            aria-label="Upload photos and videos"
-            aria-describedby={describedBy || undefined}
-            aria-invalid={Boolean(error) || undefined}
-          />
+          <span className="text-xs text-muted-foreground">{guidance}</span>
+          {recommendedAspect && (
+            <span className="text-xs text-muted-foreground">{recommendedAspect}</span>
+          )}
+        </button>
+      ) : isSingleFileMode ? (
+        /* ── Single slot (logo, cover, video): preview + clear actions ── */
+        <div
+          className={cn(
+            "flex flex-col gap-3 rounded-2xl border bg-card p-3 sm:flex-row sm:items-center",
+            isDragOver ? "border-brand-green-500" : "border-border",
+            error && "border-destructive/60"
+          )}
+        >
+          <div
+            className={cn(
+              "relative shrink-0 overflow-hidden rounded-xl border border-border bg-muted",
+              previewShape === "wide" ? "aspect-[16/9] w-full sm:w-48" : "h-24 w-24",
+              previewShape === "portrait" && "aspect-[4/5] h-auto w-24"
+            )}
+          >
+            {renderMedia(singleTile, previewShape === "square" ? "contain" : "cover")}
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
+                {singleTile.kind === "file" ? singleTile.name : `Current ${noun}`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {singleTile.kind === "file"
+                  ? `${formatFileSize(singleTile.file.size)} · ready to upload`
+                  : "Saved"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={openPicker}
+                aria-label={`Change ${singleTile.name}`}
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-input bg-background px-3.5 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                Change
+              </button>
+              {(singleTile.kind === "file" || onRemoveExisting) && (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => removeTile(singleTile)}
+                  aria-label={`Remove ${singleTile.name}`}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-destructive/30 bg-background px-3.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ── Gallery: thumbnails with always-visible remove + an "Add" tile ── */
+        <div
+          className={cn(
+            "rounded-2xl border p-2 transition-colors motion-reduce:transition-none",
+            isDragOver
+              ? "border-brand-green-500 bg-brand-green-50/60 dark:bg-brand-green-950/30"
+              : "border-border bg-muted/20",
+            error && !isDragOver && "border-destructive/60"
+          )}
+        >
+          <ul
+            className={cn(
+              "grid gap-2",
+              previewShape === "wide" ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-4"
+            )}
+          >
+            {tiles.map((tile, position) => (
+              <li
+                key={tile.key}
+                className={cn(
+                  "relative overflow-hidden rounded-xl border border-border bg-muted",
+                  SHAPE_CLASS[previewShape]
+                )}
+              >
+                {renderMedia(tile)}
+                {position === 0 && tiles.length > 1 && (
+                  <span className="absolute bottom-1.5 left-1.5 rounded-full bg-brand-green-700 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                    Cover
+                  </span>
+                )}
+                {tile.kind === "file" && existing.length > 0 && (
+                  <span className="absolute left-1.5 top-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    New
+                  </span>
+                )}
+                {(tile.kind === "file" || onRemoveExisting) && (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => removeTile(tile)}
+                    className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white shadow-sm transition-colors hover:bg-brand-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
+                    aria-label={`Remove ${tile.name}`}
+                    title="Remove"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                )}
+              </li>
+            ))}
+            {canAdd && (
+              <li className={SHAPE_CLASS[previewShape]}>
+                <button
+                  type="button"
+                  onClick={openPicker}
+                  aria-describedby={describedBy || undefined}
+                  className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border bg-background text-center text-foreground transition-colors hover:border-brand-green-500/70 hover:bg-brand-green-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:bg-brand-green-950/20 motion-reduce:transition-none"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-green-600 text-white">
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="text-xs font-semibold">Add more</span>
+                  <span className="text-[11px] text-muted-foreground">{remaining} left</span>
+                </button>
+              </li>
+            )}
+          </ul>
+          <p className="px-1 pt-2 text-xs text-muted-foreground">
+            {remaining === 0
+              ? `Limit reached. Remove one to add another.`
+              : tiles.length > 1
+                ? `First ${isVideoOnly ? "video" : "photo"} is the cover. ${guidance}.`
+                : guidance}
+          </p>
         </div>
       )}
+
       {rejectedMessages.length > 0 && (
         <div
           id={rejectedId}

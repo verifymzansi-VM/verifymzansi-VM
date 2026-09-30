@@ -130,6 +130,7 @@ export interface TourismDraftData extends TourismCategorySpecificFormFields {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
+  mapDirections?: string;
   businessId: string;
 }
 

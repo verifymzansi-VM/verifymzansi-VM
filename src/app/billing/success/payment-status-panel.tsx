@@ -72,6 +72,7 @@ export default function PaymentStatusPanel({
   paymentId?: string;
 }) {
   const [status, setStatus] = useState(initialStatus);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(
     initialStatus === "pending" && Boolean(paymentId)
   );
@@ -83,12 +84,15 @@ export default function PaymentStatusPanel({
     }
 
     let isActive = true;
+    let isPolling = false;
+    let stopped = false;
     const startedAt = Date.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const hasExpired = () => Date.now() - startedAt >= PAYMENT_POLL_MAX_MS;
 
     const stopPolling = () => {
+      stopped = true;
       if (timer) {
         clearTimeout(timer);
         timer = undefined;
@@ -100,7 +104,7 @@ export default function PaymentStatusPanel({
     };
 
     const schedulePoll = () => {
-      if (!isActive) {
+      if (!isActive || stopped) {
         return;
       }
 
@@ -116,16 +120,21 @@ export default function PaymentStatusPanel({
     };
 
     const poll = async () => {
+      if (!isActive || stopped || isPolling) return;
+      isPolling = true;
       try {
         const response = await fetch(
           `/api/billing/payment-status?payment=${encodeURIComponent(paymentId)}`,
           {
             cache: "no-store",
+            signal: AbortSignal.timeout(15_000),
           }
         );
 
         if (!response.ok) {
           if (response.status === 401 || response.status === 404) {
+            if (isActive && response.status === 401) setSessionExpired(true);
+            if (isActive && response.status === 404) setStatus("missing");
             stopPolling();
             return;
           }
@@ -138,7 +147,11 @@ export default function PaymentStatusPanel({
           terminal?: boolean;
         };
 
-        if (!isActive || !payload.status) {
+        if (!isActive) {
+          return;
+        }
+        if (!payload.status) {
+          schedulePoll();
           return;
         }
 
@@ -157,6 +170,8 @@ export default function PaymentStatusPanel({
           return;
         }
         schedulePoll();
+      } finally {
+        isPolling = false;
       }
     };
 
@@ -185,14 +200,23 @@ export default function PaymentStatusPanel({
   return (
     <PaymentStatusResult
       icon={copy.icon}
-      title={copy.title}
-      description={copy.description}
+      title={sessionExpired ? "Sign in to check your payment" : copy.title}
+      description={
+        sessionExpired
+          ? "Your session expired. Sign in again to see whether your payment was confirmed."
+          : copy.description
+      }
       tone={copy.tone}
       nextSteps={copy.nextSteps}
       primaryAction={
-        status === "complete" || status === "pending"
-          ? { href: "/dashboard", label: "Go to dashboard" }
-          : { href: "/billing", label: "Back to billing" }
+        sessionExpired
+          ? {
+              href: `/login?returnUrl=${encodeURIComponent(`/billing/success?payment=${encodeURIComponent(paymentId ?? "")}`)}`,
+              label: "Sign in",
+            }
+          : status === "complete" || status === "pending"
+            ? { href: "/dashboard", label: "Go to dashboard" }
+            : { href: "/billing", label: "Back to billing" }
       }
       secondaryAction={
         status === "complete" || status === "pending"

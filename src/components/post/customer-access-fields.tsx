@@ -5,9 +5,14 @@ import { FieldHelp } from "./field-help";
 export function CustomerAccessFields({
   value,
   onChange,
+  storeNumber,
+  onStoreNumberChange,
 }: {
   value: CustomerAccess;
   onChange: (value: CustomerAccess) => void;
+  /** Shop / unit number inside a shopping centre, published with the address */
+  storeNumber?: string;
+  onStoreNumberChange?: (value: string) => void;
 }) {
   const update = (patch: Partial<CustomerAccess>) => onChange({ ...value, ...patch });
   return (
@@ -84,6 +89,19 @@ export function CustomerAccessFields({
             />
             Show my exact visitor address publicly
           </label>
+          {value.premises === "mall_store" && value.publishAddress && onStoreNumberChange && (
+            <label className="block text-sm">
+              Shop number (Optional)
+              <input
+                id="storeNumber"
+                className="mt-2 h-11 w-full rounded-md border bg-background px-3"
+                value={storeNumber ?? ""}
+                onChange={(e) => onStoreNumberChange(e.target.value)}
+                placeholder="e.g. Shop 42"
+                maxLength={20}
+              />
+            </label>
+          )}
           <p className="text-sm text-muted-foreground">
             If you leave this off, only your area is published. Your street address and map
             directions will not be saved to the public profile.

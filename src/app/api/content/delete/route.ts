@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -55,15 +56,8 @@ type DeletableContentItem = {
   cover_video?: string | null;
   gallery_photos?: string[] | null;
   business_details?: unknown;
+  category_details?: unknown;
 };
-
-/** Media fields inside business_details: only a mall store's photo gallery. */
-function getMallPhotoUrls(details: unknown): string[] {
-  if (!details || typeof details !== "object") return [];
-  const record = details as { type?: unknown; mall_photos?: unknown };
-  if (record.type !== "mall_store" || !Array.isArray(record.mall_photos)) return [];
-  return record.mall_photos.filter((url): url is string => typeof url === "string");
-}
 
 function collectDeletedMediaUrls(table: string, item: DeletableContentItem): string[] {
   if (table === "businesses") {
@@ -73,7 +67,7 @@ function collectDeletedMediaUrls(table: string, item: DeletableContentItem): str
       item.cover_video,
       item.video_thumbnail,
       item.gallery_photos ?? undefined,
-      getMallPhotoUrls(item.business_details)
+      getBusinessVenuePhotoUrls(item.business_details, item.category_details)
     );
   }
 
@@ -93,7 +87,7 @@ function getDeleteSelectColumns(table: string, ownerColumn: OwnerColumn): string
   const baseColumns = withOwnerColumn("id, status, owner_id", ownerColumn);
 
   if (table === "businesses") {
-    return `${baseColumns}, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details`;
+    return `${baseColumns}, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details, category_details`;
   }
 
   if (table === "listings" || table === "promotions") {

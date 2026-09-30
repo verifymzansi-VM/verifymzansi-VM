@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -78,16 +79,13 @@ type BusinessOwnerRow = {
   focal_x?: number | null;
   focal_y?: number | null;
   business_details?: BusinessDetails | null;
+  category_details?: Record<string, unknown> | null;
   phone?: string | null;
   whatsapp?: string | null;
   email?: string | null;
   approved_edit_count?: number | null;
   expires_at?: string | null;
 };
-
-function getMallPhotoUrls(details: BusinessDetails | null | undefined): string[] {
-  return details?.type === "mall_store" ? (details.mall_photos ?? []) : [];
-}
 
 /**
  * GET /api/businesses/[id]
@@ -263,7 +261,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .from("businesses")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, business_name, slug, business_type, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, service_areas, business_details, payment_methods_accepted, delivery_options, layout_template, media_width, media_height, focal_x, focal_y, approved_edit_count",
+            "id, owner_id, status, area, business_name, slug, business_type, description, category, subcategory, category_details, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, service_areas, business_details, payment_methods_accepted, delivery_options, layout_template, media_width, media_height, focal_x, focal_y, approved_edit_count",
             ownerColumn
           )
         )
@@ -361,7 +359,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       data.cover_video || null,
       data.video_thumbnail || null,
       data.gallery_photos || [],
-      getMallPhotoUrls(data.business_details)
+      getBusinessVenuePhotoUrls(data.business_details, data.category_details)
     );
     const currentMediaUrls = collectMediaUrls(
       existing.logo_url,
@@ -369,7 +367,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       existing.cover_video,
       existing.video_thumbnail,
       existing.gallery_photos,
-      getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
+      getBusinessVenuePhotoUrls(existing.business_details, existing.category_details)
     );
     const addedMediaUrls = diffRemovedMediaUrls(nextMediaUrls, currentMediaUrls);
     const removedMediaUrls = diffRemovedMediaUrls(currentMediaUrls, nextMediaUrls);
@@ -530,7 +528,7 @@ export const DELETE = createOwnedContentDeleteRoute<{ id: string }, BusinessOwne
   validationErrorMessage: "Invalid business ID",
   table: "businesses",
   ownerSelect:
-    "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details",
+    "id, owner_id, status, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, business_details, category_details",
   rateLimitKey: "business:delete",
   notFoundMessage: "Business not found",
   invalidStatusMessage: "Only draft or rejected businesses can be deleted",
@@ -550,6 +548,6 @@ export const DELETE = createOwnedContentDeleteRoute<{ id: string }, BusinessOwne
       existing.cover_video,
       existing.video_thumbnail,
       existing.gallery_photos,
-      getMallPhotoUrls(existing.business_details as BusinessDetails | null | undefined)
+      getBusinessVenuePhotoUrls(existing.business_details, existing.category_details)
     ),
 });

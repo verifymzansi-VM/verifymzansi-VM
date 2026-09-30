@@ -119,6 +119,7 @@ describe("EditPromotionPage", () => {
       video_thumbnail: string;
       business_id: string | null;
       price_cents: number | null;
+      event_details: Record<string, unknown>;
     }> = {}
   ) {
     global.fetch = vi
@@ -212,6 +213,51 @@ describe("EditPromotionPage", () => {
     expect(payload.start_date).toBe("2099-03-10T00:00:00.000Z");
     expect(payload.end_date).toBe("2099-03-12T00:00:00.000Z");
     expect(payload.event_details.tickets_url).toBe("https://tickets.example.com/night-market");
+  });
+
+  it("keeps event details the form does not edit and saves website, map pin and socials", async () => {
+    mockEditPromotionFetch({
+      event_details: {
+        event_type: "market_expo",
+        recurring: "monthly",
+        rain_policy: "moved_indoors",
+        website: "https://nightmarket.example.com",
+        social_links: { instagram: "https://instagram.com/nightmarket" },
+      },
+    });
+    render(<EditPromotionPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("https://nightmarket.example.com")).toBeInTheDocument();
+    });
+    expect(screen.getByDisplayValue("https://instagram.com/nightmarket")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Location pin (Google Maps link) (Optional)"), {
+      target: { value: "maps.app.goo.gl/venue" },
+    });
+    fireEvent.change(screen.getByLabelText("Facebook (Optional)"), {
+      target: { value: "facebook.com/nightmarket" },
+    });
+    expect(screen.getByLabelText("Recurring")).toHaveValue("monthly");
+    fireEvent.change(screen.getByLabelText("Rain policy"), { target: { value: "postponed" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2];
+    const payload = JSON.parse(request[1].body as string);
+
+    expect(payload.event_details).toMatchObject({
+      recurring: "monthly",
+      rain_policy: "postponed",
+      website: "https://nightmarket.example.com",
+      map_directions: "https://maps.app.goo.gl/venue",
+      social_links: {
+        instagram: "https://instagram.com/nightmarket",
+        facebook: "https://facebook.com/nightmarket",
+      },
+    });
   });
 
   it("does not render a promotion type selector (events only)", async () => {

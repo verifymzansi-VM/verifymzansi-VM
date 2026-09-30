@@ -156,6 +156,17 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // can be forwarded onto redirect responses that would otherwise drop them.
   const pendingCookies: Array<{ name: string; value: string; options: CookieOptions }> = [];
 
+  function updateSessionCookie(name: string, value: string, options: CookieOptions): void {
+    request.cookies.set({ name, value, ...options });
+    pendingCookies.push({ name, value, options });
+    response = NextResponse.next({ request: { headers: request.headers } });
+    // A session can span multiple cookies. Rebuilding the downstream request
+    // headers must not discard earlier chunks or obsolete-cookie deletions.
+    for (const cookie of pendingCookies) {
+      response.cookies.set({ name: cookie.name, value: cookie.value, ...cookie.options });
+    }
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
@@ -165,20 +176,10 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
           return request.cookies.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
-          response.cookies.set({ name, value, ...options });
-          pendingCookies.push({ name, value, options });
+          updateSessionCookie(name, value, options);
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: "", ...options });
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          });
-          response.cookies.set({ name, value: "", ...options });
-          pendingCookies.push({ name, value: "", options });
+          updateSessionCookie(name, "", options);
         },
       },
     }
@@ -369,9 +370,17 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       error: error instanceof Error ? error.message : String(error),
     });
 
-    const fallback = request.nextUrl.pathname.startsWith("/api/")
+    const pathname = request.nextUrl.pathname;
+    const protectedPage = PROTECTED_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix));
+    const fallback = pathname.startsWith("/api/")
       ? NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 })
-      : NextResponse.next();
+      : protectedPage
+        ? new NextResponse("Service temporarily unavailable. Please try again shortly.", {
+            status: 503,
+          })
+        : NextResponse.next();
+
+    fallback.headers.set("Cache-Control", "no-store");
 
     fallback.headers.set("X-Content-Type-Options", "nosniff");
     fallback.headers.set("X-Frame-Options", "DENY");

@@ -60,7 +60,15 @@ vi.mock("@/components/business/business-detail-content", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => {
+  MediaUpload: ({
+    label,
+    onChange,
+    error,
+  }: {
+    label: string;
+    onChange?: (files: File[]) => void;
+    error?: string;
+  }) => {
     const normalizedLabel = label.toLowerCase();
     const isThumbnail = normalizedLabel.includes("thumbnail");
     const isVideo = normalizedLabel.includes("video") && !isThumbnail;
@@ -75,9 +83,12 @@ vi.mock("@/components/ui/media-upload", () => ({
         ];
 
     return (
-      <button type="button" onClick={() => onChange?.(files)}>
-        {label}
-      </button>
+      <>
+        <button type="button" onClick={() => onChange?.(files)}>
+          {label}
+        </button>
+        {error && <p>{error}</p>}
+      </>
     );
   },
 }));
@@ -213,7 +224,11 @@ describe("EditBusinessPage", () => {
     expect(mockPush).toHaveBeenCalledWith(
       "/dashboard/listings?area=MZANSI_BUSINESS&updated=business&review=pending"
     );
-    expect(payload.map_directions).toBe("https://maps.example.com/home-studio");
+    // Home businesses do not publish their address, so the server would drop the pin anyway.
+    expect(payload.map_directions).toBeUndefined();
+    expect(
+      screen.getByText(/A location pin is only shown when you publish your address/)
+    ).toBeInTheDocument();
     expect(payload.business_details).toMatchObject({
       type: "home_business",
       service_suburb: "Noordwyk",
@@ -415,7 +430,7 @@ describe("EditBusinessPage", () => {
       expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Profile Photos \(up to 5\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Profile photos$/i }));
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     expect(
@@ -494,7 +509,7 @@ describe("EditBusinessPage", () => {
       expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Video \(1 max\)/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Video$/ }));
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {

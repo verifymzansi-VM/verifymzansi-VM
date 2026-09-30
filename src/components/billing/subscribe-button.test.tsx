@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SubscribeButton } from "./subscribe-button";
 
@@ -59,6 +59,26 @@ describe("SubscribeButton", () => {
     });
 
     expect(window.location.assign).toHaveBeenCalledWith("https://pay.ozow.com/checkout/pay-001");
+  });
+
+  it("re-enables the button when restored from the back/forward cache after redirecting", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ checkoutUrl: "https://pay.ozow.com/checkout/pay-002" }),
+    } as Response);
+    render(<SubscribeButton planId="plan-1" planName="Growth" priceCents={25000} />);
+    const button = screen.getByRole("button", { name: /choose growth/i });
+    fireEvent.click(button);
+    await waitFor(() => expect(window.location.assign).toHaveBeenCalled());
+    expect(button).toBeDisabled();
+
+    await act(async () => {
+      const event = new Event("pageshow") as PageTransitionEvent;
+      Object.defineProperty(event, "persisted", { value: true });
+      window.dispatchEvent(event);
+    });
+
+    expect(button).toBeEnabled();
   });
 
   it("passes an abort signal and ignores abort errors after unmount", async () => {

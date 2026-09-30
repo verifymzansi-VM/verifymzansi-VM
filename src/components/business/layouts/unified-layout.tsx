@@ -1,4 +1,5 @@
 "use client";
+import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { CustomerAccessSummary } from "@/components/business/customer-access-summary";
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
@@ -626,6 +627,10 @@ export function UnifiedLayout({
     includeLanguages: family !== "tourism",
   });
   const tourismDetails = (business.category_details ?? {}) as Record<string, unknown>;
+  const venuePhotos = getBusinessVenuePhotoUrls(
+    business.business_details,
+    business.category_details
+  );
   const amenityHighlights = normalizeList(tourismDetails.amenities);
   const bookingUrl =
     family === "tourism" && typeof tourismDetails.booking_url === "string"
@@ -936,7 +941,9 @@ export function UnifiedLayout({
       {family === "tourism" ? (
         <TourismDetailsCard details={tourismDetails as TourismCategoryDetails} />
       ) : null}
-      {getCategoryDetailFields(businessCategory).some((field) => {
+      {/* Tourism details are already shown in full by TourismDetailsCard above. */}
+      {family !== "tourism" &&
+      getCategoryDetailFields(businessCategory).some((field) => {
         const value = business.category_details?.[field.name];
         return value != null && value !== "" && (!Array.isArray(value) || value.length > 0);
       }) ? (
@@ -975,6 +982,29 @@ export function UnifiedLayout({
         value={business.category_details?.customer_access}
         meetingPoint={business.category_details?.meeting_point}
       />
+      {venuePhotos.length > 0 ? (
+        <SectionCard
+          title="Finding us"
+          body={
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {venuePhotos.map((url, index) => (
+                <li
+                  key={url}
+                  className="aspect-[4/3] overflow-hidden rounded-xl border border-border bg-muted"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={normalizeMediaUrl(url)}
+                    alt={`Entrance or landmark photo ${index + 1}`}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </li>
+              ))}
+            </ul>
+          }
+        />
+      ) : null}
       <BusinessDetailsAccordion
         business={business}
         businessType={businessType}

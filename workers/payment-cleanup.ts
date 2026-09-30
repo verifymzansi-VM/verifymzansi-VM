@@ -53,6 +53,20 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Upper bound for each outbound Supabase REST request. Without a deadline a
+ * hung connection pins the cron invocation until the platform kills it,
+ * skipping the rest of the run (including the audit log).
+ */
+const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
+
+function fetchWithTimeout(input: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(SUPABASE_REQUEST_TIMEOUT_MS),
+  });
+}
+
 function getExpireAt(providerData: Record<string, unknown> | null): string | null {
   const value = providerData?.expire_at;
   return typeof value === "string" && value.length > 0 ? value : null;
@@ -100,11 +114,14 @@ async function patchPayment(
     select: "id",
   });
 
-  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/payments?${params.toString()}`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const response = await fetchWithTimeout(
+    `${env.SUPABASE_URL}/rest/v1/payments?${params.toString()}`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(body),
+    }
+  );
 
   if (!response.ok) {
     console.error(`Payment cleanup patch failed for ${paymentId}`, await response.text());
@@ -136,7 +153,7 @@ async function createNotification(
     Prefer: "return=minimal",
   };
 
-  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/notifications`, {
+  const response = await fetchWithTimeout(`${env.SUPABASE_URL}/rest/v1/notifications`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -169,7 +186,7 @@ const worker: ExportedHandler<Env> = {
 
     // Order by created_at so expired rows beyond the first page are not
     // starved by newer unexpired pending payments.
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,user_id,area,provider_data,created_at&order=created_at.asc&limit=200`,
       { headers }
     );
@@ -193,7 +210,7 @@ const worker: ExportedHandler<Env> = {
       );
     });
 
-    const processingResponse = await fetch(
+    const processingResponse = await fetchWithTimeout(
       `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.processing&select=id,status,provider_data,updated_at&limit=200`,
       { headers }
     );
@@ -304,7 +321,7 @@ const worker: ExportedHandler<Env> = {
       created_at: new Date().toISOString(),
     };
 
-    const auditResponse = await fetch(`${env.SUPABASE_URL}/rest/v1/audit_logs`, {
+    const auditResponse = await fetchWithTimeout(`${env.SUPABASE_URL}/rest/v1/audit_logs`, {
       method: "POST",
       headers,
       body: JSON.stringify(auditPayload),

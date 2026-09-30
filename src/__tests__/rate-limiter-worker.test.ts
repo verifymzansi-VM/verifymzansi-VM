@@ -333,4 +333,21 @@ describe("rate-limiter worker", () => {
       expect(res.status).toBe(401);
     }
   });
+
+  it("rejects every caller with 401 when WORKER_API_KEY is unset", async () => {
+    const { env } = createWorkerEnv();
+    const unsetEnv = { ...env, WORKER_API_KEY: "" };
+
+    for (const header of ["Bearer ", "Bearer undefined", ""]) {
+      const res = await rateLimiterWorker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          headers: { Authorization: header, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "auth:login", key: "198.51.100.20" }),
+        }),
+        unsetEnv as never
+      );
+      expect(res.status).toBe(401);
+    }
+  });
 });

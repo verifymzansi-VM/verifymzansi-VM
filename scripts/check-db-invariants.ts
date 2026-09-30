@@ -62,6 +62,27 @@ const INVARIANTS: Invariant[] = [
     guidance:
       "Add a migration with a BEFORE UPDATE trigger on public.account_profiles that blocks non-service-role changes to enforcement columns (account_status, strikes, banned_at, ...).",
   },
+  {
+    name: "Promotion social authorizer details off the public promotions table",
+    regex:
+      /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+public\.promotion_social_authorizers[\s\S]+DROP\s+COLUMN\s+IF\s+EXISTS\s+social_authorizer_name/i,
+    guidance:
+      "Keep social authorizer name/role/relationship in the owner-only public.promotion_social_authorizers table, not on publicly readable public.promotions.",
+  },
+  {
+    name: "Organisation internal columns hidden from API roles",
+    regex:
+      /REVOKE\s+SELECT\s+ON\s+public\.%I\s+FROM\s+anon,\s*authenticated[\s\S]+GRANT\s+SELECT\s+\(%s\)\s+ON\s+public\.%I\s+TO\s+anon,\s*authenticated/i,
+    guidance:
+      "Grant anon/authenticated SELECT on organisations/organisation_affiliations by column, excluding internal bookkeeping columns (see 20260930140000).",
+  },
+  {
+    name: "Notification owners may only update read",
+    regex:
+      /REVOKE\s+INSERT,\s*UPDATE\s+ON\s+public\.notifications\s+FROM\s+anon,\s*authenticated[\s\S]+GRANT\s+UPDATE\s+\(read\)\s+ON\s+public\.notifications\s+TO\s+authenticated/i,
+    guidance:
+      "Revoke INSERT/UPDATE on public.notifications from API roles and grant only UPDATE (read) to authenticated.",
+  },
 ];
 
 export function getMigrationFiles(migrationsDir = MIGRATIONS_DIR): string[] {

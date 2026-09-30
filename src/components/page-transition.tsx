@@ -1,27 +1,21 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
+/**
+ * Route wrapper rendered by the root template on every page.
+ *
+ * This used to be a framer-motion `motion.div` with `initial={false}` and
+ * `animate={{ opacity: 1 }}`, which never animates anything (the element starts
+ * in its animate state) but pulled framer-motion into the bundle of every
+ * route. A plain element keeps the same markup and the same per-path remount.
+ */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const prefersReduced = useReducedMotion();
 
-  // When the user prefers reduced motion OR on mobile, skip animation entirely
-  if (prefersReduced) {
-    return <div className="flex-1 flex flex-col min-h-full">{children}</div>;
-  }
-
-  // Lightweight fade-only transition — no blur filter (very expensive on mobile GPUs)
   return (
-    <motion.div
-      key={pathname}
-      initial={false}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
-      className="flex-1 flex flex-col min-h-full"
-    >
+    <div key={pathname} className="flex-1 flex flex-col min-h-full">
       {children}
-    </motion.div>
+    </div>
   );
 }

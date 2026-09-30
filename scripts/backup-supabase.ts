@@ -3,6 +3,7 @@
 import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
+import { exportSupabaseTable } from "./lib/export-supabase-table";
 
 const workspaceRoot = process.cwd();
 const timestamp = new Date().toISOString().replace(/[:.]/gu, "-");
@@ -42,31 +43,6 @@ function getPublicTableNames(document: OpenApiDocument): string[] {
     .sort();
 }
 
-async function fetchTableRows(baseUrl: string, table: string): Promise<unknown[]> {
-  const rows: unknown[] = [];
-  const pageSize = 1_000;
-
-  for (let start = 0; ; start += pageSize) {
-    const response = await fetch(`${baseUrl}/rest/v1/${table}?select=*`, {
-      headers: getApiHeaders({ Range: `${start}-${start + pageSize - 1}` }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Could not read ${table}: HTTP ${response.status}.`);
-    }
-
-    const page: unknown = await response.json();
-    if (!Array.isArray(page)) {
-      throw new Error(`Unexpected response while reading ${table}.`);
-    }
-
-    rows.push(...page);
-    if (page.length < pageSize) {
-      return rows;
-    }
-  }
-}
-
 async function copyMigrations(destination: string): Promise<string[]> {
   const migrationsDirectory = path.join(workspaceRoot, "supabase", "migrations");
   const files = (await readdir(migrationsDirectory)).filter((file) => file.endsWith(".sql")).sort();
@@ -87,10 +63,16 @@ async function main(): Promise<void> {
   requireBackupCredentials();
 
   await mkdir(backupDirectory, { recursive: true });
-  console.log(`Creating Supabase backup in ${backupDirectory}`);
+  console.log(`Creating supplemental Supabase REST export in ${backupDirectory}`);
+  console.warn(
+    "This export is not a consistent database backup. Verify a restorable database backup before migrating."
+  );
 
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!.replace(/\/$/u, "");
-  const openApiResponse = await fetch(`${baseUrl}/rest/v1/`, { headers: getApiHeaders() });
+  const openApiResponse = await fetch(`${baseUrl}/rest/v1/`, {
+    headers: getApiHeaders(),
+    signal: AbortSignal.timeout(60_000),
+  });
   if (!openApiResponse.ok) {
     throw new Error(
       `Could not read the Supabase OpenAPI document: HTTP ${openApiResponse.status}.`
@@ -98,9 +80,11 @@ async function main(): Promise<void> {
   }
 
   const tableNames = getPublicTableNames((await openApiResponse.json()) as OpenApiDocument);
+  if (tableNames.length === 0)
+    throw new Error("No public tables discovered; refusing an empty export.");
   const data: Record<string, unknown[]> = {};
   for (const table of tableNames) {
-    data[table] = await fetchTableRows(baseUrl, table);
+    data[table] = await exportSupabaseTable(baseUrl, table, getApiHeaders());
   }
 
   const migrationFiles = await copyMigrations(backupDirectory);
@@ -120,6 +104,8 @@ async function main(): Promise<void> {
         rowCounts: Object.fromEntries(tableNames.map((table) => [table, data[table].length])),
         migrationFiles,
         scope: "public data exported through the REST API, plus local schema migrations",
+        consistentSnapshot: false,
+        restorableDatabaseBackup: false,
         excluded: [
           "Supabase Auth users",
           "Supabase Storage objects",
@@ -134,7 +120,7 @@ async function main(): Promise<void> {
   );
 
   console.log(
-    "Backup completed. Store a copy outside this workspace if it contains production data."
+    "Supplemental export completed; restoration is not verified. Store sensitive exports securely outside this workspace."
   );
 }
 

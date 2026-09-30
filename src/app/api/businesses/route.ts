@@ -1,5 +1,6 @@
 import { businessCategoryFilterValues } from "@/lib/constants/categories";
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
+import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
+import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -233,8 +234,7 @@ export async function POST(request: NextRequest) {
     }
     const { hasPaidPlan, tier, entitlements: ent } = planResult;
     const postingLimitBypassEnabled =
-      isPostingLimitBypassEnabled() ||
-      (await verifyCapabilityFromDb(user, "posting:bypass_limits"));
+      isPostingLimitBypassEnabled() || (await hasStaffPostingLimitBypass(supabase, user));
 
     // The paid-plan post limit is enforced atomically inside
     // insert_business_with_limit: the per-user advisory lock is held across
@@ -278,9 +278,7 @@ export async function POST(request: NextRequest) {
           data.cover_video,
           data.video_thumbnail,
           ...(data.gallery_photos ?? []),
-          ...(data.business_details?.type === "mall_store"
-            ? (data.business_details.mall_photos ?? [])
-            : []),
+          ...getBusinessVenuePhotoUrls(data.business_details, data.category_details),
         ],
       });
     } catch (mediaError) {

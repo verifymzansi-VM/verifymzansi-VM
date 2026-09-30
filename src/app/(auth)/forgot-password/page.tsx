@@ -151,6 +151,9 @@ export default function ForgotPasswordPage() {
       setSentTo(data.email);
       setSent(true);
     } catch {
+      // The request may have consumed the single-use CAPTCHA token before
+      // the connection failed; get a fresh one for the retry.
+      if (turnstileState.mode === "configured") handleRetry();
       toast({
         title: "Something went wrong",
         description: "We couldn't send your request. Check your connection and try again.",

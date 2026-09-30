@@ -7,6 +7,8 @@ import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { mapCommercialError } from "@/lib/commercial/errors";
+import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 
 const log = createLogger("OrganisationManage");
 const uuid = z.uuid();
@@ -97,6 +99,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             .maybeSingle();
   if (ownership.error || ownership.data?.organisation_id !== id) {
     return NextResponse.json({ error: "Record not found" }, { status: 404 });
+  }
+
+  // The RPCs also accept VerifyMzansi commercial staff (is_commercial_admin),
+  // which reads the raw auth role. Anyone who is not an administrator of this
+  // organisation is acting as staff, so hold them to the back-office rules:
+  // a current DB-verified staff capability and the staff MFA policy.
+  const orgAdmin = await db.rpc("is_organisation_admin", { p_org: id, p_user: user.id });
+  if (orgAdmin.error) {
+    log.error("Organisation admin check failed", { code: orgAdmin.error.code });
+    return NextResponse.json({ error: "The change could not be applied." }, { status: 503 });
+  }
+  if (orgAdmin.data !== true) {
+    const staffRole = await verifyCapabilityRoleFromDb(user, "organisations:manage");
+    if (!staffRole) {
+      return NextResponse.json({ error: "Organisation access required" }, { status: 403 });
+    }
+    const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+    if (mfaBlock) return mfaBlock;
   }
 
   const result =

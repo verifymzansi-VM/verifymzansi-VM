@@ -6,6 +6,11 @@ compatibility_date = "2026-01-01"
 #   wrangler secret put OPS_JOBS_SECRET --config wrangler.ops-jobs.toml
 # and set the same value as OPS_JOBS_SECRET on the app worker.
 
+# Persist Workers Logs (7-day retention) so production errors can be
+# investigated after the fact; without this only a live `wrangler tail` works.
+[observability]
+enabled = true
+
 [vars]
 ENVIRONMENT = "production"
 APP_URL = "https://verifymzansi.com"

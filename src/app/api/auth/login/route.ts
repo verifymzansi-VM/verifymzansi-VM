@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     const lockout = checkAccountLockout(parsedBody.data.email);
     if (lockout.locked) {
       logAuthProtectionWarning("Account locked due to too many failed attempts", {
-        email: parsedBody.data.email,
+        email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
         ip,
       });
       const retrySeconds = lockout.retryAfter ?? 3600;
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     const distLockout = await checkDistributedLockout(parsedBody.data.email);
     if (distLockout.locked) {
       logAuthProtectionWarning("Account locked (distributed) due to too many failed attempts", {
-        email: parsedBody.data.email,
+        email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
         ip,
       });
       const distRetrySeconds = distLockout.retryAfter ?? 3600;

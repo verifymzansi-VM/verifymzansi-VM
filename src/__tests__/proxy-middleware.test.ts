@@ -2,16 +2,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // ── Hoisted mocks ───────────────────────────────────────────────────────────
-const { mockGetUser, mockFrom } = vi.hoisted(() => ({
+const { mockGetUser, mockFrom, mockCreateServerClient } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockFrom: vi.fn(),
+  mockCreateServerClient: vi.fn(),
 }));
 
 vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({
-    auth: { getUser: mockGetUser },
-    from: mockFrom,
-  }),
+  createServerClient: (...args: unknown[]) => {
+    mockCreateServerClient(...args);
+    return {
+      auth: { getUser: mockGetUser },
+      from: mockFrom,
+    };
+  },
 }));
 
 import { middleware } from "@/middleware";
@@ -229,6 +233,50 @@ describe("proxy — authenticated routing", () => {
     vi.clearAllMocks();
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+  });
+
+  it("preserves every refreshed cookie chunk and deletion on pass-through responses", async () => {
+    mockGetUser.mockImplementationOnce(async () => {
+      const options = mockCreateServerClient.mock.calls[0][2] as {
+        cookies: {
+          set: (name: string, value: string, options: { path: string }) => void;
+          remove: (name: string, options: { path: string; maxAge: number }) => void;
+        };
+      };
+      options.cookies.remove("sb-example-auth-token", { path: "/", maxAge: 0 });
+      options.cookies.set("sb-example-auth-token.0", "first-chunk", { path: "/" });
+      options.cookies.set("sb-example-auth-token.1", "second-chunk", { path: "/" });
+      return { data: { user: null } };
+    });
+
+    const res = await routeRequest(createMockRequest("/login"));
+
+    expect(res.status).toBe(200);
+    expect(res.cookies.get("sb-example-auth-token")?.maxAge).toBe(0);
+    expect(res.cookies.get("sb-example-auth-token.0")?.value).toBe("first-chunk");
+    expect(res.cookies.get("sb-example-auth-token.1")?.value).toBe("second-chunk");
+    expect(res.headers.get("x-middleware-request-cookie")).toContain(
+      "sb-example-auth-token.0=first-chunk"
+    );
+    expect(res.headers.get("x-middleware-request-cookie")).toContain(
+      "sb-example-auth-token.1=second-chunk"
+    );
+  });
+
+  it("fails closed when an unexpected account gate error interrupts a protected page", async () => {
+    mockGetUser.mockResolvedValueOnce({
+      data: { user: { id: "user-1", is_anonymous: false, app_metadata: {} } },
+    });
+    mockFrom.mockImplementationOnce(() => {
+      throw new Error("Account database unavailable");
+    });
+
+    // /staff skips the phone gate and reaches the account enforcement gate.
+    const res = await middleware(createMockRequest("/staff"));
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("x-middleware-next")).toBeNull();
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("redirects unauthenticated users from /dashboard to /login", async () => {

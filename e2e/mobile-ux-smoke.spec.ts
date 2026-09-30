@@ -316,8 +316,11 @@ test.describe("Mobile UX smoke", () => {
     expect(shareBox!.height).toBeGreaterThanOrEqual(44);
     expect(reportBox!.height).toBeGreaterThanOrEqual(44);
 
-    await reportButton.click();
-    await expect(page.getByRole("heading", { name: /report (event|promotion)/i })).toBeVisible();
+    const reportHeading = page.getByRole("heading", { name: /report (event|promotion|profile)/i });
+    await expect(async () => {
+      if (!(await reportHeading.isVisible())) await reportButton.click({ timeout: 2_000 });
+      await expect(reportHeading).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
 
     const reasonSelect = page.getByLabel(/reason/i).first();
     await expect(reasonSelect).toBeVisible();

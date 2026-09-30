@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PaymentStatusPanel from "./payment-status-panel";
 
 vi.mock("next/link", () => ({
@@ -9,6 +9,7 @@ vi.mock("next/link", () => ({
 }));
 
 describe("PaymentStatusPanel", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
@@ -30,6 +31,7 @@ describe("PaymentStatusPanel", () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/billing/payment-status?payment=pay-1", {
         cache: "no-store",
+        signal: expect.any(AbortSignal),
       });
     });
 
@@ -63,11 +65,59 @@ describe("PaymentStatusPanel", () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith("/api/billing/payment-status?payment=pay-401", {
         cache: "no-store",
+        signal: expect.any(AbortSignal),
       });
     });
 
     await waitFor(() => {
       expect(screen.queryByText(/Refreshing payment status/i)).not.toBeInTheDocument();
     });
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login?returnUrl=%2Fbilling%2Fsuccess%3Fpayment%3Dpay-401"
+    );
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries an incomplete response instead of silently abandoning confirmation", async () => {
+    vi.useFakeTimers();
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: "complete", terminal: true }),
+      } as Response);
+    render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-retry" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    expect(screen.getByText("Payment confirmed")).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not start overlapping requests when the tab becomes visible", async () => {
+    let complete!: (response: Response) => void;
+    vi.mocked(global.fetch).mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        })
+    );
+    render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-slow" />);
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      complete({
+        ok: true,
+        json: async () => ({ status: "complete", terminal: true }),
+      } as Response);
+    });
+    expect(screen.getByText("Payment confirmed")).toBeInTheDocument();
   });
 });

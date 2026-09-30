@@ -352,11 +352,21 @@ describe("ozow payments", () => {
       expect.objectContaining({
         merchantReference: "payment-1",
         providerPaymentId: "ozow-tx-1",
-        amount: "25.00",
+        amount: "25",
         currencyCode: "ZAR",
         status: "successful",
       })
     );
+  });
+
+  it.each([
+    [{ value: "25.00", currency: "ZAR" }, "25.00"],
+    [{ value: 24.999, currency: "ZAR" }, "24.999"],
+    [25.001, "25.001"],
+    ["25.00", "25.00"],
+  ])("preserves webhook amount precision for %j", async (amount, expected) => {
+    const { normalizeOzowWebhook } = await import("./ozow");
+    expect(normalizeOzowWebhook({ data: { amount } })?.amount).toBe(expected);
   });
 
   it("accepts official production Ozow base URL", async () => {

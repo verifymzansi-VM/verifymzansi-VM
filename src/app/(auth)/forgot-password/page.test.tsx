@@ -147,4 +147,25 @@ describe("ForgotPasswordPage", () => {
 
     vi.unstubAllGlobals();
   });
+  it("asks for a fresh security check after a network failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      })
+    );
+
+    render(<ForgotPasswordPage />);
+    await submitEmail("nomsa@example.com");
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Something went wrong" })
+      )
+    );
+    expect(mockTurnstileRetry).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Email")).toHaveValue("nomsa@example.com");
+
+    vi.unstubAllGlobals();
+  });
 });

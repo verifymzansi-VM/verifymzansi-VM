@@ -39,3 +39,19 @@ export function TwitterIcon(props: SocialIconProps) {
     </SocialIconBase>
   );
 }
+
+export function XIcon(props: SocialIconProps) {
+  return (
+    <SocialIconBase {...props}>
+      <path d="M17.8 3h3.1l-6.8 7.7 8 10.3h-6.2l-4.9-6.3L5.4 21H2.3l7.2-8.3L1.8 3h6.4l4.4 5.8L17.8 3Zm-1.1 16.2h1.7L7.4 4.7H5.6l11.1 14.5Z" />
+    </SocialIconBase>
+  );
+}
+
+export function TikTokIcon(props: SocialIconProps) {
+  return (
+    <SocialIconBase {...props}>
+      <path d="M16.6 2h-3.3v13.3a2.9 2.9 0 1 1-2.9-2.9c.3 0 .6 0 .9.1V9.1a6.2 6.2 0 1 0 5.3 6.2V8.6a7.9 7.9 0 0 0 4.6 1.5V6.8a4.6 4.6 0 0 1-4.6-4.6v-.2Z" />
+    </SocialIconBase>
+  );
+}

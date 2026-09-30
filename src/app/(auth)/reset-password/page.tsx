@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, KeyRound, Loader2, TimerOff } from "lucide-react";
+import { ArrowLeft, KeyRound, Loader2, RotateCw, TimerOff, WifiOff } from "lucide-react";
 
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
 import {
@@ -19,27 +19,56 @@ import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/
 import { useToast } from "@/hooks/use-toast";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 
+/**
+ * - checking: request in flight
+ * - valid: recovery session confirmed
+ * - invalid: the server answered and the link is expired/used/missing
+ * - unavailable: the check itself failed (offline, timeout, 5xx) — retryable
+ */
+type RecoverySessionState = "checking" | "valid" | "invalid" | "unavailable";
+
+const SESSION_CHECK_FAILED_MESSAGE =
+  "We couldn't check your reset link. Check your connection and try again.";
+const SUBMIT_NETWORK_FAILED_MESSAGE =
+  "We couldn't save your new password. Check your connection and try again.";
+
+async function fetchRecoverySessionState(): Promise<Exclude<RecoverySessionState, "checking">> {
+  try {
+    const res = await fetch("/api/auth/reset-password", { cache: "no-store" });
+    // A rejected session is an auth answer, not an outage.
+    if (res.status === 401 || res.status === 403) return "invalid";
+    if (!res.ok) return "unavailable";
+    const data: unknown = await res.json();
+    if (!data || typeof data !== "object" || !("valid" in data)) return "unavailable";
+    return (data as { valid: unknown }).valid === true ? "valid" : "invalid";
+  } catch {
+    return "unavailable";
+  }
+}
+
 export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [sessionValid, setSessionValid] = useState<boolean | null>(null);
+  const [sessionState, setSessionState] = useState<RecoverySessionState>("checking");
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
+  const checkSession = useCallback(async () => {
+    setSessionState("checking");
+    setSessionState(await fetchRecoverySessionState());
+  }, []);
+
   // Check if the user has a valid recovery session (set by the reset link)
   useEffect(() => {
-    async function checkSession() {
-      try {
-        const res = await fetch("/api/auth/reset-password");
-        const data = await res.json();
-        setSessionValid(data.valid === true);
-      } catch {
-        setSessionValid(false);
-      }
-    }
-
-    void checkSession();
+    let cancelled = false;
+    void fetchRecoverySessionState().then((state) => {
+      if (!cancelled) setSessionState(state);
+    });
     void ensureCsrfTokenReady();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const {
@@ -56,6 +85,7 @@ export default function ResetPasswordPage() {
   const requirements = getPasswordRequirements(password);
 
   async function onSubmit(data: ResetPasswordInput) {
+    setSubmitError(null);
     try {
       const csrfToken = await ensureCsrfTokenReady();
       if (!csrfToken) {
@@ -79,7 +109,7 @@ export default function ResetPasswordPage() {
 
       if (!res.ok) {
         if (res.status === 401) {
-          setSessionValid(false);
+          setSessionState("invalid");
           return;
         }
         toast({
@@ -97,16 +127,14 @@ export default function ResetPasswordPage() {
       });
       router.push("/login");
     } catch {
-      toast({
-        title: "Something went wrong",
-        description: "Please try again later.",
-        variant: "destructive",
-      });
+      // Network failure: keep the typed passwords and show an inline,
+      // persistent error so the user can simply press Save again.
+      setSubmitError(SUBMIT_NETWORK_FAILED_MESSAGE);
     }
   }
 
   // Loading state while checking the recovery session
-  if (sessionValid === null) {
+  if (sessionState === "checking") {
     return (
       <div aria-busy="true">
         <span className="sr-only" role="status">
@@ -132,8 +160,50 @@ export default function ResetPasswordPage() {
     );
   }
 
+  // The check itself failed (offline, timeout, server error): the link may be
+  // fine, so offer a retry instead of telling the user it expired.
+  if (sessionState === "unavailable") {
+    return (
+      <div className="space-y-6">
+        <AuthPageHeader
+          icon={
+            <AuthIconTile tone="gold">
+              <WifiOff />
+            </AuthIconTile>
+          }
+          title="Couldn't check your link"
+          description="Your reset link may still work."
+        />
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {SESSION_CHECK_FAILED_MESSAGE}
+        </p>
+        <div className="flex flex-col gap-3">
+          <Button
+            type="button"
+            variant="trust-verified"
+            size="lg"
+            className="h-12 w-full gap-2 text-[15px]"
+            onClick={() => void checkSession()}
+          >
+            <RotateCw className="h-4 w-4" aria-hidden="true" />
+            Retry
+          </Button>
+          <Button asChild variant="ghost" size="lg" className="h-12 w-full gap-2 text-[15px]">
+            <Link href="/login">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to sign in
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // No valid session: the link expired, was already used, or was opened elsewhere
-  if (!sessionValid) {
+  if (sessionState === "invalid") {
     return (
       <div className="space-y-6">
         <AuthPageHeader
@@ -196,6 +266,15 @@ export default function ResetPasswordPage() {
           onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
           toggleLabel={{ show: "Show confirm password", hide: "Hide confirm password" }}
         />
+
+        {submitError && (
+          <p
+            role="alert"
+            className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          >
+            {submitError}
+          </p>
+        )}
 
         <Button
           type="submit"

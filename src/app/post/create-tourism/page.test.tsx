@@ -12,12 +12,13 @@ const { businessPreviewProps, promotionPreviewProps } = vi.hoisted(() => ({
   businessPreviewProps: { current: null as Record<string, unknown> | null },
   promotionPreviewProps: { current: null as Record<string, unknown> | null },
 }));
-const { searchParamGetMock } = vi.hoisted(() => ({
+const { searchParamGetMock, routerPushMock } = vi.hoisted(() => ({
   searchParamGetMock: vi.fn(),
+  routerPushMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock }),
   useSearchParams: () => ({ get: searchParamGetMock }),
 }));
 
@@ -111,13 +112,16 @@ vi.mock("@/components/post/post-form-scaffold", () => ({
     children,
     footer,
     error,
+    errorAction,
   }: {
     children: React.ReactNode;
     footer?: React.ReactNode;
     error?: string | null;
+    errorAction?: React.ReactNode;
   }) => (
     <div>
       {error ? <div>{error}</div> : null}
+      {errorAction}
       {children}
       {footer}
     </div>
@@ -562,8 +566,11 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.change(screen.getByLabelText("Website (Optional)"), {
       target: { value: "https:// www.kruger.example" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
+    fireEvent.change(screen.getByLabelText("Facebook (Optional)"), {
       target: { value: "https:// facebook.com/kruger" },
+    });
+    fireEvent.change(screen.getByLabelText("Location pin (Google Maps link) (Optional)"), {
+      target: { value: "maps.app.goo.gl/kruger" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
@@ -587,6 +594,7 @@ describe("CreateTourismPage type switch behavior", () => {
       facebook: "https://facebook.com/kruger",
     });
     expect(body.category_details.booking_url).toBe("https://www.booking.co.za");
+    expect(body.map_directions).toBe("https://maps.app.goo.gl/kruger");
   });
 
   it("maps tourism business API 422 video-limit errors to the media step", async () => {
@@ -1063,5 +1071,79 @@ describe("CreateTourismPage type switch behavior", () => {
       ).toBeGreaterThan(0);
     });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  async function fillAndSubmitEvent(promotionsResponse: { status: number; body: unknown }) {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/promotions") {
+          return {
+            ok: false,
+            status: promotionsResponse.status,
+            json: async () => promotionsResponse.body,
+          };
+        }
+        return { ok: true, json: async () => ({ id: "ok" }) };
+      }
+    );
+
+    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
+    render(<CreateTourismPage />);
+    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
+      target: { value: "Soweto Food Festival" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A detailed event description with enough content to pass validation." },
+    });
+    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
+      target: { value: "festival_concert" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
+      target: { value: "2099-12-01" },
+    });
+    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
+      target: { value: "18:00" },
+    });
+    fireEvent.click(screen.getByLabelText("Free entry"));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByLabelText("Phone Call"));
+    fireEvent.click(screen.getByLabelText("Contact Form"));
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+  }
+
+  it("offers a sign-in link back to this page when the event session expired (401)", async () => {
+    window.history.pushState({}, "", "/post/create-tourism?type=event");
+    await fillAndSubmitEvent({ status: 401, body: { error: "Unauthorized" } });
+
+    const signIn = await screen.findByRole("link", { name: "Sign in" });
+    expect(signIn).toHaveAttribute(
+      "href",
+      `/login?returnUrl=${encodeURIComponent("/post/create-tourism?type=event")}`
+    );
+    expect(screen.getByText(/re-attach your photos and videos/i)).toBeInTheDocument();
+    expect(routerPushMock).not.toHaveBeenCalled();
+    window.history.pushState({}, "", "/");
+  });
+
+  it("does not follow an off-site event redirectUrl", async () => {
+    await fillAndSubmitEvent({ status: 403, body: { redirectUrl: "//evil.example/phish" } });
+
+    await waitFor(() => {
+      expect(routerPushMock).toHaveBeenCalledWith("/dashboard/listings");
+    });
+    expect(routerPushMock).not.toHaveBeenCalledWith("//evil.example/phish");
   });
 });

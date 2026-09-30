@@ -88,6 +88,62 @@ function buildWebpWithExif(): Uint8Array<ArrayBuffer> {
   ]);
 }
 
+const asciiBytes = (s: string) => [...s].map((c) => c.charCodeAt(0) & 0xff);
+const be32 = (n: number) => [(n >>> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+const isoBox = (type: string, ...parts: number[][]) => {
+  const payload = parts.flat();
+  return [...be32(8 + payload.length), ...asciiBytes(type), ...payload];
+};
+const GPS_ISO6709 = "+37.4219-122.0840/";
+
+/** Minimal MP4: ftyp + moov/udta/©xyz (Android location) + mdat. */
+function buildMp4WithLocation(): Uint8Array<ArrayBuffer> {
+  return new Uint8Array([
+    ...isoBox("ftyp", asciiBytes("isom"), be32(0x200), asciiBytes("isomiso2avc1mp41")),
+    ...isoBox(
+      "moov",
+      isoBox("udta", isoBox("©xyz", [0, GPS_ISO6709.length, 0x15, 0xc7], asciiBytes(GPS_ISO6709)))
+    ),
+    ...isoBox("mdat", asciiBytes("VIDEO-SAMPLES")),
+  ]);
+}
+
+/** Minimal AVIF: ftyp + meta(iinf Exif item, iloc v0) + mdat holding the Exif payload. */
+function buildAvifWithExif(): Uint8Array<ArrayBuffer> {
+  const exif = [
+    ...be32(0),
+    ...asciiBytes("MM"),
+    0,
+    0x2a,
+    ...be32(8),
+    ...asciiBytes("GPSLatitude=33.92S"),
+  ];
+  const make = (exifAt: number) => {
+    // infe v2: version/flags, item_ID=1, protection_index=0, item_type "Exif", empty name
+    const infe = isoBox("infe", [2, 0, 0, 0, 0, 1, 0, 0], asciiBytes("Exif"), [0]);
+    const iinf = isoBox("iinf", [0, 0, 0, 0, 0, 1], infe);
+    // iloc v0: offset_size=4 length_size=4 base_offset_size=0, 1 item (id 1,
+    // data_ref 0, 1 extent)
+    const iloc = isoBox(
+      "iloc",
+      [0, 0, 0, 0, 0x44, 0x00, 0, 1],
+      [0, 1, 0, 0, 0, 1],
+      be32(exifAt),
+      be32(exif.length)
+    );
+    const meta = isoBox("meta", [0, 0, 0, 0], iinf, iloc);
+    const ftyp = isoBox("ftyp", asciiBytes("avif"), be32(0), asciiBytes("avifmif1miaf"));
+    return { head: [...ftyp, ...meta], mdat: isoBox("mdat", exif) };
+  };
+  const first = make(0);
+  const final = make(first.head.length + 8);
+  return new Uint8Array([...final.head, ...final.mdat]);
+}
+
+function containsAscii(bytes: Uint8Array, text: string): boolean {
+  return Buffer.from(bytes).includes(Buffer.from(text, "latin1"));
+}
+
 describe("Media Upload Routes", () => {
   const mockSupabase = {
     from: vi.fn(),
@@ -351,6 +407,49 @@ describe("Media Upload Routes", () => {
           file_size: strippedSize,
         })
       );
+    });
+
+    it("blanks MP4 GPS location metadata in place before storing the video", async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+      }));
+      const mp4 = buildMp4WithLocation();
+      expect(containsAscii(mp4, GPS_ISO6709)).toBe(true);
+      const file = new File([mp4], "clip.mp4", { type: "video/mp4" });
+      vi.mocked(uploadToR2).mockResolvedValue({ url: "https://example.com/clip.mp4" } as never);
+
+      const res = await uploadMedia(createFormDataRequest([file]));
+
+      expect(res.status).toBe(200);
+      const uploadArg = vi.mocked(uploadToR2).mock.calls[0][0] as unknown as { file: Blob };
+      const stored = new Uint8Array(await uploadArg.file.arrayBuffer());
+      expect(stored.length).toBe(mp4.length); // same length: chunk offsets stay valid
+      expect(containsAscii(stored, GPS_ISO6709)).toBe(false);
+      expect(containsAscii(stored, "VIDEO-SAMPLES")).toBe(true);
+    });
+
+    it("zeroes AVIF Exif (GPS) payloads before storing the image", async () => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+      }));
+      const avif = buildAvifWithExif();
+      expect(containsAscii(avif, "GPSLatitude")).toBe(true);
+      const file = new File([avif], "photo.avif", { type: "image/avif" });
+      vi.mocked(uploadToR2).mockResolvedValue({ url: "https://example.com/photo.avif" } as never);
+
+      const res = await uploadMedia(createFormDataRequest([file]));
+
+      expect(res.status).toBe(200);
+      const uploadArg = vi.mocked(uploadToR2).mock.calls[0][0] as unknown as { file: Blob };
+      const stored = new Uint8Array(await uploadArg.file.arrayBuffer());
+      expect(stored.length).toBe(avif.length);
+      expect(containsAscii(stored, "GPSLatitude")).toBe(false);
     });
   });
 });

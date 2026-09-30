@@ -105,6 +105,16 @@ export const promotionSchema = z
           .max(10)
           .optional(),
         tickets_url: externalUrlOrEmptySchema("Enter a valid ticketing URL"),
+        website: externalUrlOrEmptySchema("Enter a valid website URL"),
+        map_directions: externalUrlOrEmptySchema("Enter a valid map link"),
+        social_links: z
+          .object({
+            facebook: externalUrlOrEmptySchema("Enter a valid Facebook URL"),
+            instagram: externalUrlOrEmptySchema("Enter a valid Instagram URL"),
+            twitter: externalUrlOrEmptySchema("Enter a valid X / Twitter URL"),
+            tiktok: externalUrlOrEmptySchema("Enter a valid TikTok URL"),
+          })
+          .optional(),
         age_restriction: z.string().max(20).optional(),
         dress_code: z.string().max(300).optional(),
         lineup: z.string().max(2000).optional(),

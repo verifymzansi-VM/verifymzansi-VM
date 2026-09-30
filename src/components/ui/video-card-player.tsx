@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, type ReactNode } from "react";
 import Image from "next/image";
 import { Volume2, VolumeX, Play, Pause, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -556,7 +556,6 @@ function VideoCardPlayerInner({
   const srcNeedsUnoptimized =
     normalizedSrc?.startsWith("blob:") || normalizedSrc?.startsWith("data:");
 
-  const stickyAutoplayEnabled = useShowroomAutoplayStore((s) => s.autoplayEnabled);
   const setStickyAutoplayEnabled = useShowroomAutoplayStore((s) => s.setAutoplayEnabled);
   // Only showroom center cards opt in: their play/pause toggle drives the
   // shared sticky intent (like the mute button) across all showroom cards.
@@ -564,20 +563,47 @@ function VideoCardPlayerInner({
     stickyAutoplay && isVideo && mode === "ambient" && showPlaybackControl
   );
 
-  // Sticky intent (mute-button style): when the user has pressed play on a
-  // showroom card, newly focused showroom cards start playing on their own
-  // (desktop and mobile) until the user presses pause. The inner player
-  // remounts whenever a card becomes the focused showroom card, so reading
-  // the persisted preference as initial state covers every focus change.
-  // Hydration-safe: it only arms playback through the visibility hook
-  // post-mount and never changes the initially rendered DOM.
-  const initiallyAutoPlay = linkStickyAutoplay && stickyAutoplayEnabled;
-  const [isPlaybackPaused, setIsPlaybackPaused] = useState(() =>
-    initiallyAutoPlay
-      ? false
-      : getInitialAmbientPlaybackPaused(mode, showPlaybackControl, deferVideoLoadUntilPlay)
+  // Hydration-safe initial state: the first client render must match the
+  // server HTML, so it only uses props. Client-only inputs (the persisted
+  // sticky-autoplay preference, prefers-reduced-motion, Save-Data) are
+  // applied in a layout effect right after mount, before the browser paints
+  // and before the visibility observer can report the card as playable.
+  const [isPlaybackPaused, setIsPlaybackPaused] = useState(
+    mode === "ambient" && showPlaybackControl && deferVideoLoadUntilPlay
   );
-  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(initiallyAutoPlay);
+  const [hasActivatedPlayback, setHasActivatedPlayback] = useState(false);
+  const mountPlaybackInputsRef = useRef({
+    linkStickyAutoplay,
+    mode,
+    showPlaybackControl,
+    deferVideoLoadUntilPlay,
+  });
+  /* eslint-disable react-hooks/set-state-in-effect -- applies client-only
+     preferences once after hydration; reading them during render would make
+     the first client render differ from the server HTML (React #418). */
+  useLayoutEffect(() => {
+    // Sticky intent (mute-button style): when the user has pressed play on a
+    // showroom card, newly focused showroom cards start playing on their own
+    // (desktop and mobile) until the user presses pause. The inner player
+    // remounts whenever a card becomes the focused showroom card, so applying
+    // the persisted preference once on mount covers every focus change.
+    const inputs = mountPlaybackInputsRef.current;
+    if (inputs.linkStickyAutoplay && useShowroomAutoplayStore.getState().autoplayEnabled) {
+      setIsPlaybackPaused(false);
+      setHasActivatedPlayback(true);
+      return;
+    }
+    if (
+      getInitialAmbientPlaybackPaused(
+        inputs.mode,
+        inputs.showPlaybackControl,
+        inputs.deferVideoLoadUntilPlay
+      )
+    ) {
+      setIsPlaybackPaused(true);
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const [tapIndicator, setTapIndicator] = useState<{
     key: number;
     action: "play" | "pause";

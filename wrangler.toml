@@ -159,10 +159,18 @@ id = "247144b6d9b1406093351378a57c62fa"
 # Keep this explicit so CI can target production without Wrangler warning about
 # multiple configured environments and an unspecified deploy target.
 # ────────────────────────────────────────────────────────────────────────────
+# Persist Workers Logs (7-day retention) so production errors can be
+# investigated after the fact; without this only a live `wrangler tail` works.
+[observability]
+enabled = true
+
 [env.production]
 name = "verifymzansi"
 workers_dev = false
 preview_urls = false
+
+[env.production.observability]
+enabled = true
 
 [env.production.limits]
 cpu_ms = 30000

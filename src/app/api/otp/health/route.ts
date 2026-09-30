@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
 import { createLogger } from "@/lib/utils/logger";
 
 const logger = createLogger("OtpHealth");
@@ -9,7 +10,7 @@ const logger = createLogger("OtpHealth");
  * OTP pipeline health check — verifies env vars, DB table,
  * Web Crypto availability, and admin client connectivity.
  *
- * Requires admin/moderator authentication.
+ * Requires admin/moderator authentication and a satisfied staff MFA policy.
  * Returns 200 with pass/fail per check.
  * Does NOT expose secret values.
  */
@@ -23,6 +24,8 @@ export async function GET() {
   if (!user || !(await verifyStaffActorRoleFromDb(user))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+  if (mfaBlock) return mfaBlock;
 
   const checks: Record<string, { ok: boolean; detail?: string }> = {};
 

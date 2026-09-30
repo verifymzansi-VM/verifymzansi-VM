@@ -48,6 +48,16 @@ describe("POST /api/auth/sign-out", () => {
     });
   });
 
+  it("returns 503 instead of redirecting when the provider returns an error", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: { signOut: vi.fn().mockResolvedValue({ error: new Error("provider unavailable") }) },
+    });
+    const res = await POST(createRequest());
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Location")).toBeNull();
+    expect(res.cookies.get("x-phone-ok")).toBeUndefined();
+  });
+
   it("returns 503 when signOut throws", async () => {
     mockCreateClient.mockResolvedValue({
       auth: { signOut: vi.fn().mockRejectedValue(new Error("fail")) },

@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
@@ -13,9 +12,9 @@ import { DashboardMobileNav } from "@/components/dashboard/dashboard-mobile-nav"
 import { createClient } from "@/lib/supabase/client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
+import { signOutBrowserSession } from "@/hooks/use-auth";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [badges, setBadges] = useState<DashboardSidebarBadges>({});
   const { unreadCount: unreadLeads } = useLeadsUnread();
   const sidebarBadges = useMemo(
@@ -116,11 +115,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   const handleSignOut = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }, [router]);
+    await signOutBrowserSession();
+  }, []);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

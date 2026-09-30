@@ -100,6 +100,8 @@ interface PostFormScaffoldProps {
   /** Per-step boolean: true if that step currently has validation errors. */
   stepHasErrors?: boolean[];
   onRetry?: () => void;
+  /** Optional recovery action (e.g. a sign-in link) rendered inside the error alert. */
+  errorAction?: React.ReactNode;
   onStepChange?: (step: number) => void;
   onFieldError?: (key: string) => void;
   children: React.ReactNode;
@@ -153,6 +155,7 @@ export function PostFormScaffold({
   errorStepLabel,
   stepHasErrors,
   onRetry,
+  errorAction,
   onStepChange,
   onFieldError,
   children,
@@ -264,6 +267,7 @@ export function PostFormScaffold({
                 </ul>
               )}
             </AlertDescription>
+            {errorAction && <div className="mt-2">{errorAction}</div>}
             {onRetry && (
               <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onRetry}>
                 Try again

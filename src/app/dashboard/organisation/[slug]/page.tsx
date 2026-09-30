@@ -64,7 +64,7 @@ export default async function OrganisationDashboardPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?returnUrl=/dashboard/organisation/${slug}`);
+  if (!user) redirect(`/login?returnUrl=${encodeURIComponent(`/dashboard/organisation/${slug}`)}`);
 
   const db = createAdminClient();
   const { data: org } = await db

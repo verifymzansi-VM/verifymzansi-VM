@@ -45,6 +45,11 @@ import {
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
 import {
+  POST_SESSION_EXPIRED_MESSAGE,
+  resolveServerRedirect,
+} from "@/app/post/_lib/post-submit-navigation";
+import { PostSignInAction } from "@/components/post/post-sign-in-action";
+import {
   getListingMediaUploadErrorState,
   uploadListingImages,
   uploadListingVideoFiles,
@@ -253,6 +258,7 @@ export default function CreateListingPage() {
   const [uploadStatuses, setUploadStatuses] = useState<UploadStatuses>(INITIAL_UPLOAD_STATUSES);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
@@ -637,6 +643,7 @@ export default function CreateListingPage() {
 
     // Ref-based guard: prevent concurrent/duplicate submissions even across re-renders
     if (submissionInFlightRef.current) return;
+    setSessionExpired(false);
 
     const stepErrors = [0, 1, 2].map((index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
@@ -747,6 +754,12 @@ export default function CreateListingPage() {
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
 
+        if (res.status === 401) {
+          setSessionExpired(true);
+          setFormError(POST_SESSION_EXPIRED_MESSAGE);
+          return;
+        }
+
         // Phone-gate: server returns redirectUrl for phone verification
         if (
           res.status === 403 &&
@@ -754,7 +767,7 @@ export default function CreateListingPage() {
           typeof payload === "object" &&
           typeof (payload as Record<string, unknown>).redirectUrl === "string"
         ) {
-          router.push((payload as Record<string, unknown>).redirectUrl as string);
+          router.push(resolveServerRedirect((payload as Record<string, unknown>).redirectUrl));
           return;
         }
 
@@ -1008,8 +1021,9 @@ export default function CreateListingPage() {
                   // errors — never show red on a pristine form.
                   Object.keys(fieldErrors).some((key) => getStepForFieldKey(key) === i)
                 )}
+                errorAction={sessionExpired && formError ? <PostSignInAction /> : undefined}
                 onRetry={
-                  formError && !isSubmitting
+                  formError && !isSubmitting && !sessionExpired
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
                     : undefined
                 }
@@ -1380,6 +1394,7 @@ export default function CreateListingPage() {
                             clearErrors("videos");
                           }}
                           accept="video/*"
+                          previewShape="wide"
                           disabled={!videoAllowed}
                         />
                         {!videoAllowed ? (

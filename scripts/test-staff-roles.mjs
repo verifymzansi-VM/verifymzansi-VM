@@ -122,7 +122,9 @@ async function as(userId, jwtRole, fn) {
   try {
     return await fn();
   } finally {
-    await db.exec(`RESET ROLE; SELECT set_config('test.uid','',false), set_config('test.jwt','',false)`);
+    await db.exec(
+      `RESET ROLE; SELECT set_config('test.uid','',false), set_config('test.jwt','',false)`
+    );
   }
 }
 
@@ -139,7 +141,11 @@ assert.equal(
 assert.equal(await scalar(`SELECT public.staff_role_of($1)`, [governor]), "governance_controller");
 assert.equal(await scalar(`SELECT public.staff_role_of($1)`, [member]), null);
 await as(member, "admin", async () => {
-  assert.equal(await scalar(`SELECT public.has_role('admin')`), false, "a forged JWT role is ignored");
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    false,
+    "a forged JWT role is ignored"
+  );
 });
 await as(moderator, "moderator", async () => {
   assert.equal(await scalar(`SELECT public.has_any_role(ARRAY['moderator','admin'])`), true);
@@ -152,7 +158,11 @@ await db.query(
 );
 await as(moderator, "moderator", async () => {
   assert.equal(await scalar(`SELECT public.has_any_role(ARRAY['moderator','admin'])`), false);
-  assert.equal(await scalar(`SELECT count(*)::int FROM reports`), 0, "demoted staff lose read access");
+  assert.equal(
+    await scalar(`SELECT count(*)::int FROM reports`),
+    0,
+    "demoted staff lose read access"
+  );
   assert.equal(await scalar(`SELECT count(*)::int FROM decision_records`), 0);
 });
 await db.query(
@@ -167,7 +177,9 @@ assert(access[0].mfa_required_after > new Date(), "staff get an MFA enrolment gr
 assert.equal((await rows(`SELECT * FROM public.staff_access_of($1)`, [member])).length, 0);
 
 // A banned or suspended staff account has no staff access.
-await db.query(`UPDATE account_profiles SET account_status='suspended' WHERE user_id=$1`, [governor]);
+await db.query(`UPDATE account_profiles SET account_status='suspended' WHERE user_id=$1`, [
+  governor,
+]);
 assert.equal(await scalar(`SELECT public.staff_role_of($1)`, [governor]), null);
 assert.equal((await rows(`SELECT * FROM public.staff_access_of($1)`, [governor])).length, 0);
 await db.query(`UPDATE account_profiles SET account_status='active' WHERE user_id=$1`, [governor]);
@@ -188,7 +200,11 @@ assert.equal(
   false,
   "metadata alone grants nothing"
 );
-assert.equal(await scalar(`SELECT public.commercial_audit($1)`, [member]), "admin", "labels untouched");
+assert.equal(
+  await scalar(`SELECT public.commercial_audit($1)`, [member]),
+  "admin",
+  "labels untouched"
+);
 await db.query(`UPDATE auth.users SET raw_app_meta_data='{"role":"member"}' WHERE id=$1`, [member]);
 
 // ── Policies ──────────────────────────────────────────────────────────────
@@ -196,7 +212,11 @@ const policies = await rows(
   `SELECT policyname, cmd, coalesce(qual,'') AS qual, coalesce(with_check,'') AS with_check FROM pg_policies WHERE schemaname='public'`
 );
 const names = policies.map((p) => p.policyname);
-for (const dropped of ["Staff updates reports", "Reviewer updates steps", "Staff creates moderation action"]) {
+for (const dropped of [
+  "Staff updates reports",
+  "Reviewer updates steps",
+  "Staff creates moderation action",
+]) {
   assert(!names.includes(dropped), `${dropped} is dropped`);
 }
 for (const p of policies) {
@@ -205,11 +225,20 @@ for (const p of policies) {
   assert(!/(?<!SELECT )has_(any_)?role\(/.test(text), `${p.policyname} wraps role checks: ${text}`);
 }
 
-const listing = await scalar(`INSERT INTO listings(owner_id, title) VALUES ($1, 'Bakkie') RETURNING id`, [owner]);
+const listing = await scalar(
+  `INSERT INTO listings(owner_id, title) VALUES ($1, 'Bakkie') RETURNING id`,
+  [owner]
+);
 await as(moderator, "moderator", async () => {
-  const updated = await rows(`UPDATE listings SET title='Changed' WHERE id=$1 RETURNING id`, [listing]);
+  const updated = await rows(`UPDATE listings SET title='Changed' WHERE id=$1 RETURNING id`, [
+    listing,
+  ]);
   assert.equal(updated.length, 0, "moderators cannot edit listings through PostgREST");
-  assert.equal(await scalar(`SELECT count(*)::int FROM listings`), 1, "moderators still read listings");
+  assert.equal(
+    await scalar(`SELECT count(*)::int FROM listings`),
+    1,
+    "moderators still read listings"
+  );
   const reportUpdate = await rows(`UPDATE reports SET status='resolved' RETURNING id`);
   assert.equal(reportUpdate.length, 0);
   await assert.rejects(
@@ -219,11 +248,15 @@ await as(moderator, "moderator", async () => {
   );
 });
 await as(owner, "member", async () => {
-  const updated = await rows(`UPDATE listings SET title='Owner edit' WHERE id=$1 RETURNING id`, [listing]);
+  const updated = await rows(`UPDATE listings SET title='Owner edit' WHERE id=$1 RETURNING id`, [
+    listing,
+  ]);
   assert.equal(updated.length, 1, "owners still edit their own listings");
 });
 await as(admin, "admin", async () => {
-  const updated = await rows(`UPDATE listings SET title='Admin edit' WHERE id=$1 RETURNING id`, [listing]);
+  const updated = await rows(`UPDATE listings SET title='Admin edit' WHERE id=$1 RETURNING id`, [
+    listing,
+  ]);
   assert.equal(updated.length, 1, "admins keep direct write access");
 });
 
@@ -236,7 +269,10 @@ await assert.rejects(
   db.query(`UPDATE staff_roles SET role='moderator' WHERE user_id=$1`, [admin]),
   /last active admin/
 );
-await assert.rejects(db.query(`DELETE FROM staff_roles WHERE user_id=$1`, [admin]), /last active admin/);
+await assert.rejects(
+  db.query(`DELETE FROM staff_roles WHERE user_id=$1`, [admin]),
+  /last active admin/
+);
 await assert.rejects(db.query(`DELETE FROM auth.users WHERE id=$1`, [admin]), /last active admin/);
 
 // ── Members cannot read other people's staff rows ─────────────────────────
@@ -245,7 +281,11 @@ await as(member, "member", async () => {
   await assert.rejects(db.query(`SELECT public.staff_role_of($1)`, [admin]), /permission denied/);
 });
 await as(governor, "governance_controller", async () => {
-  assert.equal(await scalar(`SELECT count(*)::int FROM staff_roles`), 1, "staff read only their own row");
+  assert.equal(
+    await scalar(`SELECT count(*)::int FROM staff_roles`),
+    1,
+    "staff read only their own row"
+  );
 });
 
 console.log("Staff role authority checks passed.");
@@ -267,9 +307,18 @@ const rpc = async (sql, args) => {
   }
 };
 const propose = (actor, target, role, reason = "Needed for launch queue") =>
-  rpc(`SELECT public.propose_staff_role_change($1,$2,$3,$4) AS result`, [actor, target, role, reason]);
+  rpc(`SELECT public.propose_staff_role_change($1,$2,$3,$4) AS result`, [
+    actor,
+    target,
+    role,
+    reason,
+  ]);
 const approve = (actor, decision, version = 1) =>
-  rpc(`SELECT public.approve_staff_role_change($1,$2,$3,'ok') AS result`, [actor, decision, version]);
+  rpc(`SELECT public.approve_staff_role_change($1,$2,$3,'ok') AS result`, [
+    actor,
+    decision,
+    version,
+  ]);
 const reject = (actor, decision) =>
   rpc(`SELECT public.reject_staff_role_change($1,$2,'no') AS result`, [actor, decision]);
 const roleOf = (id) => scalar(`SELECT public.staff_role_of($1)`, [id]);
@@ -282,23 +331,38 @@ let result = await propose(admin, newcomer, "moderator");
 assert.equal(result.status, "proposed");
 assert.equal(await roleOf(newcomer), null, "a proposal grants nothing yet");
 assert.equal((await propose(admin, newcomer, "moderator")).error, "pending_exists");
-assert.equal((await approve(admin, result.decision_id)).error, "not_independent", "no self-approval");
+assert.equal(
+  (await approve(admin, result.decision_id)).error,
+  "not_independent",
+  "no self-approval"
+);
 assert.equal((await approve(moderator, result.decision_id)).error, "forbidden");
 assert.equal((await approve(governor, result.decision_id, 2)).error, "payload_changed");
 const approved = await approve(governor, result.decision_id);
 assert.equal(approved.status, "applied");
 assert.equal(await roleOf(newcomer), "moderator");
-assert.equal((await approve(secondAdmin, result.decision_id)).error, "not_pending", "no double finalisation");
 assert.equal(
-  await scalar(`SELECT count(*)::int FROM audit_logs WHERE target_id=$1 AND action='role_assigned'`, [newcomer]),
+  (await approve(secondAdmin, result.decision_id)).error,
+  "not_pending",
+  "no double finalisation"
+);
+assert.equal(
+  await scalar(
+    `SELECT count(*)::int FROM audit_logs WHERE target_id=$1 AND action='role_assigned'`,
+    [newcomer]
+  ),
   1
 );
 assert.equal(
-  await scalar(`SELECT count(*)::int FROM role_assignments_history WHERE target_user_id=$1`, [newcomer]),
+  await scalar(`SELECT count(*)::int FROM role_assignments_history WHERE target_user_id=$1`, [
+    newcomer,
+  ]),
   1
 );
 assert.equal(
-  await scalar(`SELECT count(*)::int FROM decision_approvals WHERE decision_id=$1`, [result.decision_id]),
+  await scalar(`SELECT count(*)::int FROM decision_approvals WHERE decision_id=$1`, [
+    result.decision_id,
+  ]),
   1
 );
 
@@ -361,7 +425,9 @@ assert.equal((await reject(admin, result.decision_id)).status, "withdrawn");
 
 // A failed audit write rolls the whole role change back.
 result = await propose(admin, member, "moderator");
-await db.exec(`ALTER TABLE audit_logs ADD CONSTRAINT test_block_role_audit CHECK (action <> 'role_assigned') NOT VALID`);
+await db.exec(
+  `ALTER TABLE audit_logs ADD CONSTRAINT test_block_role_audit CHECK (action <> 'role_assigned') NOT VALID`
+);
 const historyBefore = await scalar(`SELECT count(*)::int FROM role_assignments_history`);
 await assert.rejects(approve(governor, result.decision_id), /test_block_role_audit/);
 assert.equal(await roleOf(member), null, "no role without its audit row");
@@ -376,7 +442,10 @@ assert.equal((await approve(governor, result.decision_id)).status, "applied");
 
 // The last admin cannot be demoted, and the demoted admin can no longer act.
 assert.equal((await propose(admin, secondAdmin, "member", "Rotation")).status, "applied");
-assert.equal(await scalar(`SELECT count(*)::int FROM staff_roles WHERE role='admin' AND status='active'`), 1);
+assert.equal(
+  await scalar(`SELECT count(*)::int FROM staff_roles WHERE role='admin' AND status='active'`),
+  1
+);
 assert.equal((await propose(secondAdmin, admin, "member", "Rotation")).error, "forbidden");
 assert.equal(await roleOf(admin), "admin");
 
@@ -395,23 +464,124 @@ assert.equal(
 );
 assert.equal(await roleOf(recovered), "admin");
 assert.equal(
-  await scalar(`SELECT count(*)::int FROM audit_logs WHERE target_id=$1 AND action='role_provisioned_by_owner'`, [
-    recovered,
-  ]),
+  await scalar(
+    `SELECT count(*)::int FROM audit_logs WHERE target_id=$1 AND action='role_provisioned_by_owner'`,
+    [recovered]
+  ),
   1
 );
 
 // Members cannot call the RPCs.
 await as(member, "member", async () => {
   await assert.rejects(
-    db.query(`SELECT public.propose_staff_role_change($1,$2,'admin','Self promotion')`, [member, member]),
+    db.query(`SELECT public.propose_staff_role_change($1,$2,'admin','Self promotion')`, [
+      member,
+      member,
+    ]),
     /permission denied/
   );
-  await assert.rejects(db.query(`SELECT public.auth_user_id_by_email('a@b.co')`), /permission denied/);
   await assert.rejects(
-    db.query(`SELECT public.provision_staff_role_by_owner($1,'admin','Self promotion attempt')`, [member]),
+    db.query(`SELECT public.auth_user_id_by_email('a@b.co')`),
+    /permission denied/
+  );
+  await assert.rejects(
+    db.query(`SELECT public.provision_staff_role_by_owner($1,'admin','Self promotion attempt')`, [
+      member,
+    ]),
     /permission denied/
   );
 });
 
 console.log("Staff role change checks passed.");
+
+// Direct PostgREST callers must meet the route's MFA read-access policy too.
+await db.exec(`CREATE TABLE auth.mfa_factors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL, status text NOT NULL
+);`);
+await db.query(`INSERT INTO reports(status) VALUES ('open')`);
+await db.query(
+  `UPDATE staff_roles SET mfa_required_after=now()-interval '1 day' WHERE user_id=$1`,
+  [admin]
+);
+await as(admin, "admin", async () => {
+  assert(
+    (await scalar(`SELECT count(*)::int FROM reports`)) > 0,
+    "reproduce pre-migration AAL1 staff read bypass"
+  );
+});
+await db.exec(read("20260930110000_staff_rls_mfa.sql"));
+await as(admin, "admin", async () => {
+  assert.equal(
+    await scalar(`SELECT public.current_staff_role()`),
+    null,
+    "expired grace requires MFA"
+  );
+  assert.equal(await scalar(`SELECT public.has_role('admin')`), false);
+  assert.equal(await scalar(`SELECT public.has_any_role(ARRAY['admin','moderator'])`), false);
+  assert.equal(
+    await scalar(`SELECT count(*)::int FROM reports`),
+    0,
+    "AAL1 cannot read staff records through RLS"
+  );
+  await db.query(`SELECT set_config('test.jwt', $1, false)`, [JSON.stringify({ aal: "aal2" })]);
+  assert.equal(await scalar(`SELECT public.has_role('admin')`), true);
+  assert((await scalar(`SELECT count(*)::int FROM reports`)) > 0, "AAL2 restores staff reads");
+});
+await db.query(
+  `UPDATE staff_roles SET mfa_required_after=now()+interval '1 day' WHERE user_id=$1`,
+  [admin]
+);
+await as(admin, "admin", async () => {
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    true,
+    "unenrolled staff retain grace"
+  );
+});
+await db.query(`INSERT INTO auth.mfa_factors(user_id,status) VALUES ($1,'verified')`, [admin]);
+await as(admin, "admin", async () => {
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    false,
+    "enrolled staff must verify even in grace"
+  );
+});
+await db.exec(`UPDATE feature_flags SET enabled=false WHERE key='staff_mfa_enforced'`);
+await as(admin, "admin", async () => {
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    true,
+    "explicit off preserves recovery switch"
+  );
+});
+await db.exec(`DELETE FROM feature_flags WHERE key='staff_mfa_enforced'`);
+await as(admin, "admin", async () => {
+  assert.equal(await scalar(`SELECT public.has_role('admin')`), false, "missing flag fails closed");
+});
+await db.exec(`ALTER TABLE feature_flags ADD COLUMN mode text;
+  INSERT INTO feature_flags(key, enabled, mode) VALUES ('staff_mfa_enforced', false, 'on');`);
+await as(admin, "admin", async () => {
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    false,
+    "explicit mode overrides legacy enabled flag"
+  );
+});
+await db.exec(`UPDATE feature_flags SET enabled=true, mode='off' WHERE key='staff_mfa_enforced'`);
+await as(admin, "admin", async () => {
+  assert.equal(await scalar(`SELECT public.has_role('admin')`), true);
+  await db.query(`SELECT set_config('test.jwt', $1, false)`, [
+    JSON.stringify({ aal: "aal2", is_anonymous: true }),
+  ]);
+  assert.equal(
+    await scalar(`SELECT public.has_role('admin')`),
+    false,
+    "anonymous sessions never gain staff privileges"
+  );
+});
+assert.equal(
+  await scalar(`SELECT public.staff_role_of($1)`, [admin]),
+  "admin",
+  "service role can still authorize MFA enrolment"
+);
+console.log("Staff RLS MFA checks passed.");

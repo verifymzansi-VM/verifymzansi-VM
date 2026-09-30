@@ -27,7 +27,13 @@ function mapNotificationRow(n: Record<string, unknown>): Notification | null {
   }
   // Only allow relative hrefs to prevent open-redirect via crafted notifications.
   const rawHref = n.href as string | undefined;
-  const href = typeof rawHref === "string" && rawHref.startsWith("/") ? rawHref : undefined;
+  const href =
+    typeof rawHref === "string" &&
+    rawHref.startsWith("/") &&
+    !rawHref.startsWith("//") &&
+    !/[\\\u0000-\u0020\u007f]/.test(rawHref)
+      ? rawHref
+      : undefined;
   return {
     id: dbId,
     type: (n.type as "info" | "success" | "warning" | "error") ?? "info",
@@ -73,6 +79,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
   } = useNotificationStore();
   const mountedRef = useRef(true);
   const currentUserRef = useRef<string | undefined>(userId);
+  const accountGenerationRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -84,6 +91,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
   const refreshNotifications = useCallback(
     async (signal?: AbortSignal) => {
       const requestUserId = currentUserRef.current;
+      const requestGeneration = accountGenerationRef.current;
       if (!requestUserId) return;
 
       await fetch("/api/notifications?limit=25", {
@@ -96,7 +104,12 @@ export function NotificationBell({ userId }: { userId?: string }) {
           return r.json();
         })
         .then((data) => {
-          if (signal?.aborted || !mountedRef.current || currentUserRef.current !== requestUserId) {
+          if (
+            signal?.aborted ||
+            !mountedRef.current ||
+            currentUserRef.current !== requestUserId ||
+            accountGenerationRef.current !== requestGeneration
+          ) {
             return;
           }
           if (data.notifications && Array.isArray(data.notifications)) {
@@ -120,6 +133,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
 
   // Hydrate from API on mount (re-runs when userId changes)
   useEffect(() => {
+    accountGenerationRef.current += 1;
     currentUserRef.current = userId;
     if (!userId) {
       clearAll();
@@ -165,97 +179,52 @@ export function NotificationBell({ userId }: { userId?: string }) {
     onEvent: (payload: Record<string, unknown>) => {
       // Supabase Realtime puts the inserted row in `payload.new`
       const row = (payload.new ?? payload) as Record<string, unknown>;
-      addNotification({
-        id: row.id as string | undefined,
-        type: (row.type as "info" | "success" | "warning" | "error") ?? "info",
-        title: (row.title as string) ?? "New notification",
-        message: row.message as string | undefined,
-        href: row.href as string | undefined,
-        createdAt: (row.created_at as string) ?? undefined,
-      });
+      if (!userId || (row.user_id && row.user_id !== currentUserRef.current)) return;
+      const notification = mapNotificationRow(row);
+      if (notification) addNotification(notification);
     },
   });
 
-  // ── API-synced action wrappers ─────────────────────────────────────
-  // Rollback strategy: re-apply the inverse operation on the *current* state
-  // rather than restoring a stale snapshot, so realtime additions that arrived
-  // after the optimistic update are not lost.
-  const handleMarkRead = useCallback(
-    (id: string) => {
-      markRead(id);
-      syncNotificationMutation({ id }, "PATCH").catch(() => {
-        if (!mountedRef.current) return;
-        // Revert: mark unread again in current state
-        useNotificationStore.setState((state) => ({
-          notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: false } : n)),
-          unreadCount: state.unreadCount + 1,
-        }));
+  // A failed optimistic mutation re-fetches server truth. Restoring a captured
+  // snapshot can overwrite newer realtime events or another account's data.
+  const recoverMutation = useCallback(
+    (body: { id: string } | { all: true }, method: "PATCH" | "DELETE") => {
+      const requestGeneration = accountGenerationRef.current;
+      void syncNotificationMutation(body, method).catch(() => {
+        if (!mountedRef.current || accountGenerationRef.current !== requestGeneration) return;
+        void refreshNotifications();
       });
     },
-    [markRead]
+    [refreshNotifications]
+  );
+
+  const handleMarkRead = useCallback(
+    (id: string) => {
+      const notification = useNotificationStore.getState().notifications.find((n) => n.id === id);
+      if (!notification || notification.read) return;
+      markRead(id);
+      recoverMutation({ id }, "PATCH");
+    },
+    [markRead, recoverMutation]
   );
 
   const handleMarkAllRead = useCallback(() => {
-    const prevUnreadIds = useNotificationStore
-      .getState()
-      .notifications.filter((n) => !n.read)
-      .map((n) => n.id);
     markAllRead();
-    syncNotificationMutation({ all: true }, "PATCH").catch(() => {
-      if (!mountedRef.current) return;
-      // Revert: restore unread status only for items that were unread before
-      useNotificationStore.setState((state) => ({
-        notifications: state.notifications.map((n) =>
-          prevUnreadIds.includes(n.id) ? { ...n, read: false } : n
-        ),
-        unreadCount: prevUnreadIds.length,
-      }));
-    });
-  }, [markAllRead]);
+    recoverMutation({ all: true }, "PATCH");
+  }, [markAllRead, recoverMutation]);
 
   const handleClearAll = useCallback(() => {
-    const prev = useNotificationStore.getState();
     clearAll();
-    syncNotificationMutation({ all: true }, "DELETE").catch(() => {
-      if (!mountedRef.current) return;
-      // Revert: restore previous notifications, merging with any new arrivals
-      useNotificationStore.setState((state) => {
-        const newArrivals = state.notifications.filter(
-          (n) => !prev.notifications.some((p) => p.id === n.id)
-        );
-        const merged = [...prev.notifications, ...newArrivals].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        return {
-          notifications: merged.slice(0, 50),
-          unreadCount: prev.unreadCount + newArrivals.filter((n) => !n.read).length,
-        };
-      });
-    });
-  }, [clearAll]);
+    recoverMutation({ all: true }, "DELETE");
+  }, [clearAll, recoverMutation]);
 
   const handleDismiss = useCallback(
     (id: string) => {
-      const prev = useNotificationStore.getState();
-      const removed = prev.notifications.find((n) => n.id === id);
       removeNotification(id);
-      syncNotificationMutation({ id }, "DELETE").catch(() => {
-        if (!mountedRef.current || !removed) return;
-        // Revert: re-insert the removed notification in the correct position
-        useNotificationStore.setState((state) => {
-          const merged = [...state.notifications, removed].sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          return {
-            notifications: merged.slice(0, 50),
-            unreadCount: removed.read ? state.unreadCount : state.unreadCount + 1,
-          };
-        });
-      });
+      recoverMutation({ id }, "DELETE");
     },
-    [removeNotification]
+    [removeNotification, recoverMutation]
   );
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -267,7 +236,7 @@ export function NotificationBell({ userId }: { userId?: string }) {
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-green px-1 text-[10px] font-bold text-white ring-2 ring-background">
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-background">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
           )}

@@ -113,6 +113,20 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Upper bound for each outbound Supabase REST/Auth request. Without a
+ * deadline a hung connection pins the cron invocation until the platform
+ * kills it, skipping the rest of the run (including the audit log).
+ */
+const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
+
+function fetchWithTimeout(input: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(SUPABASE_REQUEST_TIMEOUT_MS),
+  });
+}
+
 function isPublicBucket(bucket: string): boolean {
   return bucket === "public" || bucket === "verifymzansi-public";
 }
@@ -136,7 +150,7 @@ async function getHeldKycKeys(
     return new Set<string>();
   }
 
-  const artifactsResponse = await fetch(
+  const artifactsResponse = await fetchWithTimeout(
     `${env.SUPABASE_URL}/rest/v1/kyc_artifacts?select=r2_key,user_id&r2_key=in.${encodeURIComponent(buildInFilter(candidateKeys))}`,
     { headers }
   );
@@ -155,7 +169,7 @@ async function getHeldKycKeys(
     return new Set<string>();
   }
 
-  const holdsResponse = await fetch(
+  const holdsResponse = await fetchWithTimeout(
     `${env.SUPABASE_URL}/rest/v1/account_profiles?select=user_id&legal_hold=is.true&user_id=in.${encodeURIComponent(buildInFilter(userIds))}`,
     { headers }
   );
@@ -189,7 +203,7 @@ async function listAuthUsersPage(
   headers: Record<string, string>,
   page: number
 ): Promise<AuthAdminUser[]> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${env.SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=${AUTH_USERS_PAGE_SIZE}`,
     { headers }
   );
@@ -218,7 +232,7 @@ async function resolveExistingProfileUserIds(
     return new Set<string>();
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${env.SUPABASE_URL}/rest/v1/account_profiles?select=user_id&user_id=in.${encodeURIComponent(buildInFilter(userIds))}`,
     { headers }
   );
@@ -237,7 +251,7 @@ async function deleteAuthUser(
   headers: Record<string, string>,
   userId: string
 ): Promise<boolean> {
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+  const response = await fetchWithTimeout(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
     method: "DELETE",
     headers,
   });
@@ -320,17 +334,20 @@ async function expireContentTable(
   paidCutoffIso: string
 ): Promise<number> {
   const expireRows = async (filter: string, statusReason: string) => {
-    const response = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?status=eq.live&${filter}`, {
-      method: "PATCH",
-      headers: {
-        ...headers,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        status: "expired",
-        status_reason: statusReason,
-      }),
-    });
+    const response = await fetchWithTimeout(
+      `${env.SUPABASE_URL}/rest/v1/${table}?status=eq.live&${filter}`,
+      {
+        method: "PATCH",
+        headers: {
+          ...headers,
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({
+          status: "expired",
+          status_reason: statusReason,
+        }),
+      }
+    );
 
     if (!response.ok) {
       console.error(`Failed to expire ${table}:`, await response.text());
@@ -362,7 +379,7 @@ async function expireContentTable(
   let legacyFreeRows = 0;
 
   for (let from = 0; ; from += 1000) {
-    const freeRowsResponse = await fetch(
+    const freeRowsResponse = await fetchWithTimeout(
       `${env.SUPABASE_URL}/rest/v1/free_posts_used?select=content_id&released_at=is.null&content_id=not.is.null&${areaFilter}&order=created_at.asc&limit=1000&offset=${from}`,
       { headers }
     );
@@ -436,7 +453,7 @@ const worker: ExportedHandler<Env> = {
     };
 
     // 1. Fetch unprocessed cleanup records (max 200 per run)
-    const fetchRes = await fetch(
+    const fetchRes = await fetchWithTimeout(
       `${supabaseUrl}/rest/v1/r2_cleanup_queue?processed_at=is.null&order=created_at.asc&limit=200`,
       { headers }
     );
@@ -531,7 +548,7 @@ const worker: ExportedHandler<Env> = {
 
         const batchIds = actionableRecords.map((record) => record.id);
         try {
-          const markResponse = await fetch(
+          const markResponse = await fetchWithTimeout(
             `${supabaseUrl}/rest/v1/r2_cleanup_queue?id=in.(${batchIds.join(",")})`,
             {
               method: "PATCH",
@@ -563,7 +580,7 @@ const worker: ExportedHandler<Env> = {
     let orphanDeleteCount = 0;
     try {
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const orphanRes = await fetch(
+      const orphanRes = await fetchWithTimeout(
         `${supabaseUrl}/rest/v1/media_uploads?confirmed_at=is.null&created_at=lt.${cutoff}&order=created_at.asc&limit=100&select=id,r2_key,bucket`,
         { headers }
       );
@@ -608,7 +625,7 @@ const worker: ExportedHandler<Env> = {
             )
             .map((o) => o.id);
           if (deletedOrphanIds.length > 0) {
-            const deleteRes = await fetch(
+            const deleteRes = await fetchWithTimeout(
               `${supabaseUrl}/rest/v1/media_uploads?id=in.(${deletedOrphanIds.join(",")})`,
               { method: "DELETE", headers }
             );
@@ -670,7 +687,7 @@ const worker: ExportedHandler<Env> = {
       created_at: new Date().toISOString(),
     };
 
-    const auditRes = await fetch(`${supabaseUrl}/rest/v1/audit_logs`, {
+    const auditRes = await fetchWithTimeout(`${supabaseUrl}/rest/v1/audit_logs`, {
       method: "POST",
       headers,
       body: JSON.stringify(auditPayload),

@@ -11,18 +11,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import {
-  Loader2,
-  CreditCard,
-  Truck,
-  Wrench,
-  Plus,
-  X,
-  Camera,
-  Film,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Loader2, CreditCard, Truck, Wrench, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
@@ -31,6 +20,14 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
+import {
+  BusinessProfileExtrasFields,
+  EMPTY_BUSINESS_PROFILE_EXTRAS,
+  businessProfileExtrasPayload,
+  readBusinessProfileExtras,
+  type BusinessProfileExtras,
+} from "@/components/post/business-profile-extras-fields";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
@@ -144,6 +141,9 @@ export default function EditBusinessPage() {
   const [locationTown, setLocationTown] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [storeNumber, setStoreNumber] = useState("");
+  const [profileExtras, setProfileExtras] = useState<BusinessProfileExtras>(
+    EMPTY_BUSINESS_PROFILE_EXTRAS
+  );
   const [serviceAreasInput, setServiceAreasInput] = useState("");
   const [mapDirections, setMapDirections] = useState("");
 
@@ -155,6 +155,10 @@ export default function EditBusinessPage() {
   const contactValues = { phone, whatsapp, email, website };
   const contactMethods = readContactMethods(categoryDetails.contact_methods, contactValues);
   const publicContacts = selectedContacts(contactMethods, contactValues);
+  // Profiles without customer access predate the address toggle and always show the pin.
+  const mapPinPublishable =
+    !categoryDetails.customer_access ||
+    readCustomerAccess(categoryDetails.customer_access).publishAddress;
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
@@ -188,8 +192,6 @@ export default function EditBusinessPage() {
   const [newMallPhotoFiles, setNewMallPhotoFiles] = useState<File[]>([]);
   const [newPromoVideoFile, setNewPromoVideoFile] = useState<File[]>([]);
   const [newVideoThumbnailFile, setNewVideoThumbnailFile] = useState<File[]>([]);
-  const [removeGallery, setRemoveGallery] = useState(false);
-  const [removeMallPhotos, setRemoveMallPhotos] = useState(false);
   const [removeVideo, setRemoveVideo] = useState(false);
   const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
 
@@ -267,6 +269,7 @@ export default function EditBusinessPage() {
         setLocationTown(b.location_town || "");
         setLocationAddress(b.location_address || "");
         setStoreNumber(b.store_number || "");
+        setProfileExtras(readBusinessProfileExtras(b.category_details));
         setMapDirections(b.map_directions || "");
         setPhone(b.phone || "");
         setWhatsapp(b.whatsapp || "");
@@ -442,7 +445,8 @@ export default function EditBusinessPage() {
         for (const key of Object.keys(validationErrors))
           if (
             key.startsWith("business_details.") ||
-            ["store_number", "service_areas", "map_directions"].includes(key)
+            ["store_number", "service_areas"].includes(key) ||
+            (key === "map_directions" && !mapPinPublishable)
           )
             delete validationErrors[key];
         const result = customerAccessSchema.safeParse(categoryDetails.customer_access);
@@ -471,7 +475,7 @@ export default function EditBusinessPage() {
         if (!description.trim())
           validationErrors.description = "Tell customers about your business.";
       }
-      if (newGalleryFiles.length > maxPhotos) {
+      if (existingGalleryPhotos.length + newGalleryFiles.length > maxPhotos) {
         validationErrors.gallery_photos = `You can upload up to ${maxPhotos} profile photos on this plan.`;
       }
       if (newPromoVideoFile.length > 0 && !videoAllowed) {
@@ -502,37 +506,31 @@ export default function EditBusinessPage() {
               area: "business_cover",
               field: "cover_photo",
             }),
-            removeGallery
-              ? Promise.resolve([])
-              : uploadRequiredBusinessMedia({
-                  files: newGalleryFiles,
-                  area: "business_gallery",
-                  field: "gallery_photos",
-                }),
-            removeMallPhotos
-              ? Promise.resolve([])
-              : uploadRequiredBusinessMedia({
-                  files: newMallPhotoFiles,
-                  area: "business_gallery",
-                  field: "gallery_photos",
-                }),
+            uploadRequiredBusinessMedia({
+              files: newGalleryFiles,
+              area: "business_gallery",
+              field: "gallery_photos",
+            }),
+            uploadRequiredBusinessMedia({
+              files: newMallPhotoFiles,
+              area: "business_gallery",
+              field: "gallery_photos",
+            }),
           ]).then((urls) => {
             if (newCoverFile.length || newGalleryFiles.length || newMallPhotoFiles.length) {
               setUploadStatuses((c) => ({ ...c, photos: "done" }));
             }
             return urls;
           }),
-          removeVideo
-            ? Promise.resolve(null)
-            : newPromoVideoFile.length > 0
-              ? uploadRequiredBusinessVideo({
-                  file: newPromoVideoFile[0],
-                  area: "business_cover",
-                }).then((url) => {
-                  setUploadStatuses((c) => ({ ...c, video: "done" }));
-                  return url;
-                })
-              : Promise.resolve(null),
+          newPromoVideoFile.length > 0
+            ? uploadRequiredBusinessVideo({
+                file: newPromoVideoFile[0],
+                area: "business_cover",
+              }).then((url) => {
+                setUploadStatuses((c) => ({ ...c, video: "done" }));
+                return url;
+              })
+            : Promise.resolve(null),
           uploadRequiredBusinessMedia({
             files: newVideoThumbnailFile,
             area: "business_cover",
@@ -548,30 +546,20 @@ export default function EditBusinessPage() {
 
       let finalCoverVideo = existingCoverVideo;
       let finalVideoThumbnail = existingVideoThumbnail;
-      if (removeVideo) {
+      if (videoUrl) {
+        finalCoverVideo = videoUrl;
+      } else if (removeVideo) {
         finalCoverVideo = "";
         finalVideoThumbnail = "";
-      } else if (videoUrl) {
-        finalCoverVideo = videoUrl;
       }
 
       if (thumbUrls[0] && finalCoverVideo) {
         finalVideoThumbnail = thumbUrls[0];
       }
 
-      let finalGalleryPhotos = existingGalleryPhotos;
-      if (removeGallery) {
-        finalGalleryPhotos = [];
-      } else if (galleryUrls.length > 0) {
-        finalGalleryPhotos = galleryUrls;
-      }
-
-      let finalMallPhotos = existingMallPhotos;
-      if (removeMallPhotos) {
-        finalMallPhotos = [];
-      } else if (mallPhotoUrls.length > 0) {
-        finalMallPhotos = mallPhotoUrls;
-      }
+      // Saved photos the owner kept stay first; new uploads are appended.
+      const finalGalleryPhotos = [...existingGalleryPhotos, ...galleryUrls];
+      const finalMallPhotos = [...existingMallPhotos, ...mallPhotoUrls];
 
       setSubmitProgress("Saving business...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
@@ -626,6 +614,8 @@ export default function EditBusinessPage() {
       const primaryMediaFile = newPromoVideoFile[0] ?? newCoverFile[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
+      // The API rebuilds business_profile from the extras fields below.
+      const { business_profile: _staleProfile, ...categoryDetailsWithoutProfile } = categoryDetails;
       const body = {
         contact_methods: contactMethods,
         business_name: businessName,
@@ -639,7 +629,7 @@ export default function EditBusinessPage() {
         location_town: locationTown || undefined,
         location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
-        map_directions: mapDirections || undefined,
+        map_directions: mapPinPublishable ? mapDirections.trim() || undefined : undefined,
         phone: publicContacts.phone || undefined,
         whatsapp: publicContacts.whatsapp || undefined,
         email: publicContacts.email || undefined,
@@ -652,15 +642,16 @@ export default function EditBusinessPage() {
         services_offered: services,
         service_areas: serviceAreas,
         business_details: hadStoredAccess.current ? undefined : finalBusinessDetails,
+        ...businessProfileExtrasPayload(profileExtras),
         category_details: categoryDetails.customer_access
           ? {
-              ...categoryDetails,
+              ...categoryDetailsWithoutProfile,
               customer_access: cleanCustomerAccess(
                 readCustomerAccess(categoryDetails.customer_access)
               ),
               venue_photos: finalMallPhotos,
             }
-          : categoryDetails,
+          : categoryDetailsWithoutProfile,
         operating_hours: operatingHours,
         payment_methods_accepted: paymentMethods,
         delivery_options: normalizedDeliveryOptions,
@@ -748,17 +739,10 @@ export default function EditBusinessPage() {
       tiktok: socialTiktok,
     }).filter(([, value]) => value.trim().length > 0)
   );
-  const previewGalleryPhotos =
-    previewGalleryUrls.length > 0 ? previewGalleryUrls : removeGallery ? [] : existingGalleryPhotos;
-  const previewMallPhotos =
-    previewMallPhotoUrls.length > 0
-      ? previewMallPhotoUrls
-      : removeMallPhotos
-        ? []
-        : existingMallPhotos;
-  const previewCoverVideo = removeVideo
-    ? null
-    : (previewPromoVideoUrl ?? existingCoverVideo ?? null);
+  const previewGalleryPhotos = [...existingGalleryPhotos, ...previewGalleryUrls];
+  const previewMallPhotos = [...existingMallPhotos, ...previewMallPhotoUrls];
+  const previewCoverVideo =
+    previewPromoVideoUrl ?? (removeVideo ? null : existingCoverVideo || null);
   const previewVideoThumbnail = removeVideo
     ? null
     : (previewVideoThumbnailUrl ?? existingVideoThumbnail ?? null);
@@ -1122,6 +1106,17 @@ export default function EditBusinessPage() {
                   );
                 })()}
 
+              <div className="space-y-3 rounded-lg border p-4">
+                <p className="text-sm font-medium">
+                  Additional business information{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
+                </p>
+                <BusinessProfileExtrasFields
+                  values={profileExtras}
+                  onChange={(patch) => setProfileExtras((current) => ({ ...current, ...patch }))}
+                />
+              </div>
+
               {/* Location: Province / City / Town / Address */}
               {businessType === "online_only" && (
                 <p className="text-sm text-muted-foreground">
@@ -1154,6 +1149,8 @@ export default function EditBusinessPage() {
               />
 
               <CustomerAccessFields
+                storeNumber={storeNumber}
+                onStoreNumberChange={setStoreNumber}
                 value={readCustomerAccess(categoryDetails.customer_access)}
                 onChange={(access) => {
                   setCategoryDetails((current) => ({ ...current, customer_access: access }));
@@ -1178,49 +1175,33 @@ export default function EditBusinessPage() {
                 }
               />
 
-              {/* Social */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="facebook" className="text-xs text-muted-foreground">
-                    Facebook
-                  </Label>
-                  <Input
-                    id="facebook"
-                    value={socialFacebook}
-                    onChange={(e) => setSocialFacebook(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="instagram" className="text-xs text-muted-foreground">
-                    Instagram
-                  </Label>
-                  <Input
-                    id="instagram"
-                    value={socialInstagram}
-                    onChange={(e) => setSocialInstagram(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="twitter" className="text-xs text-muted-foreground">
-                    X (Twitter)
-                  </Label>
-                  <Input
-                    id="twitter"
-                    value={socialTwitter}
-                    onChange={(e) => setSocialTwitter(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="tiktok" className="text-xs text-muted-foreground">
-                    TikTok
-                  </Label>
-                  <Input
-                    id="tiktok"
-                    value={socialTiktok}
-                    onChange={(e) => setSocialTiktok(e.target.value)}
-                  />
-                </div>
-              </div>
+              <OnlinePresenceFields
+                values={{
+                  website,
+                  mapDirections,
+                  socialFacebook,
+                  socialInstagram,
+                  socialTwitter,
+                  socialTiktok,
+                }}
+                onChange={(field, value) => {
+                  ({
+                    website: setWebsite,
+                    mapDirections: setMapDirections,
+                    socialFacebook: setSocialFacebook,
+                    socialInstagram: setSocialInstagram,
+                    socialTwitter: setSocialTwitter,
+                    socialTiktok: setSocialTiktok,
+                  })[field](value);
+                  clearErrors(field === "mapDirections" ? "map_directions" : field);
+                }}
+                errors={fieldErrors}
+                mapPinUnavailableReason={
+                  mapPinPublishable
+                    ? undefined
+                    : 'A location pin is only shown when you publish your address. Tick "Show my exact visitor address publicly" above to add one.'
+                }
+              />
 
               {/* Operating Hours */}
               {businessType === "market_stall" && !categoryDetails.customer_access ? (
@@ -1293,168 +1274,60 @@ export default function EditBusinessPage() {
                 </div>
               )}
 
-              {/* Existing Media Preview */}
-              {(existingLogo ||
-                existingCoverPhoto ||
-                existingCoverVideo ||
-                existingGalleryPhotos.length > 0 ||
-                existingMallPhotos.length > 0) && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Current media</p>
-                  <div className="flex flex-wrap gap-4">
-                    {existingLogo && (
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Logo</p>
-                        <div className="h-12 w-12 rounded-lg overflow-hidden border">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={normalizeMediaUrl(existingLogo)}
-                            alt="Logo"
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {existingCoverPhoto && (
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Cover Photo</p>
-                        <div className="h-16 w-28 rounded-lg overflow-hidden border">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={normalizeMediaUrl(existingCoverPhoto)}
-                            alt="Cover"
-                            className="w-full h-full bg-muted object-contain"
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {existingCoverVideo && !removeVideo && (
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Promo Video</p>
-                        <div className="h-16 w-28 rounded-lg overflow-hidden border bg-black flex items-center justify-center">
-                          <Film className="h-6 w-6 text-white/60" />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm("Remove the promo video?")) setRemoveVideo(true);
-                          }}
-                          className="text-xs text-destructive hover:underline"
-                        >
-                          Remove video
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {/* Existing gallery photos */}
-                  {existingGalleryPhotos.length > 0 && !removeGallery && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Camera className="h-3 w-3" /> Gallery Photos (
-                          {existingGalleryPhotos.length})
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm("Replace all gallery photos?"))
-                              setRemoveGallery(true);
-                          }}
-                          className="text-xs text-destructive hover:underline"
-                        >
-                          Replace all
-                        </button>
-                      </div>
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {existingGalleryPhotos.map((url, i) => (
-                          <div
-                            key={i}
-                            className="h-12 w-12 rounded-lg overflow-hidden border flex-shrink-0"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={normalizeMediaUrl(url)}
-                              alt={`Gallery ${i + 1}`}
-                              className="w-full h-full bg-muted object-contain"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {businessType === "mall_store" &&
-                    existingMallPhotos.length > 0 &&
-                    !removeMallPhotos && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Camera className="h-3 w-3" /> Mall Photos ({existingMallPhotos.length})
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm("Replace all mall photos?"))
-                                setRemoveMallPhotos(true);
-                            }}
-                            className="text-xs text-destructive hover:underline"
-                          >
-                            Replace all
-                          </button>
-                        </div>
-                        <div className="flex gap-2 overflow-x-auto pb-1">
-                          {existingMallPhotos.map((url, i) => (
-                            <div
-                              key={`mall-${i}`}
-                              className="h-12 w-12 rounded-lg overflow-hidden border flex-shrink-0"
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={normalizeMediaUrl(url)}
-                                alt={`Mall photo ${i + 1}`}
-                                className="w-full h-full bg-muted object-contain"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                </div>
-              )}
-
-              {/* Upload new media */}
-              <div className="space-y-4">
-                <p className="text-sm font-medium">Upload new media (optional)</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                  <MediaUpload
+                    id="edit-business-logo-input"
+                    label="Business logo"
+                    description="Square icon shown beside your name."
+                    maxFiles={1}
+                    files={newLogoFile}
+                    existing={
+                      existingLogo
+                        ? [{ url: normalizeMediaUrl(existingLogo), label: "Current logo" }]
+                        : []
+                    }
+                    onRemoveExisting={() => {
+                      if (window.confirm("Remove your logo?")) setExistingLogo("");
+                    }}
+                    error={fieldErrors.logo_url}
+                    onChange={(files) => {
+                      setNewLogoFile(files);
+                      clearErrors("logo_url");
+                    }}
+                    accept="image/*"
+                    recommendedAspect="Recommended: square image, at least 96 x 96."
+                  />
                   <div className="space-y-2">
                     <MediaUpload
-                      label="Replace logo"
-                      maxFiles={1}
-                      files={newLogoFile}
-                      onChange={(files) => {
-                        setNewLogoFile(files);
-                        clearErrors("logo_url");
-                      }}
-                      accept="image/*"
-                    />
-                    {fieldErrors.logo_url && (
-                      <p className="inline-form-error">{fieldErrors.logo_url}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <MediaUpload
-                      label="Replace cover photo"
+                      id="edit-business-cover-input"
+                      label="Cover photo"
+                      description="Wide banner for your profile page."
                       maxFiles={1}
                       files={newCoverFile}
+                      existing={
+                        existingCoverPhoto
+                          ? [
+                              {
+                                url: normalizeMediaUrl(existingCoverPhoto),
+                                label: "Current cover photo",
+                              },
+                            ]
+                          : []
+                      }
+                      onRemoveExisting={() => {
+                        if (window.confirm("Remove your cover photo?")) setExistingCoverPhoto("");
+                      }}
+                      error={fieldErrors.cover_photo}
                       onChange={(files) => {
                         setNewCoverFile(files);
                         clearErrors("cover_photo");
                       }}
                       accept="image/*"
+                      recommendedAspect="Recommended: wide landscape image around 4:1."
+                      previewShape="wide"
                     />
-                    {fieldErrors.cover_photo && (
-                      <p className="inline-form-error">{fieldErrors.cover_photo}</p>
-                    )}
-                    {existingCoverPhoto && (
+                    {existingCoverPhoto && newCoverFile.length === 0 && (
                       <FocalPointPicker
                         src={normalizeMediaUrl(existingCoverPhoto)}
                         alt="Set focal point for cover photo"
@@ -1465,139 +1338,106 @@ export default function EditBusinessPage() {
                   </div>
                 </div>
 
-                {/* Gallery Photos */}
-                <div className="space-y-2">
-                  <MediaUpload
-                    label={
-                      removeGallery || existingGalleryPhotos.length === 0
-                        ? `Profile Photos (up to ${maxPhotos})`
-                        : `Replace Profile Photos (up to ${maxPhotos})`
-                    }
-                    maxFiles={maxPhotos}
-                    files={newGalleryFiles}
-                    onChange={(files) => {
-                      setNewGalleryFiles(files);
-                      clearErrors("gallery_photos");
-                    }}
-                    accept="image/*"
-                  />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Camera className="h-3 w-3" />
-                    Showcase your business. Use landscape photos (800×600px+).
-                  </p>
-                  {/* Gallery reorder controls */}
-                  {newGalleryFiles.length > 1 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Order — first photo is featured on cards:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {newGalleryFiles.map((file, idx) => (
-                          <div
-                            key={`${file.name}-${idx}`}
-                            className="flex items-center gap-1 bg-muted rounded-md px-2 py-1 text-xs"
-                          >
-                            <span className="font-medium truncate max-w-[100px]">{file.name}</span>
-                            <button
-                              type="button"
-                              disabled={idx === 0}
-                              onClick={() => {
-                                const arr = [...newGalleryFiles];
-                                [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-                                setNewGalleryFiles(arr);
-                              }}
-                              className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
-                              aria-label="Move left"
-                            >
-                              <ChevronLeft className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === newGalleryFiles.length - 1}
-                              onClick={() => {
-                                const arr = [...newGalleryFiles];
-                                [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
-                                setNewGalleryFiles(arr);
-                              }}
-                              className="p-0.5 disabled:opacity-30 hover:bg-background rounded"
-                              aria-label="Move right"
-                            >
-                              <ChevronRight className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {fieldErrors.gallery_photos && (
-                    <p className="inline-form-error">{fieldErrors.gallery_photos}</p>
-                  )}
-                </div>
+                <MediaUpload
+                  id="edit-business-gallery-input"
+                  label="Profile photos"
+                  description="Showcase your business. Landscape photos (800×600px+) look best."
+                  maxFiles={maxPhotos}
+                  files={newGalleryFiles}
+                  existing={existingGalleryPhotos.map((url, i) => ({
+                    url: normalizeMediaUrl(url),
+                    label: `Profile photo ${i + 1}`,
+                  }))}
+                  onRemoveExisting={(index) => {
+                    setExistingGalleryPhotos((prev) => prev.filter((_, i) => i !== index));
+                    clearErrors("gallery_photos");
+                  }}
+                  error={fieldErrors.gallery_photos}
+                  onChange={(files) => {
+                    setNewGalleryFiles(files);
+                    clearErrors("gallery_photos");
+                  }}
+                  accept="image/*"
+                  recommendedAspect=""
+                />
 
                 {businessType === "mall_store" && (
-                  <div className="space-y-2">
-                    <MediaUpload
-                      label={
-                        removeMallPhotos || existingMallPhotos.length === 0
-                          ? "Mall Photos (up to 10)"
-                          : "Replace Mall Photos (up to 10)"
-                      }
-                      maxFiles={10}
-                      files={newMallPhotoFiles}
-                      onChange={setNewMallPhotoFiles}
-                      accept="image/*"
-                    />
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Camera className="h-3 w-3" />
-                      Add optional mall entrance or landmark photos to help customers locate you.
-                    </p>
-                  </div>
+                  <MediaUpload
+                    id="edit-business-mall-input"
+                    label="Mall photos"
+                    description="Optional mall entrance or landmark photos to help customers find you."
+                    maxFiles={10}
+                    files={newMallPhotoFiles}
+                    existing={existingMallPhotos.map((url, i) => ({
+                      url: normalizeMediaUrl(url),
+                      label: `Mall photo ${i + 1}`,
+                    }))}
+                    onRemoveExisting={(index) =>
+                      setExistingMallPhotos((prev) => prev.filter((_, i) => i !== index))
+                    }
+                    onChange={setNewMallPhotoFiles}
+                    accept="image/*"
+                    recommendedAspect=""
+                  />
                 )}
 
-                {/* Promo Video */}
-                <div className="space-y-2">
-                  <MediaUpload
-                    label={
-                      removeVideo || !existingCoverVideo
-                        ? `Video (1 max)${!videoAllowed ? " — Upgrade to unlock" : ""}`
-                        : "Replace Video"
-                    }
-                    maxFiles={1}
-                    files={newPromoVideoFile}
-                    onChange={(files) => {
-                      setNewPromoVideoFile(files);
-                      if (files.length === 0) setNewVideoThumbnailFile([]);
-                      clearErrors("cover_video", "video_thumbnail");
-                    }}
-                    accept="video/*"
-                    disabled={!videoAllowed}
-                  />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Film className="h-3 w-3" />
-                    Auto-plays muted on your profile. Max 50 MB.
-                  </p>
-                  {fieldErrors.cover_video && (
-                    <p className="inline-form-error">{fieldErrors.cover_video}</p>
-                  )}
-                </div>
+                <MediaUpload
+                  id="edit-business-video-input"
+                  label={`Video${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                  description="Auto-plays muted on your profile. Max 50 MB."
+                  maxFiles={1}
+                  files={newPromoVideoFile}
+                  existing={
+                    existingCoverVideo && !removeVideo
+                      ? [
+                          {
+                            url: normalizeMediaUrl(existingCoverVideo),
+                            isVideo: true,
+                            label: "Current video",
+                          },
+                        ]
+                      : []
+                  }
+                  onRemoveExisting={() => {
+                    if (window.confirm("Remove the promo video?")) setRemoveVideo(true);
+                  }}
+                  error={fieldErrors.cover_video}
+                  onChange={(files) => {
+                    setNewPromoVideoFile(files);
+                    if (files.length === 0) setNewVideoThumbnailFile([]);
+                    clearErrors("cover_video", "video_thumbnail");
+                  }}
+                  accept="video/*"
+                  disabled={!videoAllowed}
+                  previewShape="wide"
+                />
 
-                {/* Video Thumbnail */}
                 {(newPromoVideoFile.length > 0 || (existingCoverVideo && !removeVideo)) && (
-                  <div className="space-y-2">
-                    <MediaUpload
-                      label="Video Thumbnail (1 max) — Poster shown before video loads"
-                      maxFiles={1}
-                      files={newVideoThumbnailFile}
-                      onChange={(files) => {
-                        setNewVideoThumbnailFile(files);
-                        clearErrors("video_thumbnail");
-                      }}
-                      accept="image/*"
-                    />
-                    {fieldErrors.video_thumbnail && (
-                      <p className="inline-form-error">{fieldErrors.video_thumbnail}</p>
-                    )}
-                  </div>
+                  <MediaUpload
+                    id="edit-business-video-thumbnail-input"
+                    label="Video thumbnail"
+                    description="Poster shown before the video loads."
+                    maxFiles={1}
+                    files={newVideoThumbnailFile}
+                    existing={
+                      existingVideoThumbnail && !removeVideo
+                        ? [
+                            {
+                              url: normalizeMediaUrl(existingVideoThumbnail),
+                              label: "Current video thumbnail",
+                            },
+                          ]
+                        : []
+                    }
+                    error={fieldErrors.video_thumbnail}
+                    onChange={(files) => {
+                      setNewVideoThumbnailFile(files);
+                      clearErrors("video_thumbnail");
+                    }}
+                    accept="image/*"
+                    recommendedAspect=""
+                    previewShape="wide"
+                  />
                 )}
               </div>
 
@@ -1615,6 +1455,16 @@ export default function EditBusinessPage() {
                       status: "preview",
                       business_type: businessType,
                       category: category || "general_other",
+                      subcategory: subcategory || null,
+                      category_details: {
+                        ...categoryDetails,
+                        business_profile: Object.fromEntries(
+                          Object.entries(businessProfileExtrasPayload(profileExtras)).filter(
+                            ([, value]) => value !== undefined
+                          )
+                        ),
+                        venue_photos: previewMallPhotos,
+                      },
                       cover_photo: previewCoverPhotoUrl ?? existingCoverPhoto ?? null,
                       logo_url: previewLogoUrl ?? existingLogo ?? null,
                       cover_video: previewCoverVideo,

@@ -3,6 +3,11 @@ main = "workers/payment-cleanup.ts"
 compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Persist Workers Logs (7-day retention) so production errors can be
+# investigated after the fact; without this only a live `wrangler tail` works.
+[observability]
+enabled = true
+
 [vars]
 ENVIRONMENT = "production"
 SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"

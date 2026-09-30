@@ -12,6 +12,10 @@ import { enforcePublicMutationPrelude } from "@/lib/utils/public-mutation-route"
 
 const log = createLogger("Reports");
 
+/** Mirrors reports_description_check (char_length BETWEEN 10 AND 2000). */
+const REPORT_DESCRIPTION_MIN_LENGTH = 10;
+const REPORT_DESCRIPTION_MAX_LENGTH = 2000;
+
 /** Stable per-startup fallback key for dev — avoids regenerating on every request. */
 const DEV_IP_HASH_FALLBACK_KEY = crypto.randomBytes(32).toString("hex");
 
@@ -25,6 +29,25 @@ export async function POST(request: NextRequest) {
 
     if (!parsedBody.success) {
       return parsedBody.response;
+    }
+
+    // The stored text is the sanitised form: tag stripping can shorten it and
+    // HTML escaping can lengthen it, so the database's 10..2000 character
+    // check must be applied to that form, not the raw input.
+    const description = sanitizeUserMessage(parsedBody.data.description);
+    if (
+      description.length < REPORT_DESCRIPTION_MIN_LENGTH ||
+      description.length > REPORT_DESCRIPTION_MAX_LENGTH
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            description.length < REPORT_DESCRIPTION_MIN_LENGTH
+              ? "Please describe the issue in at least 10 characters"
+              : "Description is too long. Please shorten it and try again.",
+        },
+        { status: 400 }
+      );
     }
 
     const prelude = await enforcePublicMutationPrelude({
@@ -70,9 +93,7 @@ export async function POST(request: NextRequest) {
       area,
       category,
       severity: "standard",
-      description: parsedBody.data.description
-        ? sanitizeUserMessage(parsedBody.data.description)
-        : null,
+      description,
       screenshot_url: parsedBody.data.evidenceUrls?.[0] || null,
       evidence_urls: parsedBody.data.evidenceUrls?.length ? parsedBody.data.evidenceUrls : null,
       status: "open",
@@ -82,7 +103,10 @@ export async function POST(request: NextRequest) {
       log.error("Report insert error", {
         error: error?.message || "unknown error",
       });
-      return NextResponse.json({ error: "Failed to submit report" }, { status: 500 });
+      return NextResponse.json(
+        { error: "We could not submit your report. Please try again shortly." },
+        { status: 500 }
+      );
     }
 
     void notifyStaffForAdminEvent({

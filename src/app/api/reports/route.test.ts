@@ -101,4 +101,68 @@ describe("POST /api/reports", () => {
       excludeUserId: "member-1",
     });
   });
+
+  const baseReport = {
+    targetType: "listing",
+    targetId: "11111111-1111-4111-8111-111111111111",
+    reason: "scam",
+    turnstileToken: "turnstile-ok",
+  };
+
+  it("rejects a description that exceeds the stored limit once HTML-escaped", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
+
+    // 2000 raw characters pass the schema, but "&" escapes to "&amp;".
+    const response = await POST(createRequest({ ...baseReport, description: "&".repeat(2000) }));
+
+    expect(response.status).toBe(400);
+    expect(insert).not.toHaveBeenCalled();
+    expect(mockVerifyTurnstileToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects a description that is too short once tags are stripped", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
+
+    const response = await POST(
+      createRequest({ ...baseReport, description: "<b></b><i></i>scam" })
+    );
+
+    expect(response.status).toBe(400);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("stores the sanitised description", async () => {
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    mockCreateAdminClient.mockReturnValue({ from: vi.fn().mockReturnValue({ insert }) });
+
+    const response = await POST(
+      createRequest({ ...baseReport, description: "Price is R5 & seller says <b>pay first</b>" })
+    );
+
+    expect(response.status).toBe(200);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ description: "Price is R5 &amp; seller says pay first" })
+    );
+  });
+
+  it("reports a failed insert as an error, not success", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        insert: vi.fn().mockResolvedValue({ error: { message: "column does not exist" } }),
+      }),
+    });
+
+    const response = await POST(
+      createRequest({ ...baseReport, description: "This listing is misleading and fraudulent." })
+    );
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.success).toBeUndefined();
+    expect(body.error).toMatch(/could not submit your report/i);
+    expect(JSON.stringify(body)).not.toContain("column does not exist");
+    expect(mockNotifyStaffForAdminEvent).not.toHaveBeenCalled();
+  });
 });

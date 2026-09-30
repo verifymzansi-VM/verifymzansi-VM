@@ -33,11 +33,21 @@ export function AppealForm({ decisionId }: { decisionId: string }) {
         body: JSON.stringify({ decisionId, reason: reason.trim() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Your appeal could not be sent. Try again.");
+      if (!res.ok) {
+        setError(
+          typeof data.error === "string" && data.error.trim()
+            ? data.error
+            : "Your appeal could not be sent. Try again."
+        );
+        setBusy(false);
+        return;
+      }
       router.replace("/appeals?submitted=1");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Your appeal could not be sent. Try again.");
+    } catch {
+      // Network failure: keep the typed reason and show a readable message
+      // instead of the browser's raw "Failed to fetch".
+      setError("Your appeal could not be sent. Check your connection and try again.");
       setBusy(false);
     }
   }

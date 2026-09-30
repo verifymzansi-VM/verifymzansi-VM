@@ -22,7 +22,14 @@ const VIDEO_EXTENSIONS_BY_TYPE: Record<string, string[]> = {
   "video/webm": ["webm"],
 };
 function directR2UploadsEnabled(): boolean {
-  return process.env.ENABLE_DIRECT_R2_UPLOADS !== "0";
+  // Public PUT URLs remain reusable after upload-complete validates the object.
+  // Until uploads use private quarantine and immutable promotion, production
+  // must use the server endpoint which validates bytes before publishing them.
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ENVIRONMENT !== "production" &&
+    process.env.ENABLE_DIRECT_R2_UPLOADS === "1"
+  );
 }
 
 const uploadUrlRequestSchema = z
@@ -62,8 +69,8 @@ const uploadUrlRequestSchema = z
  * POST /api/media/upload-url
  *
  * Returns a presigned R2 upload URL for direct client-to-R2 video uploads.
- * Set ENABLE_DIRECT_R2_UPLOADS=0 to disable this fast path and force the
- * server-validated /api/media/upload endpoint.
+ * Only available with explicit opt-in outside production. Production uses
+ * the server-validated /api/media/upload endpoint.
  *
  * Request body (JSON):
  * - filename: string (original filename for extension extraction)

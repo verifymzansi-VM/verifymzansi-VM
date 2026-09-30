@@ -226,4 +226,34 @@ describe("LoginPage", () => {
 
     vi.unstubAllGlobals();
   });
+  it("gets a fresh single-use CAPTCHA and keeps input after a network failure", async () => {
+    document.cookie = `vm_csrf=${"c".repeat(64)}; path=/`;
+    const tokens: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { turnstileToken: string };
+        tokens.push(body.turnstileToken);
+        if (tokens.length === 1) throw new TypeError("Failed to fetch");
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      })
+    );
+    render(<LoginPage />);
+    await waitFor(() => expect(screen.getByLabelText("Email")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "nomsa@example.com" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "StrongPass123!" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Something went wrong" })
+      )
+    );
+    expect(screen.getByLabelText("Email")).toHaveValue("nomsa@example.com");
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /^Sign in$/i }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(tokens).toHaveLength(2);
+    expect(tokens[1]).not.toBe(tokens[0]);
+    vi.unstubAllGlobals();
+  });
 });

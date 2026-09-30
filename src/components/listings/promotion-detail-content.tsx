@@ -42,6 +42,7 @@ import {
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
+import { FacebookIcon, InstagramIcon, TikTokIcon, XIcon } from "@/components/icons/social-icons";
 import { useVideoPlaybackManager } from "@/contexts/video-playback-context";
 import { type BusinessCategory, type AccountVerificationStatus } from "@/types/enums";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
@@ -434,6 +435,12 @@ export function PromotionDetailContent({
       humanizeKey(promotion.event_details.event_type))
     : null;
   const venueLabel = promotion.event_details?.venue_name ?? null;
+  // Multi-day events: show when they finish, not only when they start.
+  const showEndDate = Boolean(
+    promotion.start_date &&
+    promotion.end_date &&
+    formatSaShortDate(promotion.end_date) !== formatSaShortDate(promotion.start_date)
+  );
   const ticketSummary =
     promotion.event_details?.ticket_tiers && promotion.event_details.ticket_tiers.length > 0
       ? `${promotion.event_details.ticket_tiers.length} ticket tier${
@@ -447,7 +454,7 @@ export function PromotionDetailContent({
   const calendarStart = promotion.start_date ? toGoogleCalendarDate(promotion.start_date) : null;
   const calendarEnd = promotion.end_date ? toGoogleCalendarDate(promotion.end_date) : null;
   const calendarUrl = calendarStart
-    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${calendarStart}/${calendarEnd ?? calendarStart}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
+    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${calendarStart}/${calendarEnd ?? calendarStart}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.event_details?.venue_name, promotion.location_address, promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
     : null;
 
   return (
@@ -650,6 +657,16 @@ export function PromotionDetailContent({
                     </p>
                   </div>
                 ) : null}
+                {showEndDate ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Ends
+                    </p>
+                    <p className="mt-1 text-sm font-medium">
+                      {formatSaShortDate(promotion.end_date!)}
+                    </p>
+                  </div>
+                ) : null}
                 {venueLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -676,9 +693,14 @@ export function PromotionDetailContent({
                 ) : null}
               </div>
               {(promotion.location_city || promotion.location_province) && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4 text-brand-blue" />
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
                   <span>
+                    {promotion.location_address ? (
+                      <span className="block font-medium text-foreground">
+                        {promotion.location_address}
+                      </span>
+                    ) : null}
                     {[promotion.location_town, promotion.location_city, promotion.location_province]
                       .filter(Boolean)
                       .join(", ")}
@@ -1028,6 +1050,79 @@ export function PromotionDetailContent({
                 </Card>
               );
             })()}
+
+          {/* ═══ EVENT LINKS — website, map pin, social media ═══ */}
+          {(() => {
+            const ed = promotion.event_details;
+            if (!ed) return null;
+            const socials = [
+              {
+                key: "facebook",
+                label: "Facebook",
+                href: ed.social_links?.facebook,
+                Icon: FacebookIcon,
+              },
+              {
+                key: "instagram",
+                label: "Instagram",
+                href: ed.social_links?.instagram,
+                Icon: InstagramIcon,
+              },
+              { key: "twitter", label: "X (Twitter)", href: ed.social_links?.twitter, Icon: XIcon },
+              { key: "tiktok", label: "TikTok", href: ed.social_links?.tiktok, Icon: TikTokIcon },
+            ].filter((item) => item.href);
+            if (!ed.website && !ed.map_directions && socials.length === 0) return null;
+            return (
+              <Card>
+                <CardContent className="space-y-3 p-4 text-sm">
+                  <h2 className="font-semibold">Links and directions</h2>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {ed.map_directions && (
+                      <Button asChild variant="outline" className="flex-1 gap-2">
+                        <a
+                          href={safeExternalHref(ed.map_directions)}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow ugc"
+                        >
+                          <MapPin className="h-4 w-4 text-brand-red-600" aria-hidden="true" />
+                          Open location pin
+                        </a>
+                      </Button>
+                    )}
+                    {ed.website && (
+                      <Button asChild variant="outline" className="flex-1 gap-2">
+                        <a
+                          href={safeExternalHref(ed.website)}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow ugc"
+                        >
+                          <Globe className="h-4 w-4" aria-hidden="true" />
+                          Visit website
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                  {socials.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {socials.map(({ key, label, href, Icon }) => (
+                        <a
+                          key={key}
+                          href={safeExternalHref(href!)}
+                          target="_blank"
+                          rel="noopener noreferrer nofollow ugc"
+                          aria-label={label}
+                          title={label}
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-muted/70"
+                        >
+                          <Icon className="h-5 w-5" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
 
         {/* ═══ LINKED BUSINESS + POSTED — mobile only ═══ */}

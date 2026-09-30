@@ -22,6 +22,19 @@ export function SubscribeButton({ planId, planName, priceCents, isPopular }: Sub
   const requestControllerRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
+  // Returning from Ozow with the Back button can restore this page from the
+  // back/forward cache with the button stuck on "Redirecting…".
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      pendingRef.current = false;
+      setCheckoutState("idle");
+      setInlineMessage(null);
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   useEffect(() => {
     return () => {
       mountedRef.current = false;

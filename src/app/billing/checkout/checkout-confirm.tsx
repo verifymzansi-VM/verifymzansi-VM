@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, CalendarClock, Loader2, LockKeyhole, ReceiptText } from "lucide-react";
 import { BrandLogo } from "@/components/shared/brand-logo";
@@ -45,7 +45,20 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
   );
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   const pending = useRef(false);
+
+  // Coming back from Ozow with the browser Back button can restore this page
+  // from the back/forward cache with the button stuck on "Redirecting…".
+  useEffect(() => {
+    function onPageShow(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      pending.current = false;
+      setState("idle");
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
   // Dates use the deterministic SA formatter so server and browser render the same text.
   const [start] = useState(() => new Date());
   const expiry = summary ? new Date(start.getTime() + summary.durationDays * 86_400_000) : null;
@@ -55,6 +68,7 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
     pending.current = true;
     setState("submitting");
     setError(null);
+    setNeedsSignIn(false);
     try {
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
@@ -67,6 +81,7 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
           setPendingPayment(data.pendingPayment as PendingPayment);
         }
         setError(getFriendlyCheckoutError(res.status, data.error, summary.name));
+        setNeedsSignIn(res.status === 401);
         setState("idle");
         pending.current = false;
         return;
@@ -193,6 +208,19 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
                 className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive"
               >
                 {error}
+                {needsSignIn && summary ? (
+                  <>
+                    {" "}
+                    <Link
+                      href={`/login?returnUrl=${encodeURIComponent(
+                        `/billing/checkout?plan=${summary.planId}`
+                      )}`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Sign in
+                    </Link>
+                  </>
+                ) : null}
               </p>
             ) : null}
 

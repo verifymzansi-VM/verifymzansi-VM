@@ -16,7 +16,9 @@ export default async function NewAppealPage({
   } = await supabase.auth.getUser();
   const { decision } = await searchParams;
   if (!user || user.is_anonymous) {
-    redirect(`/login?redirect=${encodeURIComponent(`/appeals/new?decision=${decision ?? ""}`)}`);
+    redirect(
+      `/login?returnUrl=${encodeURIComponent(`/appeals/new?decision=${encodeURIComponent(decision ?? "")}`)}`
+    );
   }
 
   const decisions = await getMemberDecisions(user.id);

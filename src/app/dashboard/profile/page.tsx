@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { clearClientAccountState, signOutBrowserSession } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { summarizeVerification } from "@/lib/account/verification-summary";
@@ -52,6 +53,9 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { AccountVerificationStatus } from "@/types/enums";
 
 type TabValue = "profile" | "security" | "account";
+
+/** How long the "Account deleted" toast stays readable before the full reload home. */
+const ACCOUNT_DELETED_REDIRECT_DELAY_MS = 1500;
 
 function getIdentityProviders(user: { app_metadata?: unknown; identities?: unknown }): string[] {
   const providers = new Set<string>();
@@ -501,10 +505,13 @@ export default function ProfilePage() {
   async function handleSignOut() {
     if (!window.confirm("Are you sure you want to sign out?")) return;
     setIsSigningOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+    try {
+      // Shared helper: toasts on failure and hard-navigates home on success
+      // after clearing the auth/notification stores and the phone-gate cookie.
+      await signOutBrowserSession();
+    } finally {
+      setIsSigningOut(false);
+    }
   }
 
   function handleDeleteDialogOpenChange(open: boolean) {
@@ -559,11 +566,16 @@ export default function ProfilePage() {
       handleDeleteDialogOpenChange(false);
       toast({
         title: "Account deleted",
-        description: "Your account has been permanently deleted.",
+        description: "Your account has been permanently deleted. Taking you to the home page…",
         variant: "success",
       });
-      router.push("/");
-      router.refresh();
+      // Drop the deleted account's auth/notification state, then leave with a
+      // full page load so nothing from this session survives in memory. The
+      // short delay lets the confirmation toast be read first.
+      await clearClientAccountState();
+      window.setTimeout(() => {
+        window.location.assign(new URL("/", window.location.origin).toString());
+      }, ACCOUNT_DELETED_REDIRECT_DELAY_MS);
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
     } finally {

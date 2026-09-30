@@ -380,7 +380,10 @@ export default function EditListingPage() {
       errors.images = `You can upload up to ${maxPhotos} photos on this plan.`;
     }
 
-    const totalVideos = existingVideos.length + newVideoFile.length;
+    const totalVideos =
+      Math.max(maxVideos, existingVideos.length) === 1 && newVideoFile.length > 0
+        ? newVideoFile.length
+        : existingVideos.length + newVideoFile.length;
     if (totalVideos > 0 && !videoAllowed) {
       errors.videos = "Video upload is not available on your current plan.";
     }
@@ -463,7 +466,12 @@ export default function EditListingPage() {
       const finalLogoUrl = newLogoUrls[0] || existingLogo || null;
 
       const allPhotos = [...existingPhotos, ...newPhotoUrls];
-      const allVideos = [...existingVideos, ...(newVideoUrl ? [newVideoUrl] : [])];
+      // A one-video slot swaps the saved video for the new pick instead of adding to it.
+      const allVideos = newVideoUrl
+        ? Math.max(maxVideos, existingVideos.length) === 1
+          ? [newVideoUrl]
+          : [...existingVideos, newVideoUrl]
+        : existingVideos;
       const primaryMediaFile = newVideoFile[0] ?? newPhotoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
 
@@ -766,100 +774,28 @@ export default function EditListingPage() {
                 </PostFormSection>
 
                 <PostFormSection title="Photos and video">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Listing Logo</p>
-                    {previewLogo ? (
-                      <div className="flex items-start gap-3">
-                        <div className="relative h-20 w-20 overflow-hidden rounded-2xl border bg-muted">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={normalizeMediaUrl(previewLogo)}
-                            alt="Listing logo"
-                            className="h-full w-full object-contain"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-11"
-                            onClick={() => {
-                              if (!window.confirm("Remove the logo?")) return;
-                              setExistingLogo(null);
-                              setNewLogoFile([]);
-                            }}
-                          >
-                            Remove logo
-                          </Button>
-                          <p className="text-xs text-muted-foreground">Shown on listing cards.</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No listing logo uploaded.</p>
-                    )}
-                  </div>
-
                   <MediaUpload
-                    label="Replace listing logo (optional)"
-                    maxFiles={1}
-                    files={newLogoFile}
-                    error={fieldErrors.logo_url}
-                    onChange={(files) => {
-                      setNewLogoFile(files);
-                      clearErrors("logo_url");
-                    }}
-                    accept="image/*"
-                  />
-
-                  {/* ── Existing Images ──────────────────────── */}
-                  {existingPhotos.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Current Photos</p>
-                      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                        {existingPhotos.map((url, i) => (
-                          <div
-                            key={url}
-                            className="group relative overflow-hidden rounded-xl border border-border"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={displayExistingPhotos[i] || normalizeMediaUrl(url)}
-                              alt={`Photo ${i + 1}`}
-                              className="aspect-square w-full bg-muted object-contain"
-                            />
-                            <button
-                              type="button"
-                              title="Remove photo"
-                              aria-label={`Remove photo ${i + 1}`}
-                              onClick={() => {
-                                if (!window.confirm("Remove this photo?")) return;
-                                setExistingPhotos((prev) => prev.filter((_, idx) => idx !== i));
-                                clearErrors("images");
-                              }}
-                              className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 max-lg:opacity-100"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── New Photo Upload ──────────────────────── */}
-                  <MediaUpload
-                    label={`Add Photos (max ${Math.max(0, maxPhotos - existingPhotos.length)} more)`}
-                    maxFiles={Math.max(0, maxPhotos - existingPhotos.length)}
+                    id="edit-listing-photos-input"
+                    label="Photos"
+                    description="Your first photo is the cover on cards."
+                    maxFiles={maxPhotos}
                     files={newPhotoFiles}
+                    existing={existingPhotos.map((url, i) => ({
+                      url: displayExistingPhotos[i] || normalizeMediaUrl(url),
+                      label: `Photo ${i + 1}`,
+                    }))}
+                    onRemoveExisting={(index) => {
+                      if (!window.confirm("Remove this photo?")) return;
+                      setExistingPhotos((prev) => prev.filter((_, i) => i !== index));
+                      clearErrors("images");
+                    }}
+                    error={fieldErrors.images}
                     onChange={(files) => {
                       setNewPhotoFiles(files);
                       clearErrors("images");
                     }}
                     accept="image/*"
-                    disabled={existingPhotos.length >= maxPhotos}
                   />
-                  {fieldErrors.images && <p className="inline-form-error">{fieldErrors.images}</p>}
 
                   {/* ── Focal Point Picker ────────────────────── */}
                   {existingPhotos.length > 0 && (
@@ -871,57 +807,57 @@ export default function EditListingPage() {
                     />
                   )}
 
-                  {/* ── Existing Videos ──────────────────────── */}
-                  {existingVideos.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Current Video</p>
-                      <div className="flex gap-2">
-                        {existingVideos.map((url, i) => (
-                          <div
-                            key={url}
-                            className="group relative w-48 overflow-hidden rounded-xl border border-border"
-                          >
-                            <video
-                              src={displayExistingVideos[i] || normalizeMediaUrl(url)}
-                              className="aspect-video w-full bg-black object-contain"
-                            />
-                            <button
-                              type="button"
-                              title="Remove video"
-                              aria-label={`Remove video ${i + 1}`}
-                              onClick={() => {
-                                if (!window.confirm("Remove this video?")) return;
-                                setExistingVideos((prev) => prev.filter((_, idx) => idx !== i));
-                                clearErrors("videos");
-                              }}
-                              className="absolute right-1 top-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 max-lg:opacity-100"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <MediaUpload
+                    id="edit-listing-video-input"
+                    label={`Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                    maxFiles={Math.max(maxVideos, existingVideos.length)}
+                    files={newVideoFile}
+                    existing={existingVideos.map((url, i) => ({
+                      url: displayExistingVideos[i] || normalizeMediaUrl(url),
+                      isVideo: true,
+                      label: `Video ${i + 1}`,
+                    }))}
+                    onRemoveExisting={(index) => {
+                      if (!window.confirm("Remove this video?")) return;
+                      setExistingVideos((prev) => prev.filter((_, i) => i !== index));
+                      clearErrors("videos");
+                    }}
+                    error={fieldErrors.videos}
+                    onChange={(files) => {
+                      setNewVideoFile(files);
+                      if (files.length === 0) {
+                        setNewVideoCoverFile([]);
+                      }
+                      clearErrors("videos");
+                    }}
+                    accept="video/*"
+                    disabled={!videoAllowed}
+                    previewShape="wide"
+                  />
 
-                  {/* ── New Video Upload ──────────────────────── */}
-                  {existingVideos.length === 0 && (
-                    <MediaUpload
-                      label={`Add Video (max ${maxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                      maxFiles={Math.max(0, maxVideos - existingVideos.length)}
-                      files={newVideoFile}
-                      onChange={(files) => {
-                        setNewVideoFile(files);
-                        if (files.length === 0) {
-                          setNewVideoCoverFile([]);
-                        }
-                        clearErrors("videos");
-                      }}
-                      accept="video/*"
-                      disabled={!videoAllowed || existingVideos.length >= maxVideos}
-                    />
-                  )}
-                  {fieldErrors.videos && <p className="inline-form-error">{fieldErrors.videos}</p>}
+                  <MediaUpload
+                    id="edit-listing-logo-input"
+                    label="Listing logo (optional)"
+                    description="Shown on listing cards."
+                    maxFiles={1}
+                    files={newLogoFile}
+                    existing={
+                      existingLogo
+                        ? [{ url: normalizeMediaUrl(existingLogo), label: "Current logo" }]
+                        : []
+                    }
+                    onRemoveExisting={() => {
+                      if (!window.confirm("Remove the logo?")) return;
+                      setExistingLogo(null);
+                    }}
+                    error={fieldErrors.logo_url}
+                    onChange={(files) => {
+                      setNewLogoFile(files);
+                      clearErrors("logo_url");
+                    }}
+                    accept="image/*"
+                    recommendedAspect="Recommended: square image, at least 96 x 96."
+                  />
 
                   {/* ── Video Cover Image ────────────────────── */}
                   {(existingVideos.length > 0 || newVideoFile.length > 0) && (

@@ -628,13 +628,13 @@ export function normalizeOzowWebhook(body: unknown): NormalizedOzowWebhook | nul
     toSafeString(transaction.payment_request_id) ||
     toSafeString(transaction.id);
   const status = toSafeString(transaction.status) || toSafeString(data.status);
-  const amountValue = amountObject?.value;
+  // Preserve precision for the webhook route's exact cents validation. Rounding
+  // here would make a mismatched charge (e.g. 24.999) look like the quoted 25.00.
+  const amountValue = amountObject ? amountObject.value : transaction.amount;
   const amount =
     typeof amountValue === "number"
-      ? amountValue.toFixed(2)
-      : typeof transaction.amount === "number"
-        ? transaction.amount.toFixed(2)
-        : toSafeString(transaction.amount) || toSafeString(transaction.amountValue);
+      ? String(amountValue)
+      : toSafeString(amountValue) || toSafeString(transaction.amountValue);
   const currencyCode =
     toSafeString(amountObject?.currency) ||
     toSafeString(transaction.currencyCode) ||

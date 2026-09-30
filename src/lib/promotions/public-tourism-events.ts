@@ -5,11 +5,22 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 const TOURISM_HOSPITALITY_CATEGORY = "tourism_hospitality" as const;
 
-export function buildPublicTourismBusinessesQuery(supabase: SupabaseServerClient, select = "*") {
+// `select` is deliberately required (no "*" default): these builders feed
+// public pages, so every caller must name the columns it is allowed to expose.
+// The runtime check also catches untyped callers: postgrest-js treats an
+// undefined select as "*".
+function assertExplicitSelect(select: string): string {
+  if (typeof select !== "string" || !select.trim() || select.includes("*")) {
+    throw new Error("Public tourism/event queries require an explicit column list");
+  }
+  return select;
+}
+
+export function buildPublicTourismBusinessesQuery(supabase: SupabaseServerClient, select: string) {
   return applyVisibleExpiryFilter(
     supabase
       .from("businesses")
-      .select(select)
+      .select(assertExplicitSelect(select))
       .eq("status", "live")
       .eq("category", TOURISM_HOSPITALITY_CATEGORY)
   )
@@ -21,12 +32,12 @@ export function buildPublicTourismBusinessesQuery(supabase: SupabaseServerClient
 export function buildPublicEventPromotionsQuery(
   supabase: SupabaseServerClient,
   nowIso: string,
-  select = "*"
+  select: string
 ) {
   return applyVisibleExpiryFilter(
     supabase
       .from("promotions")
-      .select(select)
+      .select(assertExplicitSelect(select))
       .eq("status", "live")
       .eq("promotion_type", "event")
       .or(`end_date.is.null,end_date.gte.${nowIso}`),

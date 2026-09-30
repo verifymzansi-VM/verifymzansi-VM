@@ -10,6 +10,11 @@ import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+// Public detail columns only: select("*") would hand every visitor any
+// internal column added to promotions later.
+const PROMOTION_DETAIL_SELECT =
+  "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, boost_until, featured_until, view_count, created_at, logo_url, event_details, media_width, media_height";
+
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
   const supabase = await createClient();
   const { data: promotion } = await applyVisibleExpiryFilter(
@@ -33,7 +38,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
   const supabase = await createClient();
   const engagementAdmin = tryCreateAdminClient();
   const { data: rawPromotion } = await applyVisibleExpiryFilter(
-    supabase.from("promotions").select("*").eq("id", id).eq("status", "live")
+    supabase.from("promotions").select(PROMOTION_DETAIL_SELECT).eq("id", id).eq("status", "live")
   ).single();
 
   const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;

@@ -47,17 +47,27 @@ const BUSINESS_CONTACT_CHOICES = [
   },
 ] as const;
 
+/** Website has its own always-visible field; the rest are opt-in checkboxes. */
+const CHECKBOX_CHOICES = BUSINESS_CONTACT_CHOICES.filter((choice) => choice.method !== "website");
+
 export type ContactValues = { phone: string; whatsapp: string; email: string; website: string };
+/**
+ * The website is entered in the always-visible "Website, social media &
+ * location pin" section, so it counts as a contact method whenever it is
+ * filled in instead of needing its own checkbox.
+ */
 export function readContactMethods(value: unknown, values: ContactValues): string[] {
-  if (Array.isArray(value))
-    return value.filter(
-      (method): method is string =>
-        typeof method === "string" &&
-        BUSINESS_CONTACT_CHOICES.some((choice) => choice.method === method)
-    );
-  return BUSINESS_CONTACT_CHOICES.filter((choice) => choice.field && values[choice.field]).map(
-    (choice) => choice.method
-  );
+  const chosen = Array.isArray(value)
+    ? value.filter(
+        (method): method is string =>
+          typeof method === "string" &&
+          method !== "website" &&
+          BUSINESS_CONTACT_CHOICES.some((choice) => choice.method === method)
+      )
+    : BUSINESS_CONTACT_CHOICES.filter(
+        (choice) => choice.field && choice.field !== "website" && values[choice.field]
+      ).map((choice) => choice.method);
+  return values.website.trim() ? [...chosen, "website"] : chosen;
 }
 export function selectedContacts(methods: string[], values: ContactValues) {
   return {
@@ -86,13 +96,14 @@ export function BusinessContactFields({
       <legend className="font-medium">How should customers contact you? (Required)</legend>
       <p className="text-sm text-muted-foreground">
         Choose at least one. Choose all that apply. Details for selected methods will be public.
+        Your website goes in the website and social media section below.
       </p>
       <FieldHelp label="contact methods">
         Use a number or email address you check regularly. The VerifyMzansi inbox sends enquiries to
         your account. If you deselect a method, its details will not appear on your profile.
       </FieldHelp>
       <div className="grid gap-2 sm:grid-cols-2">
-        {BUSINESS_CONTACT_CHOICES.map((choice) => (
+        {CHECKBOX_CHOICES.map((choice) => (
           <label
             key={choice.method}
             className="flex min-h-11 items-start gap-2 rounded-xl border p-3"
@@ -118,7 +129,7 @@ export function BusinessContactFields({
       </div>
       {errors.contact_methods && <p className="inline-form-error">{errors.contact_methods}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
-        {BUSINESS_CONTACT_CHOICES.map(
+        {CHECKBOX_CHOICES.map(
           (choice) =>
             choice.field &&
             methods.includes(choice.method) && (

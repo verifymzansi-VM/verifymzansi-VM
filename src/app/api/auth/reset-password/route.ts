@@ -15,24 +15,26 @@ import {
 
 const log = createLogger("ResetPassword");
 const PASSWORD_RECOVERY_COOKIE = "vm_password_recovery";
-const PASSWORD_RECOVERY_COOKIE_MAX_AGE_MS = 60 * 60 * 1000;
+const PASSWORD_RECOVERY_MAX_AGE_SECONDS = 60 * 60;
 
-function hasRecentRecoveryTimestamp(user: { recovery_sent_at?: string | null }): boolean {
-  const recoverySentAt = user.recovery_sent_at ? new Date(user.recovery_sent_at).getTime() : 0;
-  const oneHourAgo = Date.now() - PASSWORD_RECOVERY_COOKIE_MAX_AGE_MS;
-  return Boolean(recoverySentAt && recoverySentAt >= oneHourAgo);
-}
-
-function hasRecoveryMarker(request: NextRequest, user: { id?: string }): boolean {
-  const marker = request.cookies.get(PASSWORD_RECOVERY_COOKIE)?.value;
-  return Boolean(user.id && marker && marker === user.id);
-}
-
-function hasValidRecoverySession(
-  request: NextRequest,
-  user: { id?: string; recovery_sent_at?: string | null }
-): boolean {
-  return hasRecentRecoveryTimestamp(user) || hasRecoveryMarker(request, user);
+async function hasValidRecoverySession(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<boolean> {
+  // A sent email and a caller-controlled cookie do not prove link redemption.
+  // Supabase signs the recovery authentication method into the session JWT.
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data || data.claims.sub !== userId) return false;
+  const now = Math.floor(Date.now() / 1000);
+  return Boolean(
+    data.claims.amr?.some(
+      (method) =>
+        method.method === "recovery" &&
+        Number.isFinite(method.timestamp) &&
+        method.timestamp <= now &&
+        now - method.timestamp <= PASSWORD_RECOVERY_MAX_AGE_SECONDS
+    )
+  );
 }
 
 /**
@@ -41,7 +43,7 @@ function hasValidRecoverySession(
  * Check if the current session is a valid recovery session.
  * Returns { valid: true } if the user has an active recovery session.
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -53,9 +55,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
-    // Only treat as valid recovery if the Supabase user has a recent recovery
-    // timestamp or our callback set a short-lived recovery marker.
-    if (!hasValidRecoverySession(request, user)) {
+    if (!(await hasValidRecoverySession(supabase, user.id))) {
       return NextResponse.json({ valid: false }, { status: 200 });
     }
 
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!hasValidRecoverySession(request, user)) {
+    if (!(await hasValidRecoverySession(supabase, user.id))) {
       return NextResponse.json(
         { error: "Your reset link has expired or is invalid. Please request a new one." },
         { status: 401 }

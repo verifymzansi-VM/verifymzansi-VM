@@ -271,14 +271,58 @@ describe("POST /api/webhooks/ozow", () => {
     expect(mockFulfillPayment).not.toHaveBeenCalled();
   });
 
-  it("rejects amount mismatches before fulfillment", async () => {
+  it.each([
+    ["missing", { value: 25 }],
+    ["blank", { value: 25, currency: "" }],
+  ])("rejects a successful completion with a %s currency", async (_kind, amount) => {
     const body = {
       eventType: "transaction.complete",
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
         status: "successful",
-        amount: { value: 24, currency: "ZAR" },
+        amount,
+      },
+    };
+
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                id: "payment-1",
+                area: "PROMOTIONS_EVENTS",
+                status: "pending",
+                provider: "ozow",
+                provider_payment_id: null,
+                provider_reference: "payment-1",
+                created_at: "2026-03-26T10:00:00.000Z",
+                provider_data: {},
+                amount_cents: 2500,
+                user_id: "user-1",
+              },
+            }),
+          }),
+        }),
+      }),
+    });
+
+    const response = await POST(createSignedRequest(body));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "Missing currency" });
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
+  it.each([24, 24.999, 25.001])("rejects amount %s before fulfillment", async (amount) => {
+    const body = {
+      eventType: "transaction.complete",
+      data: {
+        merchantReference: "payment-1",
+        id: "ozow-tx-1",
+        status: "successful",
+        amount: { value: amount, currency: "ZAR" },
       },
     };
 

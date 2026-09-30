@@ -31,9 +31,15 @@ test.describe("Commercial model", () => {
 
     // The section picker changes where the slot is used, not the price.
     const before = await main.getByRole("link", { name: /choose 30 days/i }).getAttribute("href");
-    await main.getByRole("radio", { name: /tourism/i }).click();
-    const after = await main.getByRole("link", { name: /choose 30 days/i }).getAttribute("href");
-    expect(after).not.toBe(before);
+    // Under load the page can still be hydrating; retry the click until the
+    // picker is interactive instead of asserting on a pre-hydration click.
+    await expect(async () => {
+      await main.getByRole("radio", { name: /tourism/i }).click({ timeout: 2_000 });
+      const after = await main
+        .getByRole("link", { name: /choose 30 days/i })
+        .getAttribute("href", { timeout: 2_000 });
+      expect(after).not.toBe(before);
+    }).toPass({ timeout: 20_000 });
     await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
   });
 
@@ -41,9 +47,11 @@ test.describe("Commercial model", () => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
     const main = page.locator("main");
     await expect(main.getByTestId("tourism-free-trial")).toHaveCount(0);
-    await main.getByRole("radio", { name: /tourism/i }).click();
     const trial = main.getByTestId("tourism-free-trial");
-    await expect(trial).toBeVisible();
+    await expect(async () => {
+      await main.getByRole("radio", { name: /tourism/i }).click({ timeout: 2_000 });
+      await expect(trial).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
     await expect(trial.getByRole("link", { name: /start free trial/i })).toHaveAttribute(
       "href",
       "/post/create-tourism?type=tourism"

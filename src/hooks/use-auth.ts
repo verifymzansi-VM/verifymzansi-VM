@@ -9,6 +9,7 @@ import {
 } from "@/lib/account/compat";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import { toast } from "@/hooks/use-toast";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 
 const log = createLogger("useAuth");
@@ -59,6 +60,51 @@ export function hasBrowserAuthSession(): boolean {
   }
 
   return SUPABASE_AUTH_COOKIE_PATTERN.test(document.cookie);
+}
+
+/**
+ * Signs the browser session out and clears every piece of client state tied
+ * to the account (auth store, notification store, phone-gate cookie) before a
+ * hard navigation home. Every sign-out control must go through this so a
+ * failed sign-out never looks successful and a successful one never leaves
+ * the previous account's data in memory. Resolves `false` (after showing a
+ * toast) when the provider rejects the sign-out; the session is kept intact.
+ */
+export async function signOutBrowserSession(): Promise<boolean> {
+  try {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  } catch (err) {
+    log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
+    toast({
+      title: "Could not sign out",
+      description: "Please try again.",
+      variant: "destructive",
+    });
+    return false;
+  }
+  await clearClientAccountState();
+  window.location.assign(new URL("/", window.location.origin).toString());
+  return true;
+}
+
+/**
+ * Drops every piece of in-memory/client state tied to the current account
+ * (auth store, notification store, phone-gate cookie). Call this whenever the
+ * account's session ends — sign-out, account deletion — before navigating
+ * away, so the previous account's data can never be shown to the next user.
+ */
+export async function clearClientAccountState(): Promise<void> {
+  useAuthStore.getState().reset();
+  // Clear notification store to prevent cross-account data leak
+  const { clearAll: clearNotifications } = (
+    await import("@/stores/notification-store")
+  ).useNotificationStore.getState();
+  clearNotifications();
+  // Clear the phone-gate cookie client-side (server sign-out route also
+  // does this, but the client hook may be used directly).
+  document.cookie = "x-phone-ok=; path=/; max-age=0";
 }
 
 /**
@@ -255,24 +301,7 @@ export function useAuth() {
     // on every state change. The SIGNED_OUT redirect reads `user` from closure.
   }, [fetchUser, reset]);
 
-  const signOut = useCallback(async () => {
-    try {
-      const supabase = await getSupabaseClient();
-      await supabase.auth.signOut();
-    } catch (err) {
-      log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
-    }
-    reset();
-    // Clear notification store to prevent cross-account data leak
-    const { clearAll: clearNotifications } = (
-      await import("@/stores/notification-store")
-    ).useNotificationStore.getState();
-    clearNotifications();
-    // Clear the phone-gate cookie client-side (server sign-out route also
-    // does this, but the client hook may be used directly).
-    document.cookie = "x-phone-ok=; path=/; max-age=0";
-    window.location.assign(new URL("/", window.location.origin).toString());
-  }, [reset]);
+  const signOut = useCallback(() => signOutBrowserSession(), []);
 
   const isAuthenticated = !!user;
   const isAdmin = user?.role === "admin";

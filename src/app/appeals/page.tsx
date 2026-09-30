@@ -32,7 +32,7 @@ export default async function AppealsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || user.is_anonymous) redirect("/login?redirect=/appeals");
+  if (!user || user.is_anonymous) redirect("/login?returnUrl=%2Fappeals");
 
   const { submitted } = await searchParams;
   let decisions: MemberDecision[];

@@ -13,9 +13,11 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import {
   stripExifFromJpeg,
+  stripMetadataFromAvif,
   stripMetadataFromPng,
   stripMetadataFromWebp,
 } from "@/lib/utils/exif-strip";
+import { scrubVideoLocationMetadata } from "@/lib/utils/isobmff-metadata";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { generateImageVariants } from "@/lib/services/image-variants";
 import { parseAndValidateFormData } from "@/lib/utils/api";
@@ -279,7 +281,8 @@ export async function POST(request: NextRequest) {
       const key = generateStorageKey(`media/${area}`, user.id, file.name, file.type);
 
       try {
-        // Strip metadata from images to prevent GPS/PII leaks (POPIA)
+        // Strip metadata from images and GPS from videos to prevent
+        // location/PII leaks (POPIA)
         let uploadFile: File | Blob = file;
         let strippedBytes: Uint8Array = fileBuffer;
         if (file.type === "image/jpeg") {
@@ -291,6 +294,16 @@ export async function POST(request: NextRequest) {
         } else if (file.type === "image/webp") {
           strippedBytes = stripMetadataFromWebp(fileBuffer);
           uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
+        } else if (file.type === "image/avif") {
+          strippedBytes = stripMetadataFromAvif(fileBuffer);
+          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
+        } else if (file.type === "video/mp4") {
+          // Blank ©xyz / Apple ISO6709 location values in place (same length,
+          // so chunk offsets stay valid). fileBuffer is this request's own
+          // copy; mutate it rather than duplicating up to 50 MB in memory.
+          if (scrubVideoLocationMetadata(fileBuffer) > 0) {
+            uploadFile = new Blob([fileBuffer], { type: file.type });
+          }
         } else if (file.type === "image/heic" || file.type === "image/heif") {
           // HEIC/HEIF EXIF stripping is not supported server-side.
           // Clients must convert to JPEG before upload. Reject raw HEIC to

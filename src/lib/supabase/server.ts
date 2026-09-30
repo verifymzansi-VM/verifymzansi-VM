@@ -6,6 +6,7 @@ import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-st
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 
 const logger = createLogger("Supabase");
 
@@ -46,6 +47,7 @@ export async function createClient(): Promise<SupabaseClient> {
   }
 
   return createServerClient(url, anonKey, {
+    global: { fetch: createTimeoutFetch() },
     cookies: {
       get(name: string) {
         return readCookieValue(cookieStore, name);

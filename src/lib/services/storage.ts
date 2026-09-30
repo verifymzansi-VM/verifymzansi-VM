@@ -306,6 +306,19 @@ function getR2Client(): S3Client {
 }
 
 /**
+ * Deadlines for S3-API calls to R2 (used only when no native R2 binding is
+ * available). Object transfers (up to the 50 MB video limit) get a generous
+ * budget; metadata calls (HEAD/DELETE) should answer quickly. Without these a
+ * hung connection holds the request until the platform kills it.
+ */
+const R2_TRANSFER_TIMEOUT_MS = 120_000;
+const R2_METADATA_TIMEOUT_MS = 15_000;
+
+function r2SendOptions(timeoutMs: number): { abortSignal: AbortSignal } {
+  return { abortSignal: AbortSignal.timeout(timeoutMs) };
+}
+
+/**
  * Upload a file to Cloudflare R2 using AWS S3-compatible SDK.
  * This properly signs requests using AWS Sigv4.
  */
@@ -344,7 +357,7 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     CacheControl: "public, max-age=31536000, immutable",
   });
 
-  await client.send(command);
+  await client.send(command, r2SendOptions(R2_TRANSFER_TIMEOUT_MS));
 
   // Generate public URL (trim trailing slash from base to avoid double-slash)
   const publicUrl = process.env.R2_PUBLIC_URL
@@ -427,7 +440,7 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
     Key: key,
   });
 
-  await client.send(command);
+  await client.send(command, r2SendOptions(R2_METADATA_TIMEOUT_MS));
 }
 
 /**
@@ -445,7 +458,10 @@ export async function getR2ObjectSize(bucket: string, key: string): Promise<numb
 
   const client = getR2Client();
   try {
-    const response = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    const response = await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
+      r2SendOptions(R2_METADATA_TIMEOUT_MS)
+    );
     return response.ContentLength ?? null;
   } catch (error) {
     const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
@@ -476,7 +492,8 @@ export async function getR2ObjectBytes(
     new GetObjectCommand({
       Bucket: bucket,
       Key: key,
-    })
+    }),
+    r2SendOptions(R2_TRANSFER_TIMEOUT_MS)
   );
 
   if (!response.Body) {
@@ -602,7 +619,7 @@ export async function uploadKycDocument(
     },
   });
 
-  await client.send(command);
+  await client.send(command, r2SendOptions(R2_TRANSFER_TIMEOUT_MS));
 
   return {
     url: `private://${privateBucket}/${key}`, // Use private:// scheme to indicate no public access

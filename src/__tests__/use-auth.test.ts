@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -6,7 +7,8 @@ const { mockCreateClient } = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase/client", () => ({ createClient: mockCreateClient }));
 
-import { hasBrowserAuthSession } from "@/hooks/use-auth";
+import { hasBrowserAuthSession, useAuth } from "@/hooks/use-auth";
+import { useAuthStore } from "@/stores/auth-store";
 
 function clearBrowserCookies() {
   for (const entry of document.cookie.split(";")) {
@@ -47,6 +49,25 @@ describe("hasBrowserAuthSession", () => {
 
 describe("use-auth", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("preserves authenticated state when sign-out returns an error", async () => {
+    clearBrowserCookies();
+    mockCreateClient.mockReturnValue({
+      auth: { signOut: vi.fn().mockResolvedValue({ error: new Error("provider unavailable") }) },
+    });
+    const { result } = renderHook(() => useAuth());
+    const user = {
+      id: "member-1",
+      email: "member@example.com",
+      displayName: "Member",
+      role: "user",
+    };
+    act(() => useAuthStore.getState().setUser(user));
+    await act(async () => {
+      expect(await result.current.signOut()).toBe(false);
+    });
+    expect(useAuthStore.getState().user).toEqual(user);
+  });
 
   it("should handle null user_metadata gracefully", () => {
     // Test the null-safety fix: (user_metadata?.display_name ?? "") as string

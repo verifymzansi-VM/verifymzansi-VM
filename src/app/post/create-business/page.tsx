@@ -15,7 +15,6 @@ import {
   cleanCustomerAccess,
 } from "@/lib/forms/customer-access";
 import { BusinessCategoryPicker } from "@/components/post/business-category-picker";
-import { FieldHelp } from "@/components/post/field-help";
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
@@ -24,7 +23,6 @@ import Link from "next/link";
 import {
   Building2,
   Camera,
-  ChevronDown,
   CreditCard,
   FileText,
   MapPin,
@@ -44,6 +42,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
+import { BusinessProfileExtrasFields } from "@/components/post/business-profile-extras-fields";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
@@ -72,6 +72,11 @@ import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
+import {
+  POST_SESSION_EXPIRED_MESSAGE,
+  resolveServerRedirect,
+} from "@/app/post/_lib/post-submit-navigation";
+import { PostSignInAction } from "@/components/post/post-sign-in-action";
 import {
   getBusinessMediaUploadErrorState,
   uploadRequiredBusinessMedia,
@@ -154,6 +159,7 @@ const FIELD_IDS: Record<string, string> = {
 
 const STEP_CONTACT_FIELDS = ["phone", "whatsapp", "email", "website"] as const;
 const STEP_SOCIAL_FIELDS = [
+  "map_directions",
   "socialFacebook",
   "socialInstagram",
   "socialTwitter",
@@ -352,6 +358,7 @@ function CreateBusinessContent() {
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const { toast } = useToast();
@@ -675,14 +682,14 @@ function CreateBusinessContent() {
         "business_type",
         "store_number",
         "service_areas",
-        "map_directions",
         ...businessDetailKeys,
         "business_name",
         "slug",
         "category",
         "description",
       ],
-      ["location_province", "location_city", ...STEP_CONTACT_FIELDS, ...STEP_SOCIAL_FIELDS],
+      ["location_province", "location_city", "location_address"],
+      ["contact_methods", ...STEP_CONTACT_FIELDS, ...STEP_SOCIAL_FIELDS],
       ["gallery_photos", "cover_video", "termsAccepted"],
     ][targetStep];
     const firstKey = orderByStep?.find((key) => errors[key]) ?? Object.keys(errors)[0];
@@ -772,7 +779,9 @@ function CreateBusinessContent() {
           errors[field] = businessValidationErrors[field];
         }
       }
+      const pinVisible = readCustomerAccess(categoryDetails.customer_access).publishAddress;
       for (const key of STEP_SOCIAL_FIELDS) {
+        if (key === "map_directions" && !pinVisible) continue;
         if (businessValidationErrors[key]) {
           errors[key] = businessValidationErrors[key];
         }
@@ -836,6 +845,7 @@ function CreateBusinessContent() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submissionInFlightRef.current) return;
+    setSessionExpired(false);
     const stepErrors = STEPS.map((_, index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((errors) => Object.keys(errors).length > 0);
     if (firstInvalidStep !== -1) {
@@ -878,7 +888,7 @@ function CreateBusinessContent() {
         ? readMediaDimensions(primaryMediaFile)
         : Promise.resolve(null);
 
-      const [logoUrls, [coverUrls, galleryUrls, _mallPhotoUrls], videoUrl] =
+      const [logoUrls, [coverUrls, galleryUrls, mallPhotoUrls], videoUrl] =
         await settleMediaUploads([
           uploadRequiredBusinessMedia({
             files: logoFile,
@@ -988,7 +998,9 @@ function CreateBusinessContent() {
         location_town: locationTown || undefined,
         location_address: locationAddress || undefined,
         store_number: businessType === "mall_store" ? storeNumber : undefined,
-        map_directions: mapDirections || undefined,
+        map_directions: readCustomerAccess(categoryDetails.customer_access).publishAddress
+          ? mapDirections.trim() || undefined
+          : undefined,
         phone: publicContacts.phone || undefined,
         whatsapp: publicContacts.whatsapp || undefined,
         email: publicContacts.email || undefined,
@@ -1004,6 +1016,7 @@ function CreateBusinessContent() {
         category_details: {
           ...categoryDetails,
           customer_access: cleanCustomerAccess(readCustomerAccess(categoryDetails.customer_access)),
+          ...(mallPhotoUrls.length > 0 ? { venue_photos: mallPhotoUrls } : {}),
         },
         operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
         payment_methods_accepted: paymentMethods.length > 0 ? paymentMethods : undefined,
@@ -1032,6 +1045,12 @@ function CreateBusinessContent() {
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
+        if (res.status === 401) {
+          setSessionExpired(true);
+          setFormError(POST_SESSION_EXPIRED_MESSAGE);
+          return;
+        }
+
         // Phone-gate: server returns redirectUrl for phone verification
         if (
           res.status === 403 &&
@@ -1039,7 +1058,7 @@ function CreateBusinessContent() {
           typeof payload === "object" &&
           typeof (payload as Record<string, unknown>).redirectUrl === "string"
         ) {
-          router.push((payload as Record<string, unknown>).redirectUrl as string);
+          router.push(resolveServerRedirect((payload as Record<string, unknown>).redirectUrl));
           return;
         }
 
@@ -1354,8 +1373,9 @@ function CreateBusinessContent() {
                   // errors — never show red on a pristine form.
                   Object.keys(fieldErrors).some((key) => getStepForFieldKey(key) === i)
                 )}
+                errorAction={sessionExpired && formError ? <PostSignInAction /> : undefined}
                 onRetry={
-                  formError && !isSubmitting
+                  formError && !isSubmitting && !sessionExpired
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
                     : undefined
                 }
@@ -1778,105 +1798,29 @@ function CreateBusinessContent() {
 
                     {/* SA market fields */}
                     <PostFormSection title="Additional business information" optional>
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label htmlFor="yearEstablished">Year Established</Label>
-                          <Input
-                            id="yearEstablished"
-                            type="number"
-                            min={1900}
-                            max={new Date().getFullYear()}
-                            value={yearEstablished}
-                            onChange={(e) => setYearEstablished(e.target.value)}
-                            placeholder="e.g. 2018"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label htmlFor="numberOfEmployees">Number of Employees</Label>
-                          <PostSelect
-                            id="numberOfEmployees"
-                            aria-label="Number of employees"
-                            className={SELECT_CLASS}
-                            value={numberOfEmployees}
-                            onChange={(e) => setNumberOfEmployees(e.target.value)}
-                          >
-                            <option value="">Select…</option>
-                            <option value="1">1 (Solo)</option>
-                            <option value="2_5">2 – 5</option>
-                            <option value="6_10">6 – 10</option>
-                            <option value="11_50">11 – 50</option>
-                            <option value="51_200">51 – 200</option>
-                            <option value="200_plus">200+</option>
-                          </PostSelect>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label htmlFor="cipcRegistration">
-                            Company registration number (CIPC) (Optional)
-                          </Label>
-                          <FieldHelp label="company registration number">
-                            Add your company registration number if you have one. You can leave this
-                            blank.
-                          </FieldHelp>
-                          <Input
-                            id="cipcRegistration"
-                            value={cipcRegistration}
-                            onChange={(e) => setCipcRegistration(e.target.value)}
-                            placeholder="e.g. 2023/123456/07"
-                            maxLength={30}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Shown as provided. We verify people, not company records.
-                          </p>
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label htmlFor="bbbeeLevel">B-BBEE Level</Label>
-                          <PostSelect
-                            id="bbbeeLevel"
-                            aria-label="B-BBEE level"
-                            className={SELECT_CLASS}
-                            value={bbbeeLevel}
-                            onChange={(e) => setBbbeeLevel(e.target.value)}
-                          >
-                            <option value="">Select…</option>
-                            <option value="level_1">Level 1</option>
-                            <option value="level_2">Level 2</option>
-                            <option value="level_3">Level 3</option>
-                            <option value="level_4">Level 4</option>
-                            <option value="level_5">Level 5</option>
-                            <option value="level_6">Level 6</option>
-                            <option value="level_7">Level 7</option>
-                            <option value="level_8">Level 8</option>
-                            <option value="non_compliant">Non-Compliant</option>
-                            <option value="exempt">Exempt (EME)</option>
-                          </PostSelect>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <Label htmlFor="languagesSpoken">Languages Spoken</Label>
-                        <Input
-                          id="languagesSpoken"
-                          value={languagesSpoken}
-                          onChange={(e) => setLanguagesSpoken(e.target.value)}
-                          placeholder="e.g. English, isiZulu, Afrikaans"
-                          maxLength={200}
-                        />
-                      </div>
-
-                      <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-input bg-card px-3 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={loadSheddingReady}
-                          onChange={(e) => setLoadSheddingReady(e.target.checked)}
-                          className="h-4 w-4 rounded accent-brand-blue-600"
-                        />
-                        Load-shedding ready (generator / inverter / solar)
-                      </label>
+                      <BusinessProfileExtrasFields
+                        values={{
+                          yearEstablished,
+                          numberOfEmployees,
+                          cipcRegistration,
+                          bbbeeLevel,
+                          languagesSpoken,
+                          loadSheddingReady,
+                        }}
+                        onChange={(patch) => {
+                          if (patch.yearEstablished !== undefined)
+                            setYearEstablished(patch.yearEstablished);
+                          if (patch.numberOfEmployees !== undefined)
+                            setNumberOfEmployees(patch.numberOfEmployees);
+                          if (patch.cipcRegistration !== undefined)
+                            setCipcRegistration(patch.cipcRegistration);
+                          if (patch.bbbeeLevel !== undefined) setBbbeeLevel(patch.bbbeeLevel);
+                          if (patch.languagesSpoken !== undefined)
+                            setLanguagesSpoken(patch.languagesSpoken);
+                          if (patch.loadSheddingReady !== undefined)
+                            setLoadSheddingReady(patch.loadSheddingReady);
+                        }}
+                      />
                     </PostFormSection>
                   </div>
                 )}
@@ -1885,6 +1829,8 @@ function CreateBusinessContent() {
                   <div className="space-y-6">
                     <PostFormSection title="Location & customer access">
                       <CustomerAccessFields
+                        storeNumber={storeNumber}
+                        onStoreNumberChange={setStoreNumber}
                         value={readCustomerAccess(categoryDetails.customer_access)}
                         onChange={(access) => {
                           setCategoryDetails((current) => ({
@@ -2004,101 +1950,52 @@ function CreateBusinessContent() {
                       )}
                     </PostFormSection>
 
-                    <details className="group rounded-2xl border border-border bg-muted/30 px-4">
-                      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-                        Optional extras
-                        <ChevronDown
-                          className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
-                          aria-hidden="true"
-                        />
-                      </summary>
-                      <div className="space-y-5 pb-4">
-                        <div className="space-y-3">
-                          <h3 className="text-sm font-medium">Social Links</h3>
-                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <Input
-                              id="socialFacebook"
-                              aria-label="Facebook URL"
-                              value={socialFacebook}
-                              onChange={(event) => {
-                                setSocialFacebook(event.target.value);
-                                clearErrors("socialFacebook");
-                              }}
-                              placeholder="Facebook URL"
-                              className={cn(fieldErrors.socialFacebook && "border-destructive")}
-                            />
-                            {fieldErrors.socialFacebook && (
-                              <p className="inline-form-error">{fieldErrors.socialFacebook}</p>
-                            )}
-                            <Input
-                              id="socialInstagram"
-                              aria-label="Instagram URL"
-                              value={socialInstagram}
-                              onChange={(event) => {
-                                setSocialInstagram(event.target.value);
-                                clearErrors("socialInstagram");
-                              }}
-                              placeholder="Instagram URL"
-                              className={cn(fieldErrors.socialInstagram && "border-destructive")}
-                            />
-                            {fieldErrors.socialInstagram && (
-                              <p className="inline-form-error">{fieldErrors.socialInstagram}</p>
-                            )}
-                            <Input
-                              id="socialTwitter"
-                              aria-label="X (Twitter) URL"
-                              value={socialTwitter}
-                              onChange={(event) => {
-                                setSocialTwitter(event.target.value);
-                                clearErrors("socialTwitter");
-                              }}
-                              placeholder="X (Twitter) URL"
-                              className={cn(fieldErrors.socialTwitter && "border-destructive")}
-                            />
-                            {fieldErrors.socialTwitter && (
-                              <p className="inline-form-error">{fieldErrors.socialTwitter}</p>
-                            )}
-                            <Input
-                              id="socialTiktok"
-                              aria-label="TikTok URL"
-                              value={socialTiktok}
-                              onChange={(event) => {
-                                setSocialTiktok(event.target.value);
-                                clearErrors("socialTiktok");
-                              }}
-                              placeholder="TikTok URL"
-                              className={cn(fieldErrors.socialTiktok && "border-destructive")}
-                            />
-                            {fieldErrors.socialTiktok && (
-                              <p className="inline-form-error">{fieldErrors.socialTiktok}</p>
-                            )}
-                          </div>
-                        </div>
+                    <OnlinePresenceFields
+                      values={{
+                        website,
+                        mapDirections,
+                        socialFacebook,
+                        socialInstagram,
+                        socialTwitter,
+                        socialTiktok,
+                      }}
+                      onChange={(field, value) => {
+                        ({
+                          website: setWebsite,
+                          mapDirections: setMapDirections,
+                          socialFacebook: setSocialFacebook,
+                          socialInstagram: setSocialInstagram,
+                          socialTwitter: setSocialTwitter,
+                          socialTiktok: setSocialTiktok,
+                        })[field](value);
+                        clearErrors(field === "mapDirections" ? "map_directions" : field);
+                      }}
+                      errors={fieldErrors}
+                      mapPinUnavailableReason={
+                        readCustomerAccess(categoryDetails.customer_access).publishAddress
+                          ? undefined
+                          : 'A location pin is only shown when you publish your address. Tick "Show my exact visitor address publicly" in the Location step to add one.'
+                      }
+                    />
 
-                        <div className="space-y-3">
-                          <Label className="flex items-center gap-2">
-                            <CreditCard className="h-4 w-4 text-muted-foreground" />
-                            Payment methods accepted
-                          </Label>
-                          <div className="flex flex-wrap gap-3">
-                            {PAYMENT_METHOD_OPTIONS.map((option) => (
-                              <label
-                                key={option.value}
-                                className="flex cursor-pointer items-center gap-2 text-sm"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={paymentMethods.includes(option.value)}
-                                  onChange={() => togglePaymentMethod(option.value)}
-                                  className="rounded"
-                                />
-                                {option.label}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
+                    <PostFormSection title="Payment methods accepted" icon={CreditCard} optional>
+                      <div className="flex flex-wrap gap-2">
+                        {PAYMENT_METHOD_OPTIONS.map((option) => (
+                          <label
+                            key={option.value}
+                            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-input bg-card px-3 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={paymentMethods.includes(option.value)}
+                              onChange={() => togglePaymentMethod(option.value)}
+                              className="h-4 w-4 rounded accent-brand-green-600"
+                            />
+                            {option.label}
+                          </label>
+                        ))}
                       </div>
-                    </details>
+                    </PostFormSection>
                   </div>
                 )}
 
@@ -2155,6 +2052,7 @@ function CreateBusinessContent() {
                             clearErrors("cover_video", "video_thumbnail");
                           }}
                           accept="video/*"
+                          previewShape="wide"
                           disabled={!videoAllowed}
                         />
                         {!videoAllowed ? (
@@ -2243,6 +2141,7 @@ function CreateBusinessContent() {
                             }}
                             accept="image/*"
                             recommendedAspect="Recommended: wide landscape image around 4:1."
+                            previewShape="wide"
                           />
                         </div>
                         {/* Crop preview for cover photo */}

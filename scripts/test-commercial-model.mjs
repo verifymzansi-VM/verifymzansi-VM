@@ -130,7 +130,9 @@ await migration("20260925090400_event_archiving.sql");
 await migration("20260925090500_commercial_fixes.sql");
 await migration("20260925090600_commercial_completion.sql");
 // Staff role authority: from here on, staff_roles (not auth metadata) grants staff powers.
-await db.exec(fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8"));
+await db.exec(
+  fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8")
+);
 staffRolesReady = true;
 
 let checks = 0;
@@ -1330,4 +1332,434 @@ await test("organisation administrators need identity verification (step-up)", a
   );
 });
 
+await test("public organisation RPCs and RLS conceal private and unpublished relationships", async () => {
+  const owner = await user();
+  const visitor = await user();
+  const biz = await business(owner);
+  const privateOrg = uuid();
+  const affiliation = uuid();
+  await db.query(
+    `INSERT INTO organisations(id,slug,name,programme_status,is_public)
+    VALUES($1,'private-audit-org','Private audit organisation','active_paid',false)`,
+    [privateOrg]
+  );
+  await db.query(
+    `INSERT INTO organisation_affiliations(id,organisation_id,business_id)
+    VALUES($1,$2,$3)`,
+    [affiliation, privateOrg, biz]
+  );
+  await db.query(
+    `INSERT INTO organisation_sponsorships(organisation_id,affiliation_id,business_id,sponsor_type,status,starts_at,ends_at)
+    VALUES($1,$2,$3,'ORGANISATION','active',now()-interval '1 day',now()+interval '1 day')`,
+    [privateOrg, affiliation, biz]
+  );
+
+  // Original stats bypass RLS and disclose sponsorship counts for private organisations.
+  await db.exec("SET ROLE anon");
+  try {
+    assert.equal(
+      (await scalar(`SELECT organisation_public_stats($1) AS s`, [privateOrg])).s.sponsoredCount,
+      1
+    );
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+  await migration("20260930100000_public_organisation_visibility.sql");
+  await migration("20260930100000_public_organisation_visibility.sql");
+
+  for (const [role, uid] of [
+    ["anon", ""],
+    ["authenticated", visitor],
+  ]) {
+    await db.query(`SELECT set_config('test.uid',$1,false)`, [uid]);
+    await db.exec(`SET ROLE ${role}`);
+    try {
+      assert.deepEqual(
+        (await scalar(`SELECT organisation_public_stats($1) AS s`, [privateOrg])).s,
+        { affiliatedCount: 0, sponsoredCount: 0 }
+      );
+      assert.equal(
+        (await db.query(`SELECT * FROM public_business_affiliations($1)`, [[biz]])).rows.length,
+        0
+      );
+      assert.equal(
+        (await db.query(`SELECT id FROM organisation_affiliations WHERE id=$1`, [affiliation])).rows
+          .length,
+        0
+      );
+    } finally {
+      await db.exec("RESET ROLE");
+    }
+  }
+  await db.query(`SELECT set_config('test.uid','',false)`);
+  await db.query(`UPDATE organisations SET is_public=true WHERE id=$1`, [privateOrg]);
+  await db.exec("SET ROLE anon");
+  try {
+    // Public organisation does not make its member's draft business public.
+    assert.equal(
+      (await db.query(`SELECT * FROM public_business_affiliations($1)`, [[biz]])).rows.length,
+      0
+    );
+    assert.equal(
+      (await db.query(`SELECT id FROM organisation_affiliations WHERE id=$1`, [affiliation])).rows
+        .length,
+      0
+    );
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+  // Legitimate owner access survives the tighter public branch.
+  await db.query(`SELECT set_config('test.uid',$1,false)`, [owner]);
+  await db.exec("SET ROLE authenticated");
+  try {
+    assert.equal(
+      (await db.query(`SELECT id FROM organisation_affiliations WHERE id=$1`, [affiliation])).rows
+        .length,
+      1
+    );
+  } finally {
+    await db.exec("RESET ROLE");
+    await db.query(`SELECT set_config('test.uid','',false)`);
+  }
+  await pay(owner, await retailPlan("RETAIL_30D", "MZANSI_BUSINESS"));
+  await setStatus(biz, "pending_moderation", "businesses");
+  await setStatus(biz, "live", "businesses");
+  await db.exec("SET ROLE anon");
+  try {
+    assert.deepEqual((await scalar(`SELECT organisation_public_stats($1) AS s`, [privateOrg])).s, {
+      affiliatedCount: 1,
+      sponsoredCount: 1,
+    });
+    assert.equal(
+      (await db.query(`SELECT * FROM public_business_affiliations($1)`, [[biz]])).rows.length,
+      1
+    );
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+  await db.query(`UPDATE businesses SET expires_at=now()-interval '1 second' WHERE id=$1`, [biz]);
+  await db.exec("SET ROLE anon");
+  try {
+    assert.deepEqual((await scalar(`SELECT organisation_public_stats($1) AS s`, [privateOrg])).s, {
+      affiliatedCount: 0,
+      sponsoredCount: 0,
+    });
+    assert.equal(
+      (await db.query(`SELECT * FROM public_business_affiliations($1)`, [[biz]])).rows.length,
+      0
+    );
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+});
+
+async function as(role, uid, fn) {
+  await db.query(`SELECT set_config('test.uid',$1,false)`, [uid ?? ""]);
+  await db.exec(`SET ROLE ${role}`);
+  try {
+    return await fn();
+  } finally {
+    await db.exec("RESET ROLE");
+    await db.query(`SELECT set_config('test.uid','',false)`);
+  }
+}
+async function liveBusiness(owner) {
+  const biz = await business(owner);
+  await pay(owner, await retailPlan("RETAIL_30D", "MZANSI_BUSINESS"));
+  await setStatus(biz, "pending_moderation", "businesses");
+  await setStatus(biz, "live", "businesses");
+  return biz;
+}
+
+await test("organisation internals are private; directory sponsorship honours its window", async () => {
+  const org = uuid();
+  await db.query(
+    `INSERT INTO organisations(id,slug,name,programme_status,is_public,created_by,logo_permission_by,logo_permission_reference)
+    VALUES($1,'column-privacy-org','Column privacy organisation','active_paid',true,$2,$2,'MOU-2026-17')`,
+    [org, admin]
+  );
+  const [ownerA, ownerB] = [await user(), await user()];
+  const [bizA, bizB] = [await liveBusiness(ownerA), await liveBusiness(ownerB)];
+  const [affA, affB] = [uuid(), uuid()];
+  for (const [aff, biz] of [
+    [affA, bizA],
+    [affB, bizB],
+  ])
+    await db.query(
+      `INSERT INTO organisation_affiliations(id,organisation_id,business_id,confirmed_at,confirmed_by)
+      VALUES($1,$2,$3,now(),$4)`,
+      [aff, org, biz, admin]
+    );
+  // A: sponsorship running now. B: marked active but only starts next week.
+  await db.query(
+    `INSERT INTO organisation_sponsorships(organisation_id,affiliation_id,business_id,sponsor_type,status,starts_at,ends_at)
+    VALUES($1,$2,$3,'ORGANISATION','active',now()-interval '1 day',now()+interval '30 days'),
+          ($1,$4,$5,'ORGANISATION','active',now()+interval '7 days',now()+interval '37 days')`,
+    [org, affA, bizA, affB, bizB]
+  );
+  const directory = async (sponsored = null) =>
+    Object.fromEntries(
+      (
+        await db.query(
+          `SELECT business_id, sponsored FROM organisation_directory($1,p_sponsored=>$2)`,
+          [org, sponsored]
+        )
+      ).rows.map((r) => [r.business_id, r.sponsored])
+    );
+  const privateOrgRead = `SELECT created_by, logo_permission_by, logo_permission_reference, admin_limit, sponsored_capacity FROM organisations WHERE id=$1`;
+  const privateAffRead = `SELECT confirmed_by, revoked_by, revoke_reason FROM organisation_affiliations WHERE id=$1`;
+
+  // Before: anon reads internal bookkeeping; the future sponsorship shows as sponsored.
+  await as("anon", "", async () => {
+    assert.equal(
+      (await db.query(privateOrgRead, [org])).rows[0].logo_permission_reference,
+      "MOU-2026-17"
+    );
+    assert.equal((await db.query(privateAffRead, [affA])).rows[0].confirmed_by, admin);
+    assert.deepEqual(await directory(), { [bizA]: true, [bizB]: true });
+  });
+
+  await migration("20260930140000_organisation_internal_columns.sql");
+  await migration("20260930140000_organisation_internal_columns.sql");
+  await migration("20260930150000_organisation_directory_sponsored_window.sql");
+  await migration("20260930150000_organisation_directory_sponsored_window.sql");
+
+  for (const [role, uid] of [
+    ["anon", ""],
+    ["authenticated", ownerA],
+    ["authenticated", orgAdmin],
+  ]) {
+    await as(role, uid, async () => {
+      await rejects(db.query(privateOrgRead, [org]), /permission denied/);
+      await rejects(db.query(privateAffRead, [affA]), /permission denied/);
+      for (const col of ["created_by", "contract_id", "admin_limit", "sponsored_capacity"])
+        await rejects(
+          db.query(`SELECT ${col} FROM organisations`),
+          /permission denied|does not exist/
+        );
+      // Public organisation page and search selects (src/app/organisation/[slug], /api/organisations/search).
+      const page = await db.query(
+        `SELECT id, slug, name, organisation_type, description, programme_description, service_area, province,
+          website, public_email, public_phone, logo_url, logo_permission_at, programme_status, affiliation_wording, is_public
+         FROM organisations WHERE slug='column-privacy-org'`
+      );
+      assert.equal(page.rows.length, 1);
+      await db.query(
+        `SELECT o.id, o.slug, o.name, o.organisation_type, o.service_area, o.province,
+          (SELECT json_agg(p) FROM (SELECT id, name, active FROM organisation_programmes WHERE organisation_id=o.id) p)
+         FROM organisations o WHERE is_public`
+      );
+      await db.query(`SELECT id FROM organisation_programmes`);
+      // Affiliation rows stay readable through the rewritten policy.
+      assert.equal(
+        (
+          await db.query(
+            `SELECT id, organisation_id, business_id, status, confirmed_at, affiliation_type FROM organisation_affiliations WHERE id=$1`,
+            [affA]
+          )
+        ).rows.length,
+        1
+      );
+      assert.deepEqual(await directory(), { [bizA]: true, [bizB]: false });
+      assert.deepEqual(await directory(true), { [bizA]: true });
+      assert.deepEqual(await directory(false), { [bizB]: false });
+      assert.equal(
+        (await scalar(`SELECT organisation_public_stats($1) AS s`, [org])).s.sponsoredCount,
+        1
+      );
+      assert.equal(
+        (await db.query(`SELECT * FROM public_business_affiliations($1)`, [[bizA, bizB]])).rows
+          .length,
+        2
+      );
+    });
+  }
+  // Private organisations remain hidden from the public affiliation branch.
+  await db.query(`UPDATE organisations SET is_public=false WHERE id=$1`, [org]);
+  await as("anon", "", async () =>
+    assert.equal(
+      (await db.query(`SELECT id FROM organisation_affiliations WHERE id=$1`, [affA])).rows.length,
+      0
+    )
+  );
+  await as("authenticated", ownerA, async () =>
+    assert.equal(
+      (await db.query(`SELECT id FROM organisation_affiliations WHERE id=$1`, [affA])).rows.length,
+      1
+    )
+  );
+  await db.query(`UPDATE organisations SET is_public=true WHERE id=$1`, [org]);
+  // Server-side (service role / table owner) reads are unaffected.
+  assert.equal((await scalar(privateOrgRead, [org])).logo_permission_reference, "MOU-2026-17");
+});
+
+await test("promotion social authorizer details move to an owner-only table", async () => {
+  // Production state: social authorization columns from 20260323000000, a
+  // public live-promotions read policy and table SELECT for the API roles.
+  await migration("20260323000000_promotion_social_distribution_authorization.sql");
+  // Columns insert_promotion_with_limit fills in (absent from the minimal stub).
+  await db.exec(`ALTER TABLE promotions ADD COLUMN IF NOT EXISTS price_negotiable boolean,
+    ADD COLUMN IF NOT EXISTS contact_methods text[], ADD COLUMN IF NOT EXISTS created_at timestamptz,
+    ADD COLUMN IF NOT EXISTS updated_at timestamptz;
+    ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS test_public_live_promotions ON promotions;
+    CREATE POLICY test_public_live_promotions ON promotions FOR SELECT USING (status = 'live');
+    DROP POLICY IF EXISTS test_owner_promotions ON promotions;
+    CREATE POLICY test_owner_promotions ON promotions FOR SELECT USING (owner_id = (SELECT auth.uid()));
+    GRANT SELECT ON promotions TO anon, authenticated;`);
+  const owner = await user();
+  const stranger = await user();
+  const promo = await post(owner, { table: "promotions", type: "event" });
+  await db.query(
+    `UPDATE promotions SET social_authorizer_name='Thandi Authoriser', social_authorizer_role='Marketing lead',
+      social_authorizer_relationship='agency_or_marketing_partner' WHERE id=$1`,
+    [promo]
+  );
+  await setStatus(promo, "live", "promotions");
+  const leak = `SELECT social_authorizer_name, social_authorizer_role, social_authorizer_relationship FROM promotions WHERE id=$1`;
+
+  // Before: anyone reads the authorizer's name and role on a live promotion.
+  await as("anon", "", async () =>
+    assert.equal(
+      (await db.query(leak, [promo])).rows[0].social_authorizer_name,
+      "Thandi Authoriser"
+    )
+  );
+
+  await migration("20260930130000_promotion_social_authorizer_privacy.sql");
+  await migration("20260930130000_promotion_social_authorizer_privacy.sql");
+
+  const authorizer = `SELECT authorizer_name, authorizer_role, relationship FROM promotion_social_authorizers WHERE promotion_id=$1`;
+  await as("anon", "", async () => {
+    await rejects(db.query(leak, [promo]), /does not exist/);
+    await rejects(db.query(authorizer, [promo]), /permission denied/);
+    // Whole-row reads (PostgREST select=* and computed fields such as
+    // active_boost_until(promotions)) keep working for the public.
+    const row = (await db.query(`SELECT to_jsonb(p) AS r FROM promotions p WHERE id=$1`, [promo]))
+      .rows[0].r;
+    assert.equal(row.id, promo);
+    assert(!Object.keys(row).some((k) => k.startsWith("social_authorizer")));
+  });
+  await as("authenticated", stranger, async () =>
+    assert.equal((await db.query(authorizer, [promo])).rows.length, 0)
+  );
+  await as("authenticated", owner, async () => {
+    assert.deepEqual((await db.query(authorizer, [promo])).rows[0], {
+      authorizer_name: "Thandi Authoriser",
+      authorizer_role: "Marketing lead",
+      relationship: "agency_or_marketing_partner",
+    });
+    await rejects(
+      db.query(
+        `UPDATE promotion_social_authorizers SET authorizer_name='x' WHERE promotion_id=$1`,
+        [promo]
+      ),
+      /permission denied/
+    );
+  });
+  // Creation RPC keeps working without the dropped columns.
+  const created = (
+    await scalar(`SELECT insert_promotion_with_limit($1,'PROMOTIONS_EVENTS',-1,$2) AS r`, [
+      owner,
+      { promotion_type: "event", social_authorizer_name: "Ignored" },
+    ])
+  ).r;
+  assert.equal(created.owner_id, owner);
+  assert(!("social_authorizer_name" in created));
+  // Deleting the promotion removes the authorizer record.
+  await db.query(`DELETE FROM promotions WHERE id=$1`, [promo]);
+  assert.equal((await db.query(authorizer, [promo])).rows.length, 0);
+});
+
+await test("owners can only mark their notifications read", async () => {
+  // Production state: owner policies from 20260318140000 and full API grants.
+  await db.exec(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS read boolean NOT NULL DEFAULT false;
+    ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON notifications TO anon, authenticated;
+    DROP POLICY IF EXISTS "Users can view own notifications" ON notifications;
+    CREATE POLICY "Users can view own notifications" ON notifications FOR SELECT USING ((SELECT auth.uid()) = user_id);
+    DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
+    CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE
+      USING ((SELECT auth.uid()) = user_id) WITH CHECK ((SELECT auth.uid()) = user_id);
+    DROP POLICY IF EXISTS "Users can delete own notifications" ON notifications;
+    CREATE POLICY "Users can delete own notifications" ON notifications FOR DELETE USING ((SELECT auth.uid()) = user_id);
+    DROP POLICY IF EXISTS "Service role can insert notifications" ON notifications;
+    CREATE POLICY "Service role can insert notifications" ON notifications FOR INSERT
+      WITH CHECK ((SELECT auth.role()) = 'service_role');`);
+  const member = await user();
+  const notice = async () =>
+    (
+      await scalar(
+        `INSERT INTO notifications(user_id,type,title,message,href) VALUES($1,'info','Payment received','Your plan is active','/dashboard') RETURNING id`,
+        [member]
+      )
+    ).id;
+  const [first, second, third] = [await notice(), await notice(), await notice()];
+  const rewrite = `UPDATE notifications SET title='Verify your account', href='https://phish.example' WHERE id=$1`;
+
+  // Before: the owner can rewrite a system notice into a phishing link.
+  await as("authenticated", member, async () =>
+    assert.equal((await db.query(rewrite, [first])).affectedRows, 1)
+  );
+
+  await migration("20260930160000_notifications_read_only_updates.sql");
+  await migration("20260930160000_notifications_read_only_updates.sql");
+
+  await as("authenticated", member, async () => {
+    for (const sql of [
+      rewrite,
+      `UPDATE notifications SET message='x' WHERE id=$1`,
+      `UPDATE notifications SET user_id=gen_random_uuid() WHERE id=$1`,
+    ])
+      await rejects(db.query(sql, [second]), /permission denied/);
+    await rejects(
+      db.query(`INSERT INTO notifications(user_id,type,title,message) VALUES($1,'info','x','y')`, [
+        member,
+      ]),
+      /permission denied/
+    );
+    // PATCH /api/notifications: single and mark-all, then GET and DELETE.
+    assert.equal(
+      (
+        await db.query(`UPDATE notifications SET read=true WHERE id=$1 AND user_id=$2`, [
+          second,
+          member,
+        ])
+      ).affectedRows,
+      1
+    );
+    assert.equal(
+      (
+        await db.query(`UPDATE notifications SET read=true WHERE user_id=$1 AND read=false`, [
+          member,
+        ])
+      ).affectedRows,
+      2
+    );
+    assert.equal(
+      (
+        await db.query(
+          `SELECT id, type, title, message, href, read, created_at FROM notifications WHERE user_id=$1 AND NOT read`,
+          [member]
+        )
+      ).rows.length,
+      0
+    );
+    assert.equal(
+      (await db.query(`DELETE FROM notifications WHERE id=$1 AND user_id=$2`, [third, member]))
+        .affectedRows,
+      1
+    );
+  });
+  await as("anon", "", async () =>
+    rejects(
+      db.query(`UPDATE notifications SET read=true WHERE id=$1`, [second]),
+      /permission denied/
+    )
+  );
+  // Server-side inserts (service role) are unaffected.
+  await notice();
+});
+
 console.log(`${checks} commercial model checks passed`);
+await db.close();

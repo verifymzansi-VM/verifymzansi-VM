@@ -207,4 +207,71 @@ describe("payment cleanup worker", () => {
       false
     );
   });
+
+  it("bounds every outbound Supabase request with an abort timeout", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("status=eq.pending")) {
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "pending-1",
+              user_id: "user-1",
+              provider_data: { expire_at: "2026-03-17T08:00:00.000Z" },
+            },
+          ],
+        } satisfies Partial<Response>;
+      }
+      if (url.includes("status=eq.processing")) {
+        return { ok: true, json: async () => [] } satisfies Partial<Response>;
+      }
+      if (url.includes("/rest/v1/payments?id=eq.")) {
+        return { ok: true, json: async () => [{ id: "pending-1" }] } satisfies Partial<Response>;
+      }
+      return { ok: true, text: async () => "" } satisfies Partial<Response>;
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-17T09:00:00.000Z"));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    try {
+      await worker.scheduled?.({ cron: "*/10 * * * *", scheduledTime: Date.now() }, env, ctx);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // pending list, processing list, PATCH, notification, audit
+    expect(fetchMock.mock.calls.length).toBe(5);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it("rejects manual triggers when WORKER_API_KEY is unset or the key is wrong", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const unset = await worker.fetch!(
+      new Request("https://worker.test/", {
+        method: "POST",
+        headers: { Authorization: "Bearer " },
+      }),
+      { ...env, WORKER_API_KEY: "" },
+      ctx
+    );
+    expect(unset.status).toBe(401);
+
+    const wrong = await worker.fetch!(
+      new Request("https://worker.test/", {
+        method: "POST",
+        headers: { Authorization: "Bearer worker-kez" },
+      }),
+      env,
+      ctx
+    );
+    expect(wrong.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

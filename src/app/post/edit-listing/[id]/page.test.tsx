@@ -65,13 +65,30 @@ vi.mock("@/components/listings/listing-detail-content", () => ({
 }));
 
 vi.mock("@/components/ui/media-upload", () => ({
-  MediaUpload: ({ label, onChange }: { label: string; onChange?: (files: File[]) => void }) => (
-    <button
-      type="button"
-      onClick={() => onChange?.([new File(["mock"], "logo.png", { type: "image/png" })])}
-    >
-      {label}
-    </button>
+  MediaUpload: ({
+    label,
+    onChange,
+    existing = [],
+    onRemoveExisting,
+  }: {
+    label: string;
+    onChange?: (files: File[]) => void;
+    existing?: { url: string; label?: string }[];
+    onRemoveExisting?: (index: number) => void;
+  }) => (
+    <div>
+      <button
+        type="button"
+        onClick={() => onChange?.([new File(["mock"], "logo.png", { type: "image/png" })])}
+      >
+        {label}
+      </button>
+      {existing.map((item, index) => (
+        <button key={item.url} type="button" onClick={() => onRemoveExisting?.(index)}>
+          {`Remove ${item.label ?? item.url}`}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -218,10 +235,10 @@ describe("EditListingPage", () => {
     render(<EditListingPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Remove logo/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Remove Current logo" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Remove logo/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Current logo" }));
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
@@ -232,7 +249,7 @@ describe("EditListingPage", () => {
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.logo_url).toBeNull();
-    expect(screen.getByText("No listing logo uploaded.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove Current logo" })).not.toBeInTheDocument();
   });
 
   it("keeps unsaved changes on the form when an earlier edit is pending", async () => {
@@ -283,12 +300,10 @@ describe("EditListingPage", () => {
     render(<EditListingPage />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Replace listing logo (optional)" })
-      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Listing logo (optional)" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Replace listing logo (optional)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Listing logo (optional)" }));
 
     expect(listingCardSpy).toHaveBeenCalledWith(
       expect.objectContaining({

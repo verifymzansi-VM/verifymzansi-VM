@@ -362,6 +362,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing amount" }, { status: 400 });
     }
 
+    // Same reasoning for currency: the ZAR check above only runs when a
+    // currency is present, so a successful completion must state it rather
+    // than let the exact-cents check pass on a bare number of unknown currency.
+    if (
+      eventType === SUPPORTED_OZOW_EVENT_TYPE &&
+      isSuccessfulTransactionStatus(status) &&
+      !payload.currencyCode
+    ) {
+      log.error("Ozow successful completion webhook missing currency", {
+        paymentId: payment.id,
+        eventType: payload.eventType,
+        status: payload.status,
+      });
+      return NextResponse.json({ error: "Missing currency" }, { status: 400 });
+    }
+
     if (payload.amount) {
       // Parse amount string as integer cents without floating-point arithmetic
       // to avoid precision errors (e.g. "1000.009" * 100 = 100000.899...)

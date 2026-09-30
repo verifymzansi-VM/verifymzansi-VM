@@ -321,9 +321,6 @@ export interface Promotion {
   social_distribution_authorized: boolean;
   social_distribution_authorized_at: string | null;
   social_distribution_revoked_at: string | null;
-  social_authorizer_name: string | null;
-  social_authorizer_role: string | null;
-  social_authorizer_relationship: SocialAuthorizerRelationship;
   social_authorization_version: string | null;
   social_monetization_acknowledged: boolean;
   media_width: number | null;
@@ -345,6 +342,16 @@ export interface Promotion {
   created_at: string;
   updated_at: string;
   approved_edit_count: number;
+}
+
+/* ── Promotion Social Authorizers (owner-only, service-role writes) ── */
+export interface PromotionSocialAuthorizer {
+  promotion_id: string;
+  authorizer_name: string | null;
+  authorizer_role: string | null;
+  relationship: SocialAuthorizerRelationship;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ContentEditTargetType = "listing" | "business" | "promotion";
@@ -444,6 +451,8 @@ export interface Report {
   severity: ReportSeverity;
   description: string;
   screenshot_url: string | null;
+  /** Added by 20260930120000; optional so rows read before that column existed still type-check. */
+  evidence_urls?: string[] | null;
   reporter_user_id: string | null;
   reporter_ip_hash: string;
   status: ReportStatus;

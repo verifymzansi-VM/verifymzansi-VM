@@ -211,6 +211,9 @@ export default function RegisterPage() {
       });
       router.push("/login?registered=true");
     } catch {
+      // The request may have consumed the single-use CAPTCHA token before
+      // the connection failed; get a fresh one for the retry.
+      resetTurnstileChallenge();
       toast({
         title: "Something went wrong",
         description: "Please try again later.",

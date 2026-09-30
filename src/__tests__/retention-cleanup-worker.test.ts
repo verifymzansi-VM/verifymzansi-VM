@@ -388,4 +388,64 @@ describe("retention cleanup worker", () => {
       },
     });
   });
+
+  it("bounds every outbound Supabase request with an abort timeout", async () => {
+    const env = {
+      R2_PRIVATE: { delete: vi.fn().mockResolvedValue(undefined) },
+      R2_PUBLIC: { delete: vi.fn().mockResolvedValue(undefined) },
+      SUPABASE_URL: "https://test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      WORKER_API_KEY: "worker-key",
+    } as unknown as Parameters<NonNullable<typeof worker.scheduled>>[1];
+
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        ({
+          ok: true,
+          json: async () => [],
+          text: async () => "",
+        }) satisfies Partial<Response>
+    );
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    await worker.scheduled?.({ cron: "0 3 * * *", scheduledTime: Date.now() }, env, ctx);
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(3);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
+  it("rejects manual triggers when WORKER_API_KEY is unset or the key is wrong", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const baseEnv = {
+      R2_PRIVATE: { delete: vi.fn() },
+      R2_PUBLIC: { delete: vi.fn() },
+      SUPABASE_URL: "https://test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      WORKER_API_KEY: "worker-key",
+    };
+
+    const unset = await worker.fetch!(
+      new Request("https://worker.test/", {
+        method: "POST",
+        headers: { Authorization: "Bearer " },
+      }),
+      { ...baseEnv, WORKER_API_KEY: "" } as never,
+      ctx as never
+    );
+    expect(unset.status).toBe(401);
+
+    const wrong = await worker.fetch!(
+      new Request("https://worker.test/", {
+        method: "POST",
+        headers: { Authorization: "Bearer worker-kez" },
+      }),
+      baseEnv as never,
+      ctx as never
+    );
+    expect(wrong.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

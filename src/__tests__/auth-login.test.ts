@@ -14,7 +14,11 @@ const {
   mockRecordFailedLogin,
   mockRecordDistributedFailedLogin,
   mockEnforceSameOriginMutation,
+  mockLogWarn,
+  mockLogInfo,
 } = vi.hoisted(() => ({
+  mockLogWarn: vi.fn(),
+  mockLogInfo: vi.fn(),
   mockCreateClient: vi.fn(),
   mockVerifyTurnstile: vi.fn(),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
@@ -32,6 +36,9 @@ const {
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ info: mockLogInfo, warn: mockLogWarn, error: vi.fn(), debug: vi.fn() }),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/utils/turnstile", async () => {
   const actual = await vi.importActual<typeof TurnstileModule>("@/lib/utils/turnstile");
@@ -389,6 +396,33 @@ describe("POST /api/auth/login", () => {
     expect(res.status).toBe(429);
     const body = await res.json();
     expect(body.error).toMatch(/Account temporarily locked/);
+  });
+
+  it.each([
+    ["in-memory", () => mockCheckAccountLockout.mockReturnValue({ locked: true, retryAfter: 60 })],
+    [
+      "distributed",
+      () => mockCheckDistributedLockout.mockResolvedValue({ locked: true, retryAfter: 60 }),
+    ],
+  ])("does not log the raw email address on %s lockout", async (_kind, lock) => {
+    lock();
+    const res = await POST(
+      createRequest({
+        email: "jane.doe@example.com",
+        password: "validPass123",
+        turnstileToken: "tok",
+      })
+    );
+    expect(res.status).toBe(429);
+
+    const lockoutLogs = [...mockLogWarn.mock.calls, ...mockLogInfo.mock.calls].filter(([msg]) =>
+      String(msg).includes("Account locked")
+    );
+    expect(lockoutLogs).toHaveLength(1);
+    const serialized = JSON.stringify(lockoutLogs);
+    expect(serialized).not.toContain("jane.doe@example.com");
+    expect(serialized).not.toContain("jane.doe");
+    expect(lockoutLogs[0][1]).toMatchObject({ email: "ja***@example.com" });
   });
 
   it("records failed login on invalid credentials", async () => {

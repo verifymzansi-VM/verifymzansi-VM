@@ -797,6 +797,76 @@ describe("CreateListingPage", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
+  function mockListingSubmitResponse(response: { status: number; body: unknown }) {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (input: RequestInfo | URL) => {
+        if (input === "/api/media/upload") {
+          return {
+            ok: true,
+            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
+          };
+        }
+        if (input === "/api/listings") {
+          return { ok: false, status: response.status, json: async () => response.body };
+        }
+        return { ok: true, json: async () => ({ success: true }) };
+      }
+    );
+  }
+
+  function fillAndSubmitListing() {
+    fireEvent.click(screen.getByText("Select Electronics"));
+    fireEvent.change(screen.getByLabelText("Title (Required)"), {
+      target: { value: "Used iPhone 15" },
+    });
+    fireEvent.change(screen.getByLabelText("Description (Required)"), {
+      target: { value: "A clean listing description with enough detail to continue." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByLabelText(/^(Asking price|Monthly Rent) \(ZAR\)/i), {
+      target: { value: "1500" },
+    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Photos (max 5)" }));
+    acceptListingTerms();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
+  }
+
+  it("offers a sign-in link back to this page when the session expired (401)", async () => {
+    window.history.pushState({}, "", "/post/create-listing?category=electronics");
+    mockListingSubmitResponse({ status: 401, body: { error: "Unauthorized" } });
+
+    render(<CreateListingPage />);
+    fillAndSubmitListing();
+
+    const signIn = await screen.findByRole("link", { name: "Sign in" });
+    expect(signIn).toHaveAttribute(
+      "href",
+      `/login?returnUrl=${encodeURIComponent("/post/create-listing?category=electronics")}`
+    );
+    expect(screen.getByText(/re-attach your photos and videos/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+    window.history.pushState({}, "", "/");
+  });
+
+  it.each(["https://evil.example/phish", "//evil.example/phish", "javascript:alert(1)"])(
+    "does not follow an unsafe server redirectUrl (%s)",
+    async (redirectUrl) => {
+      mockListingSubmitResponse({ status: 403, body: { redirectUrl } });
+
+      render(<CreateListingPage />);
+      fillAndSubmitListing();
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+      });
+      expect(mockPush).not.toHaveBeenCalledWith(redirectUrl);
+    }
+  );
+
   describe("draft restore and discard", () => {
     const DRAFT_USER_ID = "user-draft-listing-123";
 

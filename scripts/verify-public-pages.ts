@@ -96,15 +96,19 @@ async function assertAuthUi(page: Page) {
 
   const unavailableCopy = page.getByText(/security verification is temporarily unavailable/i);
   const failedCopy = page.getByText(/security check failed/i);
-  const iframeCount = await page.locator('iframe[src*="challenges.cloudflare.com"]').count();
+  // Turnstile now renders its iframe inside a closed shadow root, so it is not
+  // selectable; the hidden response input it injects is the reliable signal.
+  const widget = page.locator(
+    'iframe[src*="challenges.cloudflare.com"], input[name="cf-turnstile-response"]'
+  );
+  const iframeCount = await widget.count();
   const unavailableCount = await unavailableCopy.count();
 
   // Turnstile render is async and can take a few seconds on real deployments.
   // Wait up to the same window our auth pages use before declaring it missing.
   if (requireRealTurnstile && iframeCount === 0 && unavailableCount === 0) {
-    const iframe = page.locator('iframe[src*="challenges.cloudflare.com"]');
     await Promise.race([
-      iframe
+      widget
         .first()
         .waitFor({ state: "attached", timeout: turnstileTimeoutMs })
         .catch(() => {}),
@@ -118,7 +122,7 @@ async function assertAuthUi(page: Page) {
         .catch(() => {}),
     ]);
 
-    const iframeCountAfter = await iframe.count();
+    const iframeCountAfter = await widget.count();
     const unavailableAfter = await unavailableCopy.count();
     const failedAfter = await failedCopy.count();
 

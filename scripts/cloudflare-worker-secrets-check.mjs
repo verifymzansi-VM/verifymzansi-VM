@@ -4,6 +4,7 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import nextEnv from "@next/env";
+import { activeVersionIds, inspectSecretBindings } from "./lib/cloudflare-deployment-bindings.mjs";
 
 const execAsync = promisify(exec);
 const { loadEnvConfig } = nextEnv;
@@ -37,6 +38,7 @@ const requiredSecrets = [
   "R2_SECRET_ACCESS_KEY",
   "IP_HASH_SECRET",
   "RATE_LIMITER_API_KEY",
+  "OPS_JOBS_SECRET",
 ];
 
 function hasCloudflareApiToken() {
@@ -91,69 +93,31 @@ async function runWranglerJson(commandParts) {
   return JSON.parse(stdout);
 }
 
-function getCurrentVersionId(deployments) {
-  if (!Array.isArray(deployments) || deployments.length === 0) {
-    throw new Error("No deployments found for worker");
-  }
-
-  const sorted = [...deployments].sort((a, b) => {
-    const aTime = Date.parse(a?.created_on ?? "") || 0;
-    const bTime = Date.parse(b?.created_on ?? "") || 0;
-    return bTime - aTime;
-  });
-
-  const current = sorted[0];
-  const activeVersion = Array.isArray(current?.versions)
-    ? current.versions.find((entry) => Number(entry?.percentage) > 0)
-    : null;
-
-  if (!activeVersion?.version_id) {
-    throw new Error("Unable to determine active deployed version id");
-  }
-
-  return activeVersion.version_id;
-}
-
 async function main() {
   assertCloudflareApiToken();
-
   const deployments = await runWranglerJson(["deployments", "list"]);
-  const currentVersionId = getCurrentVersionId(deployments);
-  const version = await runWranglerJson(["versions", "view", currentVersionId]);
-
-  const bindings = version?.resources?.bindings;
-  if (!Array.isArray(bindings)) {
-    throw new Error("Unexpected versions view format: missing resources.bindings");
-  }
-
-  const existingNames = new Set(
-    bindings.map((entry) => entry?.name).filter((value) => typeof value === "string")
-  );
-
-  const missing = requiredSecrets.filter((name) => !existingNames.has(name));
-  const forbiddenPresent = forbiddenProductionSecrets.filter((name) => existingNames.has(name));
-
-  const scopeLabel = targetEnv ? `${workerName} (${targetEnv})` : `${workerName} (production)`;
-  console.log(`Cloudflare Worker secret check: ${scopeLabel}`);
-  console.log(`Active deployed version: ${currentVersionId}`);
-
-  if (missing.length === 0) {
-    console.log("PASS: All required launch secrets are present.");
-  } else {
-    console.log(`FAIL: Missing required secrets (${missing.length}): ${missing.join(", ")}`);
-  }
-
-  if (forbiddenPresent.length === 0) {
-    console.log("PASS: No forbidden production bypass secrets detected.");
-  } else {
-    console.log(
-      `FAIL: Forbidden bypass secrets present (${forbiddenPresent.length}): ${forbiddenPresent.join(", ")}`
+  const versionIds = activeVersionIds(deployments);
+  let failed = false;
+  console.log(`Cloudflare Worker secret check: ${workerName} (${targetEnv || "production"})`);
+  for (const versionId of versionIds) {
+    const version = await runWranglerJson(["versions", "view", versionId]);
+    const result = inspectSecretBindings(
+      version?.resources?.bindings,
+      requiredSecrets,
+      forbiddenProductionSecrets
     );
+    console.log(`Active deployed version: ${versionId}`);
+    for (const [kind, names] of Object.entries(result)) {
+      if (names.length) {
+        failed = true;
+        console.log(`FAIL: ${kind} secret bindings: ${names.join(", ")}`);
+      }
+    }
+    if (!result.missing.length && !result.unsafe.length && !result.forbidden.length) {
+      console.log("PASS: Required secrets use secret bindings; no forbidden bypass bindings.");
+    }
   }
-
-  if (missing.length > 0 || forbiddenPresent.length > 0) {
-    process.exit(1);
-  }
+  if (failed) process.exitCode = 1;
 }
 
 main().catch((error) => {

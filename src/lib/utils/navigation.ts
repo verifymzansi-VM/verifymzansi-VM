@@ -12,6 +12,8 @@ const ALLOWED_REDIRECT_PREFIXES = [
   "/tourism-events",
   "/dsar",
   "/banned",
+  "/appeals",
+  "/staff",
 ];
 
 /**

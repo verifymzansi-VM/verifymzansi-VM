@@ -44,6 +44,8 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
   socialInstagram: string;
   socialTwitter: string;
   socialTiktok: string;
+  /** Google Maps share link for the venue or premises */
+  mapDirections?: string;
 
   /* event */
   eventType: string;
@@ -217,6 +219,8 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
     errors.contactMethods = "Choose at least one contact method.";
   }
 
+  validateOnlinePresence(v, errors);
+
   // Events reuse the poster's account phone and inbox, so per-event contact
   // details are not collected or validated.
   if (v.listingType === "event") return;
@@ -237,9 +241,16 @@ function validateStep2(v: TourismFormValues, errors: Record<string, string>) {
   if (v.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) {
     errors.email = "Enter a valid email address.";
   }
+}
 
+/** Website, map pin and social links are collected for businesses and events. */
+function validateOnlinePresence(v: TourismFormValues, errors: Record<string, string>) {
   if (v.website && !isValidUserEnteredUrl(v.website)) {
     errors.website = "Enter a valid website URL.";
+  }
+
+  if (v.mapDirections?.trim() && !isValidUserEnteredUrl(v.mapDirections)) {
+    errors.mapDirections = "Enter a valid map link, e.g. a Google Maps share link.";
   }
 
   const socialFields: Array<[keyof TourismFormValues, string]> = [

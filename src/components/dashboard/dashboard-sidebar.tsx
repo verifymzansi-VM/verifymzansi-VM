@@ -104,7 +104,7 @@ export function getDashboardNavBadge(
   }
   if (href === "/dashboard/communication" && (badges.unreadNotifications ?? 0) > 0) {
     const count = badges.unreadNotifications!;
-    return { count, tone: "pending", label: `${count} unread` };
+    return { count, tone: "alert", label: `${count} unread` };
   }
   return null;
 }

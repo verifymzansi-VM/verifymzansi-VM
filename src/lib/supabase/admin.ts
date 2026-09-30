@@ -3,6 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 
 /**
  * Service-role Supabase client for server-only operations.
@@ -39,6 +40,7 @@ export function createAdminClient(): SupabaseClient {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: { fetch: createTimeoutFetch() },
   });
   cachedUrl = url;
   cachedKey = key;

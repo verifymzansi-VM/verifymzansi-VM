@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     // Use global scope to invalidate all sessions across devices,
     // preventing stolen refresh tokens from remaining valid.
-    await supabase.auth.signOut({ scope: "global" });
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) throw error;
   } catch (err) {
     log.error("Sign-out error", {
       error: err instanceof Error ? err.message : "unknown error",

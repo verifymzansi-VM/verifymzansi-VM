@@ -126,6 +126,17 @@ export interface EventDetails {
   ticket_tiers?: TicketTier[];
   /** External ticketing URL */
   tickets_url?: string;
+  /** Organiser or event website */
+  website?: string;
+  /** Google Maps link to the venue */
+  map_directions?: string;
+  /** Organiser social profiles */
+  social_links?: {
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+    tiktok?: string;
+  };
   /** Key from EVENT_AGE_RESTRICTIONS */
   age_restriction?: string;
   dress_code?: string;

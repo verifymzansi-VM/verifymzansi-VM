@@ -17,6 +17,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { LocationSelector } from "@/components/ui/location-selector";
 import { type BusinessCategory, type PromotionType } from "@/types/enums";
@@ -115,6 +116,17 @@ export default function EditPromotionPage() {
   const [accessibility, setAccessibility] = useState<string[]>([]);
   const [foodDrinksAvailable, setFoodDrinksAvailable] = useState(false);
   const [bringYourOwn, setBringYourOwn] = useState("");
+  const [website, setWebsite] = useState("");
+  const [mapDirections, setMapDirections] = useState("");
+  const [socialFacebook, setSocialFacebook] = useState("");
+  const [socialInstagram, setSocialInstagram] = useState("");
+  const [socialTwitter, setSocialTwitter] = useState("");
+  const [socialTiktok, setSocialTiktok] = useState("");
+  const [recurring, setRecurring] = useState("");
+  const [rainPolicy, setRainPolicy] = useState("");
+  const [earlyBirdDeadline, setEarlyBirdDeadline] = useState("");
+  const [groupDiscountAvailable, setGroupDiscountAvailable] = useState(false);
+  const [newVideoThumbnailFile, setNewVideoThumbnailFile] = useState<File[]>([]);
 
   const maxPhotos = usePlanMaxPhotos("PROMOTIONS_EVENTS");
   const maxVideos = usePlanMaxVideos("PROMOTIONS_EVENTS");
@@ -180,6 +192,16 @@ export default function EditPromotionPage() {
           setAccessibility(Array.isArray(ed.accessibility) ? ed.accessibility : []);
           setFoodDrinksAvailable(!!ed.food_drinks_available);
           setBringYourOwn(ed.bring_your_own || "");
+          setWebsite(ed.website || "");
+          setMapDirections(ed.map_directions || "");
+          setSocialFacebook(ed.social_links?.facebook || "");
+          setSocialInstagram(ed.social_links?.instagram || "");
+          setSocialTwitter(ed.social_links?.twitter || "");
+          setSocialTiktok(ed.social_links?.tiktok || "");
+          setRecurring(ed.recurring || "");
+          setRainPolicy(ed.rain_policy || "");
+          setEarlyBirdDeadline(ed.early_bird_deadline || "");
+          setGroupDiscountAvailable(!!ed.group_discount_available);
         }
       } catch {
         setError("Failed to load Tourism & Events post");
@@ -301,9 +323,22 @@ export default function EditPromotionPage() {
       if (ticketsUrl.trim() && !isValidUserEnteredUrl(ticketsUrl)) {
         validationErrors.tickets_url = "Enter a valid ticketing URL.";
       }
+      for (const [key, value, message] of [
+        ["website", website, "Enter a valid website URL."],
+        ["map_directions", mapDirections, "Enter a valid map link, e.g. a Google Maps share link."],
+        ["socialFacebook", socialFacebook, "Enter a valid Facebook URL."],
+        ["socialInstagram", socialInstagram, "Enter a valid Instagram URL."],
+        ["socialTwitter", socialTwitter, "Enter a valid X / Twitter URL."],
+        ["socialTiktok", socialTiktok, "Enter a valid TikTok URL."],
+      ] as const) {
+        if (value.trim() && !isValidUserEnteredUrl(value)) validationErrors[key] = message;
+      }
 
       const totalImageCount = existingImages.length + newPhotoFiles.length;
-      const totalVideoCount = existingVideos.length + newVideoFiles.length;
+      const totalVideoCount =
+        effectiveMaxVideos === 1 && newVideoFiles.length > 0
+          ? newVideoFiles.length
+          : existingVideos.length + newVideoFiles.length;
       if (totalImageCount === 0 && totalVideoCount === 0) {
         validationErrors.images = "Upload at least one photo or video.";
       }
@@ -378,9 +413,31 @@ export default function EditPromotionPage() {
       ]);
 
       const allImages = [...existingImages, ...newImageUrls];
-      const allVideos = [...existingVideos, ...newVideoUrls];
+      // A one-video slot swaps the saved video for the new pick instead of adding to it.
+      const allVideos =
+        effectiveMaxVideos === 1 && newVideoUrls.length > 0
+          ? newVideoUrls
+          : [...existingVideos, ...newVideoUrls];
       const primaryMediaFile = newVideoFiles[0] ?? newPhotoFiles[0] ?? null;
       const mediaDimensions = primaryMediaFile ? await readMediaDimensions(primaryMediaFile) : null;
+
+      // Upload a new video thumbnail if one was selected
+      let uploadedVideoThumbnailUrl: string | undefined;
+      if (newVideoThumbnailFile[0] && allVideos.length > 0) {
+        const thumbData = new FormData();
+        thumbData.append("area", "promotion");
+        thumbData.append("files", newVideoThumbnailFile[0]);
+        const thumbRes = await fetchWithRetry("/api/media/upload", {
+          method: "POST",
+          headers: withCsrfHeaders(),
+          body: thumbData,
+        });
+        if (!thumbRes.ok) {
+          throw new Error(await readUploadError(thumbRes, "Failed to upload video thumbnail"));
+        }
+        const thumbJson = await thumbRes.json();
+        uploadedVideoThumbnailUrl = (thumbJson.urls as string[])?.[0];
+      }
 
       // Upload logo if a new one was selected
       let uploadedLogoUrl: string | undefined;
@@ -404,6 +461,17 @@ export default function EditPromotionPage() {
       setSubmitProgress("Saving Tourism & Events post...");
       setUploadStatuses((c) => ({ ...c, saving: "uploading" }));
 
+      const socialEntries = Object.entries({
+        facebook: socialFacebook,
+        instagram: socialInstagram,
+        twitter: socialTwitter,
+        tiktok: socialTiktok,
+      })
+        .map(([key, value]) => [key, normalizeUserEnteredUrl(value)] as const)
+        .filter(([, value]) => value.length > 0);
+      const eventSocialLinks =
+        socialEntries.length > 0 ? Object.fromEntries(socialEntries) : undefined;
+
       const body = {
         form_version: 2,
         title: title.trim(),
@@ -421,7 +489,11 @@ export default function EditPromotionPage() {
         logo_url: uploadedLogoUrl || existingLogoUrl || undefined,
         images: allImages,
         videos: allVideos,
-        video_thumbnail: videoThumbnail || undefined,
+        // No video left means no poster; a new pick replaces the saved one.
+        video_thumbnail:
+          allVideos.length === 0
+            ? undefined
+            : uploadedVideoThumbnailUrl || videoThumbnail || undefined,
         media_width: mediaDimensions?.width,
         media_height: mediaDimensions?.height,
         focal_x: focalPoint.x,
@@ -442,6 +514,13 @@ export default function EditPromotionPage() {
           accessibility: accessibility.length > 0 ? accessibility : undefined,
           food_drinks_available: foodDrinksAvailable || undefined,
           bring_your_own: bringYourOwn || undefined,
+          recurring: recurring || undefined,
+          rain_policy: rainPolicy || undefined,
+          early_bird_deadline: earlyBirdDeadline.trim() || undefined,
+          group_discount_available: groupDiscountAvailable || undefined,
+          website: website.trim() ? normalizeUserEnteredUrl(website) : undefined,
+          map_directions: mapDirections.trim() ? normalizeUserEnteredUrl(mapDirections) : undefined,
+          social_links: eventSocialLinks,
         },
       };
 
@@ -501,7 +580,10 @@ export default function EditPromotionPage() {
   // Preview must mirror the submitted media order: existing items first, then
   // newly selected files (allImages/allVideos in handleSubmit).
   const previewImages = [...existingImages, ...previewPhotoUrls];
-  const previewVideos = [...existingVideos, ...previewVideoUrls];
+  const previewVideos =
+    effectiveMaxVideos === 1 && previewVideoUrls.length > 0
+      ? previewVideoUrls
+      : [...existingVideos, ...previewVideoUrls];
   const linkedBusiness = businessId
     ? (myBusinesses.find((item) => item.id === businessId) ?? null)
     : null;
@@ -698,6 +780,36 @@ export default function EditPromotionPage() {
                 showTown={true}
                 showAddress={true}
                 errors={fieldErrors}
+              />
+
+              <OnlinePresenceFields
+                values={{
+                  website,
+                  mapDirections,
+                  socialFacebook,
+                  socialInstagram,
+                  socialTwitter,
+                  socialTiktok,
+                }}
+                onChange={(field, value) => {
+                  ({
+                    website: setWebsite,
+                    mapDirections: setMapDirections,
+                    socialFacebook: setSocialFacebook,
+                    socialInstagram: setSocialInstagram,
+                    socialTwitter: setSocialTwitter,
+                    socialTiktok: setSocialTiktok,
+                  })[field](value);
+                  const errorKey = field === "mapDirections" ? "map_directions" : field;
+                  setFieldErrors((current) => {
+                    const next = { ...current };
+                    delete next[errorKey];
+                    return next;
+                  });
+                }}
+                errors={fieldErrors}
+                description="Optional. Help people check your event online and find the venue on a map."
+                mapPinHint="Open Google Maps, drop a pin on the venue, tap Share and paste the link here."
               />
 
               <fieldset className="space-y-2">
@@ -992,86 +1104,143 @@ export default function EditPromotionPage() {
                     placeholder="e.g. Blankets, chairs, sunscreen"
                   />
                 </div>
-              </div>
 
-              {/* Existing images preview */}
-              {existingImages.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Current Photos ({existingImages.length})</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {existingImages.map((url, i) => (
-                      <div
-                        key={i}
-                        className="relative group aspect-square rounded-lg overflow-hidden border"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={normalizeMediaUrl(url)}
-                          alt={`Photo ${i + 1}`}
-                          className="w-full h-full bg-muted object-contain"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeExistingImage(i)}
-                          className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label="Remove photo"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="recurring">Recurring</Label>
+                    <PostSelect
+                      id="recurring"
+                      aria-label="Recurring"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={recurring}
+                      onChange={(e) => setRecurring(e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      <option value="one_off">One-off</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="annual">Annual</option>
+                    </PostSelect>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="rainPolicy">Rain Policy</Label>
+                    <PostSelect
+                      id="rainPolicy"
+                      aria-label="Rain policy"
+                      className="w-full rounded-md border px-3 py-2 text-sm"
+                      value={rainPolicy}
+                      onChange={(e) => setRainPolicy(e.target.value)}
+                    >
+                      <option value="">Select…</option>
+                      <option value="outdoor_rain_or_shine">Outdoor — Rain or Shine</option>
+                      <option value="moved_indoors">Moved Indoors</option>
+                      <option value="postponed">Postponed</option>
+                      <option value="refunded">Refunded</option>
+                    </PostSelect>
                   </div>
                 </div>
-              )}
 
-              {/* Add new photos */}
+                {Number(priceZar) > 0 && (
+                  <>
+                    <div className="space-y-1">
+                      <Label htmlFor="earlyBirdDeadline">Early Bird Deadline</Label>
+                      <Input
+                        id="earlyBirdDeadline"
+                        value={earlyBirdDeadline}
+                        onChange={(e) => setEarlyBirdDeadline(e.target.value)}
+                        placeholder="e.g. 15 April 2026"
+                        maxLength={30}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={groupDiscountAvailable}
+                        onChange={(e) => setGroupDiscountAvailable(e.target.checked)}
+                        className="rounded"
+                      />
+                      Group discounts available
+                    </label>
+                  </>
+                )}
+              </div>
+
               <MediaUpload
-                label={`Add Photos (${totalImages}/${maxPhotos})`}
-                maxFiles={Math.max(0, maxPhotos - existingImages.length)}
+                id="edit-event-photos-input"
+                label="Photos"
+                description="Your first photo is the cover on cards."
+                maxFiles={maxPhotos}
                 files={newPhotoFiles}
+                existing={existingImages.map((url, i) => ({
+                  url: normalizeMediaUrl(url),
+                  label: `Photo ${i + 1}`,
+                }))}
+                onRemoveExisting={removeExistingImage}
+                error={fieldErrors.images}
                 onChange={setNewPhotoFiles}
                 accept="image/*"
               />
 
-              {/* Add new videos */}
               <MediaUpload
-                label={`Add Videos (optional, max ${effectiveMaxVideos})${!videoAllowed ? " — Upgrade to unlock" : ""}`}
-                maxFiles={Math.max(0, effectiveMaxVideos - existingVideos.length)}
+                id="edit-event-videos-input"
+                label={`Videos (optional)${!videoAllowed ? " — Upgrade to unlock" : ""}`}
+                maxFiles={effectiveMaxVideos}
                 files={newVideoFiles}
+                existing={existingVideos.map((url, i) => ({
+                  url: normalizeMediaUrl(url),
+                  isVideo: true,
+                  label: `Video ${i + 1}`,
+                }))}
+                onRemoveExisting={(index) => {
+                  if (!window.confirm("Remove this video?")) return;
+                  setExistingVideos((prev) => prev.filter((_, i) => i !== index));
+                }}
                 onChange={setNewVideoFiles}
                 accept="video/*"
                 disabled={!videoAllowed}
+                previewShape="wide"
               />
 
-              {/* Event logo */}
-              <div className="space-y-2">
-                <Label>Event Logo (optional)</Label>
-                {existingLogoUrl && newLogoFile.length === 0 && (
-                  <div className="relative group w-16 h-16 rounded-lg overflow-hidden border">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={normalizeMediaUrl(existingLogoUrl)}
-                      alt="Current logo"
-                      className="w-full h-full object-contain"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExistingLogoUrl("")}
-                      className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="Remove logo"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
+              {(existingVideos.length > 0 || newVideoFiles.length > 0) && (
                 <MediaUpload
-                  label="Upload logo"
+                  id="edit-event-video-thumbnail-input"
+                  label="Video thumbnail (optional)"
+                  description="Poster shown before the video plays."
                   maxFiles={1}
-                  files={newLogoFile}
-                  onChange={setNewLogoFile}
+                  files={newVideoThumbnailFile}
+                  existing={
+                    videoThumbnail
+                      ? [
+                          {
+                            url: normalizeMediaUrl(videoThumbnail),
+                            label: "Current video thumbnail",
+                          },
+                        ]
+                      : []
+                  }
+                  onRemoveExisting={() => setVideoThumbnail("")}
+                  onChange={setNewVideoThumbnailFile}
                   accept="image/*"
+                  recommendedAspect=""
+                  previewShape="wide"
                 />
-              </div>
+              )}
+
+              <MediaUpload
+                id="edit-event-logo-input"
+                label="Event logo (optional)"
+                maxFiles={1}
+                files={newLogoFile}
+                existing={
+                  existingLogoUrl
+                    ? [{ url: normalizeMediaUrl(existingLogoUrl), label: "Current logo" }]
+                    : []
+                }
+                onRemoveExisting={() => setExistingLogoUrl("")}
+                onChange={setNewLogoFile}
+                accept="image/*"
+                recommendedAspect="Recommended: square image, at least 96 x 96."
+              />
 
               <div className="rounded-xl border border-dashed border-brand-green/30 bg-brand-green/5 p-4">
                 <div className="mb-3 text-sm font-medium text-muted-foreground">Event preview</div>

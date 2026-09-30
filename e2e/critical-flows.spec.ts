@@ -41,6 +41,6 @@ test.describe("Critical Platform Flows", () => {
 
     await expect(page).toHaveURL((url) => url.pathname === "/");
     await page.goto("/dashboard/listings");
-    await expect(page).toHaveURL(/\/dashboard\/listings|\/login/);
+    await expect(page).toHaveURL((url) => url.pathname === "/dashboard/listings");
   });
 });

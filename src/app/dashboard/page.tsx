@@ -121,7 +121,7 @@ export default async function DashboardPage() {
       applyVisibleExpiryFilter(
         supabase
           .from("promotions")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact", head: true })
           .eq("status", "live")
           .eq("promotion_type", "event")
           .or(`end_date.is.null,end_date.gte.${now}`),
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("promotions")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "live")
         .eq("promotion_type", "event")
         .gt("end_date", now)

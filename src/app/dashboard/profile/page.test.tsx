@@ -3,6 +3,8 @@ import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProfilePage from "./page";
+import { useAuthStore } from "@/stores/auth-store";
+import { useNotificationStore } from "@/stores/notification-store";
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
@@ -305,7 +307,77 @@ describe("ProfilePage", () => {
         })
       );
     });
-    expect(mockPush).toHaveBeenCalledWith("/");
     window.location.hash = "";
+  });
+
+  it("clears the deleted account's client state and hard-navigates home after deletion", async () => {
+    useAuthStore.getState().setUser({
+      id: "user-1",
+      email: "user@example.com",
+      displayName: "Sipho",
+      role: "user",
+    });
+    useNotificationStore.getState().hydrateNotifications(
+      [
+        {
+          id: "n-1",
+          type: "info",
+          title: "Old account notification",
+          message: "Should not survive deletion",
+          read: false,
+          createdAt: "2026-09-01T10:00:00Z",
+        },
+      ],
+      1
+    );
+    document.cookie = "x-phone-ok=1; path=/";
+
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        origin: "http://localhost",
+        href: "http://localhost/dashboard/profile#account",
+        pathname: "/dashboard/profile",
+        search: "",
+        hash: "#account",
+        assign,
+        replace: vi.fn(),
+      },
+    });
+
+    try {
+      render(<ProfilePage />);
+      await screen.findByRole("heading", { name: "My profile" });
+
+      fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+      fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), {
+        target: { value: "DELETE" },
+      });
+      fireEvent.change(screen.getByLabelText("Current password"), {
+        target: { value: "MyPassword123!" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Account deleted", variant: "success" })
+        );
+      });
+      await waitFor(() => {
+        expect(useAuthStore.getState().user).toBeNull();
+        expect(useNotificationStore.getState().notifications).toHaveLength(0);
+      });
+      expect(document.cookie).not.toContain("x-phone-ok=1");
+
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("http://localhost/"), {
+        timeout: 3000,
+      });
+      // A soft client-side push would keep the old account's JS state alive.
+      expect(mockPush).not.toHaveBeenCalledWith("/");
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
   });
 });

@@ -67,7 +67,33 @@ describe("POST /api/media/upload-url", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env.ENABLE_DIRECT_R2_UPLOADS = ORIGINAL_ENABLE_DIRECT_R2_UPLOADS;
+  });
+
+  it.each(["NODE_ENV", "ENVIRONMENT"])(
+    "never issues public PUT credentials when %s is production, even with explicit opt-in",
+    async (environmentKey) => {
+      vi.stubEnv(environmentKey, "production");
+      process.env.ENABLE_DIRECT_R2_UPLOADS = "1";
+
+      const res = await POST(
+        createRequest({ filename: "clip.mp4", contentType: "video/mp4", size: 1024 })
+      );
+
+      expect(res.status).toBe(410);
+      expect(mockGeneratePresignedUploadUrl).not.toHaveBeenCalled();
+      expect(mockCreateAdminClient).not.toHaveBeenCalled();
+    }
+  );
+
+  it("defaults to validated server uploads when direct upload configuration is absent", async () => {
+    delete process.env.ENABLE_DIRECT_R2_UPLOADS;
+    const res = await POST(
+      createRequest({ filename: "clip.mp4", contentType: "video/mp4", size: 1024 })
+    );
+    expect(res.status).toBe(410);
+    expect(mockGeneratePresignedUploadUrl).not.toHaveBeenCalled();
   });
 
   it("can disable direct uploads by configuration", async () => {

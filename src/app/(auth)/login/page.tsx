@@ -386,6 +386,9 @@ export default function LoginPage() {
       );
       router.push(returnUrl);
     } catch {
+      // The request may have reached the server and consumed the single-use
+      // CAPTCHA token before the connection failed; get a fresh one.
+      resetTurnstileChallenge();
       toast({
         title: "Something went wrong",
         description: "Please try again later.",

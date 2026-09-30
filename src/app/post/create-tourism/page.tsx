@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { MediaUpload } from "@/components/ui/media-upload";
+import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
 import { VideoFrameSelector } from "@/components/ui/video-frame-selector";
 import { MediaCropPreview, type CropPosition } from "@/components/ui/media-crop-preview";
@@ -59,6 +60,11 @@ import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
 } from "@/app/post/_lib/create-post-errors";
+import {
+  POST_SESSION_EXPIRED_MESSAGE,
+  resolveServerRedirect,
+} from "@/app/post/_lib/post-submit-navigation";
+import { PostSignInAction } from "@/components/post/post-sign-in-action";
 import {
   getPromotionMediaUploadErrorState,
   uploadPromotionVideoFiles,
@@ -131,6 +137,11 @@ const FIELD_IDS: Record<string, string> = {
   whatsapp: "whatsapp",
   email: "email",
   website: "website",
+  mapDirections: "mapDirections",
+  socialFacebook: "socialFacebook",
+  socialInstagram: "socialInstagram",
+  socialTwitter: "socialTwitter",
+  socialTiktok: "socialTiktok",
   locationAddress: "locationAddress",
   locationTown: "locationTown",
   logo_url: "tourism-logo",
@@ -158,6 +169,17 @@ const FIELD_KEY_ALIASES: Record<string, string> = {
   social_instagram: "socialInstagram",
   social_twitter: "socialTwitter",
   social_tiktok: "socialTiktok",
+  map_directions: "mapDirections",
+  "social_links.facebook": "socialFacebook",
+  "social_links.instagram": "socialInstagram",
+  "social_links.twitter": "socialTwitter",
+  "social_links.tiktok": "socialTiktok",
+  "event_details.website": "website",
+  "event_details.map_directions": "mapDirections",
+  "event_details.social_links.facebook": "socialFacebook",
+  "event_details.social_links.instagram": "socialInstagram",
+  "event_details.social_links.twitter": "socialTwitter",
+  "event_details.social_links.tiktok": "socialTiktok",
   "business_details.street_address": "locationAddress",
   "business_details.suburb": "locationTown",
 };
@@ -180,6 +202,7 @@ const FIELD_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   email: "Email",
   website: "Website",
+  mapDirections: "Location pin",
   socialFacebook: "Facebook",
   socialInstagram: "Instagram",
   socialTwitter: "X / Twitter",
@@ -242,6 +265,7 @@ function getStepForFieldKey(key: string): number {
     normalizedKey === "socialInstagram" ||
     normalizedKey === "socialTwitter" ||
     normalizedKey === "socialTiktok" ||
+    normalizedKey === "mapDirections" ||
     normalizedKey === "locationAddress" ||
     normalizedKey === "locationTown"
   ) {
@@ -332,6 +356,7 @@ function CreateTourismContent() {
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [submitSucceeded, setSubmitSucceeded] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
@@ -354,6 +379,7 @@ function CreateTourismContent() {
   const [socialInstagram, setSocialInstagram] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialTiktok, setSocialTiktok] = useState("");
+  const [mapDirections, setMapDirections] = useState("");
   const rawBusinessId = searchParams.get("business_id") || "";
   const [businessId, setBusinessId] = useState(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawBusinessId)
@@ -615,6 +641,7 @@ function CreateTourismContent() {
         if (d.socialInstagram) setSocialInstagram(d.socialInstagram);
         if (d.socialTwitter) setSocialTwitter(d.socialTwitter);
         if (d.socialTiktok) setSocialTiktok(d.socialTiktok);
+        if (d.mapDirections) setMapDirections(d.mapDirections);
         if (d.businessId) setBusinessId(d.businessId);
         toast({ title: "Draft restored", description: "Continuing where you left off." });
       });
@@ -695,6 +722,7 @@ function CreateTourismContent() {
       socialInstagram,
       socialTwitter,
       socialTiktok,
+      mapDirections,
       businessId,
     };
 
@@ -781,6 +809,7 @@ function CreateTourismContent() {
     socialInstagram,
     socialTwitter,
     socialTiktok,
+    mapDirections,
     businessId,
   ]);
 
@@ -822,6 +851,7 @@ function CreateTourismContent() {
         "whatsapp",
         "email",
         "website",
+        "mapDirections",
         "socialFacebook",
         "socialInstagram",
         "socialTwitter",
@@ -919,6 +949,7 @@ function CreateTourismContent() {
         socialInstagram,
         socialTwitter,
         socialTiktok,
+        mapDirections,
         eventType,
         startDate,
         endDate,
@@ -1031,6 +1062,7 @@ function CreateTourismContent() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submissionInFlightRef.current) return;
+    setSessionExpired(false);
     const stepErrors = [0, 1, 2, 3].map((index) => validateStep(index));
     const firstInvalidStep = stepErrors.findIndex((e) => Object.keys(e).length > 0);
     if (firstInvalidStep !== -1) {
@@ -1172,6 +1204,10 @@ function CreateTourismContent() {
           whatsapp: whatsapp || undefined,
           email: email || undefined,
           website: website || undefined,
+          map_directions:
+            locationAddress.trim() && mapDirections.trim()
+              ? normalizeUserEnteredUrl(mapDirections)
+              : undefined,
           social_links: Object.keys(socialLinks).length > 0 ? socialLinks : undefined,
           operating_hours: Object.keys(operatingHours).length > 0 ? operatingHours : undefined,
           category_details: {
@@ -1195,6 +1231,12 @@ function CreateTourismContent() {
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
+          if (res.status === 401) {
+            setSessionExpired(true);
+            setFormError(POST_SESSION_EXPIRED_MESSAGE);
+            return;
+          }
+
           // Phone-gate: server returns redirectUrl for phone verification
           if (
             res.status === 403 &&
@@ -1202,7 +1244,7 @@ function CreateTourismContent() {
             typeof payload === "object" &&
             typeof (payload as Record<string, unknown>).redirectUrl === "string"
           ) {
-            router.push((payload as Record<string, unknown>).redirectUrl as string);
+            router.push(resolveServerRedirect((payload as Record<string, unknown>).redirectUrl));
             return;
           }
 
@@ -1288,6 +1330,22 @@ function CreateTourismContent() {
         if (earlyBirdDeadline) eventDetails.early_bird_deadline = earlyBirdDeadline;
         if (groupDiscountAvailable) eventDetails.group_discount_available = groupDiscountAvailable;
 
+        // Links shown on the event page
+        if (website.trim()) eventDetails.website = normalizeUserEnteredUrl(website);
+        if (mapDirections.trim())
+          eventDetails.map_directions = normalizeUserEnteredUrl(mapDirections);
+        const eventSocialLinks = Object.fromEntries(
+          Object.entries({
+            facebook: socialFacebook,
+            instagram: socialInstagram,
+            twitter: socialTwitter,
+            tiktok: socialTiktok,
+          })
+            .map(([key, value]) => [key, normalizeUserEnteredUrl(value)] as const)
+            .filter(([, value]) => value.length > 0)
+        );
+        if (Object.keys(eventSocialLinks).length > 0) eventDetails.social_links = eventSocialLinks;
+
         const body = {
           title: title.trim(),
           description: description.trim(),
@@ -1326,6 +1384,12 @@ function CreateTourismContent() {
         const payload = await res.json().catch(() => null);
 
         if (!res.ok) {
+          if (res.status === 401) {
+            setSessionExpired(true);
+            setFormError(POST_SESSION_EXPIRED_MESSAGE);
+            return;
+          }
+
           // Phone-gate: server returns redirectUrl for phone verification
           if (
             res.status === 403 &&
@@ -1333,7 +1397,7 @@ function CreateTourismContent() {
             typeof payload === "object" &&
             typeof (payload as Record<string, unknown>).redirectUrl === "string"
           ) {
-            router.push((payload as Record<string, unknown>).redirectUrl as string);
+            router.push(resolveServerRedirect((payload as Record<string, unknown>).redirectUrl));
             return;
           }
 
@@ -1473,6 +1537,7 @@ function CreateTourismContent() {
     setSocialInstagram("");
     setSocialTwitter("");
     setSocialTiktok("");
+    setMapDirections("");
     setBusinessId("");
     setPhotoFiles([]);
     setVideoFiles([]);
@@ -1563,7 +1628,7 @@ function CreateTourismContent() {
         email: email || null,
         website: website || null,
         store_number: null,
-        map_directions: null,
+        map_directions: locationAddress.trim() ? mapDirections.trim() || null : null,
         business_details: {
           type: "standalone_shop" as const,
           street_address: locationAddress || "",
@@ -1764,8 +1829,9 @@ function CreateTourismContent() {
                   // errors — never show red on a pristine form.
                   Object.keys(fieldErrors).some((key) => getStepForFieldKey(key) === i)
                 )}
+                errorAction={sessionExpired && formError ? <PostSignInAction /> : undefined}
                 onRetry={
-                  formError && !isSubmitting
+                  formError && !isSubmitting && !sessionExpired
                     ? () => handleSubmit(new Event("submit") as unknown as React.FormEvent)
                     : undefined
                 }
@@ -3271,7 +3337,7 @@ function CreateTourismContent() {
                           </div>
                         </div>
 
-                        {/* Email & Website */}
+                        {/* Email */}
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
@@ -3290,68 +3356,47 @@ function CreateTourismContent() {
                               <p className="inline-form-error">{fieldErrors.email}</p>
                             )}
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="website">Website</Label>
-                            <Input
-                              id="website"
-                              type="url"
-                              value={website}
-                              onChange={(e) => {
-                                setWebsite(e.target.value);
-                                clearErrors("website");
-                              }}
-                              placeholder="https://www.yoursite.co.za"
-                              aria-invalid={!!fieldErrors.website}
-                            />
-                            {fieldErrors.website && (
-                              <p className="inline-form-error">{fieldErrors.website}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Social links */}
-                        <div className="space-y-3">
-                          <p className="text-sm font-medium">Social Media (optional)</p>
-                          {[
-                            [
-                              "socialFacebook",
-                              "Facebook URL",
-                              socialFacebook,
-                              setSocialFacebook,
-                            ] as const,
-                            [
-                              "socialInstagram",
-                              "Instagram URL",
-                              socialInstagram,
-                              setSocialInstagram,
-                            ] as const,
-                            [
-                              "socialTwitter",
-                              "X / Twitter URL",
-                              socialTwitter,
-                              setSocialTwitter,
-                            ] as const,
-                            ["socialTiktok", "TikTok URL", socialTiktok, setSocialTiktok] as const,
-                          ].map(([key, label, value, setter]) => (
-                            <div key={key} className="space-y-1">
-                              <Input
-                                id={key}
-                                value={value}
-                                onChange={(e) => {
-                                  setter(e.target.value);
-                                  clearErrors(key);
-                                }}
-                                placeholder={label}
-                                aria-invalid={!!fieldErrors[key]}
-                              />
-                              {fieldErrors[key] && (
-                                <p className="inline-form-error">{fieldErrors[key]}</p>
-                              )}
-                            </div>
-                          ))}
                         </div>
                       </>
                     )}
+
+                    <OnlinePresenceFields
+                      values={{
+                        website,
+                        mapDirections,
+                        socialFacebook,
+                        socialInstagram,
+                        socialTwitter,
+                        socialTiktok,
+                      }}
+                      onChange={(field, value) => {
+                        ({
+                          website: setWebsite,
+                          mapDirections: setMapDirections,
+                          socialFacebook: setSocialFacebook,
+                          socialInstagram: setSocialInstagram,
+                          socialTwitter: setSocialTwitter,
+                          socialTiktok: setSocialTiktok,
+                        })[field](value);
+                        clearErrors(field);
+                      }}
+                      errors={fieldErrors}
+                      description={
+                        listingType === "event"
+                          ? "Optional. Help people check your event online and find the venue on a map."
+                          : undefined
+                      }
+                      mapPinHint={
+                        listingType === "event"
+                          ? "Open Google Maps, drop a pin on the venue, tap Share and paste the link here."
+                          : undefined
+                      }
+                      mapPinUnavailableReason={
+                        listingType === "tourism_business" && !locationAddress.trim()
+                          ? "Add your street address above to show a location pin. Without an address only your area is published."
+                          : undefined
+                      }
+                    />
 
                     {/* Operating hours (tourism business only) */}
                     {listingType === "tourism_business" && (
@@ -3466,6 +3511,7 @@ function CreateTourismContent() {
                             clearErrors("videos");
                           }}
                           accept="video/*"
+                          previewShape="wide"
                           disabled={!videoAllowed}
                         />
                         {!videoAllowed && (

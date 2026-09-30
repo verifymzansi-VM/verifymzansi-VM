@@ -28,6 +28,9 @@ vi.mock("@aws-sdk/client-s3", () => {
     GetObjectCommand: class {
       constructor(public params: unknown) {}
     },
+    HeadObjectCommand: class {
+      constructor(public params: unknown) {}
+    },
   };
 });
 
@@ -50,6 +53,8 @@ import {
   downloadKycDocument,
   getKycDocumentViewUrl,
   hasR2WriteAccess,
+  getR2ObjectSize,
+  getR2ObjectBytes,
 } from "./storage";
 
 describe("storage service", () => {
@@ -135,6 +140,31 @@ describe("storage service", () => {
     it("sends DeleteObjectCommand", async () => {
       await deleteFromR2("my-bucket", "some/key.jpg");
       expect(mockSend).toHaveBeenCalled();
+    });
+  });
+
+  describe("S3 request timeouts", () => {
+    it("passes an abortSignal to every S3 send call", async () => {
+      mockSend.mockResolvedValue({
+        ContentLength: 3,
+        Body: { transformToByteArray: async () => new Uint8Array([1, 2, 3]) },
+      });
+
+      await uploadToR2({
+        bucket: "b",
+        key: "k/a.jpg",
+        file: new Blob(["x"]),
+        contentType: "image/jpeg",
+      });
+      await deleteFromR2("b", "k/a.jpg");
+      await getR2ObjectSize("b", "k/a.jpg");
+      await getR2ObjectBytes("b", "k/a.jpg");
+      await uploadKycDocument(new Blob(["doc"]), "seller-1", "id_document");
+
+      expect(mockSend).toHaveBeenCalledTimes(5);
+      for (const call of mockSend.mock.calls) {
+        expect(call[1]?.abortSignal).toBeInstanceOf(AbortSignal);
+      }
     });
   });
 

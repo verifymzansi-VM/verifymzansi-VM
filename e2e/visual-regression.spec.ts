@@ -90,10 +90,14 @@ async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)
     });
     await Promise.all(
       images.map((image) => {
-        if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+        // A finished image (loaded or already failed) never fires load/error
+        // again, and an offscreen lazy image may never start; bound the wait
+        // so neither hangs the capture until the test timeout.
+        if (image.complete) return Promise.resolve();
         return new Promise<void>((resolve) => {
           image.addEventListener("load", () => resolve(), { once: true });
           image.addEventListener("error", () => resolve(), { once: true });
+          setTimeout(resolve, 10_000);
         });
       })
     );

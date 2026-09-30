@@ -16,6 +16,14 @@ describe("sanitizeReturnUrl", () => {
     expect(sanitizeReturnUrl("/dashboard?tab=listings")).toBe("/dashboard?tab=listings");
   });
 
+  it("keeps the destination of every protected page the login redirect can send", () => {
+    // The middleware sends signed-out visitors of these pages to /login with a
+    // returnUrl; an unlisted prefix silently lands them on the home page.
+    for (const path of ["/appeals/new?decision=abc", "/staff/two-step", "/dsar", "/billing"]) {
+      expect(sanitizeReturnUrl(path)).toBe(path);
+    }
+  });
+
   it("blocks unknown route prefixes", () => {
     expect(sanitizeReturnUrl("/evil-page")).toBe("/");
     expect(sanitizeReturnUrl("/unknown/route")).toBe("/");

@@ -146,7 +146,10 @@ export default async function PromotionsPage() {
 
   // ── Fetch top tourism businesses for showroom hero ──
   const tourismBusinesses = await getPublicCarouselRows<unknown>(
-    buildPublicTourismBusinessesQuery(supabase),
+    buildPublicTourismBusinessesQuery(
+      supabase,
+      "id, owner_id, business_name, description, category, cover_photo, cover_video, video_thumbnail, logo_url, location_city, location_province, focal_x, focal_y, media_width, media_height, boost_until, featured_until"
+    ),
     10
   );
 

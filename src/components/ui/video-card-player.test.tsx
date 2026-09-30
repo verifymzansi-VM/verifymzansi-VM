@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useShowroomAutoplayStore } from "@/stores/showroom-autoplay-store";
 
@@ -683,5 +683,121 @@ describe("mobile playback controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
     expect(togglePlayback).toHaveBeenCalledOnce();
     expect(screen.getByRole("button", { name: "Unmute" })).toBeTruthy();
+  });
+});
+
+describe("hydration-safe initial playback state", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  function setReducedMotion(matches: boolean) {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: matches && query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+    useHoverCapabilityMock.mockReturnValue(true);
+    useVideoVisibilityMock.mockReturnValue({ videoRef: { current: null }, reducedMotion: false });
+    useGlobalMuteMock.mockReturnValue({ isMuted: true, toggleMute: vi.fn() });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
+    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+  });
+
+  async function expectHydratesCleanly(element: React.ReactElement, applyClientPrefs: () => void) {
+    const { renderToString } = await import("react-dom/server");
+    const { hydrateRoot } = await import("react-dom/client");
+    // Server defaults: no persisted sticky intent, no reduced motion.
+    setReducedMotion(false);
+    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+    const html = renderToString(element);
+    // Only record the client renders from here on.
+    useVideoVisibilityMock.mockClear();
+
+    applyClientPrefs();
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const recoverable = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, element, { onRecoverableError: recoverable });
+    });
+    // React never serialises the `muted` attribute on the server (known React
+    // behaviour, unrelated to this component's state), so ignore that one
+    // attribute and fail on any other mismatched attribute or structure.
+    const mismatchedLines = consoleError.mock.calls
+      .filter((args) => String(args[0]).toLowerCase().includes("hydrat"))
+      .flatMap((args) => args.slice(1).map(String).join("\n").split("\n"))
+      .filter((line) => /^\s*[+-]\s/.test(line) && !/^\s*[+-]\s+muted=/.test(line));
+    consoleError.mockRestore();
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(mismatchedLines).toEqual([]);
+    return { container, cleanup: () => act(() => root?.unmount()) };
+  }
+
+  it("first render matches the server default for reduced-motion users, then pauses", async () => {
+    const element = (
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+      />
+    );
+    const { container, cleanup } = await expectHydratesCleanly(element, () =>
+      setReducedMotion(true)
+    );
+    // Server-safe first render: not paused (autoplay requested) ...
+    expect(useVideoVisibilityMock.mock.calls[0]?.[1]).toBe(true);
+    // ... then the reduced-motion preference applies after mount.
+    expect(useVideoVisibilityMock.mock.calls.at(-1)?.[1]).toBe(false);
+    expect(container.querySelector('button[aria-label="Play video"]')).not.toBeNull();
+    await cleanup();
+  });
+
+  it("first render matches the server default when sticky autoplay is persisted", async () => {
+    const element = (
+      <VideoCardPlayer
+        src="https://example.com/clip.mp4"
+        posterUrl="https://example.com/poster.jpg"
+        alt="Clip"
+        mode="ambient"
+        showPlaybackControl
+        stickyAutoplay
+        deferVideoLoadUntilPlay
+      />
+    );
+    const { cleanup } = await expectHydratesCleanly(element, () =>
+      useShowroomAutoplayStore.setState({ autoplayEnabled: true })
+    );
+    expect(useVideoVisibilityMock.mock.calls[0]).toEqual([undefined, false, false]);
+    expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([
+      "https://example.com/clip.mp4",
+      true,
+      true,
+    ]);
+    await cleanup();
   });
 });

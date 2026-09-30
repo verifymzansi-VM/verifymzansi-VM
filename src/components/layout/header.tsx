@@ -182,7 +182,11 @@ function HeaderInner({
 
   async function handleSignOut() {
     setSigningOut(true);
-    await auth.signOut();
+    try {
+      await auth.signOut();
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   return (

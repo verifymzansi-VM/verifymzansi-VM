@@ -1,4 +1,4 @@
-import { verifyCapabilityFromDb } from "@/lib/auth/admin-access";
+import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -292,8 +292,7 @@ export async function POST(request: NextRequest) {
     }
     const { hasPaidPlan, tier, entitlements: ent } = planResult;
     const postingLimitBypassEnabled =
-      isPostingLimitBypassEnabled() ||
-      (await verifyCapabilityFromDb(user, "posting:bypass_limits"));
+      isPostingLimitBypassEnabled() || (await hasStaffPostingLimitBypass(supabase, user));
 
     const body = await parseJsonRequest(request);
     if (body === null) {

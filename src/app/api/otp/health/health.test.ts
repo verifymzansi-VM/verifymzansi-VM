@@ -30,6 +30,8 @@ vi.mock("@/lib/utils/logger", () => ({
 }));
 
 import { GET } from "@/app/api/otp/health/route";
+import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
+import { NextResponse } from "next/server";
 
 function stubOtpEnv() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
@@ -140,5 +142,35 @@ describe("GET /api/otp/health", () => {
 
     expect(res.status).toBe(503);
     expect(body.status).toBe("unhealthy");
+  });
+});
+
+describe("GET /api/otp/health staff MFA", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stubOtpEnv();
+    mockHealthyAdmin();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("refuses staff who have not satisfied the staff MFA policy", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "admin-1", app_metadata: { role: "admin" } } },
+      error: null,
+    });
+    mockVerifyStaffActorRoleFromDb.mockResolvedValue(true);
+    vi.mocked(checkStaffApiMfa).mockResolvedValueOnce(
+      NextResponse.json({ code: "mfa_required" }, { status: 403 }) as never
+    );
+
+    const res = await GET();
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: "mfa_required" });
+    expect(checkStaffApiMfa).toHaveBeenCalledWith(expect.anything(), "admin-1");
+    expect(mockAdminFrom).not.toHaveBeenCalled();
   });
 });

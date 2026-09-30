@@ -2,13 +2,16 @@
  * EXIF metadata stripping for uploaded images.
  *
  * Removes EXIF, XMP, and ICC profile data from JPEG files, PII text/EXIF
- * chunks from PNG files, and EXIF/XMP chunks from WebP files to prevent
- * leaking GPS coordinates, device info, and other PII (POPIA compliance).
+ * chunks from PNG files, EXIF/XMP chunks from WebP files, and zeroes the
+ * Exif/XMP item payloads of AVIF files to prevent leaking GPS coordinates,
+ * device info, and other PII (POPIA compliance).
  *
- * Only JPEG/PNG/WebP files are processed — GIF/AVIF don't typically contain
- * sensitive EXIF data in the same way, and stripping them requires
- * format-specific handling that adds complexity without proportional benefit.
+ * GIF has no EXIF container and is not processed. HEIC/HEIF uploads are
+ * rejected by the routes (clients convert to JPEG). Video (MP4/MOV) location
+ * metadata is handled by scrubVideoLocationMetadata in isobmff-metadata.ts.
  */
+
+import { scrubAvifExifItems } from "@/lib/utils/isobmff-metadata";
 
 /**
  * Strip EXIF/APP1 markers from a JPEG buffer.
@@ -280,4 +283,19 @@ export function stripMetadataFromWebp(buffer: Uint8Array): Uint8Array {
     writeOffset += chunk.length;
   }
   return result;
+}
+
+// ── AVIF metadata stripping ─────────────────────────────────────────────────
+
+/**
+ * Zero the Exif (GPS, camera, timestamps) and XMP item payloads of an AVIF
+ * image. AVIF is ISO BMFF, so rather than rebuilding the container the
+ * payload bytes are overwritten at the same length (see scrubAvifExifItems),
+ * which keeps every iloc offset valid. Returns a new buffer; the input is not
+ * modified.
+ */
+export function stripMetadataFromAvif(buffer: Uint8Array): Uint8Array {
+  const copy = buffer.slice();
+  scrubAvifExifItems(copy);
+  return copy;
 }

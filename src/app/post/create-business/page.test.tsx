@@ -638,15 +638,10 @@ describe("CreateBusinessPage", () => {
     await completeStandaloneStepOne();
     await completeAccessStep();
 
-    // "Optional extras" (social links) now lives on Step 3 (Location & Contact).
+    // Social links sit in the always-visible section on Step 3 (Contact).
     expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
-    const details = screen.getByText("Optional extras").closest("details");
-    expect(details).not.toHaveAttribute("open");
 
-    // Fill required location fields so only the social URL error remains.
-
-    fireEvent.click(screen.getByText("Optional extras"));
-    fireEvent.change(screen.getByPlaceholderText("Facebook URL"), {
+    fireEvent.change(screen.getByLabelText("Facebook (Optional)"), {
       target: { value: "not-a-url" },
     });
 
@@ -664,15 +659,19 @@ describe("CreateBusinessPage", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("keeps optional extras collapsed by default on the contact step", async () => {
+  it("shows website, social media and location pin fields openly on the contact step", async () => {
     render(<CreateBusinessPage />);
 
     await completeStandaloneStepOne();
     await completeAccessStep();
 
     expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
-    const details = screen.getByText("Optional extras").closest("details");
-    expect(details).not.toHaveAttribute("open");
+    expect(screen.queryByText("Optional extras")).not.toBeInTheDocument();
+    expect(screen.getByText("Website, social media & location pin")).toBeVisible();
+    for (const name of ["Website", "Facebook", "Instagram", "X (Twitter)", "TikTok"]) {
+      const label = `${name} (Optional)`;
+      expect(screen.getByLabelText(label)).toBeVisible();
+    }
   });
 
   it("shows an inline slug error when the API rejects a duplicate slug", async () => {
@@ -786,6 +785,49 @@ describe("CreateBusinessPage", () => {
       expect(screen.getByText("You reached your plan posting limit.")).toBeInTheDocument();
     });
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("offers a sign-in link back to this page when the session expired (401)", async () => {
+    window.history.pushState({}, "", "/post/create-business");
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: "Unauthorized" }),
+    });
+
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    await completeLocationStep();
+    acceptBusinessTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    const signIn = await screen.findByRole("link", { name: "Sign in" });
+    expect(signIn).toHaveAttribute(
+      "href",
+      `/login?returnUrl=${encodeURIComponent("/post/create-business")}`
+    );
+    expect(screen.getByText(/re-attach your photos and videos/i)).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+    window.history.pushState({}, "", "/");
+  });
+
+  it("does not follow an off-site server redirectUrl", async () => {
+    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ redirectUrl: "https://evil.example/phish" }),
+    });
+
+    render(<CreateBusinessPage />);
+    await completeStandaloneStepOne();
+    await completeLocationStep();
+    acceptBusinessTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+    });
+    expect(mockPush).not.toHaveBeenCalledWith("https://evil.example/phish");
   });
 
   it("keeps the submitted-for-review state after redirecting to the dashboard", async () => {
