@@ -9,6 +9,8 @@ export interface PerformanceReportData {
   topCategories: Array<{ category: string | null; businesses: number }>;
   topLocations: Array<{ city: string | null; businesses: number }>;
   weeklyTrend: Array<{ week: string; views: number; contacts: number }>;
+  /** Traffic VerifyMzansi sent to the sponsor itself (strip, home, index, showcase page). */
+  sponsorVisibility: { impressions: number; clicks: number; pageViews: number };
 }
 
 const METRICS: ReadonlyArray<[string, string]> = [
@@ -43,6 +45,11 @@ export function parsePerformanceReport(raw: unknown): PerformanceReportData | nu
     topCategories: r.topCategories ?? [],
     topLocations: r.topLocations ?? [],
     weeklyTrend: r.weeklyTrend ?? [],
+    sponsorVisibility: {
+      impressions: Number(r.sponsorVisibility?.impressions ?? 0),
+      clicks: Number(r.sponsorVisibility?.clicks ?? 0),
+      pageViews: Number(r.sponsorVisibility?.pageViews ?? 0),
+    },
   };
 }
 
@@ -87,6 +94,24 @@ export function PerformanceReport({
           </div>
         ))}
       </dl>
+
+      <section>
+        <h3 className="text-sm font-semibold">Your programme on VerifyMzansi</h3>
+        <dl className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+          {(
+            [
+              ["Partner logo views (strip, home, index)", report.sponsorVisibility.impressions],
+              ["Clicks to your showcase", report.sponsorVisibility.clicks],
+              ["Showcase page visits", report.sponsorVisibility.pageViews],
+            ] as const
+          ).map(([name, value]) => (
+            <div key={name} className="flex justify-between gap-2 border-b py-1">
+              <dt className="text-muted-foreground">{name}</dt>
+              <dd className="tabular-nums">{value.toLocaleString("en-ZA")}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section>
         <h3 className="text-sm font-semibold">Discovery and engagement</h3>
@@ -150,8 +175,10 @@ export function PerformanceReport({
         </section>
       </div>
       <p className="text-xs text-muted-foreground">
-        Aggregated engagement only. No individual consumer data is included. The founding pilot
-        carries no automatic charge; any continuation requires a new written agreement.
+        Aggregated views and clicks only — not enquiries, sales or bookings. A contact click is not
+        a confirmed enquiry, and visitors who block tracking are not counted. No individual consumer
+        data is included. The founding pilot carries no automatic charge; any continuation requires
+        a new written agreement.
       </p>
     </article>
   );

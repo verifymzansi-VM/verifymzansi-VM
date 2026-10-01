@@ -19,7 +19,15 @@ describe("sanitizeReturnUrl", () => {
   it("keeps the destination of every protected page the login redirect can send", () => {
     // The middleware sends signed-out visitors of these pages to /login with a
     // returnUrl; an unlisted prefix silently lands them on the home page.
-    for (const path of ["/appeals/new?decision=abc", "/staff/two-step", "/dsar", "/billing"]) {
+    for (const path of [
+      "/appeals/new?decision=abc",
+      "/staff/two-step",
+      "/dsar",
+      "/billing",
+      // A sponsor administrator signs in from an emailed invitation link.
+      "/organisation-invite?token=abc_DEF-123",
+      "/dashboard/affiliations?org=city-of-umhlathuze",
+    ]) {
       expect(sanitizeReturnUrl(path)).toBe(path);
     }
   });

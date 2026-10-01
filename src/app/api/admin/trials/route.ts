@@ -29,13 +29,8 @@ const schema = z.discriminatedUnion("action", [
     reason: z.string().trim().min(5).max(500),
     values: z.object({}),
   }),
-  z.object({
-    action: z.literal("extend"),
-    target: z.uuid(),
-    reason: z.string().trim().min(5).max(500),
-    values: z.object({ expiresAt: z.iso.datetime() }),
-  }),
 ]);
+// Extensions are offers the member must accept: see trial_extension.* in /api/admin/commercial.
 export async function POST(request: Request) {
   const guard = await enforceAdminMutationGuard({
     request,
@@ -69,7 +64,7 @@ export async function POST(request: Request) {
         error:
           body.data.action === "set_account_free_posts"
             ? "Free posts could not be updated. Check that the account still exists and try again."
-            : "Change could not be applied. Extensions require an active 30-day trial and must end within 60 days of activation.",
+            : "Change could not be applied. Check the trial is still active and try again.",
       },
       { status: 409 }
     );

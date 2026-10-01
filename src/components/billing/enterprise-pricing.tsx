@@ -5,14 +5,13 @@ import { formatPlanPrice } from "@/lib/constants/pricing";
 import type { EnterpriseCatalogPlan } from "@/lib/commercial/plans";
 
 const TERMS = [
-  { days: 90, label: "3 months" },
-  { days: 180, label: "6 months" },
-  { days: 365, label: "12 months" },
+  { days: 90, label: "90 days" },
+  { days: 180, label: "180 days" },
 ] as const;
 
 /**
- * Organisations & large businesses. Bulk plans sell simultaneous ACTIVE slots;
- * 1,000+ and organisation programmes are quoted. No maximum price is published.
+ * Group 2 multi-listing plans sell simultaneous LIVE slots for 90 or 180 days;
+ * above 100 slots and sponsor programmes are quoted (Document 03 §3, §5).
  */
 export function EnterprisePricing({
   plans,
@@ -37,7 +36,8 @@ export function EnterprisePricing({
             Organisations &amp; large businesses
           </h2>
           <p className="section-lede">
-            Bulk slots and sponsored programmes, from 50 active positions.
+            Multi-listing plans from 10 live slots, with two named administrators, and sponsor
+            programmes for organisations that support local businesses.
           </p>
         </div>
         <Button asChild variant="ink" className="h-11 w-full shrink-0 rounded-full md:w-auto">
@@ -49,18 +49,18 @@ export function EnterprisePricing({
         {[
           {
             icon: Building2,
-            title: "Bulk active slots",
-            text: "A pool of listings across every section.",
+            title: "Multi-listing",
+            text: "10 to 100 live slots across every section.",
           },
           {
             icon: Landmark,
-            title: "Organisation network",
-            text: "An affiliation badge for your members.",
+            title: "Programme partners",
+            text: "Support 25 to 250 local businesses.",
           },
           {
             icon: Users,
-            title: "Sponsored businesses",
-            text: "Fund visibility, with reporting.",
+            title: "Activity reports",
+            text: "Views and contact clicks every 30 days.",
           },
         ].map(({ icon: Icon, title, text }) => (
           <li key={title} className="flex gap-3 rounded-2xl bg-muted/60 p-4 sm:block">
@@ -78,7 +78,7 @@ export function EnterprisePricing({
       {sizes.length > 0 ? (
         <details className="group mt-4 rounded-2xl border border-border/70">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            See bulk active-slot prices
+            See multi-listing prices
             <ChevronDown
               aria-hidden="true"
               className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
@@ -89,8 +89,8 @@ export function EnterprisePricing({
             <div className="grid gap-3 sm:hidden">
               {sizes.map((slots) => (
                 <div key={slots} className="rounded-xl bg-muted/60 p-3">
-                  <p className="text-sm font-semibold text-foreground">{slots} active slots</p>
-                  <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <p className="text-sm font-semibold text-foreground">{slots} live slots</p>
+                  <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     {TERMS.map((term) => (
                       <div key={term.days}>
                         <dt className="text-muted-foreground">{term.label}</dt>
@@ -106,11 +106,11 @@ export function EnterprisePricing({
               ))}
             </div>
             <table className="hidden w-full text-sm sm:table">
-              <caption className="sr-only">Bulk active-slot prices</caption>
+              <caption className="sr-only">Multi-listing prices</caption>
               <thead>
                 <tr className="text-left text-muted-foreground">
                   <th scope="col" className="py-2 font-medium">
-                    Active slots
+                    Live slots
                   </th>
                   {TERMS.map((term) => (
                     <th key={term.days} scope="col" className="py-2 font-medium">
@@ -134,7 +134,7 @@ export function EnterprisePricing({
                               <Link
                                 className="rounded-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
                                 href={`/billing/checkout?plan=${plan.planId}`}
-                                aria-label={`Choose ${slots} active slots for ${term.label}, ${formatPlanPrice(plan.priceCents)}`}
+                                aria-label={`Choose ${slots} live slots for ${term.label}, ${formatPlanPrice(plan.priceCents)}`}
                               >
                                 {formatPlanPrice(plan.priceCents)}
                               </Link>
@@ -152,7 +152,8 @@ export function EnterprisePricing({
               </tbody>
             </table>
             <p className="mt-3 text-xs text-muted-foreground">
-              1,000+ slots and public-sector programmes: priced on request.
+              Above 100 slots and public-sector orders: written quote for a 90- or 180-day term. Two
+              named administrators included.
             </p>
           </div>
         </details>

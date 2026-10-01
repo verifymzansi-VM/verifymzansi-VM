@@ -246,14 +246,14 @@ export function CommercialSettingsPanel({
   plans: AdminPlanRow[];
 }) {
   const retail = plans.filter((plan) => !plan.is_legacy && plan.tier !== "enterprise");
-  const enterprise = plans.filter((plan) => plan.tier === "enterprise");
+  const enterprise = plans.filter((plan) => !plan.is_legacy && plan.tier === "enterprise");
   const legacy = plans.filter((plan) => plan.is_legacy);
 
   return (
     <div className="space-y-6">
       <AdminCard
         title="Retail prices"
-        description="One ladder for Market, Business and Tourism. Changes apply to new checkouts immediately; paid plans keep what customers paid."
+        description="Group 1: one ladder for Market, Business and Tourism — 30, 90 and 180 fixed days. Changes apply to new checkouts immediately; paid plans keep what customers paid."
       >
         <div className="space-y-3">
           {retail.map((plan) => (
@@ -263,8 +263,8 @@ export function CommercialSettingsPanel({
       </AdminCard>
 
       <AdminCard
-        title="Bulk active-slot plans"
-        description="Self-checkout for 50–500 slots. 1,000+ is always quoted manually from Programmes & Contracts."
+        title="Multi-listing plans"
+        description="Group 2: 10, 25, 50 and 100 live slots for 90 or 180 days, two named administrators. Above 100 slots is a written quote from Programmes & Contracts."
       >
         <details>
           <summary className="cursor-pointer text-sm font-medium">
@@ -286,7 +286,7 @@ export function CommercialSettingsPanel({
 
       <AdminCard
         title="Legacy plans"
-        description="Retired Basic / Starter / Growth / Pro plans. Not for sale; existing customers keep them until their original expiry."
+        description="Retired plans (Basic / Starter / Growth / Pro, 365-day retail and calendar-month multi-listing codes). Not for sale; existing customers keep them until their recorded expiry."
       >
         <ul className="grid gap-1 text-sm sm:grid-cols-2">
           {legacy.map((plan) => (

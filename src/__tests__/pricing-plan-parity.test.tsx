@@ -89,19 +89,22 @@ beforeAll(async () => {
 });
 
 describe("Active-area pricing parity", () => {
-  it("pricing page shows the R50 / R250 / R450 ladder, free events and the organisation route", async () => {
+  it("pricing page shows the R50 / R140 / R250 fixed-day ladder, free events and the organisation route", async () => {
     render(await PricingPage());
     const radios = screen
       .getAllByRole("radio")
       .map((radio) => radio.textContent?.replace(/\s+/g, " ").trim());
     expect(radios).toHaveLength(3);
     expect(screen.getByTestId("retail-offer-month")).toHaveTextContent("R50");
+    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("R140");
+    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("Popular");
+    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("Save R10");
     expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R250");
-    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Most popular");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Best value");
     expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Save R50");
-    expect(screen.getByTestId("retail-offer-year")).toHaveTextContent("R450");
-    expect(screen.getByTestId("retail-offer-year")).toHaveTextContent("Best value");
-    expect(screen.getByTestId("retail-offer-year")).toHaveTextContent("Save R150");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R41.67 per 30 days");
+    expect(screen.queryByTestId("retail-offer-year")).not.toBeInTheDocument();
+    expect(screen.queryByText(/12 months|R450/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /request a proposal/i })).toHaveAttribute(
       "href",
@@ -110,7 +113,7 @@ describe("Active-area pricing parity", () => {
     expect(screen.queryByText(/R650|R30 /)).not.toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     const planLinks = screen.getAllByRole("link", {
-      name: /Choose .*(30 Days|6 Months|12 Months)/i,
+      name: /Choose .*(30 Days|90 Days|180 Days)/i,
     });
     expect(planLinks).toHaveLength(3);
     expect(

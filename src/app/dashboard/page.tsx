@@ -1,6 +1,8 @@
 import { getVerificationLevel, VERIFICATION_LEVEL_LABELS } from "@/lib/account/verification-level";
 import { PLAN_TIER_LABELS, type PlanTier } from "@/types/enums";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
+import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
+import { getOpenOffersForUser, type ExtensionOffer } from "@/lib/trials/extension-offers";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -296,9 +298,10 @@ export default async function DashboardPage() {
     activeEntitlements.length > 0
       ? activeEntitlements.reduce((best: string, ent: { tier?: string }) => {
           const rank: Record<string, number> = {
-            enterprise: 8,
-            year: 7,
-            half_year: 6,
+            enterprise: 9,
+            year: 8,
+            half_year: 7,
+            quarter: 6,
             month: 5,
             pro: 4,
             growth: 3,
@@ -363,6 +366,14 @@ export default async function DashboardPage() {
     ...row,
     title: leadTitles.get(`${row.target_type}:${row.target_id}`) ?? null,
   }));
+
+  // Free-access extension offers (Document 08 §6): shown next to the posts.
+  let extensionOffers: ExtensionOffer[] = [];
+  try {
+    extensionOffers = await getOpenOffersForUser(user.id);
+  } catch {
+    // Offers are also notified and emailed; the dashboard still works without them.
+  }
 
   return (
     <div className="space-y-6">
@@ -445,6 +456,9 @@ export default async function DashboardPage() {
       {/* ───── Main content ───── */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
+          {extensionOffers.map((offer) => (
+            <ExtensionOfferCard key={offer.id} offer={offer} />
+          ))}
           {showDashboardOnboarding ? (
             <DashboardOnboarding
               isVerified={isVerified}

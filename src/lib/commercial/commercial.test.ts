@@ -39,9 +39,19 @@ describe("commercial settings", () => {
       slotCapacity: 1,
       activationLimitTotal: 3,
     });
-    expect(DEFAULT_COMMERCIAL_SETTINGS.founding_commercial.slotCapacity).toBe(25);
-    expect(DEFAULT_COMMERCIAL_SETTINGS.founding_commercial.activationsPerPeriod).toBe(50);
-    expect(DEFAULT_COMMERCIAL_SETTINGS.founding_organisation.sponsoredCapacity).toBe(50);
+    // Document 03 §6: founding packages are exactly 90 days.
+    expect(DEFAULT_COMMERCIAL_SETTINGS.founding_commercial).toMatchObject({
+      durationDays: 90,
+      slotCapacity: 10,
+      adminLimit: 2,
+    });
+    expect(DEFAULT_COMMERCIAL_SETTINGS.founding_organisation).toMatchObject({
+      durationDays: 90,
+      sponsoredCapacity: 25,
+      adminLimit: 3,
+    });
+    expect(DEFAULT_COMMERCIAL_SETTINGS.extensions.defaultDays).toBe(14);
+    expect(DEFAULT_COMMERCIAL_SETTINGS.sponsors.stripMinLive).toBe(5);
     expect(DEFAULT_COMMERCIAL_SETTINGS.partner.commissionBps).toBe(2000);
   });
 });
@@ -54,7 +64,7 @@ describe("commercial catalogue", () => {
     name: tier,
     price_cents: price,
     plan_code: null,
-    duration_days: tier === "month" ? 30 : tier === "half_year" ? 180 : 365,
+    duration_days: tier === "month" ? 30 : tier === "quarter" ? 90 : 180,
     slot_capacity: 1,
     monthly_activation_limit: 10,
     promo_label: null,
@@ -73,8 +83,12 @@ describe("commercial catalogue", () => {
     expect(month?.planIds.MZANSI_MARKET).toBe("MZANSI_MARKET-month");
     // Area without a row keeps its stable checkout token.
     expect(month?.planIds.PROMOTIONS_EVENTS).toMatch(/^[0-9a-f-]{36}$/);
-    expect(catalog.retail.find((offer) => offer.tier === "year")?.priceCents).toBe(45000);
-    expect(catalog.enterprise).toHaveLength(12);
+    expect(catalog.retail.find((offer) => offer.tier === "quarter")?.priceCents).toBe(14000);
+    expect(catalog.retail.find((offer) => offer.tier === "half_year")?.durationDays).toBe(180);
+    expect(catalog.retail.map((offer) => offer.durationDays)).toEqual([30, 90, 180]);
+    // Group 2: 10/25/50/100 slots for 90 and 180 days.
+    expect(catalog.enterprise).toHaveLength(8);
+    expect(catalog.enterprise[0]).toMatchObject({ planCode: "ENT_10_90D", priceCents: 120000 });
   });
 
   it("never lists private or inactive plans", () => {

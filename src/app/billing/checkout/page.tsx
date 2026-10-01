@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { CheckoutConfirm, type CheckoutSummary } from "./checkout-confirm";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
-import { formatDurationDays, isLegacyPlanTier } from "@/lib/constants/pricing";
+import {
+  ENTERPRISE_ADMINS_INCLUDED,
+  formatDurationDays,
+  isLegacyPlanTier,
+} from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata = { title: "Checkout", robots: { index: false } };
@@ -34,6 +38,7 @@ async function loadSummary(planId: string): Promise<CheckoutSummary | null> {
     durationLabel: formatDurationDays(durationDays),
     slotCapacity: row.slot_capacity ?? 1,
     monthlyActivationLimit: row.monthly_activation_limit ?? null,
+    administrators: plan.tier === "enterprise" ? ENTERPRISE_ADMINS_INCLUDED : null,
   };
 }
 

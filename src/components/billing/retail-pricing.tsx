@@ -13,7 +13,11 @@ import {
   TreePalm,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatPlanPrice, getRetailSavingsCents } from "@/lib/constants/pricing";
+import {
+  formatPlanPrice,
+  formatThirtyDayEquivalent,
+  getRetailSavingsCents,
+} from "@/lib/constants/pricing";
 import { cn } from "@/lib/utils";
 import type { MarketplaceArea, RetailPlanTier } from "@/types/enums";
 
@@ -63,16 +67,9 @@ const AREA_UNIT: Record<MarketplaceArea, string> = {
   PROMOTIONS_EVENTS: "1 tourism listing at a time",
 };
 
-/** Whole-rand monthly equivalent, e.g. R250 / 6 months → "R42". */
-function monthlyEquivalent(offer: RetailPricingOffer): string | null {
-  const months = Math.round(offer.durationDays / 30.4);
-  if (months <= 1) return null;
-  return formatPlanPrice(Math.round(offer.priceCents / months / 100) * 100);
-}
-
 function OfferBadge({ tier, label }: { tier: RetailPlanTier; label: string }) {
   if (tier === "month") return null;
-  const best = tier === "year";
+  const best = tier === "half_year";
   const Icon = best ? Crown : Sparkles;
   return (
     <span
@@ -108,7 +105,7 @@ function FeatureItem({ children, strong }: { children: ReactNode; strong?: boole
 }
 
 /**
- * The public retail ladder: R50 / R250 / R450 and free Events. The same price
+ * The public retail ladder: R50 / 30 days, R140 / 90 days, R250 / 180 days and free Events. The same price
  * applies in every section; the section picker only chooses where the slot is used.
  * Billing rules (renewal, expiry, refunds) live once in `BillingFaq`, not in each card.
  */
@@ -197,11 +194,11 @@ export function RetailPricing({
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         {offers.map((offer) => {
-          const highlighted = offer.tier === "half_year";
-          const best = offer.tier === "year";
+          const highlighted = offer.tier === "quarter";
+          const best = offer.tier === "half_year";
           const planId = offer.planIds[area];
           const planName = `${offer.label} — ${areaLabel}`;
-          const perMonth = monthlyEquivalent(offer);
+          const perThirtyDays = formatThirtyDayEquivalent(offer.priceCents, offer.durationDays);
           const savings = offer.tier !== "month" ? getRetailSavingsCents(offer) : 0;
           return (
             <article
@@ -222,15 +219,9 @@ export function RetailPricing({
                 <span className="font-display text-[2.6rem] font-extrabold leading-none tracking-tight text-foreground">
                   {formatPlanPrice(offer.priceCents)}
                 </span>
-                {offer.compareAtCents ? (
-                  <span className="text-sm text-muted-foreground line-through">
-                    <span className="sr-only">Was </span>
-                    {formatPlanPrice(offer.compareAtCents)}
-                  </span>
-                ) : null}
               </div>
               <p className="mt-1.5 min-h-5 text-xs font-medium text-muted-foreground">
-                {perMonth ? `About ${perMonth} a month` : "Paid once"}
+                {perThirtyDays ? `${perThirtyDays} per 30 days` : "Paid once"}
               </p>
 
               <ul className="mt-5 flex-1 space-y-2.5 border-t border-border/60 pt-5">
@@ -238,7 +229,7 @@ export function RetailPricing({
                 <FeatureItem>10 photos and 1 video</FeatureItem>
                 <FeatureItem>Boost &amp; Featured add-ons</FeatureItem>
                 {savings > 0 ? (
-                  <FeatureItem strong>Save {formatPlanPrice(savings)} vs. monthly</FeatureItem>
+                  <FeatureItem strong>Save {formatPlanPrice(savings)} vs. 30-day plans</FeatureItem>
                 ) : null}
               </ul>
 

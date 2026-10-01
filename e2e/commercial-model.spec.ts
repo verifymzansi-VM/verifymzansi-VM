@@ -16,18 +16,19 @@ test.describe("Commercial model", () => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
     const main = page.locator("main");
     await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
+    await expect(main.getByTestId("retail-offer-quarter")).toContainText("R140");
+    await expect(main.getByTestId("retail-offer-quarter")).toContainText(/popular/i);
+    await expect(main.getByTestId("retail-offer-quarter")).toContainText("Save R10");
     await expect(main.getByTestId("retail-offer-half_year")).toContainText("R250");
-    await expect(main.getByTestId("retail-offer-half_year")).toContainText(/most popular/i);
+    await expect(main.getByTestId("retail-offer-half_year")).toContainText(/best value/i);
     await expect(main.getByTestId("retail-offer-half_year")).toContainText("Save R50");
-    await expect(main.getByTestId("retail-offer-year")).toContainText("R450");
-    await expect(main.getByTestId("retail-offer-year")).toContainText(/best value/i);
-    await expect(main.getByTestId("retail-offer-year")).toContainText("Save R150");
+    await expect(main.getByTestId("retail-offer-year")).toHaveCount(0);
     await expect(main.getByText("Until the event ends")).toBeVisible();
     await expect(main.getByRole("link", { name: /request a proposal/i })).toHaveAttribute(
       "href",
       "/contact?topic=organisation_proposal"
     );
-    await expect(main).not.toContainText(/R650|Growth|Starter/);
+    await expect(main).not.toContainText(/R650|R450|12 months|Growth|Starter/);
 
     // The section picker changes where the slot is used, not the price.
     const before = await main.getByRole("link", { name: /choose 30 days/i }).getAttribute("href");
@@ -97,14 +98,14 @@ test.describe("Commercial model", () => {
     test.skip(WEBKIT_SKIP.includes(info.project.name), "WebKit auth bootstrap is unreliable.");
     await signIn(page, "billing-payment");
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
-    await page.getByRole("link", { name: /choose 12 months — mzansi market/i }).click();
+    await page.getByRole("link", { name: /choose 180 days — mzansi market/i }).click();
     await page.waitForURL("**/billing/checkout?plan=*");
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
-    await expect(page.getByText("R450").first()).toBeVisible();
-    await expect(page.getByText("12 months", { exact: true })).toBeVisible();
+    await expect(page.getByText("R250").first()).toBeVisible();
+    await expect(page.getByText("180 days", { exact: true })).toBeVisible();
     await expect(page.getByText("Does not renew automatically")).toBeVisible();
     await expect(page.getByText(/stay saved in your dashboard/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /pay r450 securely/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /pay r250 securely/i })).toBeEnabled();
   });
 
   test("an unknown plan cannot be checked out", async ({ page }, info) => {

@@ -13,15 +13,24 @@ import { SHARED_WITH_ORGANISATION } from "@/lib/organisations/affiliations";
 export const metadata = { title: "Organisation affiliations" };
 export const dynamic = "force-dynamic";
 
-export default async function AffiliationsPage() {
+export default async function AffiliationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string }>;
+}) {
+  const { org: orgParam } = await searchParams;
+  const orgSlug = orgParam && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(orgParam) ? orgParam : null;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?returnUrl=/dashboard/affiliations");
+  if (!user) {
+    const back = `/dashboard/affiliations${orgSlug ? `?org=${orgSlug}` : ""}`;
+    redirect(`/login?returnUrl=${encodeURIComponent(back)}`);
+  }
 
   const db = createAdminClient();
-  const [businesses, applications, adminOf] = await Promise.all([
+  const [businesses, applications, adminOf, preselected] = await Promise.all([
     db
       .from("businesses")
       .select("id, business_name, status")
@@ -39,6 +48,9 @@ export default async function AffiliationsPage() {
       .from("organisation_admins")
       .select("organisations(name, slug, programme_status)")
       .eq("user_id", user.id),
+    orgSlug
+      ? supabase.from("organisations").select("slug, name").eq("slug", orgSlug).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const businessIds = (businesses.data ?? []).map((b) => b.id);
   const affiliations = businessIds.length
@@ -96,6 +108,7 @@ export default async function AffiliationsPage() {
         applications={(applications.data ?? []) as unknown as MemberApplication[]}
         affiliations={(affiliations.data ?? []) as unknown as MemberAffiliation[]}
         sharedFields={[...SHARED_WITH_ORGANISATION]}
+        preselect={preselected.data ?? null}
       />
     </div>
   );

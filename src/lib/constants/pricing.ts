@@ -24,7 +24,7 @@ export interface PlanDefinition {
   name: string;
   priceCents: number;
   billingFrequency: "30_days" | "fixed_term";
-  /** Retail plan code shared by all areas, e.g. RETAIL_6M. */
+  /** Retail plan code shared by all areas, e.g. RETAIL_90D. */
   planCode?: string;
   durationDays: number;
   /** Simultaneous active posts. Slots are reusable when a post is sold or deactivated. */
@@ -62,7 +62,10 @@ export interface RetailOffer {
   compareAtCents?: number;
 }
 
-/** One price ladder for Market, Business and Tourism. */
+/**
+ * Group 1: one price ladder for Market, Business and Tourism (Document 03 §2).
+ * Every term is a fixed number of days from activation, never calendar months.
+ */
 export const RETAIL_OFFERS: readonly RetailOffer[] = [
   {
     tier: "month",
@@ -73,22 +76,22 @@ export const RETAIL_OFFERS: readonly RetailOffer[] = [
     promoLabel: "Flexible",
   },
   {
-    tier: "half_year",
-    planCode: "RETAIL_6M",
-    label: "6 Months",
-    priceCents: 25000,
-    durationDays: 180,
-    promoLabel: "Most popular",
-    compareAtCents: 30000,
+    tier: "quarter",
+    planCode: "RETAIL_90D",
+    label: "90 Days",
+    priceCents: 14000,
+    durationDays: 90,
+    promoLabel: "Popular",
+    compareAtCents: 15000,
   },
   {
-    tier: "year",
-    planCode: "RETAIL_12M",
-    label: "12 Months",
-    priceCents: 45000,
-    durationDays: 365,
+    tier: "half_year",
+    planCode: "RETAIL_180D",
+    label: "180 Days",
+    priceCents: 25000,
+    durationDays: 180,
     promoLabel: "Best value",
-    compareAtCents: 60000,
+    compareAtCents: 30000,
   },
 ];
 
@@ -142,31 +145,49 @@ export interface EnterprisePlanDefinition {
   monthlyActivations: number;
 }
 
-const ENTERPRISE_PRICE_TABLE: ReadonlyArray<readonly [number, number, readonly number[]]> = [
-  [50, 100, [500000, 900000, 1600000]],
-  [100, 200, [900000, 1600000, 2800000]],
-  [250, 500, [2000000, 3500000, 6000000]],
-  [500, 1000, [3500000, 6000000, 10000000]],
+/** Group 2 multi-listing: [live slots, [90-day price, 180-day price]] (Document 03 §3). */
+const ENTERPRISE_PRICE_TABLE: ReadonlyArray<readonly [number, readonly [number, number]]> = [
+  [10, [120000, 215000]],
+  [25, [270000, 485000]],
+  [50, [500000, 900000]],
+  [100, [900000, 1600000]],
 ];
 
-const ENTERPRISE_TERMS: ReadonlyArray<readonly [string, string, number]> = [
-  ["3M", "3 Months", 90],
-  ["6M", "6 Months", 180],
-  ["12M", "12 Months", 365],
-];
+const ENTERPRISE_TERMS: readonly number[] = [90, 180];
 
-/** Bulk active-slot plans covering all areas. 1,000+ slots are quoted manually. */
+/** Above 100 live slots is a written quote for a 90- or 180-day term. */
+export const ENTERPRISE_QUOTE_ABOVE_SLOTS = 100;
+/** Named administrators included with every multi-listing plan. */
+export const ENTERPRISE_ADMINS_INCLUDED = 2;
+
 export const ENTERPRISE_PLANS: readonly EnterprisePlanDefinition[] = ENTERPRISE_PRICE_TABLE.flatMap(
-  ([slots, monthlyActivations, prices]) =>
-    ENTERPRISE_TERMS.map(([suffix, label, durationDays], index) => ({
-      planCode: `ENT_${slots}_${suffix}`,
+  ([slots, prices]) =>
+    ENTERPRISE_TERMS.map((durationDays, index) => ({
+      planCode: `ENT_${slots}_${durationDays}D`,
       slots,
       durationDays,
-      label,
+      label: `${durationDays} days`,
       priceCents: prices[index] ?? 0,
-      monthlyActivations,
+      monthlyActivations: slots * 2,
     }))
 );
+
+/** Group 3 sponsor programme: total fee by capacity and term (Document 03 §5). */
+export interface SponsorProgrammePrice {
+  capacity: number;
+  price90Cents: number;
+  price180Cents: number;
+}
+
+export const SPONSOR_PROGRAMME_PRICES: readonly SponsorProgrammePrice[] = [
+  { capacity: 25, price90Cents: 1_500_000, price180Cents: 2_500_000 },
+  { capacity: 50, price90Cents: 2_250_000, price180Cents: 4_000_000 },
+  { capacity: 100, price90Cents: 3_500_000, price180Cents: 6_500_000 },
+  { capacity: 250, price90Cents: 7_500_000, price180Cents: 14_000_000 },
+];
+
+/** Programme administrators included with every sponsor programme. */
+export const SPONSOR_PROGRAMME_ADMINS = 3;
 
 type LegacyLimits = {
   maxListings?: number;
@@ -211,6 +232,19 @@ function legacyPlan(
 
 /** Retired per-area tiers. Existing entitlements keep these limits until they expire. */
 export const LEGACY_PLANS: PlanDefinition[] = [
+  // Retired 365-day retail term (Document 03 v3.2 sells no annual package).
+  ...ACTIVE_MARKETPLACE_AREAS.map((area): PlanDefinition => ({
+    area,
+    tier: "year",
+    name: `${AREA_PLAN_NAMES[area]} — 365 Days (retired)`,
+    priceCents: 45000,
+    billingFrequency: "fixed_term",
+    planCode: "RETAIL_12M",
+    durationDays: 365,
+    slotCapacity: 1,
+    legacy: true,
+    features: { ...RETAIL_FEATURES, [AREA_CAPACITY_KEY[area]]: 1 },
+  })),
   legacyPlan("MZANSI_MARKET", "basic", 3000, {
     maxListings: 1,
     maxVideos: 0,
@@ -337,10 +371,15 @@ export function getPlanFeatureItems(
   return items;
 }
 
+/** Terms are stated in days (Document 03 fixed-day rule), never calendar months. */
 export function formatDurationDays(days: number): string {
-  if (days % 365 === 0) return days === 365 ? "12 months" : `${days / 365} years`;
-  if (days % 30 === 0 && days >= 60) return `${days / 30} months`;
-  return `${days} days`;
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+/** 30-day equivalent of a longer term (Document 03), e.g. R250 / 180 days → "R41.67". */
+export function formatThirtyDayEquivalent(priceCents: number, durationDays: number): string | null {
+  if (durationDays <= 30) return null;
+  return formatPlanPrice(Math.round((priceCents * 30) / durationDays));
 }
 
 /** Savings versus buying the same period as separate 30-day plans. */
@@ -362,7 +401,9 @@ export function getPlansForArea(area: MarketplaceArea): PlanDefinition[] {
 }
 
 export function isLegacyPlanTier(tier: string | null | undefined): boolean {
-  return tier === "basic" || tier === "starter" || tier === "growth" || tier === "pro";
+  return (
+    tier === "basic" || tier === "starter" || tier === "growth" || tier === "pro" || tier === "year"
+  );
 }
 
 /**

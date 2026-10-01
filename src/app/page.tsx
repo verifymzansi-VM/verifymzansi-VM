@@ -10,6 +10,7 @@ import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { HomeAboutSection } from "@/components/home/home-about-section";
+import { HomeSponsorsSection } from "@/components/home/home-sponsors-section";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { getServerPublicRuntimeConfig } from "@/lib/public-runtime-config";
@@ -143,6 +144,10 @@ export default async function HomePage() {
 
           <Suspense fallback={null}>
             <HomeProgrammeShowcase />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <HomeSponsorsSection />
           </Suspense>
 
           {/* ═══ What VerifyMzansi is, why it helps, and how to start ═══ */}

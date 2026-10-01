@@ -24,6 +24,7 @@ import {
   PLANS,
   FREE_POST_CONFIG,
   formatPlanPrice,
+  formatThirtyDayEquivalent,
   getPlanCheckoutHref,
   type PlanDefinition,
 } from "@/lib/constants/pricing";
@@ -195,8 +196,8 @@ function InlinePlanGrid({
       } gap-3 max-w-4xl mx-auto`}
     >
       {plans.map((plan) => {
-        const isPopular = plan.tier === "half_year";
-        const isPremium = plan.tier === "year";
+        const isPopular = plan.tier === "quarter";
+        const isPremium = plan.tier === "half_year";
         const features = planFeatureList(plan);
         return (
           <Card
@@ -213,7 +214,7 @@ function InlinePlanGrid({
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <Badge className="gap-1 whitespace-nowrap border-0 bg-brand-green-600 px-2.5 py-0.5 text-xs font-bold text-white hover:bg-brand-green-600 dark:bg-brand-green-500 dark:text-brand-green-950">
                   <Sparkles className="h-3 w-3" aria-hidden="true" />
-                  Most popular
+                  {plan.promoLabel ?? "Popular"}
                 </Badge>
               </div>
             )}
@@ -236,12 +237,12 @@ function InlinePlanGrid({
                   <span className="font-display text-2xl font-bold">
                     {formatPlanPrice(plan.priceCents)}
                   </span>
-                  {plan.compareAtCents ? (
-                    <span className="ml-1 text-xs text-muted-foreground line-through">
-                      {formatPlanPrice(plan.compareAtCents)}
-                    </span>
-                  ) : null}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  {formatThirtyDayEquivalent(plan.priceCents, plan.durationDays)
+                    ? `${formatThirtyDayEquivalent(plan.priceCents, plan.durationDays)} per 30 days`
+                    : `${plan.durationDays} days`}
+                </p>
               </div>
 
               {/* Feature list */}
@@ -840,7 +841,7 @@ function PlanPickerWithTrial({
             Choose how you want to post
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            R50 / 30 days, R250 / 6 months or R450 / 12 months.
+            R50 / 30 days, R140 / 90 days or R250 / 180 days.
           </p>
         </div>
       )}

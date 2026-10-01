@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCommercialSettings } from "@/lib/commercial/settings";
@@ -16,6 +16,8 @@ import {
   PerformanceReport,
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
+import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
+import { getOpenOfferForOrganisation } from "@/lib/trials/extension-offers";
 
 export const metadata = { title: "Organisation dashboard", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -69,7 +71,9 @@ export default async function OrganisationDashboardPage({
   const db = createAdminClient();
   const { data: org } = await db
     .from("organisations")
-    .select("id, slug, name, programme_status, trial_starts_at, is_public, affiliation_wording")
+    .select(
+      "id, slug, name, programme_status, trial_starts_at, trial_ends_at, is_public, affiliation_wording"
+    )
     .eq("slug", slug)
     .maybeSingle();
   if (!org) notFound();
@@ -80,7 +84,7 @@ export default async function OrganisationDashboardPage({
   if (isAdmin !== true) notFound();
 
   const window = reportWindow(org.trial_starts_at);
-  const [summary, applications, members, admins, report, settings] = await Promise.all([
+  const [summary, applications, members, admins, report, settings, offer] = await Promise.all([
     db.rpc("organisation_admin_summary", { p_user: user.id, p_org: org.id }),
     db.rpc("org_list_applications", { p_user: user.id, p_org: org.id, p_status: null }),
     db.rpc("org_list_members", { p_user: user.id, p_org: org.id }),
@@ -92,6 +96,7 @@ export default async function OrganisationDashboardPage({
       p_to: window.to,
     }),
     getCommercialSettings(db as never),
+    getOpenOfferForOrganisation(org.id).catch(() => null),
   ]);
   const s = (summary.data ?? {}) as Partial<Summary>;
   const adminIds = (admins.data ?? []).map((a) => a.user_id);
@@ -108,6 +113,12 @@ export default async function OrganisationDashboardPage({
   // Trial expiry moves the organisation to affiliation-only (see organisation_lifecycle).
   const pilotEnded =
     s.programmeStatus === "affiliation_only" && Boolean(s.trialEndsAt) && s.daysRemaining === 0;
+  const isOwner = (admins.data ?? []).some((a) => a.user_id === user.id && a.role === "owner");
+  const capacity = s.sponsoredCapacity ?? 0;
+  const filled = s.sponsored ?? 0;
+  const waiting = s.waitlisted ?? 0;
+  const fillPercent = capacity > 0 ? Math.min(100, Math.round((filled / capacity) * 100)) : 0;
+  const reportFrom = window.from.slice(0, 10);
 
   return (
     <div className="min-w-0 space-y-6">
@@ -137,7 +148,7 @@ export default async function OrganisationDashboardPage({
             <Link className="underline" href="/contact?topic=organisation_proposal">
               talk to VerifyMzansi
             </Link>{" "}
-            about 3, 6 or 12-month options.
+            about a 90- or 180-day programme.
           </p>
         </div>
       ) : null}
@@ -147,15 +158,15 @@ export default async function OrganisationDashboardPage({
           <h2 className="font-semibold">Your founding pilot has ended</h2>
           <p className="mt-1 text-muted-foreground">
             Nothing renews automatically. Confirmed affiliations stay on business profiles;
-            sponsored visibility has ended. Review the performance report, then choose a 3, 6 or
-            12-month organisation plan or ask for a custom enterprise quotation.
+            sponsored visibility has ended. Review the performance report, then ask for a 90- or
+            180-day programme proposal.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               className="inline-flex min-h-11 items-center rounded-md border px-3 font-medium"
-              href="/pricing#enterprise"
+              href="/advertise#programmes"
             >
-              See 3, 6 and 12-month plans
+              See programme prices
             </Link>
             <Link
               className="inline-flex min-h-11 items-center rounded-md bg-brand-green px-3 font-medium text-white"
@@ -166,6 +177,56 @@ export default async function OrganisationDashboardPage({
           </div>
         </section>
       ) : null}
+
+      {offer ? <ExtensionOfferCard offer={offer} canRespond={isOwner} /> : null}
+
+      <section aria-labelledby="programme-places" className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border p-4">
+          <h2 id="programme-places" className="text-sm font-semibold">
+            Supported places
+          </h2>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums">
+            {filled} of {capacity} places filled
+            {waiting > 0 ? (
+              <span className="text-base font-normal text-muted-foreground">
+                {" "}
+                · {waiting} waiting
+              </span>
+            ) : null}
+          </p>
+          <div
+            role="meter"
+            aria-label="Supported places filled"
+            aria-valuemin={0}
+            aria-valuemax={capacity}
+            aria-valuenow={filled}
+            className="mt-3 h-2 rounded-full bg-muted"
+          >
+            <div
+              className={
+                fillPercent >= 90
+                  ? "h-2 rounded-full bg-brand-gold-500"
+                  : "h-2 rounded-full bg-brand-green"
+              }
+              style={{ width: `${fillPercent}%` }}
+            />
+          </div>
+        </div>
+        <div className="rounded-xl border p-4 text-sm">
+          <h2 className="font-semibold">Programme dates</h2>
+          <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">Started</dt>
+            <dd>{org.trial_starts_at ? date.format(new Date(org.trial_starts_at)) : "—"}</dd>
+            <dt className="text-muted-foreground">Ends</dt>
+            <dd>{s.trialEndsAt ? date.format(new Date(s.trialEndsAt)) : "—"}</dd>
+            <dt className="text-muted-foreground">Days left</dt>
+            <dd className="tabular-nums">{s.daysRemaining ?? "—"}</dd>
+          </dl>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Nothing renews or charges automatically.
+          </p>
+        </div>
+      </section>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -212,7 +273,23 @@ export default async function OrganisationDashboardPage({
             allowFoundingSponsorship={false}
           />
         </TabsContent>
-        <TabsContent value="report" className="mt-4">
+        <TabsContent value="report" className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <a
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium"
+              href={`/api/organisations/${org.id}/report?from=${reportFrom}`}
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Download report (CSV)
+            </a>
+            <a
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm font-medium"
+              href={`/api/organisations/${org.id}/report?days=30`}
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Last 30 days (CSV)
+            </a>
+          </div>
           {parsedReport ? (
             <PerformanceReport organisationName={org.name} report={parsedReport} />
           ) : null}
@@ -230,8 +307,9 @@ export default async function OrganisationDashboardPage({
             . Badge wording: “{org.affiliation_wording}”.
           </p>
           <p className="text-muted-foreground">
-            To change your profile, logo, wording or administrators ({adminIds.length} of{" "}
-            {s.adminLimit ?? 0}), contact VerifyMzansi. Logo use requires written permission on
+            Administrators: {adminIds.length} of {s.adminLimit ?? 0}. VerifyMzansi sends new
+            administrators an email invitation. To change your profile, programme description, logo
+            or wording, contact VerifyMzansi; a logo is shown only once written permission is on
             record.
           </p>
           <ul className="space-y-1">

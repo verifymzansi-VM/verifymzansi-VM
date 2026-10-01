@@ -56,6 +56,9 @@ export interface AdminOrganisation {
   sponsorship_wording: string;
   sponsored_capacity: number;
   admin_limit: number;
+  show_on_strip: boolean;
+  show_on_home: boolean;
+  display_order: number;
 }
 
 const input = "mt-1 block w-full rounded-md border bg-background p-2";
@@ -224,6 +227,42 @@ function ProfileFields({ org }: { org?: AdminOrganisation }) {
             />
             Accepting affiliation requests
           </label>
+          <fieldset className="space-y-2 rounded-lg border p-3 text-sm sm:col-span-2">
+            <legend className="px-1 font-medium">Programme partner placement</legend>
+            <p className="text-xs text-muted-foreground">
+              Shown only while the programme is public, active, has recorded logo permission and has
+              the minimum number of live businesses (Commercial settings).
+            </p>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="showOnStrip"
+                defaultChecked={org.show_on_strip}
+                className="h-4 w-4"
+              />
+              Show on the Programme partners strip (Mzansi Business)
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="showOnHome"
+                defaultChecked={org.show_on_home}
+                className="h-4 w-4"
+              />
+              Show in the home page partners section
+            </label>
+            <label className="block">
+              Display order (lower first; paid programmes always lead)
+              <input
+                name="displayOrder"
+                type="number"
+                min={0}
+                max={10000}
+                defaultValue={org.display_order}
+                className={input}
+              />
+            </label>
+          </fieldset>
         </>
       ) : (
         <label className="text-sm">
@@ -233,7 +272,7 @@ function ProfileFields({ org }: { org?: AdminOrganisation }) {
             type="number"
             min={0}
             max={10000}
-            defaultValue={50}
+            defaultValue={25}
             className={input}
           />
         </label>
@@ -261,6 +300,9 @@ function profileValues(form: Record<string, string>, existing: boolean) {
     values.sponsorshipWording = form.sponsorshipWording;
     values.isPublic = form.isPublic === "on";
     values.acceptingApplications = form.acceptingApplications === "on";
+    values.showOnStrip = form.showOnStrip === "on";
+    values.showOnHome = form.showOnHome === "on";
+    values.displayOrder = optionalInt(form.displayOrder);
   } else {
     values.sponsoredCapacity = optionalInt(form.sponsoredCapacity);
   }
@@ -330,8 +372,7 @@ export function OrganisationProfileForm({ org }: { org: AdminOrganisation }) {
 }
 
 const OPERATIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "activate_trial", label: "Activate founding pilot (6 months, no platform fee)" },
-  { value: "extend_trial", label: "Extend founding pilot" },
+  { value: "activate_trial", label: "Activate founding pilot (90 days, no platform fee)" },
   { value: "set_capacity", label: "Change sponsored cohort size" },
   { value: "approve_logo", label: "Record written logo permission" },
   { value: "revoke_logo", label: "Withdraw logo permission" },
@@ -357,8 +398,6 @@ export function OrganisationActionsForm({ org }: { org: AdminOrganisation }) {
           durationDays: optionalInt(form.durationDays),
           ownSlots: optionalInt(form.ownSlots),
         };
-      case "extend_trial":
-        return { endsAt: new Date(form.endsAt).toISOString() };
       case "set_capacity":
         return { sponsoredCapacity: optionalInt(form.sponsoredCapacity) };
       case "approve_logo":
@@ -460,11 +499,11 @@ export function OrganisationActionsForm({ org }: { org: AdminOrganisation }) {
               </label>
             </>
           ) : null}
-          {operation === "extend_trial" ? (
-            <label className="text-sm">
-              New end date
-              <input name="endsAt" type="date" required className={input} />
-            </label>
+          {operation === "activate_trial" ? (
+            <p className="text-xs text-muted-foreground">
+              Extensions are offered from Admin › Trials and apply only after the programme owner
+              accepts.
+            </p>
           ) : null}
           {operation === "set_capacity" || operation === "convert_paid" ? (
             <label className="text-sm">

@@ -18,6 +18,10 @@ import {
   PerformanceReport,
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
+import {
+  OrganisationInvitesCard,
+  type AdminOrganisationInvite,
+} from "@/components/admin/commercial/organisation-invites";
 
 export const metadata = { title: "Organisation" };
 export const dynamic = "force-dynamic";
@@ -50,7 +54,7 @@ export default async function OrganisationAdminDetailPage({
   if (!org) notFound();
 
   const { from: reportFrom, to: reportTo } = reportWindow(org.trial_starts_at);
-  const [applications, members, admins, notes, programmes, showcases, audit, report] =
+  const [applications, members, admins, notes, programmes, showcases, audit, report, invites] =
     await Promise.all([
       admin.rpc("org_list_applications", { p_user: user.id, p_org: id, p_status: null }),
       admin.rpc("org_list_members", { p_user: user.id, p_org: id }),
@@ -84,6 +88,14 @@ export default async function OrganisationAdminDetailPage({
         p_from: reportFrom,
         p_to: reportTo,
       }),
+      admin
+        .from("organisation_admin_invites")
+        .select("id, email, expires_at, created_at")
+        .eq("organisation_id", id)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false }),
     ]);
 
   const adminIds = (admins.data ?? []).map((row) => row.user_id);
@@ -91,6 +103,8 @@ export default async function OrganisationAdminDetailPage({
     ? await admin.from("account_profiles").select("user_id, display_name").in("user_id", adminIds)
     : { data: [] as Array<{ user_id: string; display_name: string | null }> };
   const parsedReport = parsePerformanceReport(report.data);
+  const openInvites = (invites.data ?? []) as AdminOrganisationInvite[];
+  const seatsLeft = Math.max(0, org.admin_limit - adminIds.length - openInvites.length);
 
   return (
     <div className="space-y-6 p-4">
@@ -113,10 +127,27 @@ export default async function OrganisationAdminDetailPage({
             ? ` · logo permission recorded (${org.logo_permission_reference ?? "no reference"})`
             : " · no logo permission"}
         </p>
+        {org.programme_status === "founding_trial" ? (
+          <p className="mt-1 text-sm">
+            <Link className="underline" href={`/admin/trials?offer=organisation_trial:${org.id}`}>
+              Offer a pilot extension
+            </Link>{" "}
+            <span className="text-muted-foreground">
+              (applies only if the programme owner accepts)
+            </span>
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <OrganisationActionsForm org={org as AdminOrganisation} />
+        <div className="space-y-6">
+          <OrganisationActionsForm org={org as AdminOrganisation} />
+          <OrganisationInvitesCard
+            organisationId={org.id}
+            invites={openInvites}
+            seatsLeft={seatsLeft}
+          />
+        </div>
         <section className="space-y-3 rounded-xl border bg-card p-4">
           <h2 className="text-base font-semibold">
             Administrators ({adminIds.length} / {org.admin_limit})

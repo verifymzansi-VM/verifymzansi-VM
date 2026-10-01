@@ -99,7 +99,7 @@ export function BillingFaq({
           <p>
             Trial posts have standard placement: no boosts, featured placement or urgent badge.
             There is no automatic charge and no repeated free renewal. When the trial ends your post
-            stays saved, ready to reactivate for R50 / 30 days, R250 / 6 months or R450 / 12 months.
+            stays saved, ready to reactivate for R50 / 30 days, R140 / 90 days or R250 / 180 days.
           </p>
           <p>
             The offer is tied to your verified identity. Previous free-post usage counts; deleting a

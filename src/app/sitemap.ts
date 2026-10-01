@@ -34,6 +34,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     { url: `${BASE_URL}/advertise`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     { url: `${BASE_URL}/pricing`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${BASE_URL}/sponsors`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     {
       url: `${BASE_URL}/verify-buyer`,
       lastModified: now,

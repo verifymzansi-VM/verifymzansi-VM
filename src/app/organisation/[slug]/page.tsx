@@ -1,34 +1,43 @@
 import type { Metadata } from "next";
-import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Building2, Globe, Mail, MapPin, Phone } from "lucide-react";
+import { ArrowRight, Globe, Mail, MapPin, Phone, Users } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { BrandSurface } from "@/components/brand";
-import { PageHeader } from "@/components/layout/page-header";
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/server";
-import { BUSINESS_CATEGORY_LABELS, type BusinessCategory } from "@/types/enums";
+import {
+  BusinessCardGridItem,
+  type BusinessCardGridRow,
+} from "@/components/listings/business-card-grid-item";
+import { SponsorLogo } from "@/components/organisations/sponsor-logo";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
+import { getCommercialSettings, organisationsPublicEnabled } from "@/lib/commercial/settings";
+import { createClient } from "@/lib/supabase/server";
+import { ALL_BUSINESS_CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
+import { getProvinceNames } from "@/lib/constants/sa-provinces";
+import {
+  getPublicSponsors,
+  organisationTypeLabel,
+  sponsorArea,
+} from "@/lib/organisations/sponsors";
+import { cn } from "@/lib/utils";
 
 export const revalidate = 300;
 
 const PAGE_SIZE = 24;
-const PROGRAMME_STATUS_LABELS: Record<string, string> = {
-  founding_trial: "Founding programme",
-  active_paid: "Active programme",
-  affiliation_only: "Affiliation network",
-};
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const selectClass =
+  "mt-1 block h-11 w-full rounded-md border border-input bg-background px-3 text-base sm:h-10 sm:text-sm";
 
 type Params = { slug: string };
 type Search = {
-  type?: string;
   q?: string;
   category?: string;
+  subcategory?: string;
+  province?: string;
   city?: string;
   programme?: string;
   sponsored?: string;
@@ -51,22 +60,12 @@ interface PublicOrganisation {
   logo_permission_at: string | null;
   programme_status: string;
   affiliation_wording: string;
+  sponsorship_wording: string;
+  accepting_applications: boolean;
 }
 
 interface DirectoryRow {
   business_id: string;
-  business_name: string;
-  slug: string | null;
-  category: string | null;
-  subcategory: string | null;
-  city: string | null;
-  province: string | null;
-  logo_url: string | null;
-  cover_image: string | null;
-  programme_name: string | null;
-  confirmed_at: string;
-  sponsored: boolean;
-  affiliation_label: string | null;
   total_count: number;
 }
 
@@ -77,7 +76,7 @@ async function loadOrganisation(slug: string): Promise<PublicOrganisation | null
   const { data } = await supabase
     .from("organisations")
     .select(
-      "id, slug, name, organisation_type, description, programme_description, service_area, province, website, public_email, public_phone, logo_url, logo_permission_at, programme_status, affiliation_wording, is_public"
+      "id, slug, name, organisation_type, description, programme_description, service_area, province, website, public_email, public_phone, logo_url, logo_permission_at, programme_status, affiliation_wording, sponsorship_wording, accepting_applications, is_public"
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -92,17 +91,32 @@ async function loadOrganisation(slug: string): Promise<PublicOrganisation | null
   return data as PublicOrganisation;
 }
 
+async function liveCount(orgId: string): Promise<number> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("organisation_public_stats", { p_org: orgId });
+  return Number((data as { affiliatedCount?: number } | null)?.affiliatedCount ?? 0);
+}
+
+async function minimumLive(): Promise<number> {
+  const supabase = await createClient();
+  return (await getCommercialSettings(supabase as never)).sponsors.stripMinLive;
+}
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const org = await loadOrganisation((await params).slug);
   if (!org) return { title: "Organisation not found", robots: { index: false } };
   const description =
+    org.programme_description?.slice(0, 155) ??
     org.description?.slice(0, 155) ??
-    `Businesses participating in ${org.name} programmes, verified on VerifyMzansi.`;
+    `Local businesses supported by ${org.name} on VerifyMzansi.`;
+  // Kept out of search engines until the showcase has real content.
+  const [live, minimum] = await Promise.all([liveCount(org.id), minimumLive()]);
   return {
-    title: `${org.name} Business Network`,
+    title: `Businesses supported by ${org.name}`,
     description,
     alternates: { canonical: `/organisation/${org.slug}` },
-    openGraph: { title: `${org.name} Business Network`, description },
+    openGraph: { title: `Businesses supported by ${org.name}`, description },
+    ...(live < minimum ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
@@ -123,34 +137,38 @@ export default async function OrganisationPage({
   if (!org) notFound();
 
   const query = await searchParams;
+  const category = ALL_BUSINESS_CATEGORIES.find((c) => c.value === query.category);
   const filters = {
     q: clean(query.q),
-    category: clean(query.category, 40),
+    category: category?.value,
+    subcategory: category?.subcategories.some((s) => s.value === query.subcategory)
+      ? query.subcategory
+      : undefined,
+    province: getProvinceNames().includes(query.province ?? "") ? query.province : undefined,
     city: clean(query.city, 60),
     programme:
       query.programme && /^[0-9a-f-]{36}$/i.test(query.programme) ? query.programme : undefined,
     sponsored: query.sponsored === "1" ? true : undefined,
-    type:
-      query.type && ["participant", "member", "affiliate"].includes(query.type)
-        ? query.type
-        : undefined,
   };
   const page = Math.max(1, Math.min(200, Number.parseInt(query.page ?? "1", 10) || 1));
+  const filtered = Object.values(filters).some((value) => value !== undefined);
 
   const supabase = await createClient();
-  const [directory, stats, programmes] = await Promise.all([
+  const [directory, live, sponsors, programmes] = await Promise.all([
     supabase.rpc("organisation_directory", {
       p_org: org.id,
       p_search: filters.q ?? null,
       p_category: filters.category ?? null,
+      p_subcategory: filters.subcategory ?? null,
+      p_province: filters.province ?? null,
       p_city: filters.city ?? null,
       p_programme: filters.programme ?? null,
       p_sponsored: filters.sponsored ?? null,
-      p_type: filters.type ?? null,
       p_limit: PAGE_SIZE,
       p_offset: (page - 1) * PAGE_SIZE,
     }),
-    supabase.rpc("organisation_public_stats", { p_org: org.id }),
+    liveCount(org.id),
+    getPublicSponsors(),
     supabase
       .from("organisation_programmes")
       .select("id, name")
@@ -158,9 +176,24 @@ export default async function OrganisationPage({
       .eq("active", true),
   ]);
   const rows = (directory.data ?? []) as DirectoryRow[];
-  const total = rows[0]?.total_count ?? 0;
-  const counts = (stats.data ?? {}) as { affiliatedCount?: number; sponsoredCount?: number };
+  const total = Number(rows[0]?.total_count ?? 0);
+  const ids = rows.map((row) => row.business_id);
+  const { data: businessRows } = ids.length
+    ? await supabase.from("businesses").select("*").in("id", ids)
+    : { data: [] as BusinessCardGridRow[] };
+  // Keep the directory order (the RPC sorts and filters).
+  const businesses = ids
+    .map((id) => (businessRows ?? []).find((row) => row.id === id))
+    .filter(Boolean) as BusinessCardGridRow[];
+
+  const sponsor = sponsors.find((row) => row.id === org.id);
+  const isProgramme = ["founding_trial", "active_paid"].includes(org.programme_status);
+  // Below the minimum the page stays out of search engines (generateMetadata);
+  // businesses that are live are always shown — only an empty grid is replaced.
+  const onboarding = live === 0;
+  const placesAvailable = sponsor ? sponsor.places_available : true;
   const logo = org.logo_permission_at ? org.logo_url : null;
+  const area = sponsorArea(org);
   const pageHref = (next: number) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters))
@@ -186,261 +219,305 @@ export default async function OrganisationPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
       />
       <main id="main-content" className="flex-1 scroll-mt-24">
-        <BrandSurface as="section">
-          <div className="container-page space-y-4 pb-9 pt-6 sm:pb-11 sm:pt-8">
-            <PageHeader
-              title={`${org.name} Business Network`}
-              description={org.programme_description ?? org.description ?? undefined}
-              breadcrumbs={[
-                { label: "Mzansi Business", href: "/mzansi-business" },
-                { label: org.name },
-              ]}
-              tone="inverse"
-            />
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              {logo ? (
-                <Image
+        <BrandSurface as="section" aria-labelledby="organisation-title">
+          <div className="container-page grid gap-6 pb-10 pt-6 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:pb-12">
+            <div className="min-w-0">
+              <Breadcrumbs
+                items={[{ label: "Programme partners", href: "/sponsors" }, { label: org.name }]}
+                tone="inverse"
+              />
+              <div className="mt-5 flex items-start gap-4">
+                <SponsorLogo
                   src={logo}
-                  alt={`${org.name} logo`}
-                  width={72}
-                  height={72}
-                  className="h-16 w-16 rounded-xl border bg-white object-contain p-1"
-                  unoptimized
+                  name={org.name}
+                  size={72}
+                  className="rounded-2xl shadow-lg ring-white/10"
                 />
-              ) : (
-                <span className="flex h-16 w-16 items-center justify-center rounded-xl border border-white/15 bg-white/10">
-                  <Building2 aria-hidden="true" className="h-7 w-7 text-white/70" />
-                </span>
-              )}
-              <div className="space-y-1 text-sm text-white/90">
-                <p className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="border-white/25 text-white">
-                    {org.organisation_type.replace(/_/g, " ")}
-                  </Badge>
-                  <Badge variant="secondary" className="bg-brand-gold-300 text-brand-gold-950">
-                    {PROGRAMME_STATUS_LABELS[org.programme_status] ?? "Programme"}
-                  </Badge>
-                  <span>
-                    <strong>{counts.affiliatedCount ?? total}</strong> participating businesses
-                  </span>
-                  {counts.sponsoredCount ? (
-                    <span>· {counts.sponsoredCount} with sponsored visibility</span>
-                  ) : null}
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-gold-300">
+                    {isProgramme ? "Programme partner" : "Business network"} ·{" "}
+                    {organisationTypeLabel(org.organisation_type)}
+                  </p>
+                  <h1
+                    id="organisation-title"
+                    className="mt-2 font-display text-[1.9rem] font-extrabold leading-[1.08] tracking-[-0.03em] text-white sm:text-[2.6rem]"
+                  >
+                    {isProgramme ? (
+                      <>
+                        Businesses supported by{" "}
+                        <span className="text-brand-gold-300">{org.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-brand-gold-300">{org.name}</span> business network
+                      </>
+                    )}
+                  </h1>
+                </div>
+              </div>
+              {org.programme_description || org.description ? (
+                <p className="mt-4 max-w-2xl text-base leading-7 text-white/75">
+                  {org.programme_description ?? org.description}
                 </p>
-                <p className="flex flex-wrap gap-x-4 gap-y-1 text-white/70">
-                  {org.service_area || org.province ? (
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin aria-hidden="true" className="h-3.5 w-3.5" />
-                      {[org.service_area, org.province].filter(Boolean).join(", ")}
-                    </span>
-                  ) : null}
-                  {org.website ? (
-                    <a
-                      className="inline-flex items-center gap-1 underline"
-                      href={org.website}
-                      rel="noopener noreferrer nofollow"
-                      target="_blank"
-                    >
-                      <Globe aria-hidden="true" className="h-3.5 w-3.5" />
-                      Website
-                    </a>
-                  ) : null}
-                  {org.public_email ? (
-                    <a
-                      className="inline-flex items-center gap-1 underline"
-                      href={`mailto:${org.public_email}`}
-                    >
-                      <Mail aria-hidden="true" className="h-3.5 w-3.5" />
-                      {org.public_email}
-                    </a>
-                  ) : null}
-                  {org.public_phone ? (
-                    <a
-                      className="inline-flex items-center gap-1 underline"
-                      href={`tel:${org.public_phone}`}
-                    >
-                      <Phone aria-hidden="true" className="h-3.5 w-3.5" />
-                      {org.public_phone}
-                    </a>
-                  ) : null}
-                </p>
+              ) : null}
+              <ul className="mt-5 flex flex-wrap gap-2 text-sm text-white/85">
+                <li className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5">
+                  <Users aria-hidden="true" className="h-4 w-4 text-brand-gold-300" />
+                  <strong className="tabular-nums">{live}</strong> live{" "}
+                  {live === 1 ? "business" : "businesses"}
+                </li>
+                {area ? (
+                  <li className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5">
+                    <MapPin aria-hidden="true" className="h-4 w-4 text-brand-gold-300" />
+                    {area}
+                  </li>
+                ) : null}
+              </ul>
+              <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2 text-sm text-white/70">
+                {org.website ? (
+                  <a
+                    className="inline-flex min-h-11 items-center gap-1.5 underline-offset-4 hover:underline"
+                    href={org.website}
+                    rel="noopener noreferrer nofollow"
+                    target="_blank"
+                  >
+                    <Globe aria-hidden="true" className="h-4 w-4" />
+                    Website
+                  </a>
+                ) : null}
+                {org.public_email ? (
+                  <a
+                    className="inline-flex min-h-11 items-center gap-1.5 break-all underline-offset-4 hover:underline"
+                    href={`mailto:${org.public_email}`}
+                  >
+                    <Mail aria-hidden="true" className="h-4 w-4 shrink-0" />
+                    {org.public_email}
+                  </a>
+                ) : null}
+                {org.public_phone ? (
+                  <a
+                    className="inline-flex min-h-11 items-center gap-1.5 underline-offset-4 hover:underline"
+                    href={`tel:${org.public_phone}`}
+                  >
+                    <Phone aria-hidden="true" className="h-4 w-4" />
+                    {org.public_phone}
+                  </a>
+                ) : null}
               </div>
             </div>
-            <p className="max-w-3xl text-xs text-white/60">
-              “{org.affiliation_wording}” means {org.name} has confirmed the business participates
-              in its programme. It is not a guarantee by the organisation. Identity checks are done
-              separately by VerifyMzansi.
-            </p>
+            {org.accepting_applications ? (
+              <div className="flex flex-col items-start gap-2 lg:items-end">
+                {placesAvailable ? (
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="lg"
+                    className={cn("h-12 rounded-full px-6", brandOutlineButtonClassName)}
+                  >
+                    <Link href={`/dashboard/affiliations?org=${org.slug}`}>
+                      Apply to join this programme
+                    </Link>
+                  </Button>
+                ) : (
+                  <Badge className="bg-white/10 px-3 py-1.5 text-sm text-white">
+                    Programme full
+                  </Badge>
+                )}
+                <p className="text-xs text-white/60">For business owners on VerifyMzansi.</p>
+              </div>
+            ) : null}
           </div>
         </BrandSurface>
 
         <div className="container-page space-y-6 py-6 sm:py-8">
-          <form
-            method="get"
-            className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-5 sm:items-end"
-            aria-label="Filter participating businesses"
-          >
-            <label className="text-sm sm:col-span-2">
-              Business name
-              <input
-                name="q"
-                defaultValue={filters.q}
-                className="mt-1 block h-11 w-full rounded-md border bg-background px-3"
-              />
-            </label>
-            <label className="text-sm">
-              Category
-              <select
-                name="category"
-                defaultValue={filters.category ?? ""}
-                className="mt-1 block h-11 w-full rounded-md border bg-background px-2"
-              >
-                <option value="">All categories</option>
-                {Object.entries(BUSINESS_CATEGORY_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm">
-              Town or city
-              <input
-                name="city"
-                defaultValue={filters.city}
-                className="mt-1 block h-11 w-full rounded-md border bg-background px-3"
-              />
-            </label>
-            {(programmes.data ?? []).length > 1 ? (
-              <label className="text-sm">
-                Programme
-                <select
-                  name="programme"
-                  defaultValue={filters.programme ?? ""}
-                  className="mt-1 block h-11 w-full rounded-md border bg-background px-2"
-                >
-                  <option value="">All programmes</option>
-                  {(programmes.data ?? []).map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <label className="text-sm">
-              Relationship
-              <select
-                name="type"
-                defaultValue={filters.type ?? ""}
-                className="mt-1 block h-11 w-full rounded-md border bg-background px-2"
-              >
-                <option value="">All relationships</option>
-                <option value="participant">{org.affiliation_wording}</option>
-                <option value="member">Member</option>
-                <option value="affiliate">Affiliated with</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="sponsored"
-                value="1"
-                defaultChecked={filters.sponsored === true}
-                className="h-4 w-4"
-              />
-              Sponsored only
-            </label>
-            <Button type="submit" className="h-11">
-              Filter
-            </Button>
-          </form>
-
-          <h2 className="font-display text-lg font-semibold">Participating businesses ({total})</h2>
-          {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No participating businesses match these filters yet.
-            </p>
-          ) : (
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {rows.map((row) => (
-                <li key={row.business_id}>
-                  <Link
-                    href={`/mzansi-business/${row.business_id}`}
-                    className="surface-card flex h-full gap-3 p-4 transition-shadow hover:elev-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {row.logo_url ? (
-                      <Image
-                        src={row.logo_url}
-                        alt=""
-                        width={56}
-                        height={56}
-                        className="h-14 w-14 shrink-0 rounded-lg border bg-white object-contain p-0.5"
-                        unoptimized
-                      />
-                    ) : (
-                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border bg-muted">
-                        <Building2 aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
-                      </span>
-                    )}
-                    <span className="min-w-0 space-y-1">
-                      <span className="block truncate font-semibold">{row.business_name}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {BUSINESS_CATEGORY_LABELS[row.category as BusinessCategory] ??
-                          row.category ??
-                          "Business"}
-                        {row.city ? ` · ${row.city}` : ""}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {row.affiliation_label ?? org.affiliation_wording}
-                        {row.programme_name ? ` — ${row.programme_name}` : ""}
-                      </span>
-                      {row.sponsored ? (
-                        <Badge variant="secondary" className="text-[10px]">
-                          Sponsored visibility
-                        </Badge>
-                      ) : null}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          <AnalyticsImpressions
-            items={rows.map((row) => ({ table: "businesses", id: row.business_id }))}
-            type="organisation_directory_appearance"
-            surface={`org:${org.slug}`.slice(0, 40)}
-          />
-
-          {total > PAGE_SIZE ? (
-            <nav aria-label="Directory pages" className="flex items-center justify-between">
-              {page > 1 ? (
-                <Link className="underline" href={pageHref(page - 1)}>
-                  Previous
-                </Link>
-              ) : (
-                <span />
-              )}
-              <span className="text-sm text-muted-foreground">
-                Page {page} of {Math.ceil(total / PAGE_SIZE)}
-              </span>
-              {page * PAGE_SIZE < total ? (
-                <Link className="underline" href={pageHref(page + 1)}>
-                  Next
-                </Link>
-              ) : (
-                <span />
-              )}
-            </nav>
-          ) : null}
-
-          <p className="text-sm text-muted-foreground">
-            Own a business in this programme?{" "}
-            <Link className="underline" href="/dashboard/affiliations">
-              Request affiliation from your dashboard
-            </Link>
-            .
+          <p className="rounded-xl border border-border/70 bg-muted/50 p-4 text-sm leading-6 text-muted-foreground">
+            <strong className="text-foreground">
+              &ldquo;{org.sponsorship_wording} {org.name}&rdquo;
+            </strong>{" "}
+            means this business is part of {org.name}&rsquo;s programme. It is not a verification,
+            safety or quality endorsement. VerifyMzansi reviews identities separately.
           </p>
+
+          {onboarding && !filtered ? (
+            <section className="rounded-2xl border border-dashed p-6 text-center sm:p-10">
+              <h2 className="font-display text-xl font-bold">Businesses are being onboarded</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                {org.name} is welcoming its first businesses. Their profiles appear here once they
+                pass VerifyMzansi&rsquo;s identity review and moderation.
+              </p>
+              <Button asChild variant="outline" className="mt-4 h-11 rounded-full">
+                <Link href="/mzansi-business">Browse Mzansi Business</Link>
+              </Button>
+            </section>
+          ) : (
+            <>
+              <form
+                method="get"
+                className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-6 lg:items-end"
+                aria-label="Filter supported businesses"
+              >
+                <label className="text-sm lg:col-span-2">
+                  Find a business
+                  <input name="q" type="search" defaultValue={filters.q} className={selectClass} />
+                </label>
+                <label className="text-sm">
+                  Category
+                  <select
+                    name="category"
+                    defaultValue={filters.category ?? ""}
+                    className={selectClass}
+                  >
+                    <option value="">All categories</option>
+                    {BUSINESS_CATEGORIES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {category ? (
+                  <label className="text-sm">
+                    Specific activity
+                    <select
+                      name="subcategory"
+                      defaultValue={filters.subcategory ?? ""}
+                      className={selectClass}
+                    >
+                      <option value="">All activities</option>
+                      {category.subcategories.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="text-sm">
+                  Province
+                  <select
+                    name="province"
+                    defaultValue={filters.province ?? ""}
+                    className={selectClass}
+                  >
+                    <option value="">All provinces</option>
+                    {getProvinceNames().map((province) => (
+                      <option key={province} value={province}>
+                        {province}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm">
+                  City or town
+                  <input name="city" defaultValue={filters.city} className={selectClass} />
+                </label>
+                {(programmes.data ?? []).length > 1 ? (
+                  <label className="text-sm">
+                    Programme
+                    <select
+                      name="programme"
+                      defaultValue={filters.programme ?? ""}
+                      className={selectClass}
+                    >
+                      <option value="">All programmes</option>
+                      {(programmes.data ?? []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="sponsored"
+                    value="1"
+                    defaultChecked={filters.sponsored === true}
+                    className="h-4 w-4"
+                  />
+                  Sponsored only
+                </label>
+                <div className="flex gap-2">
+                  <Button type="submit" className="h-11 flex-1">
+                    Filter
+                  </Button>
+                  {filtered ? (
+                    <Button asChild variant="ghost" className="h-11">
+                      <Link href={`/organisation/${org.slug}`}>Clear</Link>
+                    </Button>
+                  ) : null}
+                </div>
+              </form>
+
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="font-display text-lg font-semibold">
+                  Supported businesses <span className="text-muted-foreground">({total})</span>
+                </h2>
+                <Link
+                  href={`/mzansi-business?org=${org.slug}`}
+                  className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+                >
+                  Browse with all Mzansi Business filters
+                  <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                </Link>
+              </div>
+
+              {businesses.length === 0 ? (
+                <p className="rounded-xl border p-6 text-sm text-muted-foreground">
+                  No supported businesses match these filters.{" "}
+                  <Link className="underline" href={`/organisation/${org.slug}`}>
+                    Clear filters
+                  </Link>
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {businesses.map((business, index) => (
+                    <BusinessCardGridItem key={business.id} business={business} index={index} />
+                  ))}
+                </div>
+              )}
+              <AnalyticsImpressions
+                items={ids.map((id) => ({ table: "businesses", id }))}
+                type="organisation_directory_appearance"
+                surface={`org:${org.slug}`.slice(0, 40)}
+              />
+
+              {total > PAGE_SIZE ? (
+                <nav aria-label="Directory pages" className="flex items-center justify-between">
+                  {page > 1 ? (
+                    <Link
+                      className="inline-flex min-h-11 items-center underline"
+                      href={pageHref(page - 1)}
+                    >
+                      Previous
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    Page {page} of {Math.ceil(total / PAGE_SIZE)}
+                  </span>
+                  {page * PAGE_SIZE < total ? (
+                    <Link
+                      className="inline-flex min-h-11 items-center underline"
+                      href={pageHref(page + 1)}
+                    >
+                      Next
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                </nav>
+              ) : null}
+            </>
+          )}
+          {/* Sponsor-page visits feed the programme's activity report. */}
+          <AnalyticsImpressions
+            items={[{ table: "organisations", id: org.id }]}
+            type="detail_view"
+            surface="sponsor_page"
+          />
         </div>
       </main>
       <Footer />

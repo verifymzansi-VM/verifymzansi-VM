@@ -12,6 +12,11 @@ import { redirect } from "next/navigation";
 import { CheckCircle2, Eye, ExternalLink, Pencil, Plus, XCircle, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
+import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
+import {
+  PlanAdministratorsCard,
+  type MultiListingPlanAdmins,
+} from "@/components/dashboard/plan-administrators-card";
 import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -123,6 +128,44 @@ async function loadSponsoredContentIds(
     return new Set(((data ?? []) as Array<{ content_id: string }>).map((row) => row.content_id));
   } catch {
     return new Set();
+  }
+}
+
+/** Multi-listing plans the member bought, with their second administrator. */
+async function loadPlanAdmins(
+  admin: ReturnType<typeof tryCreateAdminClient>,
+  userId: string
+): Promise<MultiListingPlanAdmins[]> {
+  if (!admin) return [];
+  try {
+    const { data } = await admin
+      .from("slot_entitlements")
+      .select("id, slot_capacity, expires_at, slot_entitlement_members(user_id)")
+      .eq("user_id", userId)
+      .eq("source", "ENTERPRISE_PLAN")
+      .in("status", ["active", "pending_verification"])
+      .gt("expires_at", new Date().toISOString());
+    const rows = (data ?? []) as Array<{
+      id: string;
+      slot_capacity: number;
+      expires_at: string;
+      slot_entitlement_members: Array<{ user_id: string }> | null;
+    }>;
+    return await Promise.all(
+      rows.map(async (row) => ({
+        entitlementId: row.id,
+        slotCapacity: row.slot_capacity,
+        expiresAt: row.expires_at,
+        admins: await Promise.all(
+          (row.slot_entitlement_members ?? []).map(async (member) => {
+            const summary = await getAuthAdminUserSummary(admin, member.user_id);
+            return { name: summary.accountName, email: summary.email };
+          })
+        ),
+      }))
+    );
+  } catch {
+    return [];
   }
 }
 
@@ -555,7 +598,10 @@ export default async function ListingsPage({
     PROMOTIONS_EVENTS: promotionsTier,
   };
 
-  const slotUsage = await loadSlotUsage(engagementAdmin, user.id);
+  const [slotUsage, planAdmins] = await Promise.all([
+    loadSlotUsage(engagementAdmin, user.id),
+    loadPlanAdmins(engagementAdmin, user.id),
+  ]);
 
   const hasAnyItems = items.length > 0;
   const areaLabel = areaFilter ? AREA_LABELS[areaFilter] : null;
@@ -590,6 +636,7 @@ export default async function ListingsPage({
       </PageHeader>
 
       <SlotUsageCard entries={slotUsage} />
+      <PlanAdministratorsCard plans={planAdmins} />
 
       <div className="space-y-4">
         <Suspense>

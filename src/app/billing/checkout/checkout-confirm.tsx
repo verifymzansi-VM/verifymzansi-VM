@@ -19,6 +19,8 @@ export interface CheckoutSummary {
   durationLabel: string;
   slotCapacity: number;
   monthlyActivationLimit: number | null;
+  /** Named administrators included (multi-listing plans only). */
+  administrators?: number | null;
 }
 
 interface PendingPayment {
@@ -182,6 +184,12 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
                     <SummaryRow
                       label="Fair-use activations"
                       value={`Up to ${summary.monthlyActivationLimit} per 30 days`}
+                    />
+                  ) : null}
+                  {summary.administrators ? (
+                    <SummaryRow
+                      label="Administrators"
+                      value={`${summary.administrators} named: you plus one more, added from My posts`}
                     />
                   ) : null}
                   <SummaryRow label="Renewal" value="Does not renew automatically" />

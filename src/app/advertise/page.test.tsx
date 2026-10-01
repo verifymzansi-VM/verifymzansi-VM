@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ENTERPRISE_PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
 import AdvertisePage from "./page";
 
 vi.mock("next/link", () => ({
@@ -26,49 +27,65 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer data-testid="footer" />,
 }));
 
-vi.mock("@/components/layout/trust-strip", () => ({
-  TrustStrip: () => <div data-testid="trust-strip" />,
+vi.mock("@/components/brand", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  VerificationEmblem: () => null,
+}));
+
+const catalog = vi.hoisted(() => ({ retail: [] as unknown[], enterprise: [] as unknown[] }));
+vi.mock("@/lib/commercial/plans", () => ({
+  getCommercialCatalog: async () => ({ ...catalog, source: "database" }),
 }));
 
 describe("AdvertisePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    catalog.retail = RETAIL_OFFERS.map((offer) => ({ ...offer, planIds: {} }));
+    catalog.enterprise = ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null }));
   });
 
-  it("renders advertiser landing content and key routes", () => {
-    render(<AdvertisePage />);
+  it("explains the three ways to advertise with catalogue prices", async () => {
+    render(await AdvertisePage());
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Advertise on VerifyMzansi" })
+      screen.getByRole("heading", {
+        level: 1,
+        name: /Get seen by local buyers who know who they are dealing with/i,
+      })
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /View pricing/i })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: /Choose a post type/i })).toHaveAttribute(
+    expect(screen.getAllByRole("link", { name: "Post for free" })[0]).toHaveAttribute(
       "href",
       "/post/create"
     );
-    expect(screen.getByRole("link", { name: /Explore Tourism & Events/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByText("From R50 / 30 days")).toBeInTheDocument();
+    // Thousands use a non-breaking space (site-wide rand formatting).
+    expect(screen.getByText(/^From R1\s200 \/ 90 days$/)).toBeInTheDocument();
+    expect(screen.getByText(/^From R15\s000 \/ 90 days$/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/R50 \/ 30 days · R140 \/ 90 days · R250 \/ 180 days/)
+    ).toBeInTheDocument();
+  });
+
+  it("reads retail prices from the live catalogue rather than hard-coding them", async () => {
+    catalog.retail = RETAIL_OFFERS.map((offer, index) => ({
+      ...offer,
+      priceCents: index === 0 ? 6000 : offer.priceCents,
+      planIds: {},
+    }));
+    render(await AdvertisePage());
+    expect(screen.getByText("From R60 / 30 days")).toBeInTheDocument();
+  });
+
+  it("anchors the programme partner section and makes no 12-month claims", async () => {
+    const { container } = render(await AdvertisePage());
+
+    expect(container.querySelector("#programmes")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Request a programme proposal" })).toHaveAttribute(
       "href",
-      "/tourism-events"
+      "/contact?topic=organisation_proposal"
     );
-    expect(screen.getByRole("link", { name: /Create marketplace listing/i })).toHaveAttribute(
-      "href",
-      "/post/create-listing"
-    );
-    expect(screen.getByRole("link", { name: /Create business profile/i })).toHaveAttribute(
-      "href",
-      "/post/create-business"
-    );
-    expect(screen.getByRole("link", { name: /List tourism business/i })).toHaveAttribute(
-      "href",
-      "/post/create-tourism"
-    );
-    expect(screen.getByRole("link", { name: /Create event/i })).toHaveAttribute(
-      "href",
-      "/post/create-tourism?type=event"
-    );
-    expect(screen.getByRole("link", { name: /Browse Mzansi Business/i })).toHaveAttribute(
-      "href",
-      "/mzansi-business"
-    );
+    expect(screen.getByText("Example — not real results")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/12 months|12-month|6 months|annual/i);
   });
 });

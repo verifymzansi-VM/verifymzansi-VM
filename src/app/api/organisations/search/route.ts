@@ -35,5 +35,10 @@ export async function GET(request: NextRequest) {
     query = query.eq("accepting_applications", true);
   }
   const { data } = await query;
-  return NextResponse.json({ organisations: data ?? [] });
+  // The filter list is public and identical for everyone: cache it briefly.
+  const cacheable = request.nextUrl.searchParams.get("purpose") === "filter" && !q;
+  return NextResponse.json(
+    { organisations: data ?? [] },
+    cacheable ? { headers: { "Cache-Control": "public, max-age=60, s-maxage=300" } } : undefined
+  );
 }

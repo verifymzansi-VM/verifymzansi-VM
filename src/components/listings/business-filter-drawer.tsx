@@ -23,27 +23,11 @@ import {
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useFilterOrganisations } from "@/hooks/use-filter-organisations";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 import { filterSelectClass } from "./filter-controls";
 
 const selectClassName = filterSelectClass;
-
-/** Listed organisations for the optional programme filter (loaded on demand). */
-function useFilterOrganisations(enabled: boolean): Array<{ slug: string; name: string }> {
-  const [organisations, setOrganisations] = useState<Array<{ slug: string; name: string }>>([]);
-  useEffect(() => {
-    if (!enabled || organisations.length > 0) return;
-    const controller = new AbortController();
-    fetch("/api/organisations/search?purpose=filter", { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : { organisations: [] }))
-      .then((data: { organisations?: Array<{ slug: string; name: string }> }) =>
-        setOrganisations((data.organisations ?? []).map(({ slug, name }) => ({ slug, name })))
-      )
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [enabled, organisations.length]);
-  return organisations;
-}
 
 export function BusinessFilterDrawer() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
@@ -333,10 +317,10 @@ export function BusinessFilterDrawer() {
           {/* Organisation / programme (optional; never changes ranking) */}
           {organisations.length > 0 ? (
             <div className="space-y-1.5">
-              <Label htmlFor="drawer-business-organisation">Organisation or programme</Label>
+              <Label htmlFor="drawer-business-organisation">Programme partner</Label>
               <select
                 id="drawer-business-organisation"
-                aria-label="Organisation or programme"
+                aria-label="Programme partner"
                 className={selectClassName}
                 value={filters.organisation || ""}
                 onChange={(event) => setFilter("organisation", event.target.value || undefined)}

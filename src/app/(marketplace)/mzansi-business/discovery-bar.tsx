@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent } from "react";
-import { Search, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useDebouncedCallback } from "@/hooks/use-debounce";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useFilterOrganisations } from "@/hooks/use-filter-organisations";
 import { useMarketplaceStore } from "@/stores";
 import {
   ALL_BUSINESS_CATEGORIES,
@@ -20,6 +22,8 @@ export function BusinessDiscoveryBar() {
   const { filters, setFilter, resetFilters } = useMarketplaceStore();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isInteractive = useHydrated();
+  const organisations = useFilterOrganisations(true);
+  const selectedOrganisation = organisations.find((org) => org.slug === filters.organisation);
   const debouncedSetQuery = useDebouncedCallback(
     (value: string) => setFilter("query", value || undefined),
     300
@@ -73,6 +77,7 @@ export function BusinessDiscoveryBar() {
     filters.businessType,
     filters.province,
     filters.city,
+    filters.organisation,
   ].filter(Boolean).length;
 
   return (
@@ -153,6 +158,40 @@ export function BusinessDiscoveryBar() {
             </select>
           </div>
         )}
+        {organisations.length > 0 || filters.organisation ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="business-organisation">Programme partner</Label>
+            <select
+              id="business-organisation"
+              className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
+              value={filters.organisation || ""}
+              disabled={!isInteractive}
+              onChange={(event) => setFilter("organisation", event.target.value || undefined)}
+            >
+              <option value="">All businesses</option>
+              {filters.organisation && !selectedOrganisation ? (
+                <option value={filters.organisation}>
+                  {filters.organisation.replace(/-/g, " ")}
+                </option>
+              ) : null}
+              {organisations.map((org) => (
+                <option key={org.slug} value={org.slug}>
+                  {org.name}
+                </option>
+              ))}
+            </select>
+            {filters.organisation ? (
+              <Link
+                href={`/organisation/${filters.organisation}`}
+                className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+              >
+                View {selectedOrganisation?.name ?? "programme"} page
+                <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="space-y-1.5">
           <Label htmlFor="business-province">Province</Label>
           <select
@@ -275,6 +314,20 @@ export function BusinessDiscoveryBar() {
                   setFilter("province", undefined);
                   setFilter("city", undefined);
                 }}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.organisation && (
+            <Badge variant="secondary" className="gap-1">
+              {selectedOrganisation?.name ?? filters.organisation.replace(/-/g, " ")}
+              <button
+                type="button"
+                className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Remove programme partner filter"
+                disabled={!isInteractive}
+                onClick={() => setFilter("organisation", undefined)}
               >
                 <X className="h-3 w-3" />
               </button>

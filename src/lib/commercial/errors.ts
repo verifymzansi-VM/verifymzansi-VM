@@ -13,7 +13,7 @@ const COMMERCIAL_ERRORS: ReadonlyArray<{ code: string; status: number; message: 
     code: "TRIAL_REQUIRED",
     status: 402,
     message:
-      "Choose a plan to make this post visible: R50 / 30 days, R250 / 6 months or R450 / year.",
+      "Choose a plan to make this post visible: R50 / 30 days, R140 / 90 days or R250 / 180 days.",
   },
   {
     code: "TRIAL_EXPIRED",
@@ -85,6 +85,86 @@ const COMMERCIAL_ERRORS: ReadonlyArray<{ code: string; status: number; message: 
     code: "SPONSORSHIP_EXISTS",
     status: 409,
     message: "This business is already sponsored or waitlisted.",
+  },
+  {
+    code: "ORGANISATION_ADMIN_EXISTS",
+    status: 409,
+    message: "This person is already an administrator.",
+  },
+  { code: "ORGANISATION_INACTIVE", status: 409, message: "This programme is not active." },
+  {
+    code: "ORGANISATION_INVITE_INVALID",
+    status: 410,
+    message: "This invitation link is no longer valid. Ask VerifyMzansi to send a new one.",
+  },
+  {
+    code: "ORGANISATION_INVITE_EMAIL",
+    status: 403,
+    message: "Sign in with the email address the invitation was sent to.",
+  },
+  {
+    code: "TRIAL_EXTENSION_OFFER_REQUIRED",
+    status: 409,
+    message:
+      "Free time is added through an extension offer (Admin › Trials). It applies only after the participant accepts.",
+  },
+  {
+    code: "TRIAL_EXTENSION_INELIGIBLE",
+    status: 409,
+    message: "This trial cannot be extended. Only active, unconverted free access is eligible.",
+  },
+  {
+    code: "TRIAL_EXTENSION_NO_RECIPIENT",
+    status: 409,
+    message: "Add a programme administrator before offering an extension.",
+  },
+  { code: "TRIAL_EXTENSION_DAYS", status: 400, message: "Offer between 1 and 30 days." },
+  {
+    code: "TRIAL_EXTENSION_OPEN",
+    status: 409,
+    message: "This trial already has an open extension offer.",
+  },
+  {
+    code: "TRIAL_EXTENSION_SECOND_ADMIN",
+    status: 403,
+    message: "A different administrator must approve this extension.",
+  },
+  {
+    code: "TRIAL_EXTENSION_STALE",
+    status: 409,
+    message:
+      "The end date changed after this offer was made. Withdraw it and make a new offer, or contact VerifyMzansi.",
+  },
+  { code: "TRIAL_EXTENSION_NOT_FOUND", status: 404, message: "Offer not found." },
+  {
+    code: "TRIAL_EXTENSION_ANSWERED",
+    status: 409,
+    message: "This offer has already been answered or is not open.",
+  },
+  { code: "TRIAL_EXTENSION_EXPIRED", status: 410, message: "This offer has expired." },
+  {
+    code: "PLAN_ADMIN_NOT_FOUND",
+    status: 404,
+    message: "Only the buyer of a multi-listing plan can manage its administrators.",
+  },
+  { code: "PLAN_ADMIN_INACTIVE", status: 409, message: "This plan has ended." },
+  {
+    code: "PLAN_ADMIN_UNAVAILABLE",
+    status: 404,
+    message:
+      "That email does not belong to an identity-reviewed VerifyMzansi account. Ask them to register and complete identity review first.",
+  },
+  { code: "PLAN_ADMIN_SELF", status: 400, message: "You already own this plan." },
+  { code: "PLAN_ADMIN_EXISTS", status: 409, message: "This person is already an administrator." },
+  {
+    code: "PLAN_ADMIN_LIMIT",
+    status: 409,
+    message: "This plan includes two named administrators. Remove one before adding another.",
+  },
+  {
+    code: "TRIAL_EXTENSION_RESEND_LIMIT",
+    status: 429,
+    message: "This offer has already been resent the maximum number of times.",
   },
 ];
 

@@ -22,7 +22,7 @@ const HERO_POINTS = [
 export const metadata = {
   title: "Pricing",
   description:
-    "Simple VerifyMzansi pricing: R50 for 30 days, R250 for 6 months, R450 for 12 months. Events are free. Bulk and organisation programmes on request.",
+    "Simple VerifyMzansi pricing: R50 for 30 days, R140 for 90 days, R250 for 180 days. Events are free. Multi-listing from R1,200 for 90 days; sponsor programmes from R15,000.",
 };
 
 export const revalidate = 300;

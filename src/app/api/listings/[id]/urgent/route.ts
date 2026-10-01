@@ -6,7 +6,7 @@ import { createListingAddonCheckoutRoute } from "../_lib/create-addon-checkout-r
  * POST /api/listings/[id]/urgent
  *
  * Create an Ozow checkout session to mark a listing as urgent.
- * Requires an authenticated owner with a paid plan (R50 / R250 / R450 or bulk).
+ * Requires an authenticated owner with a paid plan (30, 90 or 180 days, or multi-listing).
  */
 export const POST = createListingAddonCheckoutRoute({
   loggerName: "UrgentCheckout",

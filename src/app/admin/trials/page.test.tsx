@@ -29,10 +29,16 @@ describe("free-post account search page", () => {
     getUser.mockResolvedValue({ data: { user: { id: "admin-1" } } });
     capability.mockResolvedValue(true);
     rpc.mockResolvedValue({ data: [], error: null });
-    const query = { select: vi.fn(), order: vi.fn(), limit: vi.fn() };
-    query.select.mockReturnValue(query);
-    query.order.mockReturnValue(query);
-    query.limit.mockResolvedValue({ data: [], error: null });
+    // Every query builder call chains; awaiting it yields an empty result.
+    const query: Record<string, unknown> = new Proxy(
+      {},
+      {
+        get: (_target, prop) =>
+          prop === "then"
+            ? (resolve: (value: unknown) => void) => resolve({ data: [], error: null })
+            : () => query,
+      }
+    );
     from.mockReturnValue(query);
   });
   it("uses the authenticated admin for email lookup and passes the result to the form", async () => {
@@ -51,7 +57,8 @@ describe("free-post account search page", () => {
       p_actor_id: "admin-1",
       p_search: "member@example.com",
     });
-    expect(page.props.accounts).toEqual([account]);
+    const [, management] = page.props.children as Array<{ props: { accounts: unknown } }>;
+    expect(management?.props.accounts).toEqual([account]);
   });
   it("does not search or expose accounts without verified capability", async () => {
     staffGuard.deny("capability");

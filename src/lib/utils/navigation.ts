@@ -14,6 +14,8 @@ const ALLOWED_REDIRECT_PREFIXES = [
   "/banned",
   "/appeals",
   "/staff",
+  // Sponsor administrator invitation links (token in the query string).
+  "/organisation-invite",
 ];
 
 /**

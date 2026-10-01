@@ -257,25 +257,12 @@ export function TrialManagement({
                     t.activated_at &&
                     !t.released_at &&
                     !t.converted_at && (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          const data = new FormData(e.currentTarget);
-                          void save("extend", t.id, {
-                            expiresAt: new Date(String(data.get("expiry"))).toISOString(),
-                          });
-                        }}
+                      <Link
+                        className="block text-sm underline"
+                        href={`/admin/trials?offer=intro_trial_claim:${t.id}#extension-offer-form`}
                       >
-                        <input
-                          aria-label="New trial expiry"
-                          type="datetime-local"
-                          name="expiry"
-                          required
-                        />
-                        <Button size="sm" disabled={busy || reason.trim().length < 5}>
-                          Extend
-                        </Button>
-                      </form>
+                        Offer extension
+                      </Link>
                     )}
                 </td>
               </tr>

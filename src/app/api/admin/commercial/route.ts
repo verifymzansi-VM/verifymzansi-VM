@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,6 +13,8 @@ import {
   clearCommercialSettingsCache,
   isCommercialSettingKey,
 } from "@/lib/commercial/settings";
+import { sendOrganisationAdminInviteEmail } from "@/lib/services/email";
+import { sanitizeAppUrl } from "@/lib/services/email-template";
 
 const log = createLogger("AdminCommercial");
 
@@ -150,7 +153,6 @@ const schema = z.discriminatedUnion("action", [
     organisationId: uuid,
     operation: z.enum([
       "activate_trial",
-      "extend_trial",
       "suspend",
       "reinstate",
       "end_trial",
@@ -168,6 +170,29 @@ const schema = z.discriminatedUnion("action", [
     values,
     reason,
   }),
+  z.object({
+    action: z.literal("organisation.invite_admin"),
+    organisationId: uuid,
+    email: z.email().max(254),
+    reason,
+  }),
+  z.object({ action: z.literal("organisation.revoke_invite"), inviteId: uuid, reason }),
+  z.object({
+    action: z.literal("trial_extension.offer"),
+    targetType: z.enum(["organisation_trial", "founding_contract", "intro_trial_claim"]),
+    targetId: uuid,
+    days: z.number().int().min(1).max(30),
+    kind: z.enum(["consent", "correction"]).default("consent"),
+    reason,
+  }),
+  z.object({
+    action: z.literal("trial_extension.decide"),
+    offerId: uuid,
+    approve: z.boolean(),
+    reason,
+  }),
+  z.object({ action: z.literal("trial_extension.withdraw"), offerId: uuid, reason }),
+  z.object({ action: z.literal("trial_extension.resend"), offerId: uuid }),
 ]);
 
 type Body = z.infer<typeof schema>;
@@ -184,9 +209,15 @@ const CAPABILITY: Record<Body["action"], Capability> = {
   "commission.manage": "partners:manage",
   "organisation.upsert": "organisations:manage",
   "organisation.manage": "organisations:manage",
+  "organisation.invite_admin": "organisations:manage",
+  "organisation.revoke_invite": "organisations:manage",
+  "trial_extension.offer": "trials:manage",
+  "trial_extension.decide": "trials:manage",
+  "trial_extension.withdraw": "trials:manage",
+  "trial_extension.resend": "trials:manage",
 };
 
-function call(body: Body, actor: string) {
+function call(body: Exclude<Body, { action: "organisation.invite_admin" }>, actor: string) {
   const db = createAdminClient();
   switch (body.action) {
     case "settings.update":
@@ -272,7 +303,85 @@ function call(body: Body, actor: string) {
         p_values: body.values,
         p_reason: body.reason,
       });
+    case "organisation.revoke_invite":
+      return db.rpc("admin_revoke_organisation_invite", {
+        p_actor: actor,
+        p_invite: body.inviteId,
+        p_reason: body.reason,
+      });
+    case "trial_extension.offer":
+      return db.rpc("admin_offer_trial_extension", {
+        p_actor: actor,
+        p_type: body.targetType,
+        p_target: body.targetId,
+        p_days: body.days,
+        p_reason: body.reason,
+        p_kind: body.kind,
+      });
+    case "trial_extension.decide":
+      return db.rpc("admin_decide_trial_extension", {
+        p_actor: actor,
+        p_offer: body.offerId,
+        p_approve: body.approve,
+        p_reason: body.reason,
+      });
+    case "trial_extension.withdraw":
+      return db.rpc("admin_withdraw_trial_extension", {
+        p_actor: actor,
+        p_offer: body.offerId,
+        p_reason: body.reason,
+      });
+    case "trial_extension.resend":
+      return db.rpc("admin_resend_trial_extension", { p_actor: actor, p_offer: body.offerId });
   }
+}
+
+/**
+ * Sponsor administrator invitation. The single-use token is generated here,
+ * only its SHA-256 hash is stored, and the raw link exists only in the email.
+ * If the email cannot be sent the invitation is revoked so no unusable seat
+ * stays reserved.
+ */
+async function inviteOrganisationAdmin(
+  body: Extract<Body, { action: "organisation.invite_admin" }>,
+  actor: string
+) {
+  const db = createAdminClient();
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const { data, error } = await db.rpc("admin_invite_organisation_admin", {
+    p_actor: actor,
+    p_org: body.organisationId,
+    p_email: body.email,
+    p_token_hash: tokenHash,
+    p_reason: body.reason,
+  });
+  if (error) return { data: null, error };
+  const invite = data as { inviteId: string; expiresAt: string; organisationName: string };
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const sent = await sendOrganisationAdminInviteEmail({
+    email: body.email.trim().toLowerCase(),
+    organisationName: invite.organisationName,
+    acceptUrl: `${appUrl}/organisation-invite?token=${encodeURIComponent(token)}`,
+    expiresAt: invite.expiresAt,
+    idempotencyKey: `organisation-invite/${invite.inviteId}`,
+  });
+  if (!sent.success) {
+    await db.rpc("admin_revoke_organisation_invite", {
+      p_actor: actor,
+      p_invite: invite.inviteId,
+      p_reason: "Invitation email could not be delivered",
+    });
+    log.error("Organisation invite email failed", { inviteId: invite.inviteId });
+    return {
+      data: null,
+      error: {
+        message: "The invitation email could not be sent. Please try again.",
+        code: "EMAIL",
+      },
+    };
+  }
+  return { data: { inviteId: invite.inviteId, expiresAt: invite.expiresAt }, error: null };
 }
 
 /**
@@ -317,9 +426,15 @@ export async function POST(request: Request) {
     }
   }
 
-  const { data, error } = await call(body, guard.user.id);
+  const { data, error } =
+    body.action === "organisation.invite_admin"
+      ? await inviteOrganisationAdmin(body, guard.user.id)
+      : await call(body, guard.user.id);
   if (error) {
-    const mapped = mapCommercialError(error.message);
+    const mapped =
+      error.code === "EMAIL"
+        ? { message: error.message, status: 502 }
+        : mapCommercialError(error.message);
     log.warn("Commercial change refused", { action: body.action, code: error.code });
     return NextResponse.json(
       { error: mapped?.message ?? "The change could not be applied." },

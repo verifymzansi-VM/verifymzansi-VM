@@ -123,9 +123,11 @@ function GrantForm({
             onChange={(event) => setType(event.target.value)}
             className="mt-1 block w-full rounded-md border bg-background p-2"
           >
-            <option value="STRATEGIC_INDIVIDUAL">Strategic Individual (3 months, 1 slot)</option>
+            <option value="STRATEGIC_INDIVIDUAL">
+              Founding individual — Group 1 (90 days, 1 slot)
+            </option>
             <option value="FOUNDING_COMMERCIAL_PARTNER">
-              Founding Commercial Partner (6 months, 25 slots)
+              Founding multi-listing partner — Group 2 (90 days, 10 slots, 2 admins)
             </option>
             <option value="ENTERPRISE_CUSTOM">Custom enterprise contract (quoted)</option>
           </select>
@@ -223,9 +225,9 @@ function GrantForm({
               />
             </label>
             <p className="text-xs text-muted-foreground sm:col-span-4">
-              Internal references for 1,000+ active slots: from R60,000 (3 months), R105,000 (6
-              months), R180,000 (12 months). Priced contracts stay locked until you record the
-              invoice as paid. Public-sector contracts follow the client&apos;s procurement rules.
+              Above 100 live slots is a written quote for a 90- or 180-day term (Document 03 §3).
+              Priced contracts stay locked until you record the invoice as paid. Public-sector
+              contracts follow the client&apos;s procurement rules.
             </p>
           </>
         ) : null}
@@ -383,9 +385,18 @@ function EventAllowanceForm({
   );
 }
 
+/** Free founding time is only added through a consented offer (Admin › Trials). */
+function isFreeFoundingContract(contract: ProgrammeContract) {
+  return (
+    contract.price_cents === 0 &&
+    ["STRATEGIC_INDIVIDUAL", "FOUNDING_COMMERCIAL_PARTNER"].includes(contract.contract_type)
+  );
+}
+
 function ContractCard({ contract }: { contract: ProgrammeContract }) {
   const { run, busy, message } = useCommercialAction();
-  const [operation, setOperation] = useState("extend");
+  const freeFounding = isFreeFoundingContract(contract);
+  const [operation, setOperation] = useState(freeFounding ? "limits" : "extend");
   const activationLimit = contract.activation_limit_total ?? contract.activation_limit_per_period;
 
   return (
@@ -492,7 +503,7 @@ function ContractCard({ contract }: { contract: ProgrammeContract }) {
             onChange={(e) => setOperation(e.target.value)}
             className="mt-1 block w-full rounded-md border bg-background p-2"
           >
-            <option value="extend">Extend</option>
+            {freeFounding ? null : <option value="extend">Extend</option>}
             <option value="limits">Change slots / activations</option>
             <option value="add_member">Add administrator</option>
             <option value="remove_member">Remove administrator</option>
@@ -503,6 +514,14 @@ function ContractCard({ contract }: { contract: ProgrammeContract }) {
             <option value="end">End now</option>
           </select>
         </label>
+        {freeFounding && contract.status === "active" ? (
+          <p className="text-sm sm:col-span-4">
+            <a className="underline" href={`/admin/trials?offer=founding_contract:${contract.id}`}>
+              Offer an extension
+            </a>{" "}
+            <span className="text-muted-foreground">— applies only after the holder accepts.</span>
+          </p>
+        ) : null}
         {operation === "extend" ? (
           <label className="text-sm">
             New end date

@@ -86,6 +86,8 @@ vi.mock("@/lib/constants/pricing", () => ({
   getPlanCheckoutHref: (plan: { tier: string; area: string }) =>
     `/billing/checkout?plan=${plan.area}-${plan.tier}`,
   formatPlanPrice: (cents: number) => `R${cents / 100}`,
+  formatThirtyDayEquivalent: (cents: number, days: number) =>
+    days > 30 ? `R${Math.round((cents * 30) / days) / 100}` : null,
 }));
 
 vi.mock("@/lib/services/entitlements", () => ({

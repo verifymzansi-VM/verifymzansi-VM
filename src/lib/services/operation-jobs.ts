@@ -4,8 +4,10 @@ import { createLogger } from "@/lib/utils/logger";
 import {
   sendDsarExtensionEmail,
   sendModerationNoticeEmail,
+  sendTrialExtensionEmail,
   type ModerationNoticeTemplate,
 } from "@/lib/services/email";
+import { sanitizeAppUrl } from "@/lib/services/email-template";
 import { logAuditEvent } from "@/lib/services/audit";
 
 const log = createLogger("OperationJobs");
@@ -88,9 +90,82 @@ async function sendDsarExtensionNotice(job: OperationJob): Promise<void> {
   }
 }
 
+/**
+ * Trial extension offer / confirmation. The offer is re-read at send time: an
+ * offer that was answered, withdrawn or expired meanwhile is not emailed.
+ */
+async function sendTrialExtensionNotice(job: OperationJob, event: "offered" | "accepted") {
+  const offerId = str(job.payload.offer_id);
+  if (!offerId) throw new Error("Unusable trial extension payload");
+  const admin = createAdminClient();
+  const { data: offer, error } = await admin
+    .from("trial_extension_offers")
+    .select(
+      "id, status, target_type, target_id, target_label, recipient_user_id, days, current_ends_at, proposed_ends_at, respond_by"
+    )
+    .eq("id", offerId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the offer: ${error.message}`);
+  if (!offer) return;
+  const stillOpen =
+    offer.status === "offered" && (!offer.respond_by || Date.parse(offer.respond_by) > Date.now());
+  if (event === "offered" ? !stillOpen : offer.status !== "accepted") {
+    log.info("Trial extension email skipped: offer no longer matches", {
+      jobId: job.id,
+      status: offer.status,
+    });
+    return;
+  }
+  // A programme offer is answered by whoever owns the programme now.
+  let recipientId: string = offer.recipient_user_id;
+  let reviewPath = "/dashboard";
+  if (offer.target_type === "organisation_trial") {
+    const [{ data: org }, { data: owner }] = await Promise.all([
+      admin.from("organisations").select("slug").eq("id", offer.target_id).maybeSingle(),
+      admin
+        .from("organisation_admins")
+        .select("user_id")
+        .eq("organisation_id", offer.target_id)
+        .eq("role", "owner")
+        .maybeSingle(),
+    ]);
+    if (org?.slug) reviewPath = `/dashboard/organisation/${org.slug}`;
+    if (owner?.user_id) recipientId = owner.user_id;
+  }
+  const recipient = await getAuthAdminUserSummary(admin, recipientId);
+  if (recipient.errorMessage) {
+    throw new Error(`Could not look up offer recipient: ${recipient.errorMessage}`);
+  }
+  if (!recipient.email) return;
+
+  const result = await sendTrialExtensionEmail({
+    email: recipient.email,
+    accountName: recipient.accountName,
+    event,
+    label: offer.target_label,
+    days: offer.days,
+    currentEndsAt: offer.current_ends_at,
+    proposedEndsAt: offer.proposed_ends_at,
+    respondBy: offer.respond_by,
+    reviewUrl: `${sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL)}${reviewPath}#extension-offer`,
+    idempotencyKey: `operation-job/${job.id}`,
+  });
+  await logAuditEvent({
+    actorId: "00000000-0000-0000-0000-000000000000",
+    actorRole: "system",
+    action: result.success ? "communication_email_sent" : "communication_email_failed",
+    targetType: "trial_extension_offer",
+    targetId: offer.id,
+    metadata: { template: `trial_extension_${event}`, channel: "email", job_id: job.id },
+  });
+  if (!result.success) throw new Error(result.error ?? "Email provider refused the notice");
+}
+
 async function sendNotice(job: OperationJob): Promise<void> {
   const template = str(job.payload.template);
   if (template === "dsar_extension") return sendDsarExtensionNotice(job);
+  if (template === "trial_extension_offered") return sendTrialExtensionNotice(job, "offered");
+  if (template === "trial_extension_accepted") return sendTrialExtensionNotice(job, "accepted");
   const userId = str(job.payload.user_id);
   const decisionId = str(job.payload.decision_id) ?? job.decision_id;
   if (

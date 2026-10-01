@@ -18,28 +18,28 @@ import {
 } from "./pricing";
 
 describe("retail pricing ladder", () => {
-  it("sells R50 / 30 days, R250 / 6 months and R450 / 12 months", () => {
+  it("sells R50 / 30 days, R140 / 90 days and R250 / 180 days (Document 03)", () => {
     expect(RETAIL_OFFERS.map((o) => [o.tier, o.priceCents, o.durationDays])).toEqual([
       ["month", 5000, 30],
+      ["quarter", 14000, 90],
       ["half_year", 25000, 180],
-      ["year", 45000, 365],
     ]);
   });
 
-  it("labels 6 months Most popular and 12 months Best value, with the savings", () => {
-    const [month, half, year] = RETAIL_OFFERS;
+  it("labels the longer terms and states the saving against 30-day plans", () => {
+    const [month, quarter, half] = RETAIL_OFFERS;
     expect(month?.promoLabel).toBe("Flexible");
-    expect(half?.promoLabel).toBe("Most popular");
-    expect(year?.promoLabel).toBe("Best value");
+    expect(quarter?.promoLabel).toBe("Popular");
+    expect(half?.promoLabel).toBe("Best value");
+    expect(getRetailSavingsCents(quarter!)).toBe(1000);
     expect(getRetailSavingsCents(half!)).toBe(5000);
-    expect(getRetailSavingsCents(year!)).toBe(15000);
     expect(getRetailSavingsCents(month!)).toBe(0);
   });
 
   it("defines one retail plan per area and duration, each with one reusable slot", () => {
     expect(PLANS).toHaveLength(9);
     for (const area of ACTIVE_MARKETPLACE_AREAS) {
-      expect(getPlansForArea(area).map((p) => p.tier)).toEqual(["month", "half_year", "year"]);
+      expect(getPlansForArea(area).map((p) => p.tier)).toEqual(["month", "quarter", "half_year"]);
     }
     for (const plan of PLANS) {
       expect(plan.slotCapacity).toBe(1);
@@ -48,25 +48,28 @@ describe("retail pricing ladder", () => {
     }
   });
 
-  it("keeps old tiers only as legacy definitions", () => {
+  it("keeps old tiers, including the retired 365-day term, only as legacy definitions", () => {
     expect(LEGACY_PLANS.every((p) => p.legacy && isLegacyPlanTier(p.tier))).toBe(true);
     expect(PLANS.some((p) => isLegacyPlanTier(p.tier))).toBe(false);
     expect(
       LEGACY_PLANS.find((p) => p.area === "MZANSI_MARKET" && p.tier === "basic")?.priceCents
     ).toBe(3000);
+    // A customer who bought the retired 365-day plan still resolves its limits.
+    expect(getPlan("MZANSI_MARKET", "year")?.durationDays).toBe(365);
   });
 
-  it("prices bulk slots and leaves 1,000+ to custom quotes", () => {
-    expect(ENTERPRISE_PLANS).toHaveLength(12);
-    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_50_3M")?.priceCents).toBe(500000);
-    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_500_12M")?.priceCents).toBe(10000000);
-    expect(ENTERPRISE_PLANS.some((p) => p.slots >= 1000)).toBe(false);
+  it("prices 10-100 multi-listing slots for 90/180 days and quotes above 100", () => {
+    expect(ENTERPRISE_PLANS).toHaveLength(8);
+    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_10_90D")?.priceCents).toBe(120000);
+    expect(ENTERPRISE_PLANS.find((p) => p.planCode === "ENT_100_180D")?.priceCents).toBe(1600000);
+    expect(ENTERPRISE_PLANS.every((p) => [90, 180].includes(p.durationDays))).toBe(true);
+    expect(ENTERPRISE_PLANS.some((p) => p.slots > 100)).toBe(false);
   });
 
-  it("formats durations", () => {
+  it("states terms in days, never calendar months", () => {
     expect(formatDurationDays(30)).toBe("30 days");
-    expect(formatDurationDays(180)).toBe("6 months");
-    expect(formatDurationDays(365)).toBe("12 months");
+    expect(formatDurationDays(90)).toBe("90 days");
+    expect(formatDurationDays(180)).toBe("180 days");
   });
 });
 

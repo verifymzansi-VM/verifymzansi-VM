@@ -12,7 +12,12 @@ export type CanonicalPlanRow = {
   is_legacy?: boolean;
 };
 
-const SELLABLE_TIERS: ReadonlySet<string> = new Set(["month", "half_year", "year", "enterprise"]);
+const SELLABLE_TIERS: ReadonlySet<string> = new Set([
+  "month",
+  "quarter",
+  "half_year",
+  "enterprise",
+]);
 
 /**
  * A plan is sellable when it is active, current (not a retired legacy tier) and

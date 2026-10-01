@@ -15,6 +15,7 @@ export const COMMERCIAL_EVENT_TYPES = [
   "homepage_appearance",
   "showroom_appearance",
   "organisation_directory_appearance",
+  "sponsor_click",
 ] as const;
 
 export type CommercialEventType = (typeof COMMERCIAL_EVENT_TYPES)[number];
@@ -103,3 +104,17 @@ export function trackContactAction(
   trackCommercialEvents([{ table, id, type, surface }]);
   flushCommercialEvents();
 }
+
+/**
+ * A click on a programme partner (strip chip, home tile or /sponsors card).
+ * Recorded against the organisation so its activity report can show the
+ * traffic VerifyMzansi sent; views and clicks only, never enquiries.
+ */
+export function trackSponsorClick(organisationId: string, surface: SponsorSurface) {
+  trackCommercialEvents([
+    { table: "organisations", id: organisationId, type: "sponsor_click", surface },
+  ]);
+  flushCommercialEvents();
+}
+
+export type SponsorSurface = "sponsor_strip" | "sponsor_home" | "sponsors_index" | "sponsor_filter";

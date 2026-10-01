@@ -1847,5 +1847,746 @@ await test("owners can only mark their notifications read", async () => {
   await notice();
 });
 
+// ── Document 08: catalogue, sponsor visibility, sponsor admins, extensions ──
+// Durable job queue as in production (20260927120000); stubbed minimally here.
+await db.exec(`CREATE TABLE IF NOT EXISTS operation_jobs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  operation_key text UNIQUE NOT NULL, kind text NOT NULL, payload jsonb NOT NULL, decision_id uuid);
+CREATE OR REPLACE FUNCTION public.enqueue_operation_job(p_key text, p_kind text, p_payload jsonb, p_decision uuid)
+RETURNS void LANGUAGE sql AS $$ INSERT INTO public.operation_jobs(operation_key,kind,payload,decision_id)
+ VALUES (p_key,p_kind,p_payload,p_decision) ON CONFLICT (operation_key) DO NOTHING $$;`);
+// Founding programme created under the old 180-day default, before alignment.
+const legacyPilot = (
+  await scalar(`SELECT admin_upsert_organisation($1,NULL,$2,'Pilot before alignment') AS id`, [
+    admin,
+    { slug: "legacy-pilot", name: "Legacy Pilot" },
+  ])
+).id;
+await db.query(`SELECT admin_manage_organisation($1,$2,'activate_trial','{}','Signed MOU')`, [
+  admin,
+  legacyPilot,
+]);
+const legacyPilotEnd = (
+  await scalar(`SELECT trial_ends_at FROM organisations WHERE id=$1`, [legacyPilot])
+).trial_ends_at;
+for (const file of [
+  "20261001140000_plan_tier_quarter.sql",
+  "20261001140100_fixed_day_catalogue.sql",
+  "20261001150000_sponsor_programme_visibility.sql",
+  "20261001160000_trial_extension_offers.sql",
+  "20261001170000_multi_listing_plan_admins.sql",
+])
+  await migration(file);
+const hash = () => crypto.randomUUID().replace(/-/g, "").padEnd(64, "0");
+const notices = async (uid) =>
+  (await db.query(`SELECT title FROM notifications WHERE user_id=$1`, [uid])).rows.map(
+    (r) => r.title
+  );
+
+await test("catalogue sells 30/90/180 fixed days and Doc 03 multi-listing tiers only", async () => {
+  for (const area of ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]) {
+    const rows = (
+      await db.query(
+        `SELECT plan_code, price_cents, duration_days FROM plans WHERE area=$1 AND active AND public ORDER BY sort_order`,
+        [area]
+      )
+    ).rows;
+    assert.deepEqual(rows, [
+      { plan_code: "RETAIL_30D", price_cents: 5000, duration_days: 30 },
+      { plan_code: "RETAIL_90D", price_cents: 14000, duration_days: 90 },
+      { plan_code: "RETAIL_180D", price_cents: 25000, duration_days: 180 },
+    ]);
+  }
+  const year = await scalar(
+    `SELECT bool_and(NOT active AND NOT public AND is_legacy AND retired_at IS NOT NULL) AS ok FROM plans WHERE tier='year'`
+  );
+  assert(year.ok, "12-month plans are retired, hidden and legacy");
+  const ent = (
+    await db.query(
+      `SELECT plan_code, price_cents, slot_capacity FROM plans WHERE tier='enterprise' AND active ORDER BY slot_capacity, duration_days`
+    )
+  ).rows;
+  assert.deepEqual(
+    ent.map((r) => [r.plan_code, r.price_cents]),
+    [
+      ["ENT_10_90D", 120000],
+      ["ENT_10_180D", 215000],
+      ["ENT_25_90D", 270000],
+      ["ENT_25_180D", 485000],
+      ["ENT_50_90D", 500000],
+      ["ENT_50_180D", 900000],
+      ["ENT_100_90D", 900000],
+      ["ENT_100_180D", 1600000],
+    ]
+  );
+  const s = Object.fromEntries(
+    (await db.query(`SELECT key, value FROM commercial_settings`)).rows.map((r) => [r.key, r.value])
+  );
+  assert.equal(s.founding_organisation.durationDays, 90);
+  assert.equal(s.founding_organisation.sponsoredCapacity, 25);
+  assert.equal(s.founding_commercial.durationDays, 90);
+  assert.equal(s.founding_commercial.slotCapacity, 10);
+  // A 90-day purchase is a fixed 90-day term.
+  const buyer = await user();
+  const { result } = await pay(buyer, await retailPlan("RETAIL_90D", "MZANSI_MARKET"));
+  const e = await scalar(
+    `SELECT extract(epoch FROM expires_at - starts_at)/86400 AS d FROM slot_entitlements WHERE user_id=$1`,
+    [buyer]
+  );
+  assert.equal(result.outcome, "completed");
+  assert.equal(Number(e.d), 90);
+  // Existing programmes keep their recorded end.
+  assert.equal(
+    (
+      await scalar(`SELECT trial_ends_at FROM organisations WHERE id=$1`, [legacyPilot])
+    ).trial_ends_at.toISOString(),
+    legacyPilotEnd.toISOString()
+  );
+});
+
+// Programme with live supported businesses for the visibility checks.
+async function sponsorOrg(slug, { live = 5, logo = true, status = "founding_trial" } = {}) {
+  const org = (
+    await scalar(`SELECT admin_upsert_organisation($1,NULL,$2,'Sponsor onboarding') AS id`, [
+      admin,
+      { slug, name: slug.replace(/-/g, " ") },
+    ])
+  ).id;
+  await db.query(`SELECT admin_manage_organisation($1,$2,'activate_trial','{}','Signed MOU')`, [
+    admin,
+    org,
+  ]);
+  await db.query(`UPDATE organisations SET programme_status=$2 WHERE id=$1`, [org, status]);
+  await db.query(
+    `SELECT admin_upsert_organisation($1,$2,'{"isPublic":true,"logoUrl":"https://cdn.example/l.png"}','Publish')`,
+    [admin, org]
+  );
+  if (logo)
+    await db.query(
+      `SELECT admin_manage_organisation($1,$2,'approve_logo','{"reference":"MOU 7"}','Logo permission')`,
+      [admin, org]
+    );
+  for (let i = 0; i < live; i++) {
+    const biz = await liveBusiness(await user());
+    await db.query(
+      `INSERT INTO organisation_affiliations(organisation_id,business_id) VALUES($1,$2)`,
+      [org, biz]
+    );
+  }
+  return org;
+}
+
+await test("sponsor directory applies one eligibility rule for every surface", async () => {
+  const ready = await sponsorOrg("strip-ready");
+  const small = await sponsorOrg("strip-small", { live: 4 });
+  const noLogo = await sponsorOrg("strip-nologo", { logo: false });
+  const paid = await sponsorOrg("strip-paid", { status: "active_paid" });
+  const rows = async () => (await db.query(`SELECT * FROM public_sponsor_directory()`)).rows;
+  let all = await rows();
+  const by = (id) => all.find((r) => r.id === id);
+  assert.equal(by(ready).on_strip, true);
+  assert.equal(by(ready).live_businesses, 5);
+  // Showcase filters match Mzansi Business, including subcategory.
+  const member = (await scalar(`SELECT business_id FROM organisation_directory($1)`, [ready]))
+    .business_id;
+  await db.query(`UPDATE businesses SET subcategory='plumbing' WHERE id=$1`, [member]);
+  assert.deepEqual(
+    (
+      await db.query(
+        `SELECT business_id FROM organisation_directory($1, p_subcategory => 'plumbing')`,
+        [ready]
+      )
+    ).rows.map((r) => r.business_id),
+    [member]
+  );
+  assert.equal(by(small).on_strip, false, "below the minimum live businesses");
+  assert.equal(by(noLogo).on_strip, false);
+  assert.equal(by(noLogo).logo_url, null, "no logo without written permission");
+  assert(all.indexOf(by(paid)) < all.indexOf(by(ready)), "paid programmes first");
+  await db.query(
+    `SELECT admin_upsert_organisation($1,$2,'{"showOnStrip":false,"displayOrder":5}','Hide from strip')`,
+    [admin, ready]
+  );
+  all = await rows();
+  assert.equal(by(ready).on_strip, false);
+  assert.equal(by(ready).on_home, true, "strip and home toggles are separate");
+  await db.query(`UPDATE organisations SET is_public=false WHERE id=$1`, [ready]);
+  assert(!(await rows()).some((r) => r.id === ready), "private programmes never appear");
+  // Public and signed-in visitors can call it; the kill switch empties it.
+  await as("anon", "", async () => assert((await rows()).length > 0));
+  await db.query(
+    `UPDATE commercial_settings SET value = value || '{"organisationsPublic":false}' WHERE key='features'`
+  );
+  assert.equal((await rows()).length, 0);
+  await db.query(
+    `UPDATE commercial_settings SET value = value || '{"organisationsPublic":true}' WHERE key='features'`
+  );
+  // Sponsor clicks and page views reach the sponsor's report.
+  await db.query(`SELECT record_analytics_events($1,'viewer-1')`, [
+    JSON.stringify([
+      { table: "organisations", id: paid, type: "impression", surface: "sponsor_strip" },
+      { table: "organisations", id: paid, type: "sponsor_click", surface: "sponsor_strip" },
+      { table: "organisations", id: paid, type: "detail_view", surface: "sponsor_page" },
+    ]),
+  ]);
+  const report = (
+    await scalar(
+      `SELECT organisation_performance_report($1,$2,now()-interval '1 day',now()+interval '1 minute') AS r`,
+      [admin, paid]
+    )
+  ).r;
+  assert.deepEqual(
+    {
+      i: report.sponsorVisibility.impressions,
+      c: report.sponsorVisibility.clicks,
+      v: report.sponsorVisibility.pageViews,
+    },
+    { i: 1, c: 1, v: 1 }
+  );
+  assert.equal(report.sponsorVisibility.bySurface.sponsor_strip.clicks, 1);
+  assert.equal(report.participatingBusinesses, 5, "the sponsor row is not counted as a business");
+});
+
+await test("sponsor admin invitations are single use, email bound, verified and capped", async () => {
+  const org = await sponsorOrg("invite-org", { live: 0 });
+  const invitee = await user();
+  await db.query(`UPDATE auth.users SET email='Lerato@Example.org' WHERE id=$1`, [invitee]);
+  const token = hash();
+  const invite = (
+    await scalar(`SELECT admin_invite_organisation_admin($1,$2,$3,$4,'LED nominee') AS r`, [
+      admin,
+      org,
+      " LERATO@example.org ",
+      token,
+    ])
+  ).r;
+  assert.equal(
+    (await scalar(`SELECT organisation_invite_preview($1) AS p`, [token])).p.status,
+    "open"
+  );
+  await as("anon", "", () =>
+    rejects(db.query(`SELECT * FROM organisation_admin_invites`), /permission denied/)
+  );
+  const stranger = await user();
+  await db.query(`UPDATE auth.users SET email='someone@example.org' WHERE id=$1`, [stranger]);
+  await rejects(
+    db.query(`SELECT accept_organisation_admin_invite($1,$2)`, [stranger, token]),
+    /ORGANISATION_INVITE_EMAIL/
+  );
+  await db.query(
+    `UPDATE account_profiles SET account_verification_status='pending' WHERE user_id=$1`,
+    [invitee]
+  );
+  await rejects(
+    db.query(`SELECT accept_organisation_admin_invite($1,$2)`, [invitee, token]),
+    /ORGANISATION_ADMIN_UNVERIFIED/
+  );
+  await db.query(
+    `UPDATE account_profiles SET account_verification_status='verified' WHERE user_id=$1`,
+    [invitee]
+  );
+  const accepted = (
+    await scalar(`SELECT accept_organisation_admin_invite($1,$2) AS r`, [invitee, token])
+  ).r;
+  assert.equal(accepted.role, "owner");
+  assert.equal(invite.organisationSlug, "invite-org");
+  await rejects(
+    db.query(`SELECT accept_organisation_admin_invite($1,$2)`, [invitee, token]),
+    /ORGANISATION_INVITE_INVALID/
+  );
+  assert((await notices(invitee)).includes("Administrator added"));
+  // Expired links are refused.
+  const late = hash();
+  await db.query(
+    `SELECT admin_invite_organisation_admin($1,$2,'late@example.org',$3,'Second admin')`,
+    [admin, org, late]
+  );
+  await db.query(
+    `UPDATE organisation_admin_invites SET expires_at=now()-interval '1 second' WHERE token_hash=$1`,
+    [late]
+  );
+  await rejects(
+    db.query(`SELECT accept_organisation_admin_invite($1,$2)`, [invitee, late]),
+    /ORGANISATION_INVITE_INVALID/
+  );
+  // Three administrators per programme: open invitations hold seats.
+  await db.query(`SELECT admin_invite_organisation_admin($1,$2,'two@example.org',$3,'Admin two')`, [
+    admin,
+    org,
+    hash(),
+  ]);
+  await db.query(
+    `SELECT admin_invite_organisation_admin($1,$2,'three@example.org',$3,'Admin three')`,
+    [admin, org, hash()]
+  );
+  await rejects(
+    db.query(`SELECT admin_invite_organisation_admin($1,$2,'four@example.org',$3,'Admin four')`, [
+      admin,
+      org,
+      hash(),
+    ]),
+    /ORGANISATION_ADMIN_LIMIT/
+  );
+  // Re-inviting an address replaces its open link.
+  const fresh = hash();
+  await db.query(`SELECT admin_invite_organisation_admin($1,$2,'two@example.org',$3,'Resend')`, [
+    admin,
+    org,
+    fresh,
+  ]);
+  assert.equal(
+    (
+      await scalar(
+        `SELECT count(*)::int AS n FROM organisation_admin_invites WHERE email='two@example.org' AND revoked_at IS NULL`
+      )
+    ).n,
+    1
+  );
+  // Members cannot reach staff RPCs.
+  await rejects(
+    db.query(`SELECT admin_invite_organisation_admin($1,$2,'x@example.org',$3,'Self invite')`, [
+      invitee,
+      org,
+      hash(),
+    ]),
+    /permission required/
+  );
+});
+
+await test("removing the owner hands ownership over and tells every administrator", async () => {
+  const org = await sponsorOrg("owner-handover", { live: 0 });
+  const [first, second] = [await user(), await user()];
+  for (const u of [first, second])
+    await db.query(`SELECT admin_manage_organisation($1,$2,'add_admin',$3,'Nominee')`, [
+      admin,
+      org,
+      { userId: u },
+    ]);
+  await db.query(`SELECT admin_manage_organisation($1,$2,'remove_admin',$3,'Official left')`, [
+    admin,
+    org,
+    { userId: first },
+  ]);
+  assert.equal(
+    (
+      await scalar(`SELECT role FROM organisation_admins WHERE organisation_id=$1 AND user_id=$2`, [
+        org,
+        second,
+      ])
+    ).role,
+    "owner"
+  );
+  assert((await notices(second)).includes("Administrator removed"));
+  assert((await notices(first)).includes("Administrator access removed"));
+});
+
+await test("free time is never added instantly", async () => {
+  await rejects(
+    db.query(`SELECT admin_manage_organisation($1,$2,'extend_trial',$3,'Extend pilot')`, [
+      admin,
+      legacyPilot,
+      { endsAt: new Date(Date.now() + 400 * 864e5).toISOString() },
+    ]),
+    /TRIAL_EXTENSION_OFFER_REQUIRED/
+  );
+  const member = await user();
+  const contract = (
+    await scalar(
+      `SELECT grant_programme_contract($1,$2,'FOUNDING_COMMERCIAL_PARTNER','{}','Founding dealer') AS id`,
+      [admin, member]
+    )
+  ).id;
+  const c = await scalar(`SELECT * FROM commercial_contracts WHERE id=$1`, [contract]);
+  assert.equal((c.ends_at - c.starts_at) / 864e5, 90, "founding contracts are 90 days");
+  assert.equal(c.slot_capacity, 10);
+  await rejects(
+    db.query(`SELECT manage_commercial_contract($1,$2,'extend',$3,'Extend dealer')`, [
+      admin,
+      contract,
+      { endsAt: new Date(Date.now() + 200 * 864e5).toISOString() },
+    ]),
+    /TRIAL_EXTENSION_OFFER_REQUIRED/
+  );
+  await rejects(
+    db.query(`SELECT manage_intro_trial($1,'extend',$2,'{}','Extend trial')`, [admin, uuid()]),
+    /TRIAL_EXTENSION_OFFER_REQUIRED/
+  );
+});
+
+await test("extension offers need consent, apply exactly N days and enforce four-eyes", async () => {
+  const org = await sponsorOrg("extension-org", { live: 1 });
+  const owner = await user();
+  await db.query(`SELECT admin_manage_organisation($1,$2,'add_admin',$3,'Owner')`, [
+    admin,
+    org,
+    { userId: owner },
+  ]);
+  const aff = (
+    await scalar(`SELECT id FROM organisation_affiliations WHERE organisation_id=$1`, [org])
+  ).id;
+  await db.query(`SELECT sponsor_business($1,$2,'VERIFYMZANSI_FOUNDING','Founding place')`, [
+    admin,
+    aff,
+  ]);
+  const before = await scalar(
+    `SELECT o.trial_ends_at, c.ends_at AS contract_end FROM organisations o JOIN commercial_contracts c ON c.id=o.contract_id WHERE o.id=$1`,
+    [org]
+  );
+  const offer = (
+    await scalar(
+      `SELECT admin_offer_trial_extension($1,'organisation_trial',$2,14,'Onboarding delayed by floods') AS r`,
+      [admin, org]
+    )
+  ).r;
+  assert.equal(offer.status, "offered");
+  assert(
+    new Date(offer.respondBy) <= before.trial_ends_at,
+    "respond-by never passes the trial end"
+  );
+  assert.equal(
+    (
+      await scalar(`SELECT count(*)::int AS n FROM operation_jobs WHERE payload->>'offer_id'=$1`, [
+        offer.offerId,
+      ])
+    ).n,
+    1,
+    "offer email queued"
+  );
+  assert((await notices(owner)).includes("Free access extension offered"));
+  await rejects(
+    db.query(`SELECT admin_offer_trial_extension($1,'organisation_trial',$2,5,'Duplicate offer')`, [
+      admin,
+      org,
+    ]),
+    /TRIAL_EXTENSION_OPEN/
+  );
+  // Only the recipient answers; RLS shows the offer to them alone.
+  const stranger = await user();
+  await rejects(
+    db.query(`SELECT respond_trial_extension($1,$2,true)`, [stranger, offer.offerId]),
+    /TRIAL_EXTENSION_NOT_FOUND/
+  );
+  await as("authenticated", stranger, async () =>
+    assert.equal((await db.query(`SELECT id FROM trial_extension_offers`)).rows.length, 0)
+  );
+  await as("authenticated", owner, async () =>
+    assert.equal((await db.query(`SELECT id FROM trial_extension_offers`)).rows.length, 1)
+  );
+  await db.query(`SELECT respond_trial_extension($1,$2,true)`, [owner, offer.offerId]);
+  const after = await scalar(
+    `SELECT o.trial_ends_at, c.ends_at AS contract_end FROM organisations o JOIN commercial_contracts c ON c.id=o.contract_id WHERE o.id=$1`,
+    [org]
+  );
+  const days = (a, b) => (a.getTime() - b.getTime()) / 864e5;
+  assert.equal(days(after.trial_ends_at, before.trial_ends_at), 14);
+  assert.equal(days(after.contract_end, before.contract_end), 14);
+  assert.equal(
+    (
+      await scalar(`SELECT ends_at FROM organisation_sponsorships WHERE affiliation_id=$1`, [aff])
+    ).ends_at.toISOString(),
+    after.trial_ends_at.toISOString(),
+    "founding places share the programme end"
+  );
+  await rejects(
+    db.query(`SELECT respond_trial_extension($1,$2,true)`, [owner, offer.offerId]),
+    /TRIAL_EXTENSION_ANSWERED/
+  );
+
+  // A second extension waits for a different administrator.
+  const second = (
+    await scalar(
+      `SELECT admin_offer_trial_extension($1,'organisation_trial',$2,7,'Second extension request') AS r`,
+      [admin, org]
+    )
+  ).r;
+  assert.equal(second.status, "pending_approval");
+  await rejects(
+    db.query(`SELECT respond_trial_extension($1,$2,true)`, [owner, second.offerId]),
+    /TRIAL_EXTENSION_ANSWERED/
+  );
+  await rejects(
+    db.query(`SELECT admin_decide_trial_extension($1,$2,true,'Approving my own')`, [
+      admin,
+      second.offerId,
+    ]),
+    /TRIAL_EXTENSION_SECOND_ADMIN/
+  );
+  const controller = await user("governance_controller");
+  await db.query(`SELECT admin_decide_trial_extension($1,$2,true,'Checked the reason')`, [
+    controller,
+    second.offerId,
+  ]);
+  // Declining leaves every date unchanged.
+  await db.query(`SELECT respond_trial_extension($1,$2,false)`, [owner, second.offerId]);
+  assert.equal(
+    (
+      await scalar(`SELECT trial_ends_at FROM organisations WHERE id=$1`, [org])
+    ).trial_ends_at.toISOString(),
+    after.trial_ends_at.toISOString()
+  );
+  assert((await notices(admin)).includes("Extension declined"));
+
+  // Unanswered offers expire and can no longer be accepted.
+  const third = (
+    await scalar(
+      `SELECT admin_offer_trial_extension($1,'organisation_trial',$2,3,'Third extension request') AS r`,
+      [controller, org]
+    )
+  ).r;
+  await db.query(`SELECT admin_decide_trial_extension($1,$2,true,'Approved again')`, [
+    admin,
+    third.offerId,
+  ]);
+  await db.query(
+    `UPDATE trial_extension_offers SET respond_by=now()-interval '1 second' WHERE id=$1`,
+    [third.offerId]
+  );
+  await rejects(
+    db.query(`SELECT respond_trial_extension($1,$2,true)`, [owner, third.offerId]),
+    /TRIAL_EXTENSION_EXPIRED/
+  );
+  assert.equal((await scalar(`SELECT expire_trial_extension_offers() AS n`)).n, 1);
+  assert.equal(
+    (await scalar(`SELECT status FROM trial_extension_offers WHERE id=$1`, [third.offerId])).status,
+    "expired"
+  );
+});
+
+await test("founding contract corrections apply only after a second admin approves", async () => {
+  const member = await user();
+  const contract = (
+    await scalar(
+      `SELECT grant_programme_contract($1,$2,'STRATEGIC_INDIVIDUAL','{}','Founding seller') AS id`,
+      [admin, member]
+    )
+  ).id;
+  const end = (await scalar(`SELECT ends_at FROM commercial_contracts WHERE id=$1`, [contract]))
+    .ends_at;
+  const offer = (
+    await scalar(
+      `SELECT admin_offer_trial_extension($1,'founding_contract',$2,10,'Outage credit for 10 days','correction') AS r`,
+      [admin, contract]
+    )
+  ).r;
+  assert.equal(offer.status, "pending_approval");
+  const controller = await user("governance_controller");
+  await db.query(`SELECT admin_decide_trial_extension($1,$2,true,'Outage confirmed')`, [
+    controller,
+    offer.offerId,
+  ]);
+  const now = await scalar(
+    `SELECT c.ends_at, e.expires_at FROM commercial_contracts c JOIN slot_entitlements e ON e.contract_id=c.id WHERE c.id=$1`,
+    [contract]
+  );
+  assert.equal((now.ends_at - end) / 864e5, 10);
+  assert.equal(now.expires_at.toISOString(), now.ends_at.toISOString());
+  // Group 1 eligibility is an admin setting.
+  await db.query(
+    `UPDATE commercial_settings SET value = value || '{"groupOneEligible":false}' WHERE key='extensions'`
+  );
+  await rejects(
+    db.query(`SELECT admin_offer_trial_extension($1,'founding_contract',$2,5,'Another request')`, [
+      admin,
+      contract,
+    ]),
+    /TRIAL_EXTENSION_INELIGIBLE/
+  );
+});
+
+await test("each product delivers what was sold: term, slots and a live post", async () => {
+  const days = (a, b) => Math.round((a - b) / 864e5);
+  for (const [code, area, slots, term] of [
+    ["RETAIL_30D", "MZANSI_MARKET", 1, 30],
+    ["RETAIL_90D", "MZANSI_BUSINESS", 1, 90],
+    ["RETAIL_180D", "PROMOTIONS_EVENTS", 1, 180],
+  ]) {
+    const buyer = await user();
+    const { result } = await pay(buyer, await retailPlan(code, area));
+    assert.equal(result.outcome, "completed", code);
+    const e = await scalar(`SELECT * FROM slot_entitlements WHERE user_id=$1`, [buyer]);
+    assert.equal(e.slot_capacity, slots, code);
+    assert.equal(days(e.expires_at, e.starts_at), term, code);
+    assert.equal(e.source, "RETAIL_PAID");
+    assert.equal(e.max_photos, 10);
+    const ent = await scalar(`SELECT tier::text FROM entitlements WHERE user_id=$1 AND area=$2`, [
+      buyer,
+      area,
+    ]);
+    assert.equal(ent.tier, { 30: "month", 90: "quarter", 180: "half_year" }[term]);
+    // A post goes live on the plan and expires with it.
+    const table =
+      area === "PROMOTIONS_EVENTS"
+        ? "promotions"
+        : area === "MZANSI_BUSINESS"
+          ? "businesses"
+          : "listings";
+    const content = await post(buyer, { table, area });
+    if (table === "promotions")
+      await db.query(`UPDATE promotions SET end_date = now() + interval '400 days' WHERE id=$1`, [
+        content,
+      ]);
+    await setStatus(content, "live", table);
+    assert.equal(await statusOf(content, table), "live");
+    assert.equal(
+      (
+        await scalar(`SELECT expires_at FROM ${table} WHERE id=$1`, [content])
+      ).expires_at.toISOString(),
+      e.expires_at.toISOString(),
+      `${code} post runs to the plan end`
+    );
+    // One slot: a second simultaneous post is refused.
+    const second = await post(buyer, { table, area });
+    if (table === "promotions")
+      await db.query(`UPDATE promotions SET end_date = now() + interval '400 days' WHERE id=$1`, [
+        second,
+      ]);
+    await rejects(setStatus(second, "live", table), /SLOT_FULL|TRIAL_REQUIRED/);
+  }
+  // A retired 365-day plan cannot be bought.
+  const late = await user();
+  const year = await scalar(
+    `SELECT * FROM plans WHERE plan_code='RETAIL_12M' AND area='MZANSI_MARKET'`
+  );
+  await rejects(pay(late, year), /validation failed/);
+});
+
+await test("multi-listing: 10 shared slots for 180 days and a second named administrator", async () => {
+  const owner = await user();
+  const plan = await scalar(`SELECT * FROM plans WHERE plan_code='ENT_10_180D'`);
+  assert.equal(plan.price_cents, 215000);
+  const { result } = await pay(owner, plan);
+  assert.equal(result.outcome, "completed");
+  const e = await scalar(`SELECT * FROM slot_entitlements WHERE user_id=$1`, [owner]);
+  assert.equal(e.source, "ENTERPRISE_PLAN");
+  assert.equal(e.slot_capacity, 10);
+  assert.equal(Math.round((e.expires_at - e.starts_at) / 864e5), 180);
+  // Covers every area.
+  assert.equal(
+    (await scalar(`SELECT posting_allowance($1,'MZANSI_MARKET') AS a`, [owner])).a.capacity,
+    10
+  );
+  const colleague = await user();
+  await db.query(`UPDATE auth.users SET email='colleague@dealer.co.za' WHERE id=$1`, [colleague]);
+  const unverified = await user();
+  await db.query(`UPDATE auth.users SET email='new@dealer.co.za' WHERE id=$1`, [unverified]);
+  await db.query(
+    `UPDATE account_profiles SET account_verification_status='pending' WHERE user_id=$1`,
+    [unverified]
+  );
+  await rejects(
+    db.query(`SELECT owner_manage_plan_admin($1,$2,'add','new@dealer.co.za')`, [owner, e.id]),
+    /PLAN_ADMIN_UNAVAILABLE/
+  );
+  await rejects(
+    db.query(`SELECT owner_manage_plan_admin($1,$2,'add','colleague@dealer.co.za')`, [
+      colleague,
+      e.id,
+    ]),
+    /PLAN_ADMIN_NOT_FOUND/
+  );
+  await db.query(`SELECT owner_manage_plan_admin($1,$2,'add','Colleague@Dealer.co.za ')`, [
+    owner,
+    e.id,
+  ]);
+  assert.equal(
+    (await scalar(`SELECT posting_allowance($1,'MZANSI_BUSINESS') AS a`, [colleague])).a.capacity,
+    10,
+    "the administrator posts from the shared slots"
+  );
+  const listing = await post(colleague, { table: "listings", area: "MZANSI_MARKET" });
+  await setStatus(listing, "live");
+  assert.equal(await statusOf(listing), "live");
+  const third = await user();
+  await db.query(`UPDATE auth.users SET email='third@dealer.co.za' WHERE id=$1`, [third]);
+  await rejects(
+    db.query(`SELECT owner_manage_plan_admin($1,$2,'add','third@dealer.co.za')`, [owner, e.id]),
+    /PLAN_ADMIN_LIMIT/
+  );
+  await db.query(`SELECT owner_manage_plan_admin($1,$2,'remove','colleague@dealer.co.za')`, [
+    owner,
+    e.id,
+  ]);
+  assert.equal(
+    (await scalar(`SELECT posting_allowance($1,'MZANSI_BUSINESS') AS a`, [colleague])).a.capacity,
+    0
+  );
+  // Retail plans have no extra administrators.
+  const retail = await user();
+  await pay(retail, await retailPlan("RETAIL_30D", "MZANSI_MARKET"));
+  const r = await scalar(`SELECT id FROM slot_entitlements WHERE user_id=$1`, [retail]);
+  await rejects(
+    db.query(`SELECT owner_manage_plan_admin($1,$2,'add','third@dealer.co.za')`, [retail, r.id]),
+    /PLAN_ADMIN_NOT_FOUND/
+  );
+});
+
+await test("expiry reminders name only products on sale and reach plan administrators", async () => {
+  const owner = await user();
+  await pay(owner, await scalar(`SELECT * FROM plans WHERE plan_code='ENT_10_90D'`));
+  const e = await scalar(`SELECT id FROM slot_entitlements WHERE user_id=$1`, [owner]);
+  const helper = await user();
+  await db.query(`UPDATE auth.users SET email='helper@shop.co.za' WHERE id=$1`, [helper]);
+  await db.query(`SELECT owner_manage_plan_admin($1,$2,'add','helper@shop.co.za')`, [owner, e.id]);
+  // 25 days left on a 90-day term: the 30-day reminder.
+  await db.query(
+    `UPDATE slot_entitlements SET starts_at=now()-interval '65 days', expires_at=now()+interval '25 days' WHERE id=$1`,
+    [e.id]
+  );
+  await db.query(`SELECT notify_commercial_lifecycle()`);
+  for (const uid of [owner, helper])
+    assert((await notices(uid)).includes("Your plan expires soon"), "30-day reminder");
+  await db.query(`UPDATE slot_entitlements SET expires_at=now()-interval '1 minute' WHERE id=$1`, [
+    e.id,
+  ]);
+  await db.query(`SELECT notify_commercial_lifecycle()`);
+  const expired = await scalar(
+    `SELECT message FROM notifications WHERE user_id=$1 AND title='Your plan has expired'`,
+    [owner]
+  );
+  assert.match(expired.message, /R140 \/ 90 days or R250 \/ 180 days/);
+  assert.doesNotMatch(expired.message, /R450|6 months|year/);
+});
+
+await test("a removed programme owner can no longer answer; reminders restart after an extension", async () => {
+  const org = await sponsorOrg("ownership-change", { live: 0 });
+  const [first, second] = [await user(), await user()];
+  for (const u of [first, second])
+    await db.query(`SELECT admin_manage_organisation($1,$2,'add_admin',$3,'Nominee')`, [
+      admin,
+      org,
+      { userId: u },
+    ]);
+  const offer = (
+    await scalar(
+      `SELECT admin_offer_trial_extension($1,'organisation_trial',$2,10,'Launch delayed') AS r`,
+      [admin, org]
+    )
+  ).r;
+  await db.query(`SELECT admin_manage_organisation($1,$2,'remove_admin',$3,'Official left')`, [
+    admin,
+    org,
+    { userId: first },
+  ]);
+  await rejects(
+    db.query(`SELECT respond_trial_extension($1,$2,true)`, [first, offer.offerId]),
+    /TRIAL_EXTENSION_NOT_FOUND/
+  );
+  // The 7-day reminder was already sent for the old end date.
+  const ent = (
+    await scalar(
+      `SELECT e.id FROM slot_entitlements e JOIN organisations o ON o.contract_id = e.contract_id WHERE o.id=$1`,
+      [org]
+    )
+  ).id;
+  await db.query(`INSERT INTO commercial_notices(subject_id,milestone) VALUES($1,'expiring_7')`, [
+    ent,
+  ]);
+  await db.query(`SELECT respond_trial_extension($1,$2,true)`, [second, offer.offerId]);
+  assert.equal(
+    (await scalar(`SELECT count(*)::int AS n FROM commercial_notices WHERE subject_id=$1`, [ent]))
+      .n,
+    0
+  );
+});
+
 console.log(`${checks} commercial model checks passed`);
 await db.close();

@@ -67,6 +67,16 @@ export const COMMERCIAL_SETTING_SCHEMAS = {
     })
     .strict(),
   showroom: z.object({ programmeMinItems: int(1, 48), programmeMaxCards: int(1, 48) }).strict(),
+  /** Programme partners strip and home section (Document 08 §4). */
+  sponsors: z.object({ stripMinLive: int(1, 100) }).strict(),
+  /** Consent-based trial extension offers (Document 08 §6). */
+  extensions: z
+    .object({
+      defaultDays: int(1, 30),
+      respondDays: int(1, 30),
+      groupOneEligible: z.boolean(),
+    })
+    .strict(),
   features: z
     .object({
       enterpriseCheckout: z.boolean(),
@@ -84,15 +94,15 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
   trials: { shortDays: 7, longDays: 30, rules: "" },
   strategic: { durationDays: 90, slotCapacity: 1, activationLimitTotal: 3 },
   founding_commercial: {
-    durationDays: 180,
-    slotCapacity: 25,
-    activationsPerPeriod: 50,
+    durationDays: 90,
+    slotCapacity: 10,
+    activationsPerPeriod: 20,
     periodDays: 30,
     adminLimit: 2,
   },
   founding_organisation: {
-    durationDays: 180,
-    sponsoredCapacity: 50,
+    durationDays: 90,
+    sponsoredCapacity: 25,
     adminLimit: 3,
     ownSlots: 10,
     alertDays: [60, 30, 14, 7],
@@ -109,6 +119,8 @@ export const DEFAULT_COMMERCIAL_SETTINGS: CommercialSettings = {
     maxVideos: 1,
   },
   showroom: { programmeMinItems: 3, programmeMaxCards: 12 },
+  sponsors: { stripMinLive: 5 },
+  extensions: { defaultDays: 14, respondDays: 14, groupOneEligible: true },
   features: { enterpriseCheckout: true, organisationsPublic: true },
 };
 
@@ -122,6 +134,8 @@ export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
   media: "Media limits",
   events: "Free event fair use",
   showroom: "Programme showroom",
+  sponsors: "Programme partners strip and home section",
+  extensions: "Trial extension offers",
   features: "Feature toggles",
 };
 

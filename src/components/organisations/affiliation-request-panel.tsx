@@ -63,14 +63,17 @@ export function AffiliationRequestPanel({
   applications,
   affiliations,
   sharedFields,
+  preselect,
 }: {
   businesses: Array<{ id: string; name: string; status: string }>;
   applications: MemberApplication[];
   affiliations: MemberAffiliation[];
   sharedFields: string[];
+  /** Programme chosen from its public page ("Apply to join this programme"). */
+  preselect?: { slug: string; name: string } | null;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(preselect?.name ?? "");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState<SearchResult | null>(null);
   const [businessId, setBusinessId] = useState(businesses[0]?.id ?? "");
@@ -86,14 +89,19 @@ export function AffiliationRequestPanel({
         signal: controller.signal,
       })
         .then((res) => (res.ok ? res.json() : { organisations: [] }))
-        .then((data) => setResults(data.organisations ?? []))
+        .then((data: { organisations?: SearchResult[] }) => {
+          const found = data.organisations ?? [];
+          setResults(found);
+          const match = preselect ? found.find((org) => org.slug === preselect.slug) : undefined;
+          if (match) setSelected((current) => current ?? match);
+        })
         .catch(() => undefined);
     }, 250);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, preselect]);
 
   const businessName = (id: string) => businesses.find((b) => b.id === id)?.name ?? "Business";
 
