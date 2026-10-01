@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("Sponsors");
@@ -27,10 +27,16 @@ export interface PublicSponsor {
   on_home: boolean;
 }
 
-/** Ordered: paid programmes, then founding pilots, then the admin-set order. */
+/**
+ * Ordered: paid programmes, then founding pilots, then the admin-set order.
+ * Read without cookies (the function returns public fields only), so pages
+ * such as /sponsors can be cached; a cookie-based client would make Next.js
+ * bail out of static rendering mid-call.
+ */
 export async function getPublicSponsors(): Promise<PublicSponsor[]> {
   try {
-    const supabase = await createClient();
+    const supabase = tryCreateAdminClient();
+    if (!supabase) return [];
     const { data, error } = await supabase.rpc("public_sponsor_directory");
     if (error) {
       log.warn("Sponsor directory unavailable", { code: error.code });

@@ -47,7 +47,7 @@ test.describe("Billing payment round-trip", () => {
     await page.route("**/api/billing/payment-status?*", (route) =>
       route.fulfill({ status: 401, json: { error: "Unauthorized" } })
     );
-    await page.getByRole("link", { name: /choose 6 months — mzansi market/i }).click();
+    await page.getByRole("link", { name: /choose 180 days — mzansi market/i }).click();
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
     await page.getByRole("button", { name: /pay r250 securely/i }).click();
     await page.waitForURL("**/billing/success?payment=*");
@@ -69,11 +69,11 @@ test.describe("Billing payment round-trip", () => {
     await openAuthenticatedBilling(page, `billing-payment-${testInfo.project.name}`);
 
     // Choosing a plan opens the confirmation page (dates, slots, no auto-renewal).
-    await page.getByRole("link", { name: /choose 6 months — mzansi market/i }).click();
+    await page.getByRole("link", { name: /choose 180 days — mzansi market/i }).click();
     await page.waitForURL("**/billing/checkout?plan=*");
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
     await expect(page.getByText("Does not renew automatically")).toBeVisible();
-    await expect(page.getByText("6 months", { exact: true })).toBeVisible();
+    await expect(page.getByText("180 days", { exact: true })).toBeVisible();
 
     const checkoutResponsePromise = page.waitForResponse(
       (response) =>
