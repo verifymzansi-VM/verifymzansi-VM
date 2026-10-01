@@ -1075,7 +1075,7 @@ export default function EditPromotionPage() {
                           aria-pressed={active}
                           className={
                             active
-                              ? "inline-flex min-h-9 items-center rounded-full border border-sunset-600 bg-sunset-50 px-3 text-xs font-semibold text-sunset-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-sunset-400 dark:bg-sunset-950/40 dark:text-sunset-200"
+                              ? "inline-flex min-h-9 items-center rounded-full border border-teal-600 bg-teal-50 px-3 text-xs font-semibold text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-teal-400 dark:bg-teal-950/40 dark:text-teal-200"
                               : "inline-flex min-h-9 items-center rounded-full border border-border bg-card px-3 text-xs font-medium text-foreground/80 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           }
                           onClick={() =>

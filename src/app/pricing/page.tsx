@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface } from "@/components/brand";
+import { Reveal } from "@/components/marketing/reveal";
 import { RetailPricing } from "@/components/billing/retail-pricing";
 import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
@@ -108,57 +109,70 @@ export default async function PricingPage() {
             </h2>
             <p className="section-lede mx-auto">One posting slot, paid once.</p>
           </div>
-          <RetailPricing offers={catalog.retail} trialDays={settings?.trials} />
+          <Reveal>
+            <RetailPricing offers={catalog.retail} trialDays={settings?.trials} />
+          </Reveal>
         </section>
 
         <section aria-label="Paying safely" className="container-page pb-10 sm:pb-14">
-          <ul className="mx-auto grid max-w-6xl gap-4 rounded-3xl bg-muted/60 p-4 text-sm sm:grid-cols-3 sm:p-5">
-            {[
-              {
-                icon: LockKeyhole,
-                title: "Secure Ozow checkout",
-                text: "Pay on Ozow's hosted page.",
-              },
-              {
-                icon: ReceiptText,
-                title: "Clear rand pricing",
-                text: trustConfig.ozowMerchantName
-                  ? `Shows as ${trustConfig.ozowMerchantName}.`
-                  : "Prices shown in ZAR.",
-              },
-              {
-                icon: ShieldCheck,
-                title: "Still moderated",
-                text: "Support helps if a post is rejected.",
-              },
-            ].map(({ icon: Icon, title, text }) => (
-              <li key={title} className="flex items-center gap-3">
-                <span className="icon-tile area-market-tile">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <p className="leading-5 text-muted-foreground">
-                  <span className="block font-semibold text-foreground">{title}</span>
-                  {text}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <Reveal>
+            <ul className="mx-auto grid max-w-6xl gap-4 rounded-3xl bg-muted/60 p-4 text-sm sm:grid-cols-3 sm:p-5">
+              {[
+                {
+                  icon: LockKeyhole,
+                  title: "Secure Ozow checkout",
+                  text: "Pay on Ozow's hosted page.",
+                },
+                {
+                  icon: ReceiptText,
+                  title: "Clear rand pricing",
+                  text: trustConfig.ozowMerchantName
+                    ? `Shows as ${trustConfig.ozowMerchantName}.`
+                    : "Prices shown in ZAR.",
+                },
+                {
+                  icon: ShieldCheck,
+                  title: "Still moderated",
+                  text: "Support helps if a post is rejected.",
+                },
+              ].map(({ icon: Icon, title, text }) => (
+                <li key={title} className="flex items-center gap-3">
+                  <span className="icon-tile area-market-tile">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <p className="leading-5 text-muted-foreground">
+                    <span className="block font-semibold text-foreground">{title}</span>
+                    {text}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
         </section>
 
         <div className="container-page pb-12 sm:pb-16">
-          <EnterprisePricing
-            plans={catalog.enterprise}
-            checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
-          />
+          <Reveal>
+            <EnterprisePricing
+              plans={catalog.enterprise}
+              checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
+              retailFromCents={
+                catalog.retail.length > 0
+                  ? Math.min(...catalog.retail.map((offer) => offer.priceCents))
+                  : null
+              }
+            />
+          </Reveal>
         </div>
 
         <div className="border-t border-border/60 bg-card/50">
           <div className="container-page py-12 sm:py-16">
-            <BillingFaq
-              trials={settings?.trials}
-              merchantName={trustConfig.ozowMerchantName}
-              vatStatus={trustConfig.vatStatus}
-            />
+            <Reveal>
+              <BillingFaq
+                trials={settings?.trials}
+                merchantName={trustConfig.ozowMerchantName}
+                vatStatus={trustConfig.vatStatus}
+              />
+            </Reveal>
           </div>
         </div>
       </main>

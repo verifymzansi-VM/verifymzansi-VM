@@ -39,13 +39,12 @@ vi.mock("@/lib/commercial/plans", () => ({
 
 describe("AdvertisePage", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     catalog.retail = RETAIL_OFFERS.map((offer) => ({ ...offer, planIds: {} }));
     catalog.enterprise = ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null }));
   });
 
-  it("explains the three ways to advertise with catalogue prices", async () => {
-    render(await AdvertisePage());
+  it("explains the three packages and links each to its full details", async () => {
+    const { container } = render(await AdvertisePage());
 
     expect(
       screen.getByRole("heading", {
@@ -58,29 +57,47 @@ describe("AdvertisePage", () => {
       "/post/create"
     );
     expect(screen.getByRole("link", { name: "See plans" })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByText("From R50 / 30 days")).toBeInTheDocument();
-    // Thousands use a non-breaking space (site-wide rand formatting).
-    expect(screen.getByText(/^From R1\s200 \/ 90 days$/)).toBeInTheDocument();
-    expect(screen.getByText(/^From R15\s000 \/ 90 days$/)).toBeInTheDocument();
-    expect(
-      screen.getByText(/R50 \/ 30 days · R140 \/ 90 days · R250 \/ 180 days/)
-    ).toBeInTheDocument();
+
+    for (const [name, id] of [
+      ["Individual", "individual"],
+      ["Multi-listing", "multi-listing"],
+      ["Programme partner", "programmes"],
+    ] as const) {
+      expect(screen.getByRole("link", { name: `Full details of ${name}` })).toHaveAttribute(
+        "href",
+        `#${id}`
+      );
+      expect(container.querySelector(`#${id}`)).not.toBeNull();
+    }
+    expect(screen.getAllByText("Who can use it")).toHaveLength(3);
   });
 
-  it("reads retail prices from the live catalogue rather than hard-coding them", async () => {
-    catalog.retail = RETAIL_OFFERS.map((offer, index) => ({
-      ...offer,
-      priceCents: index === 0 ? 6000 : offer.priceCents,
-      planIds: {},
-    }));
-    render(await AdvertisePage());
-    expect(screen.getByText("From R60 / 30 days")).toBeInTheDocument();
-  });
-
-  it("anchors the programme partner section and makes no 12-month claims", async () => {
+  it("shows a price sheet for each package and links to the full pricing page", async () => {
     const { container } = render(await AdvertisePage());
 
-    expect(container.querySelector("#programmes")).not.toBeNull();
+    expect(screen.getByRole("link", { name: "See individual prices" })).toHaveAttribute(
+      "href",
+      "/pricing#plans"
+    );
+    expect(screen.getByRole("link", { name: "See multi-listing prices" })).toHaveAttribute(
+      "href",
+      "/pricing#multi-listing-prices"
+    );
+    expect(screen.getByRole("link", { name: "See programme fees" })).toHaveAttribute(
+      "href",
+      "/pricing#programme-prices"
+    );
+    expect(screen.getByText("Individual plans (one live slot)")).toBeInTheDocument();
+    expect(screen.getByText("Multi-listing price (total for the term)")).toBeInTheDocument();
+    expect(screen.getByText("Programme fee (total for the term)")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/R50/);
+    expect(container.textContent).toMatch(/R1\s200/);
+    expect(container.textContent).toMatch(/R15\s000/);
+  });
+
+  it("keeps the programme partner proposal link and makes no 12-month claims", async () => {
+    const { container } = render(await AdvertisePage());
+
     expect(screen.getByRole("link", { name: "Request a programme proposal" })).toHaveAttribute(
       "href",
       "/contact?topic=organisation_proposal"

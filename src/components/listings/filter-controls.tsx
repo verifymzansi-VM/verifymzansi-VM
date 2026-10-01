@@ -24,13 +24,13 @@ export function FilterChoiceChip({
   selected: boolean;
   onClick: () => void;
   children: ReactNode;
-  tone?: "green" | "blue" | "sunset";
+  tone?: "green" | "blue" | "teal";
 }) {
   const selectedTone =
     tone === "blue"
       ? "border-brand-blue-600 bg-brand-blue-50 text-brand-blue-700 dark:bg-brand-blue-500/15 dark:text-brand-blue-200"
-      : tone === "sunset"
-        ? "border-sunset-600 bg-sunset-50 text-sunset-700 dark:bg-sunset-500/15 dark:text-sunset-200"
+      : tone === "teal"
+        ? "border-teal-600 bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-200"
         : "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:bg-brand-green/15 dark:text-brand-green-200";
   return (
     <button

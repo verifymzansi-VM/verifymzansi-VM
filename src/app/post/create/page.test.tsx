@@ -59,15 +59,6 @@ vi.mock("@/components/layout/footer", () => ({
   Footer: () => <footer data-testid="footer">Footer</footer>,
 }));
 
-vi.mock("@/components/layout/page-header", () => ({
-  PageHeader: ({ title, description }: { title: string; description?: string }) => (
-    <div data-testid="page-header">
-      <h1>{title}</h1>
-      {description && <p>{description}</p>}
-    </div>
-  ),
-}));
-
 describe("CreatePostPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -100,14 +91,17 @@ describe("CreatePostPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mzansi Market" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mzansi Business" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Tourism & Events" })).toBeInTheDocument();
-    expect(screen.getByText("Sell an item, list property or advertise a job")).toBeInTheDocument();
-    expect(screen.getByText("Help customers find your business")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tourism" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Events" })).toBeInTheDocument();
+    expect(screen.getAllByText("Tourism & Events")).toHaveLength(2);
+    expect(screen.getByText("Advertising a job vacancy")).toBeInTheDocument();
+    expect(screen.getByText("You run a shop, practice or service")).toBeInTheDocument();
+    expect(screen.getByText("a venue for hire. Use Mzansi Business.")).toBeInTheDocument();
     expect(screen.getByText("Free to post")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Create a market listing:/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Create a business profile:/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Create an event:/ })).toBeInTheDocument();
-    expect(screen.getByText("Not sure where to post?")).toBeInTheDocument();
+    expect(screen.getByText("Not sure?")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /See advertising options/i })).toHaveAttribute(
       "href",
@@ -128,7 +122,7 @@ describe("CreatePostPage", () => {
   it("routes common examples to the right area", async () => {
     render(await CreatePostPage());
 
-    fireEvent.click(screen.getByRole("button", { name: /Advertising holiday accommodation/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Holiday accommodation/ }));
 
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith("/post/create-tourism?type=tourism_business");

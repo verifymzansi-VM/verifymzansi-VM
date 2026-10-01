@@ -21,6 +21,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { Toaster } from "@/components/ui/toaster";
+import { PointerGlow } from "@/components/marketing/pointer-glow";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
@@ -273,6 +274,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
             <MobileNav />
             <Toaster />
+            <PointerGlow />
             <PwaInstallPrompt />
             <ServiceWorkerRegistrar />
             <SiteVisitTracker />

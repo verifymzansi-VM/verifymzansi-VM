@@ -1,5 +1,33 @@
 # VerifyMzansi email operations
 
+## Zoho mailbox migration (1 October 2026)
+
+Incoming mail now uses Zoho Mail. Cloudflare Email Routing is disabled, and its
+three root MX records have been removed. Root MX records are `mx.zoho.com` (10),
+`mx2.zoho.com` (20), and `mx3.zoho.com` (50), with a 300-second TTL. Zoho's
+supplied DKIM key is published at `zmail._domainkey.verifymzansi.com`. The
+single root SPF is `v=spf1 include:zohomail.com include:_spf.google.com ~all`.
+Google authorization is retained during transition until prior sending paths are
+checked; the Cloudflare SPF include has been removed.
+
+Resend's `resend._domainkey` and `send` SPF/MX records remain unchanged.
+Application sending and Supabase Auth SMTP continue to use Resend. DMARC remains
+in monitoring mode with reports sent to `dmarc@verifymzansi.com`. Zoho TXT
+domain verification remains published.
+
+Setup screenshots confirmed the primary mailbox `senzo.mhlongo@verifymzansi.com`
+and aliases hello, support, billing, verification, privacy, security, legal,
+appeals, noreply, team, and dmarc. Group creation succeeded for abuse and
+postmaster. Senzo was shown as an abuse-group member; postmaster membership
+still needs explicit confirmation. The optional social alias is not confirmed.
+
+Cloudflare API and authoritative DNS confirm the MX switch. Recursive resolvers
+may briefly retain the previous MX set. Zoho's Verify all records step, DKIM
+enablement, group delivery settings, inbound/outbound mailbox tests, and
+signup/reset/contact-flow tests remain pending. DNS publication does not prove
+mailbox delivery. Historical mail remains in Gmail until separately migrated.
+The earlier Cloudflare/Gmail sections below describe the previous setup.
+
 ## Where a contact-form request goes
 
 The `/contact` form writes to Supabase `contact_submissions`. Staff read it in

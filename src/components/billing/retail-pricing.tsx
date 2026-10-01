@@ -57,7 +57,7 @@ const AREA_OPTIONS: ReadonlyArray<{
     label: "Tourism",
     short: "Tourism",
     icon: TreePalm,
-    activeIcon: "text-sunset-700 dark:text-sunset-300",
+    activeIcon: "text-teal-700 dark:text-teal-300",
   },
 ];
 
@@ -209,8 +209,8 @@ export function RetailPricing({
                 highlighted
                   ? "border-brand-green-600/70 ring-4 ring-brand-green/10 elev-lg dark:border-brand-green-500/70 lg:-translate-y-2"
                   : best
-                    ? "border-brand-gold/60 elev-xs hover:elev-md"
-                    : "border-border/70 elev-xs hover:elev-md"
+                    ? "spotlight border-brand-gold/60 elev-xs"
+                    : "spotlight border-border/70 elev-xs"
               )}
             >
               <OfferBadge tier={offer.tier} label={offer.promoLabel} />
@@ -247,8 +247,8 @@ export function RetailPricing({
           );
         })}
 
-        <article className="relative flex flex-col rounded-3xl border border-dashed border-sunset-300/70 bg-sunset-50/50 p-5 pt-7 dark:border-sunset-800/70 dark:bg-sunset-950/20 sm:p-6 sm:pt-8">
-          <h3 className="font-body text-base font-semibold text-sunset-700 dark:text-sunset-300">
+        <article className="relative flex flex-col rounded-3xl border border-dashed border-teal-300/70 bg-teal-50/50 p-5 pt-7 dark:border-teal-800/70 dark:bg-teal-950/20 sm:p-6 sm:pt-8">
+          <h3 className="font-body text-base font-semibold text-teal-700 dark:text-teal-300">
             Events
           </h3>
           <div className="mt-2 flex items-baseline gap-2">
@@ -259,7 +259,7 @@ export function RetailPricing({
           <p className="mt-1.5 min-h-5 text-xs font-medium text-muted-foreground">
             Until the event ends
           </p>
-          <ul className="mt-5 flex-1 space-y-2.5 border-t border-sunset-200/70 pt-5 dark:border-sunset-900/60">
+          <ul className="mt-5 flex-1 space-y-2.5 border-t border-teal-200/70 pt-5 dark:border-teal-900/60">
             {["No plan needed", "Moderated, fair use"].map((text) => (
               <li
                 key={text}
@@ -267,7 +267,7 @@ export function RetailPricing({
               >
                 <CalendarDays
                   aria-hidden="true"
-                  className="mt-px h-[18px] w-[18px] shrink-0 text-sunset-600 dark:text-sunset-300"
+                  className="mt-px h-[18px] w-[18px] shrink-0 text-teal-600 dark:text-teal-300"
                 />
                 {text}
               </li>

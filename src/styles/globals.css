@@ -718,7 +718,7 @@
     @apply bg-brand-blue/10 text-brand-blue-700 dark:bg-brand-blue/20 dark:text-brand-blue-300;
   }
   .area-tourism-tile {
-    @apply bg-sunset/10 text-sunset-700 dark:bg-sunset/15 dark:text-sunset-300;
+    @apply bg-teal-500/10 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300;
   }
 
   /* Inline text link with arrow affordance (tertiary actions) */
@@ -832,5 +832,135 @@
   .evidence-protected,
   [data-evidence-thumb] {
     display: none !important;
+  }
+}
+
+/* ── Alive surfaces: hover lift, pointer spotlight, scroll reveal ───────── */
+@layer components {
+  .spotlight {
+    position: relative;
+    transition:
+      transform 250ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      box-shadow 250ms ease,
+      border-color 250ms ease;
+  }
+  .spotlight::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 300ms ease;
+    background: radial-gradient(
+      340px circle at var(--mx, 50%) var(--my, 50%),
+      rgba(249, 168, 38, 0.16),
+      transparent 65%
+    );
+  }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .spotlight:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+      border-color: rgba(11, 122, 85, 0.4);
+    }
+    .spotlight:hover::after {
+      opacity: 1;
+    }
+    .spotlight:hover .icon-tile {
+      transform: scale(1.1) rotate(-5deg);
+    }
+    .spotlight:active {
+      transform: translateY(-1px) scale(0.99);
+    }
+  }
+
+  .reveal {
+    transition:
+      opacity 650ms ease,
+      transform 650ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .reveal-hidden {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  .video-sweep {
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.14) 50%,
+      transparent 70%
+    );
+    background-size: 250% 100%;
+    animation: video-sweep 3.2s linear infinite;
+  }
+  .video-ring {
+    animation: video-ring 2.2s ease-out infinite;
+  }
+  @keyframes video-sweep {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -100% 0;
+    }
+  }
+  @keyframes video-ring {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+}
+
+/* ── Page entrance and pop-ups ──────────────────────────────────────────── */
+@layer components {
+  /* Opacity only: a transform here would trap position:fixed descendants. */
+  .page-enter {
+    animation: page-enter 320ms ease-out both;
+  }
+  @keyframes page-enter {
+    from {
+      opacity: 0.35;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  html[data-playwright="1"] .page-enter {
+    animation: none;
+  }
+
+  /* Centred dialogs (the ones that zoom in) settle with a small spring. Edge sheets are
+     left alone: an overshoot would pull a drawer away from its screen edge. */
+  @media (prefers-reduced-motion: no-preference) {
+    [role="dialog"][data-state="open"][class*="zoom-in-95"],
+    [role="alertdialog"][data-state="open"][class*="zoom-in-95"] {
+      animation-timing-function: cubic-bezier(0.34, 1.35, 0.5, 1);
+    }
+  }
+
+  /* Whole-card links react like the rest of the site. */
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    a.surface-card {
+      transition:
+        transform 250ms cubic-bezier(0.2, 0.7, 0.2, 1),
+        box-shadow 250ms ease,
+        border-color 250ms ease;
+    }
+    a.surface-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: rgba(11, 122, 85, 0.4);
+    }
+    a.surface-card:active {
+      transform: translateY(-1px) scale(0.99);
+    }
   }
 }

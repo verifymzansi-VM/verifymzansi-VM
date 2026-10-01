@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  BedDouble,
+  ArrowRight,
   Building2,
   CalendarDays,
   Check,
-  ChevronRight,
   Loader2,
+  X,
   ShoppingBag,
   TreePalm,
   type LucideIcon,
@@ -21,129 +21,143 @@ import { normalizeAccountVerificationStatus } from "@/lib/account/compat";
 import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 
-interface PostChoice {
-  label: string;
-  hint: string;
+type OptionId = "listing" | "business" | "stay" | "event";
+
+interface PostOption {
+  id: OptionId;
+  /** Section of the site the post appears in. */
+  area: string;
+  title: string;
+  action: string;
+  /** What the section is and who browses it. */
+  about: string;
+  /** Situations that belong here. */
+  fits: readonly string[];
+  /** The kinds of posts the section is split into. */
+  covers: string;
+  /** The look-alike that belongs somewhere else. */
+  notFor: string;
   icon: LucideIcon;
+  tile: string;
+  accent: string;
   href: string;
   badge?: string;
 }
 
-interface PostArea {
-  id: string;
-  title: string;
-  fitsWhen: string;
-  question: string;
-  questionHint?: string;
-  /** What the poster ends up with, in plain words. */
-  youGet?: readonly string[];
-  haveReady?: string;
-  icon: LucideIcon;
-  tile: string;
-  accent: string;
-  choices: readonly PostChoice[];
-}
-
-// Each choice opens the matching form with the category or type already set.
-const POST_AREAS: readonly PostArea[] = [
+// One card per form; each opens with the category or type already set.
+const POST_OPTIONS: readonly PostOption[] = [
   {
-    id: "market",
+    id: "listing",
+    area: "Classifieds",
     title: "Mzansi Market",
-    fitsWhen: "Sell an item, list property or advertise a job",
-    question:
-      "Create a listing for something you are selling or renting out, or a vacancy you want to fill.",
-    questionHint: "For example: a phone, a bakkie, a room to rent or a job vacancy.",
+    action: "Create a market listing",
+    about: "The classifieds. People browse it to buy, rent or find work.",
+    fits: [
+      "Selling something new or used",
+      "Renting out a house, flat or room",
+      "Advertising a job vacancy",
+    ],
+    covers: "Property, vehicles and parts, electronics, home, clothing, farming, jobs",
+    notFor: "your business as a whole. Use Mzansi Business.",
     icon: ShoppingBag,
     tile: "area-market-tile",
     accent: "bg-brand-green-600",
-    choices: [
-      {
-        label: "Create a market listing",
-        hint: "Choose your category in the form",
-        icon: ShoppingBag,
-        href: "/post/create-listing",
-      },
-    ],
+    href: "/post/create-listing",
   },
   {
     id: "business",
+    area: "Business directory",
     title: "Mzansi Business",
-    fitsWhen: "Help customers find your business",
-    question:
-      "Create a profile for your shop, practice or services, with contact details, opening hours and photos.",
-    questionHint: "For example: a spaza shop, hair salon, plumber, accountant or online shop.",
+    action: "Create a business profile",
+    about: "The local business directory. Customers search it to find and contact you.",
+    fits: [
+      "You run a shop, practice or service",
+      "Customers need your hours and address",
+      "You want a lasting page, not one advert",
+    ],
+    covers: "Shops, food, beauty, health, trades, cleaning, transport, professional services",
+    notFor: "one item for sale. Use Mzansi Market.",
     icon: Building2,
     tile: "area-business-tile",
     accent: "bg-brand-blue-600",
-    choices: [
-      {
-        label: "Create a business profile",
-        hint: "Tell customers what you offer",
-        icon: Building2,
-        href: "/post/create-business",
-      },
-    ],
+    href: "/post/create-business",
   },
   {
-    id: "tourism",
-    title: "Tourism & Events",
-    fitsWhen: "List a stay, experience or event",
-    question: "Help visitors find accommodation, things to do or an event to attend.",
+    id: "stay",
+    area: "Tourism & Events",
+    title: "Tourism",
+    action: "List a stay or experience",
+    about: "Where visitors look for a place to stay and things to do.",
+    fits: [
+      "You host guests overnight",
+      "You run tours, safaris or activities",
+      "You run an attraction or retreat",
+    ],
+    covers: "Hotels, guest houses, lodges, self-catering, campsites, tours, attractions",
+    notFor: "a home to rent long term. Use Mzansi Market.",
     icon: TreePalm,
     tile: "area-tourism-tile",
-    accent: "bg-sunset-600",
-    choices: [
-      {
-        label: "List a stay, experience or attraction",
-        hint: "Guest house, tour, safari or visitor attraction",
-        icon: BedDouble,
-        href: "/post/create-tourism?type=tourism_business",
-      },
-      {
-        label: "Create an event",
-        hint: "A festival, workshop, concert or community event",
-        icon: CalendarDays,
-        href: "/post/create-tourism?type=event",
-        badge: "Free to post",
-      },
-    ],
-  },
-];
-const EXAMPLES: readonly { situation: string; destination: string; href: string }[] = [
-  {
-    situation: "Selling a cake mixer",
-    destination: "Market",
-    href: "/post/create-listing?category=home_lifestyle",
-  },
-  {
-    situation: "Advertising a baking business",
-    destination: "Business",
-    href: "/post/create-business?category=food_dining",
-  },
-  {
-    situation: "Advertising a baking workshop on a particular date",
-    destination: "Event",
-    href: "/post/create-tourism?type=event",
-  },
-  {
-    situation: "Renting out a residential flat",
-    destination: "Market",
-    href: "/post/create-listing?category=property",
-  },
-  {
-    situation: "Advertising holiday accommodation",
-    destination: "Tourism",
+    accent: "bg-teal-500",
     href: "/post/create-tourism?type=tourism_business",
   },
   {
-    situation: "Advertising a venue for hire",
-    destination: "Business",
-    href: "/post/create-business?category=events_entertainment",
+    id: "event",
+    area: "Tourism & Events",
+    title: "Events",
+    action: "Create an event",
+    about: "What's on near you. People browse it to find something to attend.",
+    fits: [
+      "It happens on a set date",
+      "People attend free or with tickets",
+      "Once-off or repeating, like a weekly market",
+    ],
+    covers: "Festivals, concerts, workshops, markets, sport, church and community events",
+    notFor: "a venue for hire. Use Mzansi Business.",
+    icon: CalendarDays,
+    tile: "area-tourism-tile",
+    accent: "bg-teal-500",
+    href: "/post/create-tourism?type=event",
+    badge: "Free to post",
+  },
+];
+
+const OPTION_TILES: Record<OptionId, string> = {
+  listing: "area-market-tile",
+  business: "area-business-tile",
+  stay: "area-tourism-tile",
+  event: "area-tourism-tile",
+};
+
+// Pairs that are easy to mix up, so the difference is clear.
+const EXAMPLES: readonly {
+  situation: string;
+  destination: string;
+  option: OptionId;
+  href: string;
+}[] = [
+  {
+    situation: "Selling a cake mixer",
+    destination: "Market",
+    option: "listing",
+    href: "/post/create-listing?category=home_lifestyle",
   },
   {
-    situation: "Advertising a concert at that venue",
-    destination: "Event",
+    situation: "A baking business",
+    destination: "Business",
+    option: "business",
+    href: "/post/create-business?category=food_dining",
+  },
+  {
+    situation: "A one-day baking workshop",
+    destination: "Events",
+    option: "event",
     href: "/post/create-tourism?type=event",
+  },
+  {
+    situation: "Holiday accommodation",
+    destination: "Tourism",
+    option: "stay",
+    href: "/post/create-tourism?type=tourism_business",
   },
 ];
 
@@ -247,7 +261,7 @@ export function PostCreateClient({
   const isBusy = pendingHref !== null;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-1 flex-col gap-4">
       {hasConfirmedAuth && !canPost && (
         <Alert
           hideIcon
@@ -280,147 +294,141 @@ export function PostCreateClient({
         </Alert>
       )}
 
-      <div className="space-y-4">
-        {POST_AREAS.map((area) => {
-          const AreaIcon = area.icon;
-          const headingId = `post-area-${area.id}`;
+      <div className="grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {POST_OPTIONS.map((option) => {
+          const OptionIcon = option.icon;
+          const headingId = `post-option-${option.id}`;
+          const isPending = pendingHref === option.href;
 
           return (
             <section
-              key={area.id}
+              key={option.id}
               aria-labelledby={headingId}
-              className="surface-card relative overflow-hidden p-4 sm:p-5 lg:grid lg:grid-cols-[18rem_1fr] lg:gap-6"
+              className="surface-card relative flex flex-col overflow-hidden p-5 pt-6"
             >
               <span
                 aria-hidden="true"
-                className={cn("absolute inset-y-0 left-0 w-1", area.accent)}
+                className={cn("absolute inset-x-0 top-0 h-1", option.accent)}
               />
 
-              <div className="flex items-start gap-3 lg:flex-col lg:gap-3">
-                <span aria-hidden="true" className={cn("icon-tile h-11 w-11", area.tile)}>
-                  <AreaIcon className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <span aria-hidden="true" className={cn("icon-tile h-11 w-11", option.tile)}>
+                  <OptionIcon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <h2
-                    id={headingId}
-                    className="font-display text-lg font-bold leading-tight tracking-tight text-foreground"
-                  >
-                    {area.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-foreground/80">{area.fitsWhen}</p>
-                  {area.youGet ? (
-                    <ul className="mt-3 space-y-1.5 text-sm text-foreground/80">
-                      {area.youGet.map((item) => (
-                        <li key={item} className="flex gap-2">
-                          <Check
-                            aria-hidden="true"
-                            className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
-                          />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {area.haveReady ? (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground/80">Have ready: </span>
-                      {area.haveReady}
-                    </p>
-                  ) : null}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                    {option.area}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <h2
+                      id={headingId}
+                      className="font-display text-xl font-bold leading-tight tracking-tight text-foreground"
+                    >
+                      {option.title}
+                    </h2>
+                    {option.badge ? (
+                      <span className="rounded-full bg-brand-green-600/10 px-2 py-0.5 text-xs font-semibold text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-green-300">
+                        {option.badge}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
+              <p className="mt-3 text-sm leading-6 text-foreground/80">{option.about}</p>
 
-              <div className="mt-4 lg:mt-0">
-                <p className="text-sm leading-6 text-foreground">{area.question}</p>
-                {area.questionHint ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">{area.questionHint}</p>
-                ) : null}
-                <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {area.choices.map((choice) => {
-                    const ChoiceIcon = choice.icon;
-                    const isPending = pendingHref === choice.href;
+              <p className="mt-3 text-xs font-semibold text-foreground">Post here if</p>
+              <ul className="mt-2 space-y-1.5 text-sm text-foreground/80">
+                {option.fits.map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <Check
+                      aria-hidden="true"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
 
-                    return (
-                      <li key={choice.href}>
-                        <button
-                          type="button"
-                          onClick={() => handleChoiceClick(choice.href)}
-                          disabled={isBusy}
-                          aria-label={`${choice.label}: ${choice.hint} (${area.title})`}
-                          className={cn(
-                            "group flex h-full min-h-14 w-full items-center gap-3 rounded-xl border border-border/70 bg-card px-3 py-2.5 text-left transition-colors hover:border-foreground/25 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
-                            isPending && "border-foreground/30 bg-muted/60",
-                            isBusy && !isPending && "opacity-60"
-                          )}
-                        >
-                          <span aria-hidden="true" className="text-foreground/70">
-                            {isPending ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <ChoiceIcon className="h-5 w-5" />
-                            )}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                              {choice.label}
-                              {choice.badge ? (
-                                <span className="rounded-full bg-brand-green-600/10 px-1.5 py-px text-[11px] font-semibold text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-green-300">
-                                  {choice.badge}
-                                </span>
-                              ) : null}
-                            </span>
-                            <span className="block text-xs text-muted-foreground">
-                              {isPending ? "Opening form..." : choice.hint}
-                            </span>
-                          </span>
-                          <ChevronRight
-                            aria-hidden="true"
-                            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
-                          />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                <span className="font-semibold text-foreground/80">Covers: </span>
+                {option.covers}
+              </p>
+              <p className="mt-1.5 flex gap-1.5 text-xs leading-5 text-muted-foreground">
+                <X aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive/70" />
+                <span>
+                  <span className="font-semibold text-foreground/80">Not for </span>
+                  {option.notFor}
+                </span>
+              </p>
+
+              <div className="mt-auto pt-4">
+                <button
+                  type="button"
+                  onClick={() => handleChoiceClick(option.href)}
+                  disabled={isBusy}
+                  aria-label={`${option.action}: ${option.about} (${option.area})`}
+                  className={cn(
+                    "group flex h-11 w-full items-center justify-center gap-2 rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
+                    isBusy && !isPending && "opacity-60"
+                  )}
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                      Opening form...
+                    </>
+                  ) : (
+                    <>
+                      {option.action}
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                      />
+                    </>
+                  )}
+                </button>
               </div>
             </section>
           );
         })}
       </div>
 
-      <details className="surface-card group p-4 sm:p-5">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
-          Not sure where to post?
-          <ChevronRight
-            aria-hidden="true"
-            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none"
-          />
-        </summary>
-        <ul className="mt-3 divide-y divide-border/60">
+      <section
+        aria-labelledby="post-guide-title"
+        className="surface-card flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-4"
+      >
+        <h2
+          id="post-guide-title"
+          className="shrink-0 font-display text-sm font-bold text-foreground"
+        >
+          Not sure?
+        </h2>
+        <ul className="flex min-w-0 flex-1 flex-wrap gap-2">
           {EXAMPLES.map((example) => (
             <li key={example.situation}>
               <button
                 type="button"
                 onClick={() => handleChoiceClick(example.href)}
                 disabled={isBusy}
-                className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait"
+                className="flex min-h-9 items-center gap-2 rounded-full border border-border/70 py-1 pl-3 pr-1 text-left text-xs transition-colors hover:border-foreground/25 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait"
               >
-                <span className="text-foreground/80">{example.situation}</span>
-                <span className="shrink-0 font-semibold text-foreground">
+                <span className="text-foreground/85">{example.situation}</span>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-2 py-0.5 font-semibold",
+                    OPTION_TILES[example.option]
+                  )}
+                >
                   {example.destination}
                 </span>
               </button>
             </li>
           ))}
         </ul>
-      </details>
-
-      <p className="text-sm text-muted-foreground">
-        Need more visibility after launch?{" "}
-        <Link href="/advertise" prefetch={false} className="link-arrow inline">
+        <Link href="/advertise" prefetch={false} className="link-arrow shrink-0 text-xs lg:ml-auto">
           See advertising options
         </Link>
-      </p>
+      </section>
     </div>
   );
 }

@@ -13,7 +13,7 @@ const ACTIVE_CLASSES: Record<MarketplaceArea | "ALL", string> = {
   MZANSI_BUSINESS:
     "border-brand-blue-600 bg-brand-blue-600 text-white dark:border-brand-blue-500 dark:bg-brand-blue-500",
   PROMOTIONS_EVENTS:
-    "border-sunset-600 bg-sunset-600 text-white dark:border-sunset-500 dark:bg-sunset-500",
+    "border-teal-700 bg-teal-700 text-white dark:border-teal-400 dark:bg-teal-400 dark:text-teal-950",
 };
 
 export function AreaFilter() {

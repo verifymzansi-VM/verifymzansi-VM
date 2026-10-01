@@ -49,8 +49,8 @@ const AREA_STYLES: Record<PostFormArea, AreaStyle> = {
   tourism: {
     icon: TreePalm,
     tile: "area-tourism-tile",
-    pill: "border-sunset-200 bg-sunset-50 text-sunset-800 dark:border-sunset-800 dark:bg-sunset-950/60 dark:text-sunset-200",
-    bar: "bg-sunset-600 dark:bg-sunset-400",
+    pill: "border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-200",
+    bar: "bg-teal-600 dark:bg-teal-400",
   },
 };
 

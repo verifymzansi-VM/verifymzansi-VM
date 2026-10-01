@@ -53,7 +53,7 @@ function FreeEventOption({ onChoose }: { onChoose: () => void }) {
   return (
     <div
       data-testid="free-event-option"
-      className="flex flex-col gap-3 rounded-2xl border border-sunset/30 bg-sunset-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-sunset/10"
+      className="flex flex-col gap-3 rounded-2xl border border-teal-500/30 bg-teal-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:bg-teal-500/10"
     >
       <div>
         <p className="font-semibold">Post an event — Free to post</p>
@@ -124,7 +124,7 @@ const AREA_LABELS: Record<MarketplaceArea, string> = {
 const AREA_COLORS: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "border-0 bg-brand-green-600 text-white hover:bg-brand-green-600",
   MZANSI_BUSINESS: "border-0 bg-brand-blue-600 text-white hover:bg-brand-blue-600",
-  PROMOTIONS_EVENTS: "border-0 bg-sunset-600 text-white hover:bg-sunset-600",
+  PROMOTIONS_EVENTS: "border-0 bg-teal-700 text-white hover:bg-teal-700",
 };
 
 const AREA_ITEM_LABELS: Record<MarketplaceArea, string> = {
@@ -565,7 +565,7 @@ export function PlanGate({
   if (freePosting) {
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sunset/25 bg-sunset/5 px-4 py-3 text-sm text-foreground/90">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-teal-500/25 bg-teal-500/5 px-4 py-3 text-sm text-foreground/90">
           <Badge className={AREA_COLORS[area]}>Events</Badge>
           <span>
             Events are <strong>free</strong> and stay visible until the event ends. They do not use

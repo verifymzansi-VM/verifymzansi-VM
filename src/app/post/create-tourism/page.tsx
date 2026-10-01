@@ -3518,7 +3518,7 @@ function CreateTourismContent() {
                           <p className="text-xs">
                             <Link
                               href="/billing"
-                              className="font-semibold text-sunset-700 underline underline-offset-2 dark:text-sunset-300"
+                              className="font-semibold text-teal-700 underline underline-offset-2 dark:text-teal-300"
                             >
                               Upgrade your plan
                             </Link>{" "}
@@ -3574,7 +3574,7 @@ function CreateTourismContent() {
                             How they appear together
                           </p>
                           <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
-                            <div className="flex aspect-[4/1] items-center justify-center bg-gradient-to-r from-sunset-200/70 to-sunset-50 dark:from-sunset-900/60 dark:to-sunset-950/40">
+                            <div className="flex aspect-[4/1] items-center justify-center bg-gradient-to-r from-teal-200/70 to-teal-50 dark:from-teal-900/60 dark:to-teal-950/40">
                               {photoPreviewUrls[0] ? (
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img
@@ -3618,7 +3618,7 @@ function CreateTourismContent() {
                             setTermsAccepted(event.target.checked);
                             clearErrors("termsAccepted");
                           }}
-                          className="mt-1 h-4 w-4 shrink-0 rounded accent-sunset-600"
+                          className="mt-1 h-4 w-4 shrink-0 rounded accent-teal-600"
                           aria-invalid={!!fieldErrors.termsAccepted}
                         />
                         <span>
@@ -3626,7 +3626,7 @@ function CreateTourismContent() {
                           visibility period and my responsibility for the accuracy and legality of
                           this tourism or event post.{" "}
                           <a
-                            className="font-semibold text-sunset-700 underline underline-offset-2 dark:text-sunset-300"
+                            className="font-semibold text-teal-700 underline underline-offset-2 dark:text-teal-300"
                             href="/terms"
                           >
                             View terms

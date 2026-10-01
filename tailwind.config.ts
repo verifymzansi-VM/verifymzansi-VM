@@ -38,7 +38,8 @@ const config: Config = {
          identity; the values are the new palette, not literal flag colours.
          brand-green  → Verified Emerald  (trust, primary actions, Mzansi Market)
          brand-blue   → Ocean Indigo      (Mzansi Business)
-         sunset       → Sunset Coral      (Tourism & Events)
+         teal         → Tailwind teal     (Tourism & Events; matches the header tab)
+         sunset       → Sunset Coral      (spare accent, no longer an area colour)
          brand-gold   → Marigold          (highlights, featured, premium)
          brand-red    → Protea            (errors, urgent, destructive)
          warm         → Stone             (neutral surfaces and text)        */

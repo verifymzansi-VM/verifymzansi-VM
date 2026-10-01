@@ -1,27 +1,37 @@
+import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  ArrowRight,
   BadgeCheck,
   BarChart3,
   Building2,
   Check,
+  Clapperboard,
   ChevronDown,
+  Eye,
   Landmark,
   MessageCircle,
+  Mic,
   Rocket,
   ShoppingBag,
   Sparkles,
   Star,
+  Timer,
   TreePalm,
   User,
   Users,
   Video,
   X,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { Reveal } from "@/components/marketing/reveal";
+import { SpotlightCard } from "@/components/marketing/spotlight-card";
+import { VideoShowcase } from "@/components/marketing/video-showcase";
 import { BrandSurface, VerificationEmblem, brandOutlineButtonClassName } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +52,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Advertise",
   description:
-    "Advertise to local buyers on VerifyMzansi: individual posts from R50 for 30 days, multi-listing plans from 10 live slots, and programme partnerships that support local businesses.",
+    "Why advertise on VerifyMzansi, and which package fits: individual posts, multi-listing for dealers and agencies, and programme partnerships that support local businesses.",
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
@@ -120,14 +130,274 @@ const CHECKS = {
   ],
 } as const;
 
-const PARTNER_INCLUDES = [
-  "A branded programme showcase, searchable by category and area",
-  "A “Supported by” label on each business, used only with written brand permission",
-  "A place in the Programme partners strip and home page section",
-  `Up to ${SPONSOR_PROGRAMME_ADMINS} named administrators who approve which businesses join`,
-  "An activity summary every 30 days and a term-end report",
-  "One remote onboarding session and one review meeting per 30 days",
+const BENEFITS = [
+  {
+    icon: BadgeCheck,
+    title: "Buyers can see you are real",
+    body: "Your phone, ID and a live selfie are reviewed before you go live. Buyers who are wary of scams look for exactly that.",
+  },
+  {
+    icon: Video,
+    title: "Show it, don’t just say it",
+    body: "Photos and a short video let people see what you sell or offer before they call.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Keep every rand",
+    body: "Buyers and guests contact you directly by phone or WhatsApp. We never take a cut of a sale or booking.",
+  },
+  {
+    icon: Timer,
+    title: "No lock-in",
+    body: "Plans run for a fixed number of days and never renew by themselves. You choose whether to go again.",
+  },
 ] as const;
+
+const VIDEO_POINTS = [
+  {
+    icon: Eye,
+    title: "Show the real thing",
+    body: "Walk around the car, the room or the stall. Condition and detail are clear in seconds.",
+  },
+  {
+    icon: Mic,
+    title: "Let buyers meet you",
+    body: "A few seconds of your own voice and face builds trust that text alone can’t.",
+  },
+  {
+    icon: Clapperboard,
+    title: "Stand out in the listings",
+    body: "Posts with video catch the eye, and the identity badge tells buyers who is behind it.",
+  },
+] as const;
+
+interface PackageDetail {
+  id: "individual" | "multi-listing" | "programmes";
+  icon: LucideIcon;
+  name: string;
+  eyebrow: string;
+  title: string;
+  lede: string;
+  /** Short line for the chooser cards. */
+  who: string;
+  audience: readonly string[];
+  includes: readonly string[];
+  notIncluded: string;
+  pricesHref: string;
+  pricesLabel: string;
+  cta: { href: string; label: string };
+}
+
+const PACKAGES: readonly PackageDetail[] = [
+  {
+    id: "individual",
+    icon: User,
+    name: "Individual",
+    eyebrow: "For one post or one business",
+    title: "Sell something, or put your business on the map",
+    lede: "One live slot, in any section. The simplest way to reach local buyers with a post people can trust.",
+    who: "Anyone selling one thing or running one business profile.",
+    audience: [
+      "Private sellers: a car, phone, furniture or equipment",
+      "Tradespeople, freelancers and shop owners who need one business profile",
+      "Guesthouses, tour guides and venues with one tourism listing",
+      "Community groups sharing an event (events are always free)",
+    ],
+    includes: [
+      "1 live slot in Mzansi Market, Mzansi Business or Tourism & Events",
+      "A verified-poster badge showing what was checked and when",
+      "Photos and a short video on your post",
+      "Calls and WhatsApp straight to you, with no commission",
+      "Your first post free for 7 days, then 30, 90 or 180 days",
+      "Reuse the slot when something sells or you take a post down",
+    ],
+    notIncluded: "Not included: guaranteed views, enquiries or sales.",
+    pricesHref: "/pricing#plans",
+    pricesLabel: "See individual prices",
+    cta: { href: "/post/create", label: "Post for free" },
+  },
+  {
+    id: "multi-listing",
+    icon: Building2,
+    name: "Multi-listing",
+    eyebrow: "For dealers, agencies and shops with stock",
+    title: "List everything you have, from one account",
+    lede: `From 10 up to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live slots at once and ${ENTERPRISE_ADMINS_INCLUDED} named administrators, so your whole stock is in front of buyers together.`,
+    who: "Dealers, agencies, shops and landlords with several things to list.",
+    audience: [
+      "Car, bike and equipment dealers",
+      "Estate agencies, landlords and property managers",
+      "Shops and traders with a large or changing stock",
+      "Lodges, tour operators and venues with many units or offerings",
+    ],
+    includes: [
+      `10 to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live slots at the same time, across every section`,
+      "90 or 180 day terms with a fixed end date",
+      `${ENTERPRISE_ADMINS_INCLUDED} named administrators to manage posts`,
+      "Every poster and post still identity-reviewed and moderated",
+      "Swap stock in and out as items sell",
+      `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS} slots: a written quote`,
+    ],
+    notIncluded: "Not included: guaranteed views, enquiries or sales.",
+    pricesHref: "/pricing#multi-listing-prices",
+    pricesLabel: "See multi-listing prices",
+    cta: { href: PROPOSAL_HREF, label: "Request a proposal" },
+  },
+  {
+    id: "programmes",
+    icon: Landmark,
+    name: "Programme partner",
+    eyebrow: "For organisations",
+    title: "Become a programme partner",
+    lede: "For chambers, municipalities, enterprise-development programmes and companies that support local businesses and need to show where the support went.",
+    who: "Chambers, municipalities, development programmes and companies that support local businesses.",
+    audience: [
+      "Chambers of commerce and business associations",
+      "Municipalities and local economic development units",
+      "Enterprise and supplier development programmes",
+      "Companies and funders backing local businesses",
+    ],
+    includes: [
+      "A branded programme showcase, searchable by category and area",
+      "A “Supported by” label on each business, used only with written brand permission",
+      "A place in the Programme partners strip and home page section",
+      `Up to ${SPONSOR_PROGRAMME_ADMINS} named administrators who approve which businesses join`,
+      "An activity summary every 30 days and a term-end report",
+      "One remote onboarding session and one review meeting per 30 days",
+    ],
+    notIncluded:
+      "Not included: site visits, on-site verification, professional filming, travel or any promise of views, enquiries, sales or B-BBEE recognition.",
+    pricesHref: "/pricing#programme-prices",
+    pricesLabel: "See programme fees",
+    cta: { href: PROPOSAL_HREF, label: "Request a programme proposal" },
+  },
+];
+
+interface PriceSheetData {
+  caption: string;
+  columns: readonly string[];
+  rows: ReadonlyArray<{ label: string; cells: readonly string[]; note?: string }>;
+  footnote?: string;
+}
+
+function PriceSheet({ caption, columns, rows, footnote }: PriceSheetData) {
+  return (
+    <div>
+      <div className="overflow-hidden rounded-2xl border border-border/70 bg-background">
+        <table className="w-full text-sm">
+          <caption className="bg-muted/60 px-4 py-3 text-left font-semibold text-foreground">
+            {caption}
+          </caption>
+          <thead>
+            <tr className="border-t border-border/60 text-left text-muted-foreground">
+              {columns.map((column) => (
+                <th key={column} scope="col" className="px-4 py-2 font-medium">
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} className="border-t border-border/60">
+                <th scope="row" className="px-4 py-2.5 text-left font-semibold">
+                  {row.label}
+                </th>
+                {row.cells.length === 1 ? (
+                  <td colSpan={columns.length - 1} className="px-4 py-2.5 text-muted-foreground">
+                    {row.cells[0]}
+                  </td>
+                ) : (
+                  row.cells.map((cell, index) => (
+                    <td key={index} className="px-4 py-2.5 tabular-nums">
+                      {cell}
+                    </td>
+                  ))
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {footnote ? <p className="mt-2 text-xs text-muted-foreground">{footnote}</p> : null}
+    </div>
+  );
+}
+
+function PackageSection({
+  pkg,
+  sheet,
+  shaded,
+  children,
+}: {
+  pkg: PackageDetail;
+  sheet: PriceSheetData;
+  shaded: boolean;
+  children?: ReactNode;
+}) {
+  const { id, icon: Icon, eyebrow, title, lede, audience, includes, notIncluded } = pkg;
+  return (
+    <section
+      id={id}
+      aria-labelledby={`${id}-title`}
+      className={cn("scroll-mt-24", shaded && "border-y border-border/60 bg-card/50")}
+    >
+      <div className="container-page grid gap-8 py-12 sm:py-16 lg:grid-cols-2 lg:gap-12">
+        <Reveal>
+          <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
+            <Icon aria-hidden="true" className="h-5 w-5" />
+          </span>
+          <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+            {eyebrow}
+          </p>
+          <h2 id={`${id}-title`} className="section-title mt-2">
+            {title}
+          </h2>
+          <p className="section-lede">{lede}</p>
+          <h3 className="mt-6 font-semibold text-foreground">What you get</h3>
+          <ul className="mt-3 space-y-2 text-sm">
+            {includes.map((text) => (
+              <li key={text} className="flex gap-2">
+                <Check
+                  aria-hidden="true"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
+                />
+                {text}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-sm text-muted-foreground">{notIncluded}</p>
+        </Reveal>
+        <Reveal delay={120} className="min-w-0 space-y-4">
+          <PriceSheet {...sheet} />
+          <div className="rounded-2xl border border-border/70 bg-background p-5">
+            <h3 className="font-semibold text-foreground">Who can use it</h3>
+            <ul className="mt-3 space-y-2.5 text-sm">
+              {audience.map((text) => (
+                <li key={text} className="flex gap-2.5">
+                  <BadgeCheck
+                    aria-hidden="true"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
+                  />
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {children}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Button asChild variant="ink" className="h-11 rounded-full">
+              <Link href={pkg.cta.href}>{pkg.cta.label}</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11 rounded-full">
+              <Link href={pkg.pricesHref}>{pkg.pricesLabel}</Link>
+            </Button>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
 
 const STEPS = [
   { title: "Get verified", body: "Phone, ID and selfie. Once." },
@@ -161,56 +431,56 @@ const FAQ = [
 
 export default async function AdvertisePage() {
   const catalog = await getCommercialCatalog();
-  const fromRetail = Math.min(...catalog.retail.map((offer) => offer.priceCents));
-  const retailLadder = catalog.retail
-    .map((offer) => `${formatPlanPrice(offer.priceCents)} / ${offer.durationDays} days`)
-    .join(" · ");
-  const smallest = [...catalog.enterprise].sort(
-    (a, b) => a.slots - b.slots || a.priceCents - b.priceCents
-  )[0];
-  const largestSlots = Math.max(...catalog.enterprise.map((plan) => plan.slots), 0);
-  const sponsorFrom = SPONSOR_PROGRAMME_PRICES[0]!;
+  const retail = [...catalog.retail].sort((a, b) => a.durationDays - b.durationDays);
+  const slotSizes = [...new Set(catalog.enterprise.map((plan) => plan.slots))].sort(
+    (a, b) => a - b
+  );
+  const enterprisePrice = (slots: number, days: number) => {
+    const plan = catalog.enterprise.find((p) => p.slots === slots && p.durationDays === days);
+    return plan ? formatPlanPrice(plan.priceCents) : "—";
+  };
   const sponsorMax = SPONSOR_PROGRAMME_PRICES[SPONSOR_PROGRAMME_PRICES.length - 1]!;
 
-  const WAYS = [
-    {
-      icon: User,
-      name: "Individual",
-      who: "One thing to sell or one business profile.",
-      price: `From ${formatPlanPrice(fromRetail)} / 30 days`,
-      points: ["1 live slot in any section", retailLadder, "First post free for 7 days"],
-      href: "/pricing",
-      cta: "See individual plans",
-    },
-    {
-      icon: Building2,
-      name: "Multi-listing",
-      who: "Dealers, agencies and shops with stock.",
-      price: smallest
-        ? `From ${formatPlanPrice(smallest.priceCents)} / ${smallest.durationDays} days`
-        : "Quoted",
-      points: [
-        `${smallest?.slots ?? 10} to ${largestSlots || ENTERPRISE_QUOTE_ABOVE_SLOTS} live slots, 90 or 180 days`,
-        `${ENTERPRISE_ADMINS_INCLUDED} named administrators`,
-        `Above ${ENTERPRISE_QUOTE_ABOVE_SLOTS} slots: written quote`,
+  const sheets: Record<PackageDetail["id"], PriceSheetData> = {
+    individual: {
+      caption: "Individual plans (one live slot)",
+      columns: ["Term", "Price"],
+      rows: [
+        ...retail.map((offer) => ({
+          label: `${offer.durationDays} days`,
+          cells: [formatPlanPrice(offer.priceCents)],
+        })),
+        { label: "Events", cells: ["Always free"] },
       ],
-      href: "/pricing#enterprise",
-      cta: "See multi-listing prices",
+      footnote: "The same price in every section. Your first post is free for 7 days.",
     },
-    {
-      icon: Landmark,
-      name: "Programme partner",
-      who: "Organisations that support local businesses.",
-      price: `From ${formatPlanPrice(sponsorFrom.price90Cents)} / 90 days`,
-      points: [
-        `Support ${sponsorFrom.capacity} to ${sponsorMax.capacity} businesses`,
-        "Branded showcase and Supported-by label",
-        "Activity summary every 30 days",
+    "multi-listing": {
+      caption: "Multi-listing price (total for the term)",
+      columns: ["Live slots", "90 days", "180 days"],
+      rows: [
+        ...slotSizes.map((slots) => ({
+          label: `${slots} slots`,
+          cells: [enterprisePrice(slots, 90), enterprisePrice(slots, 180)],
+        })),
+        {
+          label: `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS}`,
+          cells: ["Written quote"],
+        },
       ],
-      href: "#programmes",
-      cta: "See programme options",
+      footnote: `${ENTERPRISE_ADMINS_INCLUDED} named administrators included.`,
     },
-  ] as const;
+    programmes: {
+      caption: "Programme fee (total for the term)",
+      columns: ["Businesses", "90 days", "180 days"],
+      rows: [
+        ...SPONSOR_PROGRAMME_PRICES.map((row) => ({
+          label: `Up to ${row.capacity}`,
+          cells: [formatPlanPrice(row.price90Cents), formatPlanPrice(row.price180Cents)],
+        })),
+        { label: `More than ${sponsorMax.capacity}`, cells: ["Custom proposal"] },
+      ],
+    },
+  };
 
   return (
     <>
@@ -271,45 +541,146 @@ export default async function AdvertisePage() {
           </div>
         </BrandSurface>
 
-        {/* 2 ── Three ways to advertise ─────────────────────── */}
-        <section aria-labelledby="advertise-ways-title" className="container-page py-12 sm:py-16">
-          <h2 id="advertise-ways-title" className="section-title">
-            Three ways to advertise
-          </h2>
-          <div className="mt-7 grid gap-4 lg:grid-cols-3">
-            {WAYS.map(({ icon: Icon, name, who, price, points, href, cta }) => (
-              <article
-                key={name}
-                className="flex flex-col rounded-3xl border border-border/70 bg-card p-5 elev-xs sm:p-6"
-              >
-                <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
-                  <Icon aria-hidden="true" className="h-5 w-5" />
-                </span>
-                <h3 className="mt-4 font-display text-xl font-bold text-foreground">{name}</h3>
-                <p className="text-sm text-muted-foreground">{who}</p>
-                <p className="mt-3 font-display text-2xl font-extrabold tracking-tight text-foreground">
-                  {price}
-                </p>
-                <ul className="mt-4 flex-1 space-y-2 border-t border-border/60 pt-4 text-sm">
-                  {points.map((point) => (
-                    <li key={point} className="flex gap-2">
-                      <Check
-                        aria-hidden="true"
-                        className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
-                      />
-                      <span>{point}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button asChild variant="outline" className="mt-5 h-11 w-full rounded-full">
-                  <Link href={href}>{cta}</Link>
+        {/* 1b ── Video-first ────────────────────────────────── */}
+        <section
+          id="video"
+          aria-labelledby="advertise-video-title"
+          className="container-page scroll-mt-24 py-12 sm:py-16"
+        >
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] lg:gap-16">
+            <Reveal>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+                Video-first
+              </p>
+              <h2 id="advertise-video-title" className="section-title mt-2">
+                A short video sells what a photo can&rsquo;t
+              </h2>
+              <p className="section-lede">
+                Every post can carry photos and a short video. Buyers see the real thing, hear you,
+                and know what to expect before they pick up the phone.
+              </p>
+              <ul className="mt-6 grid gap-3">
+                {VIDEO_POINTS.map(({ icon: Icon, title, body }) => (
+                  <SpotlightCard
+                    as="li"
+                    key={title}
+                    className="flex gap-4 rounded-2xl border border-border/70 bg-card p-4 elev-xs"
+                  >
+                    <span className="icon-tile h-11 w-11 rounded-2xl bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
+                      <Icon aria-hidden="true" className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="font-body text-base font-bold text-foreground">{title}</h3>
+                      <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{body}</p>
+                    </div>
+                  </SpotlightCard>
+                ))}
+              </ul>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <Button asChild variant="ink" className="h-11 rounded-full">
+                  <Link href="/post/create">Post with a video</Link>
                 </Button>
-              </article>
-            ))}
+                <p className="self-center text-sm text-muted-foreground">
+                  Videos are reviewed with the rest of your post before it goes live.
+                </p>
+              </div>
+            </Reveal>
+            <Reveal delay={150}>
+              <VideoShowcase />
+            </Reveal>
           </div>
         </section>
 
-        {/* 3 ── Where your post appears ─────────────────────── */}
+        {/* 2 ── Why post here ───────────────────────────────── */}
+        <section aria-labelledby="advertise-why-title" className="container-page py-12 sm:py-16">
+          <div className="max-w-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+              Why post here
+            </p>
+            <h2 id="advertise-why-title" className="section-title mt-2">
+              People buy from people they trust
+            </h2>
+            <p className="section-lede">
+              Most online classifieds leave buyers guessing who is behind a post. Here, the person
+              behind every post has been reviewed, and that gives buyers a reason to choose you.
+            </p>
+          </div>
+          <Reveal>
+            <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {BENEFITS.map(({ icon: Icon, title, body }) => (
+                <SpotlightCard
+                  as="li"
+                  key={title}
+                  className="rounded-2xl border border-border/70 bg-card p-5 elev-xs"
+                >
+                  <span className="icon-tile h-11 w-11 rounded-2xl bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
+                    <Icon aria-hidden="true" className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-4 font-body text-base font-bold text-foreground">{title}</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
+                </SpotlightCard>
+              ))}
+            </ul>
+          </Reveal>
+        </section>
+
+        {/* 3 ── Which one is for you ────────────────────────── */}
+        <section
+          id="packages"
+          aria-labelledby="advertise-ways-title"
+          className="scroll-mt-24 border-y border-border/60 bg-card/50"
+        >
+          <div className="container-page py-12 sm:py-16">
+            <h2 id="advertise-ways-title" className="section-title">
+              Which one is for you?
+            </h2>
+            <p className="section-lede">
+              Three ways to advertise. Pick the one that matches what you do, then read the full
+              details below.
+            </p>
+            <Reveal>
+              <ul className="mt-8 grid gap-4 lg:grid-cols-3">
+                {PACKAGES.map(({ id, icon: Icon, name, who }) => (
+                  <SpotlightCard
+                    as="li"
+                    key={id}
+                    className="flex flex-col rounded-3xl border border-border/70 bg-background p-5 elev-xs sm:p-6"
+                  >
+                    <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
+                      <Icon aria-hidden="true" className="h-5 w-5" />
+                    </span>
+                    <h3 className="mt-4 font-display text-xl font-bold text-foreground">{name}</h3>
+                    <p className="mt-1 flex-1 text-sm leading-6 text-muted-foreground">{who}</p>
+                    <Button asChild variant="outline" className="mt-5 h-11 w-full rounded-full">
+                      <Link href={`#${id}`}>
+                        Full details of {name}
+                        <ArrowRight aria-hidden="true" className="ml-1.5 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </SpotlightCard>
+                ))}
+              </ul>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* 4 ── The three packages in full ──────────────────── */}
+        {PACKAGES.map((pkg, index) => (
+          <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1}>
+            {pkg.id === "programmes" ? (
+              <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
+                <p className="font-semibold text-foreground">Founding pilots</p>
+                <p className="mt-1 text-muted-foreground">
+                  3 programmes in the City of uMhlathuze, up to 25 businesses each, free for 90
+                  days. Invitations close on 31 December 2026. Nothing renews or charges
+                  automatically.
+                </p>
+              </div>
+            ) : null}
+          </PackageSection>
+        ))}
+
+        {/* 5 ── Where your post appears ─────────────────────── */}
         <section
           aria-labelledby="advertise-areas-title"
           className="border-y border-border/60 bg-card/50"
@@ -318,40 +689,43 @@ export default async function AdvertisePage() {
             <h2 id="advertise-areas-title" className="section-title">
               Where your post appears
             </h2>
-            <ul className="mt-7 grid gap-4 md:grid-cols-3">
-              {AREAS.map(({ icon: Icon, tile, name, body, href, browse }) => (
-                <li
-                  key={name}
-                  className="flex flex-col rounded-2xl border border-border/70 bg-background p-5"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={cn("icon-tile h-11 w-11 rounded-2xl", tile)}>
-                      <Icon aria-hidden="true" className="h-5 w-5" />
-                    </span>
-                    <h3 className="font-display text-lg font-bold text-foreground">{name}</h3>
-                  </div>
-                  <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">{body}</p>
-                  <div className="mt-4 flex flex-wrap gap-x-4">
-                    <Link
-                      href={href}
-                      className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
-                    >
-                      Post here
-                    </Link>
-                    <Link
-                      href={browse}
-                      className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                    >
-                      Browse {name}
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <Reveal>
+              <ul className="mt-7 grid gap-4 md:grid-cols-3">
+                {AREAS.map(({ icon: Icon, tile, name, body, href, browse }) => (
+                  <SpotlightCard
+                    as="li"
+                    key={name}
+                    className="flex flex-col rounded-2xl border border-border/70 bg-background p-5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={cn("icon-tile h-11 w-11 rounded-2xl", tile)}>
+                        <Icon aria-hidden="true" className="h-5 w-5" />
+                      </span>
+                      <h3 className="font-display text-lg font-bold text-foreground">{name}</h3>
+                    </div>
+                    <p className="mt-3 flex-1 text-sm leading-6 text-muted-foreground">{body}</p>
+                    <div className="mt-4 flex flex-wrap gap-x-4">
+                      <Link
+                        href={href}
+                        className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+                      >
+                        Post here
+                      </Link>
+                      <Link
+                        href={browse}
+                        className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      >
+                        Browse {name}
+                      </Link>
+                    </div>
+                  </SpotlightCard>
+                ))}
+              </ul>
+            </Reveal>
           </div>
         </section>
 
-        {/* 4 ── What we check, and what we don't ─────────────── */}
+        {/* 6 ── What we check, and what we don't ─────────────── */}
         <section aria-labelledby="advertise-checks-title" className="container-page py-12 sm:py-16">
           <h2 id="advertise-checks-title" className="section-title">
             What we check — and what we don&rsquo;t
@@ -391,7 +765,7 @@ export default async function AdvertisePage() {
           </Link>
         </section>
 
-        {/* 5 ── Get more eyes on a post ─────────────────────── */}
+        {/* 7 ── Get more eyes on a post ─────────────────────── */}
         <section
           aria-labelledby="advertise-extras-title"
           className="border-y border-border/60 bg-card/50"
@@ -403,131 +777,40 @@ export default async function AdvertisePage() {
             <p className="section-lede">
               Optional, clearly labelled and still moderated. No guaranteed number of views.
             </p>
-            <ul className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {EXTRAS.map(({ icon: Icon, name, price, body }) => (
-                <li key={name} className="surface-card flex gap-4 p-4 sm:flex-col sm:gap-0 sm:p-5">
-                  <span className="icon-tile h-11 w-11 bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
-                    <Icon aria-hidden="true" className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0">
-                    <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
-                      {name}
-                    </h3>
-                    <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-green-300">
-                      {price}
-                    </p>
-                    <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        {/* 6 ── Programme partners ──────────────────────────── */}
-        <section
-          id="programmes"
-          aria-labelledby="advertise-programmes-title"
-          className="container-page scroll-mt-24 py-12 sm:py-16"
-        >
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
-                For organisations
-              </p>
-              <h2 id="advertise-programmes-title" className="section-title mt-2">
-                Become a programme partner
-              </h2>
-              <p className="section-lede">
-                For chambers, municipalities, enterprise-development programmes and companies that
-                support local businesses and need to show where the support went.
-              </p>
-              <h3 className="mt-6 font-semibold text-foreground">What a partner gets</h3>
-              <ul className="mt-3 space-y-2 text-sm">
-                {PARTNER_INCLUDES.map((text) => (
-                  <li key={text} className="flex gap-2">
-                    <Check
-                      aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
-                    />
-                    {text}
-                  </li>
+            <Reveal>
+              <ul className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {EXTRAS.map(({ icon: Icon, name, price, body }) => (
+                  <SpotlightCard
+                    as="li"
+                    key={name}
+                    className="surface-card flex gap-4 p-4 sm:flex-col sm:gap-0 sm:p-5"
+                  >
+                    <span className="icon-tile h-11 w-11 bg-brand-gold/20 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300">
+                      <Icon aria-hidden="true" className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
+                        {name}
+                      </h3>
+                      <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-green-300">
+                        {price}
+                      </p>
+                      <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
+                    </div>
+                  </SpotlightCard>
                 ))}
               </ul>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Not included: site visits, on-site verification, professional filming, travel or any
-                promise of views, enquiries, sales or B-BBEE recognition.
-              </p>
-            </div>
-            <div className="min-w-0 space-y-4">
-              <div className="overflow-hidden rounded-2xl border border-border/70">
-                <table className="w-full text-sm">
-                  <caption className="bg-muted/60 px-4 py-3 text-left font-semibold text-foreground">
-                    Programme fee (total for the term)
-                  </caption>
-                  <thead>
-                    <tr className="border-t border-border/60 text-left text-muted-foreground">
-                      <th scope="col" className="px-4 py-2 font-medium">
-                        Businesses
-                      </th>
-                      <th scope="col" className="px-4 py-2 font-medium">
-                        90 days
-                      </th>
-                      <th scope="col" className="px-4 py-2 font-medium">
-                        180 days
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {SPONSOR_PROGRAMME_PRICES.map((row) => (
-                      <tr key={row.capacity} className="border-t border-border/60">
-                        <th scope="row" className="px-4 py-2.5 text-left font-semibold">
-                          Up to {row.capacity}
-                        </th>
-                        <td className="px-4 py-2.5 tabular-nums">
-                          {formatPlanPrice(row.price90Cents)}
-                        </td>
-                        <td className="px-4 py-2.5 tabular-nums">
-                          {formatPlanPrice(row.price180Cents)}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="border-t border-border/60">
-                      <th scope="row" className="px-4 py-2.5 text-left font-semibold">
-                        More than {sponsorMax.capacity}
-                      </th>
-                      <td colSpan={2} className="px-4 py-2.5 text-muted-foreground">
-                        Custom proposal
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
-                <p className="font-semibold text-foreground">Founding pilots</p>
-                <p className="mt-1 text-muted-foreground">
-                  3 programmes in the City of uMhlathuze, up to 25 businesses each, free for 90
-                  days. Invitations close on 31 December 2026. Nothing renews or charges
-                  automatically.
-                </p>
-              </div>
-              <Button asChild variant="ink" className="h-11 w-full rounded-full sm:w-auto">
-                <Link href={PROPOSAL_HREF}>Request a programme proposal</Link>
-              </Button>
-            </div>
+            </Reveal>
           </div>
         </section>
 
-        {/* 7 ── Sample report ───────────────────────────────── */}
-        <section
-          aria-labelledby="advertise-report-title"
-          className="border-y border-border/60 bg-card/50"
-        >
+        {/* 8 ── Sample report ───────────────────────────────── */}
+        <section aria-labelledby="advertise-report-title">
           <div className="container-page py-12 sm:py-16">
             <h2 id="advertise-report-title" className="section-title">
               What a partner report looks like
             </h2>
-            <figure className="mt-7 max-w-3xl rounded-2xl border border-border/70 bg-background p-5">
+            <figure className="mt-7 max-w-3xl rounded-2xl border border-border/70 bg-card p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="flex items-center gap-2 font-semibold">
                   <BarChart3 aria-hidden="true" className="h-5 w-5 text-brand-green-600" />
@@ -559,14 +842,15 @@ export default async function AdvertisePage() {
           </div>
         </section>
 
-        {/* 8 ── How it works ────────────────────────────────── */}
+        {/* 9 ── How it works ────────────────────────────────── */}
         <section aria-labelledby="advertise-steps-title" className="container-page py-12 sm:py-16">
           <h2 id="advertise-steps-title" className="section-title">
             How it works
           </h2>
           <ol className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((step, index) => (
-              <li
+              <SpotlightCard
+                as="li"
                 key={step.title}
                 className="flex gap-4 rounded-2xl border border-border/70 p-4 sm:flex-col sm:gap-0 sm:p-5"
               >
@@ -579,12 +863,12 @@ export default async function AdvertisePage() {
                   </h3>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">{step.body}</p>
                 </div>
-              </li>
+              </SpotlightCard>
             ))}
           </ol>
         </section>
 
-        {/* 9 ── FAQ ─────────────────────────────────────────── */}
+        {/* 10 ── FAQ ─────────────────────────────────────────── */}
         <section aria-labelledby="advertise-faq-title" className="container-page pb-12 sm:pb-16">
           <h2 id="advertise-faq-title" className="section-title">
             Questions
@@ -605,7 +889,7 @@ export default async function AdvertisePage() {
           </div>
         </section>
 
-        {/* 10 ── Final call to action ───────────────────────── */}
+        {/* 11 ── Final call to action ───────────────────────── */}
         <BrandSurface as="section" aria-labelledby="advertise-final-title">
           <div className="container-page flex flex-col gap-6 py-12 sm:py-14 md:flex-row md:items-center md:justify-between">
             <div className="max-w-xl">
