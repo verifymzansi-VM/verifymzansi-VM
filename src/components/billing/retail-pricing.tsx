@@ -205,12 +205,14 @@ export function RetailPricing({
               key={offer.tier}
               data-testid={`retail-offer-${offer.tier}`}
               className={cn(
-                "relative flex flex-col rounded-3xl border bg-card p-5 pt-7 text-card-foreground transition-all duration-200 sm:p-6 sm:pt-8",
+                // Every card lifts under the pointer. The popular card sits taller via margin,
+                // not a transform, so the hover lift doesn't fight a resting offset.
+                "spotlight flex flex-col rounded-3xl border bg-card p-5 pt-7 text-card-foreground sm:p-6 sm:pt-8",
                 highlighted
-                  ? "border-brand-green-600/70 ring-4 ring-brand-green/10 elev-lg dark:border-brand-green-500/70 lg:-translate-y-2"
+                  ? "border-brand-green-600/70 ring-4 ring-brand-green/10 elev-lg dark:border-brand-green-500/70 lg:-mt-2"
                   : best
-                    ? "spotlight border-brand-gold/60 elev-xs"
-                    : "spotlight border-border/70 elev-xs"
+                    ? "border-brand-gold/60 elev-xs"
+                    : "border-border/70 elev-xs"
               )}
             >
               <OfferBadge tier={offer.tier} label={offer.promoLabel} />
@@ -247,7 +249,7 @@ export function RetailPricing({
           );
         })}
 
-        <article className="relative flex flex-col rounded-3xl border border-dashed border-teal-300/70 bg-teal-50/50 p-5 pt-7 dark:border-teal-800/70 dark:bg-teal-950/20 sm:p-6 sm:pt-8">
+        <article className="spotlight flex flex-col rounded-3xl border border-dashed border-teal-300/70 bg-teal-50/50 p-5 pt-7 dark:border-teal-800/70 dark:bg-teal-950/20 sm:p-6 sm:pt-8">
           <h3 className="font-body text-base font-semibold text-teal-700 dark:text-teal-300">
             Events
           </h3>

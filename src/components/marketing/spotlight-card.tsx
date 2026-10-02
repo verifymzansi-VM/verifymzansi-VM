@@ -3,7 +3,7 @@
 import type { ElementType, PointerEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** A card that lifts on hover and lights up under the pointer (see `.spotlight` in globals.css). */
+/** A card that lifts on hover (see `.spotlight` in globals.css). */
 export function SpotlightCard({
   as: Tag = "div",
   className,

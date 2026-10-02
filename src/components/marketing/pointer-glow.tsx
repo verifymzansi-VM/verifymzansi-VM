@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 
-/** Elements that follow the pointer: spotlight cards and the deep-green brand bands. */
-const TRACKED = ".spotlight, .brand-alive";
+/** Elements that follow the pointer: spotlight cards (for the `.tilt` lean). */
+const TRACKED = ".spotlight";
 /** Largest lean, in degrees, of a `.tilt` card toward the pointer. */
 const MAX_TILT = 5;
 

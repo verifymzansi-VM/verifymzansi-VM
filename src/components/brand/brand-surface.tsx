@@ -21,7 +21,7 @@ type BrandSurfaceProps = {
 /**
  * The deep-green brand surface: brand-green-950 base, soft radial glows, a faint
  * Mzansi pattern and (by default) the flag stripe. Content is white on it. The glow drifts
- * slowly and a warm light follows the pointer (`.brand-alive`, fed by PointerGlow).
+ * slowly; there is no pointer-following wash.
  */
 export function BrandSurface({
   as: Tag = "div",

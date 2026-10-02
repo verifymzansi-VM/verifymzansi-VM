@@ -602,8 +602,8 @@
       transform: translateY(-3px);
     }
 
-    /* Rails: the card under the pointer lifts with a glow in the rail's colour while
-       its neighbours step back, like a shop window lighting one item. */
+    /* Rails: the card under the pointer lifts on a neutral shadow while its neighbours
+       step back, like a shop window lighting one item. No coloured halo. */
     .home-rail [data-rail-item-index] {
       transition:
         transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -622,9 +622,7 @@
       transform: translateY(-6px);
     }
     .home-rail [data-rail-item-index]:hover .rounded-\[20px\] {
-      box-shadow:
-        0 22px 40px -18px rgb(var(--rail-rgb, 20 154 107) / 0.6),
-        0 0 0 2px rgb(var(--rail-rgb, 20 154 107) / 0.55);
+      box-shadow: var(--shadow-lg);
     }
     .home-rail [data-rail-item-index]:hover img,
     .home-rail [data-rail-item-index]:hover video {
@@ -930,30 +928,15 @@
 
 /* ── Alive surfaces: hover lift, pointer spotlight, scroll reveal ───────── */
 @layer components {
-  /* Cards that answer the pointer. `--glow-rgb` tints the light and halo (defaults to
-     marigold); add `.tilt` for a gentle 3D lean toward the pointer (set by PointerGlow). */
+  /* Cards that answer the pointer: they lift on a neutral shadow, with no coloured wash
+     or halo. `--glow-rgb` only tints the CTA fill; add `.tilt` for a gentle 3D lean
+     toward the pointer (set by PointerGlow). */
   .spotlight {
     position: relative;
     --glow-rgb: 249 168 38;
     transition:
       transform 300ms cubic-bezier(0.2, 0.7, 0.2, 1),
-      box-shadow 300ms ease,
-      border-color 300ms ease;
-  }
-  .spotlight::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 300ms ease;
-    background: radial-gradient(
-      380px circle at var(--mx, 50%) var(--my, 50%),
-      rgb(var(--glow-rgb) / 0.17),
-      transparent 65%
-    );
+      box-shadow 300ms ease;
   }
   .spotlight .icon-tile {
     transition:
@@ -963,21 +946,14 @@
   @media (hover: hover) and (prefers-reduced-motion: no-preference) {
     .spotlight:hover {
       transform: translateY(-6px);
-      box-shadow:
-        0 22px 44px -20px rgb(var(--glow-rgb) / 0.55),
-        var(--shadow-lg);
-      border-color: rgb(var(--glow-rgb) / 0.45);
+      box-shadow: var(--shadow-lg);
     }
     .spotlight.tilt:hover {
       transform: perspective(1100px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg))
         translateY(-6px);
     }
-    .spotlight:hover::after {
-      opacity: 1;
-    }
     .spotlight:hover .icon-tile {
       transform: scale(1.14) rotate(-6deg);
-      box-shadow: 0 8px 18px -6px rgb(var(--glow-rgb) / 0.6);
     }
     .spotlight:active {
       transform: translateY(-2px) scale(0.99);
@@ -1032,7 +1008,6 @@
     .spotlight:hover .spotlight-cta:not(:disabled) {
       background-color: rgb(var(--cta-rgb, var(--glow-rgb)));
       color: #fff;
-      box-shadow: 0 10px 22px -10px rgb(var(--glow-rgb) / 0.7);
     }
   }
   @media (hover: hover) and (prefers-reduced-motion: no-preference) {
@@ -1126,7 +1101,6 @@
     a.surface-card:hover {
       transform: translateY(-3px);
       box-shadow: var(--shadow-md);
-      border-color: rgba(11, 122, 85, 0.4);
     }
     a.surface-card:active {
       transform: translateY(-1px) scale(0.99);
@@ -1136,26 +1110,6 @@
 
 /* ── Alive layer: brand bands, buttons, chips and cards that react ──────── */
 @layer components {
-  /* Brand bands: a warm light follows the pointer (PointerGlow sets --mx/--my). */
-  .brand-alive::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 500ms ease;
-    background: radial-gradient(
-      560px circle at var(--mx, 70%) var(--my, 30%),
-      rgba(249, 168, 38, 0.13),
-      transparent 60%
-    );
-  }
-  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-    .brand-alive:hover::before {
-      opacity: 1;
-    }
-  }
   /* The band's glow drifts slowly so the surface never looks printed. */
   @media (prefers-reduced-motion: no-preference) {
     .brand-aurora {
@@ -1308,7 +1262,6 @@
     .surface-card:where(:hover),
     .hero-panel:where(:hover) {
       box-shadow: var(--shadow-md);
-      border-color: rgba(11, 122, 85, 0.22);
     }
     .surface-card :where(.icon-tile),
     .hero-panel :where(.icon-tile) {
