@@ -7,7 +7,7 @@
 // limit, so it is shipped gzipped and decompressed in the browser
 // (see src/lib/media/video-compressor.ts).
 import { createReadStream, createWriteStream } from "node:fs";
-import { copyFile, mkdir, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
@@ -42,6 +42,24 @@ await pipeline(
   createWriteStream(gzPath)
 );
 if ((await stat(gzPath)).size > MAX_ASSET_BYTES) throw new Error(`${gzPath} exceeds 25 MiB`);
+// @ffmpeg/core is GPL-2.0-or-later: ship its licence and the corresponding-source link
+// alongside the binary we serve.
+const ffmpegPkg = JSON.parse(
+  await readFile(path.join(packageDir("@ffmpeg/core"), "package.json"), "utf8")
+);
+await writeFile(
+  path.join(ffmpegOut, "NOTICE.txt"),
+  [
+    `ffmpeg-core.js and ffmpeg-core.wasm(.gz) are @ffmpeg/core ${ffmpegPkg.version} (ffmpeg.wasm),`,
+    `a WebAssembly build of FFmpeg, licensed ${ffmpegPkg.license}.`,
+    "They are distributed unmodified (the .wasm is only gzip-compressed for hosting).",
+    "",
+    `Corresponding source: https://github.com/ffmpegwasm/ffmpeg.wasm/tree/v${ffmpegPkg.version}`,
+    "FFmpeg source: https://ffmpeg.org/download.html",
+    "Licence text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
+    "",
+  ].join("\n")
+);
 
 const mediapipeSrc = path.join(packageDir("@mediapipe/tasks-vision"), "wasm");
 const mediapipeOut = path.join(outRoot, "mediapipe");

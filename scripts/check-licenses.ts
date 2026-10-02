@@ -12,6 +12,20 @@ function spawnPnpm(
 
 const bannedLicensePatterns = [/AGPL/i, /\bGPL-3(\.0)?\b/i, /\bGPL-2(\.0)?\b/i, /BUSL-1\.1/i];
 
+// Reviewed exceptions, by exact package name. @ffmpeg/core (GPL-2.0-or-later) is only
+// vendored as a standalone browser WASM runtime for video compression; it is not linked
+// into our code, and public/vendor/ffmpeg-core/NOTICE.txt carries the licence and the
+// corresponding-source link. Any other GPL package still fails the check.
+const allowedPackages = new Set(["@ffmpeg/core"]);
+
+function isAllowedPackage(pkg: unknown): boolean {
+  return (
+    !!pkg &&
+    typeof pkg === "object" &&
+    allowedPackages.has(String((pkg as { name?: unknown }).name))
+  );
+}
+
 function writeInfo(message: string): void {
   process.stdout.write(`${message}\n`);
 }
@@ -23,7 +37,16 @@ function collectDeclaredLicenses(parsed: unknown): string[] {
 
   const bucket = new Set<string>();
 
-  for (const [licenseExpression, packages] of Object.entries(parsed)) {
+  for (const [licenseExpression, listed] of Object.entries(parsed)) {
+    const packages = Array.isArray(listed)
+      ? listed.filter((pkg) => !isAllowedPackage(pkg))
+      : listed;
+
+    // Skip an expression whose only packages are reviewed exceptions.
+    if (Array.isArray(packages) && packages.length === 0) {
+      continue;
+    }
+
     if (licenseExpression && licenseExpression !== "undefined") {
       bucket.add(licenseExpression);
     }
