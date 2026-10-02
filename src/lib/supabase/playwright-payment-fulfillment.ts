@@ -3,7 +3,10 @@ import { listPlaywrightTableRows, writePlaywrightTableRows } from "./playwright-
 
 /** UI fixture for subscription checkout only. This simulates the RPC contract;
  * database atomicity and authorization are covered by the isolated SQL tests. */
-export function fulfillPlaywrightPayment(params: Record<string, unknown> = {}) {
+export function fulfillPlaywrightPayment(
+  params: Record<string, unknown> = {},
+  confirmTransaction = false
+) {
   const fail = (message: string) => ({ data: null, error: { message } });
   const payments = listPlaywrightTableRows("payments");
   const payment = payments.find((row) => row.id === params.p_payment_id);
@@ -15,10 +18,30 @@ export function fulfillPlaywrightPayment(params: Record<string, unknown> = {}) {
     (payment.provider_payment_id && payment.provider_payment_id !== params.p_provider_payment_id)
   )
     return fail("Payment ID mismatch");
+  const data = payment.provider_data as Record<string, unknown>;
+  if (confirmTransaction) {
+    if (
+      !payment.provider_payment_id ||
+      params.p_merchant_reference !==
+        (payment.provider_reference || String(payment.id).replace(/-/g, "")) ||
+      !params.p_provider_transaction_id ||
+      (data.transaction_id && data.transaction_id !== params.p_provider_transaction_id)
+    )
+      return fail("Transaction identity mismatch");
+    if (
+      payments.some(
+        (row) =>
+          row.id !== payment.id &&
+          row.provider === "ozow" &&
+          (row.provider_data as Record<string, unknown>)?.transaction_id ===
+            params.p_provider_transaction_id
+      )
+    )
+      return fail("Transaction already used");
+  }
   if (payment.status === "complete") return { data: { outcome: "duplicate" }, error: null };
   if (!["pending", "failed", "expired"].includes(String(payment.status)))
     return fail("Unsupported legacy payment in UI fixture");
-  const data = payment.provider_data as Record<string, unknown>;
   const metadata = (data.metadata ?? data) as Record<string, unknown>;
   if (metadata.type !== "subscription") return fail("Addon RPC is not simulated in UI fixtures");
   const plan = listPlaywrightTableRows("plans").find((row) => row.id === params.p_plan_id);
@@ -75,6 +98,7 @@ export function fulfillPlaywrightPayment(params: Record<string, unknown> = {}) {
   payment.provider_payment_id = params.p_provider_payment_id;
   payment.provider_data = {
     ...data,
+    ...(confirmTransaction ? { transaction_id: params.p_provider_transaction_id } : {}),
     fulfillment_completed_at: new Date().toISOString(),
     fulfillment_protocol: "atomic_v1",
   };

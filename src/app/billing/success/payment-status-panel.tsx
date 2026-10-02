@@ -73,13 +73,14 @@ export default function PaymentStatusPanel({
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [pollingPaused, setPollingPaused] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(
-    initialStatus === "pending" && Boolean(paymentId)
+    ["pending", "failed", "expired"].includes(initialStatus) && Boolean(paymentId)
   );
   const copy = getCopy(status);
 
   useEffect(() => {
-    if (!paymentId || status !== "pending") {
+    if (!paymentId || !["pending", "failed", "expired"].includes(status)) {
       return;
     }
 
@@ -109,7 +110,7 @@ export default function PaymentStatusPanel({
       }
 
       if (hasExpired()) {
-        setStatus("expired");
+        setPollingPaused(true);
         stopPolling();
         return;
       }
@@ -166,7 +167,7 @@ export default function PaymentStatusPanel({
       } catch {
         if (hasExpired()) {
           stopPolling();
-          if (isActive) setStatus("expired");
+          if (isActive) setPollingPaused(true);
           return;
         }
         schedulePoll();
@@ -204,7 +205,9 @@ export default function PaymentStatusPanel({
       description={
         sessionExpired
           ? "Your session expired. Sign in again to see whether your payment was confirmed."
-          : copy.description
+          : pollingPaused && status === "pending"
+            ? "Confirmation is taking longer than expected. Check billing again later, or contact support if you were charged."
+            : copy.description
       }
       tone={copy.tone}
       nextSteps={copy.nextSteps}

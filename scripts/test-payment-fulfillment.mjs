@@ -51,6 +51,10 @@ for (const migration of [
 ])
   await db.exec(fs.readFileSync(`supabase/migrations/${migration}`, "utf8"));
 
+await db.exec(
+  fs.readFileSync("supabase/migrations/20261003010000_ozow_transaction_confirmation.sql", "utf8")
+);
+
 const uuid = () => crypto.randomUUID();
 const scalar = async (sql, args = []) => (await db.query(sql, args)).rows[0];
 const userId = uuid();
@@ -370,6 +374,94 @@ try {
       );
     } finally {
       await db.exec("SET TIME ZONE 'UTC'");
+    }
+  });
+  async function confirmed(row, transactionId, reference = row.id) {
+    return (
+      await scalar("SELECT confirm_ozow_payment($1,$2,$3,$4,$5,NULL,$6,$7,$8) AS result", [
+        row.id,
+        `request-${row.id}`,
+        row.amount_cents,
+        row.provider_data.metadata ?? row.provider_data,
+        planId,
+        { type: "transaction.complete" },
+        transactionId,
+        reference,
+      ])
+    ).result;
+  }
+  async function requestRow() {
+    const row = await payment();
+    await db.query(
+      "UPDATE payments SET provider_payment_id=$2, provider_reference=$1::text WHERE id=$1",
+      [row.id, `request-${row.id}`]
+    );
+    return row;
+  }
+  await test("confirmation keeps request and transaction IDs separate and duplicate benefits unchanged", async () => {
+    const row = await requestRow();
+    assert.equal((await confirmed(row, "transaction-A")).outcome, "completed");
+    const stored = await getPayment(row.id);
+    assert.equal(stored.provider_payment_id, `request-${row.id}`);
+    assert.equal(stored.provider_data.transaction_id, "transaction-A");
+    assert.equal((await confirmed(row, "transaction-A")).outcome, "duplicate");
+    await assert.rejects(confirmed(row, "other-transaction"), /Transaction ID mismatch/);
+    await assert.rejects(
+      confirmed(row, "transaction-A", "other-reference"),
+      /Merchant reference mismatch/
+    );
+  });
+  await test("a transaction reused for another purchase rolls back all benefits and completion", async () => {
+    const row = await requestRow();
+    const before = await entitlement();
+    await assert.rejects(
+      confirmed(row, "transaction-A"),
+      /idx_payments_ozow_transaction_id_unique/
+    );
+    assert.equal((await getPayment(row.id)).status, "pending");
+    assert.deepEqual(await entitlement(), before);
+    assert.equal(
+      (await scalar("SELECT count(*)::integer AS n FROM invoices WHERE payment_id=$1", [row.id])).n,
+      0
+    );
+    assert.equal((await getPayment(row.id)).provider_data.transaction_id, undefined);
+  });
+  await test("reconciliation claims throttle persisted polls and preserve legacy business metadata", async () => {
+    const row = await requestRow();
+    assert.equal(
+      (await scalar("SELECT claim_ozow_reconciliation($1) AS claimed", [row.id])).claimed,
+      true
+    );
+    assert.equal(
+      (await scalar("SELECT claim_ozow_reconciliation($1) AS claimed", [row.id])).claimed,
+      false
+    );
+    assert.equal((await confirmed(row, "transaction-B")).outcome, "completed");
+    assert.equal(
+      (await scalar("SELECT claim_ozow_reconciliation($1) AS claimed", [row.id])).claimed,
+      false
+    );
+  });
+  await test("confirmation and claim RPCs reject browser roles", async () => {
+    for (const role of ["anon", "authenticated"]) {
+      assert.equal(
+        (
+          await scalar(
+            "SELECT has_function_privilege($1,'confirm_ozow_payment(uuid,text,integer,jsonb,uuid,numeric,jsonb,text,text)','execute') AS allowed",
+            [role]
+          )
+        ).allowed,
+        false
+      );
+      assert.equal(
+        (
+          await scalar(
+            "SELECT has_function_privilege($1,'claim_ozow_reconciliation(uuid)','execute') AS allowed",
+            [role]
+          )
+        ).allowed,
+        false
+      );
     }
   });
   console.log(

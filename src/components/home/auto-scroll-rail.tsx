@@ -1,5 +1,6 @@
 "use client";
 
+import { feedSourceAttribute } from "@/lib/feed/session";
 import {
   Children,
   createContext,
@@ -496,6 +497,10 @@ export function AutoScrollRail({
         <div
           ref={containerRef}
           aria-label={railLabel}
+          data-feed-source={feedSourceAttribute({
+            kind: "rail",
+            label: ariaLabel || "Recommended",
+          })}
           className={cn(
             // The top padding (cancelled by the negative margin) gives hovered cards room to lift
             // without the scroller clipping them.

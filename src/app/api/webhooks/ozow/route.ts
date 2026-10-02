@@ -5,30 +5,19 @@ import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { fulfillPayment, type FulfillmentResult } from "@/lib/payments/fulfillment";
 import {
   fromOzowMerchantReference,
+  getOzowTransaction,
   normalizeOzowWebhook,
   verifyOzowWebhookSignature,
 } from "@/lib/payments/ozow";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import {
-  BOOST_DURATION_DAYS,
-  FEATURED_DURATION_DAYS,
-  URGENT_DURATION_DAYS,
-} from "@/lib/constants/pricing";
-import { getPaymentMetadata } from "@/lib/payments/types";
+import { validateOzowConfirmation } from "@/lib/payments/confirmation";
 import {
   getPaymentById,
   getPaymentByProviderReference,
   markPaymentFailed,
-  type PaymentRow,
   type PaymentStoreClient,
 } from "@/lib/payments/store";
-import { logAuditEvent } from "@/lib/services/audit";
-import {
-  sendPaymentFailedEmail,
-  sendPaymentReceiptEmail,
-  type PaymentReceiptDetails,
-} from "@/lib/services/email";
-import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
+import { auditPaymentCompleted, sendPaymentStatusEmail } from "@/lib/payments/notifications";
 import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 
 const log = createLogger("OzowWebhook");
@@ -40,7 +29,6 @@ const TERMINAL_UNPAID_STATUSES: ReadonlySet<string> = new Set([
   "refunded",
   "chargeback",
 ]);
-const SUBSCRIPTION_DURATION_DAYS = 30;
 
 /**
  * Route ownership:
@@ -60,200 +48,12 @@ function isE2eLoggingContext(): boolean {
   );
 }
 
-const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
-
-function getPlanNameFromArea(area?: string | null): string {
-  switch (area) {
-    case "MZANSI_MARKET":
-      return "Mzansi Market";
-    case "MZANSI_BUSINESS":
-      return "Mzansi Business";
-    case "PROMOTIONS_EVENTS":
-      return "Tourism & Events";
-    default:
-      return "VerifyMzansi Plan";
-  }
-}
-
-const ADDON_LABELS: Record<string, string> = {
-  boost: "Listing Boost",
-  boost_business: "Business Boost",
-  boost_storefront: "Storefront Boost",
-  boost_promotion: "Promotion Boost",
-  featured: "Featured Listing",
-  featured_business: "Featured Business",
-  featured_promotion: "Featured Promotion",
-  urgent: "Urgent Listing",
-  urgent_business: "Urgent Business",
-  urgent_promotion: "Urgent Promotion",
-};
-
-function getAddonDurationDays(type: string, meta: Record<string, unknown>): number {
-  const specific =
-    typeof meta.boost_days === "number" && meta.boost_days > 0
-      ? meta.boost_days
-      : typeof meta.feature_days === "number" && meta.feature_days > 0
-        ? meta.feature_days
-        : typeof meta.urgent_days === "number" && meta.urgent_days > 0
-          ? meta.urgent_days
-          : null;
-  if (specific !== null) return specific;
-  if (type.startsWith("featured")) return FEATURED_DURATION_DAYS;
-  if (type.startsWith("urgent")) return URGENT_DURATION_DAYS;
-  return BOOST_DURATION_DAYS;
-}
-
-/** Receipt wording differs for 30-day plans (no auto-renew) vs one-off add-ons. */
-function buildReceiptDetails(payment: PaymentRow): PaymentReceiptDetails {
-  const meta = getPaymentMetadata(payment);
-  const type = typeof meta?.type === "string" ? meta.type : null;
-
-  if (!type || type === "subscription") {
-    // Mirrors the slot window set during fulfillment (payment + plan duration).
-    const durationDays =
-      typeof meta?.duration_days === "number" && meta.duration_days > 0
-        ? meta.duration_days
-        : SUBSCRIPTION_DURATION_DAYS;
-    return {
-      kind: "subscription",
-      expiresAt: new Date(
-        (payment.created_at ? Date.parse(payment.created_at) : Date.now()) +
-          durationDays * 24 * 60 * 60 * 1000
-      ).toISOString(),
-    };
-  }
-
-  return {
-    kind: "addon",
-    addonName: ADDON_LABELS[type] ?? "Marketplace Add-on",
-    durationDays: getAddonDurationDays(type, meta ?? {}),
-  };
-}
-
-async function sendPaymentStatusEmail(params: {
-  admin: PaymentStoreClient;
-  payment: PaymentRow;
-  status: "success" | "failed";
-  logContext: { paymentId: string; providerPaymentId?: string | null };
-}): Promise<void> {
-  const recipient = await getAuthAdminUserSummary(params.admin, params.payment.user_id);
-  if (recipient.errorMessage || !recipient.email) {
-    log.warn("Skipping payment email: recipient lookup failed", {
-      ...params.logContext,
-      userId: params.payment.user_id,
-      error: recipient.errorMessage,
-    });
-    return;
-  }
-
-  const email = recipient.email;
-  const accountName = recipient.accountName;
-  const amount = params.payment.amount_cents / 100;
-  const paymentMeta = getPaymentMetadata(params.payment);
-  const planName =
-    typeof paymentMeta?.plan_name === "string"
-      ? paymentMeta.plan_name
-      : getPlanNameFromArea(params.payment.area);
-
-  const result =
-    params.status === "success"
-      ? await sendPaymentReceiptEmail(
-          email,
-          accountName,
-          amount,
-          planName,
-          undefined,
-          buildReceiptDetails(params.payment)
-        )
-      : await sendPaymentFailedEmail(email, accountName, amount, planName);
-
-  if (!result.success) {
-    log.warn("Payment email delivery failed", {
-      ...params.logContext,
-      userId: params.payment.user_id,
-      status: params.status,
-      error: result.error,
-    });
-  }
-
-  try {
-    await logAuditEvent({
-      actorId: SYSTEM_ACTOR_ID,
-      actorRole: "system",
-      action: result.success ? "communication_email_sent" : "communication_email_failed",
-      targetType: "account_profile",
-      targetId: params.payment.user_id,
-      metadata: {
-        template: params.status === "success" ? "payment_receipt" : "payment_failed",
-        channel: "email",
-        error: result.error,
-        owner_user_id: params.payment.user_id,
-        payment_id: params.logContext.paymentId,
-        provider_payment_id: params.logContext.providerPaymentId,
-      },
-    });
-  } catch (auditErr) {
-    log.error("Audit log failed (non-fatal)", {
-      error: auditErr instanceof Error ? auditErr.message : "Unknown",
-    });
-  }
-}
-
-/** Non-blocking audit log for completed payments. */
-async function auditPaymentCompleted(payment: {
-  id: string;
-  provider: string;
-  amount_cents: number;
-  provider_payment_id?: string | null;
-  area?: string | null;
-}): Promise<void> {
-  try {
-    await logAuditEvent({
-      actorId: SYSTEM_ACTOR_ID,
-      actorRole: "system",
-      action: "payment_completed",
-      targetType: "payment",
-      targetId: payment.id,
-      metadata: {
-        provider: payment.provider,
-        amount_cents: payment.amount_cents,
-        provider_payment_id: payment.provider_payment_id,
-        area: payment.area,
-      },
-    });
-  } catch (auditErr) {
-    log.error("Failed to write payment audit log", {
-      paymentId: payment.id,
-      error: auditErr instanceof Error ? auditErr.message : "Unknown error",
-    });
-  }
-}
-
-function toAmountString(amountCents: number): string {
-  return (amountCents / 100).toFixed(2);
-}
-
 function isFailedTransactionStatus(status: string | null): boolean {
   return status?.toLowerCase() === "error";
 }
 
 function isSuccessfulTransactionStatus(status: string | null): boolean {
   return status?.toLowerCase() === "successful";
-}
-
-/**
- * Parse a decimal amount string (e.g. "1000.00") to integer cents
- * without using floating-point multiplication.
- *
- * Returns null if the input is not a valid non-negative decimal number.
- */
-function parseAmountToCents(amount: string): number | null {
-  const trimmed = amount.trim();
-  // Match optional digits, optional dot with up to 2 decimal places
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
-  const [whole, frac = ""] = trimmed.split(".");
-  const cents = parseInt(whole, 10) * 100 + parseInt(frac.padEnd(2, "0"), 10);
-  return Number.isFinite(cents) && cents >= 0 ? cents : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -313,7 +113,17 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
     }
-    const payload = normalizeOzowWebhook(parsedBody);
+    let payload = normalizeOzowWebhook(parsedBody);
+    if (payload?.eventType?.toLowerCase() !== SUPPORTED_OZOW_EVENT_TYPE) {
+      return NextResponse.json({ success: true, ignored: true });
+    }
+    if (payload.format === "thin" && payload.transactionId) {
+      // Fetch authoritative reference, site, amount and current status. A lookup
+      // failure returns 5xx so Svix retries rather than losing the completion.
+      const thinPayload = payload.rawPayload;
+      payload = await getOzowTransaction(payload.transactionId);
+      payload.rawPayload = { ...thinPayload, resolvedTransaction: payload.rawPayload };
+    }
     if (!payload?.merchantReference) {
       return NextResponse.json({ error: "Missing merchantReference" }, { status: 400 });
     }
@@ -342,83 +152,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, ignored: true });
     }
 
-    if (payload.currencyCode && payload.currencyCode.toUpperCase() !== "ZAR") {
-      log.error("Ozow currency mismatch", {
-        paymentId: payment.id,
-        expected: "ZAR",
-        received: payload.currencyCode,
-      });
-      return NextResponse.json({ error: "Currency mismatch" }, { status: 400 });
+    const validationError = validateOzowConfirmation(payment, payload);
+    if (validationError) {
+      log.error("Ozow confirmation rejected", { paymentId: payment.id, reason: validationError });
+      return NextResponse.json({ error: validationError }, { status: 400 });
     }
-
     const eventType = payload.eventType?.toLowerCase() || "";
     const status = payload.status?.toLowerCase() || "";
-
-    // Defense-in-depth for the money-critical completion path: a successful
-    // transaction.complete webhook MUST carry an amount. Skipping validation when
-    // the field is absent would let a malformed (but signed) payload fulfill
-    // against the stored amount without ever confirming what was actually charged.
-    if (
-      eventType === SUPPORTED_OZOW_EVENT_TYPE &&
-      isSuccessfulTransactionStatus(status) &&
-      !payload.amount
-    ) {
-      log.error("Ozow successful completion webhook missing amount", {
-        paymentId: payment.id,
-        eventType: payload.eventType,
-        status: payload.status,
-      });
-      return NextResponse.json({ error: "Missing amount" }, { status: 400 });
-    }
-
-    // Same reasoning for currency: the ZAR check above only runs when a
-    // currency is present, so a successful completion must state it rather
-    // than let the exact-cents check pass on a bare number of unknown currency.
-    if (
-      eventType === SUPPORTED_OZOW_EVENT_TYPE &&
-      isSuccessfulTransactionStatus(status) &&
-      !payload.currencyCode
-    ) {
-      log.error("Ozow successful completion webhook missing currency", {
-        paymentId: payment.id,
-        eventType: payload.eventType,
-        status: payload.status,
-      });
-      return NextResponse.json({ error: "Missing currency" }, { status: 400 });
-    }
-
-    if (payload.amount) {
-      // Parse amount string as integer cents without floating-point arithmetic
-      // to avoid precision errors (e.g. "1000.009" * 100 = 100000.899...)
-      const receivedCents = parseAmountToCents(payload.amount);
-      if (receivedCents === null || receivedCents !== payment.amount_cents) {
-        log.error("Ozow amount mismatch", {
-          paymentId: payment.id,
-          expected: toAmountString(payment.amount_cents),
-          received: payload.amount,
-        });
-        return NextResponse.json({ error: "Amount mismatch" }, { status: 400 });
-      }
-    }
     if (
       payment.status === "complete" &&
-      payment.provider_payment_id === payload.providerPaymentId
+      payment.provider_data?.transaction_id === payload.transactionId
     ) {
       return NextResponse.json({ success: true, duplicate: true });
-    }
-
-    // Reject webhooks whose providerPaymentId contradicts the stored value
-    if (
-      payment.provider_payment_id &&
-      payload.providerPaymentId &&
-      payment.provider_payment_id !== payload.providerPaymentId
-    ) {
-      log.error("providerPaymentId mismatch — possible replay/substitution", {
-        paymentId: payment.id,
-        stored: payment.provider_payment_id,
-        received: payload.providerPaymentId,
-      });
-      return NextResponse.json({ error: "Payment ID mismatch" }, { status: 400 });
     }
 
     if (eventType === SUPPORTED_OZOW_EVENT_TYPE && isFailedTransactionStatus(status)) {
@@ -439,7 +184,7 @@ export async function POST(request: NextRequest) {
       if (payment.status === "complete" || payment.status === "processing") {
         log.error("Ignoring failure webhook for a claimed or completed payment", {
           paymentId: payment.id,
-          providerPaymentId: payload.providerPaymentId,
+          transactionId: payload.transactionId,
         });
         return NextResponse.json({ success: true, ignored: true });
       }
@@ -476,7 +221,7 @@ export async function POST(request: NextRequest) {
           status: "failed",
           logContext: {
             paymentId: payment.id,
-            providerPaymentId: payload.providerPaymentId,
+            transactionId: payload.transactionId,
           },
         }).catch((emailErr) => {
           log.warn("Failed to queue payment failed email", {
@@ -495,28 +240,25 @@ export async function POST(request: NextRequest) {
     // status must never reach fulfillment — they are acknowledged and ignored.
     if (eventType !== SUPPORTED_OZOW_EVENT_TYPE || !isSuccessfulTransactionStatus(status)) {
       if (eventType === SUPPORTED_OZOW_EVENT_TYPE) {
-        // A completion we cannot classify may be a paid customer we would
-        // otherwise never fulfil; surface it for reconciliation.
-        log.error("Unrecognised Ozow transaction status; payment not fulfilled", {
+        log.info("Ozow transaction has no successful completion to fulfill", {
           paymentId: payment.id,
-          providerPaymentId: payload.providerPaymentId,
+          transactionId: payload.transactionId,
           status,
         });
       }
       return NextResponse.json({ success: true, ignored: true });
     }
 
-    if (!payload.providerPaymentId) {
+    if (!payload.transactionId) {
       return NextResponse.json({ error: "Missing payment ID" }, { status: 400 });
     }
 
     let result: FulfillmentResult;
     try {
-      result = await fulfillPayment(
-        supabase as never,
-        { ...payment, provider_payment_id: payload.providerPaymentId },
-        payload.rawPayload
-      );
+      result = await fulfillPayment(supabase as never, payment, payload.rawPayload, {
+        id: payload.transactionId,
+        merchantReference: payload.merchantReference,
+      });
     } catch (error) {
       // The RPC either committed everything or rolled everything back. A lost
       // response is also safe to retry: the locked payment is already complete.
@@ -535,7 +277,7 @@ export async function POST(request: NextRequest) {
       // refunded on our side). It needs a refund or a manual grant.
       log.error("Successful Ozow payment was not fulfilled; needs reconciliation", {
         paymentId: payment.id,
-        providerPaymentId: payload.providerPaymentId,
+        transactionId: payload.transactionId,
         paymentStatus: payment.status,
       });
       return NextResponse.json({ success: true, ignored: true });
@@ -545,7 +287,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, duplicate: true });
     }
 
-    const completedPayment = { ...payment, provider_payment_id: payload.providerPaymentId };
+    const completedPayment = payment;
     await auditPaymentCompleted(completedPayment);
     scheduleBackgroundTask(
       sendPaymentStatusEmail({
@@ -554,7 +296,7 @@ export async function POST(request: NextRequest) {
         status: "success",
         logContext: {
           paymentId: payment.id,
-          providerPaymentId: payload.providerPaymentId,
+          transactionId: payload.transactionId,
         },
       }).catch((emailErr) => {
         log.warn("Failed to queue payment receipt email", {

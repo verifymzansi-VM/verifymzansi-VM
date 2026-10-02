@@ -229,6 +229,58 @@
    Level 4: Premium — green+gold dual glow, gold-rimmed shield
    ══════════════════════════════════════════════════════════════ */
 
+/* ══ Desktop post viewer: cover the classic page until the viewer takes over ══
+   Only applies when scripts can run. If the viewer never starts (blocked or
+   failed download), the classic page shows after three seconds. */
+/* Desktop post viewer: how long the current photo has left before the next one. */
+@keyframes immersive-photo-timer {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.immersive-photo-timer {
+  animation-name: immersive-photo-timer;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes immersive-pending-reveal {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
+}
+
+@keyframes immersive-pending-cover {
+  from {
+    visibility: visible;
+  }
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (min-width: 1024px) and (scripting: enabled) {
+  [data-immersive-pending] {
+    animation: immersive-pending-reveal 0s linear 3s both;
+  }
+
+  [data-immersive-pending]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: theme("colors.brand-green.950");
+    animation: immersive-pending-cover 0s linear 3s both;
+  }
+}
+
 @layer components {
   /* Compact feed controls; showroom cards never opt into this treatment. */
   [data-card-immersive] button:is([aria-label="Mute"], [aria-label="Unmute"]) {

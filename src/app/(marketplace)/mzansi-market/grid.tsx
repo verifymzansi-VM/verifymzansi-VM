@@ -16,6 +16,7 @@ import { CATEGORIES } from "@/lib/constants/categories";
 import { createLogger } from "@/lib/utils/logger";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { serializeMarketplaceFiltersToSearchParams } from "@/lib/utils/marketplace-query";
+import { feedSourceAttribute } from "@/lib/feed/session";
 
 const PAGE_SIZE = 24;
 const log = createLogger("MzansiMarketGrid");
@@ -128,6 +129,8 @@ export function MzansiMarketGrid() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<GridFetchError | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  // Lets the desktop post viewer continue through this exact list and page.
+  const [feedSource, setFeedSource] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
@@ -203,6 +206,22 @@ export function MzansiMarketGrid() {
         }
 
         setFetchError(null);
+        const sourceParams = new URLSearchParams(params);
+        sourceParams.delete("page");
+        sourceParams.delete("limit");
+        setFeedSource(
+          feedSourceAttribute({
+            kind: "list",
+            label:
+              CATEGORIES.find((category) => category.value === filters.category)?.label ??
+              "Mzansi Market",
+            api: "/api/listings",
+            params: sourceParams.toString(),
+            page,
+            pageSize: PAGE_SIZE,
+            total: payload.total ?? undefined,
+          })
+        );
         setListings(payload.listings ?? []);
         setTotalCount(payload.total ?? 0);
         setLoading(false);
@@ -389,7 +408,10 @@ export function MzansiMarketGrid() {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
+        <div
+          className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
+          data-feed-source={feedSource ?? undefined}
+        >
           {listings.map((listing, index) => {
             const cardProps = getListingCardProps(listing);
 
@@ -404,7 +426,7 @@ export function MzansiMarketGrid() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" data-feed-source={feedSource ?? undefined}>
           {listings.map((listing, index) => {
             const cardProps = getListingCardProps(listing);
 

@@ -5,15 +5,19 @@ import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
-import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
+import {
+  getOptionalContentLikeSummaryMap,
+  getOptionalContentViewCountMap,
+} from "@/lib/engagement-server";
+import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
+import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
+import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
+import { isImmersiveDetailEnabled } from "@/lib/feed/flag";
+import { presentEventSlide } from "@/lib/feed/presenters";
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-
-// Public detail columns only: select("*") would hand every visitor any
-// internal column added to promotions later.
-const PROMOTION_DETAIL_SELECT =
-  "id, owner_id, business_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_town, location_address, contact_methods, start_date, end_date, boost_until, featured_until, view_count, created_at, logo_url, event_details, media_width, media_height";
+import { PROMOTION_DETAIL_SELECT } from "@/lib/promotions/detail-select";
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
   const supabase = await createClient();
@@ -67,8 +71,20 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         ).maybeSingle()
       ).data
     : null;
-  const promotionViewCounts = await getOptionalContentViewCountMap(engagementAdmin, "promotion", [
-    promotion.id,
+  const cookieStore = await getOptionalCookieStore();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
+  const [promotionViewCounts, promotionLikes, immersiveEnabled] = await Promise.all([
+    getOptionalContentViewCountMap(engagementAdmin, "promotion", [promotion.id]),
+    getOptionalContentLikeSummaryMap(
+      engagementAdmin,
+      "promotion",
+      [promotion.id],
+      buildViewerKey(viewerId, user?.id)
+    ),
+    isImmersiveDetailEnabled({ user, viewerId }),
   ]);
   const promotionViewCount = promotionViewCounts.ok
     ? (promotionViewCounts.data.get(promotion.id) ?? 0)
@@ -98,7 +114,27 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     }),
   };
 
-  return (
+  const safeAdvertiser = advertiserProfile
+    ? {
+        ...advertiserProfile,
+        phone: promotion.contact_methods?.some((method: string) =>
+          ["call", "whatsapp"].includes(method)
+        )
+          ? advertiserProfile.phone
+          : null,
+        masked_phone_public: null,
+      }
+    : null;
+  const ownLikes = promotionLikes.ok ? promotionLikes.data.get(promotion.id) : undefined;
+  const immersiveSlide = immersiveEnabled
+    ? presentEventSlide(promotion, safeAdvertiser, linkedBusiness, {
+        views: promotionViewCount,
+        likes: ownLikes?.likeCount ?? 0,
+        viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+      })
+    : null;
+
+  const page = (
     <>
       <script
         type="application/ld+json"
@@ -118,22 +154,16 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
             ...promotion,
             view_count: promotionViewCount,
           }}
-          advertiserProfile={
-            advertiserProfile
-              ? {
-                  ...advertiserProfile,
-                  phone: promotion.contact_methods?.some((method: string) =>
-                    ["call", "whatsapp"].includes(method)
-                  )
-                    ? advertiserProfile.phone
-                    : null,
-                  masked_phone_public: null,
-                }
-              : null
-          }
+          advertiserProfile={safeAdvertiser}
           linkedBusiness={linkedBusiness}
         />
       </div>
     </>
+  );
+
+  return immersiveSlide ? (
+    <ImmersiveDetailGate initialSlide={immersiveSlide}>{page}</ImmersiveDetailGate>
+  ) : (
+    page
   );
 }

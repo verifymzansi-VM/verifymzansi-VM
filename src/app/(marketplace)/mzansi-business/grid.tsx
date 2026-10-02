@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { feedSourceAttribute } from "@/lib/feed/session";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
@@ -42,6 +43,8 @@ export function MzansiBusinessGrid() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const fetchGenRef = useRef(0);
+  // Lets the desktop post viewer continue through this exact list and page.
+  const [feedSource, setFeedSource] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchBusinesses = useCallback(
@@ -108,6 +111,20 @@ export function MzansiBusinessGrid() {
         }
 
         setFetchError(null);
+        const sourceParams = new URLSearchParams(params);
+        sourceParams.delete("page");
+        sourceParams.delete("limit");
+        setFeedSource(
+          feedSourceAttribute({
+            kind: "list",
+            label: "Mzansi Business",
+            api: "/api/businesses",
+            params: sourceParams.toString(),
+            page,
+            pageSize: PAGE_SIZE,
+            total: payload.total ?? undefined,
+          })
+        );
         setBusinesses(payload.businesses ?? []);
         setTotalCount(payload.total ?? 0);
         setLoading(false);
@@ -235,7 +252,10 @@ export function MzansiBusinessGrid() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6">
+      <div
+        className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
+        data-feed-source={feedSource ?? undefined}
+      >
         {businesses.map((business, index) => (
           <BusinessCardGridItem key={business.id} business={business} index={index} />
         ))}

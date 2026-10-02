@@ -86,6 +86,13 @@ docs/*
 !docs/production-readiness-audit-2026-10-01.md
 !docs/branch-protection.md
 !docs/DESIGN-SYSTEM.md
+!docs/mobile-app-agent-build-brief.md
+!docs/mobile-app-build-spec.md
+!docs/mobile-build-progress.md
+!docs/mobile/
+!docs/mobile/store-review-log.md
+!docs/runbooks/mobile-release.md
+!docs/runbooks/apple-signin-secret-rotation.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md
 !docs/admin-access-inventory.md

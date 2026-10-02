@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { createLogger } from "@/lib/utils/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { toOzowMerchantReference } from "@/lib/payments/ozow";
 import { parseAndValidateSearchParams } from "@/lib/utils/api";
 import {
   createNonNegativeNumberSchema,
@@ -106,13 +107,15 @@ export async function GET(request: Request) {
   const { paymentId, amount, returnUrl } = parsedQuery.data;
 
   if (paymentId) {
+    let merchantReference = toOzowMerchantReference(paymentId);
+    let paymentRequestId = `mock-${paymentId}`;
     // Guard: verify the payment exists and was created in the mock flow
     // to prevent completing real payments via the mock endpoint
     try {
       const supabase = createAdminClient();
       const { data: payment, error: paymentErr } = await supabase
         .from("payments")
-        .select("id, provider, provider_data")
+        .select("id, provider, provider_reference, provider_payment_id, provider_data")
         .eq("id", paymentId)
         .maybeSingle();
 
@@ -137,6 +140,8 @@ export async function GET(request: Request) {
         log.warn("Mock Ozow attempted on non-mock payment", { paymentId });
         return new NextResponse("Payment not found or not a mock payment", { status: 404 });
       }
+      merchantReference = payment.provider_reference || merchantReference;
+      paymentRequestId = payment.provider_payment_id || paymentRequestId;
     } catch (error) {
       log.error("Mock Ozow payment verification failed", {
         paymentId,
@@ -148,8 +153,10 @@ export async function GET(request: Request) {
     const payload = {
       eventType: "transaction.complete",
       data: {
-        id: `mock-${paymentId}`,
-        merchantReference: paymentId,
+        id: `mock-transaction-${paymentId}`,
+        merchantReference,
+        paymentRequestId,
+        siteCode: process.env.OZOW_SITE_CODE,
         amount:
           typeof amount === "number"
             ? {

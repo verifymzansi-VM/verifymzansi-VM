@@ -54,6 +54,15 @@ import type { EventDetails, TicketTier } from "@/types/tourism-details";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { humanizeKey } from "@/lib/presentation/listing-facts";
+import {
+  buildEventCalendarUrl,
+  EVENT_RAIN_POLICY_LABELS,
+  EVENT_RECURRING_LABELS,
+  formatLooseDate,
+  getEventState,
+  type EventState,
+} from "@/lib/presentation/event-facts";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -106,21 +115,6 @@ type PromotionMediaItem = {
   photoNumber?: number;
 };
 
-type EventState = "upcoming" | "ongoing" | "ended";
-
-function getEventState(
-  startDate: string | null,
-  endDate: string | null,
-  nowMs: number
-): EventState {
-  const startsAt = startDate ? new Date(startDate).getTime() : null;
-  const endsAt = endDate ? new Date(endDate).getTime() : null;
-
-  if (startsAt != null && startsAt > nowMs) return "upcoming";
-  if (endsAt != null && endsAt < nowMs) return "ended";
-  return "ongoing";
-}
-
 const EVENT_STATE_BADGE: Record<EventState, { label: string; className: string }> = {
   upcoming: {
     label: "Upcoming Event",
@@ -141,40 +135,6 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   form: "Contact Form",
 };
-
-const EVENT_RECURRING_LABELS: Record<string, string> = {
-  one_off: "One-off",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  annual: "Annual",
-};
-
-const EVENT_RAIN_POLICY_LABELS: Record<string, string> = {
-  outdoor_rain_or_shine: "Outdoor — rain or shine",
-  moved_indoors: "Moved indoors",
-  postponed: "Postponed",
-  refunded: "Refunded",
-};
-
-function humanizeKey(value: string) {
-  const text = value.replace(/_/g, " ").trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-/** Early-bird deadlines are free text; show a real date consistently when we can parse one. */
-function formatLooseDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}/.test(value) ? formatSaLongDate(value) || value : value;
-}
-
-/** Google Calendar wants UTC "20261001T100000Z"; timestamptz strings carry "+00:00". */
-function toGoogleCalendarDate(value: string): string | null {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}/, "");
-}
 
 /* ─── Countdown (isolated so the 1s tick doesn't re-render the whole page) ─── */
 function EventCountdown({
@@ -450,12 +410,19 @@ export function PromotionDetailContent({
         ? "Tickets available"
         : null;
 
-  // Calendar link (Google Calendar)
-  const calendarStart = promotion.start_date ? toGoogleCalendarDate(promotion.start_date) : null;
-  const calendarEnd = promotion.end_date ? toGoogleCalendarDate(promotion.end_date) : null;
-  const calendarUrl = calendarStart
-    ? `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(promotion.title)}&dates=${calendarStart}/${calendarEnd ?? calendarStart}&details=${encodeURIComponent(promotion.description?.slice(0, 500) ?? "")}&location=${encodeURIComponent([promotion.event_details?.venue_name, promotion.location_address, promotion.location_town, promotion.location_city, promotion.location_province].filter(Boolean).join(", "))}`
-    : null;
+  const calendarUrl = buildEventCalendarUrl({
+    title: promotion.title,
+    description: promotion.description,
+    start_date: promotion.start_date,
+    end_date: promotion.end_date,
+    venueName: promotion.event_details?.venue_name,
+    location: [
+      promotion.location_address,
+      promotion.location_town,
+      promotion.location_city,
+      promotion.location_province,
+    ],
+  });
 
   return (
     <article

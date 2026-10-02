@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { ContentTargetType } from "@/lib/engagement";
 import { trackContentView } from "@/lib/views/content-views";
+import { useClassicSuppressed } from "@/components/immersive/classic-suppression";
 
 /**
  * Opening a post's own page is a view. It shares the 30-minute window with
@@ -14,13 +15,15 @@ export function useTrackContentView(
   enabled = true,
   onRecorded?: () => void
 ) {
+  const isSuppressed = useClassicSuppressed();
   const onRecordedRef = useRef(onRecorded);
   useEffect(() => {
     onRecordedRef.current = onRecorded;
   }, [onRecorded]);
 
   useEffect(() => {
-    if (!enabled) return;
+    // The desktop viewer counts this post itself, after two seconds on screen.
+    if (!enabled || isSuppressed()) return;
     let active = true;
     void trackContentView({
       type: targetType,
@@ -33,5 +36,5 @@ export function useTrackContentView(
     return () => {
       active = false;
     };
-  }, [enabled, targetId, targetType]);
+  }, [enabled, isSuppressed, targetId, targetType]);
 }

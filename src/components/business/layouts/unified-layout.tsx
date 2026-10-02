@@ -19,6 +19,7 @@ import {
   Store,
 } from "lucide-react";
 import { ContentContactActions } from "@/components/listings/content-contact-actions";
+import { businessContactConfig } from "@/components/listings/contact-action-configs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,7 +54,16 @@ import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navig
 import { useTrackContentView } from "@/hooks/use-track-content-view";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { contactPhone } from "@/lib/utils/contact-links";
-import { BUSINESS_CATEGORIES, TOURISM_SUBCATEGORIES } from "@/lib/constants/categories";
+import { humanizeKey } from "@/lib/presentation/listing-facts";
+import {
+  acceptsInboxEnquiries,
+  getBusinessProfileFacts,
+  getBusinessQuickFacts,
+  getSubcategoryLabel,
+  getTourismSpotlightFacts,
+  normalizeList,
+  SOCIAL_LABELS,
+} from "@/lib/presentation/business-facts";
 
 interface UnifiedLayoutProps {
   family: BusinessProfileFamily;
@@ -68,192 +78,12 @@ interface UnifiedLayoutProps {
   deliveryAvailable: boolean;
 }
 
-interface QuickFact {
-  label: string;
-  value: string;
-}
-
 interface BusinessHeroMediaItem {
   kind: "video" | "photo";
   key: string;
   url: string;
   poster?: string;
   label: string;
-}
-
-/** Turn a stored key such as `children_over_6` into readable text. */
-function humanizeKey(value: string) {
-  const text = value.replace(/_/g, " ").trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-function getSubcategoryLabel(category: string, subcategory: string | null | undefined) {
-  if (!subcategory) return null;
-  const categoryDefinition = BUSINESS_CATEGORIES.find((item) => item.value === category);
-  const match =
-    categoryDefinition?.subcategories.find((item) => item.value === subcategory) ??
-    TOURISM_SUBCATEGORIES.find((item) => item.value === subcategory);
-  return match?.label ?? humanizeKey(subcategory);
-}
-
-const SOCIAL_LABELS: Record<string, string> = {
-  facebook: "Facebook",
-  instagram: "Instagram",
-  twitter: "X (Twitter)",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  linkedin: "LinkedIn",
-  website: "Website",
-};
-
-function normalizeList(values: unknown): string[] {
-  if (!Array.isArray(values)) return [];
-  return values.filter((value): value is string => typeof value === "string" && value.length > 0);
-}
-
-function getTourismQuickFacts(business: BusinessDetailRecord): QuickFact[] {
-  const details = (business.category_details ?? {}) as Record<string, unknown>;
-  const facts: QuickFact[] = [];
-
-  if (typeof details.star_rating === "number" && details.star_rating > 0) {
-    facts.push({ label: "Star Rating", value: `${details.star_rating}-star` });
-  }
-  if (typeof details.price_range === "string") {
-    facts.push({ label: "Price range", value: details.price_range.replace(/_/g, " ") });
-  }
-  if (typeof details.number_of_rooms === "number") {
-    facts.push({ label: "Rooms / Units", value: String(details.number_of_rooms) });
-  }
-  if (typeof details.check_in_time === "string") {
-    facts.push({ label: "Check-in", value: details.check_in_time });
-  }
-  if (typeof details.check_out_time === "string") {
-    facts.push({ label: "Check-out", value: details.check_out_time });
-  }
-  if (typeof details.tour_duration === "string") {
-    facts.push({ label: "Tour duration", value: details.tour_duration.replace(/_/g, " ") });
-  }
-  if (typeof details.visit_duration === "string") {
-    facts.push({ label: "Visit Duration", value: details.visit_duration.replace(/_/g, " ") });
-  }
-  if (typeof details.max_group_size === "number") {
-    facts.push({ label: "Group Size", value: `${details.max_group_size} guests` });
-  }
-
-  return facts;
-}
-
-/** Profiles saved with explicit contact methods only show the inbox when the owner chose it. */
-function acceptsInboxEnquiries(categoryDetails: unknown): boolean {
-  const methods = (categoryDetails as { contact_methods?: unknown } | null)?.contact_methods;
-  return !Array.isArray(methods) || methods.includes("form");
-}
-
-/* ── Self-reported business profile extras (category_details.business_profile) ── */
-const BBBEE_LEVEL_LABELS: Record<string, string> = {
-  level_1: "Level 1",
-  level_2: "Level 2",
-  level_3: "Level 3",
-  level_4: "Level 4",
-  level_5: "Level 5",
-  level_6: "Level 6",
-  level_7: "Level 7",
-  level_8: "Level 8",
-  non_compliant: "Non-Compliant",
-  exempt: "Exempt (EME)",
-};
-
-const EMPLOYEE_COUNT_LABELS: Record<string, string> = {
-  "1": "1 (Solo)",
-  "2_5": "2 – 5",
-  "6_10": "6 – 10",
-  "11_50": "11 – 50",
-  "51_200": "51 – 200",
-  "200_plus": "200+",
-};
-
-const CHILD_POLICY_LABELS: Record<string, string> = {
-  children_welcome: "Children welcome",
-  children_over_6: "Children 6+",
-  children_over_12: "Children 12+",
-  adults_only: "Adults only",
-};
-
-/**
- * Facts the owner entered under "Additional Business Details" in the create
- * form. The API folds them into `category_details.business_profile` — render
- * them so the form data actually reaches the public profile.
- */
-function getBusinessProfileFacts(
-  business: BusinessDetailRecord,
-  options?: { includeLanguages?: boolean }
-): QuickFact[] {
-  const details = (business.category_details ?? {}) as Record<string, unknown>;
-  const profile = details.business_profile;
-  if (!profile || typeof profile !== "object") return [];
-  const p = profile as Record<string, unknown>;
-  const facts: QuickFact[] = [];
-
-  if (typeof p.year_established === "number" && p.year_established > 0) {
-    facts.push({ label: "Established", value: String(p.year_established) });
-  }
-  if (typeof p.number_of_employees === "string" && p.number_of_employees) {
-    facts.push({
-      label: "Team Size",
-      value: EMPLOYEE_COUNT_LABELS[p.number_of_employees] ?? p.number_of_employees,
-    });
-  }
-  if (typeof p.bbbee_level === "string" && p.bbbee_level) {
-    facts.push({ label: "B-BBEE", value: BBBEE_LEVEL_LABELS[p.bbbee_level] ?? p.bbbee_level });
-  }
-  if (typeof p.cipc_registration === "string" && p.cipc_registration) {
-    facts.push({ label: "CIPC Reg.", value: p.cipc_registration });
-  }
-  if (
-    options?.includeLanguages !== false &&
-    typeof p.languages_spoken === "string" &&
-    p.languages_spoken
-  ) {
-    facts.push({ label: "Languages", value: p.languages_spoken });
-  }
-  if (p.load_shedding_ready === true) {
-    facts.push({ label: "Load-Shedding", value: "Backup power ready" });
-  }
-
-  return facts;
-}
-
-function getBusinessQuickFacts(
-  family: BusinessProfileFamily,
-  business: BusinessDetailRecord,
-  deliveryAvailable: boolean,
-  promotions: BusinessPromotionRecord[]
-): QuickFact[] {
-  const servicesCount = business.services_offered?.length ?? 0;
-  const galleryCount = business.gallery_photos?.length ?? 0;
-  const paymentCount = business.payment_methods_accepted?.length ?? 0;
-  const serviceAreaCount = business.service_areas?.areas?.length ?? 0;
-
-  if (family === "tourism") {
-    return getTourismQuickFacts(business);
-  }
-
-  if (family === "professional") {
-    return [
-      serviceAreaCount > 0 ? { label: "Service Areas", value: `${serviceAreaCount} listed` } : null,
-      servicesCount > 0 ? { label: "Services", value: `${servicesCount} offered` } : null,
-      deliveryAvailable ? { label: "Delivery", value: "Available" } : null,
-      business.map_directions ? { label: "Directions", value: "Map link available" } : null,
-      business.website ? { label: "Website", value: "Public website" } : null,
-    ].filter((fact): fact is QuickFact => Boolean(fact));
-  }
-
-  return [
-    galleryCount > 0 ? { label: "Gallery", value: `${galleryCount} photos` } : null,
-    servicesCount > 0 ? { label: "Range", value: `${servicesCount} highlights` } : null,
-    paymentCount > 0 ? { label: "Payments", value: `${paymentCount} supported` } : null,
-    promotions.length > 0 ? { label: "Offers", value: `${promotions.length} live` } : null,
-  ].filter((fact): fact is QuickFact => Boolean(fact));
 }
 
 function SectionCard({
@@ -774,93 +604,21 @@ export function UnifiedLayout({
           </div>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
-          {typeof tourismDetails.languages_spoken === "string" ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
+          {getTourismSpotlightFacts(tourismDetails).map((fact) => (
+            <div
+              key={fact.label}
+              className={
+                fact.wide
+                  ? "rounded-2xl bg-muted/40 p-3 sm:col-span-2"
+                  : "rounded-2xl bg-muted/40 p-3"
+              }
+            >
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Languages
+                {fact.label}
               </p>
-              <p className="mt-1 text-sm font-medium">{tourismDetails.languages_spoken}</p>
+              <p className="mt-1 text-sm font-medium">{fact.value}</p>
             </div>
-          ) : null}
-          {typeof tourismDetails.cancellation_policy === "string" ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Cancellation
-              </p>
-              <p className="mt-1 text-sm font-medium">
-                {tourismDetails.cancellation_policy.replace(/_/g, " ")}
-              </p>
-            </div>
-          ) : null}
-          {normalizeList(tourismDetails.meal_options).length > 0 ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Meal options
-              </p>
-              <p className="mt-1 text-sm font-medium">
-                {normalizeList(tourismDetails.meal_options).join(", ")}
-              </p>
-            </div>
-          ) : null}
-          {normalizeList(tourismDetails.activity_types).length > 0 ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Activities
-              </p>
-              <p className="mt-1 text-sm font-medium">
-                {normalizeList(tourismDetails.activity_types).join(", ")}
-              </p>
-            </div>
-          ) : null}
-          {typeof tourismDetails.tgcsa_grading === "string" && tourismDetails.tgcsa_grading ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                TGCSA Grading
-              </p>
-              <p className="mt-1 text-sm font-medium">
-                {tourismDetails.tgcsa_grading.replace(/_star$/, "-star").replace(/_/g, " ")}
-              </p>
-            </div>
-          ) : null}
-          {typeof tourismDetails.minimum_stay_nights === "number" ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Minimum stay
-              </p>
-              <p className="mt-1 text-sm font-medium">
-                {tourismDetails.minimum_stay_nights}{" "}
-                {tourismDetails.minimum_stay_nights === 1 ? "night" : "nights"}
-              </p>
-            </div>
-          ) : null}
-          {typeof tourismDetails.child_policy === "string" && tourismDetails.child_policy ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Child policy
-              </p>
-              <p className="mt-1 text-sm font-medium">
-                {CHILD_POLICY_LABELS[tourismDetails.child_policy] ??
-                  tourismDetails.child_policy.replace(/_/g, " ")}
-              </p>
-            </div>
-          ) : null}
-          {tourismDetails.seasonal_pricing === true ? (
-            <div className="rounded-2xl bg-muted/40 p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Seasonal pricing
-              </p>
-              <p className="mt-1 text-sm font-medium">Peak / off-peak rates apply</p>
-            </div>
-          ) : null}
-          {typeof tourismDetails.nearby_attractions === "string" &&
-          tourismDetails.nearby_attractions ? (
-            <div className="rounded-2xl bg-muted/40 p-3 sm:col-span-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Nearby attractions
-              </p>
-              <p className="mt-1 text-sm font-medium">{tourismDetails.nearby_attractions}</p>
-            </div>
-          ) : null}
+          ))}
         </div>
       </div>
     ) : family === "professional" ? (
@@ -1151,29 +909,11 @@ export function UnifiedLayout({
                   showPhoneButton={true}
                   showMessageButton={acceptsInboxEnquiries(business.category_details)}
                   messageIcon={MessageSquare}
-                  config={{
-                    targetId: business.id,
-                    sharePath: `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`,
-                    shareTitle: business.business_name,
-                    contactPayloadKey: "businessId",
-                    contactErrorFallback: "Failed to send enquiry",
-                    reportTargetType: "business",
-                    reportTitle: "Report profile",
-                    reportPlaceholder: "Describe the issue with this profile...",
-                    reportSuccessCopy: "Thank you. Our team will review this profile.",
-                    reportOptions: [
-                      { value: "misleading", label: "Inaccurate information" },
-                      { value: "scam", label: "Scam or fraud" },
-                      { value: "other", label: "Other" },
-                    ],
-                    messageTitle: `Enquire about ${business.business_name}`,
-                    messageDescription:
-                      "Your enquiry goes to the account holder’s inbox with your reply details.",
-                    messagePlaceholder: "Hi, I would like to know more...",
-                    messageSubmitLabel: "Send enquiry",
-                    messageSuccessCopy:
-                      "Your enquiry is in the account holder’s inbox. They can reply using the contact details you provided.",
-                  }}
+                  config={businessContactConfig(
+                    business.id,
+                    business.business_name,
+                    `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`
+                  )}
                 />
               </CardContent>
             </Card>

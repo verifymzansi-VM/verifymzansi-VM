@@ -7,6 +7,10 @@ import type { NextRequest } from "next/server";
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
+const mockReconcile = vi.hoisted(() => vi.fn());
+const admin = {};
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => admin }));
+vi.mock("@/lib/payments/reconciliation", () => ({ reconcileOzowPayment: mockReconcile }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
@@ -29,6 +33,7 @@ describe("GET /api/billing/payment-status", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReconcile.mockReset().mockResolvedValue({ checked: true });
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(checkLocalRateLimit).mockReturnValue({ limited: false });
   });
@@ -40,6 +45,56 @@ describe("GET /api/billing/payment-status", () => {
 
     expect(res.status).toBe(400);
     expect(mockSupabase.auth.getUser).not.toHaveBeenCalled();
+  });
+
+  it("reconciles an owned payment and returns the newly persisted completion", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const payment = {
+      id: PAYMENT_ID,
+      status: "pending",
+      provider: "ozow",
+      provider_payment_id: "request-1",
+      created_at: "2026-10-02T10:00:00Z",
+    };
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi
+        .fn()
+        .mockResolvedValueOnce({ data: payment, error: null })
+        .mockResolvedValueOnce({ data: { status: "complete" }, error: null }),
+    };
+    mockSupabase.from.mockReturnValue(query);
+    const response = await GET(
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
+    );
+    expect(await response.json()).toEqual({ status: "complete", terminal: true, expired: false });
+    expect(mockReconcile).toHaveBeenCalledWith(payment, admin);
+    expect(query.eq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("preserves an old pending status during provider outages", async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          id: PAYMENT_ID,
+          status: "pending",
+          provider: "ozow",
+          provider_payment_id: "request-1",
+          created_at: "2020-01-01T10:00:00Z",
+        },
+        error: null,
+      }),
+    };
+    mockSupabase.from.mockReturnValue(query);
+    mockReconcile.mockRejectedValue(new Error("Ozow unavailable"));
+    const response = await GET(
+      createRequest(`https://verifymzansi.com/api/billing/payment-status?payment=${PAYMENT_ID}`)
+    );
+    expect(await response.json()).toEqual({ status: "pending", terminal: false, expired: false });
   });
 
   it("returns 401 when the user is not authenticated", async () => {

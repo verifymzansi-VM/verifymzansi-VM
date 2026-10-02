@@ -20,7 +20,11 @@ const { mockCreateClient, mockNotFound, mockTryCreateAdminClient, mockGetViewCou
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ tryCreateAdminClient: mockTryCreateAdminClient }));
 vi.mock("next/navigation", () => ({ notFound: mockNotFound }));
-vi.mock("@/lib/engagement-server", () => ({ getOptionalContentViewCountMap: mockGetViewCounts }));
+vi.mock("@/lib/engagement-server", () => ({
+  getOptionalContentViewCountMap: mockGetViewCounts,
+  getOptionalContentLikeSummaryMap: vi.fn().mockResolvedValue({ ok: true, data: new Map() }),
+}));
+vi.mock("@/lib/feed/flag", () => ({ isImmersiveDetailEnabled: vi.fn().mockResolvedValue(false) }));
 vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
@@ -50,6 +54,7 @@ function buildClient(options?: {
   linkedBusiness?: Record<string, unknown> | null;
 }) {
   return {
+    auth: { getUser: async () => ({ data: { user: null } }) },
     from: (table: string) => {
       if (table === "promotions") {
         return {

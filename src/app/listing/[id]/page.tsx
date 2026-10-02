@@ -26,6 +26,9 @@ import {
 } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
+import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
+import { isImmersiveDetailEnabled } from "@/lib/feed/flag";
+import { presentListingSlide } from "@/lib/feed/presenters";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -45,6 +48,7 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
   return {
     title: `${listing.title} | Mzansi Market`,
     description: listing.description?.slice(0, 160),
+    alternates: { canonical: `/listing/${id}` },
   };
 }
 
@@ -141,18 +145,41 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       .in("user_id", ownerIds);
     similarSellers = new Map((ownerData ?? []).map((s) => [s.user_id, s]));
   }
-  const viewerKey = buildViewerKey(
-    readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null,
-    user?.id
-  );
+  const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
+  const viewerKey = buildViewerKey(viewerId, user?.id);
   const similarListingIds = similarItems.map((item) => item.id);
-  const [listingViewCounts, similarLikeSummary] = await Promise.all([
+  const [listingViewCounts, similarLikeSummary, immersiveEnabled] = await Promise.all([
     getOptionalContentViewCountMap(engagementAdmin, "listing", [listing.id, ...similarListingIds]),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "listing", similarListingIds, viewerKey),
+    getOptionalContentLikeSummaryMap(
+      engagementAdmin,
+      "listing",
+      [listing.id, ...similarListingIds],
+      viewerKey
+    ),
+    isImmersiveDetailEnabled({ user, viewerId }),
   ]);
   const listingViewCount = listingViewCounts.ok
     ? (listingViewCounts.data.get(listing.id) ?? 0)
     : (listing.view_count ?? 0);
+
+  const ownLikes = similarLikeSummary.ok ? similarLikeSummary.data.get(listing.id) : undefined;
+  const immersiveSlide = immersiveEnabled
+    ? presentListingSlide(
+        listing,
+        seller
+          ? {
+              display_name: seller.display_name,
+              account_verification_status: seller.account_verification_status,
+              phone: seller.phone,
+            }
+          : null,
+        {
+          views: listingViewCount,
+          likes: ownLikes?.likeCount ?? 0,
+          viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+        }
+      )
+    : null;
 
   // A job with no disclosed salary must not be published as a free (R0) offer.
   const hidesPrice = listing.category === "jobs_services" && !listing.price_cents;
@@ -173,7 +200,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     }),
   };
 
-  return (
+  const page = (
     <div className="flex min-h-screen flex-col">
       <Header />
       <script
@@ -213,5 +240,11 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
       <Footer />
     </div>
+  );
+
+  return immersiveSlide ? (
+    <ImmersiveDetailGate initialSlide={immersiveSlide}>{page}</ImmersiveDetailGate>
+  ) : (
+    page
   );
 }

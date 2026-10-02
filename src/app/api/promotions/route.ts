@@ -796,8 +796,10 @@ export async function GET(request: NextRequest) {
 
     for (const attempt of attempts) {
       const result = await buildQuery(attempt.select);
-      if (!result.error) {
-        promotions = (result.data ?? []) as unknown as PromotionResultRow[];
+      // A page past the end is an empty page, not a server error.
+      const pastLastPage = (result.error as { code?: string } | null)?.code === "PGRST103";
+      if (!result.error || pastLastPage) {
+        promotions = pastLastPage ? [] : ((result.data ?? []) as unknown as PromotionResultRow[]);
         count = result.count;
         error = null;
         selectedAttempt = attempt;

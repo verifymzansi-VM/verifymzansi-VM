@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceBillingMutationGuard } from "@/lib/billing/route-guard";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { cancelOzowPaymentRequest } from "@/lib/payments/ozow";
+import { reconcileOzowPayment } from "@/lib/payments/reconciliation";
+import type { PaymentRecordShape } from "@/lib/payments/types";
 
 const log = createLogger("CancelPendingPayment");
 
@@ -43,7 +46,9 @@ export async function POST(request: NextRequest) {
 
     const { data: payment, error: fetchError } = await admin
       .from("payments")
-      .select("id, status, provider_data")
+      .select(
+        "id,user_id,area,amount_cents,status,provider,provider_payment_id,provider_reference,provider_data,created_at"
+      )
       .eq("id", paymentId)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -71,6 +76,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (payment.provider !== "ozow" || !payment.provider_payment_id) {
+      return NextResponse.json(
+        { error: "Payment details are not yet available. Please check its status shortly." },
+        { status: 409 }
+      );
+    }
+    // Close the provider link first. Preserve the local in-flight guard on any
+    // failure or bank transaction still being processed.
+    try {
+      await cancelOzowPaymentRequest(payment.provider_payment_id);
+      const result = await reconcileOzowPayment(payment as PaymentRecordShape, admin, {
+        skipThrottle: true,
+        expire: false,
+      });
+      if (!result.checked || result.outcome || result.pendingTransaction) {
+        return NextResponse.json(
+          {
+            error:
+              "This payment is being processed. Check its current status before starting a new checkout.",
+          },
+          { status: 409 }
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Unable to confirm cancellation with Ozow. Please try again shortly." },
+        { status: 503 }
+      );
+    }
     const now = new Date().toISOString();
     const { data: cancelledPayment, error: updateError } = await admin
       .from("payments")

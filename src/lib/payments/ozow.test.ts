@@ -32,6 +32,182 @@ describe("ozow payments", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("honours short string token lifetimes instead of caching them for an hour", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "short", expires_in: "120" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "request-1", redirectUrl: "https://pay.ozow.test/one" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "fresh", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "request-2", redirectUrl: "https://pay.ozow.test/two" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { createOzowHostedPayment } = await import("./ozow");
+    const input = {
+      paymentId: "payment-1",
+      merchantReference: "payment1",
+      amountCents: 2500,
+      returnUrl: "https://verifymzansi.com/billing",
+      cancelUrl: "https://verifymzansi.com/billing",
+    };
+    await createOzowHostedPayment(input);
+    vi.advanceTimersByTime(121_000);
+    await createOzowHostedPayment(input);
+    expect(
+      fetchMock.mock.calls.filter((call) => String(call[0]).endsWith("/v1/token"))
+    ).toHaveLength(2);
+    expect((fetchMock.mock.calls[3][1] as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer fresh",
+    });
+  });
+
+  it("keeps the full webhook reference and transaction ID separate", async () => {
+    const { normalizeOzowWebhook } = await import("./ozow");
+    expect(
+      normalizeOzowWebhook({
+        type: "transaction.complete",
+        data: {
+          SiteCode: "site-code",
+          TransactionId: "transaction-1",
+          TransactionReference: "merchant-1",
+          Amount: "50.00",
+          Status: "Successful",
+          CurrencyCode: "ZAR",
+          IsTest: "True",
+        },
+      })
+    ).toMatchObject({
+      merchantReference: "merchant-1",
+      transactionId: "transaction-1",
+      providerPaymentId: null,
+      amount: "50.00",
+      currencyCode: "ZAR",
+      siteCode: "site-code",
+      isTest: true,
+      format: "full",
+    });
+  });
+
+  it("retrieves thin transaction details from the selected One API environment", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "transaction-1",
+          merchantReference: "merchant-1",
+          siteCode: "site-code",
+          amount: { value: 50, currency: "ZAR" },
+          status: "Successful",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getOzowTransaction } = await import("./ozow");
+    expect(await getOzowTransaction("transaction-1")).toMatchObject({
+      transactionId: "transaction-1",
+      amount: "50",
+      siteCode: "site-code",
+    });
+    expect(fetchMock.mock.calls[1][0].toString()).toBe(
+      "https://stagingone.ozow.com/v1/transactions/transaction-1"
+    );
+  });
+
+  it("follows provider pagination and supplies required inclusive date filters", async () => {
+    const transaction = {
+      id: "tx-1",
+      merchantReference: "merchant-1",
+      siteCode: "site-code",
+      amount: { value: 50, currency: "ZAR" },
+      status: "Successful",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [],
+          links: {
+            next: "https://stagingone.ozow.com/v1/payments/request-1/transactions?limit=50&offset=50&fromDate=2026-10-01&toDate=2026-10-04",
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [transaction], links: { next: null } }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { listOzowPaymentTransactions } = await import("./ozow");
+    const result = await listOzowPaymentTransactions("request-1", "2026-10-02T08:00:00Z");
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ providerPaymentId: "request-1", transactionId: "tx-1" });
+    expect(fetchMock.mock.calls[1][0].toString()).toContain("fromDate=2026-10-01");
+    expect(fetchMock.mock.calls[2][0].toString()).toContain("offset=50");
+  });
+
+  it("refuses pagination links that could disclose a bearer token to another host", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [],
+          links: { next: "https://untrusted.example/v1/transactions" },
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { listOzowPaymentTransactions } = await import("./ozow");
+    await expect(listOzowPaymentTransactions("request-1", "2026-10-02T08:00:00Z")).rejects.toThrow(
+      "Invalid Ozow pagination link"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels the payment request without sending transaction data or a body", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 201 });
+    vi.stubGlobal("fetch", fetchMock);
+    const { cancelOzowPaymentRequest } = await import("./ozow");
+    await cancelOzowPaymentRequest("request-1");
+    expect(fetchMock.mock.calls[1][0].toString()).toBe(
+      "https://stagingone.ozow.com/v1/payments/request-1/cancel"
+    );
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      method: "POST",
+      headers: { "Idempotency-Key": expect.any(String) },
+    });
+    expect((fetchMock.mock.calls[1][1] as RequestInit).body).toBeUndefined();
   });
 
   it("reuses the cached token until expiry", async () => {
@@ -351,7 +527,8 @@ describe("ozow payments", () => {
     expect(payload).toEqual(
       expect.objectContaining({
         merchantReference: "payment-1",
-        providerPaymentId: "ozow-tx-1",
+        transactionId: "ozow-tx-1",
+        providerPaymentId: null,
         amount: "25",
         currencyCode: "ZAR",
         status: "successful",

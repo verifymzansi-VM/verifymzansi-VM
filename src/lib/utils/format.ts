@@ -191,3 +191,12 @@ export function formatPhone(phone: string): string {
   }
   return phone;
 }
+
+/** "999", "1.4K", "12K", "1.2M": short counts for icons (likes, views). */
+export function formatCompactCount(value: number): string {
+  const safe = Math.max(0, Math.floor(value));
+  if (safe >= 1_000_000) return `${(safe / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (safe >= 10_000) return `${Math.round(safe / 1000)}K`;
+  if (safe >= 1000) return `${(safe / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(safe);
+}

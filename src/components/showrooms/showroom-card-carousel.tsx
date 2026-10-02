@@ -1,5 +1,6 @@
 "use client";
 
+import { feedSourceAttribute } from "@/lib/feed/session";
 import { trackCommercialEvents } from "@/lib/analytics/commercial-events";
 import { ShowroomProvinceChip } from "./showroom-province-chip";
 import {
@@ -200,6 +201,14 @@ const SHOWROOM_TABLES = {
   business: "businesses",
   promotion: "promotions",
 } as const;
+
+/** What the post viewer's top bar calls the list a showroom card came from. */
+const SHOWROOM_LABELS: Record<string, string> = {
+  "showroom:home": "Home showroom",
+  "showroom:market": "Mzansi Market showroom",
+  "showroom:business": "Mzansi Business showroom",
+  "showroom:tourism": "Tourism & Events showroom",
+};
 
 export function ShowroomCardCarousel({
   items,
@@ -937,6 +946,11 @@ export function ShowroomCardCarousel({
           }}
           tabIndex={0}
           aria-label="Carousel slides"
+          data-feed-source={feedSourceAttribute({
+            kind: "rail",
+            label: SHOWROOM_LABELS[surface] ?? "Showroom",
+            wrap: true,
+          })}
         >
           {/* Height-establishing invisible card */}
           <div className={cn("invisible mx-auto", CARD_W)} aria-hidden="true">

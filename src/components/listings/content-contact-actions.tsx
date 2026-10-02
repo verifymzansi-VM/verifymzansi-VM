@@ -25,7 +25,7 @@ type ReportOption = {
   label: string;
 };
 
-type ContactActionConfig = {
+export type ContactActionConfig = {
   targetId: string;
   sharePath: string;
   shareTitle: string;
@@ -50,6 +50,8 @@ type ContentContactActionsProps = {
   showMessageButton: boolean;
   config: ContactActionConfig;
   messageIcon: LucideIcon;
+  /** Off where the page already has its own share button (the desktop viewer's rail). */
+  showShare?: boolean;
 };
 
 export function ContentContactActions({
@@ -59,9 +61,16 @@ export function ContentContactActions({
   showMessageButton,
   config,
   messageIcon: MessageIcon,
+  showShare = true,
 }: ContentContactActionsProps) {
   const phoneNumber = contactPhone(phone);
   const whatsappUrl = whatsappLink(whatsapp, config.shareTitle, config.sharePath);
+  // One number is shown once: on the call button when both buttons use it.
+  const whatsappNumberShown = !(
+    showPhoneButton &&
+    phoneNumber &&
+    contactPhone(whatsapp) === phoneNumber
+  );
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
@@ -246,7 +255,7 @@ export function ContentContactActions({
           <Button className="w-full gap-2" size="lg" asChild>
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer nofollow ugc">
               <MessageIcon className="h-4 w-4" />
-              WhatsApp {whatsapp}
+              WhatsApp{whatsappNumberShown && whatsapp ? ` ${whatsapp}` : ""}
             </a>
           </Button>
         )}
@@ -280,16 +289,18 @@ export function ContentContactActions({
         )}
       </div>
 
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-11 gap-1 px-3 text-sm sm:h-10 sm:text-xs"
-          onClick={handleShare}
-        >
-          {copied ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3" />}
-          {copied ? "Link Copied!" : "Share"}
-        </Button>
+      <div className={showShare ? "flex items-center justify-between" : "flex justify-end"}>
+        {showShare ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-11 gap-1 px-3 text-sm sm:h-10 sm:text-xs"
+            onClick={handleShare}
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3" />}
+            {copied ? "Link Copied!" : "Share"}
+          </Button>
+        ) : null}
         <Button
           variant="ghost"
           size="sm"

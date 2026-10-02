@@ -91,8 +91,19 @@ export async function markPaymentFailed(
   // Ozow sends `status` (e.g. "Error") and may include `statusMessage`.
   const rawStatus =
     typeof webhookPayload.status === "string" ? webhookPayload.status.toLowerCase() : "unknown";
+  const webhookData =
+    webhookPayload.data && typeof webhookPayload.data === "object"
+      ? (webhookPayload.data as Record<string, unknown>)
+      : webhookPayload;
+  const providerStatus = webhookData.Status ?? webhookData.status ?? rawStatus;
   const statusMessage =
-    typeof webhookPayload.statusMessage === "string" ? webhookPayload.statusMessage : undefined;
+    typeof webhookData.StatusMessage === "string"
+      ? webhookData.StatusMessage
+      : typeof webhookData.reason === "string"
+        ? webhookData.reason
+        : typeof webhookData.statusMessage === "string"
+          ? webhookData.statusMessage
+          : undefined;
 
   const providerData = appendProviderWebhook(
     {
@@ -118,7 +129,8 @@ export async function markPaymentFailed(
       status: "failed",
       provider_data: {
         ...(providerData ?? {}),
-        failure_reason: rawStatus,
+        failure_reason:
+          typeof providerStatus === "string" ? providerStatus.toLowerCase() : rawStatus,
         ...(statusMessage ? { failure_message: statusMessage } : {}),
         failed_at: new Date().toISOString(),
       },

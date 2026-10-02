@@ -5,6 +5,7 @@ import { trackContactAction } from "@/lib/analytics/commercial-events";
 
 import { Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatCompactCount } from "@/lib/utils/format";
 import type { ContentTargetType } from "@/lib/engagement";
 
 /** Likes double as "saves" in commercial reports. */
@@ -20,6 +21,8 @@ interface ContentLikeButtonProps {
   initialLikeCount?: number | null;
   initialLiked?: boolean;
   className?: string;
+  /** "rail": large round button with the count underneath, for the desktop viewer. */
+  variant?: "pill" | "rail";
 }
 
 export function ContentLikeButton({
@@ -28,6 +31,7 @@ export function ContentLikeButton({
   initialLikeCount = 0,
   initialLiked = false,
   className,
+  variant = "pill",
 }: ContentLikeButtonProps) {
   const [optimisticState, setOptimisticState] = useState<{
     targetId: string;
@@ -48,9 +52,12 @@ export function ContentLikeButton({
   const likeCount = currentState?.likeCount ?? initialLikeCount ?? 0;
 
   const displayedLikeCount = Math.min(999, Math.max(0, likeCount ?? 0));
+  // The rail shows the full count (compact); cards keep their capped pill.
+  const spokenCount = variant === "rail" ? Math.max(0, likeCount ?? 0) : displayedLikeCount;
+  const noun = variant === "rail" ? "post" : "card";
   const ariaLabel = liked
-    ? `Unlike this card. ${displayedLikeCount} like${displayedLikeCount === 1 ? "" : "s"}`
-    : `Like this card. ${displayedLikeCount} like${displayedLikeCount === 1 ? "" : "s"}`;
+    ? `Unlike this ${noun}. ${spokenCount} like${spokenCount === 1 ? "" : "s"}`
+    : `Like this ${noun}. ${spokenCount} like${spokenCount === 1 ? "" : "s"}`;
 
   return (
     <div className={cn("relative z-20", className)}>
@@ -121,16 +128,36 @@ export function ContentLikeButton({
           });
         }}
         className={cn(
-          "group inline-flex h-8 min-w-[52px] items-center justify-center rounded-full border border-white/80 bg-white/95 px-2.5 text-slate-700 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.55)] backdrop-blur transition-colors duration-200 hover:border-rose-200 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-80 dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:text-rose-300 dark:focus-visible:ring-rose-300"
+          variant === "rail"
+            ? "group flex flex-col items-center gap-1.5 text-white focus-visible:outline-none disabled:cursor-wait"
+            : "group inline-flex h-8 min-w-[52px] items-center justify-center rounded-full border border-white/80 bg-white/95 px-2.5 text-slate-700 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.55)] backdrop-blur transition-colors duration-200 hover:border-rose-200 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-80 dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:text-rose-300 dark:focus-visible:ring-rose-300"
         )}
       >
-        <Heart
-          className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:scale-110",
-            liked && "fill-current text-rose-500"
-          )}
-        />
-        <span className="ml-1 text-[11px] font-semibold tabular-nums">{displayedLikeCount}</span>
+        {variant === "rail" ? (
+          <>
+            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-brand-green-900 transition-colors duration-200 group-hover:bg-brand-green-800 group-focus-visible:ring-2 group-focus-visible:ring-brand-gold-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-brand-green-950">
+              <Heart
+                className={cn("h-5 w-5", liked && "fill-current text-rose-400")}
+                aria-hidden="true"
+              />
+            </span>
+            <span className="text-xs font-semibold tabular-nums text-white/80" aria-hidden="true">
+              {formatCompactCount(likeCount ?? 0)}
+            </span>
+          </>
+        ) : (
+          <>
+            <Heart
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-hover:scale-110",
+                liked && "fill-current text-rose-500"
+              )}
+            />
+            <span className="ml-1 text-[11px] font-semibold tabular-nums">
+              {displayedLikeCount}
+            </span>
+          </>
+        )}
       </button>
       {errorMessage ? <span className="sr-only">{errorMessage}</span> : null}
     </div>

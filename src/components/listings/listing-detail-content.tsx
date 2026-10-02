@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { feedSourceAttribute } from "@/lib/feed/session";
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -14,14 +15,19 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readOwnerId } from "@/lib/account/compat";
-import { formatRandAmount, formatSaLongDate, formatZAR } from "@/lib/utils/format";
-import { CATEGORIES } from "@/lib/constants/categories";
+import { formatSaLongDate, formatZAR } from "@/lib/utils/format";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
-import { resolveMarketProfileVariant } from "@/lib/presentation/profile-variants";
+import {
+  buildListingFacts,
+  getListingCategoryLabel,
+  getListingDetailsHeading,
+  humanizeKey,
+  LISTING_CONTACT_METHOD_LABELS,
+} from "@/lib/presentation/listing-facts";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
 
@@ -94,101 +100,6 @@ export interface SimilarSellerRow {
   account_verification_status: AccountVerificationStatus | null;
 }
 
-interface FactItem {
-  label: string;
-  value: string;
-}
-
-type AttributeOption = string | { value: string; label: string };
-
-const CONTACT_METHOD_LABELS: Record<string, string> = {
-  call: "Call",
-  whatsapp: "WhatsApp",
-  form: "Enquiry form",
-  in_app: "Enquiry form",
-};
-
-/** Turn a stored key such as `like_new` into readable text ("Like new"). */
-function humanizeKey(value: string) {
-  const text = value.replace(/_/g, " ").trim();
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-function optionLabel(item: unknown, options?: AttributeOption[]) {
-  const raw = String(item);
-  const match = options?.find((option) =>
-    typeof option === "string" ? option === raw : option.value === raw
-  );
-  if (match) return typeof match === "string" ? match : match.label;
-  return /^[a-z0-9]+(_[a-z0-9]+)+$/.test(raw) ? humanizeKey(raw) : raw;
-}
-
-function formatFactValue(value: unknown, unit?: string, options?: AttributeOption[]) {
-  if (Array.isArray(value)) {
-    return value.map((item) => optionLabel(item, options)).join(", ");
-  }
-  if (typeof value === "boolean") {
-    return value ? "Yes" : "No";
-  }
-  if (value == null) {
-    return "";
-  }
-  if (typeof value === "number") {
-    // Group digits for measured values (mileage, size) but never for years or counts.
-    return unit ? `${formatRandAmount(value)} ${unit}` : String(value);
-  }
-  const label = optionLabel(value, options);
-  return unit ? `${label} ${unit}` : label;
-}
-
-function buildListingFacts(listing: ListingDetailRecord) {
-  const categoryDefinition = CATEGORIES.find((item) => item.value === listing.category);
-  const orderedFacts =
-    categoryDefinition?.attributeFields
-      .map((field) => {
-        const rawValue = listing.attributes?.[field.name];
-        if (
-          rawValue === "" ||
-          rawValue == null ||
-          (Array.isArray(rawValue) && rawValue.length === 0)
-        ) {
-          return null;
-        }
-        return {
-          label: field.label,
-          value: formatFactValue(rawValue, field.unit, field.options),
-        };
-      })
-      .filter((fact): fact is FactItem => Boolean(fact)) ?? [];
-
-  const fallbackFacts = Object.entries(listing.attributes ?? {})
-    .map(([key, value]) => {
-      if (value === "" || value == null || (Array.isArray(value) && value.length === 0)) {
-        return null;
-      }
-      return { label: humanizeKey(key), value: formatFactValue(value) };
-    })
-    .filter((fact): fact is FactItem => Boolean(fact));
-
-  return orderedFacts.length > 0 ? orderedFacts : fallbackFacts;
-}
-
-function getVariantCopy(category: string | null | undefined) {
-  const variant = resolveMarketProfileVariant(
-    category as Parameters<typeof resolveMarketProfileVariant>[0]
-  );
-  switch (variant) {
-    case "property":
-      return { detailsHeading: "Property details" };
-    case "motors":
-      return { detailsHeading: "Vehicle details" };
-    case "services":
-      return { detailsHeading: "Service details" };
-    default:
-      return { detailsHeading: "Listing details" };
-  }
-}
-
 export function ListingDetailContent({
   listing,
   seller,
@@ -219,17 +130,15 @@ export function ListingDetailContent({
       ? computeTrustLevel(seller.account_verification_status ?? null)
       : null;
   const createdAt = formatSaLongDate(listing.created_at);
-  const categoryLabel =
-    CATEGORIES.find((item) => item.value === listing.category)?.label ??
-    (listing.category ? humanizeKey(listing.category) : null);
+  const categoryLabel = getListingCategoryLabel(listing.category);
   const contactMethodLabels = Array.from(
     new Set(
       (listing.contact_methods ?? []).map(
-        (method) => CONTACT_METHOD_LABELS[method] ?? humanizeKey(method)
+        (method) => LISTING_CONTACT_METHOD_LABELS[method] ?? humanizeKey(method)
       )
     )
   );
-  const variantCopy = getVariantCopy(listing.category);
+  const detailsHeading = getListingDetailsHeading(listing.category);
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
   const sellerPhone = contactPhone(seller?.phone);
   const sellerWhatsappUrl = whatsappLink(seller?.phone, listing.title, `/listing/${listing.id}`);
@@ -357,9 +266,7 @@ export function ListingDetailContent({
                     <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Quick facts
                     </p>
-                    <h2 className="font-display text-xl font-semibold">
-                      {variantCopy.detailsHeading}
-                    </h2>
+                    <h2 className="font-display text-xl font-semibold">{detailsHeading}</h2>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {quickFacts.map((fact) => (
@@ -454,7 +361,10 @@ export function ListingDetailContent({
                   View all
                 </Link>
               </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(0,15rem))]">
+              <div
+                className="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(auto-fill,minmax(0,15rem))]"
+                data-feed-source={feedSourceAttribute({ kind: "rail", label: "Similar listings" })}
+              >
                 {similarItems.map((item) => {
                   const sellerRow = similarSellers.get(readOwnerId(item) ?? "");
                   const videoUrl = item.videos?.[0];

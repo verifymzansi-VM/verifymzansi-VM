@@ -92,6 +92,27 @@ describe("atomic payment fulfillment adapter (effects are tested in test-payment
     expect(admin.rpc.mock.calls[0][1].p_plan_id).toBe(plan.id);
   });
 
+  it("binds a confirmed transaction without replacing the stored payment-request ID", async () => {
+    const admin = client();
+    await fulfillPayment(
+      admin,
+      payment,
+      { type: "transaction.complete" },
+      { id: "transaction-1", merchantReference: "merchant-1" }
+    );
+    expect(admin.rpc).toHaveBeenCalledExactlyOnceWith("confirm_ozow_payment", {
+      p_payment_id: payment.id,
+      p_provider_payment_id: "ozow-1",
+      p_expected_amount: 25000,
+      p_expected_metadata: payment.provider_data,
+      p_plan_id: plan.id,
+      p_addon_days: null,
+      p_webhook: { type: "transaction.complete" },
+      p_provider_transaction_id: "transaction-1",
+      p_merchant_reference: "merchant-1",
+    });
+  });
+
   it("accepts the R50 / 30 days plan", async () => {
     const admin = client([{ ...plan, tier: "month", price_cents: 5000 }]);
     await fulfillPayment(admin, {

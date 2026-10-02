@@ -43,6 +43,8 @@ interface ProfileVideoPlayerProps {
   onError?: () => void;
   skipSeconds?: number;
   showErrorState?: boolean;
+  /** Called when playback reaches the end (only fires when `loop` is off). */
+  onEnded?: () => void;
 }
 
 function getMediaFitClassName(mediaFit: "contain" | "cover") {
@@ -73,6 +75,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       onError,
       skipSeconds = 10,
       showErrorState = false,
+      onEnded,
     },
     forwardedRef
   ) {
@@ -352,6 +355,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
               onDurationChange={handleLoadedMetadata}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
+              onEnded={onEnded}
               onError={handleVideoError}
               className={cn("absolute inset-0 h-full w-full", mediaFitClassName, videoClassName)}
               aria-label={`${title} video`}

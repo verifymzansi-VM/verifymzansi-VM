@@ -45,7 +45,7 @@ describe("GET /api/billing/payment-status", () => {
     });
   });
 
-  it("returns expired:true for pending payments older than 30 minutes", async () => {
+  it("preserves pending payments older than 30 minutes without provider expiry", async () => {
     const thirtyFiveMinAgo = new Date(Date.now() - 35 * 60 * 1000).toISOString();
 
     mockParseAndValidateSearchParams.mockReturnValue({
@@ -69,9 +69,9 @@ describe("GET /api/billing/payment-status", () => {
     const res = await GET(makeRequest("pay-1"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.expired).toBe(true);
-    expect(body.terminal).toBe(true);
-    expect(body.status).toBe("expired");
+    expect(body.expired).toBe(false);
+    expect(body.terminal).toBe(false);
+    expect(body.status).toBe("pending");
   });
 
   it("returns expired:false for recent pending payments", async () => {

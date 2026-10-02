@@ -4,6 +4,11 @@ import { POST as cancelPendingPayment } from "./route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const mockCancelOzow = vi.hoisted(() => vi.fn());
+const mockReconcile = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/payments/ozow", () => ({ cancelOzowPaymentRequest: mockCancelOzow }));
+vi.mock("@/lib/payments/reconciliation", () => ({ reconcileOzowPayment: mockReconcile }));
+
 const CSRF_TOKEN = "a".repeat(64);
 const PAYMENT_ID = "550e8400-e29b-41d4-a716-446655440001";
 
@@ -58,6 +63,8 @@ describe("POST /api/billing/cancel-pending", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCancelOzow.mockReset().mockResolvedValue(undefined);
+    mockReconcile.mockReset().mockResolvedValue({ checked: true });
     vi.mocked(createClient).mockResolvedValue(mockSupabase as never);
     vi.mocked(createAdminClient).mockReturnValue(mockAdmin as never);
     mockSupabase.auth.getUser.mockResolvedValue({
@@ -90,6 +97,8 @@ describe("POST /api/billing/cancel-pending", () => {
           data: {
             id: PAYMENT_ID,
             status: "pending",
+            provider: "ozow",
+            provider_payment_id: "ozow-request-1",
             provider_data: { checkout_url: "https://pay.ozow.com/resume/pay-pending" },
           },
           error: null,
@@ -103,6 +112,7 @@ describe("POST /api/billing/cancel-pending", () => {
 
     expect(res.status).toBe(200);
     expect(data).toEqual({ success: true, paymentId: PAYMENT_ID, status: "failed" });
+    expect(mockCancelOzow).toHaveBeenCalledWith("ozow-request-1");
     expect(update).toHaveBeenCalledWith({
       status: "failed",
       provider_data: expect.objectContaining({
@@ -132,7 +142,13 @@ describe("POST /api/billing/cancel-pending", () => {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({
-          data: { id: PAYMENT_ID, status: "pending", provider_data: {} },
+          data: {
+            id: PAYMENT_ID,
+            status: "pending",
+            provider: "ozow",
+            provider_payment_id: "ozow-request-1",
+            provider_data: {},
+          },
           error: null,
         }),
         update,
@@ -162,4 +178,35 @@ describe("POST /api/billing/cancel-pending", () => {
     expect(res.status).toBe(409);
     expect(data.error).toContain("already being processed");
   });
+
+  it.each(["provider outage", "paid concurrently", "bank pending"])(
+    "preserves the checkout guard for %s",
+    async (scenario) => {
+      const update = vi.fn();
+      mockAdmin.from.mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: PAYMENT_ID,
+            status: "pending",
+            provider: "ozow",
+            provider_payment_id: "request-1",
+            provider_data: {},
+          },
+          error: null,
+        }),
+        update,
+      });
+      if (scenario === "provider outage")
+        mockCancelOzow.mockRejectedValue(new Error("unavailable"));
+      if (scenario === "paid concurrently")
+        mockReconcile.mockResolvedValue({ checked: true, outcome: "completed" });
+      if (scenario === "bank pending")
+        mockReconcile.mockResolvedValue({ checked: true, pendingTransaction: true });
+      const response = await cancelPendingPayment(createMockRequest({ paymentId: PAYMENT_ID }));
+      expect(response.status).toBe(scenario === "provider outage" ? 503 : 409);
+      expect(update).not.toHaveBeenCalled();
+    }
+  );
 });

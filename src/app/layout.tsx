@@ -27,6 +27,7 @@ import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { FeedSourceCapture } from "@/components/immersive/feed-source-capture";
 import { SiteVisitTracker } from "@/components/analytics/site-visit-tracker";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { VERIFY_MZANSI_SITE_DESCRIPTION } from "@/lib/seo/public-categories";
@@ -280,6 +281,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <PwaInstallPrompt />
             <ServiceWorkerRegistrar />
             <SiteVisitTracker />
+            <FeedSourceCapture />
             <AcquisitionCapture />
           </DesktopPageShell>
         </ThemeProvider>

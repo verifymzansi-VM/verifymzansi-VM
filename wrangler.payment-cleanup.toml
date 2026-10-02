@@ -10,6 +10,7 @@ enabled = true
 
 [vars]
 ENVIRONMENT = "production"
+APP_URL = "https://verifymzansi.com"
 SUPABASE_URL = "https://tnygdgormnofpgjknlhr.supabase.co"
 PROCESSING_PAYMENT_STALE_MINUTES = "30"
 

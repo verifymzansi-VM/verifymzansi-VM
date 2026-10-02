@@ -19,11 +19,13 @@ interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   WORKER_API_KEY: string;
+  APP_URL?: string;
   PROCESSING_PAYMENT_STALE_MINUTES?: string;
 }
 
 interface PaymentRow {
   id: string;
+  provider_payment_id?: string | null;
   user_id?: string | null;
   area?: string | null;
   status?: string;
@@ -176,6 +178,28 @@ async function createNotification(
 
 const worker: ExportedHandler<Env> = {
   async scheduled(_event, env) {
+    if (env.APP_URL) {
+      try {
+        const appUrl = new URL(env.APP_URL);
+        if (appUrl.protocol !== "https:" || appUrl.username || appUrl.password)
+          throw new Error("Invalid app URL");
+        const reconciliation = await fetchWithTimeout(
+          `${appUrl.origin}/api/internal/payments/reconcile`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${env.WORKER_API_KEY}` },
+            redirect: "error",
+            signal: AbortSignal.timeout(60_000),
+          }
+        );
+        if (!reconciliation.ok)
+          console.error("Ozow provider reconciliation unavailable", reconciliation.status);
+      } catch {
+        console.error(
+          "Ozow provider reconciliation failed; provider-backed payments remain pending"
+        );
+      }
+    }
     const headers = supabaseServiceHeaders(env.SUPABASE_SERVICE_ROLE_KEY, {
       "Content-Type": "application/json",
     });
@@ -183,7 +207,7 @@ const worker: ExportedHandler<Env> = {
     // Order by created_at so expired rows beyond the first page are not
     // starved by newer unexpired pending payments.
     const response = await fetchWithTimeout(
-      `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,user_id,area,provider_data,created_at&order=created_at.asc&limit=200`,
+      `${env.SUPABASE_URL}/rest/v1/payments?provider=eq.ozow&status=eq.pending&select=id,user_id,area,provider_payment_id,provider_data,created_at&order=created_at.asc&limit=200`,
       { headers }
     );
 
@@ -193,6 +217,9 @@ const worker: ExportedHandler<Env> = {
     }
 
     const payments = ((await response.json()) as PaymentRow[]).filter((payment) => {
+      // The app reconciler owns provider-backed expiry and recovery. Elapsed
+      // time cannot establish that a customer has not paid.
+      if (payment.provider_payment_id) return false;
       const expireAt = getExpireAt(payment.provider_data);
       if (expireAt) {
         return new Date(expireAt) <= new Date();

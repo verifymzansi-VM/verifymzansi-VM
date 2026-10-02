@@ -7,6 +7,8 @@ const ALLOWLIST = new Set([
   path.join("components", "showrooms", "showroom-card-carousel.tsx"),
   path.join("components", "showrooms", "showroom-section-shell.tsx"),
   path.join("components", "business", "layouts", "unified-layout.tsx"),
+  // Only the blurred backdrop fill crops; the photo itself is shown whole (object-contain).
+  path.join("components", "immersive", "immersive-stage.tsx"),
   // Decorative, platform-owned artwork (not user uploads) may crop freely.
   path.join("app", "page.tsx"),
   path.join("app", "advertise", "page.tsx"),

@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { Webhook } from "svix";
 
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
@@ -30,6 +31,7 @@ describe("GET /api/mock-ozow", () => {
     vi.unstubAllEnvs();
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("ENABLE_MOCK_OZOW", "true");
+    vi.stubEnv("OZOW_SITE_CODE", "TEST-SITE");
   });
 
   afterEach(() => {
@@ -120,6 +122,36 @@ describe("GET /api/mock-ozow", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe("http://localhost/billing/success");
+  });
+
+  it("signs the stored merchant identity with distinct request and transaction IDs", async () => {
+    const secret = `whsec_${Buffer.from("mock-contract-test-secret").toString("base64")}`;
+    vi.stubEnv("OZOW_WEBHOOK_SECRET", secret);
+    mockPaymentLookup({
+      id: MOCK_PAYMENT_ID,
+      provider: "ozow",
+      provider_reference: "stored-reference",
+      provider_payment_id: "stored-request",
+      provider_data: { checkout: { mockFlow: true } },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await GET(
+      new Request(`http://localhost/api/mock-ozow?paymentId=${MOCK_PAYMENT_ID}&amount=99`)
+    );
+    expect(res.status).toBe(307);
+    const init = fetchMock.mock.calls[0][1];
+    expect(new Webhook(secret).verify(init.body, init.headers)).toEqual({
+      eventType: "transaction.complete",
+      data: {
+        id: `mock-transaction-${MOCK_PAYMENT_ID}`,
+        paymentRequestId: "stored-request",
+        merchantReference: "stored-reference",
+        siteCode: "TEST-SITE",
+        amount: { currency: "ZAR", value: 99 },
+        status: "successful",
+      },
+    });
   });
 
   it("surfaces a failure instead of redirecting when the webhook rejects the confirmation", async () => {

@@ -725,7 +725,8 @@ export function createPlaywrightStubSupabaseClient(
           error: { message: "Known KYC callbacks require the database integration suite" },
         };
       }
-      if (fn === "fulfill_ozow_payment") return fulfillPlaywrightPayment(params);
+      if (fn === "fulfill_ozow_payment" || fn === "confirm_ozow_payment")
+        return fulfillPlaywrightPayment(params, fn === "confirm_ozow_payment");
       if (fn === "increment_otp_attempt") {
         // Mirrors public.increment_otp_attempt: count every attempt on an
         // unverified challenge and lock it once max_attempts is reached.

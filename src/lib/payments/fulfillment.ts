@@ -49,7 +49,8 @@ function isRetiredAfterCheckout(
 export async function fulfillPayment(
   supabase: AdminClient,
   payment: PaymentRecordShape,
-  webhookPayload: Record<string, unknown> = {}
+  webhookPayload: Record<string, unknown> = {},
+  transaction?: { id: string; merchantReference: string }
 ): Promise<FulfillmentResult> {
   if (!payment.user_id) throw new Error(`Payment ${payment.id} has no user_id — cannot fulfil`);
   const meta = getPaymentMetadata(payment);
@@ -88,15 +89,24 @@ export async function fulfillPayment(
     }
   }
 
-  const { data, error } = await supabase.rpc("fulfill_ozow_payment", {
-    p_payment_id: payment.id,
-    p_provider_payment_id: payment.provider_payment_id,
-    p_expected_amount: payment.amount_cents,
-    p_expected_metadata: meta,
-    p_plan_id: planId,
-    p_addon_days: addonDays,
-    p_webhook: webhookPayload,
-  });
+  const { data, error } = await supabase.rpc(
+    transaction ? "confirm_ozow_payment" : "fulfill_ozow_payment",
+    {
+      p_payment_id: payment.id,
+      p_provider_payment_id: payment.provider_payment_id,
+      p_expected_amount: payment.amount_cents,
+      p_expected_metadata: meta,
+      p_plan_id: planId,
+      p_addon_days: addonDays,
+      p_webhook: webhookPayload,
+      ...(transaction
+        ? {
+            p_provider_transaction_id: transaction.id,
+            p_merchant_reference: transaction.merchantReference,
+          }
+        : {}),
+    }
+  );
   if (error) throw new Error(`Payment fulfillment failed: ${error.message}`);
   const result = data as FulfillmentResult | null;
   if (!result || !["completed", "duplicate", "recovered", "ignored"].includes(result.outcome)) {

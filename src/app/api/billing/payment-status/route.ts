@@ -5,6 +5,10 @@ import { parseAndValidateSearchParams } from "@/lib/utils/api";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { optionalUuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { reconcileOzowPayment } from "@/lib/payments/reconciliation";
+import { createLogger } from "@/lib/utils/logger";
+import type { PaymentRecordShape } from "@/lib/payments/types";
 
 const paymentStatusQuerySchema = z.object({
   payment: optionalUuidSchema,
@@ -60,9 +64,11 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { data: payment, error: paymentError } = await supabase
+  const { data: initialPayment, error: paymentError } = await supabase
     .from("payments")
-    .select("status, created_at")
+    .select(
+      "id,user_id,area,amount_cents,status,provider,provider_payment_id,provider_reference,provider_data,created_at"
+    )
     .eq("id", paymentId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -75,20 +81,41 @@ export async function GET(request: NextRequest) {
   }
 
   // Missing payment row — terminal immediately, no point polling
-  if (!payment) {
+  if (!initialPayment) {
     return NextResponse.json(
       { status: "missing", terminal: true, expired: false },
       { headers: { "Cache-Control": "no-store" } }
     );
   }
 
+  let payment = initialPayment;
+  if (
+    ["pending", "failed", "expired"].includes(payment.status) &&
+    payment.provider === "ozow" &&
+    payment.provider_payment_id
+  ) {
+    try {
+      await reconcileOzowPayment(payment as PaymentRecordShape, createAdminClient());
+      const { data: refreshed, error } = await supabase
+        .from("payments")
+        .select("status, created_at")
+        .eq("id", paymentId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) throw new Error("Unable to reload payment status");
+      if (refreshed) payment = { ...payment, ...refreshed };
+    } catch (error) {
+      createLogger("PaymentStatus").warn("Ozow status reconciliation unavailable", {
+        paymentId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      // Preserve the stored status during a provider outage; never infer unpaid.
+    }
+  }
   const status = toPaymentStatusView(payment.status);
   const isTerminal = isTerminalPaymentStatusView(status);
 
-  // Treat payments older than 30 minutes as expired to prevent infinite polling
-  const PAYMENT_EXPIRY_MS = 30 * 60 * 1000;
-  const createdAt = payment.created_at ? new Date(payment.created_at).getTime() : 0;
-  const isExpired = !isTerminal && createdAt > 0 && Date.now() - createdAt > PAYMENT_EXPIRY_MS;
+  const isExpired = status === "expired";
 
   return NextResponse.json(
     {

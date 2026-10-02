@@ -282,6 +282,17 @@ export async function GET(request: NextRequest) {
       });
 
       const { data, count, error } = result;
+      // A page past the end is an empty page, not a server error.
+      if (error?.code === "PGRST103") {
+        return NextResponse.json({
+          listings: [],
+          sellers: [],
+          engagement_available: false,
+          total: typeof count === "number" ? count : 0,
+          page: filters.page,
+          limit,
+        });
+      }
       if (error) {
         if (error.code === "PGRST205") {
           log.warn("Listings schema cache unavailable", {

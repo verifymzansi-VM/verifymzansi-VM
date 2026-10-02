@@ -32,6 +32,11 @@ import {
 } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visibility";
+import { selectBusinessWithFallback } from "@/lib/business/business-detail-select";
+import { isTourismBusinessRecord } from "@/lib/presentation/business-facts";
+import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
+import { isImmersiveDetailEnabled } from "@/lib/feed/flag";
+import { presentBusinessSlide } from "@/lib/feed/presenters";
 
 export interface BusinessDetailPageProps {
   params: Promise<{ id: string }>;
@@ -55,76 +60,8 @@ type BusinessDetailOwnerRecord = BusinessDetailRecord & {
   expires_at?: string | null;
 };
 
-const BUSINESS_DETAIL_SELECT = `
-  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
-  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
-  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area, layout_template, view_count,
-  expires_at, created_at, updated_at
-`;
-
-const BUSINESS_DETAIL_SELECT_LEGACY = `
-  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
-  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
-  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area, view_count,
-  expires_at, created_at, updated_at
-`;
-
-const BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY = `
-  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
-  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
-  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area, layout_template,
-  expires_at, created_at, updated_at
-`;
-
-const BUSINESS_DETAIL_SELECT_MIN_LEGACY = `
-  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
-  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
-  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area,
-  expires_at, created_at, updated_at
-`;
-
-const BUSINESS_DETAIL_SELECT_MIN_SCHEMA_LEGACY = `
-  id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
-  logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
-  services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
-  delivery_options, boost_until, featured_until, published_at, status, area,
-  created_at, updated_at
-`;
-
 const BUSINESS_PROMOTION_SELECT =
   "id, title, promotion_type, category, category_key, photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, price_cents, price_negotiable, location_province, location_city, boost_until, featured_until, view_count, start_date, end_date, created_at";
-
-function isTourismBusinessRecord(business: { area?: string | null; category?: string | null }) {
-  return business.area === "PROMOTIONS_EVENTS" || business.category === "tourism_hospitality";
-}
-
-function isMissingBusinessOptionalColumnError(
-  error: { code?: string | null; message?: string | null } | null
-) {
-  if (!error) {
-    return false;
-  }
-
-  if (error.code === "42703") {
-    const message = (error.message ?? "").toLowerCase();
-    return (
-      message.includes("layout_template") ||
-      message.includes("view_count") ||
-      message.includes("expires_at")
-    );
-  }
-
-  return false;
-}
 
 // Deduped per request: generateMetadata and the page both need the same record.
 const loadBusinessDetail = cache(async function loadBusinessDetail(
@@ -132,31 +69,14 @@ const loadBusinessDetail = cache(async function loadBusinessDetail(
 ): Promise<LoadedBusinessDetail | null> {
   const supabase = await createClient();
   const ownerColumn = await getOwnerColumn(supabase, "businesses");
-  const selectCandidates = [
-    BUSINESS_DETAIL_SELECT,
-    BUSINESS_DETAIL_SELECT_LEGACY,
-    BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY,
-    BUSINESS_DETAIL_SELECT_MIN_LEGACY,
-    BUSINESS_DETAIL_SELECT_MIN_SCHEMA_LEGACY,
-  ];
-
-  let rawBusiness: Record<string, unknown> | null = null;
-  let error: { code?: string | null; message?: string | null } | null = null;
-
-  for (const selectClause of selectCandidates) {
-    const result = await supabase
-      .from("businesses")
-      .select(withOwnerColumn(selectClause, ownerColumn))
-      .eq("id", id)
-      .maybeSingle();
-
-    rawBusiness = (result.data as Record<string, unknown> | null) ?? null;
-    error = (result.error as { code?: string | null; message?: string | null } | null) ?? null;
-
-    if (!error || !isMissingBusinessOptionalColumnError(error)) {
-      break;
-    }
-  }
+  const { data: rawBusiness, error } = await selectBusinessWithFallback<Record<string, unknown>>(
+    (selectClause) =>
+      supabase
+        .from("businesses")
+        .select(withOwnerColumn(selectClause, ownerColumn))
+        .eq("id", id)
+        .maybeSingle()
+  );
 
   if (error || !rawBusiness) {
     return null;
@@ -275,6 +195,9 @@ export async function generateBusinessDetailMetadata(
   return {
     title: `${detail.business.business_name} | ${sectionTitle}`,
     description: detail.business.description?.slice(0, 160),
+    alternates: {
+      canonical: `${resolvedSection === "tourism" ? "/tourism-events" : "/mzansi-business"}/${detail.business.id}`,
+    },
   };
 }
 
@@ -318,16 +241,22 @@ export async function BusinessDetailPageContent({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const viewerKey = buildViewerKey(
-    readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null,
-    user?.id
-  );
+  const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
+  const viewerKey = buildViewerKey(viewerId, user?.id);
   const engagementAdmin = tryCreateAdminClient();
   const promotionIds = promotions.map((promotion) => promotion.id);
-  const [businessViewSummary, promotionViewSummary, promotionLikeSummary] = await Promise.all([
+  const [
+    businessViewSummary,
+    promotionViewSummary,
+    promotionLikeSummary,
+    businessLikeSummary,
+    immersiveEnabled,
+  ] = await Promise.all([
     getOptionalContentViewCountMap(engagementAdmin, "business", [business.id]),
     getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
     getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
+    getOptionalContentLikeSummaryMap(engagementAdmin, "business", [business.id], viewerKey),
+    isOwnerPreview ? false : isImmersiveDetailEnabled({ user, viewerId }),
   ]);
   const trustLevel = ownerProfile
     ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
@@ -347,7 +276,16 @@ export async function BusinessDetailPageContent({
   const businessViewCount = businessViewSummary.ok
     ? (businessViewSummary.data.get(business.id) ?? 0)
     : (business.view_count ?? 0);
-  return (
+  const ownLikes = businessLikeSummary.ok ? businessLikeSummary.data.get(business.id) : undefined;
+  const immersiveSlide = immersiveEnabled
+    ? presentBusinessSlide(business, ownerProfile, promotions, {
+        views: businessViewCount,
+        likes: ownLikes?.likeCount ?? 0,
+        viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+      })
+    : null;
+
+  const page = (
     <div>
       <div className="container-page space-y-5 py-5 lg:space-y-6 lg:py-8">
         <Breadcrumbs items={breadcrumbs} />
@@ -380,5 +318,11 @@ export async function BusinessDetailPageContent({
         <BusinessAffiliationsSection affiliations={affiliations} />
       </div>
     </div>
+  );
+
+  return immersiveSlide ? (
+    <ImmersiveDetailGate initialSlide={immersiveSlide}>{page}</ImmersiveDetailGate>
+  ) : (
+    page
   );
 }

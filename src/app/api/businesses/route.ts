@@ -819,6 +819,11 @@ export async function GET(request: NextRequest) {
     const count = result.count;
     const error = result.error;
 
+    // A page past the end is an empty page, not a server error.
+    if ((error as { code?: string } | null)?.code === "PGRST103") {
+      return NextResponse.json({ businesses: [], total: typeof count === "number" ? count : 0 });
+    }
+
     if (error) {
       log.error("Failed to fetch businesses", {
         error: error.message,

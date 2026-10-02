@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { resetOzowTokenCacheForTesting } from "@/lib/payments/ozow";
 import { NextRequest } from "next/server";
 import { Webhook } from "svix";
 
@@ -39,6 +40,10 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/config/env", () => ({
   env: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
+      OZOW_SITE_CODE: "site-code",
+      OZOW_ENV: "staging",
+      OZOW_CLIENT_ID: "client-id",
+      OZOW_CLIENT_SECRET: "client-secret",
       OZOW_WEBHOOK_SECRET: "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw",
     };
     return envMap[key] ?? "";
@@ -73,6 +78,9 @@ function createSvixHeaders(body: Record<string, unknown>, signature?: string) {
 }
 
 function createSignedRequest(body: Record<string, unknown>, signature?: string) {
+  if (body.data && typeof body.data === "object" && !("TransactionId" in body.data)) {
+    body = { ...body, data: { siteCode: "site-code", ...body.data } };
+  }
   return new NextRequest("http://localhost/api/webhooks/ozow", {
     method: "POST",
     body: JSON.stringify(body),
@@ -81,7 +89,9 @@ function createSignedRequest(body: Record<string, unknown>, signature?: string) 
 }
 
 describe("POST /api/webhooks/ozow", () => {
+  afterEach(() => vi.unstubAllGlobals());
   beforeEach(() => {
+    resetOzowTokenCacheForTesting();
     vi.clearAllMocks();
     mockFulfillPayment.mockReset().mockResolvedValue({ outcome: "completed" });
     mockCheckRateLimit.mockReset().mockResolvedValue({ limited: false });
@@ -194,6 +204,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount: { value: 25, currency: "ZAR" },
       },
@@ -209,10 +220,10 @@ describe("POST /api/webhooks/ozow", () => {
                 area: "PROMOTIONS_EVENTS",
                 status: "complete",
                 provider: "ozow",
-                provider_payment_id: "ozow-tx-1",
+                provider_payment_id: "ozow-request-1",
                 provider_reference: "payment-1",
                 created_at: "2026-03-26T10:00:00.000Z",
-                provider_data: {},
+                provider_data: { transaction_id: "ozow-tx-1" },
                 amount_cents: 2500,
                 user_id: "user-1",
               },
@@ -236,6 +247,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount: { value: 25, currency: "USD" },
       },
@@ -251,7 +263,7 @@ describe("POST /api/webhooks/ozow", () => {
                 area: "PROMOTIONS_EVENTS",
                 status: "pending",
                 provider: "ozow",
-                provider_payment_id: null,
+                provider_payment_id: "ozow-request-1",
                 provider_reference: "payment-1",
                 created_at: "2026-03-26T10:00:00.000Z",
                 provider_data: {},
@@ -280,6 +292,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount,
       },
@@ -295,7 +308,7 @@ describe("POST /api/webhooks/ozow", () => {
                 area: "PROMOTIONS_EVENTS",
                 status: "pending",
                 provider: "ozow",
-                provider_payment_id: null,
+                provider_payment_id: "ozow-request-1",
                 provider_reference: "payment-1",
                 created_at: "2026-03-26T10:00:00.000Z",
                 provider_data: {},
@@ -321,6 +334,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount: { value: amount, currency: "ZAR" },
       },
@@ -336,7 +350,7 @@ describe("POST /api/webhooks/ozow", () => {
                 area: "PROMOTIONS_EVENTS",
                 status: "pending",
                 provider: "ozow",
-                provider_payment_id: null,
+                provider_payment_id: "ozow-request-1",
                 provider_reference: "payment-1",
                 created_at: "2026-03-26T10:00:00.000Z",
                 provider_data: {},
@@ -362,6 +376,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "error",
         amount: { value: 25, currency: "ZAR" },
       },
@@ -384,7 +399,7 @@ describe("POST /api/webhooks/ozow", () => {
                     area: "PROMOTIONS_EVENTS",
                     status: "pending",
                     provider: "ozow",
-                    provider_payment_id: null,
+                    provider_payment_id: "ozow-request-1",
                     provider_reference: "payment-1",
                     created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
@@ -442,7 +457,7 @@ describe("POST /api/webhooks/ozow", () => {
                     area: "PROMOTIONS_EVENTS",
                     status: "complete",
                     provider: "ozow",
-                    provider_payment_id: null,
+                    provider_payment_id: "ozow-request-1",
                     provider_reference: "payment-1",
                     created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
@@ -475,6 +490,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "error",
         amount: { value: 25, currency: "ZAR" },
       },
@@ -494,7 +510,7 @@ describe("POST /api/webhooks/ozow", () => {
                     area: "PROMOTIONS_EVENTS",
                     status: "pending",
                     provider: "ozow",
-                    provider_payment_id: null,
+                    provider_payment_id: "ozow-request-1",
                     provider_reference: "payment-1",
                     created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
@@ -527,6 +543,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount: { value: 25, currency: "ZAR" },
       },
@@ -546,7 +563,7 @@ describe("POST /api/webhooks/ozow", () => {
                     area: "PROMOTIONS_EVENTS",
                     status: "pending",
                     provider: "ozow",
-                    provider_payment_id: null,
+                    provider_payment_id: "ozow-request-1",
                     provider_reference: "payment-1",
                     created_at: "2026-03-26T10:00:00.000Z",
                     provider_data: {},
@@ -579,6 +596,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount: { value: 25, currency: "ZAR" },
       },
@@ -617,7 +635,7 @@ describe("POST /api/webhooks/ozow", () => {
       area: "PROMOTIONS_EVENTS",
       status: "pending",
       provider: "ozow",
-      provider_payment_id: null,
+      provider_payment_id: "ozow-request-1",
       provider_reference: "payment-1",
       created_at: "2026-03-26T10:00:00.000Z",
       amount_cents: 2500,
@@ -693,6 +711,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status,
         amount: { value: 25, currency: "ZAR" },
       },
@@ -731,7 +750,7 @@ describe("POST /api/webhooks/ozow", () => {
       area: "PROMOTIONS_EVENTS",
       provider: "ozow",
       status,
-      provider_payment_id: null,
+      provider_payment_id: "ozow-request-1",
       provider_reference: "payment-1",
       amount_cents: 2500,
       created_at: "2026-03-26T10:00:00.000Z",
@@ -753,6 +772,7 @@ describe("POST /api/webhooks/ozow", () => {
       data: {
         merchantReference: "payment-1",
         id: "ozow-tx-1",
+        paymentRequestId: "ozow-request-1",
         status: "successful",
         amount: { value: 25, currency: "ZAR" },
       },
@@ -760,14 +780,125 @@ describe("POST /api/webhooks/ozow", () => {
     return { payment, client, body, update };
   }
 
+  function fullBody(overrides: Record<string, string> = {}) {
+    return {
+      type: "transaction.complete",
+      data: {
+        SiteCode: "site-code",
+        TransactionId: "ozow-tx-1",
+        TransactionReference: "payment-1",
+        Amount: "25.00",
+        Status: "Successful",
+        Optional1: "",
+        Optional2: "",
+        Optional3: "",
+        Optional4: "",
+        Optional5: "",
+        CurrencyCode: "ZAR",
+        IsTest: "True",
+        StatusMessage: "",
+        Hash: "covered-by-svix",
+        ...overrides,
+      },
+    };
+  }
+
+  it("fulfills a signed official full payload with distinct payment-request and transaction IDs", async () => {
+    const fixture = atomicFixture();
+    const body = fullBody();
+    const response = await POST(createSignedRequest(body));
+    expect(response.status).toBe(200);
+    expect(mockFulfillPayment).toHaveBeenCalledWith(fixture.client, fixture.payment, body, {
+      id: "ozow-tx-1",
+      merchantReference: "payment-1",
+    });
+    expect(fixture.payment.provider_payment_id).toBe("ozow-request-1");
+  });
+
+  it.each([
+    [{ SiteCode: "other-site" }, "Site code mismatch"],
+    [{ IsTest: "False" }, "Test mode mismatch"],
+    [{ IsTest: "invalid" }, "Test mode mismatch"],
+    [{ Amount: "24.999" }, "Amount mismatch"],
+    [{ CurrencyCode: "USD" }, "Currency mismatch"],
+    [{ TransactionReference: "other-reference" }, "Merchant reference mismatch"],
+  ])(
+    "rejects an authenticated full payload with incorrect identity or charge %j",
+    async (overrides, error) => {
+      atomicFixture();
+      const response = await POST(createSignedRequest(fullBody(overrides)));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error });
+      expect(mockFulfillPayment).not.toHaveBeenCalled();
+    }
+  );
+
+  it("resolves a signed thin notification through the transaction API before fulfillment", async () => {
+    const fixture = atomicFixture();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: "ozow-tx-1",
+          merchantReference: "payment-1",
+          siteCode: "site-code",
+          amount: { value: 25, currency: "ZAR" },
+          status: "Successful",
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await POST(
+      createSignedRequest({
+        type: "transaction.complete",
+        data: { id: "ozow-tx-1", status: "Successful", reason: null },
+      })
+    );
+    expect(response.status).toBe(200);
+    expect(mockFulfillPayment).toHaveBeenCalledWith(
+      fixture.client,
+      fixture.payment,
+      expect.objectContaining({ resolvedTransaction: expect.any(Object) }),
+      { id: "ozow-tx-1", merchantReference: "payment-1" }
+    );
+  });
+
+  it("returns a retryable error when thin transaction resolution fails", async () => {
+    atomicFixture();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network unavailable")));
+    const response = await POST(
+      createSignedRequest({
+        type: "transaction.complete",
+        data: { id: "ozow-tx-1", status: "Successful" },
+      })
+    );
+    expect(response.status).toBe(500);
+    expect(mockFulfillPayment).not.toHaveBeenCalled();
+  });
+
+  it.each(["Pending", "Incomplete"])(
+    "acknowledges the documented %s full notification without activating access",
+    async (Status) => {
+      atomicFixture();
+      const response = await POST(createSignedRequest(fullBody({ Status })));
+      expect(await response.json()).toEqual({ success: true, ignored: true });
+      expect(mockFulfillPayment).not.toHaveBeenCalled();
+    }
+  );
+
   it("passes the original payment status, creation date and metadata to the atomic operation", async () => {
     const fixture = atomicFixture();
     const response = await POST(createSignedRequest(fixture.body));
     expect(response.status).toBe(200);
     expect(mockFulfillPayment).toHaveBeenCalledWith(
       fixture.client,
-      { ...fixture.payment, provider_payment_id: "ozow-tx-1" },
-      expect.any(Object)
+      fixture.payment,
+      expect.any(Object),
+      { id: "ozow-tx-1", merchantReference: "payment-1" }
     );
     expect(fixture.update).not.toHaveBeenCalled();
     expect(mockScheduleBackgroundTask).toHaveBeenCalledWith(

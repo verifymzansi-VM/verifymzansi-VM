@@ -209,17 +209,23 @@ export function applyBaseMarketFilters<T>(
     case "price_asc":
       return builder
         .order("price_cents", { ascending: true })
-        .order("created_at", { ascending: false }) as T;
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }) as T;
     case "price_desc":
       return builder
         .order("price_cents", { ascending: false })
-        .order("created_at", { ascending: false }) as T;
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }) as T;
     case "popular":
       return builder
         .order("view_count", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false }) as T;
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }) as T;
     case "newest":
-      return builder.order("created_at", { ascending: false }) as T;
+      // The id tie-break keeps equal timestamps in one order across pages.
+      return builder
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }) as T;
     case "recommended":
     default:
       // Everyone pays the same, so the default order is a fair rotation:

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { feedSourceAttribute } from "@/lib/feed/session";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -104,6 +105,27 @@ interface BusinessesResponse {
 function normalizeValue(value: string | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function sourceFor(
+  api: "/api/businesses" | "/api/promotions",
+  label: string,
+  params: URLSearchParams,
+  total: number | undefined
+) {
+  const sourceParams = new URLSearchParams(params);
+  const page = Number(sourceParams.get("page")) || 1;
+  sourceParams.delete("page");
+  sourceParams.delete("limit");
+  return feedSourceAttribute({
+    kind: "list",
+    label,
+    api,
+    params: sourceParams.toString(),
+    page,
+    pageSize: 24,
+    total,
+  });
 }
 
 export function PromotionsExplorer() {
@@ -284,6 +306,9 @@ export function PromotionsExplorer() {
     if (target !== activeTab) switchTab(target);
   };
 
+  // Lets the desktop post viewer continue through this exact list and page.
+  const [feedSource, setFeedSource] = useState<string | null>(null);
+
   /* ── Data fetching ── */
   useEffect(() => {
     let active = true;
@@ -314,6 +339,9 @@ export function PromotionsExplorer() {
             setTourismResponse({ businesses: [], total: 0, page: 1, limit: 24 });
           } else {
             setTourismResponse(payload);
+            setFeedSource(
+              sourceFor("/api/businesses", "Tourism stays and places", params, payload.total)
+            );
           }
         } else {
           params.set("type", "event");
@@ -337,6 +365,7 @@ export function PromotionsExplorer() {
             });
           } else {
             setEventsResponse(payload);
+            setFeedSource(sourceFor("/api/promotions", "Events", params, payload.total));
           }
         }
 
@@ -611,6 +640,7 @@ export function PromotionsExplorer() {
               <div
                 id="tab-panel-tourism"
                 role="tabpanel"
+                data-feed-source={feedSource ?? undefined}
                 aria-labelledby="tab-tourism"
                 className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >
@@ -637,6 +667,7 @@ export function PromotionsExplorer() {
               <div
                 id="tab-panel-events"
                 role="tabpanel"
+                data-feed-source={feedSource ?? undefined}
                 aria-labelledby="tab-events"
                 className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >

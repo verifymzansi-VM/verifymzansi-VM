@@ -129,6 +129,7 @@ await migration("20260925090300_partners_analytics_notifications.sql");
 await migration("20260925090400_event_archiving.sql");
 await migration("20260925090500_commercial_fixes.sql");
 await migration("20260925090600_commercial_completion.sql");
+await migration("20261003010000_ozow_transaction_confirmation.sql");
 // Staff role authority: from here on, staff_roles (not auth metadata) grants staff powers.
 await db.exec(
   fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8")
@@ -178,12 +179,18 @@ async function pay(owner, plan) {
     `INSERT INTO payments(id,user_id,area,amount_cents,status,provider,provider_data) VALUES($1,$2,$3,$4,'pending','ozow',$5)`,
     [id, owner, plan.area ?? "MZANSI_BUSINESS", plan.price_cents, meta]
   );
-  const r = await scalar(`SELECT fulfill_ozow_payment($1,$2,$3,$4,$5,NULL,'{}') AS r`, [
+  await db.query(
+    "UPDATE payments SET provider_payment_id=$2, provider_reference=$1::text WHERE id=$1",
+    [id, "ozow-" + id]
+  );
+  const r = await scalar(`SELECT confirm_ozow_payment($1,$2,$3,$4,$5,NULL,'{}',$6,$7) AS r`, [
     id,
     "ozow-" + id,
     plan.price_cents,
     meta,
     plan.id,
+    "transaction-" + id,
+    id,
   ]);
   return { id, result: r.r };
 }

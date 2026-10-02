@@ -53,6 +53,30 @@ describe("PaymentStatusPanel", () => {
     expect(screen.queryByText(/Refreshing payment status/i)).not.toBeInTheDocument();
   });
 
+  it.each(["failed", "expired"] as const)(
+    "checks a previously %s payment for late provider confirmation",
+    async (initialStatus) => {
+      render(<PaymentStatusPanel initialStatus={initialStatus} paymentId="pay-late" />);
+      await waitFor(() => expect(screen.getByText("Payment confirmed")).toBeInTheDocument());
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("pauses long polling without declaring an unconfirmed payment expired", async () => {
+    vi.useFakeTimers();
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "pending", terminal: false }),
+    } as Response);
+    render(<PaymentStatusPanel initialStatus="pending" paymentId="pay-pending" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30 * 60 * 1000 + 4000);
+    });
+    expect(screen.getByText("Payment pending")).toBeInTheDocument();
+    expect(screen.queryByText("Checkout expired")).not.toBeInTheDocument();
+    expect(screen.getByText(/Confirmation is taking longer/)).toBeInTheDocument();
+  });
+
   it("stops polling when the status endpoint returns unauthorized", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,

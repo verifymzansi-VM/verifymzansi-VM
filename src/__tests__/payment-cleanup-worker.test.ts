@@ -25,6 +25,42 @@ describe("payment cleanup worker", () => {
     vi.restoreAllMocks();
   });
 
+  it("runs authenticated provider reconciliation and preserves provider-backed rows when it fails", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/api/internal/payments/reconcile")) {
+        expect(init).toMatchObject({
+          method: "POST",
+          redirect: "error",
+          headers: { Authorization: "Bearer worker-key" },
+        });
+        return { ok: false, status: 503 } as Response;
+      }
+      if (url.includes("status=eq.pending"))
+        return {
+          ok: true,
+          json: async () => [
+            {
+              id: "provider-backed",
+              provider_payment_id: "request-1",
+              provider_data: { expire_at: "2020-01-01T00:00:00Z" },
+            },
+          ],
+        } as Response;
+      return { ok: true, json: async () => [] } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await worker.scheduled!(
+      { cron: "*/10 * * * *", scheduledTime: Date.now() },
+      { ...env, APP_URL: "https://verifymzansi.com" },
+      ctx
+    );
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://verifymzansi.com/api/internal/payments/reconcile"
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
+  });
+
   it("expires stale pending payments and reconciles stale processing payments", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);

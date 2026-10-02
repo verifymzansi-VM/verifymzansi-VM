@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatCompactCount,
   formatZAR,
   formatZARShort,
   formatDate,
@@ -143,5 +144,17 @@ describe("saCalendarDaysBetween", () => {
 
   it("returns NaN for invalid dates", () => {
     expect(saCalendarDaysBetween("not-a-date", "2026-03-10T10:00:00Z")).toBeNaN();
+  });
+});
+
+describe("formatCompactCount", () => {
+  it("keeps small counts exact and shortens large ones", () => {
+    expect(formatCompactCount(0)).toBe("0");
+    expect(formatCompactCount(999)).toBe("999");
+    expect(formatCompactCount(1434)).toBe("1.4K");
+    expect(formatCompactCount(2000)).toBe("2K");
+    expect(formatCompactCount(12_500)).toBe("13K");
+    expect(formatCompactCount(1_250_000)).toBe("1.3M");
+    expect(formatCompactCount(-5)).toBe("0");
   });
 });
