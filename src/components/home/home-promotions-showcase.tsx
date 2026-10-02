@@ -153,7 +153,7 @@ export async function HomePromotionsShowcase() {
         ariaLabel="Tourism and events"
         showEdgeFades={false}
         flushEdges
-        itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"
+        itemClassName="w-[64%] sm:w-auto"
       >
         {items.map((item) => (
           <div

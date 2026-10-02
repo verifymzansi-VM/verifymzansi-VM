@@ -75,7 +75,7 @@ export async function HomeBusinessShowcase() {
         ariaLabel="Mzansi Business"
         showEdgeFades={false}
         flushEdges
-        itemClassName="w-[calc((100%-12px)/2)] sm:w-auto"
+        itemClassName="w-[64%] sm:w-auto"
       >
         {items.map((b) => (
           <div key={b.id} className="h-full w-full sm:w-[280px] lg:w-[240px]">

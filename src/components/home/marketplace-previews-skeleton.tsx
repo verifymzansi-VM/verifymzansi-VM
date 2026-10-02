@@ -21,7 +21,7 @@ export function MarketplacePreviewsSkeleton() {
           {Array.from({ length: 5 }).map((_, cardIdx) => (
             <div
               key={cardIdx}
-              className="skeleton-shimmer aspect-[9/16] w-[calc((100%-12px)/2)] shrink-0 rounded-[20px] sm:w-[238px]"
+              className="skeleton-shimmer aspect-[9/16] w-[64%] shrink-0 rounded-[20px] sm:w-[238px]"
             />
           ))}
         </div>

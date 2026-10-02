@@ -602,21 +602,14 @@
       transform: translateY(-3px);
     }
 
-    /* Rails: the card under the pointer lifts on a neutral shadow while its neighbours
-       step back, like a shop window lighting one item. No coloured halo. */
+    /* Rails: the card under the pointer lifts on a neutral shadow. Neighbours stay fully
+       clear — no fade or desaturation while one card plays. No coloured halo. */
     .home-rail [data-rail-item-index] {
-      transition:
-        transform 350ms cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 350ms ease,
-        filter 350ms ease;
+      transition: transform 350ms cubic-bezier(0.22, 1, 0.36, 1);
     }
     .home-rail [data-rail-item-index] img,
     .home-rail [data-rail-item-index] video {
       transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
-    }
-    .home-rail .scrollbar-hide:hover > [data-rail-item-index]:not(:hover) {
-      opacity: 0.72;
-      filter: saturate(0.75);
     }
     .home-rail [data-rail-item-index]:hover {
       transform: translateY(-6px);
