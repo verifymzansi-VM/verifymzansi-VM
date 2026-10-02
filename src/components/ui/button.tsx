@@ -9,7 +9,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-sm shadow-primary/20 motion-safe:hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:bg-primary/85 disabled:bg-muted disabled:text-muted-foreground",
+          "btn-shine bg-primary text-primary-foreground shadow-sm shadow-primary/20 motion-safe:hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25 active:bg-primary/85 disabled:bg-muted disabled:text-muted-foreground",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-md hover:shadow-destructive/20 active:bg-destructive/80",
         outline:
@@ -18,12 +18,12 @@ const buttonVariants = cva(
         ghost: "text-foreground/80 hover:bg-muted hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         /** High-emphasis neutral action (dark ink on light, light on dark). */
-        ink: "bg-foreground text-background shadow-sm motion-safe:hover:-translate-y-0.5 hover:bg-foreground/90 active:bg-foreground/85",
+        ink: "btn-shine bg-foreground text-background shadow-sm motion-safe:hover:-translate-y-0.5 hover:bg-foreground/90 active:bg-foreground/85",
         // Trust-scale-aware variants
         "trust-verified":
-          "bg-brand-green-600 text-white shadow-sm shadow-brand-green/25 motion-safe:hover:-translate-y-0.5 hover:bg-brand-green-700 hover:shadow-md hover:shadow-brand-green/30 active:bg-brand-green-800 disabled:bg-brand-green-200 disabled:text-brand-green-900 disabled:opacity-100 dark:bg-brand-green-500 dark:hover:bg-brand-green-400 dark:text-brand-green-950",
+          "btn-shine bg-brand-green-600 text-white shadow-sm shadow-brand-green/25 motion-safe:hover:-translate-y-0.5 hover:bg-brand-green-700 hover:shadow-md hover:shadow-brand-green/30 active:bg-brand-green-800 disabled:bg-brand-green-200 disabled:text-brand-green-900 disabled:opacity-100 dark:bg-brand-green-500 dark:hover:bg-brand-green-400 dark:text-brand-green-950",
         "trust-gold":
-          "bg-brand-gold text-brand-gold-950 shadow-sm shadow-brand-gold/30 motion-safe:hover:-translate-y-0.5 hover:bg-brand-gold-300 hover:shadow-md active:bg-brand-gold-500",
+          "btn-shine bg-brand-gold text-brand-gold-950 shadow-sm shadow-brand-gold/30 motion-safe:hover:-translate-y-0.5 hover:bg-brand-gold-300 hover:shadow-md active:bg-brand-gold-500",
       },
       size: {
         default: "h-10 px-4 py-2",

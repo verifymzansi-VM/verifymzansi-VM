@@ -389,6 +389,17 @@ describe("admin-queries", () => {
       expect(mockFrom).toHaveBeenCalledWith("listings");
     });
 
+    it("says so when new posts cannot be read, instead of showing an empty queue", async () => {
+      mockFrom.mockImplementation((table: string) =>
+        createChainableMock(
+          table === "listings" ? { data: null, error: { message: "timeout" } } : { data: [] }
+        )
+      );
+      await expect(getPendingContent("MZANSI_MARKET")).rejects.toThrow(
+        "Failed to load pending content"
+      );
+    });
+
     it("fetches pending events and tourism businesses for PROMOTIONS_EVENTS", async () => {
       mockFrom.mockReturnValue(createChainableMock({ data: [] }));
       await getPendingContent("PROMOTIONS_EVENTS");
@@ -398,6 +409,34 @@ describe("admin-queries", () => {
   });
 
   describe("getActionsToday", () => {
+    it("counts beyond the first page instead of silently capping a busy day", async () => {
+      mockFrom
+        .mockReturnValueOnce(
+          createChainableMock({
+            data: Array.from({ length: 500 }, () => ({ action: "warning" })),
+            error: null,
+          })
+        )
+        .mockReturnValueOnce(
+          createChainableMock({ data: [{ action: "warning" }, { action: "ban" }], error: null })
+        );
+      expect(await getActionsToday()).toEqual({ warning: 501, ban: 1 });
+      expect(mockFrom).toHaveBeenCalledTimes(2);
+    });
+
+    it("rejects a later page failure instead of showing a partial count", async () => {
+      mockFrom
+        .mockReturnValueOnce(
+          createChainableMock({
+            data: Array.from({ length: 500 }, () => ({ action: "warning" })),
+            error: null,
+          })
+        )
+        .mockReturnValueOnce(createChainableMock({ data: null, error: { message: "timeout" } }));
+      await expect(getActionsToday()).rejects.toThrow(
+        "Today's actions could not be counted: timeout"
+      );
+    });
     it("counts actions grouped by type", async () => {
       mockFrom.mockReturnValue(
         createChainableMock({
@@ -408,6 +447,27 @@ describe("admin-queries", () => {
       const counts = await getActionsToday();
       expect(counts.warning).toBe(2);
       expect(counts.ban).toBe(1);
+    });
+
+    it("starts the day at midnight South African time", async () => {
+      const gte = vi.fn();
+      const builder: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "lte", "order", "range"]) builder[m] = () => builder;
+      builder.gte = (...args: unknown[]) => {
+        gte(...args);
+        return builder;
+      };
+      builder.then = (resolve: (v: unknown) => void) => resolve({ data: [], error: null });
+      mockFrom.mockReturnValue(builder);
+      vi.useFakeTimers();
+      // 23:30 UTC on 1 October is 01:30 on 2 October in South Africa.
+      vi.setSystemTime(new Date("2026-10-01T23:30:00Z"));
+      try {
+        await getActionsToday();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(gte).toHaveBeenCalledWith("created_at", "2026-10-01T22:00:00.000Z");
     });
 
     it("returns empty object when no actions", async () => {

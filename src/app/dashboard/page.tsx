@@ -395,7 +395,7 @@ export default async function DashboardPage() {
         />
         <div className="relative min-w-0">
           <h1 className="font-display text-[1.75rem] font-bold leading-tight tracking-tight text-white sm:text-[2.25rem]">
-            Hi, <span className="text-brand-gold-300">{firstName}</span>
+            Hi, <span className="gold-shine text-brand-gold-300">{firstName}</span>
           </h1>
           {isVerified ? (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">

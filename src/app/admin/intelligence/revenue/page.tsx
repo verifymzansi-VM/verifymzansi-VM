@@ -10,6 +10,7 @@ import {
 } from "@/components/admin/intelligence-panels";
 import { TrendingUp, DollarSign, CreditCard, ArrowUpRight } from "lucide-react";
 import { createLogger } from "@/lib/utils/logger";
+import { formatZAR } from "@/lib/utils/format";
 
 export const metadata = {
   title: "Revenue & costs — Intelligence",
@@ -28,10 +29,6 @@ interface RevenueSummary {
   by_month: Array<{ month: string; cents: number }>;
   invoice_vat_cents: number;
   invoice_total_cents: number;
-}
-
-function formatRand(centsValue: number) {
-  return `R ${(centsValue / 100).toFixed(2)}`;
 }
 
 function monthLabel(month: string) {
@@ -63,7 +60,8 @@ export default async function IntelligenceRevenuePage() {
   const completed = summary.completed_count;
   const failed = summary.failed_count;
   const totalRevenue = summary.completed_cents;
-  const successRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+  // No payments yet means no rate: never a 0% that reads as every payment failing.
+  const successRate = total > 0 ? Math.round((completed / total) * 100) : null;
   const failedValue = summary.failed_cents;
   const pendingValue = summary.pending_cents;
   const vatLiability = summary.invoice_vat_cents;
@@ -72,7 +70,7 @@ export default async function IntelligenceRevenuePage() {
   const revenueMix: ChartDatum[] = summary.by_area.map(({ area, cents }, index) => ({
     label: area.replaceAll("_", " "),
     value: cents,
-    caption: formatRand(cents),
+    caption: formatZAR(cents),
     tone: (["emerald", "sky", "violet", "amber"] as const)[index % 4],
   }));
   const monthlyRevenue: ChartDatum[] =
@@ -87,25 +85,25 @@ export default async function IntelligenceRevenuePage() {
     {
       label: "Completed revenue",
       value: totalRevenue,
-      caption: formatRand(totalRevenue),
+      caption: formatZAR(totalRevenue),
       tone: "emerald",
     },
     {
       label: "Failed payment value",
       value: failedValue,
-      caption: formatRand(failedValue),
+      caption: formatZAR(failedValue),
       tone: "rose",
     },
     {
       label: "Pending payment value",
       value: pendingValue,
-      caption: formatRand(pendingValue),
+      caption: formatZAR(pendingValue),
       tone: "amber",
     },
     {
       label: "VAT on invoices",
       value: vatLiability,
-      caption: formatRand(vatLiability),
+      caption: formatZAR(vatLiability),
       tone: "sky",
     },
   ];
@@ -125,9 +123,9 @@ export default async function IntelligenceRevenuePage() {
             <DollarSign className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R {(totalRevenue / 100).toFixed(2)}</div>
+            <div className="text-2xl font-bold">{formatZAR(totalRevenue)}</div>
             <p className="text-xs text-muted-foreground">
-              {formatRand(avgOrderValue)} average paid order
+              {formatZAR(avgOrderValue)} average paid order
             </p>
           </CardContent>
         </Card>
@@ -146,7 +144,12 @@ export default async function IntelligenceRevenuePage() {
             <ArrowUpRight className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{successRate}%</div>
+            <div className="text-2xl font-bold">
+              {successRate === null ? "—" : `${successRate}%`}
+            </div>
+            {successRate === null && (
+              <p className="text-xs text-muted-foreground">No payments yet</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -156,7 +159,7 @@ export default async function IntelligenceRevenuePage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{failed}</div>
-            <p className="text-xs text-muted-foreground">{formatRand(failedValue)} not captured</p>
+            <p className="text-xs text-muted-foreground">{formatZAR(failedValue)} not captured</p>
           </CardContent>
         </Card>
       </div>
@@ -191,23 +194,25 @@ export default async function IntelligenceRevenuePage() {
           items={[
             {
               label: "Cash collection quality",
-              value: `${successRate}%`,
+              value: successRate === null ? "—" : `${successRate}%`,
               detail:
-                successRate >= 95
-                  ? "Payment completion is healthy. Focus on growing paid inventory and improving average order value."
-                  : "Payment completion needs attention. Review failed checkout reasons before scaling paid campaigns.",
-              tone: successRate >= 95 ? "emerald" : "amber",
+                successRate === null
+                  ? "No payments yet. This fills in after the first paid order."
+                  : successRate >= 95
+                    ? "Payment completion is healthy. Focus on growing paid inventory and improving average order value."
+                    : "Payment completion needs attention. Review failed checkout reasons before scaling paid campaigns.",
+              tone: successRate === null ? "slate" : successRate >= 95 ? "emerald" : "amber",
             },
             {
               label: "Finance visibility",
-              value: formatRand(invoiceGross),
+              value: formatZAR(invoiceGross),
               detail:
                 "Invoices provide VAT visibility, but gateway fees or infrastructure costs are not modelled in the current schema.",
               tone: "sky",
             },
             {
               label: "Leakage to recover",
-              value: formatRand(failedValue + pendingValue),
+              value: formatZAR(failedValue + pendingValue),
               detail:
                 "Follow up failed and pending payments before treating demand as lost. This is the fastest near-term revenue lever.",
               tone: failedValue + pendingValue > 0 ? "rose" : "emerald",

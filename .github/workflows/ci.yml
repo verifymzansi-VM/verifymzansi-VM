@@ -24,12 +24,13 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run lint
       - run: pnpm run typecheck
+      - run: pnpm run test:tooling
       - run: pnpm run quality:openapi-drift
       - run: pnpm run depcruise
       - run: pnpm run db:check-invariants
       - run: pnpm run secret-scan:strict
       - run: pnpm run licenses:check
-      - run: pnpm run security:audit
+      - run: pnpm run security:audit:all
 
   knip:
     runs-on: ubuntu-latest
@@ -402,6 +403,13 @@ jobs:
         run: pnpm run build
       - name: Lighthouse quality audit
         run: pnpm run quality:lighthouse
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tmp/lighthouse/**
+          if-no-files-found: warn
 
   safety-gate-snapshot:
     runs-on: ubuntu-latest

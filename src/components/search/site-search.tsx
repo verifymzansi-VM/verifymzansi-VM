@@ -323,7 +323,7 @@ export function SiteSearch({
               <>Results for “{query}”</>
             ) : (
               <>
-                Search <span className="text-brand-gold-300">VerifyMzansi</span>
+                Search <span className="gold-shine text-brand-gold-300">VerifyMzansi</span>
               </>
             )}
           </h1>

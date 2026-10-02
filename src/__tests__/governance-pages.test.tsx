@@ -82,7 +82,8 @@ import GovernanceRolesPage from "@/app/admin/governance/roles/page";
 
 function createEqSingle(data: Record<string, unknown> | null) {
   return vi.fn().mockReturnValue({
-    single: vi.fn().mockResolvedValue({ data, error: data ? null : { message: "not found" } }),
+    // A missing row is not an error; the page shows "not found" for it.
+    maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
   });
 }
 
@@ -97,6 +98,22 @@ describe("governance page regressions", () => {
         }),
       },
     });
+  });
+
+  it("shows an error, not 'not found', when the appeal cannot be read", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: "timeout" } }),
+          }),
+        }),
+      })),
+    });
+
+    await expect(AppealDetailPage({ params: Promise.resolve({ id: "appeal-1" }) })).rejects.toThrow(
+      "Appeal could not be loaded: timeout"
+    );
   });
 
   it("renders appeal details from the current appeal schema", async () => {

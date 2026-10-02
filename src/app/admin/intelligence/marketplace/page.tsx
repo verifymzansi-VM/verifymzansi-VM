@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { ShoppingBag, Package, Store, TrendingUp } from "lucide-react";
+import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Marketplace health — Intelligence",
@@ -20,12 +21,15 @@ export default async function IntelligenceMarketplacePage() {
     { count: liveListings },
     { count: totalBusinesses },
     { count: livePromotions },
-  ] = await Promise.all([
-    admin.from("listings").select("*", { count: "exact", head: true }),
-    admin.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
-    admin.from("businesses").select("*", { count: "exact", head: true }),
-    admin.from("promotions").select("*", { count: "exact", head: true }).eq("status", "live"),
-  ]);
+  ] = countsOrThrow(
+    await Promise.all([
+      admin.from("listings").select("*", { count: "exact", head: true }),
+      admin.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+      admin.from("businesses").select("*", { count: "exact", head: true }),
+      admin.from("promotions").select("*", { count: "exact", head: true }).eq("status", "live"),
+    ]),
+    "Marketplace figures"
+  );
 
   const listings = totalListings ?? 0;
   const live = liveListings ?? 0;

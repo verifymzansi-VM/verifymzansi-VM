@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { Clock, Flag, Activity } from "lucide-react";
+import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Operations summary — Intelligence",
@@ -23,29 +24,32 @@ export default async function IntelligenceOperationsPage() {
     { count: pendingBusinessModeration },
     { count: pendingPromotionModeration },
     { count: pendingDecisions },
-  ] = await Promise.all([
-    admin.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
-    admin
-      .from("verification_steps")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
-    admin
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
-    admin
-      .from("businesses")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
-    admin
-      .from("promotions")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_moderation"),
-    admin
-      .from("decision_records")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending_approval"),
-  ]);
+  ] = countsOrThrow(
+    await Promise.all([
+      admin.from("reports").select("*", { count: "exact", head: true }).eq("status", "open"),
+      admin
+        .from("verification_steps")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending"),
+      admin
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      admin
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      admin
+        .from("promotions")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_moderation"),
+      admin
+        .from("decision_records")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending_approval"),
+    ]),
+    "Operations figures"
+  );
 
   const reports = openReports ?? 0;
   const verifications = pendingVerifications ?? 0;

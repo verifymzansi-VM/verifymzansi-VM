@@ -26,6 +26,7 @@ function formatShortTime(isoDate: string | null): string {
   return new Date(isoDate).toLocaleTimeString("en-ZA", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
   });
 }
 

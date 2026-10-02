@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { Clock, CheckCircle, XCircle } from "lucide-react";
+import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Verification metrics — Intelligence",
@@ -21,21 +22,24 @@ export default async function IntelligenceVerificationPage() {
     { count: pendingCount },
     { count: approvedCount },
     { count: rejectedCount },
-  ] = await Promise.all([
-    admin.from("verification_steps").select("*", { count: "exact", head: true }),
-    admin
-      .from("verification_steps")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "pending"),
-    admin
-      .from("verification_steps")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "approved"),
-    admin
-      .from("verification_steps")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "rejected"),
-  ]);
+  ] = countsOrThrow(
+    await Promise.all([
+      admin.from("verification_steps").select("*", { count: "exact", head: true }),
+      admin
+        .from("verification_steps")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending"),
+      admin
+        .from("verification_steps")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved"),
+      admin
+        .from("verification_steps")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "rejected"),
+    ]),
+    "Verification figures"
+  );
 
   const total = totalAttempts ?? 0;
   const pending = pendingCount ?? 0;

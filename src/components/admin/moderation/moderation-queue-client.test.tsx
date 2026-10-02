@@ -102,6 +102,23 @@ describe("ModerationQueueClient", () => {
     );
   });
 
+  it("searches the queue and says when nothing matches", () => {
+    render(<ModerationQueueClient items={items} />);
+    const search = screen.getByRole("searchbox", { name: "Search this queue" });
+
+    fireEvent.change(search, { target: { value: "beauty" } });
+    expect(screen.getByText("Nomsa Beauty Studio")).toBeInTheDocument();
+    expect(screen.queryByText("Used iPhone 15")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "no such post" } });
+    expect(screen.getByText("Nothing in this queue matches that search.")).toBeInTheDocument();
+  });
+
+  it("hides the area filter when the queue holds one area", () => {
+    render(<ModerationQueueClient items={items.filter((i) => i.area === "MZANSI_MARKET")} />);
+    expect(screen.queryByRole("button", { name: /^All \(/ })).not.toBeInTheDocument();
+  });
+
   it("filters moderation items by area", () => {
     render(<ModerationQueueClient items={items} />);
 

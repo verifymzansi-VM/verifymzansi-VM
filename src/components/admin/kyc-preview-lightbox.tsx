@@ -42,6 +42,7 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { getKycZoomWidthClass, KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
+import { formatDate } from "@/lib/utils/format";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -572,9 +573,7 @@ export function KycPreviewLightbox({
           <div className="flex items-center gap-2 rounded-md border border-amber-300/60 dark:border-amber-600/30 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             Scheduled for purge:{" "}
-            <time dateTime={artifact.purge_after}>
-              {new Date(artifact.purge_after).toLocaleDateString("en-ZA")}
-            </time>
+            <time dateTime={artifact.purge_after}>{formatDate(artifact.purge_after)}</time>
           </div>
         )}
 

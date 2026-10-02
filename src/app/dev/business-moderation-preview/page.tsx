@@ -3,7 +3,7 @@ import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import {
   ModerationPreviewPanel,
   type ModerationItem,
-} from "@/app/admin/moderation/moderation-preview-panel";
+} from "@/components/admin/moderation/moderation-preview-panel";
 
 const richBusinessItem: ModerationItem = {
   id: "preview-business-rich",

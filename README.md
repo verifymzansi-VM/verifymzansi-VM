@@ -21,7 +21,7 @@ VerifyMzansi combines:
 
 ## Prerequisites
 
-- Node.js `20.x` through `25.x` supported
+- Node.js `22.19+` (22.x) or `24.x` supported
 - Node.js `22.x` recommended locally and in CI
 - pnpm `>=10`
 - Supabase project
@@ -417,6 +417,29 @@ Dependency-cruiser is also blocking in CI and in the safety-review lane. The
 current baseline enforces a minimal rule set: no circular dependencies and no
 runtime imports from test-only modules.
 
+`pnpm lint` also enforces security rules for dynamic eval and require calls,
+unsafe Buffer construction, legacy pseudo-random byte generation, and hidden
+bidirectional characters. These focused checks complement the existing secret
+scanner and optional CodeQL analysis.
+
+Run `pnpm security:audit:all` to audit production dependencies and development
+tools. CI, the weekly security scan, and all safety-gate modes use this command
+and block on high or critical vulnerabilities. `pnpm security:audit` remains
+available for a production-only audit.
+
+Keep ESLint on 9.x while the React, import, and accessibility plugins declare
+peer support through 9.x. Keep jscpd on 4.x until the duplication-budget reader
+is migrated to the 5.x report format. Upgrade Vitest and its V8 coverage
+provider together so their versions stay compatible.
+
+`pnpm quality:lighthouse` uses Lighthouse directly, starts the built app, and
+audits the four pages configured in `lighthouse.config.json`. Score thresholds
+remain advisory; browser and audit failures fail the command. Reports are saved
+to `tmp/lighthouse` and uploaded as CI artifacts. Set `LIGHTHOUSE_BASE_URL` to
+audit an already running server, and set `CHROME_PATH` to select a browser.
+Lighthouse requires Node 22.19 or newer. Run `pnpm test:tooling` to verify the
+score handling.
+
 Use `-- --dry-run` to preview the command sequence without executing it.
 
 Each run now writes machine-readable evidence artifacts to `tmp/safety-gate`:
@@ -575,7 +598,8 @@ Startup and launch validation usually fail for one of these reasons:
   environment
 - A production-only secret is missing or malformed
 - `RATE_LIMITER_API_KEY` is set without `OTP_RATE_LIMITER_URL`
-- Local or CI Node.js version is outside the supported `20.x` to `25.x` range
+- Local or CI Node.js version is outside the supported `22.19+` (22.x) or `24.x`
+  range
 
 When that happens, run `pnpm validate:launch-env` first. It fails fast with the
 specific variable or contract that needs fixing.

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
+import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Oversight — Governance",
@@ -20,21 +21,24 @@ export default async function GovernanceOversightPage() {
     { count: approvedDecisions },
     { count: rejectedDecisions },
     { count: overriddenDecisions },
-  ] = await Promise.all([
-    admin.from("decision_records").select("*", { count: "exact", head: true }),
-    admin
-      .from("decision_records")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "approved"),
-    admin
-      .from("decision_records")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "rejected"),
-    admin
-      .from("decision_records")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "overridden"),
-  ]);
+  ] = countsOrThrow(
+    await Promise.all([
+      admin.from("decision_records").select("*", { count: "exact", head: true }),
+      admin
+        .from("decision_records")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved"),
+      admin
+        .from("decision_records")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "rejected"),
+      admin
+        .from("decision_records")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "overridden"),
+    ]),
+    "Oversight figures"
+  );
 
   const total = totalDecisions ?? 0;
   const approved = approvedDecisions ?? 0;

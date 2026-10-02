@@ -1,9 +1,12 @@
 import { cn } from "@/lib/utils";
 
-/** Thin flag-colour rule for the edge of dark brand surfaces. */
+/** Thin flag-colour rule for the edge of dark brand surfaces, with a slow light sweep. */
 export function SaFlagStripe({ className }: { className?: string }) {
   return (
-    <div aria-hidden="true" className={cn("flex h-1.5 w-full", className)}>
+    <div
+      aria-hidden="true"
+      className={cn("flag-sheen relative flex h-1.5 w-full overflow-hidden", className)}
+    >
       <span className="flex-[3] bg-brand-green-500" />
       <span className="flex-1 bg-brand-gold-400" />
       <span className="flex-1 bg-white" />

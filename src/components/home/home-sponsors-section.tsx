@@ -39,7 +39,7 @@ export async function HomeSponsorsSection() {
                 organisationId={sponsor.id}
                 surface="sponsor_home"
                 aria-label={`${sponsor.name} — view supported businesses`}
-                className="flex h-full min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card p-4 text-center elev-xs transition-shadow hover:elev-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-full min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-card p-4 text-center elev-xs transition-[box-shadow,transform,border-color] duration-300 hover:border-brand-gold-400/50 hover:elev-md motion-safe:hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <SponsorLogo src={sponsor.logo_url} name={sponsor.name} size={48} />
                 <span className="line-clamp-2 text-sm font-semibold text-foreground">

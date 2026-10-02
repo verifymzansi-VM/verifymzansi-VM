@@ -41,3 +41,4 @@ $$;
 REVOKE ALL ON FUNCTION public.complete_operation_job(uuid, boolean, text, integer, timestamptz)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.complete_operation_job(uuid, boolean, text, integer, timestamptz) TO service_role;
+NOTIFY pgrst, 'reload schema';

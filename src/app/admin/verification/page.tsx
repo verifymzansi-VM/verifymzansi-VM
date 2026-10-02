@@ -4,7 +4,6 @@ import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/servi
 import { QueueClaimBar, QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
-import { VerificationAlertBanner } from "@/components/admin/verification-alert-banner";
 import { KycQueueClient } from "./kyc-queue-client";
 import { countPendingVerifications, getPendingVerificationGroups } from "@/lib/utils/admin-queries";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
@@ -60,8 +59,6 @@ export default async function AdminVerificationPage() {
           {totalPending} pending
         </Badge>
       </PageHeader>
-
-      <VerificationAlertBanner pendingCount={totalPending} />
 
       <QueueClaimBar
         queue="kyc"

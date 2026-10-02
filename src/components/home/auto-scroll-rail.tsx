@@ -497,7 +497,9 @@ export function AutoScrollRail({
           ref={containerRef}
           aria-label={railLabel}
           className={cn(
-            "flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 scrollbar-hide select-none sm:gap-4 lg:gap-5",
+            // The top padding (cancelled by the negative margin) gives hovered cards room to lift
+            // without the scroller clipping them.
+            "-mt-2 flex overflow-x-auto snap-x snap-mandatory gap-3 pb-3 pt-2 scrollbar-hide select-none sm:gap-4 lg:gap-5",
             canHover ? (dragging ? "cursor-grabbing" : "cursor-grab") : undefined,
             flushEdges ? "mx-0 px-0" : "-mx-2 px-2 sm:-mx-1 sm:px-1 lg:-mx-2 lg:px-2",
             className

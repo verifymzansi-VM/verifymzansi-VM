@@ -72,11 +72,16 @@ function Figure({
 }) {
   return (
     <div className="rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-300/10 dark:text-brand-green-300"
+          aria-hidden="true"
+        >
+          <Icon className="h-4 w-4" />
+        </span>
       </div>
-      <p className="text-2xl font-bold tabular-nums">{value}</p>
+      <p className="font-display text-3xl font-bold tabular-nums tracking-tight">{value}</p>
       <p className="text-xs text-muted-foreground">{detail}</p>
     </div>
   );
@@ -97,6 +102,17 @@ export async function TrafficPanel() {
   }
   const pagesPerVisitor =
     visits.uniqueVisitors30d > 0 ? (visits.visits30d / visits.uniqueVisitors30d).toFixed(1) : "—";
+  // Dates are SA calendar days; en-CA formats them as YYYY-MM-DD to match.
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
+    new Date()
+  );
+  const endsToday = visits.daily.at(-1)?.date === todayKey;
+  // The seven full days before today, for a "usual day" comparison.
+  const lastWeek = endsToday ? visits.daily.slice(-8, -1) : visits.daily.slice(-7);
+  const usualVisitors =
+    lastWeek.length > 0
+      ? Math.round(lastWeek.reduce((sum, day) => sum + day.visitors, 0) / lastWeek.length)
+      : null;
 
   return (
     <section className="space-y-3" aria-labelledby="home-traffic">
@@ -110,7 +126,9 @@ export async function TrafficPanel() {
         <Figure
           label="Visitors today"
           value={formatCount(visits.uniqueVisitorsToday)}
-          detail={`${formatCount(visits.visitsToday)} page views`}
+          detail={`${formatCount(visits.visitsToday)} page views so far${
+            usualVisitors !== null ? ` · ${formatCount(usualVisitors)} on a usual day` : ""
+          }`}
           icon={Users}
         />
         <Figure
@@ -135,12 +153,16 @@ export async function TrafficPanel() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ColumnChartPanel
           title="Daily page views, last 14 days"
-          description={`Page views per day, ${dayRange(visits.daily)}.`}
-          data={visits.daily.map((point) => ({
+          description={`Page views per day, ${dayRange(visits.daily)}.${endsToday ? " Today, still counting, is in gold." : ""}`}
+          data={visits.daily.map((point, index) => ({
             label: dayLabel(point.date),
             value: point.visits,
             caption: `${formatCount(point.visitors)} visitors`,
-            tone: "sky" as const,
+            // Today is still filling up, so it is set apart in gold.
+            tone:
+              endsToday && index === visits.daily.length - 1
+                ? ("gold" as const)
+                : ("brand" as const),
           }))}
         />
         <div className="grid gap-4">
@@ -150,7 +172,7 @@ export async function TrafficPanel() {
             data={visits.topPages.map((p) => ({
               label: pageLabel(p.path),
               value: p.visits,
-              tone: "sky" as const,
+              tone: "brand" as const,
             }))}
           />
           <HorizontalBarPanel
@@ -159,7 +181,7 @@ export async function TrafficPanel() {
             data={visits.byArea.map((a) => ({
               label: AREA_LABELS[a.area] ?? a.area,
               value: a.visits,
-              tone: "violet" as const,
+              tone: "gold" as const,
             }))}
           />
         </div>

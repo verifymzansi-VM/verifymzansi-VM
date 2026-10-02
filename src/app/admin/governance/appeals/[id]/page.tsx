@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, MessageSquare } from "lucide-react";
 import { AppealResolveForm } from "./appeal-resolve-form";
+import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata = {
   title: "Appeal — Governance",
@@ -26,18 +27,21 @@ export default async function AppealDetailPage({ params }: Props) {
     .from("appeal_cases")
     .select("*")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (error || !appeal) {
-    notFound();
-  }
+  // A failed read is an error page with a retry, never a misleading "not found".
+  if (error) throw new Error(`Appeal could not be loaded: ${error.message}`);
+  if (!appeal) notFound();
 
   // Get linked decision record
-  const { data: decision } = await admin
+  const { data: decision, error: decisionError } = await admin
     .from("decision_records")
     .select("*")
     .eq("id", appeal.decision_id)
-    .single();
+    .maybeSingle();
+  if (decisionError) {
+    throw new Error(`Appealed decision could not be loaded: ${decisionError.message}`);
+  }
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -82,7 +86,7 @@ export default async function AppealDetailPage({ params }: Props) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Submitted</p>
-              <p className="text-sm">{new Date(appeal.created_at).toLocaleString()}</p>
+              <p className="text-sm">{formatDateTime(appeal.created_at)}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Appellant</p>
@@ -105,7 +109,7 @@ export default async function AppealDetailPage({ params }: Props) {
               <p className="text-sm">{appeal.reviewer_rationale}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Resolved by {appeal.reviewer_id?.slice(0, 8)}… on{" "}
-                {appeal.resolved_at ? new Date(appeal.resolved_at).toLocaleString() : "—"}
+                {appeal.resolved_at ? formatDateTime(appeal.resolved_at) : "—"}
               </p>
             </div>
           )}

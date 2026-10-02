@@ -1869,11 +1869,11 @@ const legacyPilotEnd = (
   await scalar(`SELECT trial_ends_at FROM organisations WHERE id=$1`, [legacyPilot])
 ).trial_ends_at;
 for (const file of [
-  "20261001140000_plan_tier_quarter.sql",
-  "20261001140100_fixed_day_catalogue.sql",
-  "20261001150000_sponsor_programme_visibility.sql",
-  "20261001160000_trial_extension_offers.sql",
-  "20261001170000_multi_listing_plan_admins.sql",
+  "20261001150900_plan_tier_quarter.sql",
+  "20261001150953_fixed_day_catalogue.sql",
+  "20261001151231_sponsor_programme_visibility.sql",
+  "20261001151437_trial_extension_offers.sql",
+  "20261001151505_multi_listing_plan_admins.sql",
 ])
   await migration(file);
 const hash = () => crypto.randomUUID().replace(/-/g, "").padEnd(64, "0");

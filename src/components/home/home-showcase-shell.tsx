@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useId, type ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import { ArrowRight, Building2, ShoppingBag, TreePalm, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,8 @@ const toneStyles: Record<
   {
     icon: LucideIcon;
     summary: string;
+    /** RGB triple that tints the rail's hover glow and heading underline. */
+    rgb: string;
     iconClassName: string;
     linkClassName: string;
   }
@@ -18,6 +20,7 @@ const toneStyles: Record<
   green: {
     icon: ShoppingBag,
     summary: "Buy and sell locally",
+    rgb: "20 154 107",
     iconClassName:
       "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300",
     linkClassName:
@@ -26,6 +29,7 @@ const toneStyles: Record<
   blue: {
     icon: Building2,
     summary: "Shops, trades and services",
+    rgb: "52 80 216",
     iconClassName:
       "bg-brand-blue/10 text-brand-blue-700 dark:bg-brand-blue/15 dark:text-brand-blue-300",
     linkClassName:
@@ -34,6 +38,7 @@ const toneStyles: Record<
   teal: {
     icon: TreePalm,
     summary: "Stays, places and things to do",
+    rgb: "20 184 166",
     iconClassName: "bg-teal-500/10 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
     linkClassName: "text-teal-700 hover:text-teal-800 dark:text-teal-300 dark:hover:text-teal-200",
   },
@@ -54,15 +59,16 @@ export function HomeShowcaseShell({
   children,
   className,
 }: HomeShowcaseShellProps) {
-  const { icon: Icon, summary, iconClassName, linkClassName } = toneStyles[tone];
+  const { icon: Icon, summary, rgb, iconClassName, linkClassName } = toneStyles[tone];
   const headingId = useId();
 
   return (
     <section
       aria-labelledby={headingId}
+      style={{ "--rail-rgb": rgb } as CSSProperties}
       className={cn("home-rail py-6 sm:py-8 lg:py-10", className)}
     >
-      <div className="container-page">
+      <div data-reveal className="container-page">
         <div className="mb-4 flex items-center justify-between gap-4 sm:mb-5">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <span
@@ -77,7 +83,7 @@ export function HomeShowcaseShell({
             <div className="min-w-0">
               <h2
                 id={headingId}
-                className="truncate font-display text-lg font-bold leading-tight tracking-tight text-foreground sm:text-2xl"
+                className="home-rail-title truncate font-display text-lg font-bold leading-tight tracking-tight text-foreground sm:text-2xl"
               >
                 {title}
               </h2>
@@ -92,7 +98,7 @@ export function HomeShowcaseShell({
             prefetch={false}
             aria-label={`View all ${title}`}
             className={cn(
-              "home-link-arrow inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "home-link-arrow home-rail-link inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors sm:-mr-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               linkClassName
             )}
           >

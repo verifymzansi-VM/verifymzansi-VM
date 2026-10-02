@@ -176,6 +176,63 @@ describe("Admin home", () => {
     expect(within(card("Identity checks")).getByText("5")).toBeInTheDocument();
   });
 
+  it("lists what needs a person in the banner, urgent work first", async () => {
+    staffGuard.as("governance_controller");
+    getStaffDashboard.mockResolvedValue({
+      role: "governance_controller",
+      generated_at: "",
+      queues,
+      ...decisionSections,
+    });
+
+    render(await AdminHomePage());
+
+    const needs = screen.getByRole("navigation", { name: "Needs you now" });
+    const links = within(needs).getAllByRole("link");
+    expect(links[0]).toHaveTextContent("3 reports past their deadline");
+    expect(links[0]).toHaveAttribute("href", "/admin/reports");
+    expect(screen.getByRole("status")).toHaveTextContent(/things need you · \d+ urgent/);
+  });
+
+  it("says all clear and folds empty decision lists into one row", async () => {
+    staffGuard.as("governance_controller");
+    getStaffDashboard.mockResolvedValue({
+      role: "governance_controller",
+      generated_at: "",
+      queues: {
+        reports: { open: 0, oldest_at: null, breached: 0, claimed: 0 },
+        kyc: { pending: 0, oldest_at: null, high_risk: 0, claimed: 0 },
+        content: { pending: 0, oldest_at: null, claimed: 0 },
+        support: { new: 0, oldest_at: null },
+      },
+      decisions: {
+        escalated: 0,
+        pending_approval: 0,
+        expiring_24h: 0,
+        oldest_at: null,
+        failed_executions: 0,
+        role_changes_pending: 0,
+        appeals_open: 0,
+        appeals_oldest_at: null,
+      },
+      restrictions: { suspensions: 0, bans: 0, emergency: 0 },
+      dsar: null,
+      oversight: decisionSections.oversight,
+    });
+
+    render(await AdminHomePage());
+
+    expect(screen.getByRole("status")).toHaveTextContent("All clear. Nothing needs you right now.");
+    expect(screen.queryByRole("navigation", { name: "Needs you now" })).not.toBeInTheDocument();
+    const clear = screen.getByRole("list", { name: "Lists with nothing waiting" });
+    expect(within(clear).getByRole("link", { name: /Appeals/ })).toHaveAttribute(
+      "href",
+      "/admin/governance/appeals"
+    );
+    // A list that could not be read keeps its card, never hidden among the clear ones.
+    expect(within(card("Data requests overdue")).getByText("Unavailable")).toBeInTheDocument();
+  });
+
   it("says so when the home page cannot be loaded at all", async () => {
     getStaffDashboard.mockResolvedValue(null);
 

@@ -1,10 +1,9 @@
 "use client";
 
+import { StatusFilterButtons } from "@/components/admin/status-filter-buttons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FlaggingQueueTable } from "@/components/admin/flagging-queue-table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   filterReportsByStatus,
   splitReportsByResolution,
@@ -34,26 +33,12 @@ export function ReportsClient({ reports, canEnforceDirectly = false }: ReportsCl
 
   return (
     <div className="space-y-4">
-      {/* Status filter */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {STATUS_FILTERS.map((s) => {
-          const count = s === "all" ? reports.length : reports.filter((r) => r.status === s).length;
-          return (
-            <Button
-              key={s}
-              size="sm"
-              variant={statusFilter === s ? "default" : "outline"}
-              onClick={() => setStatusFilter(s)}
-              className="capitalize"
-            >
-              {s.replace("_", " ")}
-              <Badge variant="secondary" className="ml-1.5 text-[10px]">
-                {count}
-              </Badge>
-            </Button>
-          );
-        })}
-      </div>
+      <StatusFilterButtons
+        statuses={STATUS_FILTERS}
+        value={statusFilter}
+        onChange={setStatusFilter}
+        rows={reports}
+      />
 
       {/* Open reports with SLA + enforcement */}
       {openReports.length > 0 && (

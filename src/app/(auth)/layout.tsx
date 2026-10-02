@@ -111,7 +111,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               className="max-w-[28rem] font-display text-[1.875rem] font-bold leading-[1.08] tracking-[-0.03em] xl:text-[2.25rem]"
             >
               Trade with people who&apos;ve been{" "}
-              <span className="text-brand-gold-300">checked.</span>
+              <span className="gold-shine text-brand-gold-300">checked.</span>
             </h2>
             <BrandPointCards points={PANEL_POINTS} className="mt-6" />
           </div>

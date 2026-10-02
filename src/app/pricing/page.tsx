@@ -78,7 +78,8 @@ export default async function PricingPage() {
                 id="pricing-title"
                 className="mt-4 font-display text-[2.2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-5xl"
               >
-                Start free. <span className="text-brand-gold-300">Then one simple price.</span>
+                Start free.{" "}
+                <span className="gold-shine text-brand-gold-300">Then one simple price.</span>
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
                 Your first post is free. After that, the same price in every section.

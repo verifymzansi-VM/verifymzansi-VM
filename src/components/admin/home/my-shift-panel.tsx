@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { postQueue } from "@/components/admin/queue-claims";
 import type { StaffDashboard } from "@/lib/services/staff-dashboard";
 
@@ -81,7 +82,16 @@ function ClaimRow({ claim }: { claim: Claim }) {
   );
 }
 
-export function MyShiftPanel({ claims, canClaim }: { claims: Claim[]; canClaim: boolean }) {
+export function MyShiftPanel({
+  claims,
+  canClaim,
+  waiting = {},
+}: {
+  claims: Claim[];
+  canClaim: boolean;
+  /** Items waiting per queue. The queue with work gets the solid button; empty ones go quiet. */
+  waiting?: Partial<Record<Queue, number | null>>;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -105,26 +115,46 @@ export function MyShiftPanel({ claims, canClaim }: { claims: Claim[]; canClaim: 
     <div className="space-y-3 rounded-xl border bg-card p-4">
       {canClaim && (
         <div className="flex flex-wrap gap-2">
-          {(Object.keys(QUEUES) as Queue[]).map((queue) => (
-            <Button
-              key={queue}
-              size="sm"
-              className="h-11"
-              disabled={busy !== null}
-              onClick={() =>
-                run(`claim:${queue}`, { action: "claim", queue, limit: 10 }, QUEUES[queue].href)
-              }
-            >
-              {busy === `claim:${queue}` && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-              Claim 10 {QUEUES[queue].label}
-            </Button>
-          ))}
+          {(Object.keys(QUEUES) as Queue[]).map((queue) => {
+            const count = waiting[queue];
+            const known = typeof count === "number";
+            const empty = known && count === 0;
+            return (
+              <Button
+                key={queue}
+                size="sm"
+                variant={empty ? "outline" : "trust-verified"}
+                className={cn("h-11 gap-2", empty && "text-muted-foreground")}
+                disabled={busy !== null}
+                aria-label={`Claim 10 ${QUEUES[queue].label}`}
+                aria-describedby={known ? `claim-${queue}-waiting` : undefined}
+                onClick={() =>
+                  run(`claim:${queue}`, { action: "claim", queue, limit: 10 }, QUEUES[queue].href)
+                }
+              >
+                {busy === `claim:${queue}` && <Loader2 className="h-4 w-4 animate-spin" />}
+                Claim 10 {QUEUES[queue].label}
+                {known && (
+                  <span
+                    id={`claim-${queue}-waiting`}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+                      empty ? "bg-muted" : "bg-white/20"
+                    )}
+                  >
+                    {empty ? "none waiting" : `${count > 99 ? "99+" : count} waiting`}
+                  </span>
+                )}
+              </Button>
+            );
+          })}
         </div>
       )}
 
       {claims.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          You are not holding any items. Claims last 15 minutes and can be kept 4 more times.
+          You are not holding any items. A claim keeps an item yours for 15 minutes, and you can
+          extend it 4 times.
         </p>
       ) : (
         <>

@@ -496,7 +496,9 @@ export default async function AdvertisePage() {
                 className="mt-4 font-display text-[2.1rem] font-extrabold leading-[1.06] tracking-[-0.03em] text-white sm:text-5xl"
               >
                 Get seen by local buyers who{" "}
-                <span className="text-brand-gold-300">know who they are dealing with.</span>
+                <span className="gold-shine text-brand-gold-300">
+                  know who they are dealing with.
+                </span>
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
                 Every poster&rsquo;s identity is reviewed before their posts go live.

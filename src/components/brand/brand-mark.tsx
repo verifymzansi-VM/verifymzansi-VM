@@ -1,7 +1,8 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-export const BRAND_SHIELD_SRC = "/images/brand-shield.png?v=20260924";
+// Local assets bypass resizing in our loader; use the small shield for this compact mark.
+export const BRAND_SHIELD_SRC = "/images/brand-shield-small.png?v=20260924";
 
 type BrandMarkSize = "sm" | "md" | "lg";
 

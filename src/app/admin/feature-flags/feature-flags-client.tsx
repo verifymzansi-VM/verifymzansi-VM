@@ -253,6 +253,7 @@ function FlagCard({
               {new Date(flag.updated_at).toLocaleString("en-ZA", {
                 dateStyle: "medium",
                 timeStyle: "short",
+                timeZone: "Africa/Johannesburg",
               })}
             </time>
             {flag.updated_reason && (

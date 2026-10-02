@@ -38,6 +38,7 @@ import {
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getKycZoomWidthClass } from "./kyc-review-constants";
 import { LIVENESS_THRESHOLD } from "@/lib/constants/verification";
+import { formatDateTime } from "@/lib/utils/format";
 
 interface Artifact {
   id: string;
@@ -557,7 +558,7 @@ export function KycComparisonViewer({
             <div className="min-w-0">
               <CardTitle className="text-base">{getStepLabel(artifact.step_type)}</CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                Uploaded {new Date(artifact.created_at).toLocaleString()}
+                Uploaded {formatDateTime(artifact.created_at)}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1">

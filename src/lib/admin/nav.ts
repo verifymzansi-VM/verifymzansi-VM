@@ -155,7 +155,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     capability: "queue:view",
   },
   {
-    href: "/admin/promotions-events",
+    href: "/admin/tourism-events",
     label: "Tourism & Events",
     icon: "palm",
     section: "areas",

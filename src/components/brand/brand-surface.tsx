@@ -20,7 +20,8 @@ type BrandSurfaceProps = {
 
 /**
  * The deep-green brand surface: brand-green-950 base, soft radial glows, a faint
- * Mzansi pattern and (by default) the flag stripe. Content is white on it.
+ * Mzansi pattern and (by default) the flag stripe. Content is white on it. The glow drifts
+ * slowly and a warm light follows the pointer (`.brand-alive`, fed by PointerGlow).
  */
 export function BrandSurface({
   as: Tag = "div",
@@ -32,10 +33,16 @@ export function BrandSurface({
 }: BrandSurfaceProps) {
   return (
     <Tag
-      className={cn("relative isolate overflow-hidden bg-brand-green-950 text-white", className)}
+      className={cn(
+        "brand-alive relative isolate overflow-hidden bg-brand-green-950 text-white",
+        className
+      )}
       {...rest}
     >
-      <div aria-hidden="true" className={cn("absolute inset-0 -z-10", GLOWS[glow])} />
+      <div
+        aria-hidden="true"
+        className={cn("brand-aurora absolute -inset-[12%] -z-10", GLOWS[glow])}
+      />
       <div
         aria-hidden="true"
         className="mzansi-pattern pointer-events-none absolute inset-0 -z-10 opacity-[0.05] invert [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]"

@@ -4,10 +4,21 @@ import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/servi
 import { QueueClaimBar, QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
-import { ModerationQueueClient } from "./moderation-queue-client";
+import { ModerationQueueClient } from "@/components/admin/moderation/moderation-queue-client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
+import {
+  BUSINESS_FIELDS,
+  claimTypeOf,
+  EDIT_FIELDS,
+  LISTING_FIELDS,
+  PROMOTION_FIELDS,
+  businessItem,
+  listingItem,
+  oldestFirst,
+  promotionItem,
+} from "@/lib/admin/moderation-items";
 
 const log = createLogger("AdminModerationPage");
 
@@ -48,15 +59,6 @@ export default async function AdminModerationPage() {
   const mine = (type: string) => myClaimed.filter((c) => c.type === type).map((c) => c.id);
   /** No extra query when the viewer holds nothing of this kind. */
   const NONE = Promise.resolve({ data: [] as never[], error: null });
-  const LISTING_FIELDS =
-    "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required" as const;
-  const BUSINESS_FIELDS =
-    "id, business_name, business_type, status, created_at, owner_id, area, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details" as const;
-  const PROMOTION_FIELDS =
-    "id, title, status, created_at, category, category_key, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type" as const;
-  const EDIT_FIELDS =
-    "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at" as const;
-
   const [
     listingsOldest,
     businessesOldest,
@@ -185,55 +187,18 @@ export default async function AdminModerationPage() {
     };
   };
 
-  const allItems = [
-    ...(pendingListings || []).map((l) => ({
-      ...l,
-      ...qualityContext(l.id, l.owner_id),
-      area: "MZANSI_MARKET" as const,
-      areaLabel: "Mzansi Market",
-      itemType: "Listing",
-      contentType: "listing" as const,
-    })),
-    ...(pendingBusinesses || []).map((b) => {
-      const isTourismBusiness =
-        b.area === "PROMOTIONS_EVENTS" || b.category === "tourism_hospitality";
-
-      return {
-        ...b,
-        title: b.business_name,
-        area: isTourismBusiness ? ("PROMOTIONS_EVENTS" as const) : ("MZANSI_BUSINESS" as const),
-        areaLabel: isTourismBusiness ? "Tourism & Events" : "Mzansi Business",
-        itemType: isTourismBusiness ? "Tourism business" : "Business",
-        contentType: "business" as const,
-      };
-    }),
-    ...(pendingPromotions || []).map((p) => ({
-      ...p,
-      // `category_key` is the canonical taxonomy value. Keep the legacy
-      // free-text category for display when present, but do not hide a
-      // correctly categorized promotion whose legacy value is null.
-      category: p.category?.trim() ? p.category : p.category_key,
-      area: "PROMOTIONS_EVENTS" as const,
-      areaLabel: "Tourism & Events",
-      itemType: "Promotion",
-      contentType: "promotion" as const,
-    })),
+  const allItems = oldestFirst([
+    ...pendingListings.map((l) => ({ ...listingItem(l), ...qualityContext(l.id, l.owner_id) })),
+    ...pendingBusinesses.map(businessItem),
+    ...pendingPromotions.map(promotionItem),
     ...editItems,
-  ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  ]);
 
   const shownCount = allItems.length;
   const [claims, myClaims] = await Promise.all([
     getClaimsForItems(
       user.id,
-      allItems.map((item) => ({
-        type:
-          "isEditRequest" in item && item.isEditRequest
-            ? ("content_edit" as const)
-            : "contentType" in item && item.contentType
-              ? item.contentType
-              : ("listing" as const),
-        id: item.id,
-      }))
+      allItems.map((item) => ({ type: claimTypeOf(item), id: item.id }))
     ),
     countMyClaims(user.id, "content"),
   ]);

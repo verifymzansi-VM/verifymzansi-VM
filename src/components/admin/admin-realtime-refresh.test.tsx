@@ -24,67 +24,61 @@ describe("AdminRealtimeRefresh", () => {
     realtimeOptions.length = 0;
   });
 
-  it("subscribes to the admin queue tables and refreshes for matching events", () => {
-    render(<AdminRealtimeRefresh />);
+  const notify = (href: string) => {
+    const onEvent = realtimeOptions[0]?.onEvent as (payload: Record<string, unknown>) => void;
+    onEvent({ eventType: "INSERT", new: { href } });
+  };
 
-    expect(realtimeOptions.map((option) => option.table)).toEqual([
-      "verification_steps",
-      "listings",
-      "businesses",
-      "promotions",
-      "reports",
-      "dsar_cases",
-      "contact_submissions",
-      "notifications",
-    ]);
+  it("listens only to the viewer's own notifications, never to queue tables", () => {
+    render(<AdminRealtimeRefresh userId="staff-1" />);
 
-    const reportsRealtime = realtimeOptions.find((option) => option.table === "reports");
-    const onEvent = reportsRealtime?.onEvent as (payload: Record<string, unknown>) => void;
-
-    onEvent({
-      eventType: "INSERT",
-      new: { status: "open" },
+    expect(realtimeOptions).toHaveLength(1);
+    expect(realtimeOptions[0]).toMatchObject({
+      table: "notifications",
+      event: "INSERT",
+      filterColumn: "user_id",
+      filterValue: "staff-1",
     });
+  });
+
+  it("refreshes for an admin notification, after the minimum gap", () => {
+    render(<AdminRealtimeRefresh userId="staff-1" />);
+
+    notify("/admin/moderation");
 
     // The page was rendered moments ago, so the refresh waits out the minimum gap.
     vi.advanceTimersByTime(9_999);
     expect(mockRefresh).not.toHaveBeenCalled();
-
     vi.advanceTimersByTime(1);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores notifications that are not about admin work", () => {
+    render(<AdminRealtimeRefresh userId="staff-1" />);
+    vi.advanceTimersByTime(60_000);
+    notify("/dashboard/listings");
+    vi.advanceTimersByTime(10_000);
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
   it("merges a burst of events into one refresh, at most every 10 seconds", () => {
-    render(<AdminRealtimeRefresh />);
-    const onEvent = realtimeOptions.find((option) => option.table === "reports")?.onEvent as (
-      payload: Record<string, unknown>
-    ) => void;
+    render(<AdminRealtimeRefresh userId="staff-1" />);
 
     vi.advanceTimersByTime(60_000);
-    for (let i = 0; i < 50; i++) onEvent({ eventType: "INSERT", new: { status: "open" } });
+    for (let i = 0; i < 50; i++) notify("/admin/moderation");
     vi.advanceTimersByTime(400);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(2_000);
-    onEvent({ eventType: "INSERT", new: { status: "open" } });
+    notify("/admin/moderation");
     vi.advanceTimersByTime(7_999);
     expect(mockRefresh).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(1);
     expect(mockRefresh).toHaveBeenCalledTimes(2);
   });
 
-  it("refreshes when staff receive a pending edit notification", () => {
-    render(<AdminRealtimeRefresh />);
-    const subscription = realtimeOptions.find((option) => option.table === "notifications");
-    expect(subscription?.event).toBe("INSERT");
-    const onEvent = subscription?.onEvent as (payload: Record<string, unknown>) => void;
-    onEvent({ eventType: "INSERT", new: { href: "/admin/moderation" } });
-    vi.advanceTimersByTime(10_000);
-    expect(mockRefresh).toHaveBeenCalledTimes(1);
-  });
-
   it("refreshes without a notification and cleans up its fallback", () => {
-    const { unmount } = render(<AdminRealtimeRefresh />);
+    const { unmount } = render(<AdminRealtimeRefresh userId="staff-1" />);
     vi.advanceTimersByTime(30_000);
     expect(mockRefresh).not.toHaveBeenCalled();
     window.dispatchEvent(new Event("focus"));
@@ -101,31 +95,13 @@ describe("AdminRealtimeRefresh", () => {
     expect(mockRefresh).toHaveBeenCalledTimes(2);
   });
 
-  it("does not refresh twice when a realtime event overlaps the fallback", () => {
-    render(<AdminRealtimeRefresh />);
-    const reportsRealtime = realtimeOptions.find((option) => option.table === "reports");
-    const onEvent = reportsRealtime?.onEvent as (payload: Record<string, unknown>) => void;
+  it("does not refresh twice when a notification overlaps the fallback", () => {
+    render(<AdminRealtimeRefresh userId="staff-1" />);
 
     vi.advanceTimersByTime(119_800);
-    onEvent({ eventType: "INSERT", new: { status: "open" } });
+    notify("/admin/moderation");
     vi.advanceTimersByTime(600);
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  it("ignores queue events that do not enter a tracked admin status", () => {
-    render(<AdminRealtimeRefresh />);
-
-    const dsarRealtime = realtimeOptions.find((option) => option.table === "dsar_cases");
-    const onEvent = dsarRealtime?.onEvent as (payload: Record<string, unknown>) => void;
-
-    onEvent({
-      eventType: "UPDATE",
-      old: { status: "submitted" },
-      new: { status: "completed" },
-    });
-
-    vi.advanceTimersByTime(401);
-    expect(mockRefresh).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,7 @@ const owner = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";
 const mb = 1048576;
 const migration = fs.readFileSync(
-  "supabase/migrations/20260930190000_atomic_media_storage_quota.sql",
+  "supabase/migrations/20260930234207_atomic_media_storage_quota.sql",
   "utf8"
 );
 const read = (name) => fs.readFileSync(`supabase/migrations/${name}`, "utf8");

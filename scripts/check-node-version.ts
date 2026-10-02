@@ -3,22 +3,20 @@
  * Run this before any other script to catch toolchain drift early.
  */
 
-const MIN_MAJOR = 20;
-const MAX_MAJOR = 25; // Support Node 20 LTS through Node 25
-
 const raw = process.version; // e.g. "v20.11.1"
-const match = raw.match(/^v(\d+)\./);
+const match = raw.match(/^v(\d+)\.(\d+)\./);
 if (!match) {
   console.error(`❌ Unable to parse Node.js version from "${raw}".`);
   process.exit(1);
 }
 
 const major = Number(match[1]);
-if (major < MIN_MAJOR || major > MAX_MAJOR) {
+const minor = Number(match[2]);
+if (!((major === 22 && minor >= 19) || major === 24)) {
   console.error(
     [
       `❌ Unsupported Node.js version: ${raw}`,
-      `   This project requires Node.js ${MIN_MAJOR}.x – ${MAX_MAJOR}.x.`,
+      "   This project requires Node.js 22.19+ (22.x) or 24.x.",
       "",
       "   Fix:",
       `   1. Install a supported Node version: https://nodejs.org/`,

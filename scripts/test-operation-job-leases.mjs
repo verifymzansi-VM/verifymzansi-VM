@@ -7,7 +7,7 @@ await migrate(
   "20260927110000_staff_roles_authority.sql",
   "20260927110100_staff_role_changes.sql",
   "20260927120000_decision_execution_layer.sql",
-  "20261001130000_operation_job_attempt_fencing.sql"
+  "20260930234241_operation_job_attempt_fencing.sql"
 );
 const id = uuid();
 await db.query(

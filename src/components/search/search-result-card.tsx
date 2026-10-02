@@ -61,7 +61,7 @@ function ResultThumbnail({ src, area }: { src?: string; area: SearchArea }) {
  */
 export function SearchResultCard({ item, area }: { item: SearchResultCardData; area: SearchArea }) {
   return (
-    <article className="group relative flex h-full gap-3 rounded-2xl border border-border/70 bg-card p-2.5 elev-xs transition-[border-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:border-foreground/20 hover:elev-sm sm:flex-col sm:gap-0 sm:overflow-hidden sm:p-0">
+    <article className="group relative flex h-full gap-3 rounded-2xl border border-border/70 bg-card p-2.5 elev-xs transition-[border-color,box-shadow,transform] duration-300 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:border-foreground/20 hover:elev-md motion-safe:hover:-translate-y-1 sm:flex-col sm:gap-0 sm:overflow-hidden sm:p-0">
       <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none">
         <ResultThumbnail src={item.imageUrl} area={area} />
       </div>

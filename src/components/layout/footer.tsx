@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { BrandLogo } from "../shared/brand-logo";
 import { SaFlagStripe } from "@/components/brand/sa-flag-stripe";
 import { BrandShield } from "@/components/shared/brand-shield";
@@ -67,7 +68,7 @@ export function Footer() {
     "inline-flex min-h-8 items-center rounded-md py-1 text-sm text-white/65 transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green-300 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950";
 
   return (
-    <footer className="relative mt-auto overflow-hidden bg-brand-green-950 text-white">
+    <footer className="brand-alive relative isolate mt-auto overflow-hidden bg-brand-green-950 text-white">
       <SaFlagStripe className="relative" />
       <div
         aria-hidden="true"
@@ -83,7 +84,8 @@ export function Footer() {
         <div className="container-page flex flex-col gap-5 py-10 md:flex-row md:items-center md:justify-between md:py-12">
           <div className="max-w-xl">
             <p className="font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
-              Got something to sell, <span className="text-brand-gold-300">share or host?</span>
+              Got something to sell,{" "}
+              <span className="gold-shine text-brand-gold-300">share or host?</span>
             </p>
             <p className="mt-2 text-sm text-white/70 sm:text-base">
               Get verified once, post anywhere.
@@ -93,14 +95,15 @@ export function Footer() {
             <Link
               href="/post/create"
               prefetch={false}
-              className="inline-flex h-12 items-center gap-2 rounded-full bg-brand-green-500 px-6 text-sm font-semibold text-brand-green-950 transition-colors hover:bg-brand-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
+              className="btn-shine chip-pop home-link-arrow inline-flex h-12 items-center gap-2 rounded-full bg-brand-green-500 px-6 text-sm font-semibold text-brand-green-950 transition-colors hover:bg-brand-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
             >
               Post for free
+              <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
             <Link
               href="/trust-safety"
               prefetch={false}
-              className="inline-flex h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
+              className="chip-pop inline-flex h-12 items-center gap-2 rounded-full border border-white/20 px-6 text-sm font-semibold text-white transition-colors hover:border-brand-gold-300/50 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-green-950"
             >
               <BrandShield className="h-4 w-4" />
               How verification works

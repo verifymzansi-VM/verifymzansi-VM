@@ -245,11 +245,12 @@ export default async function OrganisationPage({
                     {isProgramme ? (
                       <>
                         Businesses supported by{" "}
-                        <span className="text-brand-gold-300">{org.name}</span>
+                        <span className="gold-shine text-brand-gold-300">{org.name}</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-brand-gold-300">{org.name}</span> business network
+                        <span className="gold-shine text-brand-gold-300">{org.name}</span> business
+                        network
                       </>
                     )}
                   </h1>

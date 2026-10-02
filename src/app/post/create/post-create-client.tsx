@@ -1,7 +1,7 @@
 "use client";
 
 import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -40,6 +40,10 @@ interface PostOption {
   icon: LucideIcon;
   tile: string;
   accent: string;
+  /** Pointer glow tint (see `.glow-*` in globals.css). */
+  glow: string;
+  /** Colour of the large faded icon in the card corner. */
+  mark: string;
   href: string;
   badge?: string;
 }
@@ -62,6 +66,8 @@ const POST_OPTIONS: readonly PostOption[] = [
     icon: ShoppingBag,
     tile: "area-market-tile",
     accent: "bg-brand-green-600",
+    glow: "glow-market",
+    mark: "text-brand-green-600",
     href: "/post/create-listing",
   },
   {
@@ -80,6 +86,8 @@ const POST_OPTIONS: readonly PostOption[] = [
     icon: Building2,
     tile: "area-business-tile",
     accent: "bg-brand-blue-600",
+    glow: "glow-business",
+    mark: "text-brand-blue-600",
     href: "/post/create-business",
   },
   {
@@ -98,6 +106,8 @@ const POST_OPTIONS: readonly PostOption[] = [
     icon: TreePalm,
     tile: "area-tourism-tile",
     accent: "bg-teal-500",
+    glow: "glow-tourism",
+    mark: "text-teal-600",
     href: "/post/create-tourism?type=tourism_business",
   },
   {
@@ -116,6 +126,8 @@ const POST_OPTIONS: readonly PostOption[] = [
     icon: CalendarDays,
     tile: "area-tourism-tile",
     accent: "bg-teal-500",
+    glow: "glow-tourism",
+    mark: "text-teal-600",
     href: "/post/create-tourism?type=event",
     badge: "Free to post",
   },
@@ -295,7 +307,7 @@ export function PostCreateClient({
       )}
 
       <div className="grid flex-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {POST_OPTIONS.map((option) => {
+        {POST_OPTIONS.map((option, index) => {
           const OptionIcon = option.icon;
           const headingId = `post-option-${option.id}`;
           const isPending = pendingHref === option.href;
@@ -304,11 +316,23 @@ export function PostCreateClient({
             <section
               key={option.id}
               aria-labelledby={headingId}
-              className="surface-card relative flex flex-col overflow-hidden p-5 pt-6"
+              style={{ "--i": index } as CSSProperties}
+              className={cn(
+                "surface-card spotlight tilt rise-in relative flex flex-col overflow-hidden p-5 pt-6",
+                option.glow
+              )}
             >
               <span
                 aria-hidden="true"
-                className={cn("absolute inset-x-0 top-0 h-1", option.accent)}
+                className={cn("spotlight-bar absolute inset-x-0 top-0 h-1", option.accent)}
+              />
+              {/* Large faded icon in the corner that drifts in as the card is hovered. */}
+              <OptionIcon
+                aria-hidden="true"
+                className={cn(
+                  "spotlight-mark pointer-events-none absolute -right-6 -top-4 h-32 w-32",
+                  option.mark
+                )}
               />
 
               <div className="flex items-center gap-3">
@@ -327,7 +351,7 @@ export function PostCreateClient({
                       {option.title}
                     </h2>
                     {option.badge ? (
-                      <span className="rounded-full bg-brand-green-600/10 px-2 py-0.5 text-xs font-semibold text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-green-300">
+                      <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-xs font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">
                         {option.badge}
                       </span>
                     ) : null}
@@ -368,7 +392,7 @@ export function PostCreateClient({
                   disabled={isBusy}
                   aria-label={`${option.action}: ${option.about} (${option.area})`}
                   className={cn(
-                    "group flex h-11 w-full items-center justify-center gap-2 rounded-full bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-foreground/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
+                    "btn-shine spotlight-cta relative z-[1] flex h-11 w-full items-center justify-center gap-2 rounded-full bg-foreground px-4 text-sm font-semibold text-background shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait",
                     isBusy && !isPending && "opacity-60"
                   )}
                 >
@@ -382,7 +406,7 @@ export function PostCreateClient({
                       {option.action}
                       <ArrowRight
                         aria-hidden="true"
-                        className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+                        className="spotlight-cta-arrow h-4 w-4 shrink-0"
                       />
                     </>
                   )}
@@ -395,7 +419,8 @@ export function PostCreateClient({
 
       <section
         aria-labelledby="post-guide-title"
-        className="surface-card flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-4"
+        style={{ "--i": POST_OPTIONS.length } as CSSProperties}
+        className="surface-card rise-in flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:gap-4"
       >
         <h2
           id="post-guide-title"
@@ -410,7 +435,7 @@ export function PostCreateClient({
                 type="button"
                 onClick={() => handleChoiceClick(example.href)}
                 disabled={isBusy}
-                className="flex min-h-9 items-center gap-2 rounded-full border border-border/70 py-1 pl-3 pr-1 text-left text-xs transition-colors hover:border-foreground/25 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait"
+                className="chip-pop flex min-h-9 items-center gap-2 rounded-full border border-border/70 bg-card py-1 pl-3 pr-1 text-left text-xs transition-colors hover:border-foreground/25 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait"
               >
                 <span className="text-foreground/85">{example.situation}</span>
                 <span

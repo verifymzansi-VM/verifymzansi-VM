@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { availableParallelism } from "node:os";
 
 const PLAYWRIGHT_PORT = Number(process.env.PLAYWRIGHT_PORT || 3100);
 const PLAYWRIGHT_HOST = process.env.PLAYWRIGHT_HOST || "127.0.0.1";
@@ -18,7 +19,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : Math.min(4, availableParallelism()),
   reporter: "html",
   timeout: process.env.CI ? 90_000 : 60_000,
   use: {

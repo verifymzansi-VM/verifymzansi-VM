@@ -1,4 +1,16 @@
 import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
+import {
+  BUSINESS_FIELDS,
+  EDIT_FIELDS,
+  LISTING_FIELDS,
+  MZANSI_BUSINESS_FILTER,
+  PROMOTION_FIELDS,
+  TOURISM_BUSINESS_FILTER,
+  businessItem,
+  listingItem,
+  oldestFirst,
+  promotionItem,
+} from "@/lib/admin/moderation-items";
 /**
  * Admin query helpers — shared data-fetching for admin pages.
  * Uses server-side Supabase client (anon key + user session for RLS).
@@ -64,8 +76,6 @@ export interface RecentOtpAttempt {
   created_at: string;
   expires_at: string;
 }
-
-const TOURISM_BUSINESS_FILTER = "area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality";
 
 export async function getRecentOtpAttempts(limit = 12): Promise<RecentOtpAttempt[]> {
   const supabase = createAdminClient();
@@ -348,7 +358,8 @@ export async function getRecentActivity(limit = 20, area?: string): Promise<Audi
     query = query.eq("area", area);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) throw new Error(`Recent activity could not be read: ${error.message}`);
   return (data as AuditLogEntry[]) || [];
 }
 
@@ -370,107 +381,62 @@ export async function getAreaReports(area: MarketplaceArea) {
 }
 
 /** Get content pending moderation for an area */
+/** A failed read throws, so the page says so instead of showing an empty queue. */
+function rowsOrThrow<T>(result: { data: T[] | null; error: { message: string } | null }): T[] {
+  if (result.error) throw new Error(`Failed to load pending content: ${result.error.message}`);
+  return result.data ?? [];
+}
+
 async function getPendingNewContent(area: MarketplaceArea) {
   const supabase = createAdminClient();
-
-  if (area === "MZANSI_MARKET") {
-    const { data } = await supabase
-      .from("listings")
-      .select("*")
+  const pending = <T extends string>(table: "listings" | "businesses" | "promotions", fields: T) =>
+    supabase
+      .from(table)
+      .select(fields)
       .eq("status", "pending_moderation")
       .order("created_at", { ascending: true })
       .limit(50);
 
-    return (data || []).map((item) => ({
-      ...item,
-      title: item.title,
-      itemType: "Listing",
-      contentType: "listing",
-      area: "MZANSI_MARKET",
-      areaLabel: "Mzansi Market",
-    }));
+  if (area === "MZANSI_MARKET") {
+    return rowsOrThrow(await pending("listings", LISTING_FIELDS)).map(listingItem);
   }
 
   if (area === "MZANSI_BUSINESS") {
-    const { data } = await supabase
-      .from("businesses")
-      .select("*")
-      .eq("area", "MZANSI_BUSINESS")
-      .neq("category", "tourism_hospitality")
-      .eq("status", "pending_moderation")
-      .order("created_at", { ascending: true })
-      .limit(50);
-
-    return (data || []).map((item) => ({
-      ...item,
-      title: item.business_name,
-      itemType: "Business",
-      contentType: "business",
-      area: "MZANSI_BUSINESS",
-      areaLabel: "Mzansi Business",
-    }));
+    const businesses = rowsOrThrow(
+      await pending("businesses", BUSINESS_FIELDS)
+        .eq("area", "MZANSI_BUSINESS")
+        .or(MZANSI_BUSINESS_FILTER)
+    );
+    return businesses.map(businessItem);
   }
 
   if (area === "PROMOTIONS_EVENTS") {
-    const [{ data: promotions }, { data: tourismBusinesses }] = await Promise.all([
-      supabase
-        .from("promotions")
-        .select("*")
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(50),
-      supabase
-        .from("businesses")
-        .select("*")
-        .or(TOURISM_BUSINESS_FILTER)
-        .eq("status", "pending_moderation")
-        .order("created_at", { ascending: true })
-        .limit(50),
+    const [promotions, tourismBusinesses] = await Promise.all([
+      pending("promotions", PROMOTION_FIELDS),
+      pending("businesses", BUSINESS_FIELDS).or(TOURISM_BUSINESS_FILTER),
     ]);
-
-    return [
-      ...(promotions || []).map((item) => ({
-        ...item,
-        title: item.title,
-        itemType: "Event",
-        contentType: "promotion",
-        area: "PROMOTIONS_EVENTS",
-        areaLabel: "Tourism & Events",
-      })),
-      ...(tourismBusinesses || []).map((item) => ({
-        ...item,
-        title: item.business_name,
-        itemType: "Tourism business",
-        contentType: "business",
-        area: "PROMOTIONS_EVENTS",
-        areaLabel: "Tourism & Events",
-      })),
-    ].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    return oldestFirst([
+      ...rowsOrThrow(promotions).map(promotionItem),
+      ...rowsOrThrow(tourismBusinesses).map(businessItem),
+    ]);
   }
 
   return [];
 }
 
-// ── Dashboard-specific richer queries ────────────────────────
-
-/** Live posts stay live while their proposed edits wait in a separate table. */
 export async function getPendingContent(area: MarketplaceArea) {
   const [content, edits] = await Promise.all([
     getPendingNewContent(area),
     createAdminClient()
       .from("content_edit_requests")
-      .select(
-        "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at"
-      )
+      .select(EDIT_FIELDS)
       .eq("area", area)
       .eq("status", "pending")
       .order("created_at", { ascending: true })
       .limit(50),
   ]);
   if (edits.error) throw new Error("Failed to load pending post edits");
-  return [...content, ...(edits.data ?? []).map(toContentEditModerationItem)].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
+  return oldestFirst([...content, ...(edits.data ?? []).map(toContentEditModerationItem)]);
 }
 
 export interface DashboardReport {
@@ -491,23 +457,33 @@ export interface DashboardReport {
 /** Count moderation actions taken today, grouped by action type */
 export async function getActionsToday(area?: string): Promise<Record<string, number>> {
   const supabase = createAdminClient();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Midnight in South Africa (UTC+2, no daylight saving), whatever the server's clock zone.
+  const saDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
+    new Date()
+  );
+  const todayStart = new Date(`${saDate}T00:00:00+02:00`);
 
-  let query = supabase
-    .from("moderation_actions")
-    .select("action")
-    .gte("created_at", todayStart.toISOString());
-
-  if (area) {
-    query = query.eq("area", area);
-  }
-
-  const { data } = await query;
   const counts: Record<string, number> = {};
-  for (const row of data || []) {
-    const action = (row as { action: string }).action;
-    counts[action] = (counts[action] || 0) + 1;
+  const snapshotEnd = new Date().toISOString();
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    // PostgREST caps returned rows. Page through the same time window so busy
+    // days are counted fully and new actions cannot keep extending the scan.
+    let query = supabase
+      .from("moderation_actions")
+      .select("action")
+      .gte("created_at", todayStart.toISOString())
+      .lte("created_at", snapshotEnd)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (area) query = query.eq("area", area);
+    const { data, error } = await query;
+    if (error) throw new Error(`Today's actions could not be counted: ${error.message}`);
+    for (const row of data ?? []) {
+      const action = row.action;
+      counts[action] = (counts[action] || 0) + 1;
+    }
+    if (!data || data.length < pageSize) break;
   }
   return counts;
 }

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Eye, FileText, ImageIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { formatDate } from "@/lib/utils/format";
 
 interface Artifact {
   id: string;
@@ -232,9 +233,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
               <div className="flex items-center gap-2 rounded-md border border-amber-300/60 dark:border-amber-600/30 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 Scheduled for purge:{" "}
-                <time dateTime={artifact.purge_after}>
-                  {new Date(artifact.purge_after).toLocaleDateString("en-ZA")}
-                </time>
+                <time dateTime={artifact.purge_after}>{formatDate(artifact.purge_after)}</time>
               </div>
             )}
 

@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import path from "path";
 import react from "@vitejs/plugin-react";
+import { availableParallelism } from "node:os";
 
 const strictCoverage = process.env.STRICT_COVERAGE === "true";
 const vitestLane = process.env.VITEST_LANE ?? "blocking";
@@ -20,6 +21,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Avoid exhausting memory when the runner sees many logical CPUs.
+    maxWorkers: Math.min(4, availableParallelism()),
     testTimeout: 10000,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     exclude: coverageCoreLane

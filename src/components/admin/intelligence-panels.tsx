@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type Tone = "emerald" | "sky" | "amber" | "rose" | "violet" | "slate";
+type Tone = "brand" | "gold" | "emerald" | "sky" | "amber" | "rose" | "violet" | "slate";
 
 export type ChartDatum = {
   label: string;
@@ -18,6 +18,18 @@ export type DecisionItem = {
 };
 
 const toneClasses: Record<Tone, { bar: string; dot: string; text: string; bg: string }> = {
+  brand: {
+    bar: "bg-brand-green-600 dark:bg-brand-green-400",
+    dot: "bg-brand-green-600 dark:bg-brand-green-400",
+    text: "text-brand-green-700 dark:text-brand-green-300",
+    bg: "bg-brand-green-50 dark:bg-brand-green-950/40",
+  },
+  gold: {
+    bar: "bg-brand-gold-400",
+    dot: "bg-brand-gold-400",
+    text: "text-brand-gold-800 dark:text-brand-gold-300",
+    bg: "bg-brand-gold-50 dark:bg-brand-gold-950/30",
+  },
   emerald: {
     bar: "bg-emerald-500",
     dot: "bg-emerald-500",

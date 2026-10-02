@@ -33,7 +33,7 @@ export function HomeAboutSection() {
       className="border-t border-border/60 py-12 sm:py-16 lg:py-20"
     >
       <div className="container-page grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
-        <div className="max-w-xl">
+        <div data-reveal className="max-w-xl">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
             Why VerifyMzansi
           </p>
@@ -54,7 +54,7 @@ export function HomeAboutSection() {
             <Button
               asChild
               size="lg"
-              className="home-link-arrow h-12 w-full rounded-full bg-brand-green-700 px-7 text-base font-semibold text-white hover:bg-brand-green-800 sm:w-auto"
+              className="home-link-arrow btn-shine h-12 w-full rounded-full bg-brand-green-700 px-7 text-base font-semibold text-white hover:bg-brand-green-800 sm:w-auto"
             >
               <Link href="/post/create" prefetch={false}>
                 Post for free
@@ -89,7 +89,11 @@ export function HomeAboutSection() {
 
         <ul className="grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:gap-y-10">
           {ADVANTAGES.map(({ icon: Icon, title, body }) => (
-            <li key={title} className="home-feature relative border-t border-border pt-5">
+            <li
+              key={title}
+              data-reveal
+              className="home-feature relative border-t border-border pt-5"
+            >
               <span
                 aria-hidden="true"
                 className="home-feature-icon flex h-10 w-10 items-center justify-center rounded-full bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300"

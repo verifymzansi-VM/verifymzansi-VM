@@ -1,0 +1,14 @@
+{
+  "market": {
+    "trimBefore": 200,
+    "url": "https://verifymzansi.com/mzansi-market"
+  },
+  "business": {
+    "trimBefore": 126,
+    "url": "https://verifymzansi.com/mzansi-business"
+  },
+  "tourism": {
+    "trimBefore": 139,
+    "url": "https://verifymzansi.com/tourism-events"
+  }
+}

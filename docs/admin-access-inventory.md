@@ -264,15 +264,15 @@ No `"use server"` actions exist in the codebase.
 
 ## Realtime
 
-`src/hooks/use-realtime.ts` subscribes admin clients
-(`admin-realtime-refresh.tsx`, `admin-live-notifier.tsx`) to `postgres_changes`
-on these tables:
+`src/hooks/use-realtime.ts` subscribes admin clients to `postgres_changes`:
 
-- `verification_steps`, `listings`, `businesses`, `promotions`
-- `reports`, `dsar_cases`, `contact_submissions`, `notifications`
+- `admin-live-notifier.tsx` and `admin-realtime-refresh.tsx` listen to
+  `notifications` inserts, filtered to the viewer's own `user_id`.
 
-Delivery is filtered by the RLS policies above, so it follows the token role
-until Phase 1.
+The queue tables (`verification_steps`, `listings`, `businesses`, `promotions`,
+`reports`, `dsar_cases`) are deliberately not in the `supabase_realtime`
+publication, so their rows are never broadcast. Open admin pages pick up queue
+changes through the refresh on focus and every two minutes.
 
 ## Storage
 

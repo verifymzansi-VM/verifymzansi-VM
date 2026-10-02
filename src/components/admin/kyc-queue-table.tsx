@@ -275,7 +275,7 @@ export function KycQueueTable({
                           <Button
                             size="sm"
                             variant="default"
-                            className="h-8 bg-brand-blue hover:bg-brand-blue/90"
+                            className="h-9"
                             onClick={() =>
                               handleComparisonClick(
                                 group.user_id,
@@ -285,13 +285,13 @@ export function KycQueueTable({
                             title="Compare ID and selfie"
                           >
                             <Eye className="h-4 w-4 mr-1" />
-                            <span className="text-xs">View Docs</span>
+                            <span className="text-xs">View documents</span>
                           </Button>
                           <Button
                             asChild
                             size="sm"
                             variant="ghost"
-                            className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                            className="h-9 text-primary hover:bg-primary/10 hover:text-primary"
                             title="View evidence"
                           >
                             <Link href="/admin/verification/evidence">
@@ -305,7 +305,7 @@ export function KycQueueTable({
                         <Button
                           size="sm"
                           variant="default"
-                          className="h-8 bg-brand-blue hover:bg-brand-blue/90"
+                          className="h-9"
                           onClick={() =>
                             handleComparisonClick(
                               group.user_id,
@@ -315,7 +315,7 @@ export function KycQueueTable({
                           title="Compare ID and selfie"
                         >
                           <Eye className="h-4 w-4 mr-1" />
-                          <span className="text-xs">View Docs</span>
+                          <span className="text-xs">View documents</span>
                         </Button>
                       )}
                     </div>
@@ -395,7 +395,7 @@ export function KycQueueTable({
                                       <Button
                                         size="sm"
                                         variant="ghost"
-                                        className="h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                                        className="h-9 text-primary hover:bg-primary/10 hover:text-primary"
                                         onClick={() => void handleRowViewClick(step)}
                                         title="View"
                                         aria-label={`View ${stepLabel}`}

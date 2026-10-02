@@ -15,17 +15,13 @@ import {
   SheetDescription,
   SheetFooter,
 } from "@/components/ui/sheet";
-import { CheckCircle, XCircle, Package, Eye, FolderX } from "lucide-react";
+import { CheckCircle, XCircle, Package, Eye, FolderX, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { ModerationPreviewPanel, type ModerationItem } from "./moderation-preview-panel";
 import { ContentDecisionDialog } from "@/components/admin/content-decision-dialog";
 import { useContentDecision } from "@/components/admin/use-content-decision";
 import { ClaimBadge, ClaimGate } from "@/components/admin/queue-claims";
-import type { ClaimItemType } from "@/lib/services/queue-claims";
-
-/** Which queue claim covers a moderation item. */
-function claimTypeOf(item: ModerationItem): ClaimItemType {
-  return item.isEditRequest ? "content_edit" : (item.contentType ?? "listing");
-}
+import { claimTypeOf } from "@/lib/admin/moderation-items";
 
 interface ModerationQueueClientProps {
   items: ModerationItem[];
@@ -47,6 +43,7 @@ function buildWrongCategoryReason(item: ModerationItem) {
 export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
   const router = useRouter();
   const [areaFilter, setAreaFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const [previewItem, setPreviewItem] = useState<ModerationItem | null>(null);
   const {
     selectedItem,
@@ -71,7 +68,17 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
   });
 
   const areas = ["all", ...Array.from(new Set(items.map((i) => i.area)))];
-  const filtered = areaFilter === "all" ? items : items.filter((i) => i.area === areaFilter);
+  const needle = query.trim().toLowerCase();
+  const filtered = items.filter(
+    (i) =>
+      (areaFilter === "all" || i.area === areaFilter) &&
+      (!needle ||
+        [i.title, i.itemType, i.category, i.location_city, i.location_province, i.description]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(needle))
+  );
 
   function openPreview(item: ModerationItem) {
     setPreviewItem(item);
@@ -104,22 +111,45 @@ export function ModerationQueueClient({ items }: ModerationQueueClientProps) {
 
   return (
     <>
-      {/* Area Filter */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {areas.map((a) => (
-          <Button
-            key={a}
-            size="sm"
-            variant={areaFilter === a ? "default" : "outline"}
-            className="text-xs"
-            onClick={() => setAreaFilter(a)}
-          >
-            {a === "all"
-              ? `All (${items.length})`
-              : `${items.find((i) => i.area === a)?.areaLabel || a} (${items.filter((i) => i.area === a).length})`}
-          </Button>
-        ))}
+      {/* Area filter, when the queue spans more than one area */}
+      {areas.length > 2 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {areas.map((a) => (
+            <Button
+              key={a}
+              size="sm"
+              variant={areaFilter === a ? "default" : "outline"}
+              className="text-xs"
+              onClick={() => setAreaFilter(a)}
+            >
+              {a === "all"
+                ? `All (${items.length})`
+                : `${items.find((i) => i.area === a)?.areaLabel || a} (${items.filter((i) => i.area === a).length})`}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      <div className="relative mb-4">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <Input
+          type="search"
+          aria-label="Search this queue"
+          placeholder="Search by title, type, category or place"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="pl-9"
+        />
       </div>
+
+      {filtered.length === 0 && (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Nothing in this queue matches that search.
+        </p>
+      )}
 
       <div className="min-w-0 w-full max-w-full space-y-3">
         {filtered.map((item) => (

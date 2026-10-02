@@ -1,5 +1,6 @@
 "use client";
 
+import { StatusFilterButtons } from "@/components/admin/status-filter-buttons";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ function formatDate(iso: string) {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
   });
 }
 
@@ -82,27 +84,12 @@ export function SupportInboxClient({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      {/* Status filter */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {STATUS_FILTERS.map((s) => {
-          const count =
-            s === "all" ? submissions.length : submissions.filter((r) => r.status === s).length;
-          return (
-            <Button
-              key={s}
-              size="sm"
-              variant={filter === s ? "default" : "outline"}
-              onClick={() => setFilter(s)}
-              className="capitalize"
-            >
-              {s.replace("_", " ")}
-              <Badge variant="secondary" className="ml-1.5 text-[10px]">
-                {count}
-              </Badge>
-            </Button>
-          );
-        })}
-      </div>
+      <StatusFilterButtons
+        statuses={STATUS_FILTERS}
+        value={filter}
+        onChange={setFilter}
+        rows={submissions}
+      />
 
       {error && (
         <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

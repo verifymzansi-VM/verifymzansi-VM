@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -5,6 +6,7 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface } from "@/components/brand";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 import { PostCreateClient } from "./post-create-client";
 
 // How a post goes live, shown beside the headline on wide screens.
@@ -48,7 +50,7 @@ export default async function PostCreatePage() {
                 id="post-create-title"
                 className="mt-2 font-display text-[2rem] font-extrabold leading-[1.05] tracking-[-0.03em] text-white sm:text-[2.6rem]"
               >
-                What would you like <span className="text-brand-gold-300">to post?</span>
+                What would you like <span className="gold-shine text-brand-gold-300">to post?</span>
               </h1>
               <p className="mt-2 max-w-2xl text-base leading-7 text-white/75">
                 Each card is a section of the site. Pick the one your post belongs in.
@@ -62,9 +64,21 @@ export default async function PostCreatePage() {
               {STEPS.map((step, index) => (
                 <li
                   key={step}
-                  className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1.5 pl-1.5 pr-3.5 text-sm font-medium text-white/90"
+                  style={{ "--i": index } as CSSProperties}
+                  aria-current={index === 0 ? "step" : undefined}
+                  className={cn(
+                    "rise-in chip-pop flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-sm font-medium text-white/90",
+                    index === 0
+                      ? "border-brand-gold-300/40 bg-brand-gold-300/10"
+                      : "border-white/10 bg-white/[0.04]"
+                  )}
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-gold-300/15 font-display text-xs font-bold text-brand-gold-300">
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 items-center justify-center rounded-full bg-brand-gold-300/15 font-display text-xs font-bold text-brand-gold-300",
+                      index === 0 && "pulse-ring"
+                    )}
+                  >
                     {index + 1}
                   </span>
                   {step}

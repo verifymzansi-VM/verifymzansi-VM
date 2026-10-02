@@ -14,6 +14,7 @@ import {
   type DashboardReport,
 } from "@/lib/utils/admin-queries";
 import { calculateSlaState } from "@/lib/utils/sla";
+import { claimTypeOf } from "@/lib/admin/moderation-items";
 import type { MarketplaceArea } from "@/types/enums";
 
 interface AreaAdminPageConfig {
@@ -51,12 +52,7 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
     ...pendingVerifications.flatMap((group) =>
       group.steps.map((step) => ({ type: "verification_step" as const, id: step.id }))
     ),
-    ...pendingContent.map((item) => ({
-      type: (item.isEditRequest
-        ? "content_edit"
-        : (item.contentType ?? "listing")) as ClaimItemType,
-      id: item.id,
-    })),
+    ...pendingContent.map((item) => ({ type: claimTypeOf(item), id: item.id })),
     ...reports.map((report: DashboardReport) => ({ type: "report" as const, id: report.id })),
   ];
   const claims = await getClaimsForItems(user.id, claimItems);
@@ -81,6 +77,8 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
         [settled[0], "identity checks"],
         [settled[1], "content review queue"],
         [settled[2], "reports"],
+        [settled[3], "recent activity"],
+        [settled[4], "today's actions"],
       ].map(([result, label]) =>
         (result as PromiseSettledResult<unknown>).status === "rejected" ? (
           <p key={label as string} role="alert" className="text-sm text-destructive">
@@ -91,7 +89,8 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
       )}
 
       <p className="text-sm text-muted-foreground">
-        Claim items from the Verification, Moderation and Reports queues to work on them here.
+        Claim items from the Verification, Moderation and Reports queues to work on them here. This
+        view shows a limited set of waiting items; queue badges count the items shown.
       </p>
 
       <QueueClaimsProvider
@@ -101,7 +100,6 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
       >
         <AreaAdminTabs
           canEnforceDirectly={roleHasCapability(role, "enforcement:execute")}
-          area={area}
           areaLabel={areaLabel}
           pendingVerifications={pendingVerifications}
           pendingContent={pendingContent}

@@ -3,7 +3,8 @@
 import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KycQueueTable } from "./kyc-queue-table";
-import { ContentQueueTable, type ContentItem } from "./content-queue-table";
+import { ModerationQueueClient } from "./moderation/moderation-queue-client";
+import type { ModerationItem } from "./moderation/moderation-preview-panel";
 import { FlaggingQueueTable } from "./flagging-queue-table";
 import { AreaOverviewStats } from "./area-overview-stats";
 import { ActivityFeed } from "./activity-feed";
@@ -11,16 +12,14 @@ import { VerificationAlertBanner } from "./verification-alert-banner";
 import { FileCheck, Flag, BarChart3, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import type { MarketplaceArea } from "@/types/enums";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 
 interface AreaAdminTabsProps {
-  area: MarketplaceArea;
   /** Governors and admins may hide content and apply emergency containment. */
   canEnforceDirectly?: boolean;
   areaLabel: string;
   pendingVerifications: PendingVerificationGroup[];
-  pendingContent: ContentItem[];
+  pendingContent: ModerationItem[];
   reports: Array<{
     id: string;
     target_id: string;
@@ -51,7 +50,6 @@ interface AreaAdminTabsProps {
 }
 
 export function AreaAdminTabs({
-  area,
   areaLabel,
   pendingVerifications,
   pendingContent,
@@ -180,11 +178,7 @@ export function AreaAdminTabs({
             Content Publish Queue{" "}
             <span className="text-xs text-muted-foreground font-normal">({areaLabel} only)</span>
           </h3>
-          <ContentQueueTable
-            items={pendingContent}
-            area={area}
-            onDecisionComplete={handleRefresh}
-          />
+          <ModerationQueueClient items={pendingContent} />
         </div>
       </TabsContent>
 

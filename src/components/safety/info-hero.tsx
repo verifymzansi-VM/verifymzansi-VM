@@ -67,7 +67,7 @@ export function InfoHero({
               {accent && (
                 <>
                   {" "}
-                  <span className="text-brand-gold-300">{accent}</span>
+                  <span className="gold-shine text-brand-gold-300">{accent}</span>
                 </>
               )}
             </h1>

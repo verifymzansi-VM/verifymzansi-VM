@@ -54,6 +54,7 @@ type BlockerSummary = {
 const reviewSteps: Step[] = [
   { name: "Lint", args: ["lint"] },
   { name: "Typecheck", args: ["typecheck"] },
+  { name: "Tooling tests", args: ["test:tooling"] },
   { name: "OpenAPI drift", args: ["quality:openapi-drift"] },
   { name: "Dead-code scan", args: ["knip"] },
   { name: "Import graph", args: ["depcruise"] },
@@ -61,7 +62,7 @@ const reviewSteps: Step[] = [
   { name: "Blocking tests", args: ["test:blocking"] },
   { name: "Preflight", args: ["preflight"] },
   { name: "Secret scan", args: ["secret-scan"] },
-  { name: "Security audit", args: ["security:audit"] },
+  { name: "Security audit (including dev tools)", args: ["security:audit:all"] },
   { name: "License check", args: ["licenses:check"] },
   { name: "DB invariants", args: ["db:check-invariants"] },
 ];
@@ -69,6 +70,7 @@ const reviewSteps: Step[] = [
 const ciReviewSteps: Step[] = [
   { name: "Lint", args: ["lint"] },
   { name: "Typecheck", args: ["typecheck"] },
+  { name: "Tooling tests", args: ["test:tooling"] },
   { name: "OpenAPI drift", args: ["quality:openapi-drift"] },
   { name: "Dead-code scan", args: ["knip"] },
   { name: "Import graph", args: ["depcruise"] },
@@ -76,7 +78,7 @@ const ciReviewSteps: Step[] = [
   { name: "Blocking tests", args: ["test:blocking"] },
   { name: "Preflight", args: ["preflight"], nonBlocking: true },
   { name: "Secret scan", args: ["secret-scan"] },
-  { name: "Security audit", args: ["security:audit"] },
+  { name: "Security audit (including dev tools)", args: ["security:audit:all"] },
   { name: "License check", args: ["licenses:check"] },
   { name: "DB invariants", args: ["db:check-invariants"] },
 ];

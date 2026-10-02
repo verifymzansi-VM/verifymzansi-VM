@@ -8,7 +8,7 @@
     "src/middleware.ts",
     "workers/*.ts",
     "scripts/**/*.{ts,js,mjs,cjs}",
-    "remotion/index.ts"
+    "remotion/*index.{ts,tsx}",
   ],
   "project": [
     "src/**/*.{ts,tsx}",
@@ -18,7 +18,7 @@
     ".storybook/**/*.{ts,tsx,js,mjs,cjs}",
     ".husky/*",
     "*.{ts,js,mjs,cjs}",
-    ".github/workflows/*.{yml,yaml}"
+    ".github/workflows/*.{yml,yaml}",
   ],
   "ignoreFiles": [
     "next-env.d.ts",
@@ -26,7 +26,7 @@
     "coverage/**",
     "output/**",
     "playwright-report/**",
-    "test-results/**"
+    "test-results/**",
   ],
   "ignoreDependencies": [
     "@storybook/addon-a11y",
@@ -36,22 +36,18 @@
     "canvas",
     "k6",
     "lint-staged",
-    "supabase"
+    "supabase",
   ],
-  "ignoreBinaries": [
-    "lint-staged",
-    "storybook",
-    "supabase"
-  ],
+  "ignoreBinaries": ["lint-staged", "storybook", "supabase"],
   "ignoreIssues": {
     "src/lib/account/compat.ts": ["duplicates"],
     "src/lib/utils/phone.ts": ["duplicates"],
     "src/types/database.ts": ["types"],
     ".husky/pre-commit": ["binaries"],
-    "src/lib/api/v1.d.ts": ["exports", "types"]
+    "src/lib/api/v1.d.ts": ["exports", "types"],
   },
   "ignoreExportsUsedInFile": {
     "interface": true,
-    "type": true
-  }
+    "type": true,
+  },
 }

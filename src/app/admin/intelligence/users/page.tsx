@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { Users, UserPlus, TrendingUp, CheckCircle } from "lucide-react";
+import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Users & growth — Intelligence",
@@ -21,21 +22,24 @@ export default async function IntelligenceUsersPage() {
     { count: verifiedUsers },
     { count: suspendedUsers },
     { count: bannedUsers },
-  ] = await Promise.all([
-    admin.from(ACCOUNT_PROFILE_WRITE_TABLE).select("*", { count: "exact", head: true }),
-    admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .eq("account_verification_status", "verified"),
-    admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .eq("account_status", "suspended"),
-    admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .eq("account_status", "banned"),
-  ]);
+  ] = countsOrThrow(
+    await Promise.all([
+      admin.from(ACCOUNT_PROFILE_WRITE_TABLE).select("*", { count: "exact", head: true }),
+      admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq("account_verification_status", "verified"),
+      admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq("account_status", "suspended"),
+      admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .eq("account_status", "banned"),
+    ]),
+    "User figures"
+  );
 
   const total = totalUsers ?? 0;
   const verified = verifiedUsers ?? 0;

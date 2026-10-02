@@ -560,7 +560,7 @@ const ADMIN_ROUTE_TARGETS: RouteTarget[] = [
   },
   {
     name: "admin-promotions-events",
-    path: "/admin/promotions-events",
+    path: "/admin/tourism-events",
     scope: "admin",
     readySelectors: ["main"],
     titleIncludes: ["Tourism & Events"],

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { AREA_LABELS, type MarketplaceArea } from "@/types/enums";
+import { formatDateTime } from "@/lib/utils/format";
 
 type Campaign = {
   area: MarketplaceArea;
@@ -239,11 +240,7 @@ export function TrialManagement({
                         ? "Activated"
                         : "Pending"}
                 </td>
-                <td>
-                  {t.expires_at
-                    ? new Date(t.expires_at).toLocaleString("en-ZA")
-                    : "Starts on approval"}
-                </td>
+                <td>{t.expires_at ? formatDateTime(t.expires_at) : "Starts on approval"}</td>
                 <td className="p-2 space-y-2">
                   <Button
                     size="sm"

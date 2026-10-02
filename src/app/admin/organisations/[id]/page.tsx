@@ -50,7 +50,13 @@ export default async function OrganisationAdminDetailPage({
   const { user } = await requireStaff("organisations:manage");
 
   const admin = createAdminClient();
-  const { data: org } = await admin.from("organisations").select("*").eq("id", id).maybeSingle();
+  const { data: org, error: orgError } = await admin
+    .from("organisations")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  // A failed read is an error page with a retry, never a misleading "not found".
+  if (orgError) throw new Error(`Organisation could not be loaded: ${orgError.message}`);
   if (!org) notFound();
 
   const { from: reportFrom, to: reportTo } = reportWindow(org.trial_starts_at);

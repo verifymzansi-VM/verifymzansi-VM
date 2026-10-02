@@ -9,6 +9,7 @@ import {
   HorizontalBarPanel,
 } from "@/components/admin/intelligence-panels";
 import { TrendingUp, Calendar, BarChart3, Activity } from "lucide-react";
+import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Trends",
@@ -36,32 +37,35 @@ export default async function IntelligenceTrendsPage() {
     { count: listings30d },
     { count: businesses30d },
     { count: promotions30d },
-  ] = await Promise.all([
-    admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", thirtyDaysAgo),
-    admin
-      .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", sevenDaysAgo),
-    admin
-      .from("verification_steps")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", thirtyDaysAgo),
-    admin
-      .from("listings")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", thirtyDaysAgo),
-    admin
-      .from("businesses")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", thirtyDaysAgo),
-    admin
-      .from("promotions")
-      .select("*", { count: "exact", head: true })
-      .gte("created_at", thirtyDaysAgo),
-  ]);
+  ] = countsOrThrow(
+    await Promise.all([
+      admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", thirtyDaysAgo),
+      admin
+        .from(ACCOUNT_PROFILE_WRITE_TABLE)
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", sevenDaysAgo),
+      admin
+        .from("verification_steps")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", thirtyDaysAgo),
+      admin
+        .from("listings")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", thirtyDaysAgo),
+      admin
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", thirtyDaysAgo),
+      admin
+        .from("promotions")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", thirtyDaysAgo),
+    ]),
+    "Trend figures"
+  );
 
   const s30 = signups30d ?? 0;
   const s7 = signups7d ?? 0;

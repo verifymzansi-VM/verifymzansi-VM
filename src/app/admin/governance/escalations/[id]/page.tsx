@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, FileText, User } from "lucide-react";
 import { DecisionActionButtons } from "./decision-action-buttons";
+import { formatDateTime } from "@/lib/utils/format";
 
 export const metadata = {
   title: "Decision Detail — Governance",
@@ -26,17 +27,20 @@ export default async function DecisionDetailPage({ params }: Props) {
     .from("decision_records")
     .select("*")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (error || !decision) {
-    notFound();
-  }
+  // A failed read is an error page with a retry, never a misleading "not found".
+  if (error) throw new Error(`Decision could not be loaded: ${error.message}`);
+  if (!decision) notFound();
 
-  const { data: timelineEvents } = await admin
+  const { data: timelineEvents, error: timelineError } = await admin
     .from("decision_record_events")
     .select("*")
     .eq("decision_id", id)
     .order("created_at", { ascending: true });
+  if (timelineError) {
+    throw new Error(`Decision timeline could not be loaded: ${timelineError.message}`);
+  }
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -99,7 +103,7 @@ export default async function DecisionDetailPage({ params }: Props) {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Created</p>
-              <p className="text-sm">{new Date(decision.created_at).toLocaleString()}</p>
+              <p className="text-sm">{formatDateTime(decision.created_at)}</p>
             </div>
           </div>
 
@@ -112,7 +116,7 @@ export default async function DecisionDetailPage({ params }: Props) {
             <p className="text-sm">{decision.recommendation || "No recommendation provided."}</p>
             <p className="text-xs text-muted-foreground mt-1">
               By {decision.recommender_id?.slice(0, 8)}… on{" "}
-              {decision.created_at ? new Date(decision.created_at).toLocaleString() : "—"}
+              {decision.created_at ? formatDateTime(decision.created_at) : "—"}
             </p>
           </div>
 
@@ -126,7 +130,7 @@ export default async function DecisionDetailPage({ params }: Props) {
               <p className="text-sm">{decision.approval_rationale || "No reason provided."}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 By {decision.approved_by?.slice(0, 8)}… on{" "}
-                {decision.decided_at ? new Date(decision.decided_at).toLocaleString() : "—"}
+                {decision.decided_at ? formatDateTime(decision.decided_at) : "—"}
               </p>
             </div>
           )}
@@ -201,7 +205,7 @@ export default async function DecisionDetailPage({ params }: Props) {
                     </p>
                   </div>
                   <time className="text-xs text-muted-foreground flex-shrink-0">
-                    {new Date(event.created_at as string).toLocaleString()}
+                    {formatDateTime(event.created_at as string)}
                   </time>
                 </div>
               ))}

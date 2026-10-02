@@ -12,53 +12,18 @@ const REFRESH_DEBOUNCE_MS = 400;
 const MIN_REFRESH_INTERVAL_MS = 10_000;
 const FALLBACK_REFRESH_MS = 120_000;
 const FOCUS_REFRESH_STALE_MS = 30_000;
-const DSAR_ACTIVE_STATUSES = new Set(["submitted", "in_progress"]);
 
 type RealtimePayload = Record<string, unknown> & {
-  eventType?: string;
   new?: Record<string, unknown> | null;
-  old?: Record<string, unknown> | null;
 };
 
-function readStatus(record: Record<string, unknown> | null | undefined): string | null {
-  return typeof record?.status === "string" ? record.status : null;
-}
-
-function isQueueEntry(payload: RealtimePayload, activeStatuses: ReadonlySet<string>) {
-  const nextStatus = readStatus(payload.new);
-  if (!nextStatus || !activeStatuses.has(nextStatus)) {
-    return false;
-  }
-
-  if (payload.eventType === "INSERT") {
-    return true;
-  }
-
-  const previousStatus = readStatus(payload.old);
-  return previousStatus !== nextStatus;
-}
-
-function isVerificationQueueEntry(payload: RealtimePayload) {
-  return isQueueEntry(payload, new Set(["pending"]));
-}
-
-function isModerationQueueEntry(payload: RealtimePayload) {
-  return isQueueEntry(payload, new Set(["pending_moderation"]));
-}
-
-function isReportQueueEntry(payload: RealtimePayload) {
-  return isQueueEntry(payload, new Set(["open"]));
-}
-
-function isDsarQueueEntry(payload: RealtimePayload) {
-  return isQueueEntry(payload, DSAR_ACTIVE_STATUSES);
-}
-
-function isContactSubmissionQueueEntry(payload: RealtimePayload) {
-  return isQueueEntry(payload, new Set(["new"]));
-}
-
-export function AdminRealtimeRefresh() {
+/**
+ * Keeps an open admin page current. Live events come from the viewer's own
+ * staff notifications only: the queue tables are deliberately not in the
+ * realtime publication, so their rows (ID checks, data requests) are never
+ * broadcast. Everything else is caught by the focus and fallback refreshes.
+ */
+export function AdminRealtimeRefresh({ userId }: { userId: string }) {
   const router = useRouter();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRefreshAtRef = useRef(0);
@@ -107,94 +72,15 @@ export function AdminRealtimeRefresh() {
     };
   }, [refresh]);
 
-  useRealtime({
-    table: "verification_steps",
-    event: "*",
-    filterColumn: "status",
-    filterValue: "pending",
-    onEvent: (payload) => {
-      if (isVerificationQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  useRealtime({
-    table: "listings",
-    event: "*",
-    filterColumn: "status",
-    filterValue: "pending_moderation",
-    onEvent: (payload) => {
-      if (isModerationQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  useRealtime({
-    table: "businesses",
-    event: "*",
-    filterColumn: "status",
-    filterValue: "pending_moderation",
-    onEvent: (payload) => {
-      if (isModerationQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  useRealtime({
-    table: "promotions",
-    event: "*",
-    filterColumn: "status",
-    filterValue: "pending_moderation",
-    onEvent: (payload) => {
-      if (isModerationQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  useRealtime({
-    table: "reports",
-    event: "*",
-    filterColumn: "status",
-    filterValue: "open",
-    onEvent: (payload) => {
-      if (isReportQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  useRealtime({
-    table: "dsar_cases",
-    event: "*",
-    onEvent: (payload) => {
-      if (isDsarQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  useRealtime({
-    table: "contact_submissions",
-    event: "*",
-    filterColumn: "status",
-    filterValue: "new",
-    onEvent: (payload) => {
-      if (isContactSubmissionQueueEntry(payload as RealtimePayload)) {
-        scheduleRefresh();
-      }
-    },
-  });
-
-  // Staff notifications also cover edits, whose live source rows do not change.
+  // Filtered to the viewer, so the server checks only their rows, not every user's.
   useRealtime({
     table: "notifications",
     event: "INSERT",
+    filterColumn: "user_id",
+    filterValue: userId,
     onEvent: (payload) => {
-      if ((payload as RealtimePayload).new?.href === "/admin/moderation") {
+      const href = (payload as RealtimePayload).new?.href;
+      if (typeof href === "string" && href.startsWith("/admin")) {
         scheduleRefresh();
       }
     },

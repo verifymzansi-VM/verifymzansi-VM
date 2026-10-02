@@ -42,8 +42,6 @@ const SUB_PAGES: Record<string, string> = {
   "/admin/governance/appeals/[id]": "/admin/governance/appeals",
   "/admin/governance/escalations/[id]": "/admin/governance/escalations",
   "/admin/organisations/[id]": "/admin/organisations",
-  // Old address of Tourism & Events; the same page.
-  "/admin/tourism-events": "/admin/promotions-events",
 };
 
 describe("admin navigation registry", () => {

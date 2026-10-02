@@ -65,7 +65,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       )}
 
       <AdminLiveNotifier userId={staff.user.id} userRole={staff.role} />
-      <AdminRealtimeRefresh />
+      <AdminRealtimeRefresh userId={staff.user.id} />
 
       <div className="flex w-full min-w-0 flex-1 overflow-x-hidden">
         <AdminSidebar sections={sections} counts={counts} />

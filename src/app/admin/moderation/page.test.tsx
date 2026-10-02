@@ -39,7 +39,7 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ error: mockLoggerError, info: vi.fn(), warn: vi.fn() }),
 }));
 
-vi.mock("./moderation-queue-client", () => ({
+vi.mock("@/components/admin/moderation/moderation-queue-client", () => ({
   ModerationQueueClient: ({
     items,
   }: {
@@ -171,7 +171,7 @@ describe("AdminModerationPage", () => {
     expect(screen.getByText("queue-size:4")).toBeInTheDocument();
     expect(screen.getByText("Listing:Used iPhone 15")).toBeInTheDocument();
     expect(screen.getByText("Business:Nomsa Beauty Studio")).toBeInTheDocument();
-    expect(screen.getByText("Promotion:Weekend Sale")).toBeInTheDocument();
+    expect(screen.getByText("Event:Weekend Sale")).toBeInTheDocument();
     expect(screen.getByText(/Listing edit:Used iPhone 15 - updated/)).toBeInTheDocument();
     expect(screen.getByText(/changes:Category,Title/i)).toBeInTheDocument();
     expect(listingQuery?.select).toHaveBeenCalledWith(expect.stringContaining("video_thumbnail"), {

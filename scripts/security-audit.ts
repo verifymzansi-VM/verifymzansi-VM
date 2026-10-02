@@ -1,4 +1,5 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { dependencyAuditVerdict } from "./dependency-audit-policy";
 
 type AuditOutput = {
   auditReportVersion?: number;
@@ -28,10 +29,13 @@ function spawnCommand(
 }
 
 async function main(): Promise<void> {
-  process.stdout.write("Running dependency vulnerability audit...\n");
+  const includeDev = process.argv.slice(2).includes("--all");
+  const scope = includeDev ? "production and development" : "production";
+  process.stdout.write(`Running ${scope} dependency vulnerability audit...\n`);
 
   // Audit the resolved pnpm lockfile used by frozen installs and deployment.
-  const auditArgs = ["audit", "--json", "--prod", "--audit-level=high"];
+  const auditArgs = ["audit", "--json", "--audit-level=high"];
+  if (!includeDev) auditArgs.push("--prod");
   const result = spawnCommand("pnpm", auditArgs, {
     encoding: "utf8",
     stdio: "pipe",
@@ -64,10 +68,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (result.status === 0) {
-    process.stdout.write(
-      "Dependency audit passed (no high/critical production vulnerabilities).\n"
-    );
+  if (dependencyAuditVerdict(result.status, parsedOutput) === "PASS") {
+    process.stdout.write(`Dependency audit passed (no high/critical ${scope} vulnerabilities).\n`);
     return;
   }
 
@@ -78,7 +80,7 @@ async function main(): Promise<void> {
   ) {
     console.error("Dependency audit failed.");
     console.error(result.stdout.trim());
-    process.exit(result.status ?? 1);
+    process.exit(result.status || 1);
   }
 
   console.error("Dependency audit failed.");
@@ -95,7 +97,7 @@ async function main(): Promise<void> {
   }
   if (result.stdout) console.error(result.stdout.trim());
   if (result.stderr) console.error(result.stderr.trim());
-  process.exit(result.status ?? 1);
+  process.exit(result.status || 1);
 }
 
 main().catch((error) => {

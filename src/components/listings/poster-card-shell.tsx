@@ -199,10 +199,10 @@ export function PosterCardShell({
   const cardClassName = cn(
     "relative h-full w-full flex flex-col overflow-hidden border-transparent transition-all duration-300",
     isHeroVariant && !immersive
-      ? "border border-slate-200 bg-white text-slate-950 elev-lg ring-1 ring-black/5 hover:-translate-y-0.5 hover:elev-xl dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
+      ? "border border-slate-200 bg-white text-slate-950 elev-lg ring-1 ring-black/5 motion-safe:hover:-translate-y-1 hover:elev-xl dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:ring-white/10"
       : isShowcaseVariant || immersive
         ? "border-transparent bg-transparent shadow-none hover:-translate-y-0.5 hover:border-transparent hover:bg-transparent hover:shadow-none dark:bg-transparent"
-        : "border border-border/60 bg-card elev-xs hover:-translate-y-px hover:elev-sm hover:border-foreground/15 dark:bg-card dark:text-white",
+        : "border border-border/60 bg-card elev-xs motion-safe:hover:-translate-y-1 hover:border-foreground/15 hover:shadow-[0_24px_44px_-22px_rgba(16,23,20,0.45)] dark:bg-card dark:text-white dark:hover:shadow-[0_24px_44px_-22px_rgba(0,0,0,0.8)]",
     rootRadiusClassName,
     accentClassName
   );
