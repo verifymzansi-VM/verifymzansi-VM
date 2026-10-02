@@ -8,8 +8,8 @@ import {
 } from "@/lib/analytics/commercial-events";
 
 /** MRC/IAB viewable display impression: half the card on screen for 1 second. */
-export const IMPRESSION_VISIBLE_RATIO = 0.5;
-export const IMPRESSION_DWELL_MS = 1_000;
+const IMPRESSION_VISIBLE_RATIO = 0.5;
+const IMPRESSION_DWELL_MS = 1_000;
 
 /**
  * Records that items were seen on a surface (deduplicated server-side hourly).

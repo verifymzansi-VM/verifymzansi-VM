@@ -5,8 +5,8 @@ import type { ContentTargetType } from "@/lib/engagement";
 import { trackContentView, VIEW_WINDOW_MS } from "@/lib/views/content-views";
 
 /** MRC/IAB video standard: half the player on screen for 2 continuous seconds. */
-export const VIEW_CONTINUOUS_SECONDS = 2;
-export const VIEW_MIN_VISIBLE_RATIO = 0.5;
+const VIEW_CONTINUOUS_SECONDS = 2;
+const VIEW_MIN_VISIBLE_RATIO = 0.5;
 /** Engaged view: 30 seconds, or 90% of a shorter video. */
 const ENGAGED_SECONDS = 30;
 const ENGAGED_SHARE = 0.9;
@@ -14,7 +14,7 @@ const ENGAGED_SHARE = 0.9;
 const SHORT_VIDEO_SHARE = 0.97;
 
 /** Public content links also identify cards shared by the showroom and feeds. */
-export function targetFromHref(href?: string) {
+function targetFromHref(href?: string) {
   const match = href?.match(
     /^\/(listing|mzansi-business|tourism-events)\/([0-9a-f-]{36})(?:[/?#]|$)/i
   );

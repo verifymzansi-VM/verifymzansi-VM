@@ -25,7 +25,7 @@ const log = createLogger("ShowroomFeed");
  */
 export type ShowroomSurface = "home" | "business" | "market" | "tourism";
 
-export const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
+const SHOWROOM_LIMITS: Record<ShowroomSurface, number> = {
   home: 15,
   business: 7,
   market: 7,

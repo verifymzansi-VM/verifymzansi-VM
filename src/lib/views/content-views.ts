@@ -26,7 +26,7 @@ export interface ContentViewEvent {
 
 /** Same window the server uses: one view per person per post per 30 minutes. */
 export const VIEW_WINDOW_MS = 30 * 60 * 1000;
-export const VIEW_RECORDED_EVENT = "vmz:content-view-recorded";
+const VIEW_RECORDED_EVENT = "vmz:content-view-recorded";
 
 const ENDPOINT = "/api/engagement/view";
 const MAX_BATCH = 20;

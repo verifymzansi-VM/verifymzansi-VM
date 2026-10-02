@@ -9,7 +9,7 @@ export interface ShowroomEntry {
  * the section pages (L L N L N L N), the rest national, so posts from small
  * provinces still reach the big cities and a showroom is never empty.
  */
-export const LOCAL_SHARE = 0.55;
+const LOCAL_SHARE = 0.55;
 
 /**
  * Interleave local and national posts, keeping each side in its ranked
