@@ -87,6 +87,10 @@ export function trackCommercialEvents(events: CommercialEvent[]) {
   if (!listening) {
     listening = true;
     window.addEventListener("pagehide", flushCommercialEvents);
+    // Send before a hidden tab is throttled or discarded (app switch, lock).
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushCommercialEvents();
+    });
   }
   if (queue.length >= MAX_BATCH) {
     flushCommercialEvents();

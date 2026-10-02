@@ -77,6 +77,24 @@ describe("loadShowroomItems", () => {
     expect(items.map((item) => item.id)).toEqual(["g1", "n1", "n2"]);
   });
 
+  it("lets an over-exposed local post wait its turn like a national one", async () => {
+    mockRpc.mockResolvedValue({
+      data: [
+        { content_table: "businesses", content_id: "hog", is_local: true, over_exposed: true },
+        { content_table: "businesses", content_id: "n1", is_local: false },
+        { content_table: "businesses", content_id: "g2", is_local: true, over_exposed: false },
+      ],
+      error: null,
+    });
+    const { client } = fakeClient({
+      businesses: [business("hog"), business("n1", "Limpopo"), business("g2")],
+    });
+
+    const items = await loadShowroomItems("business", { province: "Gauteng", client });
+
+    expect(items.map((item) => item.id)).toEqual(["g2", "hog", "n1"]);
+  });
+
   it("drops placeholder posts and caps the showroom size", async () => {
     mockRpc.mockResolvedValue({
       data: Array.from({ length: 10 }, (_, index) => ({

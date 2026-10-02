@@ -99,9 +99,20 @@ async function fetchRankedOrder(
       });
       return null;
     }
-    return (data as { content_table: ContentTable; content_id: string; is_local: boolean }[]).map(
-      (row) => ({ table: row.content_table, id: row.content_id, isLocal: row.is_local })
-    );
+    return (
+      data as {
+        content_table: ContentTable;
+        content_id: string;
+        is_local: boolean;
+        over_exposed?: boolean;
+      }[]
+    ).map((row) => ({
+      table: row.content_table,
+      id: row.content_id,
+      // A local post already shown over twice its fair share waits its turn
+      // like a national one, so a province's few posts cannot hog the front.
+      isLocal: row.is_local && !row.over_exposed,
+    }));
   } catch (error) {
     log.warn("Showroom ranking failed; using newest first", {
       surface,

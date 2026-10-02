@@ -71,7 +71,22 @@ export async function POST(request: NextRequest) {
     // The browser identity is issued once by the middleware; a request that
     // still lacks it gets one here. It stays the same across login/logout.
     const existingViewerId = request.cookies.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
-    const viewerId = existingViewerId ?? createAnonymousViewerId();
+    if (!existingViewerId) {
+      // Every page load sets this cookie before any view can be sent, so a
+      // request without it did not come from someone browsing the site.
+      const response = NextResponse.json(NOT_COUNTED);
+      response.cookies.set({
+        name: ENGAGEMENT_VIEWER_COOKIE,
+        value: createAnonymousViewerId(),
+        maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+      });
+      return response;
+    }
+    const viewerId = existingViewerId;
     const clientIp = getClientIp(request);
     const geo = await resolveIpGeolocation().catch(() => null);
 
@@ -88,22 +103,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to record view" }, { status: 500 });
     }
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       ok: true,
       counted: Array.isArray(data) ? (data as string[]) : [],
     });
-    if (!existingViewerId) {
-      response.cookies.set({
-        name: ENGAGEMENT_VIEWER_COOKIE,
-        value: viewerId,
-        maxAge: ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        path: "/",
-      });
-    }
-    return response;
   } catch (error) {
     log.error("Unexpected engagement view error", {
       error: error instanceof Error ? error.message : "Unknown error",

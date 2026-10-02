@@ -92,24 +92,31 @@ describe("POST /api/engagement/view", () => {
     });
   });
 
-  it("returns the counted posts and sets the viewer cookie for a new browser", async () => {
+  it("returns the counted posts for a browser that loaded a page", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: [ID], error: null });
     mockCreateAdminClient.mockReturnValue({ rpc });
 
-    const response = await POST(createRequest(videoView));
+    const response = await POST(createRequest(videoView, "browser-1"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true, counted: [ID] });
-    expect(response.headers.get("set-cookie")).toContain("vmz_viewer=");
     expect(rpc).toHaveBeenCalledWith(
       "record_content_views",
       expect.objectContaining({
         p_events: videoView.events,
-        p_viewer_key: expect.stringMatching(/^device:/),
+        p_viewer_key: "device:browser-1",
         p_province: "Gauteng",
         p_user_id: null,
       })
     );
+  });
+
+  it("does not count a request that never loaded a page, but issues the cookie", async () => {
+    const response = await POST(createRequest(videoView));
+
+    await expect(response.json()).resolves.toEqual({ ok: true, counted: [] });
+    expect(response.headers.get("set-cookie")).toContain("vmz_viewer=");
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 
   it("keeps the device identity across login and never stores the raw IP", async () => {

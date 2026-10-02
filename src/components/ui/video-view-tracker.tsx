@@ -27,6 +27,14 @@ function targetFromHref(href?: string) {
   return { targetType: types[match[1].toLowerCase()], targetId: match[2] };
 }
 
+/** Where a card without an explicit surface was seen, from the page it is on. */
+function surfaceFromPath(pathname: string): string {
+  if (pathname === "/") return "home";
+  if (/^\/(listing|mzansi-business|tourism-events)\/[0-9a-f-]{36}/i.test(pathname)) return "detail";
+  const section = pathname.split("/").filter(Boolean)[0] ?? "other";
+  return `page:${section.replace(/[^a-z0-9_-]/gi, "").slice(0, 30) || "other"}`;
+}
+
 interface PlaybackState {
   /** Wall-clock and media time of the last sample. */
   wall: number;
@@ -95,7 +103,13 @@ export function VideoViewTracker({
 
   const report = (engaged: boolean) => {
     if (!id || !type) return;
-    void trackContentView({ type, id, source: "video", surface, engaged }).then((counted) => {
+    void trackContentView({
+      type,
+      id,
+      source: "video",
+      surface: surface ?? surfaceFromPath(window.location.pathname),
+      engaged,
+    }).then((counted) => {
       if (counted) onRecordedRef.current?.();
     });
   };

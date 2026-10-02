@@ -165,6 +165,11 @@ export function trackContentView(event: ContentViewEvent): Promise<boolean> {
     if (!listening) {
       listening = true;
       window.addEventListener("pagehide", () => flush(true));
+      // Background tabs throttle timers and phones may discard them, so send
+      // as soon as the page is hidden instead of waiting for the batch timer.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") flush(true);
+      });
     }
     if (queue.length >= MAX_BATCH) flush();
     else if (!timer) timer = setTimeout(() => flush(), FLUSH_DELAY_MS);
