@@ -70,16 +70,21 @@ describe("shouldUseStrictNonceCsp", () => {
 });
 
 describe("buildCsp", () => {
-  it.each([null, "production-nonce"])(
-    "allows the pinned face runtime JS bootstrap with nonce %s",
-    (nonce) => {
-      const csp = buildCsp(nonce);
-      const scripts = csp.split("; ").find((value) => value.startsWith("script-src "))!;
-      expect(scripts).toContain("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm/");
-      expect(scripts.split(" ")).not.toContain("https://cdn.jsdelivr.net");
-      expect(scripts).not.toContain("'unsafe-eval'");
-    }
-  );
+  it.each([null, "production-nonce"])("never trusts open package CDNs with nonce %s", (nonce) => {
+    const csp = buildCsp(nonce);
+    expect(csp).not.toContain("unpkg.com");
+    expect(csp).not.toContain("cdn.jsdelivr.net");
+    const scripts = csp.split("; ").find((value) => value.startsWith("script-src "))!;
+    expect(scripts).not.toContain("'unsafe-eval'");
+  });
+
+  it("scopes Google Cloud Storage connections to the MediaPipe model bucket", () => {
+    const connect = buildCsp(null)
+      .split("; ")
+      .find((value) => value.startsWith("connect-src "))!;
+    expect(connect.split(" ")).toContain("https://storage.googleapis.com/mediapipe-models/");
+    expect(connect.split(" ")).not.toContain("https://storage.googleapis.com");
+  });
   it("includes default-src, base-uri, frame-ancestors, and object-src", () => {
     const csp = buildCsp(null);
     expect(csp).toContain("default-src 'self'");
@@ -98,7 +103,7 @@ describe("buildCsp", () => {
   it("uses nonce-based scripts with explicit URL allowlists when nonce provided", () => {
     const csp = buildCsp("abc123");
     expect(csp).toContain(
-      "script-src 'self' 'nonce-abc123' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com"
+      "script-src 'self' 'nonce-abc123' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com;"
     );
     expect(csp).not.toContain("'strict-dynamic'");
     expect(csp).toContain("style-src 'self' 'nonce-abc123'");
@@ -140,13 +145,6 @@ describe("buildCsp", () => {
   it("includes Sentry ingest in connect-src", () => {
     const csp = buildCsp(null);
     expect(csp).toContain("https://*.ingest.us.sentry.io");
-  });
-
-  it("allows FFmpeg core downloads for client-side video compression", () => {
-    const csp = buildCsp(null);
-    expect(csp).toContain("connect-src");
-    expect(csp).toContain("https://unpkg.com");
-    expect(csp).toContain("script-src");
   });
 
   it("includes Cloudflare Turnstile in frame-src and script-src", () => {

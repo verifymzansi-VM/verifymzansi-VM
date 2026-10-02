@@ -2,15 +2,15 @@
   "name": "verifymzansi",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.2.1",
+  "packageManager": "pnpm@10.34.5",
   "engines": {
     "node": "^22.19.0 || ^24.0.0",
-    "pnpm": ">=10.0.0"
+    "pnpm": ">=10.16.0"
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "node ./node_modules/next/dist/bin/next dev",
-    "build": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack",
+    "dev": "node scripts/vendor-wasm-assets.mjs && node ./node_modules/next/dist/bin/next dev",
+    "build": "node scripts/vendor-wasm-assets.mjs && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack",
     "capture:live-site": "tsx scripts/capture-live-site.ts",
     "assets:refresh:live": "tsx scripts/generate-live-assets.ts",
     "media:refresh:live": "pnpm capture:live-site && pnpm assets:refresh:live",
@@ -163,6 +163,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@electric-sql/pglite": "^0.5.8",
+    "@ffmpeg/core": "0.12.9",
     "@next/env": "16.3.6",
     "@opennextjs/cloudflare": "^1.20.7",
     "@playwright/test": "^1.63.0",

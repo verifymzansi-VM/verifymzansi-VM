@@ -27,6 +27,7 @@
  */
 
 import { z } from "zod";
+import { supabaseServiceHeaders } from "./supabase-headers";
 
 // ---------------------------------------------------------------------------
 // Cloudflare Worker type stubs (avoids needing @cloudflare/workers-types in
@@ -160,12 +161,10 @@ const worker = {
               `${env.SUPABASE_URL}/rest/v1/kyc_artifacts?id=eq.${encodeURIComponent(artifactId)}`,
               {
                 method: "PATCH",
-                headers: {
-                  apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-                  Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+                headers: supabaseServiceHeaders(env.SUPABASE_SERVICE_ROLE_KEY, {
                   "Content-Type": "application/json",
                   Prefer: "return=minimal",
-                },
+                }),
                 body: JSON.stringify({ status: "encryption_failed" }),
               }
             );
@@ -286,12 +285,10 @@ const worker = {
       `${env.SUPABASE_URL}/rest/v1/kyc_artifacts?id=eq.${encodeURIComponent(artifactId)}`,
       {
         method: "PATCH",
-        headers: {
-          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        headers: supabaseServiceHeaders(env.SUPABASE_SERVICE_ROLE_KEY, {
           "Content-Type": "application/json",
           Prefer: "return=minimal",
-        },
+        }),
         body: JSON.stringify({ r2_key: finalKey, status: "encrypted" }),
       }
     );

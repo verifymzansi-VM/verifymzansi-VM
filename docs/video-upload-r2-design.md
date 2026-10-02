@@ -86,7 +86,8 @@ its own timeout/proxy orchestration.
 
 1. Select an MP4, WebM or MOV, at most 50 MiB per file.
 2. Read browser video metadata and optionally run single-thread FFmpeg WASM,
-   loaded from unpkg.
+   self-hosted under /vendor/ffmpeg-core (gzipped; see
+   scripts/vendor-wasm-assets.mjs).
 3. Give conversion 60 seconds on the shared posting path. MOV must become MP4;
    compatible MIME types may fall back to the original.
 4. Request `/api/media/upload-url`, PUT to R2, then call

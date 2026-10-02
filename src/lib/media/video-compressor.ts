@@ -1,7 +1,9 @@
 /**
  * Client-side video compression using FFmpeg WASM.
  *
- * Lazy-loads the ~25 MB WASM binary only when compression is needed.
+ * Lazy-loads the ~32 MB WASM binary only when compression is needed. The core
+ * is self-hosted under /vendor (see scripts/vendor-wasm-assets.mjs) so the CSP
+ * never has to trust a public CDN.
  * Uses single-threaded mode to avoid requiring COOP/COEP headers
  * that would break Cloudflare Turnstile and analytics scripts.
  *
@@ -55,7 +57,23 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, "onProgress" | "signal"
 };
 
 const WEB_UPLOAD_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
-const FFMPEG_CORE_BASE_URL = "https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd";
+const FFMPEG_CORE_BASE_PATH = "/vendor/ffmpeg-core";
+
+/**
+ * Download the self-hosted core and hand it to the worker as a blob URL.
+ * The WASM is stored gzipped because it exceeds Cloudflare's 25 MiB per-asset
+ * limit; inflate it here unless the host already decoded it in transit.
+ */
+async function loadFfmpegWasmURL(signal?: AbortSignal): Promise<string> {
+  const response = await fetch(`${FFMPEG_CORE_BASE_PATH}/ffmpeg-core.wasm.gz`, { signal });
+  if (!response.ok) throw new Error(`FFmpeg core download failed (${response.status})`);
+  let wasm = await response.blob();
+  const magic = new Uint8Array(await wasm.slice(0, 2).arrayBuffer());
+  if (magic[0] === 0x1f && magic[1] === 0x8b) {
+    wasm = await new Response(wasm.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+  }
+  return URL.createObjectURL(new Blob([wasm], { type: "application/wasm" }));
+}
 
 /**
  * Read video dimensions using a temporary <video> element.
@@ -183,6 +201,7 @@ export async function compressVideo(
   }
 
   let dispose: (() => void) | undefined;
+  let wasmURL: string | undefined;
   try {
     // ── Lazy-load FFmpeg WASM ─────────────────────────────
     const { FFmpeg } = await import("@ffmpeg/ffmpeg");
@@ -219,9 +238,12 @@ export async function compressVideo(
     // the UMD core through importScripts. An ESM core throws there, and the
     // package's dynamic-import fallback is compiled to an empty webpack
     // context (MODULE_NOT_FOUND), so selecting ESM breaks every conversion.
+    // importScripts resolves relative to the worker chunk, so pass an
+    // absolute same-origin URL.
+    wasmURL = await loadFfmpegWasmURL(options.signal);
     await ffmpeg.load({
-      coreURL: `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`,
-      wasmURL: `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`,
+      coreURL: `${window.location.origin}${FFMPEG_CORE_BASE_PATH}/ffmpeg-core.js`,
+      wasmURL,
     });
 
     if (options.signal?.aborted) {
@@ -352,6 +374,7 @@ export async function compressVideo(
     };
   } finally {
     dispose?.();
+    if (wasmURL) URL.revokeObjectURL(wasmURL);
   }
 }
 

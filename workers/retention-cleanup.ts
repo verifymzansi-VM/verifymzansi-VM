@@ -18,6 +18,8 @@
 // the main Next.js tsconfig).  Install the package for full type coverage.
 // ---------------------------------------------------------------------------
 
+import { supabaseServiceHeaders } from "./supabase-headers";
+
 interface R2Bucket {
   delete(key: string | string[]): Promise<void>;
   get(key: string): Promise<R2ObjectBody | null>;
@@ -445,12 +447,10 @@ const worker: ExportedHandler<Env> = {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
     const supabaseUrl = env.SUPABASE_URL;
     const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
-    const headers = {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
+    const headers = supabaseServiceHeaders(supabaseKey, {
       "Content-Type": "application/json",
       Prefer: "return=representation",
-    };
+    });
 
     // 1. Fetch unprocessed cleanup records (max 200 per run)
     const fetchRes = await fetchWithTimeout(

@@ -38,17 +38,20 @@ export function buildCsp(
 
   const connectSrcValues = [
     "'self'",
+    // The FFmpeg worker fetches its decompressed core from a same-origin blob
+    // URL; browsers that apply the page policy to workers need this.
+    "blob:",
     ...(supabaseOrigin ? [supabaseOrigin] : []),
     ...(supabaseWsOrigin ? [supabaseWsOrigin] : []),
     "https://*.ingest.us.sentry.io",
     "https://challenges.cloudflare.com",
     "https://static.cloudflareinsights.com",
-    "https://unpkg.com",
     "https://*.r2.cloudflarestorage.com",
-    // MediaPipe face-liveness model + WASM runtime (client-side KYC selfie
-    // liveness challenge). Its JS bootstrap also needs the pinned script path.
-    "https://cdn.jsdelivr.net",
-    "https://storage.googleapis.com",
+    // MediaPipe face-liveness model (client-side KYC selfie liveness). Scoped
+    // to Google's model bucket: storage.googleapis.com hosts every public GCS
+    // bucket, so the bare host would let anyone's bucket receive requests.
+    // The FFmpeg and MediaPipe WASM runtimes are self-hosted under /vendor.
+    "https://storage.googleapis.com/mediapipe-models/",
   ];
 
   if (options?.allowDevWebSocket) {
@@ -62,11 +65,10 @@ export function buildCsp(
   // scripts are blocked because URL allowlists are ignored. Using nonce +
   // explicit URL allowlists gives strong XSS protection while remaining
   // compatible with Cloudflare's infrastructure.
-  const scriptSrc =
-    (nonce
-      ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com`
-      : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://unpkg.com") +
-    " https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm/";
+  // Never allow open package CDNs (unpkg, jsdelivr): anyone can publish there.
+  const scriptSrc = nonce
+    ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com`
+    : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com";
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",

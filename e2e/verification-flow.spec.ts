@@ -138,8 +138,8 @@ test.describe("Verification wizard (authenticated)", () => {
     });
 
     // A fake camera cannot complete human movements. Exercise the explicit
-    // unsupported-device path without depending on an external model download.
-    await page.route("https://cdn.jsdelivr.net/**", (route) => route.abort());
+    // unsupported-device path by blocking the self-hosted MediaPipe runtime.
+    await page.route("**/vendor/mediapipe/**", (route) => route.abort());
     await page.getByRole("button", { name: /open camera/i }).click();
     await expect(page.locator("video")).toBeVisible({ timeout: 20_000 });
     const selfieDialog = page.getByRole("dialog", { name: "Selfie verification" });

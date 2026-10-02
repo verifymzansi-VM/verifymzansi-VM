@@ -4,6 +4,7 @@ import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { exportSupabaseTable } from "./lib/export-supabase-table";
+import { supabaseServiceHeaders } from "../workers/supabase-headers";
 
 const workspaceRoot = process.cwd();
 const timestamp = new Date().toISOString().replace(/[:.]/gu, "-");
@@ -28,12 +29,7 @@ type OpenApiDocument = {
 };
 
 function getApiHeaders(extra: Record<string, string> = {}): HeadersInit {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return {
-    apikey: serviceRoleKey,
-    Authorization: `Bearer ${serviceRoleKey}`,
-    ...extra,
-  };
+  return supabaseServiceHeaders(process.env.SUPABASE_SERVICE_ROLE_KEY!, extra);
 }
 
 function getPublicTableNames(document: OpenApiDocument): string[] {

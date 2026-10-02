@@ -29,6 +29,8 @@
     "test-results/**",
   ],
   "ignoreDependencies": [
+    // Copied by path into public/vendor (scripts/vendor-wasm-assets.mjs), never imported.
+    "@ffmpeg/core",
     "@storybook/addon-a11y",
     "@storybook/addon-essentials",
     "@storybook/addon-interactions",

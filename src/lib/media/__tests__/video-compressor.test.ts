@@ -77,6 +77,10 @@ beforeEach(() => {
   mockWriteFile.mockResolvedValue(undefined);
 
   vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(new Uint8Array([0x00, 0x61, 0x73, 0x6d]), { status: 200 }))
+  );
+  vi.stubGlobal(
     "URL",
     Object.assign({}, globalThis.URL, {
       createObjectURL: vi.fn(() => "blob:mock"),
@@ -223,10 +227,25 @@ describe("compressVideo", () => {
 
     await compressVideo(file);
 
-    expect(mockLoad).toHaveBeenCalledWith({
-      coreURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.js",
-      wasmURL: "https://unpkg.com/@ffmpeg/core@0.12.9/dist/umd/ffmpeg-core.wasm",
+    expect(fetch).toHaveBeenCalledWith("/vendor/ffmpeg-core/ffmpeg-core.wasm.gz", {
+      signal: undefined,
     });
+    expect(mockLoad).toHaveBeenCalledWith({
+      coreURL: `${window.location.origin}/vendor/ffmpeg-core/ffmpeg-core.js`,
+      wasmURL: "blob:mock",
+    });
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock");
+  });
+
+  it("falls back to the original file when the self-hosted core is unavailable", async () => {
+    mockVideoMeta = { width: 1920, height: 1080, duration: 30 };
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+    const result = await compressVideo(fakeFile(10 * 1024 * 1024));
+
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toContain("FFmpeg core download failed (404)");
+    expect(mockLoad).not.toHaveBeenCalled();
   });
 
   it("does NOT skip when bitrate is high even at 720p", async () => {

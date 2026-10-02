@@ -21,7 +21,9 @@ interface FaceLandmarkerLike {
   detectForVideo(video: HTMLVideoElement, timestamp: number): { faceLandmarks?: Landmark[][] };
   close(): void;
 }
-const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
+// Self-hosted copy of the installed package's runtime (scripts/vendor-wasm-assets.mjs),
+// so the WASM always matches the bundled JS and no CDN is trusted in the CSP.
+const WASM_BASE = "/vendor/mediapipe";
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const initialStatus: LivenessStatus = {

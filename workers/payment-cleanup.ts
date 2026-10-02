@@ -1,3 +1,5 @@
+import { supabaseServiceHeaders } from "./supabase-headers";
+
 interface ScheduledEvent {
   cron: string;
   scheduledTime: number;
@@ -101,12 +103,10 @@ async function patchPayment(
   expectedStatus: "pending" | "processing",
   body: Record<string, unknown>
 ): Promise<boolean> {
-  const headers = {
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+  const headers = supabaseServiceHeaders(env.SUPABASE_SERVICE_ROLE_KEY, {
     "Content-Type": "application/json",
     Prefer: "return=representation",
-  };
+  });
 
   const params = new URLSearchParams({
     id: `eq.${paymentId}`,
@@ -146,12 +146,10 @@ async function createNotification(
   message: string,
   href = "/billing"
 ): Promise<boolean> {
-  const headers = {
-    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+  const headers = supabaseServiceHeaders(env.SUPABASE_SERVICE_ROLE_KEY, {
     "Content-Type": "application/json",
     Prefer: "return=minimal",
-  };
+  });
 
   const response = await fetchWithTimeout(`${env.SUPABASE_URL}/rest/v1/notifications`, {
     method: "POST",
@@ -178,11 +176,9 @@ async function createNotification(
 
 const worker: ExportedHandler<Env> = {
   async scheduled(_event, env) {
-    const headers = {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    const headers = supabaseServiceHeaders(env.SUPABASE_SERVICE_ROLE_KEY, {
       "Content-Type": "application/json",
-    };
+    });
 
     // Order by created_at so expired rows beyond the first page are not
     // starved by newer unexpired pending payments.
