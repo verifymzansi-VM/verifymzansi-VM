@@ -212,6 +212,18 @@ function applyFilters(rows: Array<Record<string, unknown>>, filters: Filter[]) {
   );
 }
 
+const FRESH_POST_MS = 72 * 60 * 60 * 1000;
+
+/** Computed fields the real database provides (see 20261002135904). */
+function sortValue(row: Record<string, unknown>, column: string): unknown {
+  if (column !== "fair_rotation_key") return row[column];
+  const liveAt = Date.parse(String(row.published_at ?? row.created_at ?? ""));
+  if (!Number.isFinite(liveAt)) return "1";
+  const fresh = Date.now() - liveAt < FRESH_POST_MS ? "0" : "1";
+  // Newest first inside each group keeps fixture order predictable.
+  return `${fresh}${String(9_999_999_999_999 - liveAt).padStart(13, "0")}`;
+}
+
 function applyOrdering(rows: Array<Record<string, unknown>>, orders: SortOrder[]) {
   if (orders.length === 0) {
     return rows;
@@ -219,8 +231,8 @@ function applyOrdering(rows: Array<Record<string, unknown>>, orders: SortOrder[]
 
   return [...rows].sort((left, right) => {
     for (const order of orders) {
-      const leftValue = left[order.column];
-      const rightValue = right[order.column];
+      const leftValue = sortValue(left, order.column);
+      const rightValue = sortValue(right, order.column);
 
       if (leftValue == null && rightValue == null) continue;
       if (leftValue == null) return order.nullsFirst ? -1 : 1;

@@ -1,3 +1,4 @@
+import { DEFAULT_MARKET_SORT, type MarketSort } from "@/lib/utils/marketplace-query";
 import { create } from "zustand";
 import type {
   MarketplaceArea,
@@ -13,7 +14,7 @@ export interface MarketplaceFilters {
   priceMin?: number;
   priceMax?: number;
   condition?: ListingCondition;
-  sort: "newest" | "price_asc" | "price_desc" | "popular";
+  sort: MarketSort;
   query?: string;
   /** Dynamic category-specific attribute filters (matches listing attributes JSON column) */
   attributes: Record<string, string | boolean | string[] | undefined>;
@@ -30,7 +31,7 @@ export function cloneMarketplaceFilters(
 ): MarketplaceFilters {
   const { attributes, ...rest } = filters;
   return {
-    sort: "newest",
+    sort: DEFAULT_MARKET_SORT,
     ...rest,
     attributes: { ...(attributes ?? {}) },
   };

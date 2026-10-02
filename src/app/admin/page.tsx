@@ -18,6 +18,7 @@ import {
   TeamPanel,
 } from "@/components/admin/home/decision-panels";
 import { TrafficPanel, TrafficPanelSkeleton } from "@/components/admin/home/traffic-panel";
+import { ShowroomFairnessPanel } from "@/components/admin/home/showroom-fairness-panel";
 import { attentionItems } from "@/components/admin/home/attention";
 import { HomeBanner } from "@/components/admin/home/home-banner";
 
@@ -146,9 +147,14 @@ export default async function AdminHomePage() {
           )}
 
           {role === "admin" && (
-            <Suspense fallback={<TrafficPanelSkeleton />}>
-              <TrafficPanel />
-            </Suspense>
+            <>
+              <Suspense fallback={<TrafficPanelSkeleton />}>
+                <TrafficPanel />
+              </Suspense>
+              <Suspense fallback={null}>
+                <ShowroomFairnessPanel />
+              </Suspense>
+            </>
           )}
         </>
       )}

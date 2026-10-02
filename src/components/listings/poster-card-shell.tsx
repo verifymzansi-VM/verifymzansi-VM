@@ -1,6 +1,7 @@
 "use client";
 
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
+import type { ContentTargetType } from "@/lib/engagement";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -89,6 +90,14 @@ interface PosterCardShellProps {
   feedPlaybackActive?: boolean;
   /** Keeps hero videos poster-first until the user explicitly starts playback. */
   deferVideoLoadUntilPlay?: boolean;
+  /**
+   * The post this card shows, for view counting. Needed whenever the link is
+   * ambiguous (tourism businesses open at /tourism-events/<id>); otherwise
+   * it is read from `href`.
+   */
+  viewTarget?: { type: ContentTargetType; id: string };
+  /** Where the card is shown, for view reporting (e.g. "showroom:home"). */
+  viewSurface?: string;
 }
 
 export function PosterCardShell({
@@ -128,6 +137,8 @@ export function PosterCardShell({
   showPlaybackControl = false,
   stickyAutoplay = false,
   cardVariant = "default",
+  viewTarget,
+  viewSurface,
   mediaControlVariant = "default",
   makeEntireCardClickable = false,
   disableNativeDrag: disableNativeDragProp = false,
@@ -357,7 +368,12 @@ export function PosterCardShell({
         )}
       >
         {normalizedMediaUrl ? (
-          <VideoViewTracker href={href}>
+          <VideoViewTracker
+            href={href}
+            targetType={viewTarget?.type}
+            targetId={viewTarget?.id}
+            surface={viewSurface}
+          >
             <VideoCardPlayer
               src={normalizedMediaUrl}
               isVideo={hasVideo}

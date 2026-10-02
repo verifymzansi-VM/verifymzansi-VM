@@ -58,7 +58,7 @@ vi.mock("@/components/ui/video-duration-badge", () => ({
 }));
 
 describe("PosterCardShell", () => {
-  it.each(["hero", "showcase"] as const)("records %s card video playback", (cardVariant) => {
+  it.each(["hero", "showcase"] as const)("records %s card video playback", async (cardVariant) => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({ recorded: true }),
@@ -82,17 +82,22 @@ describe("PosterCardShell", () => {
       Object.defineProperty(video, "duration", { configurable: true, value: 10 });
       fireEvent.playing(video);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (let i = 1; i <= 9; i++) {
+      for (let i = 1; i <= 3; i++) {
         now += 1000;
         video.currentTime = i;
         fireEvent.timeUpdate(video);
       }
       clock.mockRestore();
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "/api/engagement/view",
-        expect.objectContaining({
-          body: expect.stringContaining(`"targetId":"${id}"`),
-        })
+      await vi.waitFor(
+        () =>
+          expect(fetchSpy).toHaveBeenCalledWith(
+            "/api/engagement/view",
+            expect.objectContaining({
+              body: expect.stringContaining(`"id":"${id}"`),
+            })
+          ),
+        // The view queue batches for one second before sending.
+        { timeout: 3000 }
       );
       unmount();
     } finally {

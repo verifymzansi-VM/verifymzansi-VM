@@ -10,8 +10,16 @@ describe("isPlaceholderMarketplaceContent", () => {
     expect(isPlaceholderMarketplaceContent("[Demo] Something")).toBe(true);
   });
 
-  it("detects word boundary placeholder", () => {
-    expect(isPlaceholderMarketplaceContent("This is a sample entry")).toBe(true);
+  it("detects the placeholder keyword", () => {
+    expect(isPlaceholderMarketplaceContent("Placeholder listing")).toBe(true);
+  });
+
+  it.each([
+    "Seed potatoes for sale",
+    "Free samples every Saturday",
+    "Book a demo of our point-of-sale system",
+  ])("keeps real selling language visible: %s", (text) => {
+    expect(isPlaceholderMarketplaceContent(text)).toBe(false);
   });
 
   it("detects sandbox keyword", () => {

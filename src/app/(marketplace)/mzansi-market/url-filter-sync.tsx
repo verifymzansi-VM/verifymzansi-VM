@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useMarketplaceUrlFilterSync } from "@/app/(marketplace)/_lib/use-marketplace-url-filter-sync";
 import {
+  DEFAULT_MARKET_SORT,
   parseMarketplaceFiltersFromSearchParams,
   serializeMarketplaceFiltersToSearchParams,
 } from "@/lib/utils/marketplace-query";
@@ -18,7 +19,7 @@ export function MarketplaceUrlFilterSync() {
       province: parsed.province,
       city: parsed.city,
       condition: parsed.condition,
-      sort: parsed.sort ?? "newest",
+      sort: parsed.sort ?? DEFAULT_MARKET_SORT,
       priceMin: parsed.priceMin,
       priceMax: parsed.priceMax,
       attributes: parsed.attributes,

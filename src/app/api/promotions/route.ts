@@ -767,11 +767,10 @@ export async function GET(request: NextRequest) {
 
       return (
         query
-          // active_* are computed fields (see 20260929150000): null once the
-          // paid window has ended, so expired add-ons never outrank anything.
-          .order("active_boost_until", { ascending: false, nullsFirst: false })
-          .order("active_featured_until", { ascending: false, nullsFirst: false })
-          .order("created_at", { ascending: false })
+          // Fair rotation (fair_rotation_key, 20261002135904): everyone pays
+          // the same, so new posts lead for 72 hours and the rest take turns.
+          .order("fair_rotation_key", { ascending: true })
+          .order("id", { ascending: true })
           .range(offset, offset + limit - 1)
       );
     };

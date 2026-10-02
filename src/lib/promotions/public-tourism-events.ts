@@ -17,16 +17,18 @@ function assertExplicitSelect(select: string): string {
 }
 
 export function buildPublicTourismBusinessesQuery(supabase: SupabaseServerClient, select: string) {
-  return applyVisibleExpiryFilter(
-    supabase
-      .from("businesses")
-      .select(assertExplicitSelect(select))
-      .eq("status", "live")
-      .eq("category", TOURISM_HOSPITALITY_CATEGORY)
-  )
-    .order("active_boost_until", { ascending: false, nullsFirst: false })
-    .order("active_featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+  return (
+    applyVisibleExpiryFilter(
+      supabase
+        .from("businesses")
+        .select(assertExplicitSelect(select))
+        .eq("status", "live")
+        .eq("category", TOURISM_HOSPITALITY_CATEGORY)
+    )
+      // Fair rotation: new posts first for 72 hours, then everyone takes turns.
+      .order("fair_rotation_key", { ascending: true })
+      .order("id", { ascending: true })
+  );
 }
 
 export function buildPublicEventPromotionsQuery(
@@ -43,7 +45,6 @@ export function buildPublicEventPromotionsQuery(
       .or(`end_date.is.null,end_date.gte.${nowIso}`),
     nowIso
   )
-    .order("active_boost_until", { ascending: false, nullsFirst: false })
-    .order("active_featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+    .order("fair_rotation_key", { ascending: true })
+    .order("id", { ascending: true });
 }

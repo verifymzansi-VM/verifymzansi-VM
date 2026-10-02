@@ -102,6 +102,7 @@ export function BusinessCard({
     <PosterCardShell
       immersive
       href={href}
+      viewTarget={{ type: "business", id }}
       title={businessName}
       description={cardDescription}
       location={city || null}

@@ -64,8 +64,19 @@ const VALID_BUSINESS_TYPES = new Set<BusinessType>([
   "market_stall",
 ]);
 
-const VALID_MARKET_SORTS = new Set(["newest", "price_asc", "price_desc", "popular"] as const);
-type MarketSort = "newest" | "price_asc" | "price_desc" | "popular";
+const VALID_MARKET_SORTS = new Set([
+  "recommended",
+  "newest",
+  "price_asc",
+  "price_desc",
+  "popular",
+] as const);
+export type MarketSort = "recommended" | "newest" | "price_asc" | "price_desc" | "popular";
+export function isMarketSort(value: string): value is MarketSort {
+  return VALID_MARKET_SORTS.has(value as MarketSort);
+}
+/** Fair rotation is the default list order (see fair_rotation_key in SQL). */
+export const DEFAULT_MARKET_SORT: MarketSort = "recommended";
 
 const LEGACY_CATEGORY_ALIASES: Record<string, ListingCategory> = {
   cars: "vehicles",
@@ -276,7 +287,7 @@ export function serializeMarketplaceFiltersToSearchParams(
   appendIfPresent(params, "province", filters.province);
   appendIfPresent(params, "city", filters.city);
   appendIfPresent(params, "condition", filters.condition);
-  if (filters.sort && filters.sort !== "newest") {
+  if (filters.sort && filters.sort !== DEFAULT_MARKET_SORT) {
     params.set("sort", filters.sort);
   }
   appendIfPresent(params, "minPrice", filters.priceMin);

@@ -14,7 +14,7 @@ describe("marketplace-store", () => {
   it("initialises with default filters", () => {
     const state = useMarketplaceStore.getState();
     expect(state.activeArea).toBe("MZANSI_MARKET");
-    expect(state.filters.sort).toBe("newest");
+    expect(state.filters.sort).toBe("recommended");
     expect(state.page).toBe(1);
     expect(state.isSearching).toBe(false);
   });
@@ -24,7 +24,7 @@ describe("marketplace-store", () => {
     setActiveArea("MZANSI_BUSINESS");
     const state = useMarketplaceStore.getState();
     expect(state.activeArea).toBe("MZANSI_BUSINESS");
-    expect(state.filters.sort).toBe("newest");
+    expect(state.filters.sort).toBe("recommended");
     expect(state.page).toBe(1);
   });
 
@@ -86,7 +86,7 @@ describe("marketplace-store", () => {
 describe("cloneMarketplaceFilters", () => {
   it("returns defaults when called with no args", () => {
     const filters = cloneMarketplaceFilters();
-    expect(filters.sort).toBe("newest");
+    expect(filters.sort).toBe("recommended");
     expect(filters.attributes).toEqual({});
   });
 

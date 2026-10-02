@@ -1,5 +1,7 @@
 "use client";
 
+import type { MarketSort } from "@/lib/utils/marketplace-query";
+
 import { ArrowUpDown, X } from "lucide-react";
 import { useMarketplaceStore } from "@/stores";
 import { Badge } from "@/components/ui/badge";
@@ -27,14 +29,15 @@ export function ListingGridHeader() {
   const { filters, setFilter, setAttribute, resetFilters } = useMarketplaceStore();
   const isHydrated = useHydrated();
 
-  const sortOptions = [
+  const sortOptions: { value: MarketSort; label: string }[] = [
+    { value: "recommended", label: "Recommended" },
     { value: "newest", label: "Recently posted" },
     { value: "price_asc", label: "Price: Low → High" },
     { value: "price_desc", label: "Price: High → Low" },
-    { value: "popular", label: "Most popular" },
+    { value: "popular", label: "Most viewed" },
   ];
   const currentSortLabel =
-    sortOptions.find((o) => o.value === filters.sort)?.label || "Recently posted";
+    sortOptions.find((o) => o.value === filters.sort)?.label || "Recommended";
 
   const hasActiveFilters =
     filters.query ||
@@ -65,12 +68,7 @@ export function ListingGridHeader() {
                 {sortOptions.map((option) => (
                   <DropdownMenuItem
                     key={option.value}
-                    onSelect={() =>
-                      setFilter(
-                        "sort",
-                        option.value as "newest" | "price_asc" | "price_desc" | "popular"
-                      )
-                    }
+                    onSelect={() => setFilter("sort", option.value)}
                     className={filters.sort === option.value ? "bg-accent font-medium" : ""}
                   >
                     {option.label}

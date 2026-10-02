@@ -214,18 +214,20 @@ export function applyBaseMarketFilters<T>(
       return builder
         .order("price_cents", { ascending: false })
         .order("created_at", { ascending: false }) as T;
-    // active_* are computed fields (see 20260929150000): null once the paid
-    // window has ended, so expired add-ons never outrank anything.
     case "popular":
       return builder
-        .order("active_featured_until", { ascending: false, nullsFirst: false })
-        .order("active_boost_until", { ascending: false, nullsFirst: false })
+        .order("view_count", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false }) as T;
     case "newest":
+      return builder.order("created_at", { ascending: false }) as T;
+    case "recommended":
     default:
+      // Everyone pays the same, so the default order is a fair rotation:
+      // posts from the last 72 hours first, then a shuffle that changes every
+      // 6 hours (fair_rotation_key, 20261002135904). Stable across pages.
       return builder
-        .order("active_featured_until", { ascending: false, nullsFirst: false })
-        .order("created_at", { ascending: false }) as T;
+        .order("fair_rotation_key", { ascending: true })
+        .order("id", { ascending: true }) as T;
   }
 }
 

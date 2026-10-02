@@ -27,11 +27,7 @@ import { userOwnsBusiness } from "@/lib/account/owned-business";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
-import {
-  buildViewerKey,
-  createAnonymousViewerId,
-  ENGAGEMENT_VIEWER_COOKIE,
-} from "@/lib/engagement";
+import { createAnonymousViewerId, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { createOwnedContentDeleteRoute } from "@/app/api/_lib/create-owned-content-delete-route";
 import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer-cookie-response";
 import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
@@ -135,40 +131,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const existingViewerId = request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
     const nextViewerId = existingViewerId ?? createAnonymousViewerId();
-    const viewerKey = buildViewerKey(nextViewerId, user?.id ?? null);
 
-    if (normalizedPromotion.status === "live") {
-      // Increment unique viewer count (best-effort, non-blocking).
-      try {
-        const admin = createAdminClient();
-        const rpc = admin.rpc?.bind(admin);
-        if (rpc) {
-          scheduleBackgroundTask(
-            Promise.resolve(
-              rpc("record_content_view", {
-                p_target_id: id,
-                p_target_type: "promotion",
-                p_viewer_key: viewerKey,
-                p_viewer_user_id: user?.id ?? null,
-                p_viewer_ip_hash: null,
-              })
-            )
-              .then(({ error }) => {
-                if (error) log.warn("View count increment failed", { id, error: error.message });
-              })
-              .catch((err: unknown) =>
-                log.warn("View count RPC error", { id, error: String(err) })
-              ),
-            "promotion view tracking"
-          );
-        }
-      } catch (viewError) {
-        log.warn("View count tracking setup failed", {
-          id,
-          error: viewError instanceof Error ? viewError.message : "Unknown error",
-        });
-      }
-    }
+    // Views are counted by the browser (page opens and video plays), not by
+    // API reads: a script calling this endpoint must not add views.
 
     // Strip owner identifiers from public response (POPIA data minimization)
     const { owner_id: _oid, seller_id: _sid, ...publicPromotion } = normalizedPromotion;

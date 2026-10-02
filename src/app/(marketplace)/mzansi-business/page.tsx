@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { SponsorStrip } from "@/components/organisations/sponsor-strip";
-import { createClient } from "@/lib/supabase/server";
 import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
-import {
-  businessToCarouselItem,
-  type CarouselItem,
-} from "@/components/showrooms/carousel-item-transforms";
+import { type CarouselItem } from "@/components/showrooms/carousel-item-transforms";
+import { loadShowroomItems, type ShowroomClient } from "@/lib/showroom/feed";
+import { createClient } from "@/lib/supabase/server";
+import { getVisitorProvince } from "@/lib/showroom/visitor-province";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
@@ -22,15 +21,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
-import { shouldHidePlaywrightFixtureRowWhenEnabled } from "@/components/home/playwright-fixture-filter";
 
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
   shouldHidePlaywrightFixtures,
 } from "@/lib/supabase/playwright-visual-fixtures";
 import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 const categorySeo = getRequiredVerifyMzansiCategorySeo("mzansi-business");
@@ -70,26 +66,17 @@ export default async function MzansiBusinessPage() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
+  const visitor = await getVisitorProvince();
   const supabase = await createClient();
-
-  // Fetch top businesses for showroom hero
-  const { data: topBusinesses } = await applyVisibleExpiryFilter(
-    supabase.from("businesses").select("*").eq("status", "live").eq("area", "MZANSI_BUSINESS")
-  )
-    .order("active_boost_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const visibleTopBusinesses = (topBusinesses ?? [])
-    .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
-    .filter(
-      (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
-    )
-    .slice(0, 7);
+  const visibleTopBusinesses = await loadShowroomItems("business", {
+    province: visitor.province,
+    hideFixtures,
+    client: supabase as unknown as ShowroomClient,
+  });
 
   const carouselItems: CarouselItem[] =
     visibleTopBusinesses.length > 0
-      ? visibleTopBusinesses.map((b) => businessToCarouselItem(b))
+      ? visibleTopBusinesses
       : [
           {
             id: "mzansi-business-empty",
@@ -116,6 +103,8 @@ export default async function MzansiBusinessPage() {
         {/* ── Card Carousel Showroom ─────────────── */}
         <ShowroomCardCarousel
           items={carouselItems}
+          surface="showroom:business"
+          visitorProvince={visitor}
           emptyTitle="Mzansi Business"
           emptyDescription={categorySeo.description}
           background={mzansiBusinessShowroomBackground}

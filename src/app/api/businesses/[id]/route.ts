@@ -31,11 +31,7 @@ import type { BusinessDetails } from "@/types/business-details";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { createNotification, shouldSendOwnerLifecycleNotifications } from "@/lib/notifications";
-import {
-  buildViewerKey,
-  createAnonymousViewerId,
-  ENGAGEMENT_VIEWER_COOKIE,
-} from "@/lib/engagement";
+import { createAnonymousViewerId, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { createOwnedContentDeleteRoute } from "@/app/api/_lib/create-owned-content-delete-route";
 import { createViewerCookieJsonResponse } from "@/app/api/_lib/engagement-viewer-cookie-response";
 import { requireAuthenticatedLocalMutation } from "@/app/api/_lib/authenticated-local-mutation";
@@ -166,38 +162,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const existingViewerId = request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
     const nextViewerId = existingViewerId ?? createAnonymousViewerId();
-    const viewerKey = buildViewerKey(nextViewerId, currentUser?.id ?? null);
 
-    if (normalizedBusiness.status === "live") {
-      // Track view (best-effort — never block the response)
-      try {
-        const admin = createAdminClient();
-        const rpc = admin.rpc?.bind(admin);
-        if (rpc) {
-          scheduleBackgroundTask(
-            Promise.resolve(
-              rpc("record_content_view", {
-                p_target_id: id,
-                p_target_type: "business",
-                p_viewer_key: viewerKey,
-                p_viewer_user_id: currentUser?.id ?? null,
-                p_viewer_ip_hash: null,
-              }).then(({ error: viewErr }) => {
-                if (viewErr) {
-                  log.warn("View tracking failed", { error: viewErr.message, businessId: id });
-                }
-              })
-            ),
-            "content view tracking"
-          );
-        }
-      } catch (viewError) {
-        log.warn("View tracking setup failed", {
-          businessId: id,
-          error: viewError instanceof Error ? viewError.message : "Unknown error",
-        });
-      }
-    }
+    // Views are counted by the browser (page opens and video plays), not by
+    // API reads: a script calling this endpoint must not add views.
 
     // Strip owner identifiers from public response (POPIA data minimization)
     const { owner_id: _oid, ...publicBusiness } = normalizedBusiness;

@@ -13,6 +13,7 @@ import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
 
 const log = createLogger("SiteVisitRoute");
 
@@ -33,7 +34,10 @@ function toOriginOnly(referrer: string | null | undefined): string | null {
 
 export async function POST(request: NextRequest) {
   try {
-    if (request.headers.get("dnt") === "1") {
+    if (
+      request.headers.get("dnt") === "1" ||
+      isAutomatedUserAgent(request.headers.get("user-agent"))
+    ) {
       return NextResponse.json({ ok: true, recorded: false });
     }
     const originBlock = enforceSameOriginMutation(request, log);

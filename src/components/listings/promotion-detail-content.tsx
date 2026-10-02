@@ -481,6 +481,7 @@ export function PromotionDetailContent({
                 <VideoViewTracker
                   targetId={promotion.id}
                   targetType="promotion"
+                  surface="detail"
                   enabled={shouldTrackView}
                   onRecorded={handleViewRecorded}
                 >
@@ -1257,16 +1258,24 @@ export function PromotionDetailContent({
       </div>
 
       {/* ═══ MEDIA LIGHTBOX ═══ */}
-      <MediaLightbox
-        items={mediaItems.map((m) => ({
-          url: m.url,
-          kind: m.kind,
-          poster: m.kind === "video" ? (m.poster ?? undefined) : undefined,
-        }))}
-        startIndex={lightboxStart}
-        isOpen={lightboxOpen}
-        onClose={closeLightbox}
-      />
+      <VideoViewTracker
+        targetId={promotion.id}
+        targetType="promotion"
+        surface="lightbox"
+        enabled={shouldTrackView}
+        onRecorded={handleViewRecorded}
+      >
+        <MediaLightbox
+          items={mediaItems.map((m) => ({
+            url: m.url,
+            kind: m.kind,
+            poster: m.kind === "video" ? (m.poster ?? undefined) : undefined,
+          }))}
+          startIndex={lightboxStart}
+          isOpen={lightboxOpen}
+          onClose={closeLightbox}
+        />
+      </VideoViewTracker>
 
       {showStickyBar && (
         <StickyMobileBar>

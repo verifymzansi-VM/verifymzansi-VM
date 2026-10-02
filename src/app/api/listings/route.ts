@@ -28,6 +28,7 @@ import { hasPhoneNumber } from "@/lib/account/require-phone";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import type { MarketplaceArea } from "@/types/enums";
 import {
+  isMarketSort,
   normalizeMarketplaceCategoryParam,
   normalizeMarketplaceConditionParam,
   parseMarketplaceFiltersFromSearchParams,
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
     if (query.condition && !normalizeMarketplaceConditionParam(query.condition)) {
       return NextResponse.json({ error: "Invalid listing condition" }, { status: 400 });
     }
-    if (query.sort && !["newest", "price_asc", "price_desc", "popular"].includes(query.sort)) {
+    if (query.sort && !isMarketSort(query.sort)) {
       return NextResponse.json({ error: "Invalid listing sort" }, { status: 400 });
     }
 

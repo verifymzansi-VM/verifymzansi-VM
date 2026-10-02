@@ -14,6 +14,10 @@ const PUBLIC_PAGES = new Set([
   "/terms",
   "/paia",
   "/help/verification",
+  "/help/showroom",
+  "/sponsors",
+  "/search",
+  "/verify-buyer",
   "/safety",
   "/safety/scam-alerts",
   "/safety/meeting-checklist",
@@ -22,6 +26,7 @@ const PUBLIC_PAGES = new Set([
 export function isTrackablePath(path: string): boolean {
   return (
     PUBLIC_PAGES.has(path) ||
+    /^\/organisation\/[a-z0-9][a-z0-9-]{0,80}$/.test(path) ||
     /^\/(listing|mzansi-business|tourism-events)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       path
     )

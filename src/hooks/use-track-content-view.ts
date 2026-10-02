@@ -1,51 +1,37 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ContentTargetType } from "@/lib/engagement";
+import { trackContentView } from "@/lib/views/content-views";
 
+/**
+ * Opening a post's own page is a view. It shares the 30-minute window with
+ * video views, so opening the page and watching its video counts once.
+ */
 export function useTrackContentView(
   targetId: string,
   targetType: ContentTargetType,
   enabled = true,
   onRecorded?: () => void
 ) {
+  const onRecordedRef = useRef(onRecorded);
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
+    onRecordedRef.current = onRecorded;
+  }, [onRecorded]);
 
-    const controller = new AbortController();
-
-    void fetch("/api/engagement/view", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        targetId,
-        targetType,
-      }),
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json().catch(() => null)) as { recorded?: boolean } | null;
-        if (payload?.recorded) {
-          onRecorded?.();
-          window.dispatchEvent(
-            new CustomEvent("vmz:content-view-recorded", {
-              detail: { targetId, targetType },
-            })
-          );
-        }
-      })
-      .catch(() => {
-        // Non-blocking analytics-style request: ignore failures.
-      });
-
-    return () => controller.abort();
-  }, [enabled, onRecorded, targetId, targetType]);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    void trackContentView({
+      type: targetType,
+      id: targetId,
+      source: "page",
+      surface: "detail",
+    }).then((counted) => {
+      if (counted && active) onRecordedRef.current?.();
+    });
+    return () => {
+      active = false;
+    };
+  }, [enabled, targetId, targetType]);
 }

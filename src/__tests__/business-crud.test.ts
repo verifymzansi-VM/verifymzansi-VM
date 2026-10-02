@@ -1760,6 +1760,9 @@ describe("GET /api/businesses", () => {
   });
 
   it("does not return owner_id or seller_id in public business responses", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    });
     const orderSpy = vi.fn().mockReturnThis();
     mockCreateAdminClient.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -1815,11 +1818,10 @@ describe("GET /api/businesses", () => {
     // Account ids stay server-side (POPIA) on the public list.
     expect(json.businesses[0]).not.toHaveProperty("owner_id");
     expect(json.businesses[0]).not.toHaveProperty("seller_id");
-    // Ranking uses computed active_* windows so expired add-ons never outrank.
+    // Fair rotation: new posts first for 72 hours, then everyone takes turns.
     expect(orderSpy.mock.calls).toEqual([
-      ["active_boost_until", { ascending: false, nullsFirst: false }],
-      ["active_featured_until", { ascending: false, nullsFirst: false }],
-      ["created_at", { ascending: false }],
+      ["fair_rotation_key", { ascending: true }],
+      ["id", { ascending: true }],
     ]);
   });
 

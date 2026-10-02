@@ -33,6 +33,7 @@ const ENDPOINT = "/api/analytics/events";
 /** Fired by share buttons; the detail-page tracker attributes it to the content. */
 export const CONTENT_SHARED_EVENT = "vm:content-shared";
 const MAX_BATCH = 50;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let queue: CommercialEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
 let listening = false;
@@ -78,7 +79,11 @@ export function trackCommercialEvents(events: CommercialEvent[]) {
   if (typeof window === "undefined") return;
   if (typeof navigator !== "undefined" && navigator.doNotTrack === "1") return;
   const source = trafficSource();
-  queue.push(...events.map((event) => ({ source, ...event })));
+  // Empty-state cards use ids like "mzansi-business-empty"; the server rejects
+  // a batch with any non-UUID id, which would drop the real events with it.
+  const valid = events.filter((event) => UUID_PATTERN.test(event.id));
+  if (valid.length === 0) return;
+  queue.push(...valid.map((event) => ({ source, ...event })));
   if (!listening) {
     listening = true;
     window.addEventListener("pagehide", flushCommercialEvents);

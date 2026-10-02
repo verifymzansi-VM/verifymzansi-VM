@@ -8,6 +8,8 @@ import type { BusinessType } from "@/types/enums";
 
 interface BusinessPreviewCardProps {
   href: string;
+  /** Counts this card's video views against the business (links can be /tourism-events/<id>). */
+  businessId?: string;
   imageUrl?: string;
   posterUrl?: string;
   logoUrl?: string;
@@ -27,6 +29,7 @@ interface BusinessPreviewCardProps {
 
 export function BusinessPreviewCard({
   href,
+  businessId,
   imageUrl,
   posterUrl,
   logoUrl,
@@ -51,6 +54,7 @@ export function BusinessPreviewCard({
     <PosterCardShell
       immersive
       href={href}
+      viewTarget={businessId ? { type: "business", id: businessId } : undefined}
       title={title}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}

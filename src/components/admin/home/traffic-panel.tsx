@@ -1,4 +1,4 @@
-import { TrendingUp, Users, Eye } from "lucide-react";
+import { TrendingUp, Users, Eye, PlayCircle } from "lucide-react";
 import { ColumnChartPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { getSiteVisitStats } from "@/lib/utils/admin-queries";
 import { formatCount, SectionHeading } from "./home-cards";
@@ -8,6 +8,7 @@ const AREA_LABELS: Record<string, string> = {
   mzansi_market: "Mzansi Market",
   mzansi_business: "Mzansi Business",
   promotions_events: "Tourism & Events",
+  organisations: "Partners and organisations",
   other: "Other public pages",
   shared_listings: "Listing details (all areas)",
 };
@@ -36,12 +37,12 @@ const PAGE_LABELS: Record<string, string> = {
   "/trust-safety": "Trust & Safety",
   "/safety": "Safety Centre",
   "/search": "Search",
+  "/sponsors": "Programme partners",
+  "/help/showroom": "How the showroom works",
   "/contact": "Contact",
   "/verify-buyer": "Verify a buyer",
   "/privacy": "Privacy policy",
   "/terms": "Terms of service",
-  "/login": "Sign in",
-  "/register": "Register",
 };
 
 const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,6 +50,8 @@ const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 /** Readable name for a visited path; single posts show their area and a short ID. */
 function pageLabel(path: string): string {
   if (PAGE_LABELS[path]) return PAGE_LABELS[path];
+  if (path.startsWith("/organisation/"))
+    return `Organisation: ${path.slice("/organisation/".length)}`;
   const segments = path.split("/").filter(Boolean);
   const last = segments.at(-1) ?? "";
   if (UUID_SEGMENT.test(last)) {
@@ -119,7 +122,7 @@ export async function TrafficPanel() {
       <div id="home-traffic">
         <SectionHeading
           title="Website traffic"
-          description="Public pages only, counted by South African day. Visitors are estimated per browser, and repeat views of a page within 30 minutes count once."
+          description="Public pages only, counted by South African day. Visitors are estimated per browser; repeat views of a page within 30 minutes count once. Staff accounts and automated crawlers are not counted."
         />
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -150,6 +153,32 @@ export async function TrafficPanel() {
           icon={Eye}
         />
       </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Figure
+          label="Post views today"
+          value={formatCount(visits.postViewsToday)}
+          detail="Video plays and post pages, every page"
+          icon={PlayCircle}
+        />
+        <Figure
+          label="Post views, 7 days"
+          value={formatCount(visits.postViews7d)}
+          detail={`${formatCount(visits.postViews30d)} in 30 days`}
+          icon={PlayCircle}
+        />
+        <Figure
+          label="Video views, 7 days"
+          value={formatCount(visits.videoViews7d)}
+          detail="2 seconds in a row, at least half on screen"
+          icon={PlayCircle}
+        />
+        <Figure
+          label="Engaged views, 7 days"
+          value={formatCount(visits.engagedViews7d)}
+          detail="Watched 30 seconds, or 90% of a short video"
+          icon={Eye}
+        />
+      </div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ColumnChartPanel
           title="Daily page views, last 14 days"
@@ -157,7 +186,7 @@ export async function TrafficPanel() {
           data={visits.daily.map((point, index) => ({
             label: dayLabel(point.date),
             value: point.visits,
-            caption: `${formatCount(point.visitors)} visitors`,
+            caption: `${formatCount(point.visitors)} visitors · ${formatCount(point.postViews ?? 0)} post views`,
             // Today is still filling up, so it is set apart in gold.
             tone:
               endsToday && index === visits.daily.length - 1

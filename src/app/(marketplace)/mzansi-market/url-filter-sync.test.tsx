@@ -43,7 +43,7 @@ describe("MarketplaceUrlFilterSync", () => {
             province: undefined,
             city: undefined,
             condition: undefined,
-            sort: "newest",
+            sort: "recommended",
             priceMin: undefined,
             priceMax: undefined,
             attributes: {},
@@ -66,7 +66,7 @@ describe("MarketplaceUrlFilterSync", () => {
         expect.objectContaining({
           category: "vehicles",
           query: "iphone",
-          sort: "newest",
+          sort: "recommended",
           attributes: {},
         }),
         1
@@ -92,7 +92,7 @@ describe("MarketplaceUrlFilterSync", () => {
             province: undefined,
             city: undefined,
             condition: undefined,
-            sort: "newest",
+            sort: "recommended",
             priceMin: undefined,
             priceMax: undefined,
             attributes: {},
@@ -109,7 +109,7 @@ describe("MarketplaceUrlFilterSync", () => {
         expect.objectContaining({
           category: "vehicles",
           query: undefined,
-          sort: "newest",
+          sort: "recommended",
           attributes: {},
         }),
         1
@@ -135,7 +135,7 @@ describe("MarketplaceUrlFilterSync", () => {
             province: undefined,
             city: undefined,
             condition: undefined,
-            sort: "newest",
+            sort: "recommended",
             priceMin: undefined,
             priceMax: undefined,
             attributes: {},

@@ -494,6 +494,8 @@ export interface SiteVisitDailyPoint {
   date: string; // YYYY-MM-DD
   visits: number;
   visitors: number;
+  /** Content views (video plays and post page opens) that day. */
+  postViews?: number;
 }
 
 export interface SiteVisitTopPage {
@@ -512,6 +514,12 @@ export interface SiteVisitStats {
   daily: SiteVisitDailyPoint[]; // last 14 days, oldest first
   topPages: SiteVisitTopPage[];
   byArea: { area: string; visits: number }[];
+  /** Post views (views v2): one per person, per post, per 30 minutes. */
+  postViewsToday: number;
+  postViews7d: number;
+  postViews30d: number;
+  videoViews7d: number;
+  engagedViews7d: number;
 }
 
 export const EMPTY_SITE_VISIT_STATS: SiteVisitStats = {
@@ -525,6 +533,11 @@ export const EMPTY_SITE_VISIT_STATS: SiteVisitStats = {
   daily: [],
   topPages: [],
   byArea: [],
+  postViewsToday: 0,
+  postViews7d: 0,
+  postViews30d: 0,
+  videoViews7d: 0,
+  engagedViews7d: 0,
 };
 
 /** One database snapshot; aggregate results are not subject to REST row limits. */
@@ -532,8 +545,54 @@ export async function getSiteVisitStats(): Promise<SiteVisitStats> {
   try {
     const { data, error } = await createAdminClient().rpc("get_site_visit_stats");
     if (error || !data) return EMPTY_SITE_VISIT_STATS;
-    return { ...(data as Omit<SiteVisitStats, "available">), available: true };
+    return {
+      ...EMPTY_SITE_VISIT_STATS,
+      ...(data as Partial<Omit<SiteVisitStats, "available">>),
+      available: true,
+    };
   } catch {
     return EMPTY_SITE_VISIT_STATS;
+  }
+}
+
+// ── Showroom fairness (admin home) ────────────────────────────
+
+export interface ShowroomSurfaceExposure {
+  surface: "home" | "business" | "market" | "tourism";
+  posts: number;
+  appearances7d: number;
+  fairShare7d: number | null;
+  lowest7d: number;
+  highest7d: number;
+}
+
+export interface ZeroExposurePost {
+  surface: ShowroomSurfaceExposure["surface"];
+  table: "businesses" | "listings" | "promotions";
+  id: string;
+  title: string;
+  province: string | null;
+  liveSince: string;
+}
+
+export interface ShowroomExposureReport {
+  available: boolean;
+  surfaces: ShowroomSurfaceExposure[];
+  zeroExposure: ZeroExposurePost[];
+}
+
+/** Fair-rotation health: appearances per showroom and posts nobody saw in 24h. */
+export async function getShowroomExposureReport(): Promise<ShowroomExposureReport> {
+  try {
+    const { data, error } = await createAdminClient().rpc("get_showroom_exposure_report");
+    if (error || !data) return { available: false, surfaces: [], zeroExposure: [] };
+    const report = data as Partial<ShowroomExposureReport>;
+    return {
+      available: true,
+      surfaces: report.surfaces ?? [],
+      zeroExposure: report.zeroExposure ?? [],
+    };
+  } catch {
+    return { available: false, surfaces: [], zeroExposure: [] };
   }
 }

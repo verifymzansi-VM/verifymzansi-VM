@@ -32,8 +32,9 @@ export async function HomeBusinessShowcase() {
   const { data: businesses } = await applyVisibleExpiryFilter(
     supabase.from("businesses").select("*").eq("status", "live").eq("area", "MZANSI_BUSINESS")
   )
-    .order("active_boost_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
+    // Fair rotation: new posts first for 72 hours, then everyone takes turns.
+    .order("fair_rotation_key", { ascending: true })
+    .order("id", { ascending: true })
     .limit(16);
 
   const items = (businesses ?? [])
@@ -80,6 +81,7 @@ export async function HomeBusinessShowcase() {
           <div key={b.id} className="h-full w-full sm:w-[280px] lg:w-[240px]">
             <BusinessPreviewCard
               href={`/mzansi-business/${b.id}`}
+              businessId={b.id}
               imageUrl={b.cover_video || b.video_thumbnail || b.cover_photo}
               posterUrl={b.video_thumbnail || b.cover_photo || undefined}
               logoUrl={b.logo_url}

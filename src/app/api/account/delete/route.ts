@@ -124,8 +124,8 @@ async function cleanupBlockingUserReferences(
       admin.from("contact_events").update({ sender_user_id: null }).eq("sender_user_id", userId),
     ],
     [
-      "listing_views.viewer_user_id",
-      admin.from("listing_views").update({ viewer_user_id: null }).eq("viewer_user_id", userId),
+      "content_views.viewer_user_id",
+      admin.from("content_views").update({ viewer_user_id: null }).eq("viewer_user_id", userId),
     ],
     [
       // Keep the record that an ID document was viewed; only drop who viewed it.

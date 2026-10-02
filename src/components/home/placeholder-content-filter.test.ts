@@ -6,7 +6,9 @@ describe("isPlaceholderMarketplaceContent", () => {
     expect(isPlaceholderMarketplaceContent("[Seed] Family Home", "Beautiful seed listing")).toBe(
       true
     );
-    expect(isPlaceholderMarketplaceContent("Demo Plumbing Service")).toBe(true);
+    expect(isPlaceholderMarketplaceContent("[demo] Plumbing Service")).toBe(true);
+    // Plain words are ordinary selling language, never a test marker.
+    expect(isPlaceholderMarketplaceContent("Demo Plumbing Service")).toBe(false);
   });
 
   it("does not flag normal marketplace content", () => {

@@ -41,7 +41,12 @@ import { POST } from "./route";
 function createRequest(body: unknown, viewerCookie?: string): NextRequest {
   return {
     text: async () => JSON.stringify(body),
-    headers: { get: () => null },
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === "user-agent"
+          ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          : null,
+    },
     cookies: {
       get: (name: string) =>
         name === "vmz_viewer" && viewerCookie ? { value: viewerCookie } : null,

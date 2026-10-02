@@ -331,6 +331,7 @@ export function ListingDetailClient({
       <VideoViewTracker
         targetId={listingId}
         targetType="listing"
+        surface="lightbox"
         enabled={trackView}
         onRecorded={onViewRecorded}
       >

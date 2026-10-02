@@ -406,6 +406,7 @@ function MediaColumn({
               <VideoViewTracker
                 targetId={business.id}
                 targetType="business"
+                surface="detail"
                 enabled={layoutMode === "public" && business.status === "live"}
                 onRecorded={onViewRecorded}
               >
@@ -572,12 +573,21 @@ function MediaColumn({
         </div>
       )}
 
-      <MediaLightbox
-        items={lightboxItems}
-        startIndex={lightboxStart}
-        isOpen={lightboxOpen}
-        onClose={closeLightbox}
-      />
+      {/* Full-screen plays count as views too. */}
+      <VideoViewTracker
+        targetId={business.id}
+        targetType="business"
+        surface="lightbox"
+        enabled={layoutMode === "public" && business.status === "live"}
+        onRecorded={onViewRecorded}
+      >
+        <MediaLightbox
+          items={lightboxItems}
+          startIndex={lightboxStart}
+          isOpen={lightboxOpen}
+          onClose={closeLightbox}
+        />
+      </VideoViewTracker>
     </div>
   );
 }

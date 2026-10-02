@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import { Eye, TrendingUp, MessageSquare, Package, BarChart3 } from "lucide-react";
+import Link from "next/link";
+import { Eye, TrendingUp, MessageSquare, Package, BarChart3, Shuffle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
 import { applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
+import { isVisibleByExpiry } from "@/lib/posting/visibility";
 
 export const metadata = {
   title: "Metrics",
@@ -141,6 +142,91 @@ async function loadEngagement(ownerId: string): Promise<Engagement> {
   return result;
 }
 
+type OwnedRow = {
+  id: string;
+  expires_at?: string | null;
+  created_at?: string | null;
+  title?: string | null;
+  business_name?: string | null;
+  status?: string | null;
+  view_count?: number | null;
+  engaged_view_count?: number | null;
+};
+
+type OwnedPost = {
+  table: "listings" | "businesses" | "promotions";
+  id: string;
+  title: string;
+  live: boolean;
+  views: number;
+  engagedViews: number;
+};
+
+function toOwnedPost(table: OwnedPost["table"], row: OwnedRow): OwnedPost {
+  return {
+    table,
+    id: row.id,
+    title: row.business_name ?? row.title ?? "",
+    // Live and still inside its paid (or legacy free) window, as the public sees it.
+    live: row.status === "live" && isVisibleByExpiry(row.expires_at, new Date(), row.created_at),
+    views: row.view_count ?? 0,
+    engagedViews: row.engaged_view_count ?? 0,
+  };
+}
+
+const SHOWROOM_LABELS: Record<string, string> = {
+  home: "Home showroom",
+  business: "Mzansi Business showroom",
+  market: "Mzansi Market showroom",
+  tourism: "Tourism & Events showroom",
+};
+
+type FairShareRow = {
+  key: string;
+  title: string;
+  surface: string;
+  appearances: number;
+  fairShare: number;
+  eligiblePosts: number;
+};
+
+/**
+ * Each live post's showroom appearances this week next to the fair share
+ * (the average for every live post in that showroom), so owners can see the
+ * rotation treats them equally.
+ */
+async function loadShowroomFairShare(posts: OwnedPost[]): Promise<FairShareRow[]> {
+  if (posts.length === 0) return [];
+  try {
+    const admin = tryCreateAdminClient();
+    if (!admin) return [];
+    const { data, error } = await admin.rpc("get_showroom_fair_share", {
+      p_ids: posts.map((post) => post.id),
+    });
+    if (error || !Array.isArray(data)) return [];
+    return (
+      data as Array<{
+        surface: string;
+        content_id: string;
+        appearances_7d: number;
+        fair_share_7d: number | null;
+        eligible_posts: number;
+      }>
+    )
+      .map((row) => ({
+        key: `${row.surface}:${row.content_id}`,
+        title: posts.find((post) => post.id === row.content_id)?.title || "Untitled post",
+        surface: row.surface,
+        appearances: Number(row.appearances_7d) || 0,
+        fairShare: Number(row.fair_share_7d) || 0,
+        eligiblePosts: Number(row.eligible_posts) || 0,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title) || a.surface.localeCompare(b.surface));
+  } catch {
+    return [];
+  }
+}
+
 export default async function MetricsPage() {
   const supabase = await createClient();
   const {
@@ -150,43 +236,54 @@ export default async function MetricsPage() {
 
   // Use user.id directly — listings.owner_id references auth.users(id)
   const ownerId = user.id;
-  const [listingOwnerColumn, contactOwnerColumn] = await Promise.all([
+  const [listingOwnerColumn, contactOwnerColumn, promotionOwnerColumn] = await Promise.all([
     getOwnerColumn(supabase, "listings"),
     getOwnerColumn(supabase, "contact_events"),
+    getOwnerColumn(supabase, "promotions"),
   ]);
 
   // Fetch stats
   const [
-    { count: activeListings },
     { data: viewData },
     { count: leadCount },
-    { count: totalListings },
+    { data: businessViewData },
+    { data: promotionViewData },
   ] = await Promise.all([
     applyOwnerFilter(
-      applyVisibleExpiryFilter(
-        supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live")
-      ),
+      supabase
+        .from("listings")
+        .select("id, title, status, expires_at, created_at, view_count, engaged_view_count"),
       listingOwnerColumn,
       ownerId
     ),
-    applyOwnerFilter(supabase.from("listings").select("view_count"), listingOwnerColumn, ownerId),
     applyOwnerFilter(
       supabase.from("contact_events").select("*", { count: "exact", head: true }),
       contactOwnerColumn,
       ownerId
     ),
+    supabase
+      .from("businesses")
+      .select("id, business_name, status, expires_at, created_at, view_count, engaged_view_count")
+      .eq("owner_id", ownerId),
     applyOwnerFilter(
-      supabase.from("listings").select("*", { count: "exact", head: true }),
-      listingOwnerColumn,
+      supabase
+        .from("promotions")
+        .select("id, title, status, expires_at, created_at, view_count, engaged_view_count"),
+      promotionOwnerColumn,
       ownerId
     ),
   ]);
 
-  const totalViews =
-    viewData?.reduce(
-      (sum: number, l: { view_count: number | null }) => sum + (l.view_count || 0),
-      0
-    ) || 0;
+  // Every post the owner has, not only Market listings: business and Tourism &
+  // Events owners used to see 0 views here.
+  const ownedPosts: OwnedPost[] = [
+    ...((viewData ?? []) as OwnedRow[]).map((row) => toOwnedPost("listings", row)),
+    ...((businessViewData ?? []) as OwnedRow[]).map((row) => toOwnedPost("businesses", row)),
+    ...((promotionViewData ?? []) as OwnedRow[]).map((row) => toOwnedPost("promotions", row)),
+  ];
+  const totalViews = ownedPosts.reduce((sum, post) => sum + post.views, 0);
+  const engagedViews = ownedPosts.reduce((sum, post) => sum + post.engagedViews, 0);
+  const fairShare = await loadShowroomFairShare(ownedPosts.filter((post) => post.live));
 
   const conversionRate =
     totalViews > 0 ? (((leadCount || 0) / totalViews) * 100).toFixed(1) : "0.0";
@@ -196,17 +293,17 @@ export default async function MetricsPage() {
 
   const stats = [
     {
-      label: "Listings",
-      value: totalListings || 0,
+      label: "Posts",
+      value: ownedPosts.length,
       icon: Package,
-      description: `${activeListings || 0} live`,
+      description: `${ownedPosts.filter((post) => post.live).length} live`,
       tone: "area-market-tile",
     },
     {
       label: "Views",
       value: totalViews.toLocaleString("en-ZA"),
       icon: Eye,
-      description: "All listings",
+      description: `${engagedViews.toLocaleString("en-ZA")} engaged`,
       tone: "area-business-tile",
     },
     {
@@ -362,6 +459,46 @@ export default async function MetricsPage() {
           )}
         </CardContent>
       </Card>
+      {fairShare.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle as="h2" className="flex items-center gap-2 text-lg">
+              <Shuffle aria-hidden="true" className="h-5 w-5 text-muted-foreground" />
+              Showroom turns, last 7 days
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Everyone gets an equal turn. Posts seen least go next, new posts get 72 hours up
+              front, and visitors see posts from their own province first.{" "}
+              <Link href="/help/showroom" className="font-medium underline underline-offset-2">
+                How the showroom works
+              </Link>
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border/60 text-sm">
+              {fairShare.map((row) => (
+                <li
+                  key={row.key}
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{row.title}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {SHOWROOM_LABELS[row.surface] ?? row.surface} · {row.eligiblePosts} live posts
+                    </span>
+                  </span>
+                  <span className="text-right tabular-nums">
+                    <span className="font-semibold">{row.appearances.toLocaleString("en-ZA")}</span>{" "}
+                    <span className="text-xs text-muted-foreground">
+                      times · fair share {row.fairShare.toLocaleString("en-ZA")}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

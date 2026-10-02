@@ -161,6 +161,7 @@ export const PromotionCard = memo(function PromotionCard({
   return (
     <PosterCardShell
       href={`/tourism-events/${id}`}
+      viewTarget={{ type: "promotion", id }}
       title={title}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}

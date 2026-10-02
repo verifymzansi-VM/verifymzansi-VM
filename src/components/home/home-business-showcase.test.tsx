@@ -145,8 +145,8 @@ describe("HomeBusinessShowcase", () => {
       createSupabaseMock([
         {
           id: "biz-seed",
-          business_name: "Seed Service Hub",
-          description: "Demo business",
+          business_name: "[seed] Service Hub",
+          description: "Test business",
           cover_photo: "https://example.com/cover.jpg",
           cover_video: null,
           video_thumbnail: null,

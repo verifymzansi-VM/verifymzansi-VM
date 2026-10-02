@@ -8,8 +8,18 @@ const { mockCreateClient, mockCookies, mockGetOwnerColumn } = vi.hoisted(() => (
   mockGetOwnerColumn: vi.fn(),
 }));
 
-const { carouselSpy } = vi.hoisted(() => ({
+const { carouselSpy, mockLoadShowroomItems, mockGetVisitorProvince } = vi.hoisted(() => ({
   carouselSpy: vi.fn(),
+  mockLoadShowroomItems: vi.fn(),
+  mockGetVisitorProvince: vi.fn(),
+}));
+
+vi.mock("@/lib/showroom/feed", () => ({
+  loadShowroomItems: mockLoadShowroomItems,
+}));
+
+vi.mock("@/lib/showroom/visitor-province", () => ({
+  getVisitorProvince: mockGetVisitorProvince,
 }));
 
 vi.mock("next/headers", () => ({
@@ -118,112 +128,33 @@ describe("PromotionsPage", () => {
     mockCookies.mockResolvedValue({
       get: vi.fn().mockReturnValue(undefined),
     });
+    mockLoadShowroomItems.mockResolvedValue([]);
+    mockGetVisitorProvince.mockResolvedValue({ province: null, source: null });
   });
 
-  it("keeps event slides in the showroom when tourism has enough rows to fill the wider stack", async () => {
-    mockCreateClient.mockResolvedValue(
-      createSupabaseClient({
-        businesses: Array.from({ length: 5 }, (_, index) => ({
-          id: `business-${index + 1}`,
-          business_name: `Tourism Business ${index + 1}`,
-          description: "Valid tourism business",
-          location_city: "Cape Town",
-          location_province: "Western Cape",
-          cover_photo: `/business-${index + 1}.jpg`,
-          cover_video: null,
-          video_thumbnail: null,
-        })),
-        promotions: [
-          {
-            id: "event-1",
-            title: "Food Festival",
-            description: "Valid live event",
-            location_city: "Durban",
-            location_province: "KwaZulu-Natal",
-            photos: ["/event-1.jpg"],
-            videos: [],
-            video_thumbnail: null,
-            price_cents: 15000,
-          },
-          {
-            id: "event-2",
-            title: "Beach Concert",
-            description: "Another live event",
-            location_city: "Gqeberha",
-            location_province: "Eastern Cape",
-            photos: ["/event-2.jpg"],
-            videos: [],
-            video_thumbnail: null,
-            price_cents: 20000,
-          },
-        ],
-      })
-    );
+  it("shows tourism businesses and events in fair rotation order, local first", async () => {
+    const supabase = createSupabaseClient({ businesses: [], promotions: [] });
+    mockCreateClient.mockResolvedValue(supabase);
+    mockGetVisitorProvince.mockResolvedValue({ province: "Western Cape", source: "detected" });
+    const items = [
+      { id: "event-1", type: "promotion", href: "/tourism-events/event-1", title: "Event" },
+      { id: "lodge-1", type: "business", href: "/tourism-events/lodge-1", title: "Lodge" },
+    ];
+    mockLoadShowroomItems.mockResolvedValue(items);
 
     render(await PromotionsPage());
 
-    expect(screen.getByTestId("showroom-card-carousel")).toBeInTheDocument();
+    expect(mockLoadShowroomItems).toHaveBeenCalledWith("tourism", {
+      province: "Western Cape",
+      hideFixtures: false,
+      client: supabase,
+    });
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        items: expect.arrayContaining([
-          expect.objectContaining({ id: "event-1", type: "promotion" }),
-        ]),
+        items,
+        surface: "showroom:tourism",
+        visitorProvince: { province: "Western Cape", source: "detected" },
       })
-    );
-    expect(carouselSpy.mock.calls[0]?.[0].items).toHaveLength(7);
-  });
-
-  it("overfetches before filtering so valid tourism slides survive placeholder rows", async () => {
-    mockCreateClient.mockResolvedValue(
-      createSupabaseClient({
-        businesses: [
-          ...Array.from({ length: 5 }, (_, index) => ({
-            id: `placeholder-${index + 1}`,
-            business_name: `Placeholder Tourism ${index + 1}`,
-            description: "placeholder business",
-            location_city: "Johannesburg",
-            location_province: "Gauteng",
-            cover_photo: `/placeholder-${index + 1}.jpg`,
-            cover_video: null,
-            video_thumbnail: null,
-          })),
-          {
-            id: "business-6",
-            business_name: "Safari Lodge",
-            description: "Valid tourism business",
-            location_city: "Nelspruit",
-            location_province: "Mpumalanga",
-            cover_photo: "/business-6.jpg",
-            cover_video: null,
-            video_thumbnail: null,
-          },
-          {
-            id: "business-7",
-            business_name: "Coastal Retreat",
-            description: "Valid tourism business",
-            location_city: "Knysna",
-            location_province: "Western Cape",
-            cover_photo: "/business-7.jpg",
-            cover_video: null,
-            video_thumbnail: null,
-          },
-        ],
-        promotions: [],
-      })
-    );
-
-    render(await PromotionsPage());
-
-    expect(carouselSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        items: expect.arrayContaining([
-          expect.objectContaining({ id: "business-6", type: "business" }),
-          expect.objectContaining({ id: "business-7", type: "business" }),
-        ]),
-      })
-    );
-    expect(carouselSpy.mock.calls[0]?.[0].items).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "tourism-events-empty" })])
     );
   });
 

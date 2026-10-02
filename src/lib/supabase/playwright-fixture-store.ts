@@ -33,7 +33,7 @@ const DEFAULT_TABLES = [
   "businesses",
   "entitlements",
   "free_posts_used",
-  "listing_views",
+  "content_views",
   "listings",
   "plans",
   "promotions",

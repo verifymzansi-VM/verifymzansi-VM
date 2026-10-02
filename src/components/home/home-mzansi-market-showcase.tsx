@@ -31,9 +31,9 @@ export async function HomeMzansiMarketShowcase() {
   const { data: listings, error } = await applyVisibleExpiryFilter(
     supabase.from("listings").select("*").eq("status", "live").eq("area", "MZANSI_MARKET")
   )
-    .order("active_boost_until", { ascending: false, nullsFirst: false })
-    .order("active_featured_until", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
+    // Fair rotation: new posts first for 72 hours, then everyone takes turns.
+    .order("fair_rotation_key", { ascending: true })
+    .order("id", { ascending: true })
     .limit(16);
 
   if (error) {
