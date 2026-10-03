@@ -117,8 +117,6 @@ for (const [width, height] of dimensions) {
         if (index === 0 && width === 1920) {
           expect(geometry.frame.width).toBeCloseTo(607.5, 1);
           if (browserName === "chromium")
-            await page.addStyleTag({ content: "nextjs-portal { display: none; }" });
-          if (browserName === "chromium")
             await page.screenshot({ path: `output/desktop-profiles/${theme}.png` });
         }
         if (width === 1920 && browserName === "chromium") {
@@ -197,7 +195,6 @@ test("toolbar icons expand on hover and keyboard focus without moving the media"
           (await toolbar.getByRole("button", { name: "Market", exact: true }).boundingBox())!.width
       )
       .toBeGreaterThan(90);
-    await page.addStyleTag({ content: "nextjs-portal { display: none; }" });
     await page.screenshot({ path: `output/desktop-profiles/${theme}-hover-labels.png` });
     await toolbar.getByRole("button", { name: "Filters", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -255,7 +252,6 @@ test("message rail opens a private enquiry and action labels stay plain", async 
   const directions = actions.getByRole("link", { name: /in maps/ });
   await expect(directions).toHaveAttribute("href", slides[1].mapUrl!);
   await expect(actions.getByRole("button", { name: /comment/i })).toHaveCount(0);
-  await page.addStyleTag({ content: "nextjs-portal { display: none; }" });
   await directions.hover();
   await page.screenshot({ path: "output/desktop-profiles/private-message-rail.png" });
 });
