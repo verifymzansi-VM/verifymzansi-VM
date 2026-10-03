@@ -93,6 +93,7 @@ describe("PwaInstallPrompt", () => {
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllEnvs();
   });
 
   it("renders for beforeinstallprompt and hides after an accepted install choice", async () => {
@@ -160,6 +161,7 @@ describe("PwaInstallPrompt", () => {
   });
 
   it("uses the public runtime app URL for the iOS install link", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
     document.body.innerHTML = `<div id="${PUBLIC_RUNTIME_CONFIG_ELEMENT_ID}" data-app-url="https://staging.verifymzansi.com"></div>`;
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
