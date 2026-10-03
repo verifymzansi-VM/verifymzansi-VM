@@ -255,6 +255,9 @@
       "qs@<6.16.0": "6.16.0",
       "body-parser@>=2.0.0 <2.3.0": "2.3.0",
       "@humanfs/node@<0.16.8": "0.16.8"
+    },
+    "patchedDependencies": {
+      "braces@3.0.3": "patches/braces@3.0.3.patch"
     }
   },
   "overrides": {

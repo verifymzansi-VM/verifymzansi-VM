@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, rm, readFile } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, readFile, cp, mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -22,6 +24,140 @@ import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
 import { sanitizeCloudflareEnvModule } from "./lib/cloudflare-env-policy";
 import { parseSupabaseStatus } from "./lib/supabase-status";
+import { assessPatchedAudit, verifyBracesBackport, BRACES_ADVISORY } from "./lib/braces-backport";
+test("Sentry approval is confined to verified internal tooling packages and terms", async () => {
+  const review = JSON.parse(await readFile("scripts/license-reviews/sentry-cli.json", "utf8"));
+  const licenseText = await readFile("node_modules/@sentry/cli/LICENSE", "utf8");
+  const evidence = { review, licenseText };
+  const report = (name = "@sentry/cli", version = "2.58.6", license = "FSL-1.1-MIT") => ({
+    [license]: [{ name, versions: [version], license }],
+  });
+  for (const name of ["@sentry/cli", "@sentry/cli-win32-x64", "@sentry/cli-linux-x64"])
+    assert.deepEqual(validateLicenseReport(report(name), "", undefined, evidence), []);
+  for (const invalid of [
+    undefined,
+    { review: { ...review, competingUse: true }, licenseText },
+    { review: { ...review, useCase: "public-CLI-service" }, licenseText },
+    { review, licenseText: licenseText + "changed" },
+  ])
+    assert(validateLicenseReport(report(), "", undefined, invalid).length);
+  for (const unreviewed of [
+    report("@sentry/new-package"),
+    report("@sentry/cli", "2.58.7"),
+    report("@sentry/cli", "2.58.6", "GPL-3.0-only"),
+  ])
+    assert(validateLicenseReport(unreviewed, "", undefined, evidence).length);
+});
+test("installed braces guards all public string and AST walkers with bounded errors", () => {
+  const require = createRequire(path.join(process.cwd(), "package.json"));
+  const braces = require("braces");
+  const nested = (depth: number) => "{".repeat(depth) + "a,b" + "}".repeat(depth);
+  for (const name of ["parse", "compile", "expand", "stringify"]) {
+    for (const options of [{}, { maxDepth: 10000 }, { maxDepth: Infinity }, { maxDepth: NaN }])
+      assert.throws(() => braces[name](nested(4000), options), /exceeds max depth/);
+    assert.throws(() => braces[name](nested(101)), /exceeds max depth/);
+    assert.doesNotThrow(() => braces[name](nested(100)));
+    assert.throws(() => braces[name]("(".repeat(101) + "a" + ")".repeat(101)), /exceeds max depth/);
+  }
+  for (const name of ["compile", "expand", "stringify"]) {
+    let ast: { type: string; value?: string; nodes?: unknown[] } = { type: "text", value: "a" };
+    for (let level = 0; level < 101; level++) ast = { type: "brace", nodes: [ast] };
+    assert.throws(() => braces[name]({ type: "root", nodes: [ast] }), /exceeds max depth/);
+  }
+  const cycle: { type: string; nodes: unknown[]; parent?: unknown } = {
+    type: "paren",
+    nodes: [{ type: "text", value: "a" }],
+  };
+  cycle.parent = cycle;
+  assert.throws(
+    () => runInNewContext("braces.expand(cycle)", { braces, cycle }, { timeout: 1000 }),
+    /parent chain contains a cycle/
+  );
+  assert.deepEqual(braces.expand("file-{a,b}-{1..3}.js"), [
+    "file-a-1.js",
+    "file-a-2.js",
+    "file-a-3.js",
+    "file-b-1.js",
+    "file-b-2.js",
+    "file-b-3.js",
+  ]);
+  assert.equal(braces.compile("foo/{a,b}/bar"), "foo/(a|b)/bar");
+});
+test("audit retains other findings and requires the exact verified backport", async () => {
+  assert.equal((await verifyBracesBackport()).verified, true);
+  const report = {
+    metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, high: 1, critical: 0 } },
+    advisories: {
+      known: {
+        github_advisory_id: BRACES_ADVISORY,
+        module_name: "braces",
+        severity: "high",
+        findings: [{ version: "3.0.3" }],
+      },
+    },
+  };
+  assert.equal(assessPatchedAudit(1, report, { verified: false }).assessment, "FAIL");
+  assert.equal(assessPatchedAudit(1, report, { verified: true }).assessment, "WARN");
+  assert.equal(report.metadata.vulnerabilities.high, 1);
+  assert.equal(assessPatchedAudit(2, report, { verified: true }).assessment, "INVALID");
+  const extra = {
+    ...report,
+    metadata: { vulnerabilities: { ...report.metadata.vulnerabilities, critical: 1 } },
+    advisories: {
+      ...report.advisories,
+      other: {
+        github_advisory_id: "unrelated",
+        module_name: "another",
+        severity: "critical",
+        findings: [{ version: "1" }],
+      },
+    },
+  };
+  assert.equal(assessPatchedAudit(1, extra, { verified: true }).assessment, "FAIL");
+  assert.equal(
+    assessPatchedAudit(1, { ...extra, metadata: report.metadata }, { verified: true }).assessment,
+    "INVALID"
+  );
+  assert.equal(
+    assessPatchedAudit(
+      1,
+      {
+        ...report,
+        advisories: { known: { ...report.advisories.known, findings: [{ version: "3.0.2" }] } },
+      },
+      { verified: true }
+    ).assessment,
+    "FAIL"
+  );
+  const directory = await mkdtemp(path.join(tmpdir(), "vm-braces-proof-"));
+  try {
+    await mkdir(path.join(directory, "patches"));
+    await cp("patches", path.join(directory, "patches"), { recursive: true });
+    await cp("package.json", path.join(directory, "package.json"));
+    await cp("node_modules/braces", path.join(directory, "node_modules/braces"), {
+      recursive: true,
+    });
+    assert.equal((await verifyBracesBackport(directory)).verified, true);
+    await mkdir(path.join(directory, "node_modules/consumer/node_modules/braces"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(directory, "node_modules/consumer/node_modules/braces/package.json"),
+      '{"version":"3.0.3","main":"index.js"}'
+    );
+    assert.equal((await verifyBracesBackport(directory)).verified, false);
+    await rm(path.join(directory, "node_modules/consumer"), { recursive: true });
+    await writeFile(
+      path.join(directory, "node_modules/braces/lib/parse.js"),
+      "unpatched or modified"
+    );
+    assert.equal((await verifyBracesBackport(directory)).verified, false);
+  } finally {
+    if (!path.resolve(directory).startsWith(path.resolve(tmpdir()) + path.sep + "vm-braces-proof-"))
+      throw new Error("Unsafe fixture cleanup");
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 test("isolated database status accepts CLI notices and rejects malformed or remote targets", () => {
   const status = {
     API_URL: "http://127.0.0.1:56421",

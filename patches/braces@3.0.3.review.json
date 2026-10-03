@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "advisory": "GHSA-vfj7-8cjw-p6xm",
+  "cve": "CVE-2026-93687",
+  "package": "braces",
+  "version": "3.0.3",
+  "reviewedAt": "2026-10-03",
+  "upstreamPullRequest": "https://github.com/micromatch/braces/pull/72",
+  "upstreamCommit": "28d440b5dd449dbf1fe6f3506cf94ecca4d02660",
+  "patchPath": "patches/braces@3.0.3.patch",
+  "patchSha256": "uSLl0knP5Xd1WxK7l1lVB5PxpFE3x40onWfWl856DUU",
+  "hashEncoding": "base64url",
+  "fileHashes": {
+    "lib/constants.js": "-ftoiVkjLu4-ateQalsOMjSBXbSe6Ffvhpg9ZbkX3Hw",
+    "lib/parse.js": "sb92b7pqYgNfeOy9qKX9lOkhqhwewM3z9GfpyDar7VU",
+    "lib/compile.js": "tlH3cV5tuJQs5h0zlDV7TYHI7OiCQKoxpFjqEWXt0ZU",
+    "lib/expand.js": "fqPhTCsrJW7yRP09g7j8qiCqIjK05tdow7tqtWf2bPU",
+    "lib/stringify.js": "Sdwti6-nTzRxWhioRby4LOZsqvO6tM8ReZjgax-aUKk",
+    "README.md": "4v5XlaiSNGMUoBqr3eGx5tTPd4Uxuc7IIM1awRWoiQI",
+    "index.js": "My6gfHsAY2Gq0SqplMp13B246DgriEkJ4vOPELhciKQ",
+    "lib/utils.js": "tadZaqZ3MEErPAKe8J6E5rZ7jkRc_9NdHSlVSciQZsc"
+  },
+  "scope": "Backport parser and all three AST walker guards, including parent-cycle detection, from the reviewed upstream proposal. Retain original version and raw registry advisory; only a verified installed backport may satisfy the local gate."
+}

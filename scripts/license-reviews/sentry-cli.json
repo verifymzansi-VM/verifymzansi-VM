@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "2.58.6",
+  "reviewedAt": "2026-10-03",
+  "useCase": "internal-build-and-source-map-tooling",
+  "competingUse": false,
+  "licenseSource": "https://github.com/getsentry/sentry-cli/blob/master/LICENSE",
+  "licenseSha256": "-BcbemRbyh7_Hmn5EdxMH6k7-SovfU1_oktLdmDDMEE",
+  "hashEncoding": "base64url",
+  "evidence": "next.config.js uses withSentryConfig to upload source maps for VerifyMzansi's own error monitoring. No application route exposes Sentry CLI as a competing product or service. Original upstream license and copyright notices are retained.",
+  "recheckWhen": "CLI version, upstream terms, or internal/noncompeting use changes."
+}

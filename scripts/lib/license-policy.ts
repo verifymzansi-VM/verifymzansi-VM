@@ -3,6 +3,32 @@ import { createHash } from "node:crypto";
 type Package = { name: string; versions: string[]; license?: string };
 export type RemotionLicenseEvidence = { review: unknown; licenseText: string };
 const REMOTION_LICENSE_HASH = "vWUIO5QPYZBPbvKYqt6RinytcqPjW8QG42-rNlhEtnM";
+const SENTRY_LICENSE_HASH = "-BcbemRbyh7_Hmn5EdxMH6k7-SovfU1_oktLdmDDMEE";
+function reviewedSentry(pkg: Package, expression: string, evidence?: RemotionLicenseEvidence) {
+  if (
+    !evidence ||
+    !evidence.review ||
+    typeof evidence.review !== "object" ||
+    Array.isArray(evidence.review) ||
+    typeof evidence.licenseText !== "string"
+  )
+    return false;
+  const review = evidence.review as Record<string, unknown>;
+  return (
+    ["@sentry/cli", "@sentry/cli-win32-x64", "@sentry/cli-linux-x64"].includes(pkg.name) &&
+    expression === "FSL-1.1-MIT" &&
+    pkg.versions.every((version) => version === "2.58.6") &&
+    review.schemaVersion === 1 &&
+    review.packageVersion === "2.58.6" &&
+    review.reviewedAt === "2026-10-03" &&
+    review.useCase === "internal-build-and-source-map-tooling" &&
+    review.competingUse === false &&
+    review.licenseSource === "https://github.com/getsentry/sentry-cli/blob/master/LICENSE" &&
+    review.licenseSha256 === SENTRY_LICENSE_HASH &&
+    createHash("sha256").update(evidence.licenseText.replace(/\r\n/g, "\n")).digest("base64url") ===
+      SENTRY_LICENSE_HASH
+  );
+}
 const REMOTION_EXPRESSIONS: Record<string, string> = {
   remotion: "Unknown",
   "@remotion/bundler": "Unknown",
@@ -49,7 +75,8 @@ function reviewedRemotion(pkg: Package, expression: string, evidence?: RemotionL
 export function validateLicenseReport(
   report: unknown,
   ffmpegNotice = "",
-  remotion?: RemotionLicenseEvidence
+  remotion?: RemotionLicenseEvidence,
+  sentry?: RemotionLicenseEvidence
 ): string[] {
   if (
     !report ||
@@ -77,6 +104,7 @@ export function validateLicenseReport(
       if (pkg.license !== undefined && pkg.license !== expression)
         throw new Error(`License bucket disagrees with package ${pkg.name}`);
       if (reviewedRemotion(pkg, expression, remotion)) continue;
+      if (reviewedSentry(pkg, expression, sentry)) continue;
       // Retain the already reviewed standalone WASM exception, pinned to its evidence.
       if (
         pkg.name === "@ffmpeg/core" &&

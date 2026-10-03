@@ -13,6 +13,45 @@ function getRule(name: string) {
 
 describe("secret scan allowlisting", () => {
   const fakeHash = "f".repeat(64);
+  it("allows pnpm computed patch hashes without exempting neighbouring or named secrets", () => {
+    for (const line of [
+      `    hash: ${fakeHash}`,
+      `  braces@3.0.3(patch_hash=${fakeHash}):`,
+      `      braces: 3.0.3(patch_hash=${fakeHash})`,
+    ])
+      expect(
+        shouldIgnoreSecretFinding({
+          filePath: "pnpm-lock.yaml",
+          line,
+          ruleName: "64-char hex string (potential encryption key)",
+        })
+      ).toBe(true);
+    for (const line of [
+      `  braces@3.0.3(patch_hash=${fakeHash}): extra ${fakeHash}`,
+      `HMAC_SECRET=${fakeHash}`,
+    ])
+      expect(
+        shouldIgnoreSecretFinding({
+          filePath: "pnpm-lock.yaml",
+          line,
+          ruleName: "64-char hex string (potential encryption key)",
+        })
+      ).toBe(false);
+    expect(
+      shouldIgnoreSecretFinding({
+        filePath: "pnpm-lock.yaml",
+        line: `HMAC_SECRET=${fakeHash}`,
+        ruleName: "Hardcoded encryption or HMAC key assignment",
+      })
+    ).toBe(false);
+    expect(
+      shouldIgnoreSecretFinding({
+        filePath: "notes.txt",
+        line: `hash: ${fakeHash}`,
+        ruleName: "64-char hex string (potential encryption key)",
+      })
+    ).toBe(false);
+  });
 
   it("detects credential assignments in quoted JSON and bundled object keys", () => {
     const credentials = [

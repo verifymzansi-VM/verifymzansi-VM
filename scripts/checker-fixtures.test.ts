@@ -30,6 +30,9 @@ test("required audit baselines and license notice are included in Git checkouts"
     "scripts/audit-baselines/duplication.json",
     "public/vendor/ffmpeg-core/NOTICE.txt",
     "scripts/license-reviews/remotion.json",
+    "scripts/license-reviews/sentry-cli.json",
+    "patches/braces@3.0.3.patch",
+    "patches/braces@3.0.3.review.json",
   ];
   const tracked = spawnSync("git", ["ls-files", "--error-unmatch", ...files], {
     cwd: root,
