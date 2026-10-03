@@ -305,7 +305,7 @@ test.describe("Posting flows in Chromium", () => {
     await expect(page).toHaveURL(PROMOTION_DASHBOARD_URL);
 
     await page.goto(`/tourism-events/${promotionId}`);
-    await expect(page.getByText(promotionTitle).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: promotionTitle, exact: true })).toBeVisible();
     await expect(page.getByText(updatedPromotionTitle)).toHaveCount(0);
   });
 });
