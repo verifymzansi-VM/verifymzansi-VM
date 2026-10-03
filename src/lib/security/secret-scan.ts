@@ -129,7 +129,9 @@ function isAllowedComputedHashMatch({ filePath, line, ruleName }: SecretScanMatc
     (normalizedPath === "skills-lock.json" && line.includes('"computedHash"')) ||
     (normalizedPath === "pnpm-lock.yaml" &&
       (/^\s*hash:\s*[0-9a-f]{64}\s*$/.test(line) ||
-        /^\s*(?:braces@3\.0\.3|braces:\s*3\.0\.3)\(patch_hash=[0-9a-f]{64}\):?\s*$/.test(line)))
+        /^\s*(?:braces@3\.0\.3|(?:braces|version):\s*3\.0\.3)\(patch_hash=[0-9a-f]{64}\):?\s*$/.test(
+          line
+        )))
   );
 }
 

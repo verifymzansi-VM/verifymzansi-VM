@@ -137,6 +137,11 @@ test("audit retains other findings and requires the exact verified backport", as
     await cp("node_modules/braces", path.join(directory, "node_modules/braces"), {
       recursive: true,
     });
+    // Exercise a runnable isolated installation, including braces' dependencies.
+    for (const dependency of ["fill-range", "to-regex-range", "is-number"])
+      await cp(`node_modules/${dependency}`, path.join(directory, "node_modules", dependency), {
+        recursive: true,
+      });
     assert.equal((await verifyBracesBackport(directory)).verified, true);
     await mkdir(path.join(directory, "node_modules/consumer/node_modules/braces"), {
       recursive: true,

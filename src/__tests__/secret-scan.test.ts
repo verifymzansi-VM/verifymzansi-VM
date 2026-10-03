@@ -18,6 +18,7 @@ describe("secret scan allowlisting", () => {
       `    hash: ${fakeHash}`,
       `  braces@3.0.3(patch_hash=${fakeHash}):`,
       `      braces: 3.0.3(patch_hash=${fakeHash})`,
+      `        version: 3.0.3(patch_hash=${fakeHash})`,
     ])
       expect(
         shouldIgnoreSecretFinding({

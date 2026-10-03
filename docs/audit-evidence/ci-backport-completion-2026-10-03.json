@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-03T14:13:52.974457+00:00",
+  "sourceCommit": "4f31e1aa48e2a8e92a87c56f8d8a048208793432",
+  "scope": "Working-tree completion of interrupted backport/CI changes; local scoped checks, not a full release attestation.",
+  "fixed": [
+    "Isolated backport fixture includes fill-range, to-regex-range and is-number.",
+    "braces is an explicit exact-version dev dependency for the guard regression tests.",
+    "Computed lockfile patch hashes cover direct importer version entries; adjacent/named secrets remain active."
+  ],
+  "windows": {
+    "runId": "2026-10-03T14-06-00-805Z-3eb59882",
+    "assessment": "WARN",
+    "startedAt": "2026-10-03T14:06:00.805Z",
+    "finishedAt": "2026-10-03T14:09:59.332Z",
+    "commit": "4f31e1aa48e2a8e92a87c56f8d8a048208793432",
+    "selectedScope": [
+      "format",
+      "lint",
+      "types",
+      "tooling",
+      "openapi",
+      "dead-code",
+      "imports",
+      "duplication",
+      "secrets",
+      "dependencies",
+      "licenses",
+      "db-static"
+    ],
+    "stepsPlanned": 12,
+    "stepsExecuted": 12,
+    "platform": "win32",
+    "results": [
+      {
+        "id": "format",
+        "status": "WARN"
+      },
+      {
+        "id": "lint",
+        "status": "WARN"
+      },
+      {
+        "id": "types",
+        "status": "PASS"
+      },
+      {
+        "id": "tooling",
+        "status": "PASS"
+      },
+      {
+        "id": "openapi",
+        "status": "PASS"
+      },
+      {
+        "id": "dead-code",
+        "status": "PASS"
+      },
+      {
+        "id": "imports",
+        "status": "PASS"
+      },
+      {
+        "id": "duplication",
+        "status": "PASS"
+      },
+      {
+        "id": "secrets",
+        "status": "PASS"
+      },
+      {
+        "id": "dependencies",
+        "status": "WARN"
+      },
+      {
+        "id": "licenses",
+        "status": "PASS"
+      },
+      {
+        "id": "db-static",
+        "status": "PASS"
+      }
+    ]
+  },
+  "linux": {
+    "runId": "2026-10-03T14-06-18-243Z-b7c8cc4d",
+    "assessment": "WARN",
+    "startedAt": "2026-10-03T14:06:18.243Z",
+    "finishedAt": "2026-10-03T14:09:55.449Z",
+    "commit": "4f31e1aa48e2a8e92a87c56f8d8a048208793432",
+    "selectedScope": [
+      "format",
+      "lint",
+      "types",
+      "tooling",
+      "openapi",
+      "dead-code",
+      "imports",
+      "duplication",
+      "secrets",
+      "dependencies",
+      "licenses",
+      "db-static"
+    ],
+    "stepsPlanned": 12,
+    "stepsExecuted": 12,
+    "platform": "linux",
+    "results": [
+      {
+        "id": "format",
+        "status": "WARN"
+      },
+      {
+        "id": "lint",
+        "status": "WARN"
+      },
+      {
+        "id": "types",
+        "status": "PASS"
+      },
+      {
+        "id": "tooling",
+        "status": "PASS"
+      },
+      {
+        "id": "openapi",
+        "status": "PASS"
+      },
+      {
+        "id": "dead-code",
+        "status": "PASS"
+      },
+      {
+        "id": "imports",
+        "status": "PASS"
+      },
+      {
+        "id": "duplication",
+        "status": "PASS"
+      },
+      {
+        "id": "secrets",
+        "status": "PASS"
+      },
+      {
+        "id": "dependencies",
+        "status": "WARN"
+      },
+      {
+        "id": "licenses",
+        "status": "PASS"
+      },
+      {
+        "id": "db-static",
+        "status": "PASS"
+      }
+    ]
+  },
+  "tests": {
+    "upstreamBracesPassed": 904,
+    "toolingPassedPerPlatform": 26,
+    "focusedScannerAndAuditPolicyPassed": 21
+  },
+  "releaseReady": false,
+  "remainingReleaseEvidence": "Supabase advisor review, authenticated KYC/genuine Ozow evidence, Worker runtime binding integration and real payment fulfillment/cancellation race coverage remain separate.",
+  "ciExecution": "Next pushed run must verify downstream build, coverage and browser jobs; these local records do not claim successful CI."
+}

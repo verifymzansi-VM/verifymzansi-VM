@@ -209,20 +209,24 @@ secret-name/posture checks, deployed schema and deep deployment health passed.
 These observations do not establish deployed secret values, exact migration
 grants, signed notification delivery or current-commit rollout.
 
-1. **P1 — Dependency security:** `braces@3.0.3` remains high severity under
-   [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). The
-   observed registry report advertised no patched version. No security exception
-   was added. A new all-dependency scan has zero moderate findings after
-   removing Jimp/file-type, and one high finding. See
-   [the structured dependency evidence](audit-evidence/dependency-audit.json).
+1. **Dependency follow-up:** the registry still lists `braces@3.0.3` under
+   [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm). Its
+   parser and all AST walkers now use the reviewed upstream depth-limit
+   backport, with 904 upstream tests passing. Source/patch hashes, registration
+   and runtime guards are verified for installed copies; a missing or modified
+   fix still blocks. Raw registry evidence is retained and the verified fix is
+   reported as WARN. Other security findings still block. Replace the backport
+   with a reviewed official release when available.
 2. **P1 — License policy:** the owner confirmed a one-person company, so the 11
    Remotion records are now reviewed under its free license for marketing
    video/image rendering. `scripts/license-reviews/remotion.json` records the
    eligibility and terms; the gate limits this approval to reviewed package
    names, version 4.0.529 and the unchanged license text. All 23 tooling tests
    pass on Windows and Linux, including ineligible companies, changed terms,
-   unreviewed packages and future versions. Two Sentry FSL records remain
-   blocked on each platform and still require package/use-specific review.
+   unreviewed packages and future versions. Sentry CLI 2.58.6 has now also been
+   reviewed for its permitted internal build/source-map use, with fixed package
+   names and unchanged installed terms. The license check passes on Windows and
+   Linux; other restricted/custom licenses have no blanket exception.
 3. **P1 — Supabase advisor:** 17 observations: three RLS tables without
    policies, 13 anon/authenticated SECURITY DEFINER grants and one plan-blocked
    leaked password protection finding. Examination shows intentional

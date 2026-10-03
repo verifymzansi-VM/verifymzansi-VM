@@ -43,8 +43,18 @@ company on 3 October 2026, and the installed
 [Remotion terms](https://www.remotion.dev/license) permit its marketing
 video/image rendering use under the free license. The exception requires the
 recorded eligibility, exact reviewed package names and version, and an unchanged
-license-text hash. Other Unknown/custom licenses, Sentry FSL records and future
-Remotion versions remain subject to review.
+license-text hash. Sentry CLI 2.58.6 has a separate package/use-specific review
+in `scripts/license-reviews/sentry-cli.json`: its FSL terms permit this internal
+build/source-map use. Exact package names, versions and installed terms are
+verified; competing use, changed terms and other FSL packages remain blocked.
+
+`braces@3.0.3` uses the reviewed depth-guard backport in `patches/`, pinned to
+[upstream proposal 72](https://github.com/micromatch/braces/pull/72) and its
+immutable commit. The audit preserves the raw registry advisory and reports WARN
+only after verifying patch registration, provenance, installed source hashes and
+depth rejection for every discovered installed copy. Missing, modified or
+additional unpatched copies keep the finding blocking. Other advisories,
+inconsistent counts and network failures cannot use this mitigation.
 
 Security defects are never baselined. Existing duplication is recorded in
 `scripts/audit-baselines/duplication.json`, including fragment/file-pair hashes

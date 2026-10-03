@@ -216,6 +216,9 @@ importers:
       autoprefixer:
         specifier: ^10.6.1
         version: 10.6.1(postcss@8.5.28)
+      braces:
+        specifier: 3.0.3
+        version: 3.0.3(patch_hash=b922e5d249cfe577755b12bb9759550793f1a45137c78d289d67d697ce7a0d45)
       dependency-cruiser:
         specifier: ^18.5.0
         version: 18.5.0
