@@ -1,6 +1,56 @@
 import parse from "spdx-expression-parse";
+import { createHash } from "node:crypto";
 type Package = { name: string; versions: string[]; license?: string };
-export function validateLicenseReport(report: unknown, ffmpegNotice = ""): string[] {
+export type RemotionLicenseEvidence = { review: unknown; licenseText: string };
+const REMOTION_LICENSE_HASH = "vWUIO5QPYZBPbvKYqt6RinytcqPjW8QG42-rNlhEtnM";
+const REMOTION_EXPRESSIONS: Record<string, string> = {
+  remotion: "Unknown",
+  "@remotion/bundler": "Unknown",
+  "@remotion/cli": "Unknown",
+  "@remotion/compositor-win32-x64-msvc": "Unknown",
+  "@remotion/compositor-linux-x64-gnu": "Unknown",
+  "@remotion/media": "Unknown",
+  "@remotion/player": "Unknown",
+  "@remotion/renderer": "Unknown",
+  "@remotion/web-renderer": "Unknown",
+  "@remotion/canvas": "Remotion License",
+  "@remotion/studio-protocol": "Remotion License",
+  "@remotion/media-parser": "Remotion License https://remotion.dev/license",
+};
+function reviewedRemotion(pkg: Package, expression: string, evidence?: RemotionLicenseEvidence) {
+  if (
+    !evidence ||
+    !evidence.review ||
+    typeof evidence.review !== "object" ||
+    Array.isArray(evidence.review) ||
+    typeof evidence.licenseText !== "string"
+  )
+    return false;
+  const review = evidence.review as Record<string, unknown>;
+  return (
+    Object.hasOwn(REMOTION_EXPRESSIONS, pkg.name) &&
+    REMOTION_EXPRESSIONS[pkg.name] === expression &&
+    pkg.versions.every((version) => version === "4.0.529") &&
+    review.schemaVersion === 1 &&
+    review.packageVersion === "4.0.529" &&
+    review.declaredBy === "project-owner" &&
+    review.declaredAt === "2026-10-03" &&
+    typeof review.companyEmployeeCount === "number" &&
+    Number.isSafeInteger(review.companyEmployeeCount) &&
+    review.companyEmployeeCount >= 0 &&
+    review.companyEmployeeCount <= 3 &&
+    review.useCase === "marketing-video-and-image-rendering" &&
+    review.licenseSource === "https://www.remotion.dev/license" &&
+    review.licenseSha256 === REMOTION_LICENSE_HASH &&
+    createHash("sha256").update(evidence.licenseText.replace(/\r\n/g, "\n")).digest("base64url") ===
+      REMOTION_LICENSE_HASH
+  );
+}
+export function validateLicenseReport(
+  report: unknown,
+  ffmpegNotice = "",
+  remotion?: RemotionLicenseEvidence
+): string[] {
   if (
     !report ||
     typeof report !== "object" ||
@@ -26,6 +76,7 @@ export function validateLicenseReport(report: unknown, ffmpegNotice = ""): strin
       const pkg = raw as Package;
       if (pkg.license !== undefined && pkg.license !== expression)
         throw new Error(`License bucket disagrees with package ${pkg.name}`);
+      if (reviewedRemotion(pkg, expression, remotion)) continue;
       // Retain the already reviewed standalone WASM exception, pinned to its evidence.
       if (
         pkg.name === "@ffmpeg/core" &&

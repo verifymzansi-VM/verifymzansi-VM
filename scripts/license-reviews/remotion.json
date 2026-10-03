@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "4.0.529",
+  "declaredBy": "project-owner",
+  "declaredAt": "2026-10-03",
+  "companyEmployeeCount": 1,
+  "useCase": "marketing-video-and-image-rendering",
+  "licenseSource": "https://www.remotion.dev/license",
+  "licenseSha256": "vWUIO5QPYZBPbvKYqt6RinytcqPjW8QG42-rNlhEtnM",
+  "hashEncoding": "base64url",
+  "rationale": "The owner confirmed a one-person company with no team. Installed Remotion 4.0.529 permits eligible small companies to create commercial videos and images for free. Repository use is marketing renders, with no application runtime imports or resale of a Remotion derivative.",
+  "recheckWhen": "Company exceeds three employees, use changes, package version changes, or upstream terms change."
+}

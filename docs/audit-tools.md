@@ -37,6 +37,15 @@ Credentials are never written into reports.
 
 ## Quality baseline
 
+The license check records Remotion 4.0.529 separately in
+`scripts/license-reviews/remotion.json`. The owner confirmed a one-person
+company on 3 October 2026, and the installed
+[Remotion terms](https://www.remotion.dev/license) permit its marketing
+video/image rendering use under the free license. The exception requires the
+recorded eligibility, exact reviewed package names and version, and an unchanged
+license-text hash. Other Unknown/custom licenses, Sentry FSL records and future
+Remotion versions remain subject to review.
+
 Security defects are never baselined. Existing duplication is recorded in
 `scripts/audit-baselines/duplication.json`, including fragment/file-pair hashes
 and budgets. A fresh scan must cover src, scripts and workers. Empty/malformed

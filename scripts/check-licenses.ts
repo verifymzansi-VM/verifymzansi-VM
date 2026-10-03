@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { execute, pnpmInvocation } from "./lib/audit-runtime";
-import { validateLicenseReport } from "./lib/license-policy";
+import { validateLicenseReport, type RemotionLicenseEvidence } from "./lib/license-policy";
 async function main() {
   if (process.argv.slice(2).some((arg) => arg !== "--"))
     throw new Error("licenses:check accepts no flags");
@@ -15,7 +15,16 @@ async function main() {
   } catch {
     /* Policy reports missing evidence. */
   }
-  const errors = validateLicenseReport(report, notice);
+  let remotion: RemotionLicenseEvidence | undefined;
+  try {
+    remotion = {
+      review: JSON.parse(readFileSync("scripts/license-reviews/remotion.json", "utf8")),
+      licenseText: readFileSync("node_modules/remotion/LICENSE.md", "utf8"),
+    };
+  } catch {
+    // Missing/malformed evidence never exempts a custom or unknown license.
+  }
+  const errors = validateLicenseReport(report, notice, remotion);
   if (errors.length) throw new Error(errors.join("\n"));
   process.stdout.write("License policy check passed.\n");
 }

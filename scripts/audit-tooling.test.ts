@@ -215,6 +215,64 @@ test("license parser rejects malformed shape, unknown expressions and unrestrict
       .length
   );
 });
+test("Remotion free license requires owner eligibility, exact packages/version and unchanged terms", async () => {
+  const review = JSON.parse(await readFile("scripts/license-reviews/remotion.json", "utf8"));
+  const licenseText = await readFile("node_modules/remotion/LICENSE.md", "utf8");
+  const evidence = { review, licenseText };
+  const report = (name = "@remotion/cli", version = "4.0.529", expression = "Unknown") => ({
+    [expression]: [{ name, versions: [version], license: expression }],
+  });
+  for (const name of [
+    "remotion",
+    "@remotion/cli",
+    "@remotion/bundler",
+    "@remotion/compositor-win32-x64-msvc",
+    "@remotion/compositor-linux-x64-gnu",
+    "@remotion/media",
+    "@remotion/player",
+    "@remotion/renderer",
+    "@remotion/web-renderer",
+  ])
+    assert.deepEqual(validateLicenseReport(report(name), "", evidence), []);
+  for (const [name, expression] of [
+    ["@remotion/canvas", "Remotion License"],
+    ["@remotion/studio-protocol", "Remotion License"],
+    ["@remotion/media-parser", "Remotion License https://remotion.dev/license"],
+  ])
+    assert.deepEqual(validateLicenseReport(report(name, "4.0.529", expression), "", evidence), []);
+  assert.deepEqual(
+    validateLicenseReport(report(), "", {
+      review: { ...review, companyEmployeeCount: 3 },
+      licenseText,
+    }),
+    []
+  );
+  assert.deepEqual(
+    validateLicenseReport(report(), "", {
+      review,
+      licenseText: licenseText.replace(/\r?\n/g, "\r\n"),
+    }),
+    []
+  );
+  for (const invalid of [
+    undefined,
+    { review: null, licenseText },
+    { review: { ...review, companyEmployeeCount: 4 }, licenseText },
+    { review: { ...review, companyEmployeeCount: "1" }, licenseText },
+    { review: { ...review, declaredBy: "unknown" }, licenseText },
+    { review: { ...review, useCase: "reselling-Remotion" }, licenseText },
+    { review, licenseText: licenseText + "changed terms" },
+  ])
+    assert(validateLicenseReport(report(), "", invalid).length);
+  for (const unreviewed of [
+    report("@remotion/new-package"),
+    report("unrelated"),
+    report("remotion", "4.0.530"),
+    report("remotion", "4.0.529", "GPL-3.0-only"),
+    report("@sentry/cli", "2.58.6", "FSL-1.1-MIT"),
+  ])
+    assert(validateLicenseReport(unreviewed, "", evidence).length);
+});
 test("duplication structure, finite totals, root coverage, stale and new findings", () => {
   const root = process.cwd();
   const now = Date.now();

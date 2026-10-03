@@ -215,9 +215,14 @@ grants, signed notification delivery or current-commit rollout.
    was added. A new all-dependency scan has zero moderate findings after
    removing Jimp/file-type, and one high finding. See
    [the structured dependency evidence](audit-evidence/dependency-audit.json).
-2. **P1 — License policy:** 13 Windows package records remain blocked: 11
-   Remotion unknown/custom terms and two Sentry FSL records. These require
-   package/use-specific review; Unknown was not silently accepted.
+2. **P1 — License policy:** the owner confirmed a one-person company, so the 11
+   Remotion records are now reviewed under its free license for marketing
+   video/image rendering. `scripts/license-reviews/remotion.json` records the
+   eligibility and terms; the gate limits this approval to reviewed package
+   names, version 4.0.529 and the unchanged license text. All 23 tooling tests
+   pass on Windows and Linux, including ineligible companies, changed terms,
+   unreviewed packages and future versions. Two Sentry FSL records remain
+   blocked on each platform and still require package/use-specific review.
 3. **P1 — Supabase advisor:** 17 observations: three RLS tables without
    policies, 13 anon/authenticated SECURITY DEFINER grants and one plan-blocked
    leaked password protection finding. Examination shows intentional
