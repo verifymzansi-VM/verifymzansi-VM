@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
@@ -14,6 +14,10 @@ import { useFeedSequence, type FeedItem } from "@/components/immersive/use-feed-
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import type { FeedSlide, FeedVertical } from "@/lib/feed/types";
 import { cn } from "@/lib/utils";
+import {
+  ViewerAppearanceProvider,
+  useViewerAppearance,
+} from "@/components/providers/viewer-appearance";
 import { trackContentView } from "@/lib/views/content-views";
 
 /** A post counts as viewed after two continuous seconds on screen, as on the classic page's video rule. */
@@ -24,6 +28,15 @@ const WHEEL_STEP = 40;
 const NAV_SETTLE_MS = 450;
 /** Two side panels from 1280px; one tabbed panel below that. */
 const SPLIT_QUERY = "(min-width: 1280px)";
+
+function subscribeLayout(update: () => void) {
+  const query = window.matchMedia(SPLIT_QUERY);
+  query.addEventListener("change", update);
+  return () => query.removeEventListener("change", update);
+}
+function layoutSnapshot() {
+  return window.matchMedia(SPLIT_QUERY).matches ? ("split" as const) : ("tabs" as const);
+}
 
 const VERTICAL_HOME: Record<FeedVertical, { href: string; label: string }> = {
   market: { href: "/mzansi-market", label: "Mzansi Market" },
@@ -69,6 +82,7 @@ function PostSlide({
   onVideoView,
   tabsMode,
   analytics,
+  navigation,
 }: {
   slide: FeedSlide;
   active: boolean;
@@ -76,6 +90,7 @@ function PostSlide({
   onVideoView: () => void;
   tabsMode: "split" | "tabs";
   analytics: boolean;
+  navigation: React.ReactNode;
 }) {
   const [mediaIndex, setMediaIndex] = useState(0);
   // Photos and videos move on by themselves until the visitor moves them.
@@ -89,7 +104,7 @@ function PostSlide({
 
   // Left and right move through photos when the visitor is not typing or in the player.
   useEffect(() => {
-    if (!active) return;
+    if (!active || slide.media.length === 0) return;
     function onKey(event: KeyboardEvent) {
       if (event.defaultPrevented || isTypingTarget(event.target) || overlayOpen()) return;
       if (insidePanel(event.target) || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -110,7 +125,7 @@ function PostSlide({
     <>
       <SlideHeadline slide={slide} active={active} titleAs={active ? "h1" : "h2"} />
       {slide.left.length > 0 ? (
-        <div className="mt-5 border-t border-white/10 pt-5">
+        <div className="mt-5 border-t border-[color:var(--viewer-border)] pt-5">
           <SlideSections sections={slide.left} slide={slide} />
         </div>
       ) : null}
@@ -119,7 +134,7 @@ function PostSlide({
   const details = <SlideSections sections={slide.right} slide={slide} />;
   // Panels are exactly as tall as the stage (same formula as its width × 16/9).
   const panelClass =
-    "h-[min(853px,calc(100dvh-94px),calc((100vw-480px)*1.7778))] xl:h-[min(853px,calc(100dvh-94px),calc((100vw-736px)*1.7778))] min-h-0 overflow-y-auto overscroll-contain rounded-[28px] border border-white/10 bg-brand-green-950/85 px-6 py-6 [scrollbar-color:rgba(255,255,255,0.2)_transparent] [scrollbar-width:thin]";
+    "viewer-panel min-h-0 overflow-y-auto overscroll-contain rounded-[28px] border border-[color:var(--viewer-border)] bg-[var(--viewer-surface)] px-5 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]";
 
   return (
     // The tracker credits clicks inside this element to this post only.
@@ -135,20 +150,28 @@ function PostSlide({
       ) : null}
       <div
         className={cn(
-          "grid h-full min-h-0 items-center justify-center gap-4",
+          "viewer-slide grid h-full min-h-0 items-center justify-center gap-3",
           tabsMode === "split"
             ? "grid-cols-[minmax(260px,420px)_auto_minmax(260px,420px)]"
             : "grid-cols-[auto_minmax(280px,420px)]"
         )}
       >
         {tabsMode === "split" ? (
-          <aside data-feed-panel className={panelClass} aria-label="Post overview">
+          <aside
+            data-feed-panel
+            tabIndex={active ? 0 : -1}
+            className={panelClass}
+            aria-label="Post overview"
+          >
             {overview}
           </aside>
         ) : null}
 
-        <div className="flex min-h-0 items-end gap-3">
-          <div className="relative aspect-[9/16] w-[min(480px,calc((100dvh-94px)*0.5625),calc(100vw-480px))] max-h-full overflow-hidden rounded-[28px] bg-black shadow-[0_30px_80px_-30px_rgba(0,0,0,0.8)] ring-1 ring-white/10 xl:w-[min(480px,calc((100dvh-94px)*0.5625),calc(100vw-736px))]">
+        <div className="flex min-h-0 items-center gap-3">
+          <div
+            data-viewer-media
+            className="viewer-media relative shrink-0 overflow-hidden bg-black ring-1 ring-[color:var(--viewer-border)]"
+          >
             <ImmersiveStage
               slide={slide}
               active={active}
@@ -159,11 +182,24 @@ function PostSlide({
               analytics={analytics}
             />
           </div>
-          <ImmersiveActionRail slide={slide} views={views} active={active} />
+          <div className="viewer-rail flex shrink-0 flex-col items-center gap-3">
+            <div className="flex min-h-0 flex-1 items-center">{navigation}</div>
+            <ImmersiveActionRail
+              slide={slide}
+              views={views}
+              active={active}
+              analytics={analytics}
+            />
+          </div>
         </div>
 
         {tabsMode === "split" ? (
-          <aside data-feed-panel className={panelClass} aria-label="Contact and details">
+          <aside
+            data-feed-panel
+            tabIndex={active ? 0 : -1}
+            className={panelClass}
+            aria-label="Contact and details"
+          >
             {details}
           </aside>
         ) : (
@@ -175,7 +211,7 @@ function PostSlide({
             <div
               role="tablist"
               aria-label="Post details"
-              className="flex gap-1 border-b border-white/10 p-2"
+              className="flex gap-1 border-b border-[color:var(--viewer-border)] p-2"
             >
               {(
                 [
@@ -193,16 +229,24 @@ function PostSlide({
                   tabIndex={active ? (tab === value ? 0 : -1) : -1}
                   onClick={() => setTab(value)}
                   onKeyDown={(event) => {
-                    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-                      event.preventDefault();
-                      setTab(tab === "overview" ? "contact" : "overview");
-                    }
+                    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? "overview"
+                        : event.key === "End"
+                          ? "contact"
+                          : tab === "overview"
+                            ? "contact"
+                            : "overview";
+                    setTab(next);
+                    document.getElementById(`${slide.key}-tab-${next}`)?.focus();
                   }}
                   className={cn(
-                    "h-11 flex-1 rounded-full px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300",
+                    "h-11 flex-1 rounded-full px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]",
                     tab === value
-                      ? "bg-white text-brand-green-950"
-                      : "text-white/70 hover:text-white"
+                      ? "bg-[var(--viewer-selected)] text-[color:var(--viewer-selected-text)]"
+                      : "text-[color:var(--viewer-muted)] hover:text-[color:var(--viewer-foreground)]"
                   )}
                 >
                   {label}
@@ -213,7 +257,8 @@ function PostSlide({
               role="tabpanel"
               id={`${slide.key}-panel-${tab}`}
               aria-labelledby={`${slide.key}-tab-${tab}`}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6"
+              tabIndex={active ? 0 : -1}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--viewer-accent)]"
             >
               {tab === "overview" ? overview : details}
             </div>
@@ -227,14 +272,16 @@ function PostSlide({
 function LoadingSlide({ failed, onRetry }: { failed: boolean; onRetry: () => void }) {
   return (
     <div className="flex h-full items-center justify-center">
-      <div className="flex aspect-[9/16] h-full max-h-full max-w-[480px] flex-col items-center justify-center gap-4 rounded-[28px] bg-brand-green-900/60 ring-1 ring-white/10">
+      <div className="flex aspect-[9/16] h-full max-h-full max-w-[480px] flex-col items-center justify-center gap-4 rounded-[28px] bg-[var(--viewer-surface)]/60 ring-1 ring-white/10">
         {failed ? (
           <>
-            <p className="px-8 text-center text-sm text-white/75">This post could not be loaded.</p>
+            <p className="px-8 text-center text-sm text-[color:var(--viewer-muted)]">
+              This post could not be loaded.
+            </p>
             <button
               type="button"
               onClick={onRetry}
-              className="flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+              className="flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-brand-green-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
             >
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Try again
@@ -242,7 +289,7 @@ function LoadingSlide({ failed, onRetry }: { failed: boolean; onRetry: () => voi
           </>
         ) : (
           <span
-            className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-brand-gold-300"
+            className="h-8 w-8 animate-spin rounded-full border-2 border-[color:var(--viewer-border)] border-t-brand-gold-300"
             role="status"
             aria-label="Loading post"
           />
@@ -281,8 +328,10 @@ function EndSlide({
   return (
     <div className="flex h-full items-center justify-center">
       <div className="max-w-md space-y-5 text-center">
-        <h2 className="font-display text-3xl font-bold tracking-[-0.02em] text-white">{title}</h2>
-        <p className="text-white/70">{body}</p>
+        <h2 className="font-display text-3xl font-bold tracking-[-0.02em] text-[color:var(--viewer-foreground)]">
+          {title}
+        </h2>
+        <p className="text-[color:var(--viewer-muted)]">{body}</p>
         <div className="flex flex-wrap justify-center gap-3">
           {item.type === "more-error" ? (
             <button
@@ -305,7 +354,7 @@ function EndSlide({
           ) : null}
           <Link
             href={backHref}
-            className="flex h-11 items-center rounded-full border border-white/25 px-5 text-sm font-semibold text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+            className="flex h-11 items-center rounded-full border border-[color:var(--viewer-border)] px-5 text-sm font-semibold text-[color:var(--viewer-foreground)] hover:bg-[var(--viewer-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
           >
             {item.type === "end" && item.terminal !== "exhausted"
               ? `Continue browsing ${backLabel}`
@@ -330,12 +379,12 @@ function EmptyBrowse({
   const cleared = defaultBrowse(browse.vertical, browse.province);
   const filtered = describeBrowse(browse) !== describeBrowse(cleared);
   return (
-    <div className="absolute inset-x-0 bottom-0 top-[62px] z-[2] flex items-center justify-center px-6">
+    <div className="absolute bottom-0 left-[72px] right-0 top-0 z-[2] flex items-center justify-center px-6">
       <div className="max-w-md space-y-5 text-center" role="status">
-        <h2 className="font-display text-3xl font-bold tracking-[-0.02em] text-white">
+        <h2 className="font-display text-3xl font-bold tracking-[-0.02em] text-[color:var(--viewer-foreground)]">
           Nothing here yet
         </h2>
-        <p className="text-white/70">
+        <p className="text-[color:var(--viewer-muted)]">
           No posts match {describeBrowse(browse)}. New posts appear here as soon as they go live.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
@@ -354,7 +403,7 @@ function EmptyBrowse({
               type="button"
               disabled={busy}
               onClick={() => onBrowse(cleared)}
-              className="h-11 rounded-full border border-white/25 px-5 text-sm font-semibold text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:opacity-60"
+              className="h-11 rounded-full border border-[color:var(--viewer-border)] px-5 text-sm font-semibold text-[color:var(--viewer-foreground)] hover:bg-[var(--viewer-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)] disabled:opacity-60"
             >
               Clear filters
             </button>
@@ -367,7 +416,7 @@ function EmptyBrowse({
 
 /* ─────────────────────────── Viewer ─────────────────────────── */
 
-export function ImmersiveViewer({
+function ViewerContent({
   initialSlide,
   onActiveHrefChange,
   fixtures,
@@ -377,6 +426,7 @@ export function ImmersiveViewer({
   /** Design preview at /dev/immersive: fixed posts, no analytics, no address-bar changes. */
   fixtures?: FeedSlide[];
 }) {
+  const appearance = useViewerAppearance();
   const preview = Boolean(fixtures);
   const router = useRouter();
   const reducedMotion = useReducedMotion();
@@ -389,11 +439,10 @@ export function ImmersiveViewer({
   const [endRequested, setOnEnd] = useState(false);
   const feed = useFeedSequence(initialSlide, ctx, activeId, fixtures);
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
-  const [tabsMode, setTabsMode] = useState<"split" | "tabs">(() =>
-    typeof window !== "undefined" && !window.matchMedia(SPLIT_QUERY).matches ? "tabs" : "split"
-  );
+  const tabsMode = useSyncExternalStore(subscribeLayout, layoutSnapshot, () => "tabs" as const);
   const stageRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
+  const navigationFocus = useRef<"Next profile" | "Previous profile" | null>(null);
 
   const postItems = useMemo(
     () =>
@@ -421,21 +470,22 @@ export function ImmersiveViewer({
   const home = VERTICAL_HOME[(activeSlide ?? initialSlide).vertical];
   const backHref = feed.returnUrl ?? home.href;
   const backLabel = feed.returnUrl ? feed.sourceLabel || "the list" : home.label;
-  const announcement = activeSlide && !onEnd ? `Post ${activeIndex + 1}: ${activeSlide.title}` : "";
-
-  useEffect(() => {
-    const query = window.matchMedia(SPLIT_QUERY);
-    const apply = () => setTabsMode(query.matches ? "split" : "tabs");
-    apply();
-    query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, []);
+  const announcement = onEnd
+    ? tailItem?.type === "more-error"
+      ? "More profiles could not load. Try again."
+      : "You have reached the end of this browsing list."
+    : activeSlide
+      ? `Post ${activeIndex + 1}: ${activeSlide.title}`
+      : "Loading profile";
 
   const canPrevious = position > 0;
   const canNext = !onEnd && (activeIndex < postItems.length - 1 || Boolean(tailItem));
 
   const go = useCallback(
     (direction: 1 | -1) => {
+      const focusedLabel = document.activeElement?.getAttribute("aria-label");
+      if (focusedLabel === "Next profile" || focusedLabel === "Previous profile")
+        navigationFocus.current = focusedLabel;
       if (direction === 1) {
         if (onEnd) return;
         if (activeIndex < postItems.length - 1) {
@@ -618,6 +668,18 @@ export function ImmersiveViewer({
   useEffect(() => {
     const live = liveRef.current;
     if (!live) return;
+    if (navigationFocus.current) {
+      const button = stageRef.current?.querySelector<HTMLButtonElement>(
+        `button[aria-label="${navigationFocus.current}"]`
+      );
+      if (button?.disabled)
+        stageRef.current
+          ?.querySelector<HTMLButtonElement>('button[aria-label="Previous profile"]')
+          ?.focus({ preventScroll: true });
+      else button?.focus({ preventScroll: true });
+      navigationFocus.current = null;
+      return;
+    }
     const active = document.activeElement;
     if (active && stageRef.current?.contains(active) && active.closest("[inert]")) {
       live.focus({ preventScroll: true });
@@ -631,18 +693,17 @@ export function ImmersiveViewer({
       .map((item, offset) => ({ item, index: from + offset }));
   }, [postItems, activeIndex]);
 
-  const total = postItems.length;
-
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-brand-green-950 text-white"
+      data-viewer-theme={appearance?.theme}
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--viewer-background)] text-[color:var(--viewer-foreground)]"
       role="region"
       aria-roledescription="post viewer"
       aria-label={feed.sourceLabel ? `${feed.sourceLabel} posts` : "Posts"}
     >
       {/* The brand surface: deep green with the Mzansi pattern across the whole stage. */}
       <div
-        className="mzansi-pattern pointer-events-none absolute inset-0 opacity-[0.09] invert"
+        className="viewer-pattern mzansi-pattern pointer-events-none absolute inset-0"
         aria-hidden="true"
       />
       <ImmersiveTopBar
@@ -684,7 +745,7 @@ export function ImmersiveViewer({
           return (
             <div
               key={item.id}
-              className="absolute inset-0 py-4 pl-6 pr-[88px]"
+              className="absolute inset-0 pl-[72px] pr-4"
               style={slideStyle(offset, reducedMotion)}
               inert={!isActive}
               aria-hidden={!isActive}
@@ -702,6 +763,11 @@ export function ImmersiveViewer({
                   }
                   tabsMode={tabsMode}
                   analytics={!preview}
+                  navigation={
+                    isActive ? (
+                      <ProfileNavigation go={go} canPrevious={canPrevious} canNext={canNext} />
+                    ) : null
+                  }
                 />
               ) : (
                 <LoadingSlide failed={item.failed} onRetry={() => feed.retrySlide(item.id)} />
@@ -711,7 +777,7 @@ export function ImmersiveViewer({
         })}
         {tailItem && activeIndex >= postItems.length - 2 ? (
           <div
-            className="absolute inset-0 px-6 py-4 pr-[88px]"
+            className="absolute inset-0 pl-[72px] pr-4"
             style={slideStyle(onEnd ? 0 : postItems.length - activeIndex, reducedMotion)}
             inert={!onEnd}
             aria-hidden={!onEnd}
@@ -733,40 +799,58 @@ export function ImmersiveViewer({
           </div>
         ) : null}
 
-        <nav
-          aria-label="Move between posts"
-          className="absolute inset-y-0 right-4 z-10 flex w-14 flex-col items-center justify-center gap-3"
-        >
-          <button
-            type="button"
-            onClick={() => go(-1)}
-            disabled={!canPrevious}
-            aria-label="Previous post"
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-brand-green-900 text-white transition-colors hover:bg-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:opacity-35"
-          >
-            <ChevronUp className="h-5 w-5" aria-hidden="true" />
-          </button>
-          {total > 0 ? (
-            <p className="min-w-[3ch] text-center text-xs font-semibold tabular-nums text-white/70">
-              <span className="sr-only">Post </span>
-              {Math.min(position + 1, Math.max(total, 1))}
-              <span className="sr-only"> of</span>
-              <span aria-hidden="true">/</span>
-              {total}
-              {feed.open ? "+" : ""}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => go(1)}
-            disabled={!canNext}
-            aria-label="Next post"
-            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-brand-green-900 text-white transition-colors hover:bg-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:opacity-35"
-          >
-            <ChevronDown className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </nav>
+        {!activeSlide || onEnd ? (
+          <div className="absolute inset-y-0 right-4 z-10 flex items-center">
+            <ProfileNavigation go={go} canPrevious={canPrevious} canNext={canNext} />
+          </div>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function ProfileNavigation({
+  go,
+  canPrevious,
+  canNext,
+}: {
+  go: (direction: 1 | -1) => void;
+  canPrevious: boolean;
+  canNext: boolean;
+}) {
+  return (
+    <nav
+      aria-label="Move between profiles"
+      className="viewer-profile-navigation flex w-16 flex-col items-center gap-3"
+    >
+      <button
+        type="button"
+        onClick={() => go(-1)}
+        disabled={!canPrevious}
+        aria-label="Previous profile"
+        aria-keyshortcuts="ArrowUp PageUp"
+        className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[color:var(--viewer-accent)] bg-[var(--viewer-surface)] text-[color:var(--viewer-foreground)] shadow-md transition-transform hover:scale-105 hover:bg-[var(--viewer-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--viewer-background)] disabled:opacity-35 disabled:hover:scale-100"
+      >
+        <ChevronUp className="h-7 w-7" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={() => go(1)}
+        disabled={!canNext}
+        aria-label="Next profile"
+        aria-keyshortcuts="ArrowDown PageDown"
+        className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-brand-gold-200 bg-brand-gold-300 text-brand-gold-950 shadow-md transition-transform hover:scale-105 hover:bg-brand-gold-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--viewer-background)] disabled:opacity-35 disabled:hover:scale-100"
+      >
+        <ChevronDown className="h-7 w-7" strokeWidth={2.5} aria-hidden="true" />
+      </button>
+    </nav>
+  );
+}
+
+export function ImmersiveViewer(props: React.ComponentProps<typeof ViewerContent>) {
+  return (
+    <ViewerAppearanceProvider>
+      <ViewerContent {...props} />
+    </ViewerAppearanceProvider>
   );
 }

@@ -9,11 +9,14 @@ import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useDataSaver } from "@/hooks/use-data-saver";
 import type { FeedSlide } from "@/lib/feed/types";
 import { cn } from "@/lib/utils";
 
 /** How long a photo stays before the next photo or video of the same post. */
 const PHOTO_SECONDS = 6;
+const MEDIA_SIZES =
+  "(min-width: 1280px) min(calc(100dvh * 0.5625), calc(100vw - 708px)), min(calc(100dvh * 0.5625), calc(100vw - 456px))";
 const OPEN_DIALOG = '[role="dialog"]:not([data-state="closed"])';
 
 export type MediaChangeCause = "user" | "auto";
@@ -69,7 +72,9 @@ export function ImmersiveStage({
   });
 
   const reducedMotion = useReducedMotion();
-  const autoRunning = active && autoplay && canNext && !reducedMotion && !lightboxOpen;
+  const dataSaver = useDataSaver();
+  const autoRunning =
+    active && autoplay && canNext && !reducedMotion && !dataSaver && !lightboxOpen;
   const photoTimerRunning = autoRunning && item?.kind === "photo";
   // Restarts the photo countdown (and its progress bar) after the tab was hidden.
   const [runKey, setRunKey] = useState(0);
@@ -134,6 +139,7 @@ export function ImmersiveStage({
               }}
               src={item.url}
               poster={item.poster}
+              posterSizes={MEDIA_SIZES}
               title={slide.title}
               mediaFit="contain"
               skipSeconds={10}
@@ -144,7 +150,7 @@ export function ImmersiveStage({
         ) : (
           <div className="absolute inset-0 bg-black">
             {item.poster ? (
-              <Image src={item.poster} alt="" fill sizes="480px" className="object-contain" />
+              <Image src={item.poster} alt="" fill sizes={MEDIA_SIZES} className="object-contain" />
             ) : null}
             <span className="absolute inset-0 flex items-center justify-center">
               <Play className="h-12 w-12 fill-white/80 text-white/80" aria-hidden="true" />
@@ -172,7 +178,7 @@ export function ImmersiveStage({
             src={item.url}
             alt={`${slide.title}, photo ${index + 1}`}
             fill
-            sizes="480px"
+            sizes={MEDIA_SIZES}
             priority={active}
             className="object-contain"
           />

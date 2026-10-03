@@ -51,7 +51,14 @@ export function ContactActionTracker({
       const anchor = target?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
       const href = anchor.getAttribute("href") ?? "";
-      if (/^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(href)) {
+      const action = anchor.dataset.contactAction;
+      if (
+        action === "directions_click" ||
+        action === "booking_click" ||
+        action === "ticket_click"
+      ) {
+        trackContactAction(table, id!, action, surface);
+      } else if (/^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(href)) {
         trackContactAction(table, id!, "whatsapp_click", surface);
       } else if (href.startsWith("tel:")) {
         trackContactAction(table, id!, "phone_click", surface);
@@ -66,7 +73,9 @@ export function ContactActionTracker({
       }
     }
 
-    function onShare() {
+    function onShare(event: Event) {
+      const detail = (event as CustomEvent<{ table: string; id: string }>).detail;
+      if (detail && (detail.table !== table || detail.id !== id)) return;
       trackContactAction(table, id!, "share", surface);
     }
 

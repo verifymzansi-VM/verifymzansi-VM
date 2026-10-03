@@ -78,7 +78,7 @@ export interface FeedContact {
   showPhoneButton: boolean;
   showMessageButton: boolean;
   /** The main action when it is not a phone call: a stay's booking page. */
-  cta: { label: string; href: string; icon: "booking" } | null;
+  cta: { label: string; href: string; icon: "booking" | "tickets" } | null;
 }
 
 export interface FeedSlide {
@@ -116,7 +116,7 @@ export interface FeedSlide {
     href: string | null;
   };
   contact: FeedContact;
-  engagement: { views: number; likes: number; viewerHasLiked: boolean };
+  engagement: { views: number; likes: number; viewerHasLiked: boolean; shares?: number | null };
   website: string | null;
   /** The owner's own map link (Google Maps share link); never guessed from the address. */
   mapUrl: string | null;

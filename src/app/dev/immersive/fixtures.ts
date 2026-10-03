@@ -13,7 +13,12 @@ import type { FeedSlide } from "@/lib/feed/types";
 
 /** Design-preview posts only. Not real people or businesses. */
 const photo = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1080&q=70`;
-const engagement = (views: number, likes: number) => ({ views, likes, viewerHasLiked: false });
+const engagement = (views: number, likes: number) => ({
+  views,
+  likes,
+  shares: 0,
+  viewerHasLiked: false,
+});
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
 const vehicle: ListingDetailRecord = {
@@ -200,7 +205,7 @@ const festival: PromotionDetailRecord = {
 
 const seller = {
   display_name: "Siphesihle Biyela",
-  account_verification_status: "id_verified",
+  account_verification_status: "verified",
   phone: "0836558782",
 };
 
@@ -222,7 +227,7 @@ export function buildFixtureSlides(): FeedSlide[] {
     presentListingSlide(vehicle, seller, engagement(1434, 247)),
     presentBusinessSlide(
       salon,
-      { display_name: "Nomvula Dlamini", account_verification_status: "phone_verified" },
+      { display_name: "Nomvula Dlamini", account_verification_status: "pending_review" },
       [],
       engagement(512, 61)
     ),
@@ -230,7 +235,7 @@ export function buildFixtureSlides(): FeedSlide[] {
       festival,
       {
         display_name: "Durban Live",
-        account_verification_status: "id_verified",
+        account_verification_status: "verified",
         phone: "0311234567",
       },
       null,
@@ -238,7 +243,7 @@ export function buildFixtureSlides(): FeedSlide[] {
     ),
     presentBusinessSlide(
       lodge,
-      { display_name: "Mpushini Ridge", account_verification_status: "id_verified" },
+      { display_name: "Mpushini Ridge", account_verification_status: "verified" },
       lodgePosts,
       engagement(98, 12)
     ),

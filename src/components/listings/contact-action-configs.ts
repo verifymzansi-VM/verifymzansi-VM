@@ -1,4 +1,5 @@
-import type { ContactActionConfig } from "@/components/listings/content-contact-actions";
+import type { ContactActionConfig } from "@/components/listings/contact-action-types";
+import type { FeedSlide } from "@/lib/feed/types";
 
 export function listingContactConfig(
   listingId: string,
@@ -86,4 +87,12 @@ export function businessContactConfig(
     messageSuccessCopy:
       "Your enquiry is in the account holder’s inbox. They can reply using the contact details you provided.",
   };
+}
+
+export function feedContactConfig(
+  slide: Pick<FeedSlide, "table" | "id" | "title" | "href">
+): ContactActionConfig {
+  if (slide.table === "listings") return listingContactConfig(slide.id, slide.title);
+  if (slide.table === "promotions") return promotionContactConfig(slide.id);
+  return businessContactConfig(slide.id, slide.title, slide.href);
 }

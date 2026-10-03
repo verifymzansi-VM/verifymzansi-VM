@@ -65,6 +65,7 @@ async function main() {
         "playwright",
         "test",
         "e2e/smoke.spec.ts",
+        "e2e/immersive-viewer.spec.ts",
         "e2e/addon-checkout.spec.ts",
         "e2e/billing-payment-roundtrip.spec.ts",
         "e2e/kyc-verification.spec.ts",

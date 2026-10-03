@@ -20,11 +20,7 @@ import {
 import { FacebookIcon, InstagramIcon, TikTokIcon, XIcon } from "@/components/icons/social-icons";
 import { BrandShield } from "@/components/shared/brand-shield";
 import { ContentContactActions } from "@/components/listings/content-contact-actions";
-import {
-  businessContactConfig,
-  listingContactConfig,
-  promotionContactConfig,
-} from "@/components/listings/contact-action-configs";
+import { feedContactConfig } from "@/components/listings/contact-action-configs";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { getOpenStatus, type OpenStatus } from "@/lib/business/open-status";
 import type { FeedLink, FeedSection, FeedSlide } from "@/lib/feed/types";
@@ -48,9 +44,18 @@ function useOpenStatus(hours: FeedSlide["headline"]["hours"], active: boolean): 
 }
 
 const EVENT_STATE_CHIP: Record<EventState, { label: string; tone: string }> = {
-  upcoming: { label: "Upcoming", tone: "bg-white/10 text-white" },
-  ongoing: { label: "Happening now", tone: "bg-brand-green-300/15 text-brand-green-300" },
-  ended: { label: "Event ended", tone: "bg-white/10 text-white/60" },
+  upcoming: {
+    label: "Upcoming",
+    tone: "bg-[var(--viewer-hover)] text-[color:var(--viewer-foreground)]",
+  },
+  ongoing: {
+    label: "Happening now",
+    tone: "bg-[var(--viewer-hover)] text-[color:var(--viewer-positive)]",
+  },
+  ended: {
+    label: "Event ended",
+    tone: "bg-[var(--viewer-hover)] text-[color:var(--viewer-muted)]",
+  },
 };
 
 function useEventClock(event: FeedSlide["headline"]["event"], active: boolean) {
@@ -84,24 +89,14 @@ function Countdown({
     { value: Math.floor((remaining % 60_000) / 1000), label: "sec" },
   ];
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-brand-green-950/60 px-4 py-3">
-      <Timer className="h-4 w-4 shrink-0 text-brand-gold-300" aria-hidden="true" />
+    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-[var(--viewer-hover)] px-3 py-3">
+      <Timer className="h-4 w-4 shrink-0 text-[color:var(--viewer-accent)]" aria-hidden="true" />
       <p className="sr-only">
         {label} {units[0].value} days {units[1].value} hours {units[2].value} minutes
       </p>
-      <span className="text-sm text-white/70" aria-hidden="true">
+      <span className="text-sm text-[color:var(--viewer-muted)]" aria-hidden="true">
         {label}
       </span>
-      <div className="ml-auto flex gap-2.5" aria-hidden="true">
-        {units.map((unit) => (
-          <span key={unit.label} className="text-center">
-            <span className="block font-display text-lg font-bold leading-none tabular-nums text-white">
-              {String(unit.value).padStart(2, "0")}
-            </span>
-            <span className="text-[10px] text-white/50">{unit.label}</span>
-          </span>
-        ))}
-      </div>
       {calendarUrl ? (
         <a
           href={calendarUrl}
@@ -109,11 +104,21 @@ function Countdown({
           rel="noopener noreferrer"
           aria-label="Add to calendar"
           title="Add to calendar"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--viewer-border)] text-[color:var(--viewer-foreground)] transition-colors hover:bg-[var(--viewer-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
         >
           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : null}
+      <div className="col-span-3 row-start-2 grid grid-cols-4 gap-2" aria-hidden="true">
+        {units.map((unit) => (
+          <span key={unit.label} className="text-center">
+            <span className="block font-display text-lg font-bold leading-none tabular-nums text-[color:var(--viewer-foreground)]">
+              {String(unit.value).padStart(2, "0")}
+            </span>
+            <span className="text-[10px] text-[color:var(--viewer-muted)]">{unit.label}</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -154,15 +159,15 @@ export function SlideHeadline({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
               openStatus.state === "open"
-                ? "bg-brand-green-300/15 text-brand-green-300"
-                : "bg-white/10 text-white/75"
+                ? "bg-[var(--viewer-hover)] text-[color:var(--viewer-positive)]"
+                : "bg-[var(--viewer-hover)] text-[color:var(--viewer-muted)]"
             )}
           >
             <span
               aria-hidden="true"
               className={cn(
                 "h-1.5 w-1.5 rounded-full",
-                openStatus.state === "open" ? "bg-brand-green-300" : "bg-white/50"
+                openStatus.state === "open" ? "bg-brand-green-300" : "bg-[var(--viewer-hover)]"
               )}
             />
             {openStatus.label}
@@ -171,24 +176,24 @@ export function SlideHeadline({
         {slide.headline.chips.map((chip) => (
           <span
             key={chip}
-            className="rounded-full bg-white/[0.07] px-2.5 py-1 text-xs text-white/80"
+            className="rounded-full bg-[var(--viewer-hover)] px-2.5 py-1 text-xs text-[color:var(--viewer-muted)]"
           >
             {chip}
           </span>
         ))}
       </div>
 
-      <TitleTag className="break-words font-display text-[1.65rem] font-bold leading-[1.12] tracking-[-0.02em] text-white xl:text-[1.85rem]">
+      <TitleTag className="break-words font-display text-[1.65rem] font-bold leading-[1.12] tracking-[-0.02em] text-[color:var(--viewer-foreground)] xl:text-[1.85rem]">
         {slide.title}
       </TitleTag>
 
       {slide.headline.figure ? (
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <p className="font-display text-[2.1rem] font-bold leading-none tracking-[-0.02em] text-brand-gold-300 tabular-nums">
+          <p className="font-display text-[2.1rem] font-bold leading-none tracking-[-0.02em] text-[color:var(--viewer-accent)] tabular-nums">
             {slide.headline.figure.value}
           </p>
           {slide.headline.figure.note ? (
-            <span className="rounded-full border border-brand-gold-300/40 px-2.5 py-0.5 text-xs font-medium text-brand-gold-300">
+            <span className="rounded-full border border-brand-gold-300/40 px-2.5 py-0.5 text-xs font-medium text-[color:var(--viewer-accent)]">
               {slide.headline.figure.note}
             </span>
           ) : null}
@@ -196,12 +201,15 @@ export function SlideHeadline({
       ) : null}
 
       {slide.headline.meta.length > 0 ? (
-        <ul className="space-y-1.5 text-sm text-white/70">
+        <ul className="space-y-1.5 text-sm text-[color:var(--viewer-muted)]">
           {slide.headline.meta.map((item) => {
             const Icon = META_ICONS[item.icon];
             return (
               <li key={`${item.icon}-${item.text}`} className="flex items-start gap-2">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-white/45" aria-hidden="true" />
+                <Icon
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--viewer-muted)]"
+                  aria-hidden="true"
+                />
                 <span className="min-w-0 break-words">{item.text}</span>
               </li>
             );
@@ -247,41 +255,49 @@ function OwnerAvatar({ slide, size = 44 }: { slide: FeedSlide; size?: number }) 
   );
 }
 
-function contactConfigFor(slide: FeedSlide) {
-  if (slide.table === "listings") return listingContactConfig(slide.id, slide.title);
-  if (slide.table === "promotions") return promotionContactConfig(slide.id);
-  return businessContactConfig(slide.id, slide.title, slide.href);
-}
-
 function ContactBlock({ slide }: { slide: FeedSlide }) {
   const name = slide.owner.href ? (
     <Link
       href={slide.owner.href}
-      className="break-words font-semibold text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+      className="break-words font-semibold text-[color:var(--viewer-foreground)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
     >
       {slide.owner.name}
     </Link>
   ) : (
-    <p className="break-words font-semibold text-white">{slide.owner.name}</p>
+    <p className="break-words font-semibold text-[color:var(--viewer-foreground)]">
+      {slide.owner.name}
+    </p>
   );
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <OwnerAvatar slide={slide} />
         <div className="min-w-0 space-y-1">
-          <p className="text-xs text-white/55">{slide.owner.label}</p>
+          <p className="text-xs text-[color:var(--viewer-muted)]">{slide.owner.label}</p>
           {name}
           {slide.owner.trustLevel ? <TrustBadge level={slide.owner.trustLevel} size="sm" /> : null}
+          {slide.table === "businesses" ? (
+            <p className="text-xs leading-5 text-[color:var(--viewer-muted)]">
+              Identity review applies to the profile manager.
+            </p>
+          ) : null}
         </div>
       </div>
       {slide.contact.cta ? (
         <a
           href={slide.contact.cta.href}
+          data-contact-action={
+            slide.contact.cta.icon === "tickets" ? "ticket_click" : "booking_click"
+          }
           target="_blank"
           rel="noopener noreferrer nofollow ugc"
           className="flex h-12 items-center justify-center gap-2 rounded-full bg-brand-gold-300 px-5 text-sm font-semibold text-brand-gold-950 transition-colors hover:bg-brand-gold-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         >
-          <CalendarCheck className="h-4 w-4" aria-hidden="true" />
+          {slide.contact.cta.icon === "tickets" ? (
+            <Ticket className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <CalendarCheck className="h-4 w-4" aria-hidden="true" />
+          )}
           {slide.contact.cta.label}
         </a>
       ) : null}
@@ -292,7 +308,7 @@ function ContactBlock({ slide }: { slide: FeedSlide }) {
           showPhoneButton={slide.contact.showPhoneButton}
           showMessageButton={slide.contact.showMessageButton}
           messageIcon={MessageSquare}
-          config={contactConfigFor(slide)}
+          config={feedContactConfig(slide)}
           showShare={false}
         />
       </div>
@@ -329,10 +345,15 @@ function BooleanValue({ value }: { value: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <Icon
-        className={cn("h-4 w-4", yes ? "text-brand-green-300" : "text-white/45")}
+        className={cn(
+          "h-4 w-4",
+          yes ? "text-[color:var(--viewer-positive)]" : "text-[color:var(--viewer-muted)]"
+        )}
         aria-hidden="true"
       />
-      <span className={yes ? undefined : "text-white/60"}>{yes ? "Yes" : "No"}</span>
+      <span className={yes ? undefined : "text-[color:var(--viewer-muted)]"}>
+        {yes ? "Yes" : "No"}
+      </span>
     </span>
   );
 }
@@ -342,10 +363,10 @@ function SectionShell({ title, children }: { title?: string; children: ReactNode
   return (
     <section
       aria-labelledby={title ? headingId : undefined}
-      className="space-y-3 border-t border-white/10 py-5 first:border-t-0 first:pt-0 last:pb-0"
+      className="space-y-3 border-t border-[color:var(--viewer-border)] py-5 first:border-t-0 first:pt-0 last:pb-0"
     >
       {title ? (
-        <h3 id={headingId} className="text-sm font-semibold text-white">
+        <h3 id={headingId} className="text-sm font-semibold text-[color:var(--viewer-foreground)]">
           {title}
         </h3>
       ) : null}
@@ -361,7 +382,7 @@ function ClampedText({ body, clamp }: { body: string; clamp?: boolean }) {
     <div className="space-y-2">
       <p
         className={cn(
-          "whitespace-pre-wrap break-words text-sm leading-6 text-white/75",
+          "whitespace-pre-wrap break-words text-sm leading-6 text-[color:var(--viewer-muted)]",
           long && !expanded && "line-clamp-6"
         )}
       >
@@ -372,7 +393,7 @@ function ClampedText({ body, clamp }: { body: string; clamp?: boolean }) {
           type="button"
           onClick={() => setExpanded((value) => !value)}
           aria-expanded={expanded}
-          className="text-sm font-semibold text-brand-gold-300 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+          className="text-sm font-semibold text-[color:var(--viewer-accent)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
         >
           {expanded ? "Show less" : "Read more"}
         </button>
@@ -399,10 +420,10 @@ function HoursTable({ hours }: { hours: NonNullable<FeedSlide["headline"]["hours
   const rows = [
     { key: "Mon_Fri", label: "Monday to Friday" },
     { key: "Sat", label: "Saturday" },
-    { key: "Sun", label: "Sunday and holidays" },
+    { key: "Sun", label: "Sunday" },
   ] as const;
   return (
-    <dl className="divide-y divide-white/10 text-sm">
+    <dl className="divide-y divide-[color:var(--viewer-border)] text-sm">
       {rows
         .filter((row) => hours[row.key])
         .map((row) => (
@@ -414,7 +435,9 @@ function HoursTable({ hours }: { hours: NonNullable<FeedSlide["headline"]["hours
             <dt
               className={cn(
                 "flex items-center gap-2",
-                row.key === today ? "font-semibold text-white" : "text-white/60"
+                row.key === today
+                  ? "font-semibold text-[color:var(--viewer-foreground)]"
+                  : "text-[color:var(--viewer-muted)]"
               )}
             >
               {row.key === today ? (
@@ -423,7 +446,9 @@ function HoursTable({ hours }: { hours: NonNullable<FeedSlide["headline"]["hours
               {row.label}
               {row.key === today ? <span className="sr-only">(today)</span> : null}
             </dt>
-            <dd className="text-right font-medium text-white">{hours[row.key]}</dd>
+            <dd className="text-right font-medium text-[color:var(--viewer-foreground)]">
+              {hours[row.key]}
+            </dd>
           </div>
         ))}
     </dl>
@@ -447,8 +472,8 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
                 key={`${fact.label}-${fact.value}`}
                 className={cn("min-w-0", fact.wide && "col-span-2")}
               >
-                <dt className="text-xs text-white/55">{fact.label}</dt>
-                <dd className="mt-0.5 break-words text-sm font-medium text-white">
+                <dt className="text-xs text-[color:var(--viewer-muted)]">{fact.label}</dt>
+                <dd className="mt-0.5 break-words text-sm font-medium text-[color:var(--viewer-foreground)]">
                   <BooleanValue value={fact.value} />
                 </dd>
               </div>
@@ -459,14 +484,14 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
     case "rows":
       return (
         <SectionShell key={section.id} title={section.title}>
-          <dl className="divide-y divide-white/10 text-sm">
+          <dl className="divide-y divide-[color:var(--viewer-border)] text-sm">
             {section.rows.map((row) => (
               <div
                 key={`${row.label}-${row.value}`}
                 className="flex items-start justify-between gap-4 py-2"
               >
-                <dt className="shrink-0 text-white/60">{row.label}</dt>
-                <dd className="min-w-0 break-words text-right font-medium text-white">
+                <dt className="shrink-0 text-[color:var(--viewer-muted)]">{row.label}</dt>
+                <dd className="min-w-0 break-words text-right font-medium text-[color:var(--viewer-foreground)]">
                   <BooleanValue value={row.value} />
                 </dd>
               </div>
@@ -487,7 +512,7 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
             {section.items.map((item, index) => (
               <li
                 key={`${item}-${index}`}
-                className="rounded-full border border-white/15 px-2.5 py-1 text-xs text-white/85"
+                className="rounded-full border border-[color:var(--viewer-border)] px-2.5 py-1 text-xs text-[color:var(--viewer-muted)]"
               >
                 {item}
               </li>
@@ -517,9 +542,12 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
                       href={link.href}
                       target={external ? "_blank" : undefined}
                       rel={external ? "noopener noreferrer nofollow ugc" : undefined}
-                      className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-sm text-white/85 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+                      className="flex min-h-11 items-center gap-3 rounded-xl px-2 text-sm text-[color:var(--viewer-muted)] transition-colors hover:bg-[var(--viewer-hover)] hover:text-[color:var(--viewer-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
                     >
-                      <Icon className="h-4 w-4 shrink-0 text-white/50" aria-hidden="true" />
+                      <Icon
+                        className="h-4 w-4 shrink-0 text-[color:var(--viewer-muted)]"
+                        aria-hidden="true"
+                      />
                       <span className="min-w-0 break-all">{link.label}</span>
                     </a>
                   </li>
@@ -539,7 +567,7 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
                       rel="noopener noreferrer nofollow ugc"
                       aria-label={link.label}
                       title={link.label}
-                      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+                      className="flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--viewer-border)] text-[color:var(--viewer-muted)] transition-colors hover:bg-[var(--viewer-hover)] hover:text-[color:var(--viewer-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
                     >
                       <Icon className="h-4 w-4" />
                     </a>
@@ -555,14 +583,14 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
       return (
         <SectionShell key={section.id} title={section.title}>
           {section.tiers.length > 0 ? (
-            <dl className="divide-y divide-white/10 text-sm">
+            <dl className="divide-y divide-[color:var(--viewer-border)] text-sm">
               {section.tiers.map((tier, index) => (
                 <div
                   key={`${tier.name}-${index}`}
                   className="flex items-center justify-between gap-4 py-2"
                 >
-                  <dt className="text-white/80">{tier.name}</dt>
-                  <dd className="font-display font-bold tabular-nums text-brand-gold-300">
+                  <dt className="text-[color:var(--viewer-muted)]">{tier.name}</dt>
+                  <dd className="font-display font-bold tabular-nums text-[color:var(--viewer-accent)]">
                     {tier.price}
                   </dd>
                 </div>
@@ -589,7 +617,7 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
             {section.photos.map((photo) => (
               <li
                 key={photo.url}
-                className="relative aspect-[4/3] overflow-hidden rounded-xl bg-white/5"
+                className="relative aspect-[4/3] overflow-hidden rounded-xl bg-[var(--viewer-hover)]"
               >
                 <Image
                   src={photo.url}
@@ -611,19 +639,21 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
               <li key={post.key}>
                 <Link
                   href={post.href}
-                  className="-mx-2 flex min-h-11 items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
+                  className="-mx-2 flex min-h-11 items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-[var(--viewer-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)]"
                 >
-                  <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/10">
+                  <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--viewer-hover)]">
                     {post.image ? (
                       <Image src={post.image} alt="" fill sizes="44px" className="object-contain" />
                     ) : null}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-white">
+                    <span className="block truncate text-sm font-medium text-[color:var(--viewer-foreground)]">
                       {post.title}
                     </span>
                     {post.meta ? (
-                      <span className="block text-xs text-white/55">{post.meta}</span>
+                      <span className="block text-xs text-[color:var(--viewer-muted)]">
+                        {post.meta}
+                      </span>
                     ) : null}
                   </span>
                 </Link>
@@ -637,10 +667,10 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
         <SectionShell key={section.id} title="Stay safe when you meet">
           <div className="flex gap-3">
             <BrandShield
-              className="mt-0.5 h-5 w-5 shrink-0 text-brand-gold-300"
+              className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--viewer-accent)]"
               aria-hidden="true"
             />
-            <p className="text-sm leading-6 text-white/70">
+            <p className="text-sm leading-6 text-[color:var(--viewer-muted)]">
               Meet in a public place, check the item before paying, and never share OTPs or upfront
               deposits with strangers.
             </p>
@@ -649,14 +679,14 @@ function renderSection(section: FeedSection, slide: FeedSlide): ReactNode {
             <Link
               href="/safety/meeting-checklist"
               prefetch={false}
-              className="font-semibold text-brand-gold-300 underline-offset-4 hover:underline"
+              className="font-semibold text-[color:var(--viewer-accent)] underline-offset-4 hover:underline"
             >
               Meeting checklist
             </Link>
             <Link
               href="/safety/scam-alerts"
               prefetch={false}
-              className="font-semibold text-brand-gold-300 underline-offset-4 hover:underline"
+              className="font-semibold text-[color:var(--viewer-accent)] underline-offset-4 hover:underline"
             >
               Scam alerts
             </Link>

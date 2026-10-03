@@ -19,11 +19,14 @@ const ENGAGEMENT_METRICS: ReadonlyArray<[string, string]> = [
   ["whatsapp_click", "WhatsApp clicks"],
   ["phone_click", "Phone clicks"],
   ["website_click", "Website clicks"],
+  ["directions_click", "Directions clicks"],
+  ["booking_click", "Booking clicks"],
+  ["ticket_click", "Ticket clicks"],
   ["showroom_appearance", "Showroom appearances"],
   ["organisation_directory_appearance", "Organisation directory"],
   ["search_appearance", "Search appearances"],
   ["homepage_appearance", "Homepage appearances"],
-  ["share", "Shares"],
+  ["share", "Share actions"],
   ["save", "Saves"],
 ];
 
@@ -67,7 +70,14 @@ const IMPRESSION_TYPES = new Set([
   "showroom_appearance",
   "organisation_directory_appearance",
 ]);
-const CONTACT_TYPES = new Set(["whatsapp_click", "phone_click", "website_click"]);
+const CONTACT_TYPES = new Set([
+  "whatsapp_click",
+  "phone_click",
+  "website_click",
+  "directions_click",
+  "booking_click",
+  "ticket_click",
+]);
 
 /** Commercial analytics for the owner's posts (best effort; aggregates only). */
 async function loadEngagement(ownerId: string): Promise<Engagement> {
@@ -420,7 +430,7 @@ export default async function MetricsPage() {
                               ["Unique", post.uniqueViewers],
                               ["Contacts", post.contacts],
                               ["Saves", post.saves],
-                              ["Shares", post.shares],
+                              ["Share actions", post.shares],
                             ] as const
                           ).map(([label, value]) => (
                             <div key={label}>

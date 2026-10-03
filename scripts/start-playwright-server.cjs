@@ -14,7 +14,11 @@ function shouldSuppressWebServerLine(line) {
     return true;
   }
 
-  if (normalized.includes("These will not work in local development, but they should work in production")) {
+  if (
+    normalized.includes(
+      "These will not work in local development, but they should work in production"
+    )
+  ) {
     return true;
   }
 
@@ -90,8 +94,7 @@ function createDeterministicEnv() {
     NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE: "stub",
     NEXT_PUBLIC_SUPABASE_URL: "https://playwright.supabase.stub",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-anon-key",
-    SUPABASE_SERVICE_ROLE_KEY:
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-service-role", // secret-scan: allow deterministic fixture
+    SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.playwright-service-role", // secret-scan: allow deterministic fixture
     R2_ACCOUNT_ID: "playwright-r2-account",
     R2_ACCESS_KEY_ID: "playwright-r2-access-key",
     R2_SECRET_ACCESS_KEY: "playwright-r2-secret-key",
@@ -109,8 +112,7 @@ function createDeterministicEnv() {
     // Svix expects webhook secrets in `whsec_<base64>` form; keeping this
     // deterministic lets the mock Ozow flow sign and verify webhooks in CI.
     OZOW_SITE_CODE: "playwright-ozow-site",
-    OZOW_WEBHOOK_SECRET:
-      "whsec_cGxheXdyaWdodC1vem93LXdlYmhvb2stc2VjcmV0LTMyaGFycw==", // secret-scan: allow deterministic fixture
+    OZOW_WEBHOOK_SECRET: "whsec_cGxheXdyaWdodC1vem93LXdlYmhvb2stc2VjcmV0LTMyaGFycw==", // secret-scan: allow deterministic fixture
     RESEND_API_KEY: "re_playwright_1234567890",
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
     TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture
@@ -183,7 +185,14 @@ function main() {
     runBuild(env);
   }
 
-  const server = spawnPnpm(useDevServer ? ["dev", "--webpack", "--hostname", PLAYWRIGHT_HOST, "--port", String(PLAYWRIGHT_PORT)] : ["start"], env);
+  // Use the same Turbopack dev runtime as `pnpm dev`. Webpack's eval-based
+  // development chunks cannot hydrate under the application's existing CSP.
+  const server = spawnPnpm(
+    useDevServer
+      ? ["dev", "--hostname", PLAYWRIGHT_HOST, "--port", String(PLAYWRIGHT_PORT)]
+      : ["start"],
+    env
+  );
   wireOutputFilters(server);
 
   server.on("error", (error) => {

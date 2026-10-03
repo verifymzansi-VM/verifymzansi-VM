@@ -6,6 +6,29 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("EngagementServer");
 
+export async function getOptionalContentShareCountMap(
+  admin: SupabaseClient | null | undefined,
+  targetType: ContentTargetType,
+  targetIds: string[]
+) {
+  if (!admin || targetIds.length === 0) return new Map<string, number>();
+  try {
+    const { data, error } = await admin.rpc("get_content_share_counts", {
+      p_target_ids: targetIds,
+      p_target_type: targetType,
+    });
+    if (error) return new Map<string, number>();
+    return new Map<string, number>(
+      (data ?? []).map((row: { target_id: string; share_count: number }) => [
+        row.target_id,
+        Number(row.share_count) || 0,
+      ])
+    );
+  } catch {
+    return new Map<string, number>();
+  }
+}
+
 type ContentViewCountRow = {
   target_id: string;
   view_count: number;

@@ -11,6 +11,7 @@ const { mockCreateClient, mockNotFound } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/supabase/admin", () => ({ tryCreateAdminClient: () => null }));
 vi.mock("next/navigation", () => ({ notFound: mockNotFound }));
 vi.mock("@/components/layout/header", () => ({
   Header: () => <header>Header</header>,

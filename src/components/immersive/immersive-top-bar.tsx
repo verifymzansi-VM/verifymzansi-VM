@@ -1,18 +1,20 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Building2,
   Loader2,
   MapPin,
+  Moon,
+  Sun,
   ShoppingBag,
   SlidersHorizontal,
   TreePalm,
   X,
 } from "lucide-react";
-import { BrandMark } from "@/components/brand";
-import { SaFlagStripe } from "@/components/brand/sa-flag-stripe";
+import { BrandShield } from "@/components/shared/brand-shield";
+import { useViewerAppearance } from "@/components/providers/viewer-appearance";
 import {
   Sheet,
   SheetContent,
@@ -41,19 +43,24 @@ import {
 } from "@/lib/showroom/province-cookie";
 import { cn } from "@/lib/utils";
 
-const SECTIONS: {
-  vertical: FeedVertical;
-  short: string;
-  icon: typeof ShoppingBag;
-  iconClass: string;
-}[] = [
-  { vertical: "market", short: "Market", icon: ShoppingBag, iconClass: "text-brand-green-300" },
-  { vertical: "business", short: "Business", icon: Building2, iconClass: "text-brand-blue-300" },
-  { vertical: "tourism", short: "Tourism & Events", icon: TreePalm, iconClass: "text-teal-300" },
+const SECTIONS: { vertical: FeedVertical; short: string; icon: typeof ShoppingBag }[] = [
+  { vertical: "market", short: "Market", icon: ShoppingBag },
+  { vertical: "business", short: "Business", icon: Building2 },
+  { vertical: "tourism", short: "Tourism & Events", icon: TreePalm },
 ];
-
 const CONTROL =
-  "flex h-11 items-center gap-2 rounded-full border border-white/15 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300 disabled:opacity-60";
+  "viewer-tool flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[color:var(--viewer-border)] bg-[var(--viewer-surface)] text-[color:var(--viewer-foreground)] transition-colors hover:bg-[var(--viewer-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--viewer-accent)] disabled:opacity-60";
+function ToolSlot({ children }: { children: ReactNode }) {
+  return <div className="viewer-tool-slot">{children}</div>;
+}
+function ToolLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="viewer-tool-label" aria-hidden="true">
+      {children}
+    </span>
+  );
+}
+
 const FIELD =
   "h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -96,7 +103,7 @@ function FilterSheet({
           <SheetTitle>Filter {VERTICAL_LABELS[draft.vertical]}</SheetTitle>
           <SheetDescription>
             {draft.province ? `Posts in ${draft.province}.` : "Posts from all of South Africa."}{" "}
-            Change the province in the top bar.
+            Change the province using the location icon on the left.
           </SheetDescription>
         </SheetHeader>
 
@@ -278,7 +285,7 @@ function FilterSheet({
 }
 
 /**
- * The viewer's own top bar: the three sections, one province or the whole
+ * The viewer's compact side toolbar: the three sections, one province or the whole
  * country, and the section's filters. Every choice reloads the posts here,
  * in the viewer; nothing navigates away.
  */
@@ -304,94 +311,81 @@ export function ImmersiveTopBar({
   onClose: () => void;
 }) {
   const provinceId = useId();
+  const appearance = useViewerAppearance();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const current = browse ?? defaultBrowse(activeVertical, null);
   const filterCount = browse ? activeFilterCount(browse) : 0;
   const provinces = getProvinceNames();
 
   return (
-    <header className="relative z-10 shrink-0">
-      <div className="grid h-[60px] grid-cols-[1fr_auto_1fr] items-center gap-4 px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/"
-            className="shrink-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
-            aria-label="VerifyMzansi home"
-          >
-            <BrandMark
-              size="sm"
-              inverse
-              hideKicker
-              decorative
-              className="[&_img]:!h-8 [&_img]:!w-8"
-            />
+    <aside
+      aria-label="Profile browsing tools"
+      className="absolute inset-y-0 left-0 z-10 w-16 border-r border-[color:var(--viewer-border)] bg-[var(--viewer-background)]"
+    >
+      <div className="flex h-full flex-col items-center viewer-toolbar-items gap-3 py-3">
+        <ToolSlot>
+          <Link href="/" aria-label="VerifyMzansi home" className={CONTROL}>
+            <span className="viewer-tool-icon">
+              <BrandShield className="h-8 w-8" aria-hidden="true" />
+            </span>
+            <ToolLabel>VerifyMzansi home</ToolLabel>
           </Link>
-          {/* A list followed from another page (a grid, a showroom) is named here. */}
-          {!browse && sourceLabel ? (
-            <p className="hidden truncate text-sm text-white/65 xl:block">
-              From <span className="font-semibold text-white">{sourceLabel}</span>
-            </p>
-          ) : null}
-          {notice ? (
-            <p className="hidden truncate text-xs text-white/70 xl:block" role="status">
-              {notice}
-            </p>
-          ) : null}
-        </div>
-
+        </ToolSlot>
+        {!browse && sourceLabel ? <p className="sr-only">From {sourceLabel}</p> : null}
+        {notice ? (
+          <p className="sr-only" role="status">
+            {notice}
+          </p>
+        ) : null}
         <nav
           aria-label="Sections"
-          className="flex items-center gap-1 rounded-full border border-white/10 bg-brand-green-900/80 p-1"
+          className="flex flex-col items-center gap-2 rounded-full border border-[color:var(--viewer-border)] bg-[var(--viewer-surface)] py-1"
         >
-          {SECTIONS.map(({ vertical, short, icon: Icon, iconClass }) => {
+          {SECTIONS.map(({ vertical, short, icon: Icon }) => {
             const selected = current.vertical === vertical;
             return (
-              <button
-                key={vertical}
-                type="button"
-                aria-pressed={selected}
-                disabled={busy !== null}
-                onClick={() => onBrowse(defaultBrowse(vertical, current.province), "section")}
-                className={cn(
-                  "flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300",
-                  selected
-                    ? "bg-white text-brand-green-950"
-                    : "text-white/80 hover:bg-white/10 hover:text-white"
-                )}
-              >
-                {busy === "section" && selected ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : (
-                  <Icon
-                    className={cn("h-4 w-4", selected ? "text-brand-green-700" : iconClass)}
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="xl:hidden">{short}</span>
-                <span className="hidden xl:inline">{VERTICAL_LABELS[vertical]}</span>
-              </button>
+              <ToolSlot key={vertical}>
+                <button
+                  type="button"
+                  aria-label={short}
+                  aria-pressed={selected}
+                  disabled={busy !== null}
+                  onClick={() => onBrowse(defaultBrowse(vertical, current.province), "section")}
+                  className={cn(
+                    CONTROL,
+                    "border-transparent",
+                    selected &&
+                      "bg-[var(--viewer-selected)] text-[color:var(--viewer-selected-text)] hover:bg-[var(--viewer-selected)]"
+                  )}
+                >
+                  <span className="viewer-tool-icon">
+                    {busy === "section" && selected ? (
+                      <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    )}
+                  </span>
+                  <ToolLabel>{VERTICAL_LABELS[vertical]}</ToolLabel>
+                </button>
+              </ToolSlot>
             );
           })}
         </nav>
-
-        <div className="flex items-center justify-end gap-2">
-          {error ? (
-            <p className="hidden text-xs text-brand-gold-300 xl:block" role="alert">
-              Posts could not load. Try again.
-            </p>
-          ) : null}
+        <ToolSlot>
           <div
             className={cn(
               CONTROL,
-              "relative max-w-[10.5rem] xl:max-w-[13rem] focus-within:ring-2 focus-within:ring-brand-gold-300"
+              "relative focus-within:ring-2 focus-within:ring-[color:var(--viewer-accent)]"
             )}
           >
-            {busy === "province" ? (
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-            ) : (
-              <MapPin className="h-4 w-4 shrink-0 text-brand-gold-300" aria-hidden="true" />
-            )}
-            <span className="truncate">{current.province ?? "All of South Africa"}</span>
+            <span className="viewer-tool-icon">
+              {busy === "province" ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <MapPin className="h-5 w-5 text-[color:var(--viewer-accent)]" aria-hidden="true" />
+              )}
+            </span>
+            <ToolLabel>{current.province ?? "All of South Africa"}</ToolLabel>
             <label htmlFor={provinceId} className="sr-only">
               Show posts from
             </label>
@@ -414,52 +408,89 @@ export function ImmersiveTopBar({
                 </option>
               ))}
             </select>
+            {current.province ? (
+              <span className="pointer-events-none absolute right-0 top-0 h-2 w-2 rounded-full bg-brand-gold-300" />
+            ) : null}
           </div>
-
+        </ToolSlot>
+        <ToolSlot>
           <button
             type="button"
             className={cn(CONTROL, "relative")}
             onClick={() => setFiltersOpen(true)}
             disabled={busy !== null}
             aria-label={filterCount > 0 ? `Filters, ${filterCount} on` : "Filters"}
-            title="Filters"
           >
-            {busy === "filters" ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-            )}
-            <span className="hidden 2xl:inline">Filters</span>
+            <span className="viewer-tool-icon">
+              {busy === "filters" ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <SlidersHorizontal className="h-5 w-5" aria-hidden="true" />
+              )}
+            </span>
+            <ToolLabel>Filters</ToolLabel>
             {filterCount > 0 ? (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold-300 px-1 text-[11px] font-bold text-brand-gold-950">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold-300 px-1 text-[11px] font-bold text-brand-gold-950">
                 {filterCount}
               </span>
             ) : null}
           </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close viewer"
-            aria-keyshortcuts="Escape"
-            title="Close (Esc)"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold-300"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
+        </ToolSlot>
+        <div className="mt-auto flex flex-col items-center gap-2">
+          <ToolSlot>
+            <button
+              type="button"
+              onClick={appearance?.toggle}
+              className={CONTROL}
+              aria-label={
+                appearance?.theme === "light" ? "Switch to dark mode" : "Switch to light mode"
+              }
+            >
+              <span className="viewer-tool-icon">
+                {appearance?.theme === "light" ? (
+                  <Moon className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <Sun className="h-5 w-5" aria-hidden="true" />
+                )}
+              </span>
+              <ToolLabel>{appearance?.theme === "light" ? "Dark mode" : "Light mode"}</ToolLabel>
+            </button>
+          </ToolSlot>
+          <ToolSlot>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close viewer"
+              aria-keyshortcuts="Escape"
+              className={CONTROL}
+            >
+              <span className="viewer-tool-icon">
+                <X className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <ToolLabel>Close viewer</ToolLabel>
+            </button>
+          </ToolSlot>
         </div>
       </div>
-      <SaFlagStripe className="h-0.5 opacity-80" />
-
-      <FilterSheet
-        open={filtersOpen}
-        onOpenChange={setFiltersOpen}
-        browse={current}
-        onApply={(next) => {
-          setFiltersOpen(false);
-          onBrowse(next, "filters");
-        }}
-      />
-    </header>
+      {error ? (
+        <p
+          className="absolute left-[72px] top-2 z-20 w-64 rounded-xl bg-[var(--viewer-surface)] px-4 py-3 text-xs text-[color:var(--viewer-accent)] shadow-lg"
+          role="alert"
+        >
+          Posts could not load. Try again.
+        </p>
+      ) : null}
+      {filtersOpen ? (
+        <FilterSheet
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          browse={current}
+          onApply={(next) => {
+            setFiltersOpen(false);
+            onBrowse(next, "filters");
+          }}
+        />
+      ) : null}
+    </aside>
   );
 }

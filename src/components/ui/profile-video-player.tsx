@@ -34,6 +34,7 @@ interface ProfileVideoPlayerProps {
   title: string;
   poster?: string;
   prioritizePoster?: boolean;
+  posterSizes?: string;
   autoPlayOnMobile?: boolean;
   className?: string;
   videoClassName?: string;
@@ -66,6 +67,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       title,
       poster,
       prioritizePoster = false,
+      posterSizes = "100vw",
       autoPlayOnMobile = true,
       className,
       videoClassName,
@@ -103,6 +105,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     const [errorSource, setErrorSource] = useState<string | null>(null);
     const [retryKey, setRetryKey] = useState(0);
     const [isCompactLayout, setIsCompactLayout] = useState(false);
+    const [fullscreenError, setFullscreenError] = useState(false);
     const videoError = showErrorState && errorSource === src;
     const mediaFitClassName = getMediaFitClassName(mediaFit);
     const nativePoster = poster ? getVariantUrl(poster, "card") : undefined;
@@ -208,21 +211,24 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
       [seekTo]
     );
 
-    const enterFullscreen = useCallback(() => {
+    const enterFullscreen = useCallback(async () => {
       const video = localVideoRef.current;
       if (!video) return;
+      setFullscreenError(false);
       try {
-        if (video.requestFullscreen) {
-          video.requestFullscreen();
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        } else if (containerRef.current?.requestFullscreen) {
+          await containerRef.current.requestFullscreen();
         } else if (
           (video as HTMLVideoElement & { webkitEnterFullscreen?: () => void }).webkitEnterFullscreen
         ) {
           (
             video as HTMLVideoElement & { webkitEnterFullscreen?: () => void }
           ).webkitEnterFullscreen?.();
-        }
+        } else setFullscreenError(true);
       } catch {
-        /* fullscreen not supported */
+        setFullscreenError(true);
       }
     }, []);
 
@@ -249,7 +255,11 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
 
     const handleKeyDown = useCallback(
       (event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.target instanceof HTMLInputElement) {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+        if (
+          event.target instanceof Element &&
+          event.target.closest("input, button, a, select, textarea, [contenteditable]")
+        ) {
           return;
         }
 
@@ -293,11 +303,19 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
     return (
       <div
         ref={containerRef}
-        className={cn("absolute inset-0", className)}
+        className={cn("absolute inset-0 bg-black", className)}
         tabIndex={0}
         onKeyDown={handleKeyDown}
         aria-label={`${title} video player`}
       >
+        {fullscreenError ? (
+          <p
+            role="status"
+            className="absolute inset-x-4 top-14 z-30 rounded-lg bg-black/80 p-2 text-center text-xs text-white"
+          >
+            Fullscreen is unavailable. You can keep watching here.
+          </p>
+        ) : null}
         {videoError ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black">
             {poster ? (
@@ -306,7 +324,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                 alt={`${title} poster`}
                 fill
                 className={cn(mediaFitClassName, "opacity-40")}
-                sizes="100vw"
+                sizes={posterSizes}
               />
             ) : null}
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/45 backdrop-blur-sm">
@@ -334,7 +352,7 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
                   // Blur backdrop is desktop-only: full-width Gaussian blur is a
                   // severe mobile GPU cost (see video-card-player SmartFitBackdrop).
                   className="absolute inset-0 scale-110 object-cover opacity-75 blur-none brightness-100 md:blur-2xl md:brightness-75 md:motion-reduce:blur-none"
-                  sizes="100vw"
+                  sizes={posterSizes}
                   loading={prioritizePoster ? "eager" : "lazy"}
                   fetchPriority={prioritizePoster ? "high" : "auto"}
                 />

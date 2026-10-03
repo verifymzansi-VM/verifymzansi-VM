@@ -17,6 +17,7 @@ import {
 import { selectBusinessWithFallback } from "@/lib/business/business-detail-select";
 import type { ContentTargetType } from "@/lib/engagement";
 import {
+  getOptionalContentShareCountMap,
   getOptionalContentLikeSummaryMap,
   getOptionalContentViewCountMap,
 } from "@/lib/engagement-server";
@@ -78,14 +79,16 @@ async function engagementFor(
   ids: string[]
 ): Promise<(id: string) => EngagementInput> {
   if (ids.length === 0) return () => ({ views: 0, likes: 0, viewerHasLiked: false });
-  const [views, likes] = await Promise.all([
+  const [views, likes, shares] = await Promise.all([
     getOptionalContentViewCountMap(context.admin, type, ids),
     getOptionalContentLikeSummaryMap(context.admin, type, ids, context.viewerKey),
+    getOptionalContentShareCountMap(context.admin, type, ids),
   ]);
   return (id) => ({
     views: views.ok ? (views.data.get(id) ?? 0) : 0,
     likes: likes.ok ? (likes.data.get(id)?.likeCount ?? 0) : 0,
     viewerHasLiked: likes.ok ? (likes.data.get(id)?.viewerHasLiked ?? false) : false,
+    shares: shares.get(id) ?? null,
   });
 }
 

@@ -23,6 +23,7 @@ vi.mock("next/navigation", () => ({ notFound: mockNotFound }));
 vi.mock("@/lib/engagement-server", () => ({
   getOptionalContentViewCountMap: mockGetViewCounts,
   getOptionalContentLikeSummaryMap: vi.fn().mockResolvedValue({ ok: true, data: new Map() }),
+  getOptionalContentShareCountMap: vi.fn().mockResolvedValue(new Map()),
 }));
 vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,

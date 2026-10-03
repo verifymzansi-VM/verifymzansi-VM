@@ -80,6 +80,7 @@ export interface EngagementInput {
   views: number;
   likes: number;
   viewerHasLiked: boolean;
+  shares?: number | null;
 }
 
 function initialsOf(name: string | null | undefined, fallback: string) {
@@ -476,6 +477,7 @@ export function presentBusinessSlide(
 
   // Every field of the tourism form, grouped; anything left empty stays out.
   const stay = getTourismViewerDetails(details);
+  const stayPrice = stay.facts.find((fact) => fact.label === "Price range");
   const stayLists: FeedSection[] = stay.lists.map((list) => ({
     type: "chips",
     id: `list-${list.label}`,
@@ -483,32 +485,27 @@ export function presentBusinessSlide(
     items: list.items,
   }));
 
+  const about: FeedSection | null = business.description
+    ? {
+        type: "text",
+        id: "about",
+        title: isTourism ? "About the stay" : "About",
+        body: business.description,
+        clamp: true,
+      }
+    : null;
   const left = isTourism
     ? sections(
-        business.description
-          ? {
-              type: "text",
-              id: "about",
-              title: "About the stay",
-              body: business.description,
-              clamp: true,
-            }
-          : null,
-        { type: "facts", id: "glance", title: "Stay details", facts: stay.facts },
-        ...stayLists
-      )
-    : sections(
-        business.description
-          ? { type: "text", id: "about", title: "About", body: business.description, clamp: true }
-          : null,
         {
           type: "facts",
           id: "glance",
-          eyebrow: "At a glance",
-          title: "Business details",
-          // Counts of the lists below ("5 highlights") would only repeat them.
-          facts: profileFacts,
+          title: "Stay details",
+          facts: stay.facts.filter((fact) => fact.label !== "Price range"),
         },
+        ...stayLists,
+        about
+      )
+    : sections(
         {
           type: "chips",
           id: "services",
@@ -524,15 +521,18 @@ export function presentBusinessSlide(
           title: "Service areas",
           items: business.service_areas?.areas ?? [],
         },
-        { type: "facts", id: "more", title: "More details", facts: categoryDetailFacts(business) }
+        { type: "facts", id: "glance", title: "Business details", facts: profileFacts },
+        { type: "facts", id: "more", title: "More details", facts: categoryDetailFacts(business) },
+        about
       );
 
   const right = isTourism
     ? sections(
         { type: "contact", id: "contact" },
-        { type: "rows", id: "policies", title: "Policies and house rules", rows: stay.rules },
         hours ? { type: "hours", id: "hours", title: "Opening hours", hours } : null,
         { type: "rows", id: "location", title: "Location", rows: addressRows },
+        { type: "rows", id: "access", title: "Getting here", rows: accessRows },
+        { type: "rows", id: "policies", title: "Policies and house rules", rows: stay.rules },
         ...stay.notes.map((note): FeedSection => ({
           type: "text",
           id: `note-${note.label}`,
@@ -540,7 +540,7 @@ export function presentBusinessSlide(
           body: note.value,
         })),
         { type: "links", id: "links", title: "Links", links },
-        { type: "rows", id: "access", title: "Getting here", rows: accessRows },
+
         { type: "photos", id: "finding-us", title: "Finding us", photos: venuePhotos },
         postsSection
       )
@@ -583,12 +583,21 @@ export function presentBusinessSlide(
         (chip, index, all): chip is string => Boolean(chip) && all.indexOf(chip) === index
       ),
       figure:
-        isTourism && (grading || starRating)
+        isTourism && stayPrice
           ? {
-              value: grading ? `${grading} graded` : `${starRating}-star`,
-              note: grading ? "TGCSA" : undefined,
+              value: stayPrice.value,
+              note: grading
+                ? `${grading} · owner supplied`
+                : starRating
+                  ? `${starRating}-star · owner supplied`
+                  : undefined,
             }
-          : null,
+          : isTourism && (grading || starRating)
+            ? {
+                value: grading ? `${grading} graded` : `${starRating}-star`,
+                note: grading ? "TGCSA · owner supplied" : "Owner supplied",
+              }
+            : null,
       meta: [place ? { icon: "location" as const, text: place } : null].filter(
         (item): item is NonNullable<typeof item> => Boolean(item)
       ),
@@ -797,7 +806,7 @@ export function presentEventSlide(
       whatsapp,
       showPhoneButton: methods.includes("call"),
       showMessageButton: methods.includes("form") || methods.includes("in_app"),
-      cta: null,
+      cta: ticketsUrl ? { label: "Get tickets", href: ticketsUrl, icon: "tickets" } : null,
     },
     engagement,
     website: externalLink(details.website),
@@ -815,7 +824,7 @@ export function presentEventSlide(
               ? formatZARShort(tier.price_cents)
               : "Free",
         })),
-        buyUrl: ticketsUrl,
+        buyUrl: null,
       },
       promotion.description
         ? {

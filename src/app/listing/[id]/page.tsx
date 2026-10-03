@@ -21,12 +21,14 @@ import {
 } from "@/lib/account/compat";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import {
+  getOptionalContentShareCountMap,
   getOptionalContentLikeSummaryMap,
   getOptionalContentViewCountMap,
 } from "@/lib/engagement-server";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
+import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { presentListingSlide } from "@/lib/feed/presenters";
 
 interface ListingDetailPageProps {
@@ -37,18 +39,28 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
   const { id } = await params;
   const supabase = await createClient();
   const { data: listing } = await applyVisibleExpiryFilter(
-    supabase.from("listings").select("title, description").eq("id", id).eq("status", "live")
+    supabase
+      .from("listings")
+      .select(
+        "title, description, photos, videos, video_thumbnail, media_width, media_height, location_city, location_province"
+      )
+      .eq("id", id)
+      .eq("status", "live")
   ).single();
 
   if (!listing) {
     return { title: "Listing Not Found" };
   }
 
-  return {
+  return publicPageMetadata({
     title: `${listing.title} | Mzansi Market`,
-    description: listing.description?.slice(0, 160),
-    alternates: { canonical: `/listing/${id}` },
-  };
+    description: listing.description,
+    path: `/listing/${id}`,
+    image: listing.video_thumbnail || listing.photos?.[0],
+    video: listing.videos?.[0],
+    width: listing.media_width,
+    height: listing.media_height,
+  });
 }
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
@@ -161,6 +173,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     : (listing.view_count ?? 0);
 
   const ownLikes = similarLikeSummary.ok ? similarLikeSummary.data.get(listing.id) : undefined;
+  const shareCounts = await getOptionalContentShareCountMap(engagementAdmin, "listing", [
+    listing.id,
+  ]);
   const immersiveSlide = presentListingSlide(
     listing,
     seller
@@ -174,6 +189,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
       views: listingViewCount,
       likes: ownLikes?.likeCount ?? 0,
       viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+      shares: shareCounts.get(listing.id) ?? null,
     }
   );
 

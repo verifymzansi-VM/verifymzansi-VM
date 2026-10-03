@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileVideoPlayer } from "./profile-video-player";
 
@@ -15,6 +15,7 @@ const managerMock = vi.hoisted(() => ({
   claimExclusive: vi.fn(),
   releaseExclusive: vi.fn(),
 }));
+const preferences = vi.hoisted(() => ({ reducedMotion: false, saveData: false }));
 
 vi.mock("next/image", () => ({
   default: ({
@@ -43,14 +44,17 @@ vi.mock("@/contexts/video-playback-context", () => ({
 }));
 
 vi.mock("@/hooks/use-reduced-motion", () => ({
-  useReducedMotion: () => false,
+  useReducedMotion: () => preferences.reducedMotion,
 }));
+vi.mock("@/hooks/use-data-saver", () => ({ useDataSaver: () => preferences.saveData }));
 
 describe("ProfileVideoPlayer", () => {
   let requestFullscreenMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    preferences.reducedMotion = false;
+    preferences.saveData = false;
 
     class CompactResizeObserver {
       constructor(private callback: ResizeObserverCallback) {}
@@ -68,7 +72,7 @@ describe("ProfileVideoPlayer", () => {
 
     vi.stubGlobal("ResizeObserver", CompactResizeObserver);
     requestFullscreenMock = vi.fn();
-    Object.defineProperty(HTMLVideoElement.prototype, "requestFullscreen", {
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
       configurable: true,
       writable: true,
       value: requestFullscreenMock,
@@ -104,6 +108,54 @@ describe("ProfileVideoPlayer", () => {
       "poster",
       "/api/media/serve/media/business/photo.w800.webp"
     );
+  });
+
+  it("handles an asynchronous fullscreen failure without losing playback controls", async () => {
+    requestFullscreenMock.mockRejectedValue(new Error("Permission denied"));
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+    fireEvent.click(screen.getByRole("button", { name: "Fullscreen" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Fullscreen is unavailable")
+    );
+    expect(screen.getByRole("button", { name: "Play video" })).toBeInTheDocument();
+  });
+
+  it("fullscreens the container so controls remain present", () => {
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+    fireEvent.click(screen.getByRole("button", { name: "Fullscreen" }));
+    expect(requestFullscreenMock.mock.contexts[0]).toBe(
+      screen.getByLabelText("Profile clip video player")
+    );
+  });
+
+  it("does not intercept Space or playback shortcuts on focused buttons", () => {
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+    const video = screen.getByLabelText("Profile clip video") as HTMLVideoElement;
+    video.play = vi.fn().mockResolvedValue(undefined);
+    const button = screen.getByRole("button", { name: "Fullscreen" });
+    expect(fireEvent.keyDown(button, { key: " " })).toBe(true);
+    expect(fireEvent.keyDown(button, { key: "k" })).toBe(true);
+    expect(video.play).not.toHaveBeenCalled();
+  });
+
+  it.each(["reducedMotion", "saveData"] as const)(
+    "honours %s while allowing explicit playback",
+    (preference) => {
+      preferences[preference] = true;
+      render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+      const video = screen.getByLabelText("Profile clip video") as HTMLVideoElement;
+      expect(managerMock.updateVisibility).toHaveBeenCalledWith(video, 0);
+      video.play = vi.fn().mockResolvedValue(undefined);
+      fireEvent.click(screen.getByRole("button", { name: "Play video" }));
+      expect(video.play).toHaveBeenCalled();
+    }
+  );
+
+  it("leaves browser modifier shortcuts available", () => {
+    render(<ProfileVideoPlayer src="/video.mp4" title="Profile clip" />);
+    const player = screen.getByLabelText("Profile clip video player");
+    expect(fireEvent.keyDown(player, { key: "f", ctrlKey: true })).toBe(true);
+    expect(requestFullscreenMock).not.toHaveBeenCalled();
   });
 
   it("holds mobile autoplay until the visitor plays the video", () => {

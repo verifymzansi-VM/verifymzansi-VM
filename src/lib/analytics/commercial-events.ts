@@ -10,6 +10,9 @@ export const COMMERCIAL_EVENT_TYPES = [
   "phone_click",
   "website_click",
   "share",
+  "directions_click",
+  "booking_click",
+  "ticket_click",
   "save",
   "search_appearance",
   "homepage_appearance",
@@ -105,7 +108,14 @@ export function trackContactAction(
   id: string | null | undefined,
   type: Extract<
     CommercialEventType,
-    "whatsapp_click" | "phone_click" | "website_click" | "share" | "save"
+    | "whatsapp_click"
+    | "phone_click"
+    | "website_click"
+    | "share"
+    | "save"
+    | "directions_click"
+    | "booking_click"
+    | "ticket_click"
   >,
   surface?: string
 ) {

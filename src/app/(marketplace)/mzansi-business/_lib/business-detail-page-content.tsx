@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import type { Metadata } from "next";
 import { cache } from "react";
 import {
@@ -27,6 +28,7 @@ import {
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import {
+  getOptionalContentShareCountMap,
   getOptionalContentLikeSummaryMap,
   getOptionalContentViewCountMap,
 } from "@/lib/engagement-server";
@@ -183,6 +185,9 @@ export async function generateBusinessDetailMetadata(
     return null;
   }
 
+  if (detail.isOwnerPreview)
+    return { title: "Private profile preview", robots: { index: false, follow: false } };
+
   const isTourismBusiness = isTourismBusinessRecord(detail.business);
   if (section === "tourism" && !isTourismBusiness) {
     return null;
@@ -191,13 +196,17 @@ export async function generateBusinessDetailMetadata(
   const resolvedSection = section === "tourism" || isTourismBusiness ? "tourism" : "business";
   const sectionTitle = resolvedSection === "tourism" ? "Tourism & Events" : "Mzansi Business";
 
-  return {
+  return publicPageMetadata({
+    previewType: "business",
     title: `${detail.business.business_name} | ${sectionTitle}`,
-    description: detail.business.description?.slice(0, 160),
-    alternates: {
-      canonical: `${resolvedSection === "tourism" ? "/tourism-events" : "/mzansi-business"}/${detail.business.id}`,
-    },
-  };
+    description: detail.business.description,
+    path: `${resolvedSection === "tourism" ? "/tourism-events" : "/mzansi-business"}/${detail.business.id}`,
+    image:
+      detail.business.video_thumbnail ||
+      detail.business.cover_photo ||
+      detail.business.gallery_photos?.[0],
+    video: detail.business.cover_video,
+  });
 }
 
 export async function BusinessDetailPageContent({
@@ -271,11 +280,15 @@ export async function BusinessDetailPageContent({
     : (business.view_count ?? 0);
   const ownLikes = businessLikeSummary.ok ? businessLikeSummary.data.get(business.id) : undefined;
   // Owner previews of drafts keep the classic page with its preview banner.
+  const shareCounts = await getOptionalContentShareCountMap(engagementAdmin, "business", [
+    business.id,
+  ]);
   const immersiveSlide = !isOwnerPreview
     ? presentBusinessSlide(business, ownerProfile, promotions, {
         views: businessViewCount,
         likes: ownLikes?.likeCount ?? 0,
         viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+        shares: shareCounts.get(business.id) ?? null,
       })
     : null;
 

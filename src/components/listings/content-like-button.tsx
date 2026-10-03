@@ -129,20 +129,26 @@ export function ContentLikeButton({
         }}
         className={cn(
           variant === "rail"
-            ? "group flex flex-col items-center gap-1.5 text-white focus-visible:outline-none disabled:cursor-wait"
+            ? "group flex flex-col items-center gap-1.5 text-[color:var(--viewer-foreground,white)] focus-visible:outline-none disabled:cursor-wait"
             : "group inline-flex h-8 min-w-[52px] items-center justify-center rounded-full border border-white/80 bg-white/95 px-2.5 text-slate-700 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.55)] backdrop-blur transition-colors duration-200 hover:border-rose-200 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-80 dark:border-slate-700 dark:bg-slate-950/90 dark:text-slate-200 dark:hover:border-rose-500/60 dark:hover:text-rose-300 dark:focus-visible:ring-rose-300"
         )}
       >
         {variant === "rail" ? (
           <>
-            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-brand-green-900 transition-colors duration-200 group-hover:bg-brand-green-800 group-focus-visible:ring-2 group-focus-visible:ring-brand-gold-300 group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-brand-green-950">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--viewer-border)] bg-[var(--viewer-surface)] transition-colors duration-200 group-hover:bg-[var(--viewer-hover)] group-focus-visible:ring-2 group-focus-visible:ring-[color:var(--viewer-accent,#f5cc70)] group-focus-visible:ring-offset-2 group-focus-visible:ring-offset-[var(--viewer-background,#032820)]">
               <Heart
                 className={cn("h-5 w-5", liked && "fill-current text-rose-400")}
                 aria-hidden="true"
               />
             </span>
-            <span className="text-xs font-semibold tabular-nums text-white/80" aria-hidden="true">
+            <span
+              className="text-xs font-semibold tabular-nums text-[color:var(--viewer-muted,white)]"
+              aria-hidden="true"
+            >
               {formatCompactCount(likeCount ?? 0)}
+            </span>
+            <span className="viewer-action-label" aria-hidden="true">
+              Like
             </span>
           </>
         ) : (

@@ -1,3 +1,4 @@
+import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import type { Metadata } from "next";
@@ -6,6 +7,7 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { PromotionDetailContent } from "@/components/listings/promotion-detail-content";
 import { ACCOUNT_PROFILE_TABLE, normalizeOwnerRecord, readOwnerId } from "@/lib/account/compat";
 import {
+  getOptionalContentShareCountMap,
   getOptionalContentLikeSummaryMap,
   getOptionalContentViewCountMap,
 } from "@/lib/engagement-server";
@@ -21,20 +23,26 @@ import { PROMOTION_DETAIL_SELECT } from "@/lib/promotions/detail-select";
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
   const supabase = await createClient();
   const { data: promotion } = await applyVisibleExpiryFilter(
-    supabase.from("promotions").select("title, description").eq("id", id).eq("status", "live")
+    supabase
+      .from("promotions")
+      .select("title, description, photos, videos, video_thumbnail, media_width, media_height")
+      .eq("id", id)
+      .eq("status", "live")
   ).single();
 
   if (!promotion) {
     return { title: "Tourism & Events Listing Not Found" };
   }
 
-  return {
+  return publicPageMetadata({
     title: `${promotion.title} | Tourism & Events`,
-    description: promotion.description?.slice(0, 160),
-    alternates: {
-      canonical: `/tourism-events/${id}`,
-    },
-  };
+    description: promotion.description,
+    path: `/tourism-events/${id}`,
+    image: promotion.video_thumbnail || promotion.photos?.[0],
+    video: promotion.videos?.[0],
+    width: promotion.media_width,
+    height: promotion.media_height,
+  });
 }
 
 export async function PromotionDetailPageContent({ id }: { id: string }) {
@@ -124,10 +132,14 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
       }
     : null;
   const ownLikes = promotionLikes.ok ? promotionLikes.data.get(promotion.id) : undefined;
+  const shareCounts = await getOptionalContentShareCountMap(engagementAdmin, "promotion", [
+    promotion.id,
+  ]);
   const immersiveSlide = presentEventSlide(promotion, safeAdvertiser, linkedBusiness, {
     views: promotionViewCount,
     likes: ownLikes?.likeCount ?? 0,
     viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+    shares: shareCounts.get(promotion.id) ?? null,
   });
 
   const page = (
