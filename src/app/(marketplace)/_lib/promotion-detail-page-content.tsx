@@ -12,7 +12,6 @@ import {
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
-import { isImmersiveDetailEnabled } from "@/lib/feed/flag";
 import { presentEventSlide } from "@/lib/feed/presenters";
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
@@ -76,7 +75,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     data: { user },
   } = await supabase.auth.getUser();
   const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
-  const [promotionViewCounts, promotionLikes, immersiveEnabled] = await Promise.all([
+  const [promotionViewCounts, promotionLikes] = await Promise.all([
     getOptionalContentViewCountMap(engagementAdmin, "promotion", [promotion.id]),
     getOptionalContentLikeSummaryMap(
       engagementAdmin,
@@ -84,7 +83,6 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
       [promotion.id],
       buildViewerKey(viewerId, user?.id)
     ),
-    isImmersiveDetailEnabled({ user, viewerId }),
   ]);
   const promotionViewCount = promotionViewCounts.ok
     ? (promotionViewCounts.data.get(promotion.id) ?? 0)
@@ -126,13 +124,11 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
       }
     : null;
   const ownLikes = promotionLikes.ok ? promotionLikes.data.get(promotion.id) : undefined;
-  const immersiveSlide = immersiveEnabled
-    ? presentEventSlide(promotion, safeAdvertiser, linkedBusiness, {
-        views: promotionViewCount,
-        likes: ownLikes?.likeCount ?? 0,
-        viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
-      })
-    : null;
+  const immersiveSlide = presentEventSlide(promotion, safeAdvertiser, linkedBusiness, {
+    views: promotionViewCount,
+    likes: ownLikes?.likeCount ?? 0,
+    viewerHasLiked: ownLikes?.viewerHasLiked ?? false,
+  });
 
   const page = (
     <>
@@ -161,9 +157,6 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     </>
   );
 
-  return immersiveSlide ? (
-    <ImmersiveDetailGate initialSlide={immersiveSlide}>{page}</ImmersiveDetailGate>
-  ) : (
-    page
-  );
+  // Desktop opens the post viewer; phones, search engines and no-JS visitors get `page`.
+  return <ImmersiveDetailGate initialSlide={immersiveSlide}>{page}</ImmersiveDetailGate>;
 }

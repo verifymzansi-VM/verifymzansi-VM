@@ -201,7 +201,9 @@ export function presentListingSlide(
           : { value: price.label },
       meta: [
         place ? { icon: "location" as const, text: place } : null,
-        { icon: "date" as const, text: `Listed ${formatSaLongDate(listing.created_at)}` },
+        listing.created_at && !Number.isNaN(new Date(listing.created_at).getTime())
+          ? { icon: "date" as const, text: `Listed ${formatSaLongDate(listing.created_at)}` }
+          : null,
       ].filter((item): item is NonNullable<typeof item> => Boolean(item)),
     },
     owner: {

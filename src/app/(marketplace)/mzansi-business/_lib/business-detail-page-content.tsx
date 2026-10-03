@@ -35,7 +35,6 @@ import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visib
 import { selectBusinessWithFallback } from "@/lib/business/business-detail-select";
 import { isTourismBusinessRecord } from "@/lib/presentation/business-facts";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
-import { isImmersiveDetailEnabled } from "@/lib/feed/flag";
 import { presentBusinessSlide } from "@/lib/feed/presenters";
 
 export interface BusinessDetailPageProps {
@@ -245,19 +244,13 @@ export async function BusinessDetailPageContent({
   const viewerKey = buildViewerKey(viewerId, user?.id);
   const engagementAdmin = tryCreateAdminClient();
   const promotionIds = promotions.map((promotion) => promotion.id);
-  const [
-    businessViewSummary,
-    promotionViewSummary,
-    promotionLikeSummary,
-    businessLikeSummary,
-    immersiveEnabled,
-  ] = await Promise.all([
-    getOptionalContentViewCountMap(engagementAdmin, "business", [business.id]),
-    getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
-    getOptionalContentLikeSummaryMap(engagementAdmin, "business", [business.id], viewerKey),
-    isOwnerPreview ? false : isImmersiveDetailEnabled({ user, viewerId }),
-  ]);
+  const [businessViewSummary, promotionViewSummary, promotionLikeSummary, businessLikeSummary] =
+    await Promise.all([
+      getOptionalContentViewCountMap(engagementAdmin, "business", [business.id]),
+      getOptionalContentViewCountMap(engagementAdmin, "promotion", promotionIds),
+      getOptionalContentLikeSummaryMap(engagementAdmin, "promotion", promotionIds, viewerKey),
+      getOptionalContentLikeSummaryMap(engagementAdmin, "business", [business.id], viewerKey),
+    ]);
   const trustLevel = ownerProfile
     ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
     : null;
@@ -277,7 +270,8 @@ export async function BusinessDetailPageContent({
     ? (businessViewSummary.data.get(business.id) ?? 0)
     : (business.view_count ?? 0);
   const ownLikes = businessLikeSummary.ok ? businessLikeSummary.data.get(business.id) : undefined;
-  const immersiveSlide = immersiveEnabled
+  // Owner previews of drafts keep the classic page with its preview banner.
+  const immersiveSlide = !isOwnerPreview
     ? presentBusinessSlide(business, ownerProfile, promotions, {
         views: businessViewCount,
         likes: ownLikes?.likeCount ?? 0,

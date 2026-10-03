@@ -2,7 +2,6 @@ import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { isImmersiveDetailEnabled } from "@/lib/feed/flag";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
@@ -15,8 +14,8 @@ export function feedError(status: number, error: string) {
 }
 
 /**
- * Shared front door for the viewer's read endpoints: rate limit, the
- * `immersive_detail` flag, and the visitor's own Supabase client.
+ * Shared front door for the viewer's read endpoints: rate limit and the
+ * visitor's own Supabase client (RLS still decides what they can read).
  */
 export async function openFeedRequest(request: NextRequest, action: string, maxPerMinute: number) {
   const limit = checkLocalRateLimit(getClientRateLimitKey(request), action, maxPerMinute);
@@ -27,9 +26,6 @@ export async function openFeedRequest(request: NextRequest, action: string, maxP
     data: { user },
   } = await supabase.auth.getUser();
   const viewerId = request.cookies.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
-  if (!(await isImmersiveDetailEnabled({ user, viewerId }))) {
-    return { response: feedError(404, "Not found") } as const;
-  }
   return {
     response: null,
     supabase,

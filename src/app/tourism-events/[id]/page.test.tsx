@@ -24,7 +24,6 @@ vi.mock("@/lib/engagement-server", () => ({
   getOptionalContentViewCountMap: mockGetViewCounts,
   getOptionalContentLikeSummaryMap: vi.fn().mockResolvedValue({ ok: true, data: new Map() }),
 }));
-vi.mock("@/lib/feed/flag", () => ({ isImmersiveDetailEnabled: vi.fn().mockResolvedValue(false) }));
 vi.mock("@/components/layout/page-header", () => ({
   PageHeader: ({ title }: { title: string }) => <div>{title}</div>,
 }));
