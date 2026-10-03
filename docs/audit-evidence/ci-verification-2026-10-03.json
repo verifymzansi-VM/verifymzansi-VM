@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-03T11:50:41.895091+00:00",
+  "runUrl": "https://github.com/verifymzansi-VM/verifymzansi-VM/actions/runs/37120559729",
+  "commit": "1abcb0748eb31e93ec959bfe35312eda3ba4666a",
+  "ciAssessment": "FAIL",
+  "static": {
+    "runId": "2026-10-03T11-43-38-368Z-549eb202",
+    "assessment": "FAIL",
+    "results": [
+      {
+        "id": "format",
+        "status": "WARN"
+      },
+      {
+        "id": "lint",
+        "status": "WARN"
+      },
+      {
+        "id": "types",
+        "status": "PASS"
+      },
+      {
+        "id": "tooling",
+        "status": "PASS"
+      },
+      {
+        "id": "openapi",
+        "status": "PASS"
+      },
+      {
+        "id": "imports",
+        "status": "PASS"
+      },
+      {
+        "id": "secrets",
+        "status": "PASS"
+      },
+      {
+        "id": "dependencies",
+        "status": "FAIL"
+      },
+      {
+        "id": "licenses",
+        "status": "FAIL"
+      },
+      {
+        "id": "db-static",
+        "status": "PASS"
+      }
+    ]
+  },
+  "isolatedDatabase": {
+    "assessment": "PASS",
+    "migrationStateVerified": true,
+    "migrationCount": 198,
+    "results": [
+      {
+        "name": "start",
+        "status": "PASS"
+      },
+      {
+        "name": "migrations",
+        "status": "PASS"
+      },
+      {
+        "name": "status",
+        "status": "PASS"
+      },
+      {
+        "name": "PostgREST RLS",
+        "status": "PASS"
+      },
+      {
+        "name": "Final grants and independent-session races",
+        "status": "PASS"
+      },
+      {
+        "name": "stop",
+        "status": "PASS"
+      }
+    ],
+    "limitations": [
+      "Payment fulfillment/cancellation race is separately tested in PGlite; expand real PostgreSQL race fixtures"
+    ]
+  },
+  "tooling": {
+    "windows": {
+      "passed": 22,
+      "failed": 0
+    },
+    "linux": {
+      "passed": 22,
+      "failed": 0
+    }
+  },
+  "fixedDefects": [
+    "Supabase CLI update notice appended to JSON no longer breaks status parsing.",
+    "ESLint runs before Prettier in commit hooks; changed format debt is corrected rather than rebaselined."
+  ],
+  "remainingBlockers": [
+    "Dependency audit: unpatched braces advisory.",
+    "Remotion custom/unknown license metadata requires verification of company eligibility; owner was asked.",
+    "Sentry CLI FSL terms require package/use-specific review."
+  ],
+  "skippedCoverage": "Unit/build/browser/performance jobs depending on the static gate were skipped in this CI run; previous local runs are separate evidence.",
+  "productionDatabaseMutated": false
+}

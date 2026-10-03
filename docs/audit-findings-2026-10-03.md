@@ -51,6 +51,18 @@ production state was changed.
 
 ## Deliverables and interpretation
 
+CI follow-up on commit `1abcb0748eb31e93ec959bfe35312eda3ba4666a` corrected the
+Supabase status parser to handle trailing CLI update notices and reordered the
+commit hook so Prettier runs after ESLint fixes. Six changed files were
+formatted rather than expanding their debt baseline. All 22 tooling tests passed
+on Windows and Linux, locally and in CI. The isolated PostgreSQL job then passed
+the full 198-migration history, PostgREST RLS, final RPC grants and independent
+reconciliation/KYC callback races. Real PostgreSQL payment
+fulfillment/cancellation races remain a separate coverage limitation. The static
+job now fails only on dependency and license findings; format and lint match
+their remaining reviewed baselines. See
+[the CI evidence](audit-evidence/ci-verification-2026-10-03.json).
+
 [Machine-readable evidence](audit-evidence/audit-evidence-2026-10-03.json)
 contains the complete registry inventory, all package command classifications,
 scope/exclusion/dependency/test/policy references, latest scoped observations,
@@ -215,11 +227,12 @@ grants, signed notification delivery or current-commit rollout.
    PostgreSQL review; strict advisor remains FAIL with no hidden security
    baseline. See
    [structured observations](audit-evidence/supabase-security-observations.json).
-4. **P1 — PostgreSQL evidence:** Docker is absent locally and in WSL.
-   `test:db:isolated` reported INCOMPLETE. Its uniquely named loopback stack
-   applies the full migration history and checks grants/RLS and independent HTTP
-   callback/claim races. It still needs execution and real-PostgreSQL
-   fulfillment/cancellation race fixtures. No remote migration was attempted.
+4. **P1 — PostgreSQL payment race coverage:** Docker remains absent locally and
+   in WSL, but CI has now passed the isolated full-migration, grants/RLS and
+   independent HTTP callback/claim checks. Real-PostgreSQL fulfillment and
+   cancellation race fixtures still need expansion. No production SQL was
+   replayed; the separate migration verification confirmed all 198 migrations
+   already applied remotely.
 5. **P1 — Genuine Ozow delivery and authenticated KYC browser evidence:**
    Signing-secret provenance/genuine signed delivery remain unverified.
    Authenticated synthetic KYC browser fixtures require expansion. Both are
