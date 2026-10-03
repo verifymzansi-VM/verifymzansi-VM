@@ -111,7 +111,6 @@ export default function OpenGraphImage() {
       <div style={contentStyle}>
         <div style={brandRowStyle}>
           {/* ImageResponse renders native images into the social card. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={shieldData} alt="VerifyMzansi shield" width={128} height={128} />
 
           <div style={brandTextStyle}>

@@ -27,7 +27,7 @@ function readJson<T>(filePath: string): T | null {
     const raw = readFileSync(filePath, "utf8");
     return JSON.parse(raw) as T;
   } catch {
-    return null;
+    throw new Error(`Malformed/unreadable build manifest: ${filePath}`);
   }
 }
 
@@ -58,7 +58,7 @@ function getFileSize(filePath: string): number {
   try {
     return statSync(filePath).size;
   } catch {
-    return 0;
+    throw new Error(`Missing/unreadable referenced bundle: ${filePath}`);
   }
 }
 
@@ -81,6 +81,8 @@ function collectRouteBundles(): RouteBundle[] {
   const bundles: RouteBundle[] = [];
 
   for (const [route, files] of allEntries) {
+    if (!Array.isArray(files) || files.some((file) => typeof file !== "string"))
+      throw new Error(`Invalid bundle entry: ${route}`);
     const jsFiles = unique((files ?? []).filter((file) => file.endsWith(".js")));
     if (jsFiles.length === 0) {
       continue;
@@ -107,6 +109,7 @@ function fail(message: string): never {
 }
 
 function main(): void {
+  if (process.argv.slice(2).some((arg) => arg !== "--")) fail("Unsupported bundle-budget argument");
   if (!existsSync(nextDir)) {
     fail("Cannot find .next directory. Run build before bundle budget check.");
   }

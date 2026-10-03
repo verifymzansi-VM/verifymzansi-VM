@@ -23,7 +23,9 @@ const FIXTURE_RULES = new Set([
   "Worker API key",
 ]);
 
-const FIXTURE_MARKERS = ["playwright", "test", "stub", "dummy", "sandbox", "example"];
+// A word in a comment or variable name must never exempt an unrelated secret.
+const FIXTURE_VALUE =
+  /(?:["']|=)(?:eyJ[A-Za-z0-9._-]*[.-](?:playwright|test|stub)[A-Za-z0-9._-]*|(?:sbp_|atsk_|re_)?(?:playwright|test|stub|dummy|sandbox|example)[-_][A-Za-z0-9._-]+)["']?/i;
 
 export const SECRET_SCAN_RULES: SecretScanRule[] = [
   {
@@ -49,15 +51,15 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   {
     name: "Hardcoded service role key assignment",
     pattern:
-      /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*(?:["']eyJ[A-Za-z0-9._-]{20,}["']|eyJ[A-Za-z0-9._-]{20,})/g,
+      /\bSUPABASE_SERVICE_ROLE_KEY["']?\s*[:=]\s*(?:["']eyJ[A-Za-z0-9._-]{20,}["']|eyJ[A-Za-z0-9._-]{20,})/g,
   },
   {
     name: "Supabase access token",
-    pattern: /\bSUPABASE_ACCESS_TOKEN\s*[:=]\s*["']?(?:sbp_[A-Za-z0-9]{20,})["']?/g,
+    pattern: /\bSUPABASE_ACCESS_TOKEN["']?\s*[:=]\s*["']?(?:sbp_[A-Za-z0-9]{20,})["']?/g,
   },
   {
     name: "Africa's Talking API key",
-    pattern: /\bAFRICASTALKING_API_KEY\s*[:=]\s*["']?(?:atsk_[A-Za-z0-9]{20,})["']?/g,
+    pattern: /\bAFRICASTALKING_API_KEY["']?\s*[:=]\s*["']?(?:atsk_[A-Za-z0-9]{20,})["']?/g,
   },
   {
     name: "Resend API key",
@@ -70,12 +72,17 @@ export const SECRET_SCAN_RULES: SecretScanRule[] = [
   {
     name: "Turnstile secret key",
     pattern:
-      /\bTURNSTILE_SECRET_KEY\s*[:=]\s*(?:["'](?!process\.env\.|z\.)[A-Za-z0-9._-]{10,}["']|0x[A-Za-z0-9_-]{10,})/g,
+      /\bTURNSTILE_SECRET_KEY["']?\s*[:=]\s*(?:["'](?!process\.env\.|z\.)[A-Za-z0-9._-]{10,}["']|0x[A-Za-z0-9_-]{10,})/g,
   },
   {
     name: "Worker API key",
     pattern:
-      /\bWORKER_API_KEY\s*[:=]\s*["']?(?!(?:dummy|placeholder|example|replace)[-_a-z0-9]*\b)[A-Za-z0-9+/=._-]{20,}["']?/g,
+      /\bWORKER_API_KEY["']?\s*[:=]\s*["']?(?!(?:dummy|placeholder|example|replace)[-_a-z0-9]*\b)[A-Za-z0-9+/=._-]{20,}["']?/g,
+  },
+  {
+    name: "Hardcoded encryption or HMAC key assignment",
+    pattern:
+      /\b(?:KYC_ENCRYPTION_KEY|ID_ENCRYPTION_KEY|HMAC_SECRET|IP_HASH_SECRET)["']?\s*[:=]\s*["']?[0-9a-fA-F]{64}\b/g,
   },
   {
     name: "64-char hex string (potential encryption key)",
@@ -105,8 +112,11 @@ function isDeterministicFixtureMatch({
     return false;
   }
 
-  const normalizedLine = line.toLowerCase();
-  return FIXTURE_MARKERS.some((marker) => normalizedLine.includes(marker));
+  const rule = SECRET_SCAN_RULES.find((rule) => rule.name === ruleName);
+  if (!rule) return false;
+  const matches = line.match(rule.pattern);
+  rule.pattern.lastIndex = 0;
+  return !!matches?.length && matches.every((value) => FIXTURE_VALUE.test(value));
 }
 
 function isAllowedComputedHashMatch({ filePath, line, ruleName }: SecretScanMatchContext): boolean {

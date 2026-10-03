@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium, devices, type Page, type Response as PlaywrightResponse } from "playwright";
 
+if (process.argv.length > 2) throw new Error("test:public-verify accepts no flags");
+
 const baseUrl =
   process.env.PUBLIC_VERIFY_BASE_URL || process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
 
@@ -12,6 +14,8 @@ if (!baseUrl) {
 const requireRealTurnstile = process.env.PUBLIC_VERIFY_REQUIRE_TURNSTILE !== "0";
 const allowCloudflareChallenge = process.env.PUBLIC_VERIFY_ALLOW_CLOUDFLARE_CHALLENGE === "1";
 const turnstileTimeoutMs = Number(process.env.PUBLIC_VERIFY_TURNSTILE_TIMEOUT_MS || 30_000);
+if (!Number.isInteger(turnstileTimeoutMs) || turnstileTimeoutMs < 1 || turnstileTimeoutMs > 120_000)
+  throw new Error("PUBLIC_VERIFY_TURNSTILE_TIMEOUT_MS must be an integer from 1 to 120000");
 const artifactsDir = process.env.PUBLIC_VERIFY_ARTIFACTS_DIR || "test-results/public-verify";
 
 function report(message: string) {

@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "commit": "5d03fba1296db20cab7e456fbe51ba294f6439d9",
+  "rationale": "Existing non-security debt discovered when expanding scans to executable tooling/workers; counts and content hashes prevent new regressions.",
+  "findings": {
+    "vvumbvX7VV3CFpqR_qkI-khlT8gDk7P-vttmnuVWkzY": 1,
+    "thg8SCooty5zVt7Bc1g9ZKB6ipb7X2s7FU4IzTcYZh4": 1,
+    "QPOLupZUCcWUsQTz91epm0FFgonF_FsOav9TymY4Thw": 1,
+    "86SpZm_fmOGdqkja2a_VXQivSdY7eQdVXjJrcQWAY4I": 1,
+    "1sykIf4tt-uxP1WxGhJzSybTEQBs0pN8vwH2nPD2kFk": 1,
+    "JBVxVx58FwLazuNeOS-wwbUWeZKxQdKHIxJwqdFH_p4": 1,
+    "dRUanmMKX_MPfqALuYTRJoI_VUab2w2XtkbPff6sLUE": 1,
+    "c1Ol7wq1JWTE7zgD7XPgEfbjniDULkkcU3yxvcDTwZU": 1,
+    "pprTCrHEejes2FRBnPvCaGzLBwxrO3J8SZ2JNxk77cQ": 1,
+    "9GNxMGEg1ds4ltDqqtFacSv9CNeXDM2pqf98_tmXiCE": 1,
+    "2UkcxSS4CS3HrFDyKJno7PPjBXVtnGcH-N9EZGRpvSo": 1,
+    "8rPt6ozUsFC1jC7dCaW7qQ5yhVoVD9-bck7r5hpE5us": 1,
+    "WggqTOY8hMXbIek5Y8jWshHReqABdrKQs4K3vEIpHDw": 1,
+    "hoZ_7a6KBqze9scdag67nCeL6JMKxaYC4jnG3zA2qMg": 1,
+    "BsYMf1FxNH7C3ksMkQHzGfNvmkHrTtPQkKJYLJru63A": 2,
+    "wOS4AJ0RAI1NmOwHzanYkFHNeDw6GSVcNkXkzoHXynY": 1,
+    "TT3FwUSNtLSp7hbg-RfifcQHRpmOV4F7hDUQkGt29bk": 1,
+    "uxC7wmCDYF20IJbRzJYvcIUMPNnwQaTTWDOQzLCzVhg": 1,
+    "5bk6iGm3gtXa2uA8YZ9Q7f0iQ_1RsMhfeERQLFJiGec": 1,
+    "Dg60jxh6NpJWZ_hoUAphW2oDEBzQpsTBvcJIcknaKbE": 1,
+    "yzQ8flAWNbLQ6q6ZAxMD5zSb71aUhrkH17NYm9z-VLY": 1,
+    "8OcherVPqR0GWHJEHJ8w1y4tUdHW1v5RUN5ut4zW674": 1,
+    "YG0vAw8Oj1Qg5KtzFvEHx2K9g9B7aZnyS_1AuAbFigg": 1,
+    "9SebT5fLBcnPiWiReyZ54_a60AhAugfzKssPpXjYTtw": 1,
+    "aJzyppm950THHRNxhTH8SHH2MlyidJenG_NeKdW0t8g": 1,
+    "t3ykXZwuUhm1gQgJCAVUfzxplWByxfJO3Jk3EqdlyRM": 1,
+    "aeNZa0ug20-CZIgod4UNL1Az4-8KH5qWfoqY_aGgSwA": 1,
+    "H1MG2OOED7tHwvt5cRVYgfbQ55YVSFgTbEnxbgt1z8U": 1,
+    "9e0UNYvfudc6EWXZCL1SC9f7_FsmIppftjZ34DUIOB4": 1
+  },
+  "inventory": [
+    {
+      "file": "scripts/backup-supabase.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "vvumbvX7VV3CFpqR_qkI-khlT8gDk7P-vttmnuVWkzY"
+    },
+    {
+      "file": "scripts/bootstrap-operator.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "thg8SCooty5zVt7Bc1g9ZKB6ipb7X2s7FU4IzTcYZh4"
+    },
+    {
+      "file": "scripts/check-db-invariants.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "QPOLupZUCcWUsQTz91epm0FFgonF_FsOav9TymY4Thw"
+    },
+    {
+      "file": "scripts/check-openapi-drift.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "86SpZm_fmOGdqkja2a_VXQivSdY7eQdVXjJrcQWAY4I"
+    },
+    {
+      "file": "scripts/check-supabase-performance-advisor.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "1sykIf4tt-uxP1WxGhJzSybTEQBs0pN8vwH2nPD2kFk"
+    },
+    {
+      "file": "scripts/check-supabase-schema.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "JBVxVx58FwLazuNeOS-wwbUWeZKxQdKHIxJwqdFH_p4"
+    },
+    {
+      "file": "scripts/check-supabase-security-advisor.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "dRUanmMKX_MPfqALuYTRJoI_VUab2w2XtkbPff6sLUE"
+    },
+    {
+      "file": "scripts/cloudflare-email-routing-catch-all.mjs",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "c1Ol7wq1JWTE7zgD7XPgEfbjniDULkkcU3yxvcDTwZU"
+    },
+    {
+      "file": "scripts/cloudflare-posture-check.mjs",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "pprTCrHEejes2FRBnPvCaGzLBwxrO3J8SZ2JNxk77cQ"
+    },
+    {
+      "file": "scripts/cloudflare-worker-secrets-check.mjs",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "9GNxMGEg1ds4ltDqqtFacSv9CNeXDM2pqf98_tmXiCE"
+    },
+    {
+      "file": "scripts/cloudflare-zone-remediate.mjs",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "2UkcxSS4CS3HrFDyKJno7PPjBXVtnGcH-N9EZGRpvSo"
+    },
+    {
+      "file": "scripts/email-domain-readiness-check.mjs",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "8rPt6ozUsFC1jC7dCaW7qQ5yhVoVD9-bck7r5hpE5us"
+    },
+    {
+      "file": "scripts/generate-placeholders.mjs",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'solidImage' is defined but never used. Allowed unused vars must match /^_/u.",
+      "fingerprint": "WggqTOY8hMXbIek5Y8jWshHReqABdrKQs4K3vEIpHDw"
+    },
+    {
+      "file": "scripts/load-test.js",
+      "rule": "import/no-anonymous-default-export",
+      "message": "Unexpected default export of anonymous function",
+      "fingerprint": "hoZ_7a6KBqze9scdag67nCeL6JMKxaYC4jnG3zA2qMg"
+    },
+    {
+      "file": "scripts/patch-opennext-og-paths.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_' is defined but never used.",
+      "fingerprint": "BsYMf1FxNH7C3ksMkQHzGfNvmkHrTtPQkKJYLJru63A"
+    },
+    {
+      "file": "scripts/patch-opennext-og-paths.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_' is defined but never used.",
+      "fingerprint": "BsYMf1FxNH7C3ksMkQHzGfNvmkHrTtPQkKJYLJru63A"
+    },
+    {
+      "file": "scripts/preflight-check.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "wOS4AJ0RAI1NmOwHzanYkFHNeDw6GSVcNkXkzoHXynY"
+    },
+    {
+      "file": "scripts/preflight-cloudflare.js",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'error' is defined but never used.",
+      "fingerprint": "TT3FwUSNtLSp7hbg-RfifcQHRpmOV4F7hDUQkGt29bk"
+    },
+    {
+      "file": "scripts/reprocess-media.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "uxC7wmCDYF20IJbRzJYvcIUMPNnwQaTTWDOQzLCzVhg"
+    },
+    {
+      "file": "scripts/reset-launch-data.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "5bk6iGm3gtXa2uA8YZ9Q7f0iQ_1RsMhfeERQLFJiGec"
+    },
+    {
+      "file": "scripts/run-k6.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "Dg60jxh6NpJWZ_hoUAphW2oDEBzQpsTBvcJIcknaKbE"
+    },
+    {
+      "file": "scripts/run-supabase-cli.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "yzQ8flAWNbLQ6q6ZAxMD5zSb71aUhrkH17NYm9z-VLY"
+    },
+    {
+      "file": "scripts/test-contract.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "8OcherVPqR0GWHJEHJ8w1y4tUdHW1v5RUN5ut4zW674"
+    },
+    {
+      "file": "scripts/test-db.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "YG0vAw8Oj1Qg5KtzFvEHx2K9g9B7aZnyS_1AuAbFigg"
+    },
+    {
+      "file": "scripts/test-decision-execution.mjs",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'admin2' is assigned a value but never used. Allowed unused vars must match /^_/u.",
+      "fingerprint": "9SebT5fLBcnPiWiReyZ54_a60AhAugfzKssPpXjYTtw"
+    },
+    {
+      "file": "scripts/test-perf.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "aJzyppm950THHRNxhTH8SHH2MlyidJenG_NeKdW0t8g"
+    },
+    {
+      "file": "scripts/test-queue-claims.mjs",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'standard1' is assigned a value but never used. Allowed unused vars must match /^_/u.",
+      "fingerprint": "t3ykXZwuUhm1gQgJCAVUfzxplWByxfJO3Jk3EqdlyRM"
+    },
+    {
+      "file": "scripts/test-queue-claims.mjs",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'standard2' is assigned a value but never used. Allowed unused vars must match /^_/u.",
+      "fingerprint": "aeNZa0ug20-CZIgod4UNL1Az4-8KH5qWfoqY_aGgSwA"
+    },
+    {
+      "file": "scripts/test-smoke.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "H1MG2OOED7tHwvt5cRVYgfbQ55YVSFgTbEnxbgt1z8U"
+    },
+    {
+      "file": "scripts/validate-launch-env.ts",
+      "rule": "parser",
+      "message": "Unused eslint-disable directive (no problems were reported from 'no-console').",
+      "fingerprint": "9e0UNYvfudc6EWXZCL1SC9f7_FsmIppftjZ34DUIOB4"
+    }
+  ]
+}

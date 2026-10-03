@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -266,7 +266,19 @@ async function main(): Promise<void> {
     `/organizations/${project.organization_id}`
   );
 
-  const rawLints = securityAdvisor.lints ?? [];
+  const rawLints = securityAdvisor.lints;
+  if (
+    !Array.isArray(rawLints) ||
+    rawLints.some(
+      (lint) =>
+        !lint ||
+        typeof lint.name !== "string" ||
+        !lint.name ||
+        typeof lint.title !== "string" ||
+        !["INFO", "WARN", "ERROR"].includes(lint.level)
+    )
+  )
+    throw new Error("Malformed Security Advisor response");
   const classifiedLints = rawLints.map((lint) => classifyLint(lint, organization.plan));
   const actionable = classifiedLints.filter((lint) => lint.state === "actionable");
   const planBlocked = classifiedLints.filter((lint) => lint.state === "plan-blocked");
@@ -337,7 +349,8 @@ async function main(): Promise<void> {
   }
 
   const shouldFail =
-    (args.strict && actionable.length > 0) || (args.failOnPlanBlocked && planBlocked.length > 0);
+    (args.strict && (actionable.length > 0 || planBlocked.length > 0)) ||
+    (args.failOnPlanBlocked && planBlocked.length > 0);
 
   if (shouldFail) {
     process.exit(1);

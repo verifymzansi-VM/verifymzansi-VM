@@ -62,6 +62,8 @@ export async function auditPages(config, baseUrl, outputDir = "tmp/lighthouse") 
 }
 
 async function main() {
+  if (process.argv.slice(2).some((arg) => arg !== "--"))
+    throw new Error("Unsupported Lighthouse argument");
   const config = JSON.parse(await readFile("lighthouse.config.json", "utf8"));
   const baseUrl = process.env.LIGHTHOUSE_BASE_URL || `http://${config.hostname}:${config.port}`;
   let server;

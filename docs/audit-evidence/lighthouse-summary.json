@@ -1,0 +1,126 @@
+[
+  {
+    "url": "http://127.0.0.1:3197/",
+    "scores": [
+      {
+        "category": "performance",
+        "score": 0.37,
+        "minimum": 0.7,
+        "status": "WARN"
+      },
+      {
+        "category": "accessibility",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "best-practices",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "seo",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      }
+    ],
+    "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-1.report.json",
+    "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-1.report.html"
+  },
+  {
+    "url": "http://127.0.0.1:3197/mzansi-market",
+    "scores": [
+      {
+        "category": "performance",
+        "score": 0.55,
+        "minimum": 0.7,
+        "status": "WARN"
+      },
+      {
+        "category": "accessibility",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "best-practices",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "seo",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      }
+    ],
+    "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-2.report.json",
+    "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-2.report.html"
+  },
+  {
+    "url": "http://127.0.0.1:3197/pricing",
+    "scores": [
+      {
+        "category": "performance",
+        "score": 0.61,
+        "minimum": 0.7,
+        "status": "WARN"
+      },
+      {
+        "category": "accessibility",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "best-practices",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "seo",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      }
+    ],
+    "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-3.report.json",
+    "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-3.report.html"
+  },
+  {
+    "url": "http://127.0.0.1:3197/verify-buyer",
+    "scores": [
+      {
+        "category": "performance",
+        "score": 0.59,
+        "minimum": 0.7,
+        "status": "WARN"
+      },
+      {
+        "category": "accessibility",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "best-practices",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      },
+      {
+        "category": "seo",
+        "score": 1,
+        "minimum": 0.9,
+        "status": "PASS"
+      }
+    ],
+    "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-4.report.json",
+    "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-4.report.html"
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "assessment": "LOCAL_FIX_VERIFIED",
+  "artifact": ".open-next/cloudflare/next-env.mjs",
+  "finding": "Configured encryption/HMAC keys serialized in generated fallback exports",
+  "matchedNames": ["KYC_ENCRYPTION_KEY", "ID_ENCRYPTION_KEY", "HMAC_SECRET", "IP_HASH_SECRET"],
+  "configuredValueMatchConfirmed": true,
+  "localFallbackSanitized": true,
+  "privateConfigNamesRemoved": 47,
+  "pipeline": "build:cloudflare now runs sanitize:cloudflare-env before strict secret scanning",
+  "strictScanAfterRepair": "PASS",
+  "toolingWindowsTests": 19,
+  "toolingLinuxTests": 19,
+  "workerBuildAndRuntimeBindings": "UNAVAILABLE",
+  "remoteConfigurationChanged": false,
+  "remainingWork": "Review prior artifact distribution and verify isolated Worker/runtime-binding integration; do not infer public exposure or rotate keys without recovery planning",
+  "secretValuesIncludedInAuditOutput": false,
+  "originalFileModifiedDate": "2026-07-25",
+  "preflightPreservesOperatorEnv": true
+}

@@ -1,143 +1,51 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
-import { extname } from "node:path";
-import {
-  SECRET_SCAN_RULES,
-  shouldIgnoreSecretFinding,
-  type SecretScanRule,
-} from "../src/lib/security/secret-scan";
-
-const MAX_FILE_SIZE_BYTES = 1_000_000;
-const GIT_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
-const SKIP_EXTENSIONS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".webp",
-  ".svg",
-  ".ico",
-  ".pdf",
-  ".zip",
-  ".gz",
-  ".woff",
-  ".woff2",
-  ".ttf",
-  ".lock",
-]);
-
-const gitBin = process.platform === "win32" ? "git.exe" : "git";
-const STRICT_SCAN_DIRS = [".open-next", ".next", "out", "build", "dist"];
-
-function isStrictMode(): boolean {
-  const cliStrict = process.argv.includes("--strict");
-  const envStrict = process.env.SECRET_SCAN_STRICT === "1";
-  return cliStrict || envStrict;
-}
-
-function getSourceFiles(): string[] {
-  // Include new source files before staging, while respecting ignored local credentials.
-  const result = spawnSync(gitBin, ["ls-files", "--cached", "--others", "--exclude-standard"], {
+import { scanFile } from "./lib/secret-scan-files";
+const artifactDirs = [".open-next", ".next", "out", "build", "dist"];
+function enumerate(ignored = false): string[] {
+  const args = ignored
+    ? ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ...artifactDirs]
+    : ["ls-files", "-z", "--cached", "--others", "--exclude-standard"];
+  const result = spawnSync("git", args, {
     encoding: "utf8",
-    stdio: "pipe",
-    maxBuffer: GIT_MAX_BUFFER_BYTES,
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 30_000,
   });
-  if (result.error || result.status !== 0) {
-    console.error("Failed to run git ls-files:", result.error?.message ?? "non-zero exit status");
-    process.exit(1);
-  }
-  return (result.stdout || "").split(/\r?\n/).filter(Boolean);
+  if (result.error || result.status !== 0)
+    throw new Error(`File enumeration failed: ${result.error?.message || result.stderr}`);
+  return result.stdout.split("\0").filter(Boolean);
 }
-
-function getIgnoredSensitiveFiles(): string[] {
-  const result = spawnSync(
-    gitBin,
-    ["ls-files", "--others", "--ignored", "--exclude-standard", "--", ...STRICT_SCAN_DIRS],
-    {
-      encoding: "utf8",
-      stdio: "pipe",
-      maxBuffer: GIT_MAX_BUFFER_BYTES,
+async function main() {
+  if (process.argv.slice(2).some((arg) => !["--", "--strict"].includes(arg)))
+    throw new Error("Unsupported secret scan argument");
+  const strict = process.argv.includes("--strict") || process.env.SECRET_SCAN_STRICT === "1";
+  const files = new Set([...enumerate(), ...(strict ? enumerate(true) : [])]);
+  if (!files.size) throw new Error("No files enumerated; scan incomplete");
+  const findings: string[] = [];
+  const failures: string[] = [];
+  let scanned = 0;
+  let skipped = 0;
+  let compilerCaches = 0;
+  for (const file of files) {
+    if (/^\.next\/(?:dev\/)?cache\//.test(file.replace(/\\/g, "/"))) {
+      compilerCaches++;
+      continue;
     }
+    try {
+      const result = await scanFile(file);
+      findings.push(...result.findings);
+      if (result.skipped) skipped++;
+      else scanned++;
+    } catch (error) {
+      failures.push(`${file}: ${String(error)}`);
+    }
+  }
+  process.stdout.write(
+    `Secret scan: ${scanned} text files, ${skipped} binary exclusions, ${compilerCaches} compiler-cache exclusions, ${failures.length} read failures.\n`
   );
-
-  if (result.error || result.status !== 0) {
-    console.error(
-      "Failed to enumerate ignored files for strict scan:",
-      result.error?.message ?? "non-zero exit status"
-    );
-    process.exit(1);
-  }
-
-  return (result.stdout || "").split(/\r?\n/).filter(Boolean);
+  if (findings.length || failures.length) throw new Error([...findings, ...failures].join("\n"));
+  process.stdout.write("Secret scan passed.\n");
 }
-
-function shouldSkipFile(path: string): boolean {
-  const extension = extname(path).toLowerCase();
-  if (SKIP_EXTENSIONS.has(extension)) {
-    return true;
-  }
-
-  try {
-    const stats = statSync(path);
-    return stats.size > MAX_FILE_SIZE_BYTES;
-  } catch {
-    return true;
-  }
-}
-
-const strictMode = isStrictMode();
-const candidateFiles = new Set(getSourceFiles());
-
-if (strictMode) {
-  for (const file of getIgnoredSensitiveFiles()) {
-    candidateFiles.add(file);
-  }
-}
-
-const findings: string[] = [];
-
-for (const file of candidateFiles) {
-  if (shouldSkipFile(file)) {
-    continue;
-  }
-
-  let content = "";
-  try {
-    content = readFileSync(file, "utf8");
-  } catch {
-    continue;
-  }
-
-  const lines = content.split(/\r?\n/);
-
-  SECRET_SCAN_RULES.forEach((rule: SecretScanRule) => {
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      if (
-        shouldIgnoreSecretFinding({
-          filePath: file,
-          line,
-          ruleName: rule.name,
-        })
-      ) {
-        continue;
-      }
-      if (rule.pattern.test(line)) {
-        findings.push(`${file}:${i + 1} [${rule.name}]`);
-      }
-      rule.pattern.lastIndex = 0;
-    }
-  });
-}
-
-if (findings.length > 0) {
-  console.error("Secret scan failed. Potential secrets found:");
-  findings.forEach((finding) => console.error(`- ${finding}`));
-  process.exit(1);
-}
-
-if (strictMode) {
-  process.stdout.write("Strict secret scan mode enabled (source + ignored sensitive dirs).\n");
-}
-
-process.stdout.write("Secret scan passed.\n");
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

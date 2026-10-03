@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 import { pathToFileURL } from "node:url";
 import { loadEnvConfig } from "@next/env";
 
@@ -67,7 +67,7 @@ export const checks: SmokeCheck[] = [
     method: "POST",
     headers: { "content-type": "application/json" },
     body: { provider_ref: "unknown-smoke-ref", status: "approved" },
-    expectStatuses: [200, 401, 503],
+    expectStatuses: [400, 401, 403, 404, 503],
   },
 ];
 
@@ -83,6 +83,8 @@ export async function runCheck(
   const url = `${resolvedBaseUrl}${check.path}`;
   const method = check.method ?? "GET";
   const response = await fetchImpl(url, {
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
     method,
     headers: check.headers,
     body:
@@ -104,12 +106,16 @@ export async function runCheck(
     if (!json.status) {
       throw new Error(`${check.name} missing 'status' key in JSON response`);
     }
+    if (response.status !== 200 || json.status !== "ok")
+      throw new Error(`${check.name} is degraded; smoke checks do not establish readiness`);
   }
 
   console.log(`  [OK] ${check.name} (${response.status})`);
 }
 
 async function main(): Promise<void> {
+  if (process.argv.slice(2).some((arg) => arg !== "--"))
+    throw new Error("Unsupported smoke argument");
   console.log("Running smoke checks...");
   console.log(`Target base URL: ${baseUrl}`);
 

@@ -1,0 +1,109 @@
+{
+  "observedAt": "2026-10-03T08:42:19Z",
+  "assessment": "FAIL",
+  "findings": [
+    {
+      "classification": "ACTIONABLE",
+      "title": "RLS Enabled No Policy (rls_enabled_no_policy)",
+      "level": "INFO",
+      "detail": "Table \\`public.content_views\\` has RLS enabled, but no policies exist"
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "RLS Enabled No Policy (rls_enabled_no_policy)",
+      "level": "INFO",
+      "detail": "Table \\`public.media_storage_usage\\` has RLS enabled, but no policies exist"
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "RLS Enabled No Policy (rls_enabled_no_policy)",
+      "level": "INFO",
+      "detail": "Table \\`public.organisation_admin_invites\\` has RLS enabled, but no policies exist"
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Public Can Execute SECURITY DEFINER Function (anon_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.current_staff_role()` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/current_staff_role`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Public Can Execute SECURITY DEFINER Function (anon_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.is_current_organisation_admin(p_org uuid)` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/is_current_organisation_admin`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Public Can Execute SECURITY DEFINER Function (anon_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.organisation_directory(p_org uuid, p_search text, p_category text, p_city text, p_programme uuid, p_sponsored boolean, p_limit integer, p_offset integer, p_province text, p_type text, p_subcategory text)` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/organisation_directory`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Public Can Execute SECURITY DEFINER Function (anon_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.organisation_public_stats(p_org uuid)` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/organisation_public_stats`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Public Can Execute SECURITY DEFINER Function (anon_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.public_business_affiliations(p_business_ids uuid[])` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/public_business_affiliations`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Public Can Execute SECURITY DEFINER Function (anon_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.public_sponsor_directory()` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/public_sponsor_directory`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.current_staff_role()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/current_staff_role`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.intro_trial_offer(p_area public.marketplace_area)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/intro_trial_offer`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.is_current_organisation_admin(p_org uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/is_current_organisation_admin`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.organisation_directory(p_org uuid, p_search text, p_category text, p_city text, p_programme uuid, p_sponsored boolean, p_limit integer, p_offset integer, p_province text, p_type text, p_subcategory text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/organisation_directory`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.organisation_public_stats(p_org uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/organisation_public_stats`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.public_business_affiliations(p_business_ids uuid[])` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/public_business_affiliations`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "ACTIONABLE",
+      "title": "Signed-In Users Can Execute SECURITY DEFINER Function (authenticated_security_definer_function_executable)",
+      "level": "WARN",
+      "detail": "Function `public.public_sponsor_directory()` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/public_sponsor_directory`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional."
+    },
+    {
+      "classification": "PLAN-BLOCKED",
+      "title": "Leaked Password Protection Disabled (auth_leaked_password_protection)",
+      "level": "WARN",
+      "detail": "Supabase Auth prevents the use of compromised passwords by checking against HaveIBeenPwned.org. Enable this feature to enhance security."
+    }
+  ],
+  "interpretation": "Advisor observations require review; intentionally public RPCs and deny-by-default tables are not automatically proven vulnerabilities."
+}

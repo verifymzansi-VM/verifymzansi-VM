@@ -9,7 +9,7 @@ export async function applyKycProviderWebhook(
   payload: {
     provider_ref: string;
     status: "approved" | "rejected" | "needs_manual_review";
-    scores?: Record<string, number>;
+    scores?: Record<string, number | null | undefined>;
     ocr_payload?: Record<string, unknown>;
     raw_response?: Record<string, unknown>;
   }

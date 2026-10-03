@@ -1,0 +1,4949 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-03T10:23:19.681730+00:00",
+  "assessment": "FAIL",
+  "releaseReady": false,
+  "assessmentBasis": "Cross-run evidence synthesis; not a single full release gate. Security/license failures and required missing verification remain blocking.",
+  "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+  "workingTree": " A .agents/skills/code-review-security-auditor/SKILL.md\n A .agents/skills/kyc-auditor/SKILL.md\n A .agents/skills/payment-auditor/SKILL.md\n A .agents/skills/release-readiness-synthesizer/SKILL.md\n M .dependency-cruiser.cjs\n M .github/workflows/ci.yml\n M .github/workflows/codeql.yml\n M .gitignore\n M .jscpd.json\n M LAUNCH-CHECKLIST.md\n A docs/audit-evidence/audit-evidence-2026-10-03.json\n A docs/audit-evidence/audit-inventory.canvas.tsx\n A docs/audit-evidence/audit-inventory.html\n A docs/audit-evidence/dependency-audit.json\n A docs/audit-evidence/license-findings.json\n A docs/audit-evidence/lighthouse-summary.json\n A docs/audit-evidence/supabase-security-observations.json\n A docs/audit-findings-2026-10-03.md\n A docs/audit-tools.md\n M docs/branch-protection.md\n A docs/encryption-recovery.md\n A docs/kyc-audit-guide.md\n A docs/ozow-integration-guide.md\n A docs/ozow-integration-review-2026-10-03.md\n A docs/ozow-payment-repair-rollout.md\n M eslint.config.mjs\n M knip.jsonc\n M package.json\n M pnpm-lock.yaml\n A public/vendor/ffmpeg-core/NOTICE.txt\n A scripts/audit-baselines/duplication.json\n A scripts/audit-baselines/format.json\n M scripts/audit-live-load.ts\n A scripts/audit-tooling.test.ts\n M scripts/check-bundle-budget.ts\n M scripts/check-deployment-ci.ts\n M scripts/check-jscpd-budget.ts\n M scripts/check-licenses.ts\n A scripts/check-quality.ts\n M scripts/check-supabase-performance-advisor.ts\n M scripts/check-supabase-security-advisor.ts\n A scripts/checker-fixtures.test.ts\n M scripts/dependency-audit-policy.ts\n M scripts/dev-startup-smoke.ts\n M scripts/email-domain-readiness-check.mjs\n M scripts/generate-live-assets.ts\n A scripts/kyc-audit.ts\n A scripts/lib/audit-runtime.ts\n A scripts/lib/check-registry.ts\n A scripts/lib/cloudflare-env-policy.ts\n A scripts/lib/duplication-policy.ts\n A scripts/lib/license-policy.ts\n A scripts/lib/quality-policy.ts\n A scripts/lib/secret-scan-files.ts\n A scripts/lib/social-watermarks.ts\n M scripts/payment-security-audit.ts\n M scripts/preflight-check.ts\n M scripts/preflight-cloudflare.js\n A scripts/run-domain-tests.ts\n M scripts/run-lighthouse.mjs\n M scripts/run-safety-gate.ts\n A scripts/sanitize-cloudflare-env.ts\n M scripts/secret-scan.ts\n M scripts/security-audit.ts\n M scripts/test-contract.ts\n A scripts/test-isolated-browser.ts\n A scripts/test-isolated-db.ts\n M scripts/test-mutation.ts\n M scripts/test-perf.ts\n M scripts/test-smoke.ts\n M scripts/verify-live-pages.ts\n M scripts/verify-public-pages.ts\n M src/__tests__/cloudflare-preflight.test.ts\n M src/__tests__/dependency-audit-policy.test.ts\n M src/__tests__/preflight-check.test.ts\n M src/__tests__/secret-scan.test.ts\n M src/__tests__/test-smoke-script.test.ts\n M src/app/api/webhooks/kyc/provider/route.test.ts\n M src/app/api/webhooks/kyc/provider/route.ts\n M src/lib/payments/ozow.test.ts\n M src/lib/security/secret-scan-cli.test.ts\n M src/lib/security/secret-scan.ts\n M src/lib/services/kyc-provider.test.ts\n M src/lib/services/kyc-provider.ts\n M src/lib/services/kyc-webhook-store.ts\n A src/lib/validations/kyc-webhook.test.ts\n A src/lib/validations/kyc-webhook.ts\n A src/test/contracts/ozow.ts\n M src/test/contracts/webhooks.ts\n M src/test/fixtures/contracts/kyc/provider-approved.json\n M src/test/fixtures/contracts/kyc/provider-rejected.json\n A src/test/fixtures/contracts/ozow/full.json\n A src/test/fixtures/contracts/ozow/thin.json\n M tsconfig.json\n M tsconfig.typecheck.json\n?? docs/audit-evidence/cloudflare-env-repair.json\n",
+  "checks": [
+    {
+      "id": "format",
+      "name": "format",
+      "args": ["format:check"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "src, workers, scripts, configs, maintained skills/guides",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "scripts/check-quality.ts",
+        "scripts/audit-baselines/format.json"
+      ],
+      "evidence": ["per-run format.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "format",
+        "name": "format",
+        "command": "pnpm format:check",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "WARN",
+        "exitCode": 0,
+        "durationMs": 20693,
+        "executed": true,
+        "warnings": [
+          "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions"
+        ],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-04-03-949Z-7e163e15\\format.log"],
+        "reason": "pnpm format:check: WARN; inspect tmp\\safety-gate\\2026-10-03T10-04-03-949Z-7e163e15\\format.log",
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T10-04-03-949Z-7e163e15.json",
+        "runId": "2026-10-03T10-04-03-949Z-7e163e15",
+        "observedAt": "2026-10-03T10:05:53.901Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "lint",
+      "name": "lint",
+      "args": ["lint"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "src, scripts, workers; ESLint security and accessibility rules",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "eslint.config.mjs",
+        "scripts/audit-baselines/lint.json"
+      ],
+      "evidence": ["per-run lint.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "lint",
+        "name": "lint",
+        "command": "pnpm lint",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "WARN",
+        "exitCode": 0,
+        "durationMs": 57277,
+        "executed": true,
+        "warnings": [
+          "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+        ],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-04-03-949Z-7e163e15\\lint.log"],
+        "reason": "pnpm lint: WARN; inspect tmp\\safety-gate\\2026-10-03T10-04-03-949Z-7e163e15\\lint.log",
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T10-04-03-949Z-7e163e15.json",
+        "runId": "2026-10-03T10-04-03-949Z-7e163e15",
+        "observedAt": "2026-10-03T10:05:53.901Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "types",
+      "name": "types",
+      "args": ["typecheck"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "tsconfig.typecheck.json; generated routes verified by isolated build",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["tsconfig.typecheck.json", "Next generated types in the isolated build"],
+      "evidence": ["per-run types.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "types",
+        "name": "types",
+        "command": "pnpm typecheck",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 8984,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\types.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-58-07-545Z-5a8b4139.json",
+        "runId": "2026-10-03T09-58-07-545Z-5a8b4139",
+        "observedAt": "2026-10-03T10:00:20.413Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "tooling",
+      "name": "tooling",
+      "args": ["test:tooling"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "runner/parser/scanner/policy regression and Lighthouse tests",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "scripts/checker-fixtures.test.ts",
+        "scripts/run-lighthouse.test.mjs"
+      ],
+      "evidence": ["per-run tooling.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "tooling",
+        "name": "tooling",
+        "command": "pnpm test:tooling",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 10738,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-51-22-967Z-ee336968\\tooling.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-51-22-967Z-ee336968.json",
+        "runId": "2026-10-03T09-51-22-967Z-ee336968",
+        "observedAt": "2026-10-03T09:51:48.145Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "openapi",
+      "name": "openapi",
+      "args": ["quality:openapi-drift"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "docs/openapi.json versus generated declarations",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for quality:openapi-drift; external provider proof remains separate"
+      ],
+      "evidence": ["per-run openapi.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "openapi",
+        "name": "openapi",
+        "command": "pnpm quality:openapi-drift",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 8657,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-15-27-297Z-0d503700\\openapi.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-15-27-297Z-0d503700.json",
+        "runId": "2026-10-03T09-15-27-297Z-0d503700",
+        "observedAt": "2026-10-03T09:23:46.356Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "dead-code",
+      "name": "dead-code",
+      "args": ["knip"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "Next file conventions, workers, scripts, remotion and CI",
+      "exclusions": "knip.jsonc: generated declarations, output and reviewed ignoreIssues",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/checker-fixtures.test.ts", "knip.jsonc"],
+      "evidence": ["per-run dead-code.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "dead-code",
+        "name": "dead-code",
+        "command": "pnpm knip",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 6439,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\dead-code.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-58-07-545Z-5a8b4139.json",
+        "runId": "2026-10-03T09-58-07-545Z-5a8b4139",
+        "observedAt": "2026-10-03T10:00:20.413Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "imports",
+      "name": "imports",
+      "args": ["depcruise"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "src, scripts, workers import boundaries",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/checker-fixtures.test.ts", ".dependency-cruiser.cjs"],
+      "evidence": ["per-run imports.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "imports",
+        "name": "imports",
+        "command": "pnpm depcruise",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 15246,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\imports.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-58-07-545Z-5a8b4139.json",
+        "runId": "2026-10-03T09-58-07-545Z-5a8b4139",
+        "observedAt": "2026-10-03T10:00:20.413Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "duplication",
+      "name": "duplication",
+      "args": ["jscpd:check"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "src, scripts, workers executable code",
+      "exclusions": ".jscpd.json: tests, generated/vendor, reviewed aliases",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/audit-tooling.test.ts", "scripts/checker-fixtures.test.ts", ".jscpd.json"],
+      "evidence": ["tmp/jscpd/jscpd-report.json", "scripts/audit-baselines/duplication.json"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "duplication",
+        "name": "duplication",
+        "command": "pnpm jscpd:check",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 17487,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-04-03-949Z-7e163e15\\duplication.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T10-04-03-949Z-7e163e15.json",
+        "runId": "2026-10-03T10-04-03-949Z-7e163e15",
+        "observedAt": "2026-10-03T10:05:53.901Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "secrets",
+      "name": "secrets",
+      "args": ["secret-scan:strict"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "Git tracked/untracked source plus built artifacts; streaming",
+      "exclusions": "binary extensions and transient compiler caches; deterministic fixture values, annotated exceptions, skills-lock computedHash and generic generated 64-hex hashes; named credential rules remain active",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "src/__tests__/secret-scan.test.ts",
+        "src/lib/security/secret-scan-cli.test.ts",
+        "scripts/audit-tooling.test.ts"
+      ],
+      "evidence": ["per-run secrets.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "secrets",
+        "name": "secrets",
+        "command": "pnpm secret-scan:strict",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 14112,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-04-03-949Z-7e163e15\\secrets.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T10-04-03-949Z-7e163e15.json",
+        "runId": "2026-10-03T10-04-03-949Z-7e163e15",
+        "observedAt": "2026-10-03T10:05:53.901Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "dependencies",
+      "name": "dependencies",
+      "args": ["security:audit:all"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "resolved production and dev lockfile vulnerabilities",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["registry network access"],
+      "tests": ["src/__tests__/dependency-audit-policy.test.ts", "scripts/audit-tooling.test.ts"],
+      "evidence": ["tmp/dependency-audit/latest.json"],
+      "category": "repo_runtime",
+      "timeoutMs": 180000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "dependencies",
+        "name": "dependencies",
+        "command": "pnpm security:audit:all",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "FAIL",
+        "exitCode": 1,
+        "durationMs": 3605,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\dependencies.log"],
+        "reason": "pnpm security:audit:all: FAIL; inspect tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\dependencies.log",
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-58-07-545Z-5a8b4139.json",
+        "runId": "2026-10-03T09-58-07-545Z-5a8b4139",
+        "observedAt": "2026-10-03T10:00:20.413Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "licenses",
+      "name": "licenses",
+      "args": ["licenses:check"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "resolved dependencies, SPDX expressions and FFmpeg exception",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for licenses:check; external provider proof remains separate"
+      ],
+      "evidence": ["public/vendor/ffmpeg-core/NOTICE.txt", "per-run licenses.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "licenses",
+        "name": "licenses",
+        "command": "pnpm licenses:check",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "FAIL",
+        "exitCode": 1,
+        "durationMs": 2984,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\licenses.log"],
+        "reason": "pnpm licenses:check: FAIL; inspect tmp\\safety-gate\\2026-10-03T09-58-07-545Z-5a8b4139\\licenses.log",
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-58-07-545Z-5a8b4139.json",
+        "runId": "2026-10-03T09-58-07-545Z-5a8b4139",
+        "observedAt": "2026-10-03T10:00:20.413Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-static",
+      "name": "db-static",
+      "args": ["db:check-invariants"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "static migration corpus invariants; supplementary only",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for db:check-invariants; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-static.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-static",
+        "name": "db-static",
+        "command": "pnpm db:check-invariants",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 2122,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-15-27-297Z-0d503700\\db-static.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-15-27-297Z-0d503700.json",
+        "runId": "2026-10-03T09-15-27-297Z-0d503700",
+        "observedAt": "2026-10-03T09:23:46.356Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "contracts",
+      "name": "contracts",
+      "args": ["test:contract"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "Ozow full/thin official event fixtures, shared KYC schema, SMS/email",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/test-contract.ts", "src/test/contracts", "src/test/fixtures/contracts"],
+      "evidence": ["per-run contracts.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "contracts",
+        "name": "contracts",
+        "command": "pnpm test:contract",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 2363,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-15-27-297Z-0d503700\\contracts.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-15-27-297Z-0d503700.json",
+        "runId": "2026-10-03T09-15-27-297Z-0d503700",
+        "observedAt": "2026-10-03T09:23:46.356Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "canaries",
+      "name": "canaries",
+      "args": ["test:security-canaries"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "security assertions; no mutation score",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/test-mutation.ts"],
+      "evidence": ["per-run canaries.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "canaries",
+        "name": "canaries",
+        "command": "pnpm test:security-canaries",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 1715,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-15-27-297Z-0d503700\\canaries.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-15-27-297Z-0d503700.json",
+        "runId": "2026-10-03T09-15-27-297Z-0d503700",
+        "observedAt": "2026-10-03T09:23:46.356Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "unit",
+      "name": "unit",
+      "args": ["exec", "vitest", "run"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "all blocking application tests including coverage-excluded suites",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["vitest.config.ts", "src/**/*.test.{ts,tsx}"],
+      "evidence": ["per-run unit.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 1800000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "unit",
+        "name": "unit",
+        "command": "pnpm exec vitest run",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 501230,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp/safety-gate/2026-10-03T09-15-05-425Z-3462cf11/unit.log"],
+        "sourceReport": "tmp/linux-current-report.json",
+        "runId": "2026-10-03T09-15-05-425Z-3462cf11",
+        "observedAt": "2026-10-03T09:28:45.557Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "linux"
+      }
+    },
+    {
+      "id": "payment-unit",
+      "name": "payment-unit",
+      "args": ["test:payments"],
+      "scopes": ["payments", "release"],
+      "scope": "billing, paid add-ons, invoices, reconciliation, signatures",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/run-domain-tests.ts payments",
+        "src/lib/payments/ozow.test.ts",
+        "src/app/api/billing/**/route.test.ts"
+      ],
+      "evidence": ["per-run payment-unit.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "coveredBy": "unit",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "payment-unit",
+        "name": "unit",
+        "command": "pnpm exec vitest run",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 501230,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp/safety-gate/2026-10-03T09-15-05-425Z-3462cf11/unit.log"],
+        "sourceReport": "tmp/linux-current-report.json",
+        "runId": "2026-10-03T09-15-05-425Z-3462cf11",
+        "observedAt": "2026-10-03T09:28:45.557Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "linux",
+        "reason": "Executed through unit; identical/subset scope deduplicated",
+        "coveredBy": "unit"
+      }
+    },
+    {
+      "id": "kyc-unit",
+      "name": "kyc-unit",
+      "args": ["test:kyc"],
+      "scopes": ["kyc", "release"],
+      "scope": "manual/stub KYC upload, crypto, provider, evidence, review permissions",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/run-domain-tests.ts kyc",
+        "src/lib/validations/kyc-webhook.test.ts",
+        "src/app/api/webhooks/kyc/provider/route.test.ts"
+      ],
+      "evidence": ["per-run kyc-unit.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "coveredBy": "unit",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "kyc-unit",
+        "name": "unit",
+        "command": "pnpm exec vitest run",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 501230,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp/safety-gate/2026-10-03T09-15-05-425Z-3462cf11/unit.log"],
+        "sourceReport": "tmp/linux-current-report.json",
+        "runId": "2026-10-03T09-15-05-425Z-3462cf11",
+        "observedAt": "2026-10-03T09:28:45.557Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "linux",
+        "reason": "Executed through unit; identical/subset scope deduplicated",
+        "coveredBy": "unit"
+      }
+    },
+    {
+      "id": "db-trials",
+      "name": "db-trials",
+      "args": ["test:trials"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:trials; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-trials.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-trials",
+        "name": "db-trials",
+        "command": "pnpm test:trials",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 8842,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-trials.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-commercial",
+      "name": "db-commercial",
+      "args": ["test:commercial:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:commercial:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-commercial.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-commercial",
+        "name": "db-commercial",
+        "command": "pnpm test:commercial:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 15640,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-commercial.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-payments",
+      "name": "db-payments",
+      "args": ["test:payments:db"],
+      "scopes": ["review", "ci-review", "release", "payments"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:payments:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-payments.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-payments",
+        "name": "db-payments",
+        "command": "pnpm test:payments:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 11080,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-payments.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-media",
+      "name": "db-media",
+      "args": ["test:media:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:media:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-media.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-media",
+        "name": "db-media",
+        "command": "pnpm test:media:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 26402,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-media.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-visits",
+      "name": "db-visits",
+      "args": ["test:visits:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:visits:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-visits.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-visits",
+        "name": "db-visits",
+        "command": "pnpm test:visits:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 11762,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-visits.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-staff-roles",
+      "name": "db-staff-roles",
+      "args": ["test:staff-roles:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:staff-roles:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-staff-roles.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-staff-roles",
+        "name": "db-staff-roles",
+        "command": "pnpm test:staff-roles:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 18660,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-staff-roles.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-decisions",
+      "name": "db-decisions",
+      "args": ["test:decisions:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:decisions:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-decisions.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-decisions",
+        "name": "db-decisions",
+        "command": "pnpm test:decisions:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 20779,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-decisions.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-queue-claims",
+      "name": "db-queue-claims",
+      "args": ["test:queue-claims:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:queue-claims:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-queue-claims.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-queue-claims",
+        "name": "db-queue-claims",
+        "command": "pnpm test:queue-claims:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 22284,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-queue-claims.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-operation-jobs",
+      "name": "db-operation-jobs",
+      "args": ["test:operation-jobs:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:operation-jobs:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-operation-jobs.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-operation-jobs",
+        "name": "db-operation-jobs",
+        "command": "pnpm test:operation-jobs:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 9250,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-operation-jobs.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-dsar",
+      "name": "db-dsar",
+      "args": ["test:dsar:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:dsar:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-dsar.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-dsar",
+        "name": "db-dsar",
+        "command": "pnpm test:dsar:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 21541,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-dsar.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-dashboard",
+      "name": "db-dashboard",
+      "args": ["test:dashboard:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:dashboard:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-dashboard.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-dashboard",
+        "name": "db-dashboard",
+        "command": "pnpm test:dashboard:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 17619,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-dashboard.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-admin-lists",
+      "name": "db-admin-lists",
+      "args": ["test:admin-lists:db"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:admin-lists:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-admin-lists.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-admin-lists",
+        "name": "db-admin-lists",
+        "command": "pnpm test:admin-lists:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 16364,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-admin-lists.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "db-kyc",
+      "name": "db-kyc",
+      "args": ["test:kyc:db"],
+      "scopes": ["review", "ci-review", "release", "kyc"],
+      "scope": "isolated PGlite assertions; limited migration/concurrency model",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:kyc:db; external provider proof remains separate"
+      ],
+      "evidence": ["per-run db-kyc.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "db-kyc",
+        "name": "db-kyc",
+        "command": "pnpm test:kyc:db",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 6684,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-19-15-235Z-955634aa\\db-kyc.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+        "runId": "2026-10-03T09-19-15-235Z-955634aa",
+        "observedAt": "2026-10-03T09:22:45.441Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "coverage",
+      "name": "coverage",
+      "args": ["test:coverage:core"],
+      "scopes": ["review", "ci-review", "release"],
+      "scope": "core thresholds unchanged; six DOM-heavy suites run in unit",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["vitest.config.ts", "scripts/run-vitest.ts coverage-core"],
+      "evidence": ["coverage/coverage-summary.json"],
+      "category": "repo_runtime",
+      "timeoutMs": 1800000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "coverage",
+        "name": "coverage",
+        "command": "pnpm test:coverage:core",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 309594,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp/safety-gate/2026-10-03T09-15-05-425Z-3462cf11/coverage.log"],
+        "sourceReport": "tmp/linux-current-report.json",
+        "runId": "2026-10-03T09-15-05-425Z-3462cf11",
+        "observedAt": "2026-10-03T09:28:45.557Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "linux"
+      }
+    },
+    {
+      "id": "preflight",
+      "name": "preflight",
+      "args": ["preflight"],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "local development environment",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["src/__tests__/preflight-check.test.ts"],
+      "evidence": ["per-run preflight.log"],
+      "category": "local_production_env",
+      "timeoutMs": 600000,
+      "coveredBy": "preflight-production",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "preflight",
+        "name": "preflight",
+        "command": "pnpm preflight",
+        "category": "local_production_env",
+        "optional": false,
+        "required": true,
+        "status": "WARN",
+        "exitCode": 0,
+        "durationMs": 4621,
+        "executed": true,
+        "warnings": [
+          "  ! R2                  Endpoint reachability is only enforced in production mode.",
+          "  ! Ozow                Non-production mode allows OZOW_ENV=production scope=payments",
+          "  ! Resend              Live Resend API verification is skipped outside production mode.",
+          "  ! Turnstile           Live Turnstile verification is skipped outside production mode."
+        ],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\preflight.log"],
+        "reason": "pnpm preflight: WARN; inspect tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\preflight.log",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "preflight-production",
+      "name": "preflight-production",
+      "args": ["preflight:prod"],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "production config plus read-only service authentication/reachability; no payments",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["src/__tests__/preflight-check.test.ts"],
+      "evidence": ["per-run preflight-production.log"],
+      "category": "local_production_env",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "preflight-production",
+        "name": "preflight-production",
+        "command": "pnpm preflight:prod",
+        "category": "local_production_env",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 8331,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": [
+          "tmp\\safety-gate\\2026-10-03T09-13-08-356Z-89a8bb0b\\preflight-production.log"
+        ],
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T09-13-08-356Z-89a8bb0b.json",
+        "runId": "2026-10-03T09-13-08-356Z-89a8bb0b",
+        "observedAt": "2026-10-03T09:13:18.516Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "isolated-db",
+      "name": "isolated-db",
+      "args": ["test:db:isolated"],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "full migrations, PostgreSQL/PostgREST RLS, independent-session races",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["Docker daemon", "Supabase CLI"],
+      "tests": ["scripts/test-isolated-db.ts", "scripts/test-db.ts", "supabase/migrations"],
+      "evidence": ["per-run isolated-db.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 1800000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "isolated-db",
+        "name": "isolated-db",
+        "command": "pnpm test:db:isolated",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "UNAVAILABLE",
+        "exitCode": 2,
+        "durationMs": 1249,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\kyc-audit\\2026-10-03T09-39-41-572Z-21f9705d\\isolated-db.log"],
+        "reason": "pnpm test:db:isolated: UNAVAILABLE; inspect tmp\\kyc-audit\\2026-10-03T09-39-41-572Z-21f9705d\\isolated-db.log",
+        "sourceReport": "tmp/kyc-audit/kyc-audit-2026-10-03T09-39-41-572Z-21f9705d.json",
+        "runId": "2026-10-03T09-39-41-572Z-21f9705d",
+        "observedAt": "2026-10-03T09:39:43.112Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "browser",
+      "name": "browser",
+      "args": ["test:browser:isolated"],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "critical smoke, billing, KYC, DSAR flows; isolated build and bundle budget",
+      "exclusions": "WebKit/mobile-safari quarantine; authenticated scenarios need test credentials",
+      "dependencies": ["Playwright Chromium"],
+      "tests": [
+        "e2e/smoke.spec.ts",
+        "e2e/addon-checkout.spec.ts",
+        "e2e/billing-payment-roundtrip.spec.ts",
+        "e2e/kyc-verification.spec.ts",
+        "e2e/dsar.spec.ts"
+      ],
+      "evidence": ["tmp/isolated-browser/latest.json"],
+      "category": "repo_runtime",
+      "timeoutMs": 1800000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "browser",
+        "status": "PASS",
+        "executed": true,
+        "sourceReport": "tmp/isolated-browser/critical-desktop-mobile.json",
+        "observedAt": "2026-10-03T09:02:01.339Z",
+        "stats": {
+          "startTime": "2026-10-03T09:02:01.339Z",
+          "duration": 82509.934,
+          "expected": 50,
+          "skipped": 2,
+          "unexpected": 0,
+          "flaky": 0
+        },
+        "skips": [
+          {
+            "key": "smoke.spec.ts:265:@smoke mobile footer and marketplace tabs stay clear of the bottom tab bar",
+            "project": "chromium",
+            "status": "skipped"
+          },
+          {
+            "key": "smoke.spec.ts:314:@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome",
+            "project": "chromium",
+            "status": "skipped"
+          }
+        ],
+        "uncoveredSkips": [],
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "reason": "50 passing desktop/mobile tests; two desktop skips pass on mobile. KYC authenticated submission/reviewer browser coverage remains incomplete separately.",
+        "evidence": [
+          "tmp/isolated-browser/checkout-vkZFp0/.next/server/app-paths-manifest.json",
+          "tmp/isolated-browser/bundle-standard-budget.log"
+        ]
+      }
+    },
+    {
+      "id": "launch-env",
+      "name": "launch-env",
+      "args": ["validate:launch-env"],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "workstation production config; not deployed config",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for validate:launch-env; external provider proof remains separate"
+      ],
+      "evidence": ["per-run launch-env.log"],
+      "category": "local_production_env",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "launch-env",
+        "name": "launch-env",
+        "command": "pnpm validate:launch-env",
+        "category": "local_production_env",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 1590,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\launch-env.log"],
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "cloudflare-adapter",
+      "name": "cloudflare-adapter",
+      "args": ["exec", "node", "scripts/preflight-cloudflare.js", "--validate-only"],
+      "scopes": ["release"],
+      "scope": "read-only local Cloudflare adapter/proxy compatibility and configuration",
+      "exclusions": "No build, environment rewrite, deployment or remote mutation; final Worker build still required",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "src/__tests__/cloudflare-preflight.test.ts",
+        "Implementation/configuration for exec node scripts/preflight-cloudflare.js --validate-only; external provider proof remains separate"
+      ],
+      "evidence": ["per-run cloudflare-adapter.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "cloudflare-adapter",
+        "name": "cloudflare-adapter",
+        "command": "pnpm exec node scripts/preflight-cloudflare.js --validate-only",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 518,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-51-22-967Z-ee336968\\cloudflare-adapter.log"],
+        "sourceReport": "tmp/safety-gate/safety-review-2026-10-03T09-51-22-967Z-ee336968.json",
+        "runId": "2026-10-03T09-51-22-967Z-ee336968",
+        "observedAt": "2026-10-03T09:51:48.145Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "kyc-auth-browser",
+      "name": "kyc-auth-browser",
+      "args": [],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "authenticated synthetic KYC submission, evidence access and manual reviewer decisions",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "e2e/kyc-verification.spec.ts",
+        "src/app/api/admin/kyc/**/route.test.ts",
+        "Implementation/configuration for authenticated synthetic KYC submission, evidence access and manual reviewer decisions; external provider proof remains separate"
+      ],
+      "evidence": ["per-run kyc-auth-browser.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Isolated KYC browser fixtures currently cover anonymous/callback boundaries only; authenticated submission and reviewer fixtures need expansion",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "kyc-auth-browser",
+        "name": "kyc-auth-browser",
+        "command": "external evidence",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": true,
+        "status": "UNAVAILABLE",
+        "exitCode": null,
+        "durationMs": 0,
+        "executed": false,
+        "warnings": [],
+        "findings": [],
+        "evidence": [],
+        "reason": "Isolated KYC browser fixtures currently cover anonymous/callback boundaries only; authenticated submission and reviewer fixtures need expansion",
+        "sourceReport": "tmp/kyc-audit/kyc-audit-2026-10-03T09-39-41-572Z-21f9705d.json",
+        "runId": "2026-10-03T09-39-41-572Z-21f9705d",
+        "observedAt": "2026-10-03T09:39:43.112Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "cloudflare-build",
+      "name": "cloudflare-build",
+      "args": ["build:cloudflare"],
+      "scopes": ["release"],
+      "scope": "isolated production Worker bundle and runtime-binding integration",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": [
+        "isolated Linux/macOS checkout",
+        "build-time public config",
+        "Worker runtime-binding fixtures"
+      ],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "scripts/preflight-cloudflare.js",
+        "scripts/sanitize-cloudflare-env.ts",
+        "Implementation/configuration for build:cloudflare; external provider proof remains separate"
+      ],
+      "evidence": ["per-run cloudflare-build.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Full Cloudflare Worker build/runtime-binding integration not executed in this audit; local config validation and sanitizer fixtures do not replace it",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "cloudflare-build",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Full Cloudflare Worker build/runtime-binding integration not executed in this audit; local config validation and sanitizer fixtures do not replace it",
+        "evidence": []
+      }
+    },
+    {
+      "id": "cloudflare-secrets",
+      "name": "cloudflare-secrets",
+      "args": ["cloudflare:secrets:check"],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "read-only deployed secret names",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["Cloudflare read access"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for cloudflare:secrets:check; external provider proof remains separate"
+      ],
+      "evidence": ["per-run cloudflare-secrets.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "cloudflare-secrets",
+        "name": "cloudflare-secrets",
+        "command": "pnpm cloudflare:secrets:check",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 8732,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\cloudflare-secrets.log"],
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "cloudflare-posture",
+      "name": "cloudflare-posture",
+      "args": ["cloudflare:posture:strict"],
+      "scopes": ["release", "payments", "kyc"],
+      "scope": "read-only TLS/HSTS/DNS/health",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for cloudflare:posture:strict; external provider proof remains separate"
+      ],
+      "evidence": ["per-run cloudflare-posture.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "cloudflare-posture",
+        "name": "cloudflare-posture",
+        "command": "pnpm cloudflare:posture:strict",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 9191,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\cloudflare-posture.log"],
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "schema",
+      "name": "schema",
+      "args": ["db:verify-schema"],
+      "scopes": ["release"],
+      "scope": "read-only deployed schema",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for db:verify-schema; external provider proof remains separate"
+      ],
+      "evidence": ["per-run schema.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "schema",
+        "name": "schema",
+        "command": "pnpm db:verify-schema",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 4667,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\schema.log"],
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "security-advisor",
+      "name": "security-advisor",
+      "args": ["supabase:advisor:security:strict"],
+      "scopes": ["release"],
+      "scope": "read-only security advisor",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for supabase:advisor:security:strict; external provider proof remains separate"
+      ],
+      "evidence": ["per-run security-advisor.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "security-advisor",
+        "name": "security-advisor",
+        "command": "pnpm supabase:advisor:security:strict",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "FAIL",
+        "exitCode": 1,
+        "durationMs": 4701,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\security-advisor.log"],
+        "reason": "pnpm supabase:advisor:security:strict: FAIL; inspect tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\security-advisor.log",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "performance-advisor",
+      "name": "performance-advisor",
+      "args": ["supabase:advisor:performance"],
+      "scopes": ["release"],
+      "scope": "read-only performance advisor",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for supabase:advisor:performance; external provider proof remains separate"
+      ],
+      "evidence": ["per-run performance-advisor.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "advisory": true,
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "performance-advisor",
+        "name": "performance-advisor",
+        "command": "pnpm supabase:advisor:performance",
+        "category": "live_deployment",
+        "optional": false,
+        "required": false,
+        "status": "WARN",
+        "exitCode": 0,
+        "durationMs": 6027,
+        "executed": true,
+        "warnings": ["WARN: Performance Advisor has 8 actionable and 33 accepted findings"],
+        "findings": [],
+        "evidence": [
+          "tmp\\safety-gate\\2026-10-03T08-52-26-991Z-d25d7ee7\\performance-advisor.log"
+        ],
+        "reason": "pnpm supabase:advisor:performance: WARN; inspect tmp\\safety-gate\\2026-10-03T08-52-26-991Z-d25d7ee7\\performance-advisor.log",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-52-26-991Z-d25d7ee7.json",
+        "runId": "2026-10-03T08-52-26-991Z-d25d7ee7",
+        "observedAt": "2026-10-03T08:52:45.474Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "deployment-ci",
+      "name": "deployment-ci",
+      "args": ["exec", "tsx", "scripts/check-deployment-ci.ts"],
+      "scopes": ["release"],
+      "scope": "read-only deployed commit/workflows",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for exec tsx scripts/check-deployment-ci.ts; external provider proof remains separate"
+      ],
+      "evidence": ["per-run deployment-ci.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "deployment-ci",
+        "name": "deployment-ci",
+        "command": "pnpm exec tsx scripts/check-deployment-ci.ts",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "UNAVAILABLE",
+        "exitCode": 2,
+        "durationMs": 1229,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T09-13-08-356Z-89a8bb0b\\deployment-ci.log"],
+        "reason": "pnpm exec tsx scripts/check-deployment-ci.ts: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T09-13-08-356Z-89a8bb0b\\deployment-ci.log",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T09-13-08-356Z-89a8bb0b.json",
+        "runId": "2026-10-03T09-13-08-356Z-89a8bb0b",
+        "observedAt": "2026-10-03T09:13:18.516Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "deployment-health",
+      "name": "deployment-health",
+      "args": ["exec", "tsx", "scripts/check-deployment-health.ts"],
+      "scopes": ["release"],
+      "scope": "read-only deployed health",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for exec tsx scripts/check-deployment-health.ts; external provider proof remains separate"
+      ],
+      "evidence": ["per-run deployment-health.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "deployment-health",
+        "name": "deployment-health",
+        "command": "pnpm exec tsx scripts/check-deployment-health.ts",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 3024,
+        "executed": true,
+        "warnings": [],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-41-37-508Z-91beea49\\deployment-health.log"],
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+        "runId": "2026-10-03T08-41-37-508Z-91beea49",
+        "observedAt": "2026-10-03T08:42:19.408Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "lighthouse",
+      "name": "lighthouse",
+      "args": ["quality:lighthouse"],
+      "scopes": ["release"],
+      "scope": "public accessibility/performance; advisory",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/run-lighthouse.test.mjs", "lighthouse.config.json"],
+      "evidence": ["per-run lighthouse.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "optional": true,
+      "advisory": true,
+      "unavailable": "Run against isolated build; no shared-checkout build permitted",
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "lighthouse",
+        "status": "WARN",
+        "executed": true,
+        "evidence": ["tmp/isolated-browser/lighthouse.log"],
+        "reason": "Isolated synthetic deployment; scores are advisory.",
+        "scores": [
+          {
+            "url": "http://127.0.0.1:3197/",
+            "scores": [
+              {
+                "category": "performance",
+                "score": 0.37,
+                "minimum": 0.7,
+                "status": "WARN"
+              },
+              {
+                "category": "accessibility",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "best-practices",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "seo",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              }
+            ],
+            "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-1.report.json",
+            "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-1.report.html"
+          },
+          {
+            "url": "http://127.0.0.1:3197/mzansi-market",
+            "scores": [
+              {
+                "category": "performance",
+                "score": 0.55,
+                "minimum": 0.7,
+                "status": "WARN"
+              },
+              {
+                "category": "accessibility",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "best-practices",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "seo",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              }
+            ],
+            "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-2.report.json",
+            "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-2.report.html"
+          },
+          {
+            "url": "http://127.0.0.1:3197/pricing",
+            "scores": [
+              {
+                "category": "performance",
+                "score": 0.61,
+                "minimum": 0.7,
+                "status": "WARN"
+              },
+              {
+                "category": "accessibility",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "best-practices",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "seo",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              }
+            ],
+            "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-3.report.json",
+            "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-3.report.html"
+          },
+          {
+            "url": "http://127.0.0.1:3197/verify-buyer",
+            "scores": [
+              {
+                "category": "performance",
+                "score": 0.59,
+                "minimum": 0.7,
+                "status": "WARN"
+              },
+              {
+                "category": "accessibility",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "best-practices",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              },
+              {
+                "category": "seo",
+                "score": 1,
+                "minimum": 0.9,
+                "status": "PASS"
+              }
+            ],
+            "json": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-4.report.json",
+            "html": "C:\\Users\\SENZO\\Documents\\verifymzansi\\tmp\\isolated-browser\\checkout-vkZFp0\\tmp\\lighthouse\\page-4.report.html"
+          }
+        ]
+      }
+    },
+    {
+      "id": "performance",
+      "name": "performance",
+      "args": ["test:perf"],
+      "scopes": ["release"],
+      "scope": "staging HTTP latency/error budget",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:perf; external provider proof remains separate"
+      ],
+      "evidence": ["per-run performance.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "external": true,
+      "optional": true,
+      "advisory": true,
+      "unavailable": "Requires dedicated staging load target; excluded from this read-only audit",
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "performance",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Requires dedicated staging load target; excluded from this read-only audit",
+        "evidence": []
+      }
+    },
+    {
+      "id": "k6",
+      "name": "k6",
+      "args": ["test:perf:k6"],
+      "scopes": ["release"],
+      "scope": "advisory staging load",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:perf:k6; external provider proof remains separate"
+      ],
+      "evidence": ["per-run k6.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "external": true,
+      "optional": true,
+      "advisory": true,
+      "unavailable": "Requires separately approved staging load target; excluded from read-only audit",
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "k6",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Requires separately approved staging load target; excluded from read-only audit",
+        "evidence": []
+      }
+    },
+    {
+      "id": "codeql",
+      "name": "codeql",
+      "args": [],
+      "scopes": ["review", "ci-review", "release", "payments", "kyc"],
+      "scope": "GitHub security-extended analysis",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for GitHub security-extended analysis; external provider proof remains separate"
+      ],
+      "evidence": ["per-run codeql.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "advisory": true,
+      "unavailable": "Local CodeQL unavailable; CI requires ENABLE_CODEQL and code-scanning access",
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "codeql",
+        "name": "codeql",
+        "command": "external evidence",
+        "category": "repo_runtime",
+        "optional": false,
+        "required": false,
+        "status": "UNAVAILABLE",
+        "exitCode": null,
+        "durationMs": 0,
+        "executed": false,
+        "warnings": [],
+        "findings": [],
+        "evidence": [],
+        "reason": "Local CodeQL unavailable; CI requires ENABLE_CODEQL and code-scanning access",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T00-52-59-375Z-c5cbb4c3.json",
+        "runId": "2026-10-03T00-52-59-375Z-c5cbb4c3",
+        "observedAt": "2026-10-03T01:11:27.711Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "ozow-delivery",
+      "name": "ozow-delivery",
+      "args": [],
+      "scopes": ["release", "payments"],
+      "scope": "genuine signed Ozow notification",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for genuine signed Ozow notification; external provider proof remains separate"
+      ],
+      "evidence": ["per-run ozow-delivery.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "unavailable": "Genuine delivery not verified by fixtures or secret-name checks",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "ozow-delivery",
+        "name": "ozow-delivery",
+        "command": "external evidence",
+        "category": "live_deployment",
+        "optional": false,
+        "required": true,
+        "status": "UNAVAILABLE",
+        "exitCode": null,
+        "durationMs": 0,
+        "executed": false,
+        "warnings": [],
+        "findings": [],
+        "evidence": [],
+        "reason": "Genuine delivery not verified by fixtures or secret-name checks",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T00-52-59-375Z-c5cbb4c3.json",
+        "runId": "2026-10-03T00-52-59-375Z-c5cbb4c3",
+        "observedAt": "2026-10-03T01:11:27.711Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "email-dns",
+      "name": "email-dns",
+      "args": ["email:domain:check"],
+      "scopes": ["release"],
+      "scope": "public MX/SPF/DKIM/DMARC DNS; not inbox delivery",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for email:domain:check; external provider proof remains separate"
+      ],
+      "evidence": ["per-run email-dns.log"],
+      "category": "live_deployment",
+      "timeoutMs": 600000,
+      "external": true,
+      "advisory": true,
+      "optional": true,
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "email-dns",
+        "name": "email-dns",
+        "command": "pnpm email:domain:check",
+        "category": "live_deployment",
+        "optional": true,
+        "required": false,
+        "status": "WARN",
+        "exitCode": 0,
+        "durationMs": 1912,
+        "executed": true,
+        "warnings": [
+          "WARN: MX records: MX records exist for verifymzansi.com, but they do not look like Cloudflare Email Routing records.",
+          "WARN: DMARC: v=DMARC1; p=none; adkim=s; aspf=s; rua=mailto:dmarc@verifymzansi.com; pct=100"
+        ],
+        "findings": [],
+        "evidence": ["tmp\\safety-gate\\2026-10-03T08-52-26-991Z-d25d7ee7\\email-dns.log"],
+        "reason": "pnpm email:domain:check: WARN; inspect tmp\\safety-gate\\2026-10-03T08-52-26-991Z-d25d7ee7\\email-dns.log",
+        "sourceReport": "tmp/safety-gate/safety-release-2026-10-03T08-52-26-991Z-d25d7ee7.json",
+        "runId": "2026-10-03T08-52-26-991Z-d25d7ee7",
+        "observedAt": "2026-10-03T08:52:45.474Z",
+        "sourceCommit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+        "platform": "win32"
+      }
+    },
+    {
+      "id": "http-smoke",
+      "name": "http-smoke",
+      "args": ["test:smoke"],
+      "scopes": ["inventory"],
+      "scope": "public routes and rejected unauthenticated POSTs",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["src/__tests__/test-smoke-script.test.ts"],
+      "evidence": ["per-run http-smoke.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "POST probes must use an isolated test target; deployment deep health is the read-only check",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "http-smoke",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "POST probes must use an isolated test target; deployment deep health is the read-only check",
+        "evidence": []
+      }
+    },
+    {
+      "id": "dev-startup",
+      "name": "dev-startup",
+      "args": ["test:dev-startup"],
+      "scopes": ["inventory"],
+      "scope": "local development startup and image-loader diagnostics",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:dev-startup; external provider proof remains separate"
+      ],
+      "evidence": ["per-run dev-startup.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Excluded to preserve the active development server; production build is isolated",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "dev-startup",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Excluded to preserve the active development server; production build is isolated",
+        "evidence": []
+      }
+    },
+    {
+      "id": "public-pages",
+      "name": "public-pages",
+      "args": ["test:public-verify"],
+      "scopes": ["inventory"],
+      "scope": "live public browser routes and Turnstile UI",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:public-verify; external provider proof remains separate"
+      ],
+      "evidence": ["per-run public-pages.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Live browser may issue telemetry/challenge POSTs; excluded from strict read-only verification",
+      "external": true,
+      "advisory": true,
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "public-pages",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Live browser may issue telemetry/challenge POSTs; excluded from strict read-only verification",
+        "evidence": []
+      }
+    },
+    {
+      "id": "live-pages",
+      "name": "live-pages",
+      "args": ["test:live-pages"],
+      "scopes": ["inventory"],
+      "scope": "public/user/admin browser scenarios and boundaries",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for test:live-pages; external provider proof remains separate"
+      ],
+      "evidence": ["per-run live-pages.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Live browser POSTs and authenticated sessions require a separate scoped run; requested skips now exit 2",
+      "external": true,
+      "advisory": true,
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "live-pages",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Live browser POSTs and authenticated sessions require a separate scoped run; requested skips now exit 2",
+        "evidence": []
+      }
+    },
+    {
+      "id": "live-load",
+      "name": "live-load",
+      "args": ["security:audit:live-load:strict"],
+      "scopes": ["inventory"],
+      "scope": "browser network payload/header/runtime observations",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": [
+        "scripts/audit-tooling.test.ts",
+        "Implementation/configuration for security:audit:live-load:strict; external provider proof remains separate"
+      ],
+      "evidence": ["per-run live-load.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Live browser POST side effects are outside this read-only run; load testing excluded",
+      "external": true,
+      "advisory": true,
+      "blockingPolicy": "advisory; warnings visible",
+      "observation": {
+        "id": "live-load",
+        "status": "UNAVAILABLE",
+        "executed": false,
+        "reason": "Live browser POST side effects are outside this read-only run; load testing excluded",
+        "evidence": []
+      }
+    },
+    {
+      "id": "video-worker",
+      "name": "video-worker",
+      "args": ["exec", "node", "scripts/test-video-worker.mjs"],
+      "scopes": ["inventory"],
+      "scope": "emitted FFmpeg worker and self-hosted WASM",
+      "exclusions": "Command configuration; external verification not implied",
+      "dependencies": ["pnpm frozen install"],
+      "tests": ["scripts/test-video-worker.mjs"],
+      "evidence": ["per-run video-worker.log"],
+      "category": "repo_runtime",
+      "timeoutMs": 600000,
+      "unavailable": "Requires isolated completed build and Chromium; report separately from unit mocks",
+      "blockingPolicy": "required; defect or incomplete blocks applicable scope",
+      "observation": {
+        "id": "video-worker",
+        "status": "PASS",
+        "executed": true,
+        "evidence": ["tmp/isolated-browser/video-worker.log"],
+        "reason": "Actual emitted worker loaded self-hosted WASM and converted a synthetic MOV to MP4 (1964 bytes)."
+      }
+    }
+  ],
+  "commands": [
+    {
+      "name": "preinstall",
+      "command": "npx only-allow pnpm",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "dev",
+      "command": "node scripts/vendor-wasm-assets.mjs && node ./node_modules/next/dist/bin/next dev",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "build",
+      "command": "node scripts/vendor-wasm-assets.mjs && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "capture:live-site",
+      "command": "tsx scripts/capture-live-site.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "assets:refresh:live",
+      "command": "tsx scripts/generate-live-assets.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "media:refresh:live",
+      "command": "pnpm capture:live-site && pnpm assets:refresh:live",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:studio",
+      "command": "remotion studio remotion/index.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render",
+      "command": "remotion render remotion/index.ts VerifyMzansiAdvert output/verifymzansi-advert.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:still",
+      "command": "remotion still remotion/index.ts VerifyMzansiAdvert output/verifymzansi-advert-poster.png --frame=390",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render:launch",
+      "command": "remotion render remotion/index.ts VerifyMzansiLaunchReveal output/verifymzansi-launch-reveal.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render:how",
+      "command": "remotion render remotion/index.ts VerifyMzansiHowItWorks output/verifymzansi-how-it-works.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render:promo",
+      "command": "remotion render remotion/index.ts VerifyMzansiPublicPromo output/verifymzansi-public-promo.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render:posting-guide",
+      "command": "remotion render remotion/index.ts VerifyMzansiPostingGuide output/verifymzansi-posting-guide.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render:buyer",
+      "command": "remotion render remotion/buyer-index.tsx BuyerPromo output/verifymzansi-buyer-promo.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:render:buyer-film",
+      "command": "remotion render remotion/buyer-index.tsx BuyerFilm output/verifymzansi-buyer-film.mp4",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:still:buyer-film",
+      "command": "remotion still remotion/buyer-index.tsx BuyerFilm output/verifymzansi-buyer-film-poster.png --frame=880",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:still:buyer",
+      "command": "remotion still remotion/buyer-index.tsx BuyerPromo output/verifymzansi-buyer-promo-poster.png --frame=820",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:still:launch",
+      "command": "remotion still remotion/index.ts VerifyMzansiLaunchReveal output/verifymzansi-launch-reveal-poster.png --frame=390",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:still:how",
+      "command": "remotion still remotion/index.ts VerifyMzansiHowItWorks output/verifymzansi-how-it-works-poster.png --frame=390",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "video:still:promo",
+      "command": "remotion still remotion/index.ts VerifyMzansiPublicPromo output/verifymzansi-public-promo-poster.png --frame=390",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "brand:assets",
+      "command": "node scripts/generate-brand-assets.js && node scripts/generate-final-icons.js",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "build:cloudflare",
+      "command": "node scripts/preflight-cloudflare.js && pnpm exec opennextjs-cloudflare build && pnpm sanitize:cloudflare-env && pnpm secret-scan:strict && node scripts/patch-opennext-og-paths.js",
+      "classification": "check or audit alias",
+      "registryIds": ["cloudflare-build"],
+      "limitation": ""
+    },
+    {
+      "name": "sanitize:cloudflare-env",
+      "command": "tsx scripts/sanitize-cloudflare-env.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "preview:cloudflare",
+      "command": "pnpm build:cloudflare && pnpm exec wrangler dev",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "deploy",
+      "command": "pnpm validate:launch-env && pnpm build:cloudflare && pnpm exec opennextjs-cloudflare deploy --env production",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "start",
+      "command": "node ./node_modules/next/dist/bin/next start",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "lint",
+      "command": "tsx scripts/check-quality.ts lint",
+      "classification": "check or audit alias",
+      "registryIds": ["lint"],
+      "limitation": ""
+    },
+    {
+      "name": "typecheck",
+      "command": "pnpm exec tsc --noEmit -p tsconfig.typecheck.json",
+      "classification": "check or audit alias",
+      "registryIds": ["types"],
+      "limitation": ""
+    },
+    {
+      "name": "format",
+      "command": "pnpm exec prettier --write \"src/**/*.{ts,tsx,json,css}\" \"*.{js,json,md}\"",
+      "classification": "check or audit alias",
+      "registryIds": [],
+      "limitation": "Mutating formatter; format:check is the audit check."
+    },
+    {
+      "name": "format:check",
+      "command": "tsx scripts/check-quality.ts format",
+      "classification": "check or audit alias",
+      "registryIds": ["format"],
+      "limitation": ""
+    },
+    {
+      "name": "storybook",
+      "command": "pnpm exec storybook dev -p 6006",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "storybook:build",
+      "command": "pnpm exec storybook build -o storybook-static",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "knip",
+      "command": "pnpm exec knip --config knip.jsonc --tsConfig tsconfig.typecheck.json --reporter compact",
+      "classification": "check or audit alias",
+      "registryIds": ["dead-code"],
+      "limitation": ""
+    },
+    {
+      "name": "jscpd",
+      "command": "pnpm exec jscpd --config .jscpd.json src scripts workers",
+      "classification": "check or audit alias",
+      "registryIds": ["duplication"],
+      "limitation": "Raw report generator; only jscpd:check enforces the reviewed budget."
+    },
+    {
+      "name": "jscpd:check",
+      "command": "tsx scripts/check-jscpd-budget.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["duplication"],
+      "limitation": ""
+    },
+    {
+      "name": "depcruise",
+      "command": "pnpm exec depcruise --config .dependency-cruiser.cjs src scripts workers",
+      "classification": "check or audit alias",
+      "registryIds": ["imports"],
+      "limitation": ""
+    },
+    {
+      "name": "security:audit",
+      "command": "tsx scripts/security-audit.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["dependencies"],
+      "limitation": ""
+    },
+    {
+      "name": "security:audit:all",
+      "command": "tsx scripts/security-audit.ts --all",
+      "classification": "check or audit alias",
+      "registryIds": ["dependencies"],
+      "limitation": ""
+    },
+    {
+      "name": "payments:audit",
+      "command": "tsx scripts/payment-security-audit.ts",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "payment-unit",
+        "db-payments",
+        "preflight",
+        "preflight-production",
+        "isolated-db",
+        "browser",
+        "launch-env",
+        "kyc-auth-browser",
+        "cloudflare-secrets",
+        "cloudflare-posture",
+        "codeql",
+        "ozow-delivery"
+      ],
+      "limitation": ""
+    },
+    {
+      "name": "licenses:check",
+      "command": "tsx scripts/check-licenses.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["licenses"],
+      "limitation": ""
+    },
+    {
+      "name": "secret-scan",
+      "command": "tsx scripts/secret-scan.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["secrets"],
+      "limitation": ""
+    },
+    {
+      "name": "emails:auth-templates",
+      "command": "tsx scripts/generate-auth-email-templates.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "secret-scan:strict",
+      "command": "tsx scripts/secret-scan.ts --strict",
+      "classification": "check or audit alias",
+      "registryIds": ["secrets"],
+      "limitation": ""
+    },
+    {
+      "name": "test",
+      "command": "pnpm test:blocking",
+      "classification": "check or audit alias",
+      "registryIds": ["unit"],
+      "limitation": ""
+    },
+    {
+      "name": "test:blocking",
+      "command": "tsx scripts/run-vitest.ts blocking && pnpm test:trials && pnpm test:commercial:db && pnpm test:payments:db && pnpm test:media:db && pnpm test:visits:db && pnpm test:staff-roles:db && pnpm test:decisions:db && pnpm test:queue-claims:db && pnpm test:operation-jobs:db && pnpm test:dsar:db && pnpm test:dashboard:db && pnpm test:admin-lists:db && pnpm test:kyc:db",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "unit",
+        "db-trials",
+        "db-commercial",
+        "db-payments",
+        "db-media",
+        "db-visits",
+        "db-staff-roles",
+        "db-decisions",
+        "db-queue-claims",
+        "db-operation-jobs",
+        "db-dsar",
+        "db-dashboard",
+        "db-admin-lists",
+        "db-kyc"
+      ],
+      "limitation": ""
+    },
+    {
+      "name": "stability:check",
+      "command": "pnpm lint --max-warnings=0 && pnpm typecheck && pnpm test:smoke && pnpm test:blocking && pnpm build && pnpm audit --prod",
+      "classification": "check or audit alias",
+      "registryIds": ["lint", "types", "http-smoke", "unit", "browser", "dependencies"],
+      "limitation": "Legacy stricter zero-warning lint blocks on baseline debt; shared-checkout build and HTTP POST probes were not invoked."
+    },
+    {
+      "name": "test:all",
+      "command": "pnpm test:blocking && pnpm test:coverage:core && pnpm exec playwright test",
+      "classification": "check or audit alias",
+      "registryIds": ["unit", "coverage", "browser"],
+      "limitation": "Full Firefox matrix not executed; WebKit/mobile Safari quarantined. Critical Chromium subset only."
+    },
+    {
+      "name": "test:deep",
+      "command": "pnpm test:coverage:core && pnpm exec playwright test",
+      "classification": "check or audit alias",
+      "registryIds": ["coverage", "browser"],
+      "limitation": "Full Firefox matrix not executed; WebKit/mobile Safari quarantined. Critical Chromium subset only."
+    },
+    {
+      "name": "test:coverage",
+      "command": "pnpm test:coverage:core",
+      "classification": "check or audit alias",
+      "registryIds": ["coverage"],
+      "limitation": ""
+    },
+    {
+      "name": "test:coverage:core",
+      "command": "tsx scripts/run-vitest.ts coverage-core",
+      "classification": "check or audit alias",
+      "registryIds": ["coverage"],
+      "limitation": ""
+    },
+    {
+      "name": "test:dev-startup",
+      "command": "tsx scripts/dev-startup-smoke.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["dev-startup"],
+      "limitation": ""
+    },
+    {
+      "name": "test:launch:flows",
+      "command": "pnpm exec vitest run src/app/api/billing/create-checkout/route.test.ts src/app/api/billing/change-plan/route.test.ts src/app/api/billing/cancel/route.test.ts src/app/api/billing/payment-status/route.test.ts src/lib/payments/checkout.test.ts src/lib/payments/fulfillment.test.ts src/lib/payments/ozow.test.ts src/__tests__/payment-cleanup-worker.test.ts src/app/api/otp/otp.test.ts src/app/verification/page.test.tsx src/__tests__/otp-send-safe-errors.test.ts src/__tests__/otp-exposure.test.ts src/__tests__/dsar-submit-route.test.ts src/__tests__/dsar-validation.test.ts src/app/api/admin/dsar/export/route.test.ts src/app/api/admin/dsar/decide/route.test.ts src/app/api/admin/dsar/complete/route.test.ts src/app/dsar/page.test.tsx && pnpm exec playwright test e2e/billing-payment-roundtrip.spec.ts e2e/dsar.spec.ts --project=chromium",
+      "classification": "check or audit alias",
+      "registryIds": ["payment-unit", "browser"],
+      "limitation": ""
+    },
+    {
+      "name": "test:smoke",
+      "command": "tsx scripts/test-smoke.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["http-smoke"],
+      "limitation": ""
+    },
+    {
+      "name": "test:contract",
+      "command": "tsx scripts/test-contract.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["contracts"],
+      "limitation": ""
+    },
+    {
+      "name": "test:db",
+      "command": "tsx scripts/test-db.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["isolated-db"],
+      "limitation": ""
+    },
+    {
+      "name": "test:perf",
+      "command": "tsx scripts/test-perf.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["performance"],
+      "limitation": ""
+    },
+    {
+      "name": "test:perf:k6",
+      "command": "tsx scripts/run-k6.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["k6"],
+      "limitation": ""
+    },
+    {
+      "name": "test:mutation",
+      "command": "tsx scripts/test-mutation.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["canaries"],
+      "limitation": ""
+    },
+    {
+      "name": "safety:review",
+      "command": "tsx scripts/run-safety-gate.ts review",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "unit",
+        "db-trials",
+        "db-commercial",
+        "db-payments",
+        "db-media",
+        "db-visits",
+        "db-staff-roles",
+        "db-decisions",
+        "db-queue-claims",
+        "db-operation-jobs",
+        "db-dsar",
+        "db-dashboard",
+        "db-admin-lists",
+        "db-kyc",
+        "coverage",
+        "preflight",
+        "codeql"
+      ],
+      "limitation": ""
+    },
+    {
+      "name": "safety:ci-review",
+      "command": "tsx scripts/run-safety-gate.ts ci-review",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "unit",
+        "db-trials",
+        "db-commercial",
+        "db-payments",
+        "db-media",
+        "db-visits",
+        "db-staff-roles",
+        "db-decisions",
+        "db-queue-claims",
+        "db-operation-jobs",
+        "db-dsar",
+        "db-dashboard",
+        "db-admin-lists",
+        "db-kyc",
+        "coverage",
+        "preflight",
+        "codeql"
+      ],
+      "limitation": ""
+    },
+    {
+      "name": "safety:release",
+      "command": "tsx scripts/run-safety-gate.ts release",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "unit",
+        "payment-unit",
+        "kyc-unit",
+        "db-trials",
+        "db-commercial",
+        "db-payments",
+        "db-media",
+        "db-visits",
+        "db-staff-roles",
+        "db-decisions",
+        "db-queue-claims",
+        "db-operation-jobs",
+        "db-dsar",
+        "db-dashboard",
+        "db-admin-lists",
+        "db-kyc",
+        "coverage",
+        "preflight",
+        "preflight-production",
+        "isolated-db",
+        "browser",
+        "launch-env",
+        "cloudflare-adapter",
+        "kyc-auth-browser",
+        "cloudflare-build",
+        "cloudflare-secrets",
+        "cloudflare-posture",
+        "schema",
+        "security-advisor",
+        "performance-advisor",
+        "deployment-ci",
+        "deployment-health",
+        "lighthouse",
+        "performance",
+        "k6",
+        "codeql",
+        "ozow-delivery",
+        "email-dns"
+      ],
+      "limitation": ""
+    },
+    {
+      "name": "check:bundle-budget",
+      "command": "tsx scripts/check-bundle-budget.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["browser"],
+      "limitation": ""
+    },
+    {
+      "name": "test:e2e",
+      "command": "pnpm exec playwright test",
+      "classification": "check or audit alias",
+      "registryIds": ["browser"],
+      "limitation": "Full Firefox matrix not executed; WebKit/mobile Safari quarantined. Critical Chromium subset only."
+    },
+    {
+      "name": "test:public-verify",
+      "command": "tsx scripts/verify-public-pages.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["public-pages"],
+      "limitation": ""
+    },
+    {
+      "name": "test:live-pages",
+      "command": "tsx scripts/verify-live-pages.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["live-pages"],
+      "limitation": ""
+    },
+    {
+      "name": "security:audit:live-load",
+      "command": "tsx scripts/audit-live-load.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["live-load"],
+      "limitation": ""
+    },
+    {
+      "name": "security:audit:live-load:strict",
+      "command": "tsx scripts/audit-live-load.ts --strict",
+      "classification": "check or audit alias",
+      "registryIds": ["live-load"],
+      "limitation": ""
+    },
+    {
+      "name": "bootstrap:operator",
+      "command": "tsx scripts/bootstrap-operator.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "reset:launch-data",
+      "command": "tsx scripts/reset-launch-data.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:cli",
+      "command": "tsx scripts/run-supabase-cli.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:migration:list",
+      "command": "tsx scripts/run-supabase-cli.ts migration list",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:db:push",
+      "command": "tsx scripts/run-supabase-cli.ts db push",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:db:backup",
+      "command": "tsx scripts/backup-supabase.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:db:push:safe",
+      "command": "pnpm supabase:db:backup && pnpm supabase:db:push",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:advisor:security",
+      "command": "tsx scripts/check-supabase-security-advisor.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:advisor:security:strict",
+      "command": "tsx scripts/check-supabase-security-advisor.ts --strict",
+      "classification": "check or audit alias",
+      "registryIds": ["security-advisor"],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:advisor:performance",
+      "command": "tsx scripts/check-supabase-performance-advisor.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["performance-advisor"],
+      "limitation": ""
+    },
+    {
+      "name": "supabase:advisor:performance:strict",
+      "command": "tsx scripts/check-supabase-performance-advisor.ts --strict",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "db:verify-schema",
+      "command": "tsx scripts/check-supabase-schema.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["schema"],
+      "limitation": ""
+    },
+    {
+      "name": "db:check-invariants",
+      "command": "tsx scripts/check-db-invariants.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["db-static"],
+      "limitation": ""
+    },
+    {
+      "name": "preflight",
+      "command": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["preflight"],
+      "limitation": ""
+    },
+    {
+      "name": "preflight:prod",
+      "command": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts --mode=production",
+      "classification": "check or audit alias",
+      "registryIds": ["preflight-production"],
+      "limitation": ""
+    },
+    {
+      "name": "preflight:prod:edge",
+      "command": "pnpm preflight:prod && pnpm cloudflare:secrets:check && pnpm cloudflare:posture:strict",
+      "classification": "check or audit alias",
+      "registryIds": ["preflight-production", "cloudflare-secrets", "cloudflare-posture"],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:secrets:check",
+      "command": "node scripts/cloudflare-worker-secrets-check.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["cloudflare-secrets"],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:secrets:check:staging",
+      "command": "node scripts/cloudflare-worker-secrets-check.mjs --env=staging",
+      "classification": "check or audit alias",
+      "registryIds": ["cloudflare-secrets"],
+      "limitation": "Production observation does not verify staging; staging credentials/target not examined."
+    },
+    {
+      "name": "cloudflare:posture",
+      "command": "node scripts/cloudflare-posture-check.mjs",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:posture:strict",
+      "command": "node scripts/cloudflare-posture-check.mjs --strict",
+      "classification": "check or audit alias",
+      "registryIds": ["cloudflare-posture"],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:posture:strict:zone",
+      "command": "node scripts/cloudflare-posture-check.mjs --strict \"--strict-checks=Health endpoint,HSTS,DNSSEC DS record,www hostname behavior\"",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:posture:json",
+      "command": "node scripts/cloudflare-posture-check.mjs --json",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:email-routing:catch-all",
+      "command": "node scripts/cloudflare-email-routing-catch-all.mjs",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "email:domain:check",
+      "command": "node scripts/email-domain-readiness-check.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["email-dns"],
+      "limitation": ""
+    },
+    {
+      "name": "cloudflare:zone:remediate",
+      "command": "node scripts/cloudflare-zone-remediate.mjs",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "validate:launch-env",
+      "command": "tsx scripts/validate-launch-env.ts --mode=production",
+      "classification": "check or audit alias",
+      "registryIds": ["launch-env"],
+      "limitation": ""
+    },
+    {
+      "name": "ozow:webhook:secret",
+      "command": "node scripts/fetch-ozow-webhook-secret.mjs",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "prepare",
+      "command": "husky",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "generate:api-types",
+      "command": "pnpm exec openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts && pnpm exec prettier --write src/lib/api/v1.d.ts",
+      "classification": "build/development/operator command; outside audit execution",
+      "registryIds": [],
+      "limitation": ""
+    },
+    {
+      "name": "quality:openapi-drift",
+      "command": "tsx scripts/check-openapi-drift.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["openapi"],
+      "limitation": ""
+    },
+    {
+      "name": "quality:lighthouse",
+      "command": "node scripts/run-lighthouse.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["lighthouse"],
+      "limitation": ""
+    },
+    {
+      "name": "test:tooling",
+      "command": "node --import tsx --test scripts/audit-tooling.test.ts scripts/run-lighthouse.test.mjs scripts/checker-fixtures.test.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["tooling"],
+      "limitation": ""
+    },
+    {
+      "name": "test:visits:db",
+      "command": "node scripts/test-site-visits.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-visits"],
+      "limitation": ""
+    },
+    {
+      "name": "test:trials",
+      "command": "node scripts/test-intro-trials.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-trials"],
+      "limitation": ""
+    },
+    {
+      "name": "test:commercial:db",
+      "command": "node scripts/test-commercial-model.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-commercial"],
+      "limitation": ""
+    },
+    {
+      "name": "test:payments:db",
+      "command": "node scripts/test-payment-fulfillment.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-payments"],
+      "limitation": ""
+    },
+    {
+      "name": "test:media:db",
+      "command": "node scripts/test-media-upload-authorization.mjs && node scripts/test-media-storage-quota.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-media"],
+      "limitation": ""
+    },
+    {
+      "name": "test:staff-roles:db",
+      "command": "node scripts/test-staff-roles.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-staff-roles"],
+      "limitation": ""
+    },
+    {
+      "name": "test:decisions:db",
+      "command": "node scripts/test-decision-execution.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-decisions"],
+      "limitation": ""
+    },
+    {
+      "name": "test:queue-claims:db",
+      "command": "node scripts/test-queue-claims.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-queue-claims"],
+      "limitation": ""
+    },
+    {
+      "name": "test:operation-jobs:db",
+      "command": "node scripts/test-operation-job-leases.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-operation-jobs"],
+      "limitation": ""
+    },
+    {
+      "name": "test:dsar:db",
+      "command": "node scripts/test-dsar-operations.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-dsar"],
+      "limitation": ""
+    },
+    {
+      "name": "test:dashboard:db",
+      "command": "node scripts/test-staff-dashboard.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-dashboard"],
+      "limitation": ""
+    },
+    {
+      "name": "test:admin-lists:db",
+      "command": "node scripts/test-admin-list-helpers.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-admin-lists"],
+      "limitation": ""
+    },
+    {
+      "name": "test:kyc:db",
+      "command": "node scripts/test-kyc-webhook.mjs",
+      "classification": "check or audit alias",
+      "registryIds": ["db-kyc"],
+      "limitation": ""
+    },
+    {
+      "name": "test:security-canaries",
+      "command": "tsx scripts/test-mutation.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["canaries"],
+      "limitation": ""
+    },
+    {
+      "name": "kyc:audit",
+      "command": "tsx scripts/kyc-audit.ts",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "kyc-unit",
+        "db-kyc",
+        "preflight",
+        "preflight-production",
+        "isolated-db",
+        "browser",
+        "launch-env",
+        "kyc-auth-browser",
+        "cloudflare-secrets",
+        "cloudflare-posture",
+        "codeql"
+      ],
+      "limitation": ""
+    },
+    {
+      "name": "audit:inventory",
+      "command": "tsx scripts/run-safety-gate.ts inventory --dry-run",
+      "classification": "check or audit alias",
+      "registryIds": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "unit",
+        "payment-unit",
+        "kyc-unit",
+        "db-trials",
+        "db-commercial",
+        "db-payments",
+        "db-media",
+        "db-visits",
+        "db-staff-roles",
+        "db-decisions",
+        "db-queue-claims",
+        "db-operation-jobs",
+        "db-dsar",
+        "db-dashboard",
+        "db-admin-lists",
+        "db-kyc",
+        "coverage",
+        "preflight",
+        "preflight-production",
+        "isolated-db",
+        "browser",
+        "launch-env",
+        "cloudflare-adapter",
+        "kyc-auth-browser",
+        "cloudflare-build",
+        "cloudflare-secrets",
+        "cloudflare-posture",
+        "schema",
+        "security-advisor",
+        "performance-advisor",
+        "deployment-ci",
+        "deployment-health",
+        "lighthouse",
+        "performance",
+        "k6",
+        "codeql",
+        "ozow-delivery",
+        "email-dns",
+        "http-smoke",
+        "dev-startup",
+        "public-pages",
+        "live-pages",
+        "live-load",
+        "video-worker"
+      ],
+      "limitation": "Plan only; no controls verified."
+    },
+    {
+      "name": "test:payments",
+      "command": "tsx scripts/run-domain-tests.ts payments",
+      "classification": "check or audit alias",
+      "registryIds": ["payment-unit"],
+      "limitation": ""
+    },
+    {
+      "name": "test:kyc",
+      "command": "tsx scripts/run-domain-tests.ts kyc",
+      "classification": "check or audit alias",
+      "registryIds": ["kyc-unit"],
+      "limitation": ""
+    },
+    {
+      "name": "test:db:isolated",
+      "command": "tsx scripts/test-isolated-db.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["isolated-db"],
+      "limitation": ""
+    },
+    {
+      "name": "test:browser:isolated",
+      "command": "tsx scripts/test-isolated-browser.ts",
+      "classification": "check or audit alias",
+      "registryIds": ["browser"],
+      "limitation": ""
+    }
+  ],
+  "skills": [
+    {
+      "name": "code-review-security-auditor",
+      "owner": "project",
+      "path": "C:\\Users\\SENZO\\Documents\\verifymzansi\\.agents\\skills\\code-review-security-auditor\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "BxeLliT645qce17MDlrYmZx3nza8Vd402kr-CDNl8FQ",
+      "edited": true,
+      "inspection": "Project routing/commands/references regression-tested",
+      "hostLimitation": ""
+    },
+    {
+      "name": "kyc-auditor",
+      "owner": "project",
+      "path": "C:\\Users\\SENZO\\Documents\\verifymzansi\\.agents\\skills\\kyc-auditor\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "OynC3t5Vfbn8up2JZ1W7EuaFs5rOpSTiF36Ljtll5-o",
+      "edited": true,
+      "inspection": "Project routing/commands/references regression-tested",
+      "hostLimitation": ""
+    },
+    {
+      "name": "next-browser",
+      "owner": "project",
+      "path": "C:\\Users\\SENZO\\Documents\\verifymzansi\\.agents\\skills\\next-browser\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "JfcFugLLbTgAS3VDgRP2WjSCFXD0CH5wrTaj3gHuOvw",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "payment-auditor",
+      "owner": "project",
+      "path": "C:\\Users\\SENZO\\Documents\\verifymzansi\\.agents\\skills\\payment-auditor\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "xf_q6iQS7BTBNht0hGfAQlsWds1BSZPfxEd9G1TbYIo",
+      "edited": true,
+      "inspection": "Project routing/commands/references regression-tested",
+      "hostLimitation": ""
+    },
+    {
+      "name": "release-readiness-synthesizer",
+      "owner": "project",
+      "path": "C:\\Users\\SENZO\\Documents\\verifymzansi\\.agents\\skills\\release-readiness-synthesizer\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "QwUErPwGo8rAseII9kLcXCAgX10LM9E3VpTDuZbIXUQ",
+      "edited": true,
+      "inspection": "Project routing/commands/references regression-tested",
+      "hostLimitation": ""
+    },
+    {
+      "name": "automate",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\automate\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "XtjTTta4tB_fBOZlYeNPa3axMwig88W12ER-2xwgFao",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Assumes an Automations editor handoff and picker tools; current host exposes a different automation API. Inspected only."
+    },
+    {
+      "name": "autopilot",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\autopilot\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "Lw_XrrvKz6ga-46tgQe0TkIC5F4jrSDjd4yRI8rblYk",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "canvas",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\canvas\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "TwxnEDpuMZojXfQZIzmyWvePp3VUf-5QmYz7caQct-8",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Managed .cursor canvas directory and native renderer are unavailable on this Codex desktop host"
+    },
+    {
+      "name": "create-hook",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\create-hook\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "PJahIRI8BuyAHHNU7uW1tSR8ZSHXvX3RuQGMzMdKHpw",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "create-rule",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\create-rule\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "_x3hbt-1X3GQEBrCqCBqi_8f74A8KKC4oZQ-n_oXXks",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "create-skill",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\create-skill\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "pJ723O2RofkpxUvCOlDRQTT-r4Nhu8VABHSG8Ieb-i8",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "create-subagent",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\create-subagent\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "iHTnisqmrnTkJSumPLY3Tra_pHoyT_BULQ4o-cAftWo",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "deploy-with-vercel",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\deploy-with-vercel\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "QLHjAUFZdsosmC3zrIwNQEEMC0SMCUFrZZyUnEID7MM",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "goal",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\goal\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "46I4iuEeD_fLdNmOWn8yX8aDnyT9SGqnu_JRQu1Q8TU",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "loop",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\loop\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "-hldAcqV3vb45soZAtNUcNFTtJRyuk5g6lIkSF8ZKgU",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "migrate-to-skills",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\migrate-to-skills\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "uk6TmqcqLpVeG0gXQ_8dsXH6DbE_QzhfHqkKnnEXooM",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "new-repo",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\new-repo\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "8Arj0OIxw1u3DO065drnN4qltD5si18mN6A3Y45n794",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "onboard",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\onboard\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "5d-EHLMvWTOTrPqWvDxHFM1mZ6cQTh79oIaS9BtfDFU",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "origin",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\origin\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "zVFf4NcDf7KQe_8F88AQ9WQ7r0OyUFkriC34T4k3_c8",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "rename-chat",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\rename-chat\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "YYttQsrOybd-utxcoPVk9C4eWSSZsBz8IllaYI886zE",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "review",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\review\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "vQBgGCP3PM5qIKzDmW59LqPCo2YUPaEur9DZS5jYjs4",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "review-bugbot",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\review-bugbot\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "JLsLNoRFg8Wh_-LcEfhhyF1oooHMYc7aNZZrv2DAjno",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "review-security",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\review-security\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "0AfsWmF-nK7vAwVc2cXa12LYCstK4bIDd73ks7QcRv0",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "sdk",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\sdk\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "uvljwRbUsKQjF0hWPvD8bswlifmzZ1nYBsOFAEvoVKQ",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "share",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\share\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "fetMIH2k_Ysy3T9Bx6ambJYfblauDbhZIe13kZ6L8bo",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "shell",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\shell\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "s1TOKMcK8dXAW7a_BwoYI_rdRwUwmTqycaHPy-V61P4",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "split-to-prs",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\split-to-prs\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "YeO5S1RFfg-KhQzM9kk2oPWmhvatIgFtF9MJWNLysyg",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    },
+    {
+      "name": "statusline",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\statusline\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "nOB878Fvr3N61Y-48JrG00_0Vzgtr5D_agbUAvRojXM",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "update-cli-config",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\update-cli-config\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "erI8sf6t09Cu31vwbUefF2BqdhDeVY2Jot4eznUSOHQ",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": "Cursor-oriented paths/tool conventions; verify host compatibility before invoking. Inspected, not edited or executed."
+    },
+    {
+      "name": "update-cursor-settings",
+      "owner": "shared personal",
+      "path": "C:\\Users\\SENZO\\.agents\\skills\\update-cursor-settings\\SKILL.md",
+      "frontmatterPresent": true,
+      "contentDigest": "zacYAznR8D-TMZFbINg1pdQU6sf5fzD6pTDT5IXJ--U",
+      "edited": false,
+      "inspection": "Read-only metadata, instructions and environment assumptions inspected; not executed",
+      "hostLimitation": ""
+    }
+  ],
+  "browser": {
+    "stats": {
+      "startTime": "2026-10-03T09:02:01.339Z",
+      "duration": 82509.934,
+      "expected": 50,
+      "skipped": 2,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "scenarios": [
+      {
+        "key": "addon-checkout.spec.ts:30:@smoke POST featured listing route exists (not 404)",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "addon-checkout.spec.ts:30:@smoke POST urgent listing route exists (not 404)",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "addon-checkout.spec.ts:30:@smoke POST boost listing route exists (not 404)",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "addon-checkout.spec.ts:30:@smoke POST featured listing route exists (not 404)",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "addon-checkout.spec.ts:30:@smoke POST urgent listing route exists (not 404)",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "addon-checkout.spec.ts:30:@smoke POST boost listing route exists (not 404)",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "billing-payment-roundtrip.spec.ts:36:offers sign-in recovery when the session expires while confirming a payment",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "billing-payment-roundtrip.spec.ts:65:completes a mock Ozow checkout and reaches confirmed success state",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "billing-payment-roundtrip.spec.ts:36:offers sign-in recovery when the session expires while confirming a payment",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "billing-payment-roundtrip.spec.ts:65:completes a mock Ozow checkout and reaches confirmed success state",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "dsar.spec.ts:4:@smoke DSAR page requires sign-in",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "dsar.spec.ts:11:@smoke DSAR form is unavailable while signed out",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "dsar.spec.ts:4:@smoke DSAR page requires sign-in",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "dsar.spec.ts:11:@smoke DSAR form is unavailable while signed out",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:43:verification page redirects to login",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:49:verification API returns 401 without auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:58:admin evidence desk requires auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:43:verification page redirects to login",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:49:verification API returns 401 without auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:58:admin evidence desk requires auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:66:session start returns 401 without auth cookie",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:73:upload endpoint returns 401 without auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:78:location detection endpoint returns 401 without auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:85:manual location endpoint returns 401 without auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:66:session start returns 401 without auth cookie",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:73:upload endpoint returns 401 without auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:78:location detection endpoint returns 401 without auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:85:manual location endpoint returns 401 without auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:96:decide endpoint returns 401 without auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:105:evidence endpoint returns 401 without auth",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:96:decide endpoint returns 401 without auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:105:evidence endpoint returns 401 without auth",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:114:webhook rejects empty payload",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:123:webhook accepts unknown provider_ref gracefully",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:114:webhook rejects empty payload",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "kyc-verification.spec.ts:123:webhook accepts unknown provider_ref gracefully",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:68:@smoke public and auth pages render without hydration errors",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:116:@smoke protected pages redirect unauthenticated users",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:123:@smoke API health responds 200",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:131:@smoke Google OAuth recovers when the page starts without a CSRF token",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:217:@smoke webhook endpoints handle malformed payloads without 5xx",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:232:@smoke mzansi business filters can be cleared from the keyboard",
+        "project": "chromium",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:265:@smoke mobile footer and marketplace tabs stay clear of the bottom tab bar",
+        "project": "chromium",
+        "status": "skipped"
+      },
+      {
+        "key": "smoke.spec.ts:314:@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome",
+        "project": "chromium",
+        "status": "skipped"
+      },
+      {
+        "key": "smoke.spec.ts:68:@smoke public and auth pages render without hydration errors",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:116:@smoke protected pages redirect unauthenticated users",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:123:@smoke API health responds 200",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:131:@smoke Google OAuth recovers when the page starts without a CSRF token",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:217:@smoke webhook endpoints handle malformed payloads without 5xx",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:232:@smoke mzansi business filters can be cleared from the keyboard",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:265:@smoke mobile footer and marketplace tabs stay clear of the bottom tab bar",
+        "project": "mobile-chrome",
+        "status": "expected"
+      },
+      {
+        "key": "smoke.spec.ts:314:@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome",
+        "project": "mobile-chrome",
+        "status": "expected"
+      }
+    ],
+    "uncoveredSkips": [],
+    "authenticatedKycCoverage": "INCOMPLETE",
+    "quarantine": ["webkit", "mobile-safari"],
+    "fullFirefoxMatrix": "UNAVAILABLE"
+  },
+  "testEvidence": {
+    "unit": {
+      "source": "tmp/linux-current-unit.log",
+      "contentDigest": "9FDDx47pmK3R5S5qj2BwKjUV5Jb7XJ20m4sefs97sts",
+      "summary": [
+        "{\"timestamp\":\"2026-10-03T09:21:46.294Z\",\"level\":\"warn\",\"context\":\"Turnstile\",\"message\":\"Turnstile token verification failed\",\"meta\":{\"category\":\"invalid_token\",\"errorCodes\":[\"timeout-or-duplicate\"]}}",
+        "[2026-10-03T09:21:49.299Z] [ERROR] [OpsJobsWebhook] Operation job run failed {\"error\":\"db exploded\"}",
+        "[2026-10-03T09:21:55.717Z] [ERROR] [QueueClaims] Claim check failed {\"error\":\"down\",\"itemType\":\"report\"}",
+        "stderr | src/lib/services/queue-claims.test.ts > queue claims > never fails a decision because the release failed",
+        "[2026-10-03T09:21:55.722Z] [WARN] [QueueClaims] Could not release claim after decision {\"error\":\"release_queue_claims failed: down\"}",
+        "[2026-10-03T09:22:10.545Z] [ERROR] [CQRS] Command \"test.throws\" failed {\"error\":\"handler boom\"}",
+        "[2026-10-03T09:22:10.556Z] [ERROR] [CQRS] Command \"test.throws-string\" failed {\"error\":\"unknown error\"}",
+        "[2026-10-03T09:22:10.564Z] [ERROR] [CQRS] Query \"test.query-throws\" failed {\"error\":\"query boom\"}",
+        "[2026-10-03T09:22:10.565Z] [ERROR] [CQRS] Query \"test.query-throws-obj\" failed {\"error\":\"unknown error\"}",
+        "stderr | src/lib/media/confirm-media-uploads.test.ts > confirmMediaUploads > rejects uploads that never passed server-side validation",
+        "Test Files  524 passed (524)",
+        "Tests  4841 passed | 1 skipped (4842)"
+      ]
+    },
+    "coverage": {
+      "source": "tmp/linux-current-coverage.log",
+      "contentDigest": "HBb-47qwVrV0HiN7PpCu_BLyxH9Jm4FnMz8B2sx_xsI",
+      "summary": [
+        "[2026-10-03T09:27:08.096Z] [ERROR] [CQRS] Query \"test.query-throws-obj\" failed {\"error\":\"unknown error\"}",
+        "Retention cleanup complete: 2 queued files deleted, 0 failed, 1 skipped for legal hold, 0 orphaned media deleted, 1 orphaned auth users deleted, expired content: listings=0, businesses=0, promotions=0, deleted expired content: listings=0, businesses=0, promotions=0.",
+        "Retention cleanup complete: 0 queued files deleted, 0 failed, 0 skipped for legal hold, 0 orphaned media deleted, 0 orphaned auth users deleted, expired content: listings=0, businesses=0, promotions=0, deleted expired content: listings=0, businesses=0, promotions=0.",
+        "Retention cleanup complete: 0 queued files deleted, 0 failed, 0 skipped for legal hold, 0 orphaned media deleted, 0 orphaned auth users deleted, expired content: listings=0, businesses=0, promotions=0, deleted expired content: listings=0, businesses=0, promotions=0.",
+        "[2026-10-03T09:27:10.914Z] [ERROR] [QueueClaims] Claim check failed {\"error\":\"down\",\"itemType\":\"report\"}",
+        "stderr | src/lib/services/queue-claims.test.ts > queue claims > never fails a decision because the release failed",
+        "[2026-10-03T09:27:10.918Z] [WARN] [QueueClaims] Could not release claim after decision {\"error\":\"release_queue_claims failed: down\"}",
+        "stderr | src/lib/media/confirm-media-uploads.test.ts > confirmMediaUploads > rejects uploads that never passed server-side validation",
+        "[2026-10-03T09:27:29.727Z] [ERROR] [Audit] CRITICAL: Audit log exception (POPIA compliance risk) {\"severity\":\"critical\",\"action\":\"user_login\",\"error\":\"DB Error\",\"failureCount\":1,\"thresholdBreached\":false}",
+        "Test Files  519 passed (519)",
+        "Tests  4763 passed | 1 skipped (4764)",
+        "All files          |   79.22 |    69.29 |   85.57 |   80.77 |"
+      ]
+    },
+    "tooling": {
+      "source": "tmp/linux-current-tooling.log",
+      "contentDigest": "eBjl4Jx8b54izJfWBLO0jBql9x3eFMRpUu0_O_CK3vc",
+      "summary": ["# tests 18", "# pass 18", "# fail 0"]
+    },
+    "toolingLinuxFinal": {
+      "source": "tmp/linux-final-tooling.log",
+      "contentDigest": "nIW2MnNgUPifxmz-G0HvwYG1wD8bW0f2jmisfu27X58",
+      "summary": ["# tests 19", "# pass 19", "# fail 0"]
+    },
+    "toolingWindowsFinal": {
+      "source": "tmp/windows-final-tooling.log",
+      "contentDigest": "VeKdJeA9T5OkPrLpaSmHrqZCsxwls-fwo9kZvUl6WSU",
+      "summary": ["# tests 19", "# pass 19", "# fail 0"]
+    },
+    "finalScannerPreflight": {
+      "source": "tmp-audit-upgrade-final-focused.log",
+      "contentDigest": "yzkiJR30wljlHx24I50cnfEqCTgxwC3MHRDxiN0HNHI",
+      "summary": ["Test Files  3 passed (3)", "Tests  28 passed (28)"]
+    },
+    "cloudflarePreflightFinal": {
+      "source": "tmp-audit-upgrade-cloudflare-final-regression.log",
+      "contentDigest": "l7DOvygs4uHI2fwyWNHAdMAPCwvlDC-o-isLeB4wU18",
+      "summary": ["Test Files  2 passed (2)", "Tests  13 passed (13)"]
+    },
+    "cloudflareEnvPreservation": {
+      "source": "tmp-audit-upgrade-cloudflare-env-preservation.log",
+      "contentDigest": "rpHp9MS8UPdcDkyPlfYvL2Xak1scuLnwG9nZnqiX9vo",
+      "summary": ["Test Files  1 passed (1)", "Tests  6 passed (6)"]
+    },
+    "cloudflareScannerLinuxFinal": {
+      "source": "tmp/linux-final-cloudflare-scanner.log",
+      "contentDigest": "_bMChCT_pt_b0xUCCZsKkvaIOSvqx3AhpqaxUgkNIqQ",
+      "summary": ["Test Files  2 passed (2)", "Tests  13 passed | 1 skipped (14)"]
+    }
+  },
+  "backlog": [
+    {
+      "priority": "P1",
+      "item": "braces 3.0.3 high-severity advisory GHSA-vfj7-8cjw-p6xm",
+      "owner": "Dependency maintainer",
+      "acceptance": "Adopt an upstream patched release or review a minimal depth-guard patch with adversarial regressions; strict all-dependency audit must pass. No patch was advertised at observation time."
+    },
+    {
+      "priority": "P1",
+      "item": "Remotion custom/unknown licenses and Sentry FSL findings",
+      "owner": "Repository owner / license reviewer",
+      "acceptance": "Review actual package terms and deployment use. Document precise permitted versions and supporting evidence; do not approve Unknown globally."
+    },
+    {
+      "priority": "P1",
+      "item": "17 Supabase security advisor observations",
+      "owner": "Database/security maintainer",
+      "acceptance": "Review three deny-by-default tables, 13 intentionally exposed definer-function grants and one plan-blocked password-protection finding. Verify final grants/RLS on isolated PostgreSQL before any separately authorized remote change."
+    },
+    {
+      "priority": "P1",
+      "item": "Full migration PostgreSQL/PostgREST verification unavailable",
+      "owner": "CI / database maintainer",
+      "acceptance": "Run test:db:isolated with Docker; validate final migrations, RLS, grants and independent HTTP races. Extend real PostgreSQL fixtures for fulfillment/cancellation races; PGlite does not prove deployment or independent-session behavior."
+    },
+    {
+      "priority": "P1",
+      "item": "Full Worker build/runtime bindings and prior credential artifact history",
+      "owner": "Cloudflare / security maintainer",
+      "acceptance": "Run the corrected build in an isolated Linux checkout, verify private settings arrive only through runtime bindings and examine prior artifact distribution. Any rotation requires encrypted-data recovery planning; no public exposure was established from the old local artifact."
+    },
+    {
+      "priority": "P1",
+      "item": "Genuine signed Ozow delivery/signing-secret provenance unverified",
+      "owner": "Payments operator",
+      "acceptance": "Separately authorize a controlled provider test and retain delivery/signature evidence; OAuth payment-method access and synthetic Svix signatures cannot substitute."
+    },
+    {
+      "priority": "P1",
+      "item": "Authenticated KYC browser submission/manual decisions not exercised",
+      "owner": "KYC/test maintainer",
+      "acceptance": "Expand isolated synthetic document and reviewer fixtures; test encryption/evidence access and high-risk decisions in Chromium, without customer documents."
+    },
+    {
+      "priority": "P2",
+      "item": "Deployment commit/CI provenance unavailable",
+      "owner": "Release operator",
+      "acceptance": "Supply deployed SHA, repository and read token, then check exact successful main-push workflows."
+    },
+    {
+      "priority": "P2",
+      "item": "CodeQL disabled/unavailable, quarantined WebKit/mobile Safari, full Firefox matrix not run",
+      "owner": "CI maintainer",
+      "acceptance": "Enable CodeQL with appropriate code-scanning access; stabilize quarantined browsers and execute full matrix. Keep missing coverage visible."
+    },
+    {
+      "priority": "P2",
+      "item": "Advisory accessibility/performance, email DNS and index observations",
+      "owner": "Frontend / infrastructure maintainer",
+      "acceptance": "Review isolated Lighthouse evidence or resolve Chrome startup, DNS MX/DMARC warnings and performance advisor findings. Use a separately scoped staging load target for perf/k6."
+    },
+    {
+      "priority": "P2",
+      "item": "Existing non-security debt and deferred major upgrades",
+      "owner": "Repository maintainer",
+      "acceptance": "Reduce exact lint/format/duplication baselines; independently plan Sentry, ESLint, Vite/Vitest, Svix, Tailwind and TypeScript major migrations. Refresh next-browser vendor snapshot through upstream installer, not hand edits."
+    }
+  ],
+  "externalBoundary": "Authenticated read-only OAuth/service checks and DNS/health/advisor queries only. No real payments, customer documents, deployments, production migrations or remote configuration mutation.",
+  "canvasHost": "Native managed canvas renderer unavailable; source artifact and offline interactive HTML companion provided.",
+  "sourceRuns": [
+    {
+      "runId": "2026-10-03T00-52-59-375Z-c5cbb4c3",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T00:52:59.375Z",
+      "finishedAt": "2026-10-03T01:11:27.711Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local + read-only deployment",
+      "selectedScope": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "secrets",
+        "dependencies",
+        "licenses",
+        "db-static",
+        "contracts",
+        "canaries",
+        "preflight",
+        "isolated-db",
+        "launch-env",
+        "cloudflare-secrets",
+        "cloudflare-posture",
+        "schema",
+        "security-advisor",
+        "performance-advisor",
+        "deployment-ci",
+        "deployment-health",
+        "codeql",
+        "ozow-delivery"
+      ],
+      "partialScope": null,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 24,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [
+        {
+          "id": "isolated-db",
+          "status": "UNAVAILABLE",
+          "reason": "pnpm test:db:isolated: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T00-52-59-375Z-c5cbb4c3\\isolated-db.log"
+        },
+        {
+          "id": "codeql",
+          "status": "UNAVAILABLE",
+          "reason": "Local CodeQL unavailable; CI requires ENABLE_CODEQL and code-scanning access"
+        },
+        {
+          "id": "ozow-delivery",
+          "status": "UNAVAILABLE",
+          "reason": "Genuine delivery not verified by fixtures or secret-name checks"
+        }
+      ],
+      "report": "tmp/safety-gate/safety-release-2026-10-03T00-52-59-375Z-c5cbb4c3.json",
+      "workingTreeDigest": "FxA-XDNMMQISy9D3Sn0csv2lCeqbTETik-cgDJ5CGUY"
+    },
+    {
+      "runId": "2026-10-03T08-41-37-508Z-91beea49",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T08:41:37.508Z",
+      "finishedAt": "2026-10-03T08:42:19.408Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local + read-only deployment",
+      "selectedScope": [
+        "preflight",
+        "launch-env",
+        "cloudflare-secrets",
+        "cloudflare-posture",
+        "schema",
+        "security-advisor",
+        "performance-advisor",
+        "deployment-ci",
+        "deployment-health"
+      ],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 9,
+      "warnings": [
+        "  ! R2                  Endpoint reachability is only enforced in production mode.",
+        "  ! Ozow                Non-production mode allows OZOW_ENV=production scope=payments",
+        "  ! Resend              Live Resend API verification is skipped outside production mode.",
+        "  ! Turnstile           Live Turnstile verification is skipped outside production mode."
+      ],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-release-2026-10-03T08-41-37-508Z-91beea49.json",
+      "workingTreeDigest": "FxA-XDNMMQISy9D3Sn0csv2lCeqbTETik-cgDJ5CGUY"
+    },
+    {
+      "runId": "2026-10-03T08-52-26-991Z-d25d7ee7",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T08:52:26.991Z",
+      "finishedAt": "2026-10-03T08:52:45.474Z",
+      "assessment": "WARN",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local + read-only deployment",
+      "selectedScope": ["preflight-production", "performance-advisor", "email-dns"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 3,
+      "warnings": [
+        "WARN: Performance Advisor has 8 actionable and 33 accepted findings",
+        "WARN: MX records: MX records exist for verifymzansi.com, but they do not look like Cloudflare Email Routing records.",
+        "WARN: DMARC: v=DMARC1; p=none; adkim=s; aspf=s; rua=mailto:dmarc@verifymzansi.com; pct=100"
+      ],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-release-2026-10-03T08-52-26-991Z-d25d7ee7.json",
+      "workingTreeDigest": "5O-JP4J4oBkzpTzd50dCk5cLOq4KHUrFNl9D36TYs-k"
+    },
+    {
+      "runId": "2026-10-03T09-13-08-356Z-89a8bb0b",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:13:08.356Z",
+      "finishedAt": "2026-10-03T09:13:18.516Z",
+      "assessment": "INCOMPLETE",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local + read-only deployment",
+      "selectedScope": ["preflight-production", "deployment-ci"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 2,
+      "warnings": [],
+      "skips": [
+        {
+          "id": "deployment-ci",
+          "status": "UNAVAILABLE",
+          "reason": "pnpm exec tsx scripts/check-deployment-ci.ts: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T09-13-08-356Z-89a8bb0b\\deployment-ci.log"
+        }
+      ],
+      "report": "tmp/safety-gate/safety-release-2026-10-03T09-13-08-356Z-89a8bb0b.json",
+      "workingTreeDigest": "LFq-Lczi9OntJPmeKyHl-N69HdTYzdwVWZRqZo4oHhs"
+    },
+    {
+      "runId": "2026-10-03T00-51-55-700Z-2b65b3b8",
+      "commit": "5d03fba1296db20cab7e456fbe51ba294f6439d9",
+      "startedAt": "2026-10-03T00:51:55.700Z",
+      "finishedAt": "2026-10-03T00:51:55.706Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [],
+      "partialScope": null,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 0,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T00-51-55-700Z-2b65b3b8.json",
+      "workingTreeDigest": "xETy-hL8XTvgCIOkSgdSzQO5Y8GqyE7ZjyoYxJFVylc"
+    },
+    {
+      "runId": "2026-10-03T00-53-40-809Z-bcbca720",
+      "commit": "5d03fba1296db20cab7e456fbe51ba294f6439d9",
+      "startedAt": "2026-10-03T00:53:40.809Z",
+      "finishedAt": "2026-10-03T00:53:40.823Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [],
+      "partialScope": null,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 0,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T00-53-40-809Z-bcbca720.json",
+      "workingTreeDigest": "xETy-hL8XTvgCIOkSgdSzQO5Y8GqyE7ZjyoYxJFVylc"
+    },
+    {
+      "runId": "2026-10-03T01-04-55-504Z-e6361822",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T01:04:55.504Z",
+      "finishedAt": "2026-10-03T01:05:20.681Z",
+      "assessment": "PASS",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["types"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 1,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T01-04-55-504Z-e6361822.json",
+      "workingTreeDigest": "ANAD0DyOy9DCyWBxghmV-4PrQ4GZPwVoOAb0IAH4jb4"
+    },
+    {
+      "runId": "2026-10-03T08-41-02-085Z-9f730770",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T08:41:02.085Z",
+      "finishedAt": "2026-10-03T08:42:56.949Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["types", "tooling", "duplication", "secrets"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 4,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T08-41-02-085Z-9f730770.json",
+      "workingTreeDigest": "FxA-XDNMMQISy9D3Sn0csv2lCeqbTETik-cgDJ5CGUY"
+    },
+    {
+      "runId": "2026-10-03T08-45-14-510Z-1fcd2d31",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T08:45:14.510Z",
+      "finishedAt": "2026-10-03T08:46:41.519Z",
+      "assessment": "PASS",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["secrets"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 1,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T08-45-14-510Z-1fcd2d31.json",
+      "workingTreeDigest": "ggdt5Cvv2Nu2F1dmqhzH5_9sFlIY46YNzPH8IuYm4BI"
+    },
+    {
+      "runId": "2026-10-03T08-48-34-341Z-ba78c58a",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T08:48:34.341Z",
+      "finishedAt": "2026-10-03T08:57:21.604Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "dead-code",
+        "imports",
+        "duplication",
+        "dependencies",
+        "licenses"
+      ],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 9,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [
+        {
+          "id": "types",
+          "status": "UNAVAILABLE",
+          "reason": "pnpm typecheck: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T08-48-34-341Z-ba78c58a\\types.log"
+        }
+      ],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T08-48-34-341Z-ba78c58a.json",
+      "workingTreeDigest": "jUoBMvMvvpfnPpoyuhs_P0LlrUoSq4fJGWDwUVOk8UY"
+    },
+    {
+      "runId": "2026-10-03T08-57-03-146Z-d6fa9114",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T08:57:03.146Z",
+      "finishedAt": "2026-10-03T08:58:09.535Z",
+      "assessment": "INCOMPLETE",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["types", "tooling"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 2,
+      "warnings": [],
+      "skips": [
+        {
+          "id": "types",
+          "status": "UNAVAILABLE",
+          "reason": "pnpm typecheck: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T08-57-03-146Z-d6fa9114\\types.log"
+        }
+      ],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T08-57-03-146Z-d6fa9114.json",
+      "workingTreeDigest": "jUoBMvMvvpfnPpoyuhs_P0LlrUoSq4fJGWDwUVOk8UY"
+    },
+    {
+      "runId": "2026-10-03T09-02-11-753Z-6f86549b",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:02:11.753Z",
+      "finishedAt": "2026-10-03T09:02:29.156Z",
+      "assessment": "PASS",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["types"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 1,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-02-11-753Z-6f86549b.json",
+      "workingTreeDigest": "jUoBMvMvvpfnPpoyuhs_P0LlrUoSq4fJGWDwUVOk8UY"
+    },
+    {
+      "runId": "2026-10-03T09-15-27-297Z-0d503700",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:15:27.297Z",
+      "finishedAt": "2026-10-03T09:23:46.356Z",
+      "assessment": "WARN",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "openapi",
+        "dead-code",
+        "imports",
+        "duplication",
+        "db-static",
+        "contracts",
+        "canaries"
+      ],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 11,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-15-27-297Z-0d503700.json",
+      "workingTreeDigest": "fqoRcwEqqWNEiVKUz4VpP9XDx-RNdnYbtn79_AtX_GI"
+    },
+    {
+      "runId": "2026-10-03T09-19-15-235Z-955634aa",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:19:15.235Z",
+      "finishedAt": "2026-10-03T09:22:45.441Z",
+      "assessment": "PASS",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [
+        "db-trials",
+        "db-commercial",
+        "db-payments",
+        "db-media",
+        "db-visits",
+        "db-staff-roles",
+        "db-decisions",
+        "db-queue-claims",
+        "db-operation-jobs",
+        "db-dsar",
+        "db-dashboard",
+        "db-admin-lists",
+        "db-kyc"
+      ],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 13,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-19-15-235Z-955634aa.json",
+      "workingTreeDigest": "fqoRcwEqqWNEiVKUz4VpP9XDx-RNdnYbtn79_AtX_GI"
+    },
+    {
+      "runId": "2026-10-03T09-31-57-834Z-d79432b5",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:31:57.834Z",
+      "finishedAt": "2026-10-03T09:34:20.602Z",
+      "assessment": "INCOMPLETE",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [
+        "format",
+        "lint",
+        "types",
+        "tooling",
+        "duplication",
+        "secrets",
+        "kyc-auth-browser"
+      ],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 6,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [
+        {
+          "id": "kyc-auth-browser",
+          "status": "UNAVAILABLE",
+          "reason": "Isolated KYC browser fixtures currently cover anonymous/callback boundaries only; authenticated submission and reviewer fixtures need expansion"
+        }
+      ],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-31-57-834Z-d79432b5.json",
+      "workingTreeDigest": "kTAVwLY5eeSbUVQT3pzluLvWd04dS_V1nWPs50HvwUg"
+    },
+    {
+      "runId": "2026-10-03T09-43-04-962Z-c5a5c035",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:43:04.962Z",
+      "finishedAt": "2026-10-03T09:44:49.693Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["format", "lint", "types", "secrets"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 4,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-43-04-962Z-c5a5c035.json",
+      "workingTreeDigest": "5ENUMPAqBxDgROjUIngoWJQXa-16BwUPFMMHDY8D96I"
+    },
+    {
+      "runId": "2026-10-03T09-51-22-967Z-ee336968",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:51:22.967Z",
+      "finishedAt": "2026-10-03T09:51:48.145Z",
+      "assessment": "PASS",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["tooling", "secrets", "cloudflare-adapter"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 3,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-51-22-967Z-ee336968.json",
+      "workingTreeDigest": "K3N5avCRN7Q6f1E3uWJD0DpohgZRRBuKWf5F-Z4hOPE"
+    },
+    {
+      "runId": "2026-10-03T09-58-07-545Z-5a8b4139",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:58:07.545Z",
+      "finishedAt": "2026-10-03T10:00:20.413Z",
+      "assessment": "FAIL",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": [
+        "format",
+        "lint",
+        "types",
+        "dead-code",
+        "imports",
+        "duplication",
+        "dependencies",
+        "licenses"
+      ],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 8,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T09-58-07-545Z-5a8b4139.json",
+      "workingTreeDigest": "V9vLOl0UBC6gdzAD2uqGgeYPtRngWx4lIo9zYhVpndI"
+    },
+    {
+      "runId": "2026-10-03T10-04-03-949Z-7e163e15",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T10:04:03.949Z",
+      "finishedAt": "2026-10-03T10:05:53.901Z",
+      "assessment": "WARN",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["format", "lint", "duplication", "secrets"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 4,
+      "warnings": [
+        "WARN: 15 existing non-security format findings match reviewed baseline; no new regressions",
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ],
+      "skips": [],
+      "report": "tmp/safety-gate/safety-review-2026-10-03T10-04-03-949Z-7e163e15.json",
+      "workingTreeDigest": "X2kUQUqQstfAuIQe_k-axsyGQ0DYGDESM3k_pOaSYIs"
+    },
+    {
+      "runId": "2026-10-03T09-15-05-425Z-3462cf11",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:15:05.425Z",
+      "finishedAt": "2026-10-03T09:28:45.557Z",
+      "assessment": "PASS",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "linux"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["tooling", "unit", "coverage"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 3,
+      "warnings": [],
+      "skips": [],
+      "report": "tmp/linux-current-report.json",
+      "workingTreeDigest": "oM5U3jGy2QgLgwaaVRbNJJiBFf7F_Td3wPxpsRfS_pU"
+    },
+    {
+      "runId": "2026-10-03T09-39-41-572Z-21f9705d",
+      "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+      "startedAt": "2026-10-03T09:39:41.572Z",
+      "finishedAt": "2026-10-03T09:39:43.112Z",
+      "assessment": "INCOMPLETE",
+      "toolVersions": {
+        "installed": {
+          "next": "16.3.6",
+          "vitest": "4.1.11",
+          "typescript": "5.9.3",
+          "eslint": "9.39.5",
+          "knip": "6.39.0",
+          "jscpd": "4.3.0",
+          "dependency-cruiser": "18.5.0",
+          "@playwright/test": "1.63.0"
+        },
+        "node": "v22.22.0",
+        "pnpm": "pnpm@10.34.5",
+        "next": "16.3.6",
+        "platform": "win32"
+      },
+      "targetEnvironment": "local; external only when selected",
+      "selectedScope": ["isolated-db", "kyc-auth-browser"],
+      "partialScope": true,
+      "flags": {
+        "failFast": false,
+        "dryRun": false,
+        "skipOptional": false,
+        "localOnly": false
+      },
+      "stepsExecuted": 1,
+      "warnings": [],
+      "skips": [
+        {
+          "id": "isolated-db",
+          "status": "UNAVAILABLE",
+          "reason": "pnpm test:db:isolated: UNAVAILABLE; inspect tmp\\kyc-audit\\2026-10-03T09-39-41-572Z-21f9705d\\isolated-db.log"
+        },
+        {
+          "id": "kyc-auth-browser",
+          "status": "UNAVAILABLE",
+          "reason": "Isolated KYC browser fixtures currently cover anonymous/callback boundaries only; authenticated submission and reviewer fixtures need expansion"
+        }
+      ],
+      "report": "tmp/kyc-audit/kyc-audit-2026-10-03T09-39-41-572Z-21f9705d.json",
+      "workingTreeDigest": "laEmC4o8AANNRYjfv_HVY41-8rB4oU8wkUvZMrJCqUU"
+    }
+  ],
+  "summaryCounts": {
+    "PASS": 36,
+    "WARN": 6,
+    "FAIL": 3,
+    "UNAVAILABLE": 13,
+    "TIMED_OUT": 0,
+    "SKIPPED": 0
+  },
+  "confirmedCredentialArtifactFix": "cloudflare-env-repair.json; values omitted, runtime-binding integration incomplete",
+  "followUpVerification": {
+    "path": "docs/audit-evidence/double-check-2026-10-03.json",
+    "assessment": "FAIL",
+    "releaseReady": false,
+    "note": "Follow-up corrects seven gaps and refreshes application/tooling/database/external/build evidence. This inventory snapshot remains historical; the follow-up supersedes affected observations."
+  }
+}

@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -314,10 +314,26 @@ async function main(): Promise<void> {
     fetchIndexMetadata(accessToken, projectRef),
   ]);
 
-  const rawLints = performanceAdvisor.lints ?? [];
+  const rawLints = performanceAdvisor.lints;
+  if (
+    !Array.isArray(rawLints) ||
+    rawLints.some(
+      (lint) =>
+        !lint ||
+        typeof lint.name !== "string" ||
+        !lint.name ||
+        typeof lint.title !== "string" ||
+        !["INFO", "WARN", "ERROR"].includes(lint.level)
+    )
+  )
+    throw new Error("Malformed Performance Advisor response");
   const classifiedLints = rawLints.map((lint) => classifyLint(lint, indexMetadata));
   const actionable = classifiedLints.filter((lint) => lint.state === "actionable");
   const accepted = classifiedLints.filter((lint) => lint.state === "accepted");
+  if (classifiedLints.length && !args.json)
+    console.warn(
+      `WARN: Performance Advisor has ${actionable.length} actionable and ${accepted.length} accepted findings`
+    );
 
   if (args.json) {
     console.log(

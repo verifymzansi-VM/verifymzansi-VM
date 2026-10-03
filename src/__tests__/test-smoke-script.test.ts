@@ -27,7 +27,7 @@ describe("test-smoke script", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("accepts degraded 503 responses when status field exists", async () => {
+  it("rejects degraded 503 responses even when a status field exists", async () => {
     const fetchImpl: typeof fetch = async () => makeJsonResponse({ status: "degraded" }, 503);
 
     await expect(
@@ -35,7 +35,7 @@ describe("test-smoke script", () => {
         baseUrl: "https://example.com",
         fetchImpl,
       })
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("is degraded");
   });
 
   it("fails when expected status key is missing", async () => {

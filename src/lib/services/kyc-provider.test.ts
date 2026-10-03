@@ -45,6 +45,16 @@ describe("kyc-provider", () => {
   });
 
   describe("ManualKycProvider via getConfiguredProvider", () => {
+    it("rejects unsupported provider configuration instead of silently selecting the stub", () => {
+      const originalProvider = process.env.KYC_PROVIDER;
+      try {
+        process.env.KYC_PROVIDER = "unsupported-provider";
+        expect(() => getConfiguredProvider()).toThrow("Unsupported KYC_PROVIDER");
+      } finally {
+        if (originalProvider) process.env.KYC_PROVIDER = originalProvider;
+        else delete process.env.KYC_PROVIDER;
+      }
+    });
     it("routes directly to manual review with null scores", async () => {
       const originalProvider = process.env.KYC_PROVIDER;
       process.env.KYC_PROVIDER = "manual";

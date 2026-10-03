@@ -67,6 +67,43 @@ afterEach(() => {
   }
 });
 
+it("rejects unknown flags before rewriting local environment or middleware", () => {
+  const root = fixture();
+  const result = run(root, ["--validate-ony"]);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Unsupported Cloudflare preflight argument");
+  expect(fs.readFileSync(path.join(root, ".env.production.local"), "utf8")).toBe(
+    "existing-production-override\n"
+  );
+  expect(fs.existsSync(path.join(root, "src/middleware.ts"))).toBe(false);
+});
+
+it("preserves operator production settings while clearing development bypasses", () => {
+  const root = fixture();
+  fs.writeFileSync(
+    path.join(root, ".env.production.local"),
+    "PRIVATE_LOCAL_SETTING=fixture-value\nTEST_PHONE_NUMBERS=fixture-phone\n"
+  );
+  fs.writeFileSync(
+    path.join(root, "src/middleware.ts"),
+    "// Existing fixture entry; do not generate source.\n"
+  );
+  const result = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      "require('node:os').platform=()=> 'linux'; require(process.argv[1]);",
+      path.join(root, "scripts/preflight-cloudflare.js"),
+    ],
+    { cwd: root, encoding: "utf8", timeout: 5000 }
+  );
+  expect(result.status).toBe(0);
+  const production = fs.readFileSync(path.join(root, ".env.production.local"), "utf8");
+  expect(production).toContain("PRIVATE_LOCAL_SETTING=fixture-value");
+  expect(production).toContain("TEST_PHONE_NUMBERS=\n");
+  expect(production).not.toContain("fixture-phone");
+});
+
 describe("Cloudflare build preflight source safety", () => {
   it("rejects conflicting entrypoints without deleting source or rewriting environment files", () => {
     const root = fixture();

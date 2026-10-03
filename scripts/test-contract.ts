@@ -1,6 +1,7 @@
-/* eslint-disable no-console */
+ 
 import fs from "node:fs";
 import path from "node:path";
+import { OzowTransactionEventSchema } from "../src/test/contracts/ozow";
 import {
   EmailProviderResponseSchema,
   KycWebhookPayloadSchema,
@@ -16,6 +17,16 @@ type ContractCase = {
 const ROOT = path.join(process.cwd(), "src", "test", "fixtures", "contracts");
 
 const CASES: ContractCase[] = [
+  {
+    name: "Ozow official full transaction event",
+    file: path.join("ozow", "full.json"),
+    validate: (value) => OzowTransactionEventSchema.safeParse(value),
+  },
+  {
+    name: "Ozow official thin transaction event",
+    file: path.join("ozow", "thin.json"),
+    validate: (value) => OzowTransactionEventSchema.safeParse(value),
+  },
   {
     name: "KYC webhook approved",
     file: path.join("kyc", "provider-approved.json"),
@@ -54,6 +65,8 @@ function readJson(file: string): unknown {
 }
 
 async function main(): Promise<void> {
+  if (process.argv.slice(2).some((arg) => arg !== "--"))
+    throw new Error("test:contract accepts no flags");
   console.log("Running provider/webhook contract validation...");
 
   const failures: string[] = [];

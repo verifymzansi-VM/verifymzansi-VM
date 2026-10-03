@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "commit": "5d03fba1296db20cab7e456fbe51ba294f6439d9",
+  "rationale": "Existing non-security debt discovered when expanding scans to executable tooling/workers; counts and content hashes prevent new regressions.",
+  "findings": {
+    "Cenj5sotm-uZrgJIFpDatlo8OZDrcLWaFrTkciaz8qI": 1,
+    "p9aTMekP0tt7srPY-ljHKeRvsDhS1iX8KpU5Id9FSnU": 1,
+    "I0r9m5yg1OFcmY-0SuF3hvzmdXKZN-Ebq8Tx39TOe4w": 1,
+    "jMkUdOObKQ7N3WBD-ocHsZ7I1KouRRsKi6mdFws0HNo": 1,
+    "bQCZ-NFSgtNquUFtsocdP7XISQAbvwMblTlDssBLzgY": 1,
+    "jf0eJ9IvJb96j7sudgFp-LVqWH8Rwbg8XRtBZAbJYE0": 1,
+    "Cdjj5qtQWIxd7V1EpWWQsXmO3MxseIGXLcI8EaWEDKY": 1,
+    "iVyqwdot1KFvP-p5KieJiBCU1yhBRwp-eJJCGzDUwh0": 1,
+    "dTJslqKS-VwBZmfQqXchhA2PlUrlF8gxabqiV9w4lRE": 1,
+    "WRyA-Yoz5VyJ-AY7wInTlmSa9rT-Y3TZ7ntN3G7Gq0s": 1,
+    "vu30fFuM2rz_ThyG7qvIgYE_8WLSQuxkLalRC1Nq3fc": 1,
+    "xDEGnu4U5vW6h0IyLLqQqGgLFVAo0J_biVpzxY9ZTkM": 1,
+    "wgd92NzuCKntwxlU_WN9SXD0Nz8r9N0Qeq_lgnd5gAA": 1,
+    "fq_5Z_r8axmI7zdAN3DN40cYmDNN2JFvUgolP8K9X8o": 1,
+    "UP-DXmsj6xqHarHc5MdWQ2D6eWo_dG4ZgZzhsIivGPA": 1
+  },
+  "inventory": [
+    {
+      "file": "scripts/backfill-image-variants.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "Cenj5sotm-uZrgJIFpDatlo8OZDrcLWaFrTkciaz8qI"
+    },
+    {
+      "file": "scripts/capture-advert-browsing.cjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "p9aTMekP0tt7srPY-ljHKeRvsDhS1iX8KpU5Id9FSnU"
+    },
+    {
+      "file": "scripts/cloudflare-email-routing-catch-all.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "I0r9m5yg1OFcmY-0SuF3hvzmdXKZN-Ebq8Tx39TOe4w"
+    },
+    {
+      "file": "scripts/cloudflare-posture-check.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "jMkUdOObKQ7N3WBD-ocHsZ7I1KouRRsKi6mdFws0HNo"
+    },
+    {
+      "file": "scripts/cloudflare-zone-remediate.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "bQCZ-NFSgtNquUFtsocdP7XISQAbvwMblTlDssBLzgY"
+    },
+    {
+      "file": "scripts/fetch-ozow-webhook-secret.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "jf0eJ9IvJb96j7sudgFp-LVqWH8Rwbg8XRtBZAbJYE0"
+    },
+    {
+      "file": "scripts/generate-placeholders.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "Cdjj5qtQWIxd7V1EpWWQsXmO3MxseIGXLcI8EaWEDKY"
+    },
+    {
+      "file": "scripts/patch-opennext-og-paths.js",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "iVyqwdot1KFvP-p5KieJiBCU1yhBRwp-eJJCGzDUwh0"
+    },
+    {
+      "file": "scripts/prepare-advert-originals.cjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "dTJslqKS-VwBZmfQqXchhA2PlUrlF8gxabqiV9w4lRE"
+    },
+    {
+      "file": "scripts/start-playwright-server.cjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "WRyA-Yoz5VyJ-AY7wInTlmSa9rT-Y3TZ7ntN3G7Gq0s"
+    },
+    {
+      "file": "scripts/test-dsar-operations.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "vu30fFuM2rz_ThyG7qvIgYE_8WLSQuxkLalRC1Nq3fc"
+    },
+    {
+      "file": "scripts/test-intro-trials.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "xDEGnu4U5vW6h0IyLLqQqGgLFVAo0J_biVpzxY9ZTkM"
+    },
+    {
+      "file": "scripts/test-media-upload-authorization.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "wgd92NzuCKntwxlU_WN9SXD0Nz8r9N0Qeq_lgnd5gAA"
+    },
+    {
+      "file": "scripts/test-queue-claims.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "fq_5Z_r8axmI7zdAN3DN40cYmDNN2JFvUgolP8K9X8o"
+    },
+    {
+      "file": "workers/open-next-entry.mjs",
+      "rule": "prettier",
+      "message": "Format differs",
+      "fingerprint": "UP-DXmsj6xqHarHc5MdWQ2D6eWo_dG4ZgZzhsIivGPA"
+    }
+  ]
+}

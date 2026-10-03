@@ -1,0 +1,563 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-03T11:09:58.261292+00:00",
+  "assessment": "FAIL",
+  "releaseReady": false,
+  "commit": "a4a0c5f24f09e023e755b1b12a3268817e1a55f8",
+  "scope": "Follow-up review and fixes; scoped runs, not a complete successful release attestation.",
+  "fixes": [
+    {
+      "id": "baseline-checkout",
+      "finding": "Required lint baseline was ignored and absent from Git snapshots.",
+      "fix": "Narrow allowlist and checkout regression cover all required baselines and the FFmpeg notice.",
+      "evidence": [
+        "scripts/checker-fixtures.test.ts",
+        "tmp/double-check-tooling-windows.log",
+        "tmp/double-check-tooling-linux.log"
+      ]
+    },
+    {
+      "id": "quoted-credentials",
+      "finding": "Several named credential rules missed quoted JSON property names.",
+      "fix": "Service-role, access-token, SMS, Turnstile and Worker rules recognize quoted keys; generated files cannot exempt them.",
+      "evidence": ["src/__tests__/secret-scan.test.ts", "tmp/double-check-unit-linux.log"]
+    },
+    {
+      "id": "custom-spdx",
+      "finding": "Custom LicenseRef expressions could parse successfully without review.",
+      "fix": "Custom/document license references require explicit review, including compound expressions.",
+      "evidence": [
+        "scripts/audit-tooling.test.ts",
+        "tmp/double-check-tooling-windows.log",
+        "tmp/double-check-tooling-linux.log"
+      ]
+    },
+    {
+      "id": "cached-worker",
+      "finding": "Wrangler cached-output path skipped the credential sanitizer and strict scan.",
+      "fix": "Reused Worker output is sanitized and scanned; missing/malformed modules or failed scans stop the hook.",
+      "evidence": [
+        "scripts/checker-fixtures.test.ts",
+        "tmp/double-check-tooling-windows.log",
+        "tmp/double-check-tooling-linux.log"
+      ]
+    },
+    {
+      "id": "metadata-lint",
+      "finding": "Next metadata image path exemption differed across platforms, adding an unused suppression warning on Linux.",
+      "fix": "Removed the inline suppression and configured a single metadata-image file exemption.",
+      "evidence": ["tmp/double-check-lint-windows.log", "tmp/double-check-lint-linux.log"]
+    },
+    {
+      "id": "coverage-evidence",
+      "finding": "Registry referenced coverage-summary.json, which the configured reporters do not produce.",
+      "fix": "Registry references the actual coverage-final.json; recheck totals are computed from that artifact with Istanbul.",
+      "evidence": [
+        "scripts/lib/check-registry.ts",
+        "tmp/double-check-coverage-summary.json",
+        "tmp/double-check-coverage-linux.log"
+      ]
+    },
+    {
+      "id": "build-warnings",
+      "finding": "Runner did not recognize common workerd/esbuild warning formats.",
+      "fix": "Plain WARN, Warning: and triangular WARNING prefixes propagate to report warnings and WARN assessment.",
+      "evidence": [
+        "scripts/audit-tooling.test.ts",
+        "tmp/double-check-tooling-windows.log",
+        "tmp/double-check-tooling-linux.log"
+      ]
+    }
+  ],
+  "static": {
+    "runId": "2026-10-03T10-39-51-700Z-c343960a",
+    "assessment": "FAIL",
+    "startedAt": "2026-10-03T10:39:51.700Z",
+    "finishedAt": "2026-10-03T10:47:05.798Z",
+    "partialScope": true,
+    "results": [
+      {
+        "id": "format",
+        "status": "WARN",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\format.log"],
+        "reason": "pnpm format:check: WARN; inspect tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\format.log"
+      },
+      {
+        "id": "lint",
+        "status": "WARN",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\lint.log"],
+        "reason": "pnpm lint: WARN; inspect tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\lint.log"
+      },
+      {
+        "id": "types",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\types.log"],
+        "reason": null
+      },
+      {
+        "id": "tooling",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\tooling.log"],
+        "reason": null
+      },
+      {
+        "id": "openapi",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\openapi.log"],
+        "reason": null
+      },
+      {
+        "id": "dead-code",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\dead-code.log"],
+        "reason": null
+      },
+      {
+        "id": "imports",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\imports.log"],
+        "reason": null
+      },
+      {
+        "id": "duplication",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\duplication.log"],
+        "reason": null
+      },
+      {
+        "id": "secrets",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\secrets.log"],
+        "reason": null
+      },
+      {
+        "id": "dependencies",
+        "status": "FAIL",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\dependencies.log"],
+        "reason": "pnpm security:audit:all: FAIL; inspect tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\dependencies.log"
+      },
+      {
+        "id": "licenses",
+        "status": "FAIL",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\licenses.log"],
+        "reason": "pnpm licenses:check: FAIL; inspect tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\licenses.log"
+      },
+      {
+        "id": "db-static",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\db-static.log"],
+        "reason": null
+      },
+      {
+        "id": "contracts",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\contracts.log"],
+        "reason": null
+      },
+      {
+        "id": "canaries",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-39-51-700Z-c343960a\\canaries.log"],
+        "reason": null
+      }
+    ]
+  },
+  "finalStatic": {
+    "runId": "2026-10-03T10-48-57-109Z-8e4f436d",
+    "assessment": "WARN",
+    "startedAt": "2026-10-03T10:48:57.109Z",
+    "finishedAt": "2026-10-03T10:56:36.186Z",
+    "partialScope": true,
+    "results": [
+      {
+        "id": "format",
+        "status": "WARN",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\format.log"],
+        "reason": "pnpm format:check: WARN; inspect tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\format.log"
+      },
+      {
+        "id": "lint",
+        "status": "WARN",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\lint.log"],
+        "reason": "pnpm lint: WARN; inspect tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\lint.log"
+      },
+      {
+        "id": "types",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\types.log"],
+        "reason": null
+      },
+      {
+        "id": "imports",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\imports.log"],
+        "reason": null
+      },
+      {
+        "id": "duplication",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\duplication.log"],
+        "reason": null
+      },
+      {
+        "id": "secrets",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-48-57-109Z-8e4f436d\\secrets.log"],
+        "reason": null
+      }
+    ]
+  },
+  "database": {
+    "runId": "2026-10-03T10-47-17-181Z-336d640d",
+    "assessment": "PASS",
+    "startedAt": "2026-10-03T10:47:17.181Z",
+    "finishedAt": "2026-10-03T10:50:04.704Z",
+    "partialScope": true,
+    "results": [
+      {
+        "id": "db-trials",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-trials.log"],
+        "reason": null
+      },
+      {
+        "id": "db-commercial",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-commercial.log"],
+        "reason": null
+      },
+      {
+        "id": "db-payments",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-payments.log"],
+        "reason": null
+      },
+      {
+        "id": "db-media",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-media.log"],
+        "reason": null
+      },
+      {
+        "id": "db-visits",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-visits.log"],
+        "reason": null
+      },
+      {
+        "id": "db-staff-roles",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-staff-roles.log"],
+        "reason": null
+      },
+      {
+        "id": "db-decisions",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-decisions.log"],
+        "reason": null
+      },
+      {
+        "id": "db-queue-claims",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-queue-claims.log"],
+        "reason": null
+      },
+      {
+        "id": "db-operation-jobs",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-operation-jobs.log"],
+        "reason": null
+      },
+      {
+        "id": "db-dsar",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-dsar.log"],
+        "reason": null
+      },
+      {
+        "id": "db-dashboard",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-dashboard.log"],
+        "reason": null
+      },
+      {
+        "id": "db-admin-lists",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-admin-lists.log"],
+        "reason": null
+      },
+      {
+        "id": "db-kyc",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-47-17-181Z-336d640d\\db-kyc.log"],
+        "reason": null
+      }
+    ]
+  },
+  "external": {
+    "runId": "2026-10-03T10-42-10-393Z-ee885e28",
+    "assessment": "FAIL",
+    "startedAt": "2026-10-03T10:42:10.393Z",
+    "finishedAt": "2026-10-03T10:43:24.790Z",
+    "partialScope": true,
+    "results": [
+      {
+        "id": "preflight-production",
+        "status": "PASS",
+        "evidence": [
+          "tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\preflight-production.log"
+        ],
+        "reason": null
+      },
+      {
+        "id": "isolated-db",
+        "status": "UNAVAILABLE",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\isolated-db.log"],
+        "reason": "pnpm test:db:isolated: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\isolated-db.log"
+      },
+      {
+        "id": "launch-env",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\launch-env.log"],
+        "reason": null
+      },
+      {
+        "id": "cloudflare-adapter",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\cloudflare-adapter.log"],
+        "reason": null
+      },
+      {
+        "id": "kyc-auth-browser",
+        "status": "UNAVAILABLE",
+        "evidence": [],
+        "reason": "Isolated KYC browser fixtures currently cover anonymous/callback boundaries only; authenticated submission and reviewer fixtures need expansion"
+      },
+      {
+        "id": "cloudflare-secrets",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\cloudflare-secrets.log"],
+        "reason": null
+      },
+      {
+        "id": "cloudflare-posture",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\cloudflare-posture.log"],
+        "reason": null
+      },
+      {
+        "id": "schema",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\schema.log"],
+        "reason": null
+      },
+      {
+        "id": "security-advisor",
+        "status": "FAIL",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\security-advisor.log"],
+        "reason": "pnpm supabase:advisor:security:strict: FAIL; inspect tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\security-advisor.log"
+      },
+      {
+        "id": "performance-advisor",
+        "status": "WARN",
+        "evidence": [
+          "tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\performance-advisor.log"
+        ],
+        "reason": "pnpm supabase:advisor:performance: WARN; inspect tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\performance-advisor.log"
+      },
+      {
+        "id": "deployment-ci",
+        "status": "UNAVAILABLE",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\deployment-ci.log"],
+        "reason": "pnpm exec tsx scripts/check-deployment-ci.ts: UNAVAILABLE; inspect tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\deployment-ci.log"
+      },
+      {
+        "id": "deployment-health",
+        "status": "PASS",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\deployment-health.log"],
+        "reason": null
+      },
+      {
+        "id": "ozow-delivery",
+        "status": "UNAVAILABLE",
+        "evidence": [],
+        "reason": "Genuine delivery not verified by fixtures or secret-name checks"
+      },
+      {
+        "id": "email-dns",
+        "status": "WARN",
+        "evidence": ["tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\email-dns.log"],
+        "reason": "pnpm email:domain:check: WARN; inspect tmp\\safety-gate\\2026-10-03T10-42-10-393Z-ee885e28\\email-dns.log"
+      }
+    ]
+  },
+  "application": {
+    "runId": "2026-10-03T10-40-13-445Z-17303186",
+    "assessment": "FAIL",
+    "startedAt": "2026-10-03T10:40:13.445Z",
+    "finishedAt": "2026-10-03T10:58:34.250Z",
+    "partialScope": true,
+    "results": [
+      {
+        "id": "tooling",
+        "status": "FAIL",
+        "evidence": ["tmp/safety-gate/2026-10-03T10-40-13-445Z-17303186/tooling.log"],
+        "reason": "pnpm test:tooling: FAIL; inspect tmp/safety-gate/2026-10-03T10-40-13-445Z-17303186/tooling.log"
+      },
+      {
+        "id": "unit",
+        "status": "PASS",
+        "evidence": ["tmp/safety-gate/2026-10-03T10-40-13-445Z-17303186/unit.log"],
+        "reason": null
+      },
+      {
+        "id": "coverage",
+        "status": "PASS",
+        "evidence": ["tmp/safety-gate/2026-10-03T10-40-13-445Z-17303186/coverage.log"],
+        "reason": null
+      }
+    ]
+  },
+  "logs": [
+    {
+      "file": "tmp/double-check-unit-linux.log",
+      "sha256": "1p1ERSIPNS5tcJHSF780ZrQXhJkJdKC3HrS125paAc4",
+      "summaries": ["Test Files  524 passed (524)", "Tests  4844 passed | 1 skipped (4845)"]
+    },
+    {
+      "file": "tmp/double-check-coverage-linux.log",
+      "sha256": "PHJ8GVZcklQMMRuH69zkdAF0NXr_XOwc9sI4eV2iV7E",
+      "summaries": [
+        "Test Files  519 passed (519)",
+        "Tests  4766 passed | 1 skipped (4767)",
+        "All files          |   79.22 |    69.29 |   85.57 |   80.77 |"
+      ]
+    },
+    {
+      "file": "tmp/double-check-tooling-windows.log",
+      "sha256": "xa4EqBPMCP80wUzxgQHBhwRGeHk0oAd68lSUA5GCAk4",
+      "summaries": ["# tests 21", "# pass 21", "# fail 0", "# skipped 0"]
+    },
+    {
+      "file": "tmp/double-check-tooling-linux.log",
+      "sha256": "AK3gVj4bnHNwkNvFMFN5DJnp4YMfLAwnmjJojBdNAgY",
+      "summaries": ["# tests 21", "# pass 21", "# fail 0", "# skipped 0"]
+    },
+    {
+      "file": "tmp/double-check-lint-windows.log",
+      "sha256": "dkR7Rx3Z5xaSmf3SjmzSYq5DIWk-xPu3dHrQcyw_1eU",
+      "summaries": [
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ]
+    },
+    {
+      "file": "tmp/double-check-lint-linux.log",
+      "sha256": "FXdKbkJ4f3-zoz8iIQ1_yilw5UuCE4TzFRGO50Qghk8",
+      "summaries": [
+        "WARN: 30 existing non-security lint findings match reviewed baseline; no new regressions"
+      ]
+    }
+  ],
+  "coverage": {
+    "lines": {
+      "total": 15888,
+      "covered": 12833,
+      "skipped": 0,
+      "pct": 80.77
+    },
+    "statements": {
+      "total": 17124,
+      "covered": 13566,
+      "skipped": 0,
+      "pct": 79.22
+    },
+    "functions": {
+      "total": 2329,
+      "covered": 1993,
+      "skipped": 0,
+      "pct": 85.57
+    },
+    "branches": {
+      "total": 14510,
+      "covered": 10055,
+      "skipped": 0,
+      "pct": 69.29
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": "Unknown"
+    }
+  },
+  "cloudflareBuild": {
+    "exitCode": 0,
+    "status": "PASS",
+    "durationMs": 812848,
+    "target": "/home/senzo/vm-audit-cloudflare.WHic9y",
+    "fakeConfig": true,
+    "remoteMutation": false,
+    "runtimeBindingsVerified": false,
+    "finishedAt": "2026-10-03T11:02:16.827Z",
+    "log": {
+      "file": "tmp/double-check-cloudflare.log",
+      "sha256": "VoQHH0yHQD7Na9TPZISJH63LJJRLyHeEFhaTCp3EkDg",
+      "summaries": []
+    },
+    "warnings": [
+      "WARN workerd compatibility_date: 2026-01-01, consider updating your wrangler config to a more recent date to benefit from the latest features and fixes.",
+      "\u26a0 No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache",
+      "\u26a0 The \"middleware\" file convention is deprecated. Please use \"proxy\" instead.",
+      "\u26a0 Compiled with warnings in 8.0min",
+      "\u25b2 [WARNING] The \"??\" operator here will always return the left operand [suspicious-nullish-coalescing]",
+      "\u25b2 [WARNING] The \"??\" operator here will always return the left operand [suspicious-nullish-coalescing]",
+      "\u25b2 [WARNING] The \"??\" operator here will always return the left operand [suspicious-nullish-coalescing]"
+    ],
+    "assessment": "WARN"
+  },
+  "priorBrowserEvidence": {
+    "expected": 50,
+    "unexpected": 0,
+    "limitations": "Prior isolated desktop/mobile run remains applicable: no application behavior changed in this follow-up; the metadata source change removes only a lint comment."
+  },
+  "supersededAttempts": [
+    "Initial Linux packaging regression failed because its working snapshot Git index omitted uncommitted baseline/notice files; index corrected and 21 tooling tests passed.",
+    "Initial Linux lint found a platform-specific unused suppression; corrected and both full lint runs pass with 30 existing warnings.",
+    "Temporary Cloudflare orchestration failed on unsupported top-level await/CRLF path; corrected wrapper produced the successful isolated build."
+  ],
+  "remainingBlockers": [
+    "One high-severity braces advisory with no upstream patched version; all-dependency gate FAIL.",
+    "13 license-policy records require package/use-specific review; gate FAIL.",
+    "Supabase security advisor remains FAIL; observations require final grant/definition review.",
+    "Docker unavailable: full migrated PostgreSQL/PostgREST and real fulfillment/cancellation races remain unverified.",
+    "Authenticated KYC submission/reviewer browser fixture and genuine signed Ozow delivery remain unverified.",
+    "Worker runtime-binding integration and prior artifact distribution/rotation assessment remain unverified.",
+    "Deployment commit/CI provenance remains unavailable; CodeQL and browser quarantines remain coverage limitations."
+  ],
+  "gitActions": {
+    "committed": false,
+    "pushed": false,
+    "reason": "User authorized commit/push only after a clean verification; required gates still fail or are unavailable. Main push can automatically deploy after successful CI."
+  },
+  "finalTypecheck": {
+    "status": "PASS",
+    "evidence": "tmp/double-check-types-final.log"
+  },
+  "ciYaml": {
+    "status": "PASS",
+    "parser": "yaml with uniqueKeys=true",
+    "jobs": {
+      "ci": 16,
+      "codeql": 2,
+      "deploy": 1
+    },
+    "limitation": "Syntax parsing and code examination; no pushed CI execution."
+  },
+  "canvasTypecheck": {
+    "status": "PASS",
+    "evidence": "tsc --noEmit -p tmp/canvas-tsconfig.json",
+    "limitation": "Source typecheck; native Canvas rendering remains unavailable on this host."
+  },
+  "sourceDiffSha256": "JfDhF2K-X4fzED17v4FFLu_VR3uUTm5yGGnxm_g3V34",
+  "hashEncoding": "base64url"
+}

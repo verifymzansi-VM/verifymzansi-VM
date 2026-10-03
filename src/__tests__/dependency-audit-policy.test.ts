@@ -2,18 +2,22 @@ import { describe, expect, it } from "vitest";
 import { dependencyAuditVerdict } from "../../scripts/dependency-audit-policy";
 
 describe("dependency audit gate", () => {
-  it("accepts lower-severity findings even when pnpm exits nonzero", () => {
+  it("blocks lower-severity security findings even when high/critical are zero", () => {
     expect(
       dependencyAuditVerdict(1, {
-        metadata: { vulnerabilities: { high: 0, critical: 0, moderate: 6, low: 1 } },
+        metadata: { vulnerabilities: { info: 0, high: 0, critical: 0, moderate: 6, low: 1 } },
       })
-    ).toBe("PASS");
+    ).toBe("FAIL");
   });
   it.each([
     { high: 1, critical: 0 },
     { high: 0, critical: 1 },
   ])("blocks high or critical findings: %j", (vulnerabilities) => {
-    expect(dependencyAuditVerdict(0, { metadata: { vulnerabilities } })).toBe("FAIL");
+    expect(
+      dependencyAuditVerdict(0, {
+        metadata: { vulnerabilities: { info: 0, low: 0, moderate: 0, ...vulnerabilities } },
+      })
+    ).toBe("FAIL");
   });
   it.each([
     null,

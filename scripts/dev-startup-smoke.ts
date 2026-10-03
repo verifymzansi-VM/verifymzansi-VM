@@ -1,7 +1,18 @@
 import { spawn } from "node:child_process";
 
+if (process.argv.length > 2) throw new Error("test:dev-startup accepts no flags");
+
 const port = Number(process.env.DEV_SMOKE_PORT || "3000");
 const startupTimeoutMs = Number(process.env.DEV_SMOKE_TIMEOUT_MS || "45000");
+if (
+  !Number.isInteger(port) ||
+  port < 1 ||
+  port > 65535 ||
+  !Number.isInteger(startupTimeoutMs) ||
+  startupTimeoutMs < 1 ||
+  startupTimeoutMs > 600000
+)
+  throw new Error("Invalid dev startup port or timeout");
 const warningPattern = /next-image-missing-loader-width|does not implement width/i;
 
 function sleep(ms: number) {
@@ -13,7 +24,7 @@ async function waitForHttpOk(url: string, attempts = 30, delayMs = 500): Promise
 
   for (let i = 0; i < attempts; i += 1) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "error" });
       lastStatus = String(response.status);
       if (response.ok) {
         return;
@@ -71,28 +82,29 @@ async function run(): Promise<void> {
   child.stdout?.on("data", onData);
   child.stderr?.on("data", onData);
 
-  const startupStart = Date.now();
-  while (!sawReady && Date.now() - startupStart < startupTimeoutMs) {
-    await sleep(200);
-  }
+  try {
+    const startupStart = Date.now();
+    while (!sawReady && Date.now() - startupStart < startupTimeoutMs) {
+      await sleep(200);
+    }
 
-  if (!sawReady) {
+    if (!sawReady) {
+      throw new Error(
+        `Dev server did not become ready within ${startupTimeoutMs}ms.\n${startupOutput}`
+      );
+    }
+
+    await waitForHttpOk(`http://127.0.0.1:${port}/`);
+    await waitForHttpOk(`http://127.0.0.1:${port}/api/health`);
+
+    if (sawLoaderWarning) {
+      throw new Error("Detected Next image loader width warning in dev output.");
+    }
+
+    process.stdout.write("DEV_STARTUP_SMOKE:PASS\n");
+  } finally {
     await stopProcessTree(child);
-    throw new Error(
-      `Dev server did not become ready within ${startupTimeoutMs}ms.\n${startupOutput}`
-    );
   }
-
-  await waitForHttpOk(`http://127.0.0.1:${port}/`);
-  await waitForHttpOk(`http://127.0.0.1:${port}/api/health`);
-
-  if (sawLoaderWarning) {
-    await stopProcessTree(child);
-    throw new Error("Detected Next image loader width warning in dev output.");
-  }
-
-  await stopProcessTree(child);
-  process.stdout.write("DEV_STARTUP_SMOKE:PASS\n");
 }
 
 run().catch((error) => {

@@ -2,8 +2,11 @@
   "extends": "./tsconfig.json",
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": [
+    "docs/audit-evidence/*.canvas.tsx",
     ".next",
     "node_modules",
+    "tmp",
+    ".open-next",
     "infra",
     "coverage",
     "output",

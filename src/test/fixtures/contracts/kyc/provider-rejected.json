@@ -3,9 +3,9 @@
   "status": "rejected",
   "reason": "document_tampered",
   "scores": {
-    "face_match_score": 0.31,
-    "liveness_score": 0.28,
-    "doc_auth_score": 0.11
+    "face_match_score": 31,
+    "liveness_score": 28,
+    "doc_auth_score": 11
   },
   "raw_response": {
     "provider": "mock_kyc",

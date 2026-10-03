@@ -507,6 +507,44 @@ describe("ozow payments", () => {
       )
     ).toBe(false);
   });
+  it.each([-3600, 3600])(
+    "rejects correctly signed webhook timestamps outside tolerance (%s seconds)",
+    async (offset) => {
+      const { verifyOzowWebhookSignature } = await import("./ozow");
+      const body = JSON.stringify({ type: "transaction.complete" });
+      const at = new Date(Date.now() + offset * 1000);
+      const signature = new Webhook(envMap.OZOW_WEBHOOK_SECRET).sign(
+        "msg_timestamp_fixture",
+        at,
+        body
+      );
+      expect(
+        verifyOzowWebhookSignature(
+          body,
+          new Headers({
+            "svix-id": "msg_timestamp_fixture",
+            "svix-timestamp": String(Math.floor(at.getTime() / 1000)),
+            "svix-signature": signature,
+          })
+        )
+      ).toBe(false);
+    }
+  );
+  it("normalizes the official full notification fixture without conflating identifiers", async () => {
+    const { normalizeOzowWebhook } = await import("./ozow");
+    const fixture = (await import("../../test/fixtures/contracts/ozow/full.json")).default;
+    const result = normalizeOzowWebhook(fixture);
+    expect(result).toMatchObject({
+      format: "full",
+      transactionId: fixture.data.TransactionId,
+      merchantReference: fixture.data.TransactionReference,
+      providerPaymentId: null,
+      siteCode: "TEST-SITE",
+      isTest: true,
+      amount: "30.00",
+      currencyCode: "ZAR",
+    });
+  });
 
   it("normalizes full transaction webhooks into payment fields", async () => {
     const { normalizeOzowWebhook } = await import("./ozow");

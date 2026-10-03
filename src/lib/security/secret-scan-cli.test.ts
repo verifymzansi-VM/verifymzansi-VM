@@ -29,7 +29,7 @@ it("scans unstaged source, excludes local credentials, and fails on Git errors",
     unlinkSync(path.join(directory, "new-source.txt"));
     const failedGit = scan(directory, { ...process.env, GIT_DIR: path.join(directory, "missing") });
     expect(failedGit.status).toBe(1);
-    expect(failedGit.stderr).toContain("Failed to run git ls-files");
+    expect(failedGit.stderr).toContain("File enumeration failed");
   } finally {
     const resolvedDirectory = realpathSync(directory);
     if (

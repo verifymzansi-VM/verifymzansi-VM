@@ -21,6 +21,13 @@ const fs = require("fs");
 const path = require("path");
 
 const args = new Set(process.argv.slice(2));
+if (
+  args.size !== process.argv.slice(2).length ||
+  [...args].some((arg) => arg !== "--validate-only")
+) {
+  console.error("Unsupported Cloudflare preflight argument; only --validate-only is accepted");
+  process.exit(1);
+}
 const validateOnly = args.has("--validate-only");
 
 const repoRoot = path.join(__dirname, "..");
@@ -160,7 +167,20 @@ function writeProductionEnvOverride() {
     overrideLines.push(`${variableName}=`);
   }
 
-  fs.writeFileSync(envProductionLocalPath, `${overrideLines.join("\n")}\n`, "utf8");
+  // Preserve operator settings rather than replacing the entire secret file.
+  const retained = (readText(envProductionLocalPath) || "")
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        !overrideLines.slice(0, 2).includes(line) &&
+        !blockedProductionVars.some((name) => new RegExp(`^\\s*${name}\\s*=`).test(line))
+    )
+    .join("\n");
+  fs.writeFileSync(
+    envProductionLocalPath,
+    `${retained.trimEnd()}\n${overrideLines.join("\n")}\n`,
+    "utf8"
+  );
 
   if (foundBlockedVars.size > 0) {
     console.log(

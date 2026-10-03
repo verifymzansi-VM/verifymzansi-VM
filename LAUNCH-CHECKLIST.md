@@ -247,3 +247,13 @@ service should never silently serve real users. When set, any error from
 `validateEnv()` will crash the worker at startup before handling any requests.
 
 Run `pnpm validate:launch-env` first when startup or deploy validation fails.
+
+## Audit sign-off evidence
+
+Use `pnpm safety:release` with the shared registry and retain its version-2
+report. Required payment/KYC checks survive `--skip-optional`. Dry-run or
+partial `--checks=` output cannot establish readiness. Missing Docker,
+credentials, authenticated flows or genuine signed Ozow delivery remains
+INCOMPLETE/NO-GO. See [audit tools](docs/audit-tools.md),
+[Ozow](docs/ozow-integration-guide.md), [KYC](docs/kyc-audit-guide.md) and
+[recovery](docs/encryption-recovery.md).

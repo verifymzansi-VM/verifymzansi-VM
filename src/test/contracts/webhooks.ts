@@ -1,24 +1,6 @@
 import { z } from "zod";
 
-const KycWebhookStatusSchema = z.enum(["approved", "rejected", "needs_manual_review"]);
-
-export const KycWebhookPayloadSchema = z
-  .object({
-    provider_ref: z.string().min(1),
-    status: KycWebhookStatusSchema,
-    reason: z.string().optional(),
-    scores: z
-      .object({
-        face_match_score: z.number().min(0).max(1).nullable().optional(),
-        liveness_score: z.number().min(0).max(1).nullable().optional(),
-        doc_auth_score: z.number().min(0).max(1).nullable().optional(),
-      })
-      .optional(),
-    ocr_payload: z.record(z.string(), z.unknown()).optional(),
-    raw_response: z.record(z.string(), z.unknown()).optional(),
-  })
-  .passthrough();
-
+export { KycWebhookPayloadSchema } from "../../lib/validations/kyc-webhook";
 const SmsRecipientSchema = z.object({
   statusCode: z.number().int(),
   number: z.string().optional(),
@@ -59,6 +41,5 @@ export const EmailProviderResponseSchema = z
     }
   });
 
-type _KycWebhookPayload = z.infer<typeof KycWebhookPayloadSchema>;
 type _SmsProviderResponse = z.infer<typeof SmsProviderResponseSchema>;
 type _EmailProviderResponse = z.infer<typeof EmailProviderResponseSchema>;

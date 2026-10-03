@@ -4,6 +4,8 @@
 import { Resolver } from "node:dns/promises";
 
 const rawArgs = process.argv.slice(2);
+if (rawArgs.some((arg) => !["--", "--strict", "--json"].includes(arg)))
+  throw new Error("Unsupported email-domain check argument");
 const args = new Set(rawArgs);
 const jsonOutput = args.has("--json");
 const strictMode = args.has("--strict");

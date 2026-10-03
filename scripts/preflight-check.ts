@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 
 import crypto from "crypto";
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
@@ -25,6 +25,11 @@ const R2_HEAD_BUCKET_MAX_ATTEMPTS = 3;
 const OZOW_CONNECTIVITY_TIMEOUT_MS = 10_000;
 
 function parseModeArg(argv: string[]): LaunchValidationMode | undefined {
+  if (
+    argv.filter((arg) => arg !== "--").some((arg) => !arg.startsWith("--mode=")) ||
+    argv.filter((arg) => arg.startsWith("--mode=")).length > 1
+  )
+    throw new Error("Unsupported or duplicate preflight argument");
   const modeArg = argv.find((arg) => arg.startsWith("--mode="));
   if (!modeArg) return undefined;
 
@@ -192,11 +197,21 @@ async function readOzowErrorDetail(response: Response): Promise<string> {
 }
 
 function getOzowApiBaseUrl(ozowEnv?: string, configuredBaseUrl?: string): string {
-  if (configuredBaseUrl) {
-    return configuredBaseUrl.replace(/\/$/, "");
+  const expected =
+    ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
+  if (!configuredBaseUrl) return expected;
+  const parsed = new URL(configuredBaseUrl);
+  if (
+    parsed.origin !== expected ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error("OZOW_API_BASE_URL must match the official HTTPS origin for OZOW_ENV");
   }
-
-  return ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
+  return expected;
 }
 
 export async function checkOzowPaymentApiAccess({
@@ -219,6 +234,7 @@ export async function checkOzowPaymentApiAccess({
   const baseUrl = getOzowApiBaseUrl(ozowEnv, configuredBaseUrl);
   const tokenResponse = await fetchImpl(`${baseUrl}/v1/token`, {
     method: "POST",
+    redirect: "error",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "client_credentials",
@@ -257,6 +273,7 @@ export async function checkOzowPaymentApiAccess({
   paymentMethodsUrl.searchParams.set("region", "ZA");
 
   const accessResponse = await fetchImpl(paymentMethodsUrl, {
+    redirect: "error",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "X-Correlation-ID": crypto.randomUUID(),

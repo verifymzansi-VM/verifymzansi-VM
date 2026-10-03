@@ -1,0 +1,74 @@
+{
+  "assessment": "FAIL",
+  "platform": "win32",
+  "observedAt": "2026-10-03",
+  "source": "tmp/safety-gate/2026-10-03T08-48-34-341Z-ba78c58a/licenses.log",
+  "findings": [
+    {
+      "package": "@remotion/bundler",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/cli",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/compositor-win32-x64-msvc",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/media",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/player",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/renderer",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/web-renderer",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "remotion",
+      "classification": "unknown or invalid license expression",
+      "expression": "Unknown"
+    },
+    {
+      "package": "@remotion/canvas",
+      "classification": "unknown or invalid license expression",
+      "expression": "Remotion License"
+    },
+    {
+      "package": "@remotion/studio-protocol",
+      "classification": "unknown or invalid license expression",
+      "expression": "Remotion License"
+    },
+    {
+      "package": "@remotion/media-parser",
+      "classification": "unknown or invalid license expression",
+      "expression": "Remotion License https://remotion.dev/license"
+    },
+    {
+      "package": "@sentry/cli",
+      "classification": "restricted license",
+      "expression": "FSL-1.1-MIT"
+    },
+    {
+      "package": "@sentry/cli-win32-x64",
+      "classification": "restricted license",
+      "expression": "FSL-1.1-MIT"
+    }
+  ],
+  "ffmpegException": "Pinned @ffmpeg/core 0.12.9 with tracked public/vendor/ffmpeg-core/NOTICE.txt; no broader GPL exception"
+}

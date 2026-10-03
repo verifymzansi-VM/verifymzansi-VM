@@ -3,6 +3,8 @@ import path from "node:path";
 import { chromium, devices } from "playwright";
 
 const rawArgs = new Set(process.argv.slice(2));
+if ([...rawArgs].some((arg) => !["--", "--strict"].includes(arg)))
+  throw new Error("Unsupported live-load audit argument");
 
 type Target = {
   name: string;

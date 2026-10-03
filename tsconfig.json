@@ -31,5 +31,16 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "infra", "**/*.stories.ts", "**/*.stories.tsx"]
+  "exclude": [
+    "docs/audit-evidence/*.canvas.tsx",
+    "node_modules",
+    "infra",
+    "tmp",
+    ".open-next",
+    "coverage",
+    "output",
+    "storybook-static",
+    "**/*.stories.ts",
+    "**/*.stories.tsx"
+  ]
 }

@@ -1,0 +1,44 @@
+{
+  "checkedAt": "2026-10-03T11:25:26.851Z",
+  "project": "tnygdgormnofpgjknlhr",
+  "localMigrationCount": 198,
+  "remoteMigrationCount": 198,
+  "pending": [],
+  "remoteOnly": [],
+  "latestLocal": "20261003010107",
+  "database": [
+    {
+      "verification": {
+        "migration_count": 198,
+        "latest_migration": "20261003010107",
+        "immersive_flag_remaining": 0,
+        "ozow_transaction_index": true,
+        "rpcs": [
+          {
+            "name": "apply_kyc_provider_webhook",
+            "arguments": "p_provider_ref text, p_status text, p_scores jsonb, p_ocr_payload jsonb, p_raw_response jsonb",
+            "service_role": true,
+            "anon": false,
+            "authenticated": false
+          },
+          {
+            "name": "claim_ozow_reconciliation",
+            "arguments": "p_payment_id uuid",
+            "service_role": true,
+            "anon": false,
+            "authenticated": false
+          },
+          {
+            "name": "confirm_ozow_payment",
+            "arguments": "p_payment_id uuid, p_provider_payment_id text, p_expected_amount integer, p_expected_metadata jsonb, p_plan_id uuid, p_addon_days numeric, p_webhook jsonb, p_provider_transaction_id text, p_merchant_reference text",
+            "service_role": true,
+            "anon": false,
+            "authenticated": false
+          }
+        ]
+      }
+    }
+  ],
+  "migrationsAppliedThisRun": [],
+  "mutationPerformed": false
+}

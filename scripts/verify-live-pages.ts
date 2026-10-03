@@ -79,6 +79,8 @@ type RuntimeIssue = {
 };
 
 const rawArgs = new Set(process.argv.slice(2));
+if ([...rawArgs].some((arg) => !["--", "--headed", "--skip-dynamic-discovery"].includes(arg)))
+  throw new Error("Unsupported live-page verification argument");
 const baseUrl =
   process.env.LIVE_VERIFY_BASE_URL ||
   process.env.PUBLIC_VERIFY_BASE_URL ||
@@ -1438,6 +1440,10 @@ async function main() {
 
     if (summary.totals.fail > 0) {
       process.exit(1);
+    }
+    if (!summary.results.length || summary.totals.skip > 0) {
+      report("INCOMPLETE: requested live-page scenarios were not all executed");
+      process.exitCode = 2;
     }
   } finally {
     await browser.close();

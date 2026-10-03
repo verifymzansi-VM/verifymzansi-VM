@@ -34,7 +34,7 @@ describe("POST /api/webhooks/kyc/provider", () => {
     vi.clearAllMocks();
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("ENVIRONMENT", "production");
-    vi.stubEnv("KYC_PROVIDER", "veriff");
+    vi.stubEnv("KYC_PROVIDER", "manual");
     vi.stubEnv("KYC_WEBHOOK_SECRET", secret);
     vi.stubEnv("PLAYWRIGHT_TEST_MODE", "");
     vi.stubEnv("VERIFYMZANSI_RUNTIME_MODE", "production");
@@ -54,6 +54,20 @@ describe("POST /api/webhooks/kyc/provider", () => {
     expect(mockRpc).toHaveBeenCalledWith(
       "apply_kyc_provider_webhook",
       expect.objectContaining({ p_scores: { liveness_score: 80 } })
+    );
+  });
+  it("rejects an unsupported provider before touching the database", async () => {
+    vi.stubEnv("KYC_PROVIDER", "unimplemented-provider");
+    expect((await POST(request())).status).toBe(503);
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+  it("accepts explicit null scores as unknown", async () => {
+    expect((await POST(request({ ...payload, scores: { liveness_score: null } }))).status).toBe(
+      200
+    );
+    expect(mockRpc).toHaveBeenCalledWith(
+      "apply_kyc_provider_webhook",
+      expect.objectContaining({ p_scores: { liveness_score: null } })
     );
   });
   it("acknowledges an unknown provider reference", async () => {

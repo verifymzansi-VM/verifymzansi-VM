@@ -1,106 +1,60 @@
-import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dependencyAuditVerdict } from "./dependency-audit-policy";
-
-type AuditOutput = {
-  auditReportVersion?: number;
-  vulnerabilities?: Record<string, unknown>;
-  metadata?: {
-    vulnerabilities?: {
-      high?: number;
-      critical?: number;
-    };
-  };
-  error?: {
-    code?: string;
-    summary?: string;
-    detail?: string;
-  };
-};
-
-function spawnCommand(
-  command: string,
-  args: string[],
-  options: { encoding: "utf8"; stdio: "pipe"; maxBuffer: number }
-): SpawnSyncReturns<string> {
-  if (process.platform === "win32") {
-    return spawnSync(process.env.ComSpec ?? "cmd.exe", ["/c", command, ...args], options);
-  }
-  return spawnSync(command, args, options);
-}
-
-async function main(): Promise<void> {
-  const includeDev = process.argv.slice(2).includes("--all");
-  const scope = includeDev ? "production and development" : "production";
-  process.stdout.write(`Running ${scope} dependency vulnerability audit...\n`);
-
-  // Audit the resolved pnpm lockfile used by frozen installs and deployment.
-  const auditArgs = ["audit", "--json", "--audit-level=high"];
-  if (!includeDev) auditArgs.push("--prod");
-  const result = spawnCommand("pnpm", auditArgs, {
-    encoding: "utf8",
-    stdio: "pipe",
-    maxBuffer: 20 * 1024 * 1024,
-  });
-
-  if (result.error) {
-    console.error("Dependency audit failed to start.");
-    console.error(result.error.message);
-    process.exit(1);
-  }
-
-  const combinedOutput = `${result.stdout}\n${result.stderr}`;
-  const hasNetworkError =
-    /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|network timeout/i.test(combinedOutput);
-  let parsedOutput: AuditOutput | null = null;
-
-  if (result.stdout.trim().length > 0) {
+import { execute, pnpmInvocation } from "./lib/audit-runtime";
+async function main() {
+  await mkdir("tmp/dependency-audit", { recursive: true });
+  const includeDev = process.argv.includes("--all");
+  const args = ["audit", "--json", "--audit-level=low", ...(includeDev ? [] : ["--prod"])];
+  let output = "";
+  let status: number | null = null;
+  let assessment = "UNAVAILABLE";
+  if (process.argv.slice(2).some((arg) => !["--", "--all"].includes(arg)))
+    output = JSON.stringify({ error: "Unsupported dependency audit argument" });
+  else {
+    const [command, invocation] = pnpmInvocation(args);
+    const run = await execute(command, invocation, 120_000);
+    output = run.output;
+    status = run.exitCode;
+    let parsed: unknown;
     try {
-      parsedOutput = JSON.parse(result.stdout) as AuditOutput;
+      parsed = JSON.parse(output);
     } catch {
-      parsedOutput = null;
+      parsed = null;
     }
+    const networkError =
+      /ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|ECONNRESET|network timeout/i.test(output);
+    const verdict =
+      networkError || ["UNAVAILABLE", "TIMED_OUT"].includes(run.status)
+        ? "INVALID"
+        : dependencyAuditVerdict(status, parsed);
+    assessment = verdict === "INVALID" ? "UNAVAILABLE" : verdict;
   }
-
-  if (hasNetworkError && process.env.ALLOW_NETWORKLESS_SECURITY_AUDIT === "true") {
-    console.warn(
-      "Dependency audit skipped due to network error and ALLOW_NETWORKLESS_SECURITY_AUDIT=true."
-    );
-    return;
+  const id = new Date().toISOString().replace(/[:.]/g, "-");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    parsed = { error: "Malformed audit output", diagnostics: output };
   }
-
-  if (dependencyAuditVerdict(result.status, parsedOutput) === "PASS") {
-    process.stdout.write(`Dependency audit passed (no high/critical ${scope} vulnerabilities).\n`);
-    return;
-  }
-
-  if (
-    parsedOutput?.auditReportVersion &&
-    typeof parsedOutput.metadata?.vulnerabilities?.high === "number" &&
-    typeof parsedOutput.metadata?.vulnerabilities?.critical === "number"
-  ) {
-    console.error("Dependency audit failed.");
-    console.error(result.stdout.trim());
-    process.exit(result.status || 1);
-  }
-
-  console.error("Dependency audit failed.");
-  if (parsedOutput?.error) {
-    console.error(
-      JSON.stringify(
-        {
-          error: parsedOutput.error,
-        },
-        null,
-        2
-      )
-    );
-  }
-  if (result.stdout) console.error(result.stdout.trim());
-  if (result.stderr) console.error(result.stderr.trim());
-  process.exit(result.status || 1);
+  const report = JSON.stringify(
+    {
+      schemaVersion: 1,
+      scope: includeDev ? "all" : "production",
+      assessment,
+      exitCode: status,
+      output: parsed,
+    },
+    null,
+    2
+  );
+  await writeFile(`tmp/dependency-audit/audit-${id}.json`, report);
+  await writeFile("tmp/dependency-audit/latest.json", report);
+  process.stdout.write(
+    `Dependency audit: ${assessment}; evidence tmp/dependency-audit/latest.json\n`
+  );
+  if (assessment !== "PASS") process.exitCode = assessment === "FAIL" ? 1 : 2;
 }
-
 main().catch((error) => {
-  console.error("Dependency audit crashed:", error);
-  process.exit(1);
+  console.error(error);
+  process.exitCode = 2;
 });

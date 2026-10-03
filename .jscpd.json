@@ -2,7 +2,7 @@
   "threshold": 100,
   "reporters": ["console", "json", "html"],
   "output": "./tmp/jscpd",
-  "pattern": "**/*.{ts,tsx}",
+  "pattern": "**/*.{ts,tsx,js,mjs,cjs}",
   "absolute": true,
   "gitignore": true,
   "minLines": 8,

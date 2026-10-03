@@ -41,7 +41,9 @@ const canaries: Canary[] = [
 ];
 
 async function main(): Promise<void> {
-  process.stdout.write("Running mutation canary checks...\n");
+  if (process.argv.slice(2).some((arg) => arg !== "--"))
+    throw new Error("Unsupported security-canary argument");
+  process.stdout.write("Running security canary checks...\n");
 
   const failed: string[] = [];
   for (const canary of canaries) {
@@ -54,17 +56,17 @@ async function main(): Promise<void> {
   }
 
   if (failed.length > 0) {
-    console.error("Mutation canary checks failed:");
+    console.error("Security canary checks failed:");
     for (const name of failed) {
       console.error(`  - ${name}`);
     }
     process.exit(1);
   }
 
-  process.stdout.write("Mutation canary checks passed.\n");
+  process.stdout.write("Security canary checks passed.\n");
 }
 
 main().catch((error) => {
-  console.error("Mutation canary run crashed:", error);
+  console.error("Security canary run crashed:", error);
   process.exit(1);
 });

@@ -4,7 +4,10 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import {
+  KycWebhookPayloadSchema as providerWebhookPayloadSchema,
+  type KycWebhookPayload as ProviderWebhookPayload,
+} from "@/lib/validations/kyc-webhook";
 import { createAdminClient } from "@/lib/supabase/admin";
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
@@ -14,66 +17,6 @@ import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/re
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("KycWebhook");
-
-/**
- * Expected webhook payload shape (provider-agnostic).
- * Real providers will have different shapes — this is the normalized interface.
- */
-interface ProviderWebhookPayload {
-  provider_ref: string;
-  status: "approved" | "rejected" | "needs_manual_review";
-  reason?: string;
-  scores?: {
-    face_match_score?: number | null;
-    liveness_score?: number | null;
-    doc_auth_score?: number | null;
-  };
-  ocr_payload?: Record<string, unknown>;
-  raw_response?: Record<string, unknown>;
-}
-
-const PROVIDER_STATUSES = ["approved", "rejected", "needs_manual_review"] as const;
-const providerScoreSchema = z
-  .number({ error: "Score must be a number" })
-  .finite("Score must be a number")
-  .min(0)
-  .max(100);
-const providerMetadataSchema = z
-  .record(z.string().max(200), z.unknown())
-  .superRefine((value, ctx) => {
-    const serialized = JSON.stringify(value);
-    if (serialized.length > 50_000) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Payload metadata is too large",
-      });
-    }
-  });
-const providerWebhookPayloadSchema = z.object({
-  provider_ref: z
-    .string()
-    .trim()
-    .min(1, "Missing provider_ref in webhook payload")
-    .max(128, "provider_ref is too long"),
-  status: z.enum(PROVIDER_STATUSES, {
-    error: "Invalid webhook status",
-  }),
-  reason: z.preprocess((value) => {
-    if (typeof value !== "string") return value;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }, z.string().max(1_000, "reason is too long").optional()),
-  scores: z
-    .object({
-      face_match_score: providerScoreSchema.optional(),
-      liveness_score: providerScoreSchema.optional(),
-      doc_auth_score: providerScoreSchema.optional(),
-    })
-    .strict()
-    .optional(),
-  ocr_payload: providerMetadataSchema.optional(),
-  raw_response: providerMetadataSchema.optional(),
-});
 
 const TRUTHY_VALUES = new Set(["1", "true", "yes", "on"]);
 
@@ -117,6 +60,13 @@ export async function POST(request: NextRequest) {
     const allowUnsignedWebhook =
       isExplicitLocalUnsignedWebhookBypass(request) || isPlaywrightTestMode;
     const kycProvider = getConfiguredKycProvider();
+
+    if (!["manual", "stub"].includes(kycProvider)) {
+      return NextResponse.json(
+        { error: "Unsupported KYC provider configuration" },
+        { status: 503 }
+      );
+    }
 
     if (kycProvider === "stub" && !allowUnsignedWebhook) {
       log.warn("Received provider webhook while KYC_PROVIDER=stub", {

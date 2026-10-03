@@ -10,9 +10,8 @@
  * `wrangler versions upload` then fails because `assets.directory`
  * (.open-next/assets) does not exist — hard error since wrangler 4.114.
  *
- * The build is skipped when the artifacts are already present, so the
- * GitHub Actions deploy path (`pnpm run build:cloudflare` followed by
- * `opennextjs-cloudflare deploy`) is completely unaffected.
+ * Existing artifacts still require environment sanitization and a strict
+ * secret scan. Cached output must never bypass the credential policy.
  */
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -30,20 +29,23 @@ if ((process.env.WRANGLER_COMMAND || "") === "types") {
 }
 
 if (existsSync(workerBundle) && existsSync(assetsDir)) {
-  console.log("✓ .open-next output already present — skipping OpenNext rebuild.");
+  console.log("✓ .open-next output already present — checking cached artifact credentials.");
+  runTask("sanitize:cloudflare-env");
+  runTask("secret-scan:strict");
   process.exit(0);
 }
 
 console.log("⚙  .open-next output missing — running `pnpm run build:cloudflare`…");
-const result = spawnSync("pnpm", ["run", "build:cloudflare"], {
-  cwd: repoRoot,
-  stdio: "inherit",
-  shell: process.platform === "win32",
-});
-
-if (result.error) {
-  console.error(`Failed to launch build:cloudflare — ${result.error.message}`);
-  process.exit(1);
+function runTask(task) {
+  const result = spawnSync("pnpm", ["run", task], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (result.error) {
+    console.error(`Failed to launch ${task} — ${result.error.message}`);
+    process.exit(1);
+  }
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }
-
-process.exit(result.status ?? 1);
+runTask("build:cloudflare");

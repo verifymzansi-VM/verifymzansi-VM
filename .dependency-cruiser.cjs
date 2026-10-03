@@ -3,7 +3,8 @@ module.exports = {
     {
       name: "no-circular",
       severity: "error",
-      comment: "Circular dependencies make initialization order and refactors harder to reason about.",
+      comment:
+        "Circular dependencies make initialization order and refactors harder to reason about.",
       from: {},
       to: {
         circular: true,
@@ -14,10 +15,10 @@ module.exports = {
       severity: "error",
       comment: "Runtime code should not import test utilities, fixtures, or specs.",
       from: {
-        pathNot: "(^src/test/|/__tests__/|\\.(test|spec)\\.(ts|tsx)$)",
+        pathNot: "(^scripts/test-contract\\.ts$|^src/test/|/__tests__/|\\.(test|spec)\\.(ts|tsx)$)",
       },
       to: {
-        path: "(^src/test/|/__tests__/|\\.(test|spec)\\.(ts|tsx)$)",
+        path: "(^scripts/test-contract\\.ts$|^src/test/|/__tests__/|\\.(test|spec)\\.(ts|tsx)$)",
       },
     },
     {
@@ -50,8 +51,9 @@ module.exports = {
     enhancedResolveOptions: {
       extensions: [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
     },
-    includeOnly: "^src",
-    exclude: "(^node_modules|^\\.next|^coverage|^tmp|^output|^playwright-report|^test-results|\\.d\\.ts$)",
+    includeOnly: "^(src|scripts|workers)",
+    exclude:
+      "(^node_modules|^\\.next|^coverage|^tmp|^output|^playwright-report|^test-results|\\.d\\.ts$)",
     doNotFollow: {
       path: "node_modules",
     },

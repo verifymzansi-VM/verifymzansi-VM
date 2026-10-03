@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile, copyFile } from "node:fs/promises";
 import path from "node:path";
-import Jimp from "jimp";
+import { socialWatermarks } from "./lib/social-watermarks";
 
 const rootDir = process.cwd();
 const outputPlaywrightDir = path.join(rootDir, "output", "playwright");
@@ -62,20 +62,8 @@ async function copyCapture(source: string, destination: string) {
 
 async function generateSocialWatermarks() {
   const icon512Path = path.join(publicDir, "icons", "icon-512.png");
-  const icon = await Jimp.read(icon512Path);
-
-  const base512 = icon.clone().contain(512, 512);
-  await base512.writeAsync(path.join(socialDir, "youtube-watermark-shield-512.png"));
-
-  const base150 = icon.clone().contain(150, 150);
-  await base150.writeAsync(path.join(socialDir, "youtube-watermark-shield-150.png"));
-  await base150
-    .clone()
-    .writeAsync(path.join(socialDir, "youtube-watermark-shield-150-outline.png"));
-  await base150
-    .clone()
-    .writeAsync(path.join(socialDir, "youtube-watermark-shield-150-clean-badge.png"));
-  await base150.clone().writeAsync(path.join(socialDir, "youtube-watermark-shield-150-badge.png"));
+  for (const [name, image] of await socialWatermarks(await readFile(icon512Path)))
+    await writeFile(path.join(socialDir, name), image);
 }
 
 function buildFallbackSvg({

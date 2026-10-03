@@ -132,14 +132,15 @@ class ManualKycProvider implements IKycProvider {
  * Default: "stub" — all verifications route to manual review.
  */
 export function getConfiguredProvider(): IKycProvider {
-  const provider = process.env.KYC_PROVIDER || "stub";
+  const provider = (process.env.KYC_PROVIDER || "stub").trim().toLowerCase();
   if (provider === "manual") {
     return new ManualKycProvider();
   }
   if (provider === "stub") {
     log.warn("KYC_PROVIDER=stub: All verifications route to manual review");
+    return new StubKycProvider();
   }
-  return new StubKycProvider();
+  throw new Error(`Unsupported KYC_PROVIDER: ${provider}; configure manual or stub`);
 }
 
 // Re-export the provider contract so existing imports from this file keep working.

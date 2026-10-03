@@ -8,6 +8,30 @@ import {
 } from "../../scripts/preflight-check";
 
 describe("preflight-check", () => {
+  it.each([
+    "https://example.com",
+    "http://one.ozow.com",
+    "https://stagingone.ozow.com",
+    "https://user:password@one.ozow.com",
+    "https://one.ozow.com/path",
+    "https://one.ozow.com?proxy=1",
+  ])(
+    "rejects a mismatched credential destination before fetching: %s",
+    async (configuredBaseUrl) => {
+      const fetchImpl = vi.fn<typeof fetch>();
+      await expect(
+        checkOzowPaymentApiAccess({
+          ozowEnv: "production",
+          clientId: "fixture-client",
+          clientSecret: "fixture-secret",
+          siteCode: "fixture-site",
+          configuredBaseUrl,
+          fetchImpl,
+        })
+      ).rejects.toThrow("official HTTPS origin");
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  );
   it("downgrades transient Supabase connectivity failures to warnings outside production", () => {
     const result = classifySupabaseSchemaPreflightError(
       "development",
@@ -104,6 +128,8 @@ describe("preflight-check", () => {
     expect(result.status).toBe("pass");
     expect(result.detail).toContain("site-code");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0]?.[1]?.redirect).toBe("error");
+    expect(fetchImpl.mock.calls[1]?.[1]?.redirect).toBe("error");
     expect(String(fetchImpl.mock.calls[1]?.[0])).toContain("/v1/paymentmethods");
   });
 

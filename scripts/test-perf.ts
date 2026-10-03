@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 import { loadEnvConfig } from "@next/env";
 import { resolvePerformanceTestTarget } from "./performance-test-target";
 
@@ -113,6 +113,22 @@ async function runScenario(scenario: PerfScenario): Promise<PerfResult> {
 }
 
 async function main(): Promise<void> {
+  if (process.argv.slice(2).some((arg) => arg !== "--"))
+    throw new Error("test:perf accepts no flags");
+  if (
+    !Number.isSafeInteger(requestCount) ||
+    requestCount < 1 ||
+    requestCount > 100_000 ||
+    !Number.isSafeInteger(concurrency) ||
+    concurrency < 1 ||
+    concurrency > 100 ||
+    !Number.isFinite(p95ThresholdMs) ||
+    p95ThresholdMs <= 0 ||
+    !Number.isFinite(maxErrorRate) ||
+    maxErrorRate < 0 ||
+    maxErrorRate > 1
+  )
+    throw new Error("Invalid performance sample count, concurrency, latency or error budget");
   console.log("Running performance baseline checks...");
   console.log(
     `Target=${baseUrl} Requests=${requestCount} Concurrency=${concurrency} p95<=${p95ThresholdMs}ms ErrorRate<=${maxErrorRate}`

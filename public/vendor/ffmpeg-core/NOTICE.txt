@@ -1,0 +1,7 @@
+ffmpeg-core.js and ffmpeg-core.wasm(.gz) are @ffmpeg/core 0.12.9 (ffmpeg.wasm),
+a WebAssembly build of FFmpeg, licensed GPL-2.0-or-later.
+They are distributed unmodified (the .wasm is only gzip-compressed for hosting).
+
+Corresponding source: https://github.com/ffmpegwasm/ffmpeg.wasm/tree/v0.12.9
+FFmpeg source: https://ffmpeg.org/download.html
+Licence text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
