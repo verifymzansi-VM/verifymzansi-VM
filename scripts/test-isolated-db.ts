@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { execute, pnpmInvocation } from "./lib/audit-runtime";
+import { parseSupabaseStatus } from "./lib/supabase-status";
 async function main() {
   if (process.argv.length > 2) throw new Error("test:db:isolated accepts no flags");
   const output = path.resolve("tmp/isolated-db");
@@ -81,12 +82,7 @@ async function main() {
       "-o",
       "json",
     ]);
-    const status = JSON.parse(statusOutput.slice(statusOutput.indexOf("{")));
-    if (
-      new URL(status.API_URL).hostname !== "127.0.0.1" &&
-      new URL(status.API_URL).hostname !== "localhost"
-    )
-      throw new Error("Refusing non-local database target");
+    const status = parseSupabaseStatus(statusOutput);
     const env = {
       ...process.env,
       DB_TEST_SUPABASE_URL: status.API_URL,

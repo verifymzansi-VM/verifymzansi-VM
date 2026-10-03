@@ -21,6 +21,37 @@ import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
 import { sanitizeCloudflareEnvModule } from "./lib/cloudflare-env-policy";
+import { parseSupabaseStatus } from "./lib/supabase-status";
+test("isolated database status accepts CLI notices and rejects malformed or remote targets", () => {
+  const status = {
+    API_URL: "http://127.0.0.1:56421",
+    ANON_KEY: "fixture-anon",
+    SERVICE_ROLE_KEY: "fixture-service",
+    note: 'quoted } brace and escaped "quote"',
+  };
+  const json = JSON.stringify(status, null, 2);
+  assert.deepEqual(
+    parseSupabaseStatus(
+      `Stopped services: [studio]\n${json}\nA new version is available {notice}\n`
+    ),
+    status
+  );
+  assert.deepEqual(parseSupabaseStatus(json), status);
+  for (const bad of [
+    "",
+    "{}",
+    json.slice(0, -1),
+    '{"API_URL": invalid}',
+    JSON.stringify({ ...status, SERVICE_ROLE_KEY: "" }),
+    ...[
+      "https://remote.example",
+      "http://localhost:54321",
+      "http://localhost:56421/path",
+      "http://user:password@localhost:56421",
+    ].map((API_URL) => JSON.stringify({ ...status, API_URL })),
+  ])
+    assert.throws(() => parseSupabaseStatus(bad));
+});
 test("Cloudflare fallback exports retain public settings and cannot bundle private credentials", () => {
   const env = {
     NEXT_PUBLIC_APP_URL: "https://fixture.example",

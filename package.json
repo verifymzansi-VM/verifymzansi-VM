@@ -274,8 +274,8 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "pnpm exec prettier --write",
-      "pnpm exec eslint --fix --max-warnings=0"
+      "pnpm exec eslint --fix --max-warnings=0",
+      "pnpm exec prettier --write"
     ],
     "*.{json,css,md}": [
       "pnpm exec prettier --write"
