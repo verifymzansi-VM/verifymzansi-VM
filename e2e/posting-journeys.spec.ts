@@ -127,7 +127,10 @@ test.describe("Market journeys", () => {
     await expect(page.getByText(/^R\s?0(\.00)?$/)).toHaveCount(0);
     const viewHref = await page.getByRole("link", { name: /^View/ }).first().getAttribute("href");
     await page.goto(viewHref ?? "/mzansi-market");
-    await expect(page.getByText("Salary not provided").first()).toBeVisible();
+    // Desktop retains a hidden classic page underneath its active post viewer.
+    await expect(
+      page.getByText("Salary not provided", { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
   });
 });
 

@@ -281,7 +281,8 @@ test.describe("Posting flows in Chromium", () => {
     await expect(page).toHaveURL(BUSINESS_DASHBOARD_URL);
 
     await page.goto(`/mzansi-business/${businessId}`);
-    await expect(page.getByText(businessName).first()).toBeVisible();
+    // Role locators exclude the hidden classic breadcrumb and heading on desktop.
+    await expect(page.getByRole("heading", { name: businessName, exact: true })).toBeVisible();
     await expect(page.getByText(updatedBusinessName)).toHaveCount(0);
   });
 
