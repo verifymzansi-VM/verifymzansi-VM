@@ -29,12 +29,20 @@ test("confirmation destination survives a failed login and successful retry", as
 test("password recovery retries an outage, retains input, and recognizes an expired session", async ({
   page,
 }) => {
-  let checks = 0;
+  // Auth pages reload once to clear stale service-worker caches, and some
+  // engines start the link check before that reload. Keep the outage up until
+  // Retry is pressed so the discarded first load cannot consume it.
+  let outage = true;
+  let checksAfterOutage = 0;
   let submissions = 0;
   await page.route("**/api/auth/reset-password", async (route) => {
     if (route.request().method() === "GET") {
-      checks += 1;
-      await route.fulfill({ status: checks === 1 ? 503 : 200, json: { valid: checks > 1 } });
+      if (outage) {
+        await route.fulfill({ status: 503, json: { valid: false } });
+        return;
+      }
+      checksAfterOutage += 1;
+      await route.fulfill({ status: 200, json: { valid: true } });
       return;
     }
     submissions += 1;
@@ -43,6 +51,7 @@ test("password recovery retries an outage, retains input, and recognizes an expi
   });
   await page.goto("/reset-password");
   await expect(page.getByRole("heading", { name: "Couldn't check your link" })).toBeVisible();
+  outage = false;
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Set a new password" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -61,6 +70,6 @@ test("password recovery retries an outage, retains input, and recognizes an expi
     "href",
     "/forgot-password"
   );
-  expect(checks).toBe(2);
+  expect(checksAfterOutage).toBe(1);
   expect(submissions).toBe(2);
 });

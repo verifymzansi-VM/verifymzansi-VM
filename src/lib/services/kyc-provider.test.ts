@@ -1,8 +1,17 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { getConfiguredProvider } from "./kyc-provider";
 
 describe("kyc-provider", () => {
+  // Pin the provider per test so a developer's .env.local cannot change the result.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   describe("StubKycProvider via getConfiguredProvider", () => {
+    beforeEach(() => {
+      vi.stubEnv("KYC_PROVIDER", "stub");
+    });
+
     it("rejects without an ID image R2 key", async () => {
       const provider = getConfiguredProvider();
       const result = await provider.submitIdentity({
@@ -46,43 +55,31 @@ describe("kyc-provider", () => {
 
   describe("ManualKycProvider via getConfiguredProvider", () => {
     it("rejects unsupported provider configuration instead of silently selecting the stub", () => {
-      const originalProvider = process.env.KYC_PROVIDER;
-      try {
-        process.env.KYC_PROVIDER = "unsupported-provider";
-        expect(() => getConfiguredProvider()).toThrow("Unsupported KYC_PROVIDER");
-      } finally {
-        if (originalProvider) process.env.KYC_PROVIDER = originalProvider;
-        else delete process.env.KYC_PROVIDER;
-      }
+      vi.stubEnv("KYC_PROVIDER", "unsupported-provider");
+      expect(() => getConfiguredProvider()).toThrow("Unsupported KYC_PROVIDER");
     });
+
     it("routes directly to manual review with null scores", async () => {
-      const originalProvider = process.env.KYC_PROVIDER;
-      process.env.KYC_PROVIDER = "manual";
+      vi.stubEnv("KYC_PROVIDER", "manual");
+      const provider = getConfiguredProvider();
+      const result = await provider.submitIdentity({
+        idImageR2Key: "kyc/some-key.jpg",
+        selfieImageR2Key: "kyc/selfie.jpg",
+        idNumber: "9901015009088",
+        artifactId: "art-4",
+        userId: "user-1",
+      });
 
-      try {
-        const provider = getConfiguredProvider();
-        const result = await provider.submitIdentity({
-          idImageR2Key: "kyc/some-key.jpg",
-          selfieImageR2Key: "kyc/selfie.jpg",
-          idNumber: "9901015009088",
-          artifactId: "art-4",
-          userId: "user-1",
-        });
-
-        expect(provider.name).toBe("manual");
-        expect(result.status).toBe("needs_manual_review");
-        expect(result.providerReference).toMatch(/^manual_/);
-        expect(result.scores).toEqual({
-          faceMatchScore: null,
-          livenessScore: null,
-          docAuthScore: null,
-          ocrPayload: {},
-          rawResponse: {},
-        });
-      } finally {
-        if (originalProvider) process.env.KYC_PROVIDER = originalProvider;
-        else delete process.env.KYC_PROVIDER;
-      }
+      expect(provider.name).toBe("manual");
+      expect(result.status).toBe("needs_manual_review");
+      expect(result.providerReference).toMatch(/^manual_/);
+      expect(result.scores).toEqual({
+        faceMatchScore: null,
+        livenessScore: null,
+        docAuthScore: null,
+        ocrPayload: {},
+        rawResponse: {},
+      });
     });
   });
 });
