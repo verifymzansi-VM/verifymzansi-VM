@@ -12,16 +12,14 @@ import { ImmersiveTopBar } from "@/components/immersive/immersive-top-bar";
 import { defaultBrowse, describeBrowse, type FeedBrowse } from "@/lib/feed/browse";
 import { useFeedSequence, type FeedItem } from "@/components/immersive/use-feed-sequence";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { useDwellView } from "@/components/immersive/use-dwell-view";
 import type { FeedSlide, FeedVertical } from "@/lib/feed/types";
 import { cn } from "@/lib/utils";
 import {
   ViewerAppearanceProvider,
   useViewerAppearance,
 } from "@/components/providers/viewer-appearance";
-import { trackContentView } from "@/lib/views/content-views";
 
-/** A post counts as viewed after two continuous seconds on screen, as on the classic page's video rule. */
-const VIEW_DWELL_MS = 2000;
 /** Wheel events closer together than this belong to one gesture (trackpad momentum). */
 const WHEEL_GESTURE_GAP_MS = 220;
 const WHEEL_STEP = 40;
@@ -524,37 +522,11 @@ function ViewerContent({
   }, [activeSlide, feed.sessionId, onEnd, onActiveHrefChange, preview]);
 
   /* ── Page view after two continuous seconds in the foreground ── */
-  useEffect(() => {
-    if (!activeSlide || onEnd || preview) return;
-    let timer: number | null = null;
-    let cancelled = false;
-    const slide = activeSlide;
-    const arm = () => {
-      if (timer) window.clearTimeout(timer);
-      timer = null;
-      if (document.visibilityState !== "visible") return;
-      timer = window.setTimeout(() => {
-        void trackContentView({
-          type: slide.targetType,
-          id: slide.id,
-          source: "page",
-          surface: `feed:${slide.vertical}`,
-        }).then((counted) => {
-          if (counted && !cancelled) {
-            setViewCounts((counts) => ({ ...counts, [slide.key]: (counts[slide.key] ?? 0) + 1 }));
-          }
-        });
-        document.removeEventListener("visibilitychange", arm);
-      }, VIEW_DWELL_MS);
-    };
-    arm();
-    document.addEventListener("visibilitychange", arm);
-    return () => {
-      cancelled = true;
-      if (timer) window.clearTimeout(timer);
-      document.removeEventListener("visibilitychange", arm);
-    };
-  }, [activeSlide, onEnd, preview]);
+  useDwellView(
+    activeSlide,
+    onEnd || preview ? null : `feed:${(activeSlide ?? initialSlide).vertical}`,
+    (slide) => setViewCounts((counts) => ({ ...counts, [slide.key]: (counts[slide.key] ?? 0) + 1 }))
+  );
 
   /* ── Section, province and filters from the top bar: stay in the viewer ── */
   const [browseBusy, setBrowseBusy] = useState<"section" | "province" | "filters" | null>(null);

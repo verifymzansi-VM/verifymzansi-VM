@@ -1599,3 +1599,145 @@
     transition: none;
   }
 }
+
+/* ── Mobile Video mode (/video-mode) ── */
+.vm-shadow {
+  text-shadow:
+    0 1px 2px rgb(0 0 0 / 0.85),
+    0 0 12px rgb(0 0 0 / 0.45);
+}
+.vm-stage {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.vm-actions .vm-like .viewer-action-label {
+  display: none;
+}
+/* The Like button matches the other 40px circles, inside a 44px target. */
+.vm-actions .vm-like button {
+  min-width: 44px;
+  gap: 4px;
+  padding: 2px;
+}
+.vm-actions .vm-like button > span:first-child {
+  width: 40px;
+  height: 40px;
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(3 36 29 / 0.75);
+}
+.vm-actions .vm-like button > span:first-child svg {
+  width: 18px;
+  height: 18px;
+}
+.vm-actions .vm-like button > span:nth-child(2) {
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+}
+
+/* Clean view: every control leaves through its nearest edge, the right rail
+   (beside the edge tab) first, and comes back in the reverse order. */
+.vm-chrome {
+  transition:
+    transform 380ms cubic-bezier(0.22, 0.8, 0.24, 1),
+    opacity 280ms ease;
+  transition-delay: calc((3 - var(--vm-order, 0)) * 45ms);
+}
+.vm-chrome-fade {
+  transition: opacity 280ms ease;
+}
+[data-chrome="hidden"] .vm-chrome {
+  opacity: 0;
+  transition-timing-function: cubic-bezier(0.55, 0, 0.75, 0.2), ease;
+  transition-delay: calc(var(--vm-order, 0) * 45ms);
+}
+[data-chrome="hidden"] .vm-chrome-fade {
+  opacity: 0;
+}
+[data-chrome="hidden"] .vm-chrome-left {
+  transform: translateX(calc(-100% - 24px)) scale(0.8);
+}
+[data-chrome="hidden"] .vm-chrome-right {
+  transform: translateX(calc(100% + 24px)) scale(0.8);
+}
+[data-chrome="hidden"] .vm-chrome-up {
+  transform: translateY(calc(-100% - 24px));
+}
+[data-chrome="hidden"] .vm-chrome-down {
+  transform: translateY(calc(100% + 32px));
+}
+/* First visit: a gentle nudge upwards, then it fades on its own. */
+.vm-swipe-hint {
+  animation: vm-hint-fade 5s ease forwards;
+}
+.vm-swipe-hint-arrow {
+  animation: vm-hint-nudge 1.4s cubic-bezier(0.22, 0.8, 0.24, 1) infinite;
+}
+@keyframes vm-hint-nudge {
+  0%,
+  100% {
+    transform: translateY(4px);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+@keyframes vm-hint-fade {
+  0%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* Phones on their side and very short screens: icons only, closer together. */
+@media (max-height: 520px) {
+  .vm-rail-text,
+  .vm-actions .vm-like button > span:nth-child(2) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .vm-actions,
+  .vm-sections nav {
+    gap: 8px;
+  }
+  /* The section rail runs the full height here, so the post sits beside it. */
+  .vm-sections {
+    top: calc(env(safe-area-inset-top) + 64px);
+  }
+  .vm-info {
+    left: calc(max(4px, env(safe-area-inset-left)) + 60px);
+  }
+  /* Little height: the tab rests just under the top bar, clear of the actions. */
+  .vm-edge-tab.vm-edge-tab {
+    top: calc(env(safe-area-inset-top) + 56px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vm-track,
+  .vm-track > * {
+    transition: none !important;
+  }
+  /* Controls fade in place instead of travelling. */
+  .vm-chrome,
+  [data-chrome="hidden"] .vm-chrome {
+    transform: none !important;
+    transition: opacity 150ms ease;
+    transition-delay: 0ms;
+  }
+  .vm-swipe-hint,
+  .vm-swipe-hint-arrow {
+    animation: none;
+  }
+}

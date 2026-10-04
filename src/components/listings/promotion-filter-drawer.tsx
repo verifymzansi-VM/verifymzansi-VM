@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { SlidersHorizontal, X } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FilterEdgeTab } from "./filter-edge-tab";
 import { Button } from "@/components/ui/button";
 import {
   type PromotionFilterCallbacks,
@@ -13,7 +14,6 @@ import { getPromotionFilterTypeLabel } from "@/lib/promotions/type-taxonomy";
 import { EVENT_TYPES, TOURISM_SUBCATEGORIES } from "@/lib/constants/categories";
 import { PROMOTION_EVENT_STATE_LABELS } from "@/types/enums";
 import { triggerHaptic } from "@/lib/utils/haptics";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
 interface PromotionFilterDrawerProps extends PromotionFilterCallbacks {
@@ -52,7 +52,6 @@ export function PromotionFilterDrawer({
   onClearAll,
 }: PromotionFilterDrawerProps) {
   const [open, setOpen] = useState(false);
-  const isHydrated = useHydrated();
   const activeFilterCount = countActivePromotionFilters(filters);
 
   /* ── Build active-filter chips for the strip ───────── */
@@ -137,34 +136,16 @@ export function PromotionFilterDrawer({
         />
       </div>
 
-      {/* ── Sticky FAB filter button (mobile only) ── */}
-      {isHydrated ? (
-        <SheetTrigger asChild>
-          <button
-            type="button"
-            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
-            aria-label="Open tourism and events filters"
-          >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[11px] font-bold text-warm-950">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-        </SheetTrigger>
-      ) : (
-        <button
-          type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl lg:hidden"
-          aria-label="Open tourism and events filters"
-          disabled
-        >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          <span>Filters</span>
-        </button>
-      )}
+      {/* ── Filters on the right wall (phones and tablets) ── */}
+      <FilterEdgeTab
+        label="Open tourism and events filters"
+        count={activeFilterCount}
+        open={open}
+        onOpen={() => {
+          triggerHaptic("medium");
+          setOpen(true);
+        }}
+      />
 
       {/* ── Drawer Content ───────────────────────────── */}
       <SheetContent

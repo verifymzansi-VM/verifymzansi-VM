@@ -249,6 +249,14 @@ function isLiveSession(session: FeedSession | null, now: number): session is Fee
   );
 }
 
+/** A stored browse session by id (Video mode resumes after refresh or Back). */
+export function readBrowseSession(id: string, now = Date.now()): FeedSession | null {
+  const stored = readJson<FeedSession>(`${STORAGE_PREFIX}${id.slice(0, 20)}`);
+  return isLiveSession(stored, now) && stored.source.kind === "browse" && stored.source.browse
+    ? stored
+    : null;
+}
+
 export type SessionStart =
   | { session: FeedSession; resumed: boolean; notice: null }
   | { session: FeedSession; resumed: false; notice: "expired" };

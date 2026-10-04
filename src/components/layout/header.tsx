@@ -32,6 +32,7 @@ import {
 import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
+import { VideoModeEntry, useVideoModeEnabled } from "@/components/video-mode/video-mode-entry";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { cn } from "@/lib/utils";
@@ -94,6 +95,7 @@ function HeaderInner({
 
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
   const auth = useAuth();
+  const videoModeEnabled = useVideoModeEnabled();
 
   const isAuthenticated = isAuthProp ?? auth.isAuthenticated;
   const finalDisplayName = displayNameProp || auth.user?.displayName || "";
@@ -129,7 +131,7 @@ function HeaderInner({
     </Button>
   );
 
-  // The phone tab bar carries Search; from tablet up the header does.
+  // The phone tab bar carries Search unless Video mode has its place; then the header does.
   const renderSearchLink = (className?: string) => (
     <Link
       href="/search"
@@ -215,6 +217,9 @@ function HeaderInner({
               size="md"
               variant="transparent"
               priority
+              // Signed in on a narrow phone, four 44px buttons share the bar: the shield stays,
+              // the wordmark steps aside so every button keeps a full-size target.
+              className={cn(isAuthenticated && "max-[399px]:[&>span:last-child]:hidden")}
               imageClassName="transition-transform duration-200 group-hover:scale-105"
             />
           </Link>
@@ -355,8 +360,8 @@ function HeaderInner({
 
         {/* Mobile actions stay visible when the menu is closed. */}
         <div className="flex shrink-0 items-center gap-1 justify-self-end lg:hidden">
-          {renderSearchLink("hidden md:flex")}
           {renderThemeToggle("relative h-11 w-11 shrink-0")}
+          {renderSearchLink(videoModeEnabled ? "flex shrink-0" : "hidden md:flex")}
           {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
           <button
             ref={mobileToggleRef}
@@ -375,8 +380,11 @@ function HeaderInner({
 
       {/* Mobile Marketplace Tabs — always visible on mobile */}
       <div className="lg:hidden w-full border-t border-border/40">
-        <div className="px-3 py-2">
-          <MarketplaceSwitcher />
+        <div className="flex items-center gap-2 px-3 py-2">
+          <div className="min-w-0 flex-1">
+            <MarketplaceSwitcher />
+          </div>
+          <VideoModeEntry />
         </div>
       </div>
 

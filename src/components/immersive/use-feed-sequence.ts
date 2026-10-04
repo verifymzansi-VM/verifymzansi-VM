@@ -13,6 +13,7 @@ import {
   type FeedSession,
   type FeedTerminal,
 } from "@/lib/feed/session";
+import { fetchSlides, mergeSlides, withoutRefs } from "@/lib/feed/slides-client";
 import type { FeedRef, FeedSlide } from "@/lib/feed/types";
 
 /** Load this many posts ahead (and one behind) of the post on screen. */
@@ -132,27 +133,10 @@ export function useFeedSequence(
   const loadSlides = useCallback((batch: FeedRef[]) => {
     if (batch.length === 0) return;
     batch.forEach((ref) => inFlight.current.add(ref.id));
-    const query = batch.map(encodeRef).join(",");
-    fetchJson<{ slides: { ref: string; slide: FeedSlide | null }[] }>(
-      `/api/feed/slides?refs=${encodeURIComponent(query)}`,
-      abort.current.signal
-    )
-      .then((payload) => {
-        setSlides((current) => {
-          const next = new Map(current);
-          for (const entry of payload.slides) {
-            const ref = decodeRef(entry.ref.replace(":", "."));
-            if (ref && !next.has(ref.id)) next.set(ref.id, entry.slide);
-          }
-          // Anything the server left out is treated as no longer public.
-          for (const ref of batch) if (!next.has(ref.id)) next.set(ref.id, null);
-          return next;
-        });
-        setFailed((current) => {
-          const next = new Set(current);
-          batch.forEach((ref) => next.delete(ref.id));
-          return next;
-        });
+    fetchSlides(batch, abort.current.signal)
+      .then((loaded) => {
+        setSlides((current) => mergeSlides(current, loaded));
+        setFailed((current) => withoutRefs(current, batch));
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;

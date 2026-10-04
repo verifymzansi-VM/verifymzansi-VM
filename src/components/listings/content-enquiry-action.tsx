@@ -18,6 +18,7 @@ import {
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { contactPhone } from "@/lib/utils/contact-links";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { cn } from "@/lib/utils";
 import type { ContactActionConfig } from "./contact-action-types";
 
 /** Private enquiries go to the existing recipient inbox; nothing is published on the post. */
@@ -25,10 +26,16 @@ export function ContentEnquiryAction({
   config,
   rail = false,
   children,
+  renderTrigger,
+  contentClassName,
 }: {
   config: ContactActionConfig;
   rail?: boolean;
   children?: ReactNode;
+  /** Own trigger (Video mode's rail); receives the function that opens the form. */
+  renderTrigger?: (open: () => void) => ReactNode;
+  /** Extra classes for the form's dialog, e.g. docking it to the bottom on phones. */
+  contentClassName?: string;
 }) {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
@@ -127,7 +134,9 @@ export function ContentEnquiryAction({
   }
   return (
     <>
-      {rail ? (
+      {renderTrigger ? (
+        renderTrigger(openEnquiry)
+      ) : rail ? (
         <button
           type="button"
           onClick={openEnquiry}
@@ -147,7 +156,7 @@ export function ContentEnquiryAction({
         </Button>
       )}
       <Dialog open={messageOpen} onOpenChange={setMessageOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={cn("sm:max-w-md", contentClassName)}>
           <DialogHeader>
             <DialogTitle>{config.messageTitle}</DialogTitle>
             <DialogDescription>

@@ -3,10 +3,11 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, Home, Plus, UserRound } from "lucide-react";
+import { Clapperboard, Compass, Home, Plus, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { triggerHaptic } from "@/lib/utils/haptics";
+import { useOpenVideoMode, useVideoModeEnabled } from "@/components/video-mode/video-mode-entry";
 
 interface TabDef {
   id: "home" | "search" | "post" | "verify" | "dashboard";
@@ -72,6 +73,9 @@ export function MobileNav() {
 
 function MobileNavBar({ pathname }: { pathname: string }) {
   const { isAuthenticated } = useAuth();
+  // Video mode takes Search's place; Search then sits in the header.
+  const videoEnabled = useVideoModeEnabled();
+  const openVideoMode = useOpenVideoMode();
 
   return (
     <nav
@@ -88,6 +92,26 @@ function MobileNavBar({ pathname }: { pathname: string }) {
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const Icon = tab.icon;
           const isPostAction = tab.id === "post";
+
+          if (tab.id === "search" && videoEnabled) {
+            return (
+              <a
+                key="video"
+                href="/video-mode"
+                onClick={(event) => {
+                  triggerHaptic("light");
+                  openVideoMode(event);
+                }}
+                className="group relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                {/* Same plain icon as its neighbours. */}
+                <span aria-hidden="true" className="flex h-7 w-12 items-center justify-center">
+                  <Clapperboard className="h-[22px] w-[22px]" strokeWidth={2} />
+                </span>
+                <span className="leading-none">Video</span>
+              </a>
+            );
+          }
 
           return (
             <Link

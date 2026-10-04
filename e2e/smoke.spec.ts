@@ -338,12 +338,12 @@ test.describe("Platform Smoke", () => {
 
       if (check.filterButtonName) {
         const filterButton = page
-          .locator(`button[aria-label="${check.filterButtonName}"]:visible`)
+          .locator(`button[aria-label^="${check.filterButtonName}"]:visible`)
           .last();
         await expect(filterButton).toBeVisible();
-        await expect(filterButton).toContainText("Filters");
+        await expect(filterButton).toHaveAttribute("aria-haspopup", "dialog");
 
-        // The labelled filter pill floats above the tab bar rather than covering it.
+        // The filters drop sits on the right wall above the tab bar rather than covering it.
         const bottomNav = page.getByRole("navigation", { name: "Main", exact: true });
         await expect(bottomNav).toBeVisible();
         const [filterBox, navBox] = await Promise.all([

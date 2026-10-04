@@ -26,6 +26,8 @@ interface ReportDialogProps {
   size?: "sm" | "default" | "icon";
   className?: string;
   triggerLabel?: string;
+  /** Extra classes for the dialog, e.g. docking it to the bottom on phones. */
+  contentClassName?: string;
 }
 
 const REPORT_REASONS = [
@@ -46,6 +48,7 @@ export function ReportDialog({
   size = "sm",
   className,
   triggerLabel = "Report",
+  contentClassName,
 }: ReportDialogProps) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<string>("");
@@ -131,7 +134,7 @@ export function ReportDialog({
           {size !== "icon" ? triggerLabel : <span className="sr-only">{triggerLabel}</span>}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={`sm:max-w-md ${contentClassName || ""}`}>
         {submitted ? (
           <div className="space-y-3 py-4 text-center">
             <div className="empty-state-icon">

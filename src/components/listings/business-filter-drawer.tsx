@@ -1,14 +1,14 @@
 "use client";
 
+import { FilterEdgeTab } from "./filter-edge-tab";
 import { useEffect, useRef, useState } from "react";
-import { SlidersHorizontal, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,23 +153,16 @@ export function BusinessFilterDrawer() {
         <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} />
       </div>
 
-      {/* ── Sticky FAB filter button (mobile only) ── */}
-      <SheetTrigger asChild>
-        <button
-          type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
-          aria-label="Open business filters"
-          disabled={!isInteractive}
-        >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          <span>Filters</span>
-          {activeFilterCount > 0 && (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[11px] font-bold text-warm-950">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-      </SheetTrigger>
+      {/* ── Filters on the right wall (phones and tablets) ── */}
+      <FilterEdgeTab
+        label="Open business filters"
+        count={activeFilterCount}
+        open={open}
+        onOpen={() => {
+          triggerHaptic("medium");
+          setOpen(true);
+        }}
+      />
 
       <SheetContent
         side="bottom"

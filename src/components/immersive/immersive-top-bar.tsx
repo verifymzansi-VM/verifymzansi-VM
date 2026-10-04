@@ -65,7 +65,7 @@ const FIELD =
   "h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /** The site-wide "show my province first" preference, kept in step with the showrooms. */
-function rememberProvince(province: string | null) {
+export function rememberProvince(province: string | null) {
   try {
     const secure = window.location.protocol === "https:" ? "; secure" : "";
     document.cookie = `${SHOWROOM_PROVINCE_COOKIE}=${encodeURIComponent(province ?? SHOWROOM_PROVINCE_ALL)}; path=/; max-age=${SHOWROOM_PROVINCE_MAX_AGE_SECONDS}; samesite=lax${secure}`;
@@ -74,19 +74,31 @@ function rememberProvince(province: string | null) {
   }
 }
 
-function FilterSheet({
+export function FilterSheet({
   open,
   onOpenChange,
   browse,
   onApply,
+  side = "right",
+  withProvince = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   browse: FeedBrowse;
   onApply: (browse: FeedBrowse) => void;
+  /** Phones: a bottom sheet that also holds the province choice. */
+  side?: "right" | "bottom";
+  withProvince?: boolean;
 }) {
   const [draft, setDraft] = useState(browse);
-  const ids = { q: useId(), category: useId(), condition: useId(), event: useId(), sort: useId() };
+  const ids = {
+    q: useId(),
+    province: useId(),
+    category: useId(),
+    condition: useId(),
+    event: useId(),
+    sort: useId(),
+  };
   const options = browseOptions(draft.vertical);
   const set = (patch: Partial<FeedBrowse>) => setDraft((current) => ({ ...current, ...patch }));
 
@@ -98,12 +110,19 @@ function FilterSheet({
         onOpenChange(next);
       }}
     >
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+      <SheetContent
+        side={side}
+        className={cn(
+          "flex w-full flex-col gap-0 p-0",
+          side === "bottom" ? "max-h-[85dvh] rounded-t-3xl pb-safe" : "sm:max-w-md"
+        )}
+      >
         <SheetHeader className="border-b px-6 py-5">
           <SheetTitle>Filter {VERTICAL_LABELS[draft.vertical]}</SheetTitle>
           <SheetDescription>
-            {draft.province ? `Posts in ${draft.province}.` : "Posts from all of South Africa."}{" "}
-            Change the province using the location icon on the left.
+            {withProvince
+              ? "Choose where and what to show."
+              : `${draft.province ? `Posts in ${draft.province}.` : "Posts from all of South Africa."} Change the province using the location icon on the left.`}
           </SheetDescription>
         </SheetHeader>
 
@@ -129,6 +148,32 @@ function FilterSheet({
               onChange={(event) => set({ query: event.target.value })}
             />
           </div>
+
+          {withProvince ? (
+            <div className="space-y-1.5">
+              <label htmlFor={ids.province} className="text-sm font-medium">
+                Province
+              </label>
+              <select
+                id={ids.province}
+                className={FIELD}
+                value={draft.province ?? SHOWROOM_PROVINCE_ALL}
+                onChange={(event) =>
+                  set({
+                    province:
+                      event.target.value === SHOWROOM_PROVINCE_ALL ? null : event.target.value,
+                  })
+                }
+              >
+                <option value={SHOWROOM_PROVINCE_ALL}>All of South Africa</option>
+                {getProvinceNames().map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           {draft.vertical === "tourism" ? (
             <fieldset className="space-y-1.5">

@@ -212,11 +212,11 @@ test.describe("Mobile UX smoke", () => {
         expect(createBox!.height).toBeGreaterThanOrEqual(44);
       }
 
-      const pill = page.locator(`button[aria-label="${filterCheck.buttonLabel}"]:visible`).last();
+      // The filters drop on the right wall: named for screen readers, titled for touch.
+      const pill = page.locator(`button[aria-label^="${filterCheck.buttonLabel}"]:visible`).last();
       await expect(pill).toBeVisible();
       await expect(pill).toBeEnabled();
-      // A labelled pill, not an icon-only FAB.
-      await expect(pill).toContainText("Filters");
+      await expect(pill).toHaveAttribute("aria-haspopup", "dialog");
 
       await expect
         .poll(async () => (await pill.boundingBox())?.width ?? 0)

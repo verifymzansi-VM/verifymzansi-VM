@@ -24,6 +24,7 @@ export function ContactActionTracker({
   enabled = true,
   root,
   surface = "detail",
+  recordDetailView = true,
 }: {
   table: CommercialEventTable;
   id: string | null | undefined;
@@ -31,12 +32,14 @@ export function ContactActionTracker({
   enabled?: boolean;
   root?: RefObject<HTMLElement | null>;
   surface?: string;
+  /** Off where posts are flicked past (Video mode): only the dwell view counts there. */
+  recordDetailView?: boolean;
 }) {
   const isSuppressed = useClassicSuppressed();
 
   useEffect(() => {
     if (!id || !enabled || (!root && isSuppressed())) return;
-    trackCommercialEvents([{ table, id, type: "detail_view", surface }]);
+    if (recordDetailView) trackCommercialEvents([{ table, id, type: "detail_view", surface }]);
 
     let websiteHost: string | null = null;
     try {
@@ -85,7 +88,7 @@ export function ContactActionTracker({
       document.removeEventListener("click", onClick, { capture: true });
       window.removeEventListener(CONTENT_SHARED_EVENT, onShare);
     };
-  }, [table, id, website, enabled, root, surface, isSuppressed]);
+  }, [table, id, website, enabled, root, surface, isSuppressed, recordDetailView]);
 
   return null;
 }

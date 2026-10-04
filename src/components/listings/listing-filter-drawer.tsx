@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, SlidersHorizontal, X } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Search, X } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { FilterEdgeTab } from "./filter-edge-tab";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,6 @@ import { LISTING_CONDITIONS, getListingConditionLabel } from "@/lib/constants/li
 import { cloneMarketplaceFilters, useMarketplaceStore, type MarketplaceFilters } from "@/stores";
 import { cn } from "@/lib/utils";
 import { triggerHaptic } from "@/lib/utils/haptics";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { ListingAttributeFilters } from "./listing-attribute-filters";
 import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 import {
@@ -52,7 +52,6 @@ function countActiveFilters(
 export function ListingFilterDrawer() {
   const { filters, replaceFilters } = useMarketplaceStore();
   const [open, setOpen] = useState(false);
-  const isHydrated = useHydrated();
   const [draftFilters, setDraftFilters] = useState<MarketplaceFilters>(() =>
     cloneMarketplaceFilters(filters)
   );
@@ -173,34 +172,17 @@ export function ListingFilterDrawer() {
         />
       </div>
 
-      {/* ── Sticky FAB filter button (mobile only) ── */}
-      {isHydrated ? (
-        <SheetTrigger asChild>
-          <button
-            type="button"
-            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background shadow-xl shadow-black/20 ring-1 ring-white/10 transition-all hover:bg-foreground/90 active:scale-[0.98] lg:hidden motion-reduce:transition-none motion-reduce:active:scale-100"
-            aria-label="Open listing filters"
-          >
-            <SlidersHorizontal className="h-4 w-4 shrink-0" />
-            <span>Filters</span>
-            {appliedFilterCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-gold px-1 text-[11px] font-bold text-warm-950">
-                {appliedFilterCount}
-              </span>
-            )}
-          </button>
-        </SheetTrigger>
-      ) : (
-        <button
-          type="button"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-[calc(1rem+env(safe-area-inset-bottom))] z-40 inline-flex h-11 items-center justify-center gap-2 rounded-full bg-foreground px-5 text-sm font-semibold text-background opacity-50 shadow-xl lg:hidden"
-          aria-label="Open listing filters"
-          disabled
-        >
-          <SlidersHorizontal className="h-4 w-4 shrink-0" />
-          <span>Filters</span>
-        </button>
-      )}
+      {/* ── Filters on the right wall (phones and tablets) ── */}
+      <FilterEdgeTab
+        label="Open listing filters"
+        count={appliedFilterCount}
+        open={open}
+        onOpen={() => {
+          triggerHaptic("medium");
+          setDraftFilters(cloneMarketplaceFilters(filters));
+          setOpen(true);
+        }}
+      />
 
       <SheetContent
         side="bottom"

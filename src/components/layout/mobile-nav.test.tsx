@@ -3,10 +3,27 @@ import { render, screen } from "@testing-library/react";
 import { MobileNav } from "./mobile-nav";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
-vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
+const videoMode = vi.hoisted(() => ({ enabled: false }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => route.pathname,
+  useRouter: () => ({ push: vi.fn() }),
+}));
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ isAuthenticated: false }) }));
+vi.mock("@/components/video-mode/video-mode-entry", () => ({
+  useVideoModeEnabled: () => videoMode.enabled,
+  useOpenVideoMode: () => vi.fn(),
+}));
 
 describe("MobileNav", () => {
+  it("gives Search's place to Video mode when the visitor may use it", () => {
+    route.pathname = "/mzansi-market";
+    videoMode.enabled = true;
+    render(<MobileNav />);
+    expect(screen.getByRole("link", { name: "Video" })).toHaveAttribute("href", "/video-mode");
+    expect(screen.queryByRole("link", { name: "Search" })).not.toBeInTheDocument();
+    videoMode.enabled = false;
+  });
+
   it("replaces Safety with Search on the home page", () => {
     route.pathname = "/";
     render(<MobileNav />);
