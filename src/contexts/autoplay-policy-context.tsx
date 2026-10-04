@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useHoverCapability } from "@/hooks/use-hover-capability";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 interface AutoplayPolicyContextValue {
   /**
@@ -14,7 +15,10 @@ interface AutoplayPolicyContextValue {
 
 const DEFAULT_POLICY: AutoplayPolicyContextValue = { disableAutoplay: false };
 
-const AutoplayPolicyContext = createContext<AutoplayPolicyContextValue>(DEFAULT_POLICY);
+const AutoplayPolicyContext = createContext({
+  ...DEFAULT_POLICY,
+  serverDisableAutoplay: DEFAULT_POLICY.disableAutoplay,
+});
 
 /**
  * Reads the current autoplay policy. Defaults to `disableAutoplay: false`
@@ -22,17 +26,30 @@ const AutoplayPolicyContext = createContext<AutoplayPolicyContextValue>(DEFAULT_
  * their behaviour unless they explicitly opt out.
  */
 export function useAutoplayPolicy(): AutoplayPolicyContextValue {
-  return useContext(AutoplayPolicyContext);
+  const policy = useContext(AutoplayPolicyContext);
+  const hydrated = useHydrated();
+  // A streamed child may hydrate after the provider's hover effect has run.
+  // Its first render must still use the policy that produced its server HTML.
+  const disableAutoplay = hydrated ? policy.disableAutoplay : policy.serverDisableAutoplay;
+  return useMemo(() => ({ disableAutoplay }), [disableAutoplay]);
 }
 
 interface AutoplayPolicyProviderProps {
   disableAutoplay: boolean;
+  serverDisableAutoplay?: boolean;
   children: ReactNode;
 }
 
 /** Explicitly sets the autoplay policy for a subtree. */
-export function AutoplayPolicyProvider({ disableAutoplay, children }: AutoplayPolicyProviderProps) {
-  const value = useMemo<AutoplayPolicyContextValue>(() => ({ disableAutoplay }), [disableAutoplay]);
+export function AutoplayPolicyProvider({
+  disableAutoplay,
+  serverDisableAutoplay = disableAutoplay,
+  children,
+}: AutoplayPolicyProviderProps) {
+  const value = useMemo(
+    () => ({ disableAutoplay, serverDisableAutoplay }),
+    [disableAutoplay, serverDisableAutoplay]
+  );
   return <AutoplayPolicyContext.Provider value={value}>{children}</AutoplayPolicyContext.Provider>;
 }
 
@@ -44,5 +61,9 @@ export function AutoplayPolicyProvider({ disableAutoplay, children }: AutoplayPo
  */
 export function DisableMobileAutoplay({ children }: { children: ReactNode }) {
   const canHover = useHoverCapability();
-  return <AutoplayPolicyProvider disableAutoplay={!canHover}>{children}</AutoplayPolicyProvider>;
+  return (
+    <AutoplayPolicyProvider disableAutoplay={!canHover} serverDisableAutoplay>
+      {children}
+    </AutoplayPolicyProvider>
+  );
 }
