@@ -16,7 +16,10 @@ async function generateAllIcons() {
       .toFile(output(`public/icons/icon-${size}.png`));
   }
   await sharp(master).resize(64, 64).png().toFile(output("src/app/icon.png"));
-  await sharp(master).resize(96, 96).png().toFile(output("public/images/brand-shield-small.png"));
+  await sharp(master)
+    .resize(96, 96)
+    .png({ palette: true, quality: 90, effort: 10, compressionLevel: 9 })
+    .toFile(output("public/images/brand-shield-small.png"));
   const favicon = await pngToIco(
     await Promise.all([16, 32, 48].map((size) => sharp(master).resize(size, size).png().toBuffer()))
   );

@@ -49,7 +49,7 @@ export function VerificationEmblem({
         alt=""
         width={176}
         height={176}
-        sizes={lg ? "176px" : "112px"}
+        unoptimized
         className={cn(
           "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)]",
           lg ? "h-36 w-36 xl:h-44 xl:w-44" : "h-28 w-28"

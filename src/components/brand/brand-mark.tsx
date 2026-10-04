@@ -1,8 +1,8 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-// Local assets bypass resizing in our loader; use the small shield for this compact mark.
-export const BRAND_SHIELD_SRC = "/images/brand-shield-small.png?v=20260924";
+// Pre-compressed 96px shield served as-is so every instance shares one cached URL.
+export const BRAND_SHIELD_SRC = "/images/brand-shield-small.png?v=20261005";
 
 type BrandMarkSize = "sm" | "md" | "lg";
 
@@ -72,7 +72,7 @@ export function BrandMark({
         alt=""
         width={s.px}
         height={s.px}
-        sizes={`${s.px}px`}
+        unoptimized
         priority={priority}
         className={cn(
           "shrink-0 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.25)]",

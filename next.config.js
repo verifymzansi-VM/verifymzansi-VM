@@ -44,9 +44,11 @@ const nextConfig = {
     // with proper width/quality/format negotiation on mobile.
     loader: "custom",
     loaderFile: "./src/lib/image-loader.ts",
-    // 400px media variants already exist in R2. Include their exact width so
-    // small high-DPI phones do not jump from 384w straight to an 800px file.
-    deviceSizes: [400, 640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    // Media is served as pre-generated 400/800/1600px variants and local
+    // assets are not resized, so extra widths only repeat the same file in
+    // every srcset. Keep candidates aligned with the variants that exist.
+    deviceSizes: [400, 800, 1600],
+    imageSizes: [128, 256],
     remotePatterns: [
       {
         protocol: "https",

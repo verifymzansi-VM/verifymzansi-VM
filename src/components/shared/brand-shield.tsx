@@ -15,7 +15,7 @@ export const BrandShield = forwardRef<SVGSVGElement, SVGProps<SVGSVGElement>>(fu
       viewBox="0 0 24 24"
       fill="none"
     >
-      <image href="/images/brand-shield-small.png?v=20260924" width="24" height="24" />
+      <image href="/images/brand-shield-small.png?v=20261005" width="24" height="24" />
       {children}
     </svg>
   );

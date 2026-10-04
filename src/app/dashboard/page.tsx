@@ -390,7 +390,7 @@ export default async function DashboardPage() {
           aria-hidden="true"
           width={160}
           height={160}
-          sizes="160px"
+          unoptimized
           className="pointer-events-none absolute -right-6 -top-6 h-40 w-40 object-contain opacity-[0.12] sm:right-6 sm:top-1/2 sm:-translate-y-1/2 sm:opacity-20"
         />
         <div className="relative min-w-0">

@@ -241,7 +241,7 @@ describe("ShowroomCardCarousel", () => {
       "media",
       "(min-width: 768px), (orientation: landscape)"
     );
-    expect(mobileBackground).toHaveAttribute("fetchpriority", "low");
+    expect(mobileBackground).toHaveAttribute("fetchpriority", "high");
   });
 
   it("keeps the default gradient-only shell when no decorative background is provided", () => {

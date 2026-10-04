@@ -119,7 +119,8 @@ export function ShowroomSectionShell({
           ) : (
             <picture>
               <source media="(min-width: 768px), (orientation: landscape)" srcSet={backgroundSrc} />
-              {/* Precompressed local artwork: picture selects one file before downloading. */}
+              {/* Precompressed local artwork: picture selects one file before downloading.
+                  It is the LCP element on showroom pages, so fetch it at high priority. */}
               <img
                 src={mobileBackgroundSrc}
                 alt=""
@@ -127,7 +128,7 @@ export function ShowroomSectionShell({
                 height={800}
                 loading="eager"
                 decoding="async"
-                fetchPriority="low"
+                fetchPriority="high"
                 className={cn(
                   "showroom-artwork absolute inset-0 h-full w-full object-cover",
                   hasListings && "scale-[1.01]"

@@ -96,7 +96,7 @@ function LegalShield() {
         alt=""
         width={112}
         height={112}
-        sizes="112px"
+        unoptimized
         className="absolute inset-6 h-28 w-28 object-contain opacity-90 drop-shadow-[0_14px_30px_rgba(0,0,0,0.45)]"
       />
     </div>

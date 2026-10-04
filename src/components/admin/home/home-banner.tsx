@@ -67,7 +67,7 @@ export function HomeBanner({
         aria-hidden="true"
         width={160}
         height={160}
-        sizes="160px"
+        unoptimized
         className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 object-contain opacity-[0.08] lg:left-[46%] lg:right-auto lg:top-1/2 lg:-translate-y-1/2"
       />
 
