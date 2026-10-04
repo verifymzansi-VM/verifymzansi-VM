@@ -106,7 +106,7 @@ test.describe("Mobile UX smoke", () => {
     for (const path of ["/", "/search", "/mzansi-market", "/mzansi-business", "/tourism-events"]) {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await expect(bottomNav, `${path} shows the tab bar`).toBeVisible();
-      for (const label of ["Home", "Search", "Post", "Verify", "Account"]) {
+      for (const label of ["Home", "Video", "Post", "Verify", "Account"]) {
         await expect(bottomNav.getByRole("link", { name: label, exact: true })).toBeVisible();
       }
       const tabs = bottomNav.getByRole("link");

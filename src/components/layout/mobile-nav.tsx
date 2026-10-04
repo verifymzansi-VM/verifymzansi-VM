@@ -3,14 +3,14 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clapperboard, Compass, Home, Plus, UserRound } from "lucide-react";
+import { Clapperboard, Home, Plus, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { triggerHaptic } from "@/lib/utils/haptics";
-import { useOpenVideoMode, useVideoModeEnabled } from "@/components/video-mode/video-mode-entry";
+import { useOpenVideoMode } from "@/components/video-mode/video-mode-entry";
 
 interface TabDef {
-  id: "home" | "search" | "post" | "verify" | "dashboard";
+  id: "home" | "video" | "post" | "verify" | "dashboard";
   href: string;
   icon: typeof Home;
   label: string;
@@ -21,12 +21,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: "home", href: "/", icon: Home, label: "Home" },
-  {
-    id: "search",
-    href: "/search",
-    icon: Compass,
-    label: "Search",
-  },
+  { id: "video", href: "/video-mode", icon: Clapperboard, label: "Video" },
   { id: "post", href: "/post/create", icon: Plus, label: "Post", requiresAuth: true },
   { id: "verify", href: "/verification", icon: ShieldCheck, label: "Verify" },
   {
@@ -73,8 +68,7 @@ export function MobileNav() {
 
 function MobileNavBar({ pathname }: { pathname: string }) {
   const { isAuthenticated } = useAuth();
-  // Video mode takes Search's place; Search then sits in the header.
-  const videoEnabled = useVideoModeEnabled();
+  // Search sits in the header on phones, so Video mode takes its slot here.
   const openVideoMode = useOpenVideoMode();
 
   return (
@@ -93,11 +87,11 @@ function MobileNavBar({ pathname }: { pathname: string }) {
           const Icon = tab.icon;
           const isPostAction = tab.id === "post";
 
-          if (tab.id === "search" && videoEnabled) {
+          if (tab.id === "video") {
             return (
               <a
-                key="video"
-                href="/video-mode"
+                key={tab.id}
+                href={href}
                 onClick={(event) => {
                   triggerHaptic("light");
                   openVideoMode(event);
@@ -106,9 +100,9 @@ function MobileNavBar({ pathname }: { pathname: string }) {
               >
                 {/* Same plain icon as its neighbours. */}
                 <span aria-hidden="true" className="flex h-7 w-12 items-center justify-center">
-                  <Clapperboard className="h-[22px] w-[22px]" strokeWidth={2} />
+                  <Icon className="h-[22px] w-[22px]" strokeWidth={2} />
                 </span>
-                <span className="leading-none">Video</span>
+                <span className="leading-none">{tab.label}</span>
               </a>
             );
           }

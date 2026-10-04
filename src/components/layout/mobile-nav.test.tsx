@@ -3,31 +3,27 @@ import { render, screen } from "@testing-library/react";
 import { MobileNav } from "./mobile-nav";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
-const videoMode = vi.hoisted(() => ({ enabled: false }));
 vi.mock("next/navigation", () => ({
   usePathname: () => route.pathname,
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ isAuthenticated: false }) }));
 vi.mock("@/components/video-mode/video-mode-entry", () => ({
-  useVideoModeEnabled: () => videoMode.enabled,
   useOpenVideoMode: () => vi.fn(),
 }));
 
 describe("MobileNav", () => {
-  it("gives Search's place to Video mode when the visitor may use it", () => {
+  it("offers Video mode in the second slot; Search lives in the header", () => {
     route.pathname = "/mzansi-market";
-    videoMode.enabled = true;
     render(<MobileNav />);
     expect(screen.getByRole("link", { name: "Video" })).toHaveAttribute("href", "/video-mode");
     expect(screen.queryByRole("link", { name: "Search" })).not.toBeInTheDocument();
-    videoMode.enabled = false;
   });
 
-  it("replaces Safety with Search on the home page", () => {
+  it("shows the same tabs on the home page", () => {
     route.pathname = "/";
     render(<MobileNav />);
-    expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: "Video" })).toHaveAttribute("href", "/video-mode");
     expect(screen.queryByRole("link", { name: "Safety" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Post" })).toHaveAttribute(
       "href",
@@ -58,9 +54,9 @@ describe("MobileNav", () => {
   });
 
   it("marks the active tab and labels the account tab", () => {
-    route.pathname = "/search";
+    route.pathname = "/";
     render(<MobileNav />);
-    expect(screen.getByRole("link", { name: "Search" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Account" })).toHaveAttribute(
       "href",
       "/login?returnUrl=%2Fdashboard"

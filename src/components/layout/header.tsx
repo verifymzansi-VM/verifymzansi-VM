@@ -32,7 +32,7 @@ import {
 import { BrandLogo } from "../shared/brand-logo";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
-import { VideoModeEntry, useVideoModeEnabled } from "@/components/video-mode/video-mode-entry";
+import { VideoModeEntry } from "@/components/video-mode/video-mode-entry";
 import { useAuth } from "@/hooks/use-auth";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { cn } from "@/lib/utils";
@@ -95,7 +95,6 @@ function HeaderInner({
 
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
   const auth = useAuth();
-  const videoModeEnabled = useVideoModeEnabled();
 
   const isAuthenticated = isAuthProp ?? auth.isAuthenticated;
   const finalDisplayName = displayNameProp || auth.user?.displayName || "";
@@ -361,7 +360,8 @@ function HeaderInner({
         {/* Mobile actions stay visible when the menu is closed. */}
         <div className="flex shrink-0 items-center gap-1 justify-self-end lg:hidden">
           {renderThemeToggle("relative h-11 w-11 shrink-0")}
-          {renderSearchLink(videoModeEnabled ? "flex shrink-0" : "hidden md:flex")}
+          {/* Phones: Video mode holds the tab bar's second slot, so Search sits here. */}
+          {renderSearchLink("flex shrink-0")}
           {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
           <button
             ref={mobileToggleRef}

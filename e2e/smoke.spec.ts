@@ -285,9 +285,9 @@ test.describe("Platform Smoke", () => {
     // Browse pages are discovery surfaces, so the tab bar shows here too.
     const bottomNav = page.getByRole("navigation", { name: "Main", exact: true });
     await expect(bottomNav).toBeVisible();
-    await expect(bottomNav.getByRole("link", { name: "Search", exact: true })).toHaveAttribute(
+    await expect(bottomNav.getByRole("link", { name: "Video", exact: true })).toHaveAttribute(
       "href",
-      "/search"
+      "/video-mode"
     );
 
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));

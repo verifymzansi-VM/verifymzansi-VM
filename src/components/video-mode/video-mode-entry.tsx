@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Clapperboard } from "lucide-react";
-import { VIDEO_MODE_DESKTOP_QUERY, VIDEO_MODE_FROM_KEY } from "@/lib/feed/video-mode-keys";
+import { VIDEO_MODE_FROM_KEY } from "@/lib/feed/video-mode-keys";
 import { cn } from "@/lib/utils";
-
-const ENABLED_KEY = "vm:video:enabled";
-const ENABLED_TTL_MS = 10 * 60 * 1000;
 
 /** Pages where the tablet header entry belongs: home and the three marketplace lists. */
 const ENTRY_PATHS = new Set([
@@ -18,75 +15,6 @@ const ENTRY_PATHS = new Set([
   "/promotions",
   "/promotions/events",
 ]);
-
-function cachedEnabled(): boolean | null {
-  try {
-    const raw = window.sessionStorage.getItem(ENABLED_KEY);
-    if (!raw) return null;
-    const { enabled, at } = JSON.parse(raw) as { enabled?: unknown; at?: unknown };
-    return typeof enabled === "boolean" &&
-      typeof at === "number" &&
-      Date.now() - at < ENABLED_TTL_MS
-      ? enabled
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-/** One question per page load, however many places ask (header, tab bar). */
-let pending: Promise<boolean> | null = null;
-
-function askEnabled(): Promise<boolean> {
-  const cached = cachedEnabled();
-  if (cached !== null) return Promise.resolve(cached);
-  pending ??= fetch("/api/feed/video-mode", { cache: "no-store", credentials: "same-origin" })
-    .then((response) => (response.ok ? response.json() : { enabled: false }))
-    .then((payload: { enabled?: unknown }) => {
-      const value = payload.enabled === true;
-      try {
-        window.sessionStorage.setItem(
-          ENABLED_KEY,
-          JSON.stringify({ enabled: value, at: Date.now() })
-        );
-      } catch {
-        // Asked again on the next page.
-      }
-      return value;
-    })
-    .catch(() => false)
-    .finally(() => {
-      pending = null;
-    });
-  return pending;
-}
-
-/**
- * Whether this visitor may use Video mode (the `video_mode` flag), on phones and
- * tablets only. The header and tab bar are shared by cached pages, so it is
- * asked once per tab session; it stays false until the answer is yes.
- */
-export function useVideoModeEnabled() {
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    const desktop = window.matchMedia(VIDEO_MODE_DESKTOP_QUERY);
-    let cancelled = false;
-    // Asked when the screen is (or becomes, e.g. a rotated tablet) phone or tablet sized.
-    const check = () => {
-      if (desktop.matches) return;
-      void askEnabled().then((value) => {
-        if (!cancelled) setEnabled(value);
-      });
-    };
-    check();
-    desktop.addEventListener("change", check);
-    return () => {
-      cancelled = true;
-      desktop.removeEventListener("change", check);
-    };
-  }, []);
-  return enabled;
-}
 
 /**
  * Open Video mode from the page the visitor is on, keeping a list's filters.
@@ -118,9 +46,8 @@ export function useOpenVideoMode() {
  */
 export function VideoModeEntry({ className }: { className?: string }) {
   const pathname = usePathname();
-  const enabled = useVideoModeEnabled();
   const open = useOpenVideoMode();
-  if (!enabled || !ENTRY_PATHS.has(pathname)) return null;
+  if (!ENTRY_PATHS.has(pathname)) return null;
   return (
     <a
       href="/video-mode"
