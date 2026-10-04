@@ -52,6 +52,8 @@ export default defineConfig({
   ],
   webServer: {
     command: "node scripts/start-playwright-server.cjs",
+    // Preserve build diagnostics in isolated audit logs when startup fails.
+    stdout: process.env.PLAYWRIGHT_CAPTURE_SERVER_OUTPUT === "1" ? "pipe" : "ignore",
     url: PLAYWRIGHT_BASE_URL,
     reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
     timeout: PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS,

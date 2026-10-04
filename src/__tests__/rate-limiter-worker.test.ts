@@ -83,6 +83,44 @@ function createWorkerRequest(action: string, key: string): Request {
 }
 
 describe("rate-limiter worker", () => {
+  it.each([true, false])(
+    "limits governance mutations to ten per minute (Durable Object: %s)",
+    async (useDurableObject) => {
+      const { env } = createWorkerEnv({ useDurableObject });
+      for (let attempt = 0; attempt < 10; attempt++) {
+        expect(
+          (
+            await rateLimiterWorker.fetch(
+              createWorkerRequest("admin:governance:decide", "synthetic-governor"),
+              env as never
+            )
+          ).status
+        ).toBe(200);
+      }
+      expect(
+        (
+          await rateLimiterWorker.fetch(
+            createWorkerRequest("admin:governance:decide", "synthetic-governor"),
+            env as never
+          )
+        ).status
+      ).toBe(429);
+    }
+  );
+
+  it("keeps the hourly governance limit and does not consume minute quota on refusal", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+    kvStore.set("admin:governance:decide:synthetic-governor:3600", "60");
+    expect(
+      (
+        await rateLimiterWorker.fetch(
+          createWorkerRequest("admin:governance:decide", "synthetic-governor"),
+          env as never
+        )
+      ).status
+    ).toBe(429);
+    expect(kvStore.get("admin:governance:decide:synthetic-governor:60")).toBeUndefined();
+  });
   it("rejects invalid external worker payloads", async () => {
     const { env } = createWorkerEnv({ useDurableObject: false });
     const res = await rateLimiterWorker.fetch(

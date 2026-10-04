@@ -22,7 +22,8 @@ const legacyBanned = await person(null, "banned");
 await migrate(
   "20260927110000_staff_roles_authority.sql",
   "20260927110100_staff_role_changes.sql",
-  "20260927120000_decision_execution_layer.sql"
+  "20260927120000_decision_execution_layer.sql",
+  "20261004120000_kyc_override_submission_binding.sql"
 );
 
 const moderate = (actor, report, action, opts = {}) =>
@@ -408,10 +409,16 @@ assert.equal(
 // ── KYC override execution tracking ─────────────────────────────────────────
 const kycUser = await person("member");
 const stepId = uuid();
+const submittedAt = "2026-10-04T08:00:00.123456Z";
+await db.query(
+  `INSERT INTO verification_steps(id,user_id,step_type,risk_level,updated_at)
+  VALUES ($1,$2,'id_doc','high',$3)`,
+  [stepId, kycUser, submittedAt]
+);
 const proposeKyc = (actor, user = kycUser) =>
   call(
-    `SELECT public.propose_kyc_override($1,$2,$3,'high','verified_in_person','Checked the original ID') AS result`,
-    [actor, stepId, user]
+    `SELECT public.propose_kyc_override($1,$2,$3,'high','verified_in_person','Checked the original ID',$4) AS result`,
+    [actor, stepId, user, submittedAt]
   );
 assert.equal(
   (await proposeKyc(moderator, moderator)).error,
@@ -419,11 +426,74 @@ assert.equal(
   "staff cannot override their own KYC"
 );
 assert.equal((await proposeKyc(kycUser)).error, "forbidden", "members cannot propose overrides");
+assert.equal(
+  (
+    await call(
+      `SELECT public.propose_kyc_override($1,$2,$3,'high','verified_in_person',NULL) AS result`,
+      [moderator, stepId, kycUser]
+    )
+  ).error,
+  "step_changed",
+  "the legacy signature fails closed"
+);
+assert.equal(
+  (
+    await call(
+      `SELECT public.propose_kyc_override($1,$2,$3,'high','verified_in_person',NULL,$4) AS result`,
+      [moderator, stepId, kycUser, "2026-10-04T08:00:00.123455Z"]
+    )
+  ).error,
+  "step_changed",
+  "microsecond drift cannot be rounded away"
+);
+assert.equal(
+  (await proposeKyc(moderator, governor)).error,
+  "step_changed",
+  "the submitted owner must match the stored owner"
+);
+for (const role of ["anon", "authenticated"]) {
+  assert.equal(
+    await scalar(
+      `SELECT has_function_privilege($1,
+    'public.propose_kyc_override(uuid,uuid,uuid,text,text,text,timestamp with time zone)','EXECUTE')`,
+      [role]
+    ),
+    false
+  );
+}
 r = await proposeKyc(moderator);
 assert.equal(r.status, "proposed");
 const kyc = r.decision_id;
 assert.equal((await proposeKyc(governor2)).error, "pending_exists");
 assert.equal((await approve(moderator, kyc)).error, "forbidden");
+assert.equal(
+  await scalar(
+    `SELECT (payload->>'step_updated_at')::timestamptz = verification_steps.updated_at
+  FROM decision_records JOIN verification_steps ON verification_steps.id = (payload->>'step_id')::uuid
+  WHERE decision_records.id=$1`,
+    [kyc]
+  ),
+  true,
+  "proposal pins the exact database version"
+);
+await db.query(
+  `UPDATE verification_steps SET updated_at = updated_at + interval '1 microsecond' WHERE id=$1`,
+  [stepId]
+);
+assert.equal(
+  (await approve(governor, kyc)).error,
+  "step_changed",
+  "replacement evidence cannot inherit approval"
+);
+assert.equal(
+  await scalar(`SELECT status::text FROM decision_records WHERE id=$1`, [kyc]),
+  "pending_approval"
+);
+assert.equal(
+  await scalar(`SELECT count(*)::int FROM decision_approvals WHERE decision_id=$1`, [kyc]),
+  0
+);
+await db.query(`UPDATE verification_steps SET updated_at=$2 WHERE id=$1`, [stepId, submittedAt]);
 r = await approve(governor, kyc);
 assert.equal(r.execution, "pending");
 await asService(() =>

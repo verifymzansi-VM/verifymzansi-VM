@@ -22,6 +22,7 @@ import { scanForMalware } from "@/lib/utils/malware-scan";
 import { generateImageVariants } from "@/lib/services/image-variants";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { z } from "zod";
+import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 
 const log = createLogger("MediaUpload");
 
@@ -156,8 +157,13 @@ export async function POST(request: NextRequest) {
     // ── Parse form data ──────────────────────────────────────
     let formData: FormData;
     try {
-      formData = await request.formData();
-    } catch {
+      // Cap aggregate buffering at 50 MiB plus multipart overhead. Larger
+      // batches must be split into separate validated upload requests.
+      formData = await readBoundedRequestFormData(request, MAX_VIDEO_SIZE + 1024 * 1024);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+      }
       return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
     }
 

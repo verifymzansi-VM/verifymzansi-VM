@@ -3,6 +3,14 @@ import "server-only";
 export const PLAYWRIGHT_SESSION_COOKIE = "vmz_pw_session";
 const PLAYWRIGHT_SESSION_PREFIX = "persona:";
 
+/** Synthetic KYC reviewer only; callers must already enforce isolated E2E mode. */
+export function getPlaywrightPersonaRole(
+  persona: string
+): "member" | "moderator" | "governance_controller" {
+  if (/^kyc-governor(?:-[A-Za-z0-9]+)*$/.test(persona)) return "governance_controller";
+  return /^kyc-reviewer(?:-[A-Za-z0-9]+)*$/.test(persona) ? "moderator" : "member";
+}
+
 type StubUser = {
   id: string;
   email: string;
@@ -62,7 +70,7 @@ function buildStubUser(persona: string): StubUser {
     password: `Playwright-${normalizedPersona}-Password1!`,
     persona: normalizedPersona,
     is_anonymous: false,
-    app_metadata: { role: "member" },
+    app_metadata: { role: getPlaywrightPersonaRole(normalizedPersona) },
     user_metadata: { display_name: `Playwright ${normalizedPersona}` },
     identities: [{ id: deterministicId(`identity:${normalizedPersona}`) }],
   };

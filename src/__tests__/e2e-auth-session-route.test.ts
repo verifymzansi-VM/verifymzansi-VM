@@ -70,4 +70,23 @@ describe("GET /api/e2e/auth/session", () => {
     await expect(res.json()).resolves.toEqual({ error: "Not found" });
     expect(mockCreatePlaywrightSession).not.toHaveBeenCalled();
   });
+
+  it.each(["http:", "https:"])(
+    "matches %s transport for synthetic production-build cookies",
+    async (protocol) => {
+      vi.stubEnv("NODE_ENV", "production");
+      try {
+        const response = await GET(
+          new Request(
+            `${protocol}//localhost/api/e2e/auth/session?persona=verified-member`
+          ) as never
+        );
+        expect(response.status).toBe(200);
+        const cookie = response.headers.get("set-cookie") ?? "";
+        expect(/; secure(?:;|$)/i.test(cookie)).toBe(protocol === "https:");
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    }
+  );
 });

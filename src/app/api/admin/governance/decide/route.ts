@@ -11,7 +11,13 @@ import { applyVerificationDecision } from "@/lib/services/verification-decision"
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { reportCriticalIncident } from "@/lib/utils/alerts";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import {
+  internalApiError,
+  logApiError,
+  parseAndValidateJsonRequest,
+  rateLimitResponse,
+} from "@/lib/utils/api";
+import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { uuidSchema } from "@/lib/validations/shared";
 import type { StaffRole } from "@/types/enums";
@@ -57,9 +63,17 @@ export async function POST(request: Request) {
       request,
       logger: log,
       capability: "decision:approve",
-      rateLimitAction: "admin:governance:decide",
+      rateLimitAction: "admin:governance:request",
+      stepUp: true,
     });
     if (!guard.success) return guard.response;
+
+    const rateLimit = await checkSensitiveActionRateLimit(
+      guard.user.id,
+      "admin:governance:decide",
+      10
+    );
+    if (rateLimit.limited) return rateLimitResponse(rateLimit.retryAfter ?? 60);
 
     const body = await parseAndValidateJsonRequest(request, governanceDecideSchema, {
       invalidJsonMessage: "Invalid JSON payload",
@@ -146,15 +160,23 @@ async function executeKycOverride(
   const stepId = typeof payload.step_id === "string" ? payload.step_id : null;
   const overrideReasonCode =
     typeof payload.override_reason_code === "string" ? payload.override_reason_code : null;
+  const submissionUpdatedAt =
+    typeof payload.step_updated_at === "string" ? payload.step_updated_at : null;
+  const ownerId = typeof payload.user_id === "string" ? payload.user_id : null;
 
-  let error = "Verification step not found";
-  if (stepId) {
+  let error = "The reviewed submission is unavailable; request a new review";
+  if (
+    stepId &&
+    ownerId &&
+    submissionUpdatedAt &&
+    Number.isFinite(Date.parse(submissionUpdatedAt))
+  ) {
     const { data: step } = await createAdminClient()
       .from("verification_steps")
       .select("*")
       .eq("id", stepId)
       .maybeSingle();
-    if (step) {
+    if (step && step.user_id === ownerId && step.user_id !== reviewerId) {
       const applied = await applyVerificationDecision({
         step,
         decision: "approved",
@@ -162,6 +184,8 @@ async function executeKycOverride(
         reviewerId,
         reviewerRole,
         allowAlreadyApplied: isRetry,
+        overrideDecisionId: decisionId,
+        expectedSubmissionUpdatedAt: submissionUpdatedAt,
       });
       if (applied.ok) {
         await markDecisionExecution(decisionId, true);
@@ -183,7 +207,7 @@ async function executeKycOverride(
 async function retryExecution(decisionId: string, actorId: string, actorRole: StaffRole) {
   const { data: decision } = await createAdminClient()
     .from("decision_records")
-    .select("id, status, action_category, execution_status, payload, approver_id")
+    .select("id, status, action_category, execution_status, payload, approver_id, recommender_id")
     .eq("id", decisionId)
     .maybeSingle();
   if (
@@ -193,6 +217,10 @@ async function retryExecution(decisionId: string, actorId: string, actorRole: St
     decision.execution_status !== "failed"
   ) {
     return NextResponse.json({ error: "Nothing to retry for this decision" }, { status: 409 });
+  }
+
+  if (decision.recommender_id === actorId || decision.payload?.user_id === actorId) {
+    return decisionRefusalResponse("not_independent");
   }
 
   // The admin who retries is recorded as the reviewer of the step.

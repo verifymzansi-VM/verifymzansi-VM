@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
+import { fetchManagementApi } from "./lib/supabase-management";
 import {
   classifyLint,
   type AdvisorLint,
@@ -178,28 +179,6 @@ function resolveProjectRef(explicitRef: string | null): string {
   }
 
   return ref;
-}
-
-async function fetchManagementApi<T>(
-  token: string,
-  pathname: string,
-  init?: RequestInit
-): Promise<T> {
-  const response = await fetch(`https://api.supabase.com/v1${pathname}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Supabase Management API ${pathname} failed (${response.status}): ${text}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 async function fetchIndexMetadata(

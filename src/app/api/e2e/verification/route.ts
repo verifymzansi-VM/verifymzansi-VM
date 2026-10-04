@@ -22,10 +22,12 @@ import { z } from "zod";
 import {
   listPlaywrightTableRows,
   writePlaywrightTableRows,
+  ensurePlaywrightVerifiedMember,
 } from "@/lib/supabase/playwright-fixture-store";
 import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { normalizeSaPhone } from "@/lib/utils/phone";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { uuidSchema } from "@/lib/validations/shared";
 
 const OTP_PBKDF2_ITERATIONS = 100000;
 
@@ -47,6 +49,16 @@ const personaSchema = z
 
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reset"), persona: personaSchema }),
+  z.object({ action: z.literal("prepare_kyc"), persona: personaSchema }),
+  z.object({ action: z.literal("snapshot"), persona: personaSchema }),
+  z.object({ action: z.literal("claim"), persona: personaSchema, stepId: uuidSchema }),
+  z.object({
+    action: z.literal("set_risk"),
+    persona: personaSchema,
+    stepId: uuidSchema,
+    riskLevel: z.enum(["low", "high"]),
+    riskScore: z.number().int().min(0).max(100),
+  }),
   z.object({
     action: z.literal("seed_otp"),
     persona: personaSchema,
@@ -97,6 +109,9 @@ function resetVerificationState(userId: string) {
           location_city: null,
           location_town: null,
           account_verification_status: "incomplete",
+          legal_first_name: null,
+          legal_last_name: null,
+          legal_name_locked_at: null,
           updated_at: new Date().toISOString(),
         }
       : row
@@ -158,7 +173,115 @@ export async function POST(request: NextRequest) {
     return parsed.response;
   }
 
-  const userId = `pw-${parsed.data.persona}`;
+  const userId = ensurePlaywrightVerifiedMember(parsed.data.persona).id;
+
+  if (parsed.data.action === "snapshot") {
+    const steps = listPlaywrightTableRows("verification_steps")
+      .filter((row) => row.user_id === userId)
+      .map(
+        ({
+          id,
+          step_type,
+          status,
+          artifact_id,
+          updated_at,
+          risk_level,
+          reviewed_by,
+          reviewed_at,
+        }) => ({
+          id,
+          step_type,
+          status,
+          artifact_id,
+          updated_at,
+          risk_level,
+          reviewed_by,
+          reviewed_at,
+        })
+      );
+    const profile = listPlaywrightTableRows("account_profiles").find(
+      (row) => row.user_id === userId
+    );
+    const artifacts = listPlaywrightTableRows("kyc_artifacts")
+      .filter((row) => row.user_id === userId)
+      .map(({ id, step_type, status, purge_after }) => ({ id, step_type, status, purge_after }));
+    return NextResponse.json({
+      ok: true,
+      userId,
+      steps,
+      artifacts,
+      profile: {
+        account_verification_status: profile?.account_verification_status,
+        display_name: profile?.display_name,
+        legal_name_locked_at: profile?.legal_name_locked_at,
+      },
+    });
+  }
+  if (parsed.data.action === "set_risk") {
+    const role = listPlaywrightTableRows("staff_roles").find(
+      (row) => row.user_id === userId && row.status === "active"
+    );
+    if (!role) return NextResponse.json({ error: "Reviewer fixture required" }, { status: 403 });
+    const { stepId, riskLevel, riskScore } = parsed.data;
+    const steps = listPlaywrightTableRows("verification_steps");
+    if (!steps.some((row) => row.id === stepId))
+      return NextResponse.json({ error: "Step not found" }, { status: 404 });
+    writePlaywrightTableRows(
+      "verification_steps",
+      steps.map((row) =>
+        row.id === stepId
+          ? {
+              ...row,
+              risk_level: riskLevel,
+              risk_score: riskScore,
+              updated_at: new Date().toISOString(),
+            }
+          : row
+      )
+    );
+    return NextResponse.json({ ok: true });
+  }
+  if (parsed.data.action === "claim") {
+    const { stepId } = parsed.data;
+    const role = listPlaywrightTableRows("staff_roles").find(
+      (row) => row.user_id === userId && row.status === "active"
+    );
+    if (!role) return NextResponse.json({ error: "Reviewer fixture required" }, { status: 403 });
+    const rows = listPlaywrightTableRows("queue_claims").filter((row) => row.item_id !== stepId);
+    rows.push({
+      id: crypto.randomUUID(),
+      queue: "kyc",
+      item_type: "verification_step",
+      item_id: stepId,
+      claimed_by: userId,
+      expires_at: new Date(Date.now() + 600000).toISOString(),
+    });
+    writePlaywrightTableRows("queue_claims", rows);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (parsed.data.action === "prepare_kyc") {
+    resetVerificationState(userId);
+    const now = new Date().toISOString();
+    writePlaywrightTableRows(
+      "account_profiles",
+      listPlaywrightTableRows("account_profiles").map((row) =>
+        row.user_id === userId ? { ...row, phone: "+27110000000" } : row
+      )
+    );
+    const steps = listPlaywrightTableRows("verification_steps");
+    steps.push({
+      id: crypto.randomUUID(),
+      user_id: userId,
+      step_type: "phone",
+      status: "approved",
+      phone_verified_at: now,
+      created_at: now,
+      updated_at: now,
+    });
+    writePlaywrightTableRows("verification_steps", steps);
+    return NextResponse.json({ ok: true, userId });
+  }
 
   if (parsed.data.action === "reset") {
     resetVerificationState(userId);

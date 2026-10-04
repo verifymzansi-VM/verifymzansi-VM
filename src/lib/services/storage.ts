@@ -8,8 +8,31 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import { createLogger } from "@/lib/utils/logger";
+import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Storage");
+
+function shouldUsePlaywrightStorage(): boolean {
+  return isPlaywrightTestMode() && isPlaywrightSupabaseStubMode();
+}
+
+async function playwrightStoragePath(bucket: string, key: string): Promise<string | null> {
+  if (!shouldUsePlaywrightStorage()) return null;
+  const path = await import("node:path");
+  const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+  const publicBucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
+  const root =
+    bucket === privateBucket
+      ? ["tmp", "e2e-private-storage"]
+      : bucket === publicBucket
+        ? ["public", "e2e-media"]
+        : null;
+  if (!root) throw new Error("Unknown isolated storage bucket");
+  const directory = path.resolve(process.cwd(), ...root);
+  const target = path.resolve(path.join(directory, key));
+  if (!target.startsWith(directory + path.sep)) throw new Error("Invalid isolated storage path");
+  return target;
+}
 
 /**
  * R2-compatible object storage helpers for listing images
@@ -323,7 +346,7 @@ function r2SendOptions(timeoutMs: number): { abortSignal: AbortSignal } {
  * This properly signs requests using AWS Sigv4.
  */
 export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
-  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+  if (shouldUsePlaywrightStorage()) {
     assertSafeStorageKey(params.key);
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
@@ -426,6 +449,12 @@ export function generateStorageKey(
  */
 export async function deleteFromR2(bucket: string, key: string): Promise<void> {
   assertSafeStorageKey(key);
+  const localPath = await playwrightStoragePath(bucket, key);
+  if (localPath) {
+    const fs = await import("node:fs/promises");
+    await fs.rm(localPath, { force: true });
+    return;
+  }
 
   // Prefer native R2 binding when running on Cloudflare Workers.
   const r2Binding = await getR2BucketBinding(bucket);
@@ -449,6 +478,16 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
  */
 export async function getR2ObjectSize(bucket: string, key: string): Promise<number | null> {
   assertSafeStorageKey(key);
+  const localPath = await playwrightStoragePath(bucket, key);
+  if (localPath) {
+    const fs = await import("node:fs/promises");
+    try {
+      return (await fs.stat(localPath)).size;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
 
   const r2Binding = await getR2BucketBinding(bucket);
   if (r2Binding) {
@@ -475,6 +514,18 @@ export async function getR2ObjectBytes(
   key: string
 ): Promise<{ bytes: Uint8Array; contentType?: string; contentLength?: number } | null> {
   assertSafeStorageKey(key);
+
+  const localPath = await playwrightStoragePath(bucket, key);
+  if (localPath) {
+    const fs = await import("node:fs/promises");
+    try {
+      const bytes = await fs.readFile(localPath);
+      return { bytes, contentLength: bytes.byteLength };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
 
   const r2Binding = await getR2BucketBinding(bucket);
   if (r2Binding) {
@@ -585,7 +636,7 @@ export async function uploadKycDocument(
 
   // Playwright e2e stub: persist the encrypted artifact on local disk instead
   // of reaching real R2 with fixture credentials (mirrors uploadToR2's stub).
-  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+  if (shouldUsePlaywrightStorage()) {
     assertSafeStorageKey(key);
     const fs = await import("node:fs/promises");
     const path = await import("node:path");

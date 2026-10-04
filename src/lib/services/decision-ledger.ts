@@ -141,6 +141,7 @@ const REFUSALS: Record<string, [number, string]> = {
   not_pending: [409, "This has already been decided."],
   expired: [410, "This proposal expired. Propose it again if it is still needed."],
   payload_changed: [409, "The proposal changed after you opened it. Refresh and review it again."],
+  step_changed: [409, "The submission changed after review. Request a new review."],
   invalid_action: [400, "Choose a valid action."],
   invalid_duration: [400, "Suspensions last between 1 and 30 days."],
   target_missing: [404, "The reported content or account no longer exists."],

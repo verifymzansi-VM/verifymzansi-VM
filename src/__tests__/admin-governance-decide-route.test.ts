@@ -10,6 +10,7 @@ const {
   applyVerificationDecision,
   adminFrom,
   reportCriticalIncident,
+  sensitiveRateLimit,
 } = vi.hoisted(() => ({
   guard: vi.fn(),
   approveDecision: vi.fn(),
@@ -19,9 +20,11 @@ const {
   applyVerificationDecision: vi.fn(),
   adminFrom: vi.fn(),
   reportCriticalIncident: vi.fn(),
+  sensitiveRateLimit: vi.fn(),
 }));
 
 vi.mock("@/lib/utils/admin-route-guard", () => ({ enforceAdminMutationGuard: guard }));
+vi.mock("@/lib/utils/rate-limit", () => ({ checkSensitiveActionRateLimit: sensitiveRateLimit }));
 vi.mock("@/lib/services/decision-ledger", async (importOriginal) => ({
   ...(await importOriginal<typeof DecisionLedger>()),
   approveDecision,
@@ -38,6 +41,7 @@ import { POST } from "@/app/api/admin/governance/decide/route";
 const GOV = "11111111-1111-4111-8111-111111111111";
 const DECISION = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 const STEP = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+const SUBMISSION = "2026-10-04T08:00:00.123456Z";
 
 const request = (body: Record<string, unknown>) =>
   new Request("http://localhost:3000/api/admin/governance/decide", {
@@ -54,6 +58,7 @@ function tableReturns(data: unknown) {
 describe("POST /api/admin/governance/decide", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sensitiveRateLimit.mockResolvedValue({ limited: false });
     guard.mockResolvedValue({
       success: true,
       user: { id: GOV },
@@ -67,7 +72,10 @@ describe("POST /api/admin/governance/decide", () => {
       request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
     );
     expect(res.status).toBe(403);
-    expect(guard).toHaveBeenCalledWith(expect.objectContaining({ capability: "decision:approve" }));
+    expect(guard).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: "decision:approve", stepUp: true })
+    );
+    expect(sensitiveRateLimit).not.toHaveBeenCalled();
   });
 
   it("approves the exact payload version with the verified approver", async () => {
@@ -83,7 +91,25 @@ describe("POST /api/admin/governance/decide", () => {
     expect(res.status).toBe(200);
     expect(approveDecision).toHaveBeenCalledWith(GOV, DECISION, 2, "Evidence is clear");
     expect(applyVerificationDecision).not.toHaveBeenCalled();
+    expect(sensitiveRateLimit).toHaveBeenCalledWith(GOV, "admin:governance:decide", 10);
   });
+
+  it.each(["approve", "reject", "escalate", "retry_execution"])(
+    "refuses %s before mutation when the shared limiter is unavailable or exhausted",
+    async (action) => {
+      sensitiveRateLimit.mockResolvedValue({ limited: true, retryAfter: 37, degraded: true });
+      const response = await POST(
+        request({ action, decisionId: DECISION, payloadVersion: 1, rationale: "Synthetic review" })
+      );
+      expect(response.status).toBe(429);
+      expect(response.headers.get("Retry-After")).toBe("37");
+      expect(approveDecision).not.toHaveBeenCalled();
+      expect(rejectDecision).not.toHaveBeenCalled();
+      expect(escalateDecision).not.toHaveBeenCalled();
+      expect(adminFrom).not.toHaveBeenCalled();
+      expect(applyVerificationDecision).not.toHaveBeenCalled();
+    }
+  );
 
   it("no longer accepts a typed secondary approver", async () => {
     const res = await POST(
@@ -101,6 +127,7 @@ describe("POST /api/admin/governance/decide", () => {
   it.each([
     ["not_independent", 403],
     ["payload_changed", 409],
+    ["step_changed", 409],
     ["expired", 410],
     ["not_pending", 409],
   ])("maps the %s refusal to %i", async (error, status) => {
@@ -117,7 +144,12 @@ describe("POST /api/admin/governance/decide", () => {
       status: "approved",
       decision_id: DECISION,
       execution: "pending",
-      payload: { step_id: STEP, user_id: "member-1", override_reason_code: "verified_in_person" },
+      payload: {
+        step_id: STEP,
+        user_id: "member-1",
+        override_reason_code: "verified_in_person",
+        step_updated_at: SUBMISSION,
+      },
     });
     tableReturns({ id: STEP, user_id: "member-1", step_type: "id_doc", status: "pending" });
     applyVerificationDecision.mockResolvedValue({ ok: true });
@@ -133,6 +165,8 @@ describe("POST /api/admin/governance/decide", () => {
         overrideReasonCode: "verified_in_person",
         reviewerId: GOV,
         allowAlreadyApplied: false,
+        overrideDecisionId: DECISION,
+        expectedSubmissionUpdatedAt: SUBMISSION,
       })
     );
     expect(markDecisionExecution).toHaveBeenCalledWith(DECISION, true);
@@ -144,7 +178,7 @@ describe("POST /api/admin/governance/decide", () => {
       status: "approved",
       decision_id: DECISION,
       execution: "pending",
-      payload: { step_id: STEP, user_id: "member-1" },
+      payload: { step_id: STEP, user_id: "member-1", step_updated_at: SUBMISSION },
     });
     tableReturns({ id: STEP, user_id: "member-1", step_type: "id_doc", status: "pending" });
     applyVerificationDecision.mockResolvedValue({
@@ -186,7 +220,7 @@ describe("POST /api/admin/governance/decide", () => {
                 status: "approved",
                 action_category: "kyc_override",
                 execution_status: "failed",
-                payload: { step_id: STEP },
+                payload: { step_id: STEP, user_id: "member-1", step_updated_at: SUBMISSION },
               },
             }),
           })),
@@ -207,6 +241,49 @@ describe("POST /api/admin/governance/decide", () => {
     );
     expect(markDecisionExecution).toHaveBeenCalledWith(DECISION, true);
   });
+
+  it.each([
+    { step_id: STEP, user_id: "member-1" },
+    { step_id: STEP, user_id: "member-1", step_updated_at: "invalid" },
+    { step_id: STEP, user_id: "other-member", step_updated_at: SUBMISSION },
+    { step_id: STEP, user_id: GOV, step_updated_at: SUBMISSION },
+  ])("refuses an override with missing or mismatched submission binding: %j", async (payload) => {
+    approveDecision.mockResolvedValue({
+      ok: true,
+      status: "approved",
+      execution: "pending",
+      payload,
+    });
+    tableReturns({ id: STEP, user_id: "member-1", step_type: "id_doc", status: "pending" });
+    const response = await POST(
+      request({ action: "approve", decisionId: DECISION, payloadVersion: 1, rationale: "ok" })
+    );
+    expect(response.status).toBe(502);
+    expect(applyVerificationDecision).not.toHaveBeenCalled();
+    expect(markDecisionExecution).toHaveBeenCalledWith(DECISION, false, expect.any(String));
+  });
+
+  it.each(["proposer", "subject"])(
+    "refuses a retry by the %s even when they are an admin",
+    async (relationship) => {
+      guard.mockResolvedValue({ success: true, user: { id: GOV }, actorRole: "admin" });
+      tableReturns({
+        id: DECISION,
+        status: "approved",
+        action_category: "kyc_override",
+        execution_status: "failed",
+        recommender_id: relationship === "proposer" ? GOV : "other-staff",
+        payload: {
+          step_id: STEP,
+          user_id: relationship === "subject" ? GOV : "member-1",
+          step_updated_at: SUBMISSION,
+        },
+      });
+      const response = await POST(request({ action: "retry_execution", decisionId: DECISION }));
+      expect(response.status).toBe(403);
+      expect(applyVerificationDecision).not.toHaveBeenCalled();
+    }
+  );
 
   it("rejects through the database", async () => {
     rejectDecision.mockResolvedValue({ ok: true, status: "rejected" });

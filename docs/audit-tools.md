@@ -64,6 +64,17 @@ block both local and CI gates. Baseline updates require review of exact debt;
 environment variables cannot increase the budget. Lint/Knip failures remain
 visible until a precise non-security baseline or correction is reviewed.
 
+The Supabase security advisor retains raw findings and separately verifies
+intentional controls in `scripts/security-reviews/supabase-controls.json`.
+Reviewed states require exact function-body hashes, signatures, return types,
+ownership, fixed search paths and grants across the complete public helper
+dependency graph. Service-only tables require RLS, no policies and no effective
+browser-role table or column grants. Browser roles must lack superuser, RLS
+bypass and public-schema creation rights. New overloads, changed helpers,
+missing metadata or changed privileges lose attestation and block strict mode.
+This is a control review, not a security-debt baseline. Native leaked-password
+protection remains separately blocking in strict mode when plan-blocked.
+
 License reports fail closed on JSON/shape errors, unknown expressions and
 restricted license terms. The existing FFmpeg 0.12.9 exception requires the
 vendored notice and corresponding-source URL. Unknown/custom Remotion licenses
@@ -88,8 +99,11 @@ runs critical Chromium flows with deterministic providers, and records bundle
 checks at the same 275/325 KB budgets as CI. Desktop and mobile Chrome execute
 the same selected suite. It retains the checkout and artifacts for review. Skips
 without a passing instance of the same scenario in another project produce
-UNAVAILABLE. KYC browser coverage currently exercises anonymous and callback
-boundaries; authenticated submission/reviewer decisions remain incomplete.
+UNAVAILABLE. KYC browser coverage exercises anonymous/callback boundaries and
+synthetic authenticated ID/selfie submission, private evidence access, queue
+claims, resubmission, final approval and high-risk two-reviewer UI. All three
+authenticated scenarios must pass in both Chrome projects. Local fixtures do not
+establish genuine PostgreSQL RLS/transactions or provider delivery.
 WebKit/mobile-safari remain quarantined and are not inferred covered. The active
 checkout's `.next` directory is not built by this audit runner.
 

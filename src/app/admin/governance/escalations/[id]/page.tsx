@@ -121,7 +121,7 @@ export default async function DecisionDetailPage({ params }: Props) {
           </div>
 
           {/* Approval (if present) */}
-          {decision.approved_by && (
+          {decision.approver_id && (
             <div className="rounded-lg border p-4 bg-green-50 dark:bg-green-950/20">
               <div className="flex items-center gap-2 mb-2">
                 <User className="h-4 w-4" />
@@ -129,7 +129,7 @@ export default async function DecisionDetailPage({ params }: Props) {
               </div>
               <p className="text-sm">{decision.approval_rationale || "No reason provided."}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                By {decision.approved_by?.slice(0, 8)}… on{" "}
+                By {decision.approver_id?.slice(0, 8)}… on{" "}
                 {decision.decided_at ? formatDateTime(decision.decided_at) : "—"}
               </p>
             </div>

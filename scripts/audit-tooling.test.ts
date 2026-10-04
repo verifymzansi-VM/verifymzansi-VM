@@ -22,9 +22,122 @@ import { dependencyAuditVerdict } from "./dependency-audit-policy";
 import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
+import { assertKycAuthenticatedScenarios } from "./lib/kyc-browser-evidence";
+
+test("authenticated KYC evidence cannot be replaced by smoke tests, missing projects, skips or duplicates", () => {
+  const titles = [
+    "authenticated synthetic document submission, private evidence and independent reviewer resubmission",
+    "synthetic selfie and ordinary manual approvals complete verification, lock the legal name and schedule retention",
+    "high-risk approval stays pending until an independent governor approves through the governance UI",
+  ];
+  const rows = ["chromium", "mobile-chrome"].flatMap((project) =>
+    titles.map((title) => ({
+      file: "e2e/kyc-authenticated.spec.ts",
+      title,
+      project,
+      status: "expected",
+      expectedStatus: "passed",
+      resultStatus: "passed",
+    }))
+  );
+  assert.doesNotThrow(() => assertKycAuthenticatedScenarios(rows));
+  assert.throws(() => assertKycAuthenticatedScenarios([]), /Required KYC scenario/);
+  assert.throws(() => assertKycAuthenticatedScenarios(rows.slice(0, -1)), /Required KYC scenario/);
+  assert.throws(
+    () =>
+      assertKycAuthenticatedScenarios(
+        rows.map((row, index) => (index === 0 ? { ...row, status: "skipped" } : row))
+      ),
+    /Required KYC scenario/
+  );
+  assert.throws(() => assertKycAuthenticatedScenarios([...rows, rows[0]]), /Required KYC scenario/);
+  assert.throws(
+    () =>
+      assertKycAuthenticatedScenarios(
+        rows.map((row, index) =>
+          index === 0 ? { ...row, expectedStatus: "failed", resultStatus: "failed" } : row
+        )
+      ),
+    /Required KYC scenario/
+  );
+  assert.throws(
+    () =>
+      assertKycAuthenticatedScenarios(rows.map((row) => ({ ...row, file: "e2e/smoke.spec.ts" }))),
+    /Required KYC scenario/
+  );
+});
 import { sanitizeCloudflareEnvModule } from "./lib/cloudflare-env-policy";
 import { parseSupabaseStatus } from "./lib/supabase-status";
+import { copyWorkingTreeSnapshot } from "./lib/working-tree-snapshot";
+import { execFileSync } from "node:child_process";
+import { domainTestCommand } from "./lib/domain-test-command";
 import { assessPatchedAudit, verifyBracesBackport, BRACES_ADVISORY } from "./lib/braces-backport";
+test("domain test invocation executes paths with spaces and route-group parentheses", async () => {
+  const fixtureRoot = path.resolve("tmp");
+  await mkdir(fixtureRoot, { recursive: true });
+  const directory = await mkdtemp(path.join(fixtureRoot, "domain-path-"));
+  try {
+    await mkdir(path.join(directory, "src", "(marketplace)"), { recursive: true });
+    const file = "src/(marketplace)/space name.test.ts";
+    await writeFile(
+      path.join(directory, file),
+      'import {it,expect} from "vitest"; it("selected exact path",()=>expect(1).toBe(1));'
+    );
+    await writeFile(
+      path.join(directory, "vitest.config.mjs"),
+      'export default {test:{environment:"node",include:["src/**/*.test.ts"]}};'
+    );
+    const [command, args] = domainTestCommand([file]);
+    const result = await execute(command, args, 30000, process.env, directory);
+    assert.equal(result.status, "PASS", result.output);
+    assert.match(result.output, /1 passed/);
+  } finally {
+    if (!path.resolve(directory).startsWith(fixtureRoot + path.sep + "domain-path-"))
+      throw new Error("Invalid fixture cleanup");
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+test("isolated snapshots preserve staged deletions, renames, edits and untracked files without ignored secrets", async () => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), "vm-snapshot-"));
+  const source = path.join(fixtureRoot, "source");
+  const checkout = path.join(fixtureRoot, "checkout");
+  await mkdir(source);
+  const git = (args: string[]) =>
+    execFileSync("git", args, { cwd: source, encoding: "utf8", windowsHide: true });
+  try {
+    git(["init", "--quiet"]);
+    for (const file of ["deleted.txt", "renamed.txt", "edited.txt"])
+      await writeFile(path.join(source, file), "original");
+    await writeFile(path.join(source, ".gitignore"), ".env.local\n");
+    git(["add", "."]);
+    git([
+      "-c",
+      "user.name=Audit Fixture",
+      "-c",
+      "user.email=audit@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--quiet",
+      "-m",
+      "fixture",
+    ]);
+    await cp(source, checkout, { recursive: true });
+    git(["rm", "deleted.txt"]);
+    git(["mv", "renamed.txt", "new-name.txt"]);
+    await writeFile(path.join(source, "edited.txt"), "changed");
+    await writeFile(path.join(source, "untracked.txt"), "new");
+    await writeFile(path.join(source, ".env.local"), "PRIVATE_KEY=fixture-value");
+    await copyWorkingTreeSnapshot(source, checkout, git);
+    for (const absent of ["deleted.txt", "renamed.txt", ".env.local"])
+      await assert.rejects(readFile(path.join(checkout, absent)), { code: "ENOENT" });
+    assert.equal(await readFile(path.join(checkout, "new-name.txt"), "utf8"), "original");
+    assert.equal(await readFile(path.join(checkout, "edited.txt"), "utf8"), "changed");
+    assert.equal(await readFile(path.join(checkout, "untracked.txt"), "utf8"), "new");
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
 test("Sentry approval is confined to verified internal tooling packages and terms", async () => {
   const review = JSON.parse(await readFile("scripts/license-reviews/sentry-cli.json", "utf8"));
   const licenseText = await readFile("node_modules/@sentry/cli/LICENSE", "utf8");

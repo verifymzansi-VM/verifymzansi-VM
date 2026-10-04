@@ -28,6 +28,7 @@ import {
 import { cleanupPersistedKycUpload, cleanupUploadedR2Object } from "./_lib/kyc-upload-cleanup";
 import { analyzeKycUploadFile } from "./_lib/kyc-file-analysis";
 import { ID_NUMBER_IN_USE_ERROR } from "@/lib/services/verification-decision";
+import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 
 const log = createLogger("VerificationUpload");
 const ID_NUMBER_DUPLICATE_CODE = "id_number_duplicate";
@@ -197,17 +198,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Parse multipart form ─────────────────────────────────
-    // Reject oversized bodies before buffering into memory (belt check; Content-Length can be spoofed)
-    const contentLength = parseInt(request.headers.get("content-length") ?? "", 10);
     const MAX_BODY_BYTES = 6 * 1024 * 1024; // 6 MB (5 MB file + metadata overhead)
-    if (contentLength > MAX_BODY_BYTES) {
-      return jsonError({ error: "Request body too large" }, { status: 413 });
-    }
 
     let formData: FormData;
     try {
-      formData = await request.formData();
-    } catch {
+      formData = await readBoundedRequestFormData(request, MAX_BODY_BYTES);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return jsonError({ error: "Request body too large" }, { status: 413 });
+      }
       return jsonError({ error: "Invalid form data. Send multipart/form-data." }, { status: 400 });
     }
 

@@ -28,6 +28,7 @@ export interface VerificationStepRow {
   id_number_hmac?: string | null;
   /** Version of the step that was reviewed (optimistic lock). */
   updated_at?: string | null;
+  override_decision_id?: string | null;
 }
 
 export type ApplyVerificationResult =
@@ -55,6 +56,8 @@ export async function applyVerificationDecision({
   reviewerId,
   reviewerRole,
   allowAlreadyApplied = false,
+  overrideDecisionId,
+  expectedSubmissionUpdatedAt,
 }: {
   step: VerificationStepRow;
   decision: VerificationDecision;
@@ -64,8 +67,24 @@ export async function applyVerificationDecision({
   reviewerId: string;
   reviewerRole: StaffRole;
   allowAlreadyApplied?: boolean;
+  overrideDecisionId?: string;
+  expectedSubmissionUpdatedAt?: string;
 }): Promise<ApplyVerificationResult> {
   const admin = createAdminClient();
+
+  // A retry may finish downstream work only for the override that applied
+  // this step. An unrelated approval is not evidence of prior execution.
+  if (
+    (allowAlreadyApplied || overrideDecisionId) &&
+    (!overrideDecisionId || !expectedSubmissionUpdatedAt)
+  ) {
+    return {
+      ok: false,
+      status: 409,
+      error: "The reviewed submission is unavailable",
+      code: "step_changed",
+    };
+  }
 
   // Without the ID number hash the duplicate-identity check cannot run, so the
   // same person could verify several accounts.
@@ -108,6 +127,9 @@ export async function applyVerificationDecision({
     reviewed_by: reviewerId,
     reviewed_at: new Date().toISOString(),
   };
+  if (overrideDecisionId || step.override_decision_id !== undefined) {
+    updateData.override_decision_id = overrideDecisionId ?? null;
+  }
 
   if (decision !== "approved") {
     updateData.reason_code = reasonCode;
@@ -131,8 +153,9 @@ export async function applyVerificationDecision({
     .in("status", ["pending", "needs_resubmission"]);
   // Optimistic lock: a re-upload between reading and deciding bumps
   // updated_at, so the decision cannot land on evidence nobody reviewed.
-  if (step.updated_at) {
-    stepUpdate = stepUpdate.eq("updated_at", step.updated_at);
+  const expectedUpdatedAt = expectedSubmissionUpdatedAt ?? step.updated_at;
+  if (expectedUpdatedAt) {
+    stepUpdate = stepUpdate.eq("updated_at", expectedUpdatedAt);
   }
   const { data: updatedRows, error: updateError } = await stepUpdate.select("id");
 
@@ -159,7 +182,24 @@ export async function applyVerificationDecision({
   if (!updatedRows?.length) {
     // A retried override may find its own earlier update already applied;
     // carry on with the rest of the workflow, which is safe to repeat.
-    const alreadyApplied = allowAlreadyApplied && step.status === decision;
+    let alreadyApplied =
+      allowAlreadyApplied &&
+      step.status === decision &&
+      step.override_decision_id === overrideDecisionId &&
+      typeof step.updated_at === "string";
+    if (alreadyApplied) {
+      // Re-read after the failed CAS: the caller's row could have changed
+      // while the conditional update was in flight.
+      const { data: appliedStep, error: appliedStepError } = await admin
+        .from("verification_steps")
+        .select("id")
+        .eq("id", step.id)
+        .eq("status", decision)
+        .eq("override_decision_id", overrideDecisionId!)
+        .eq("updated_at", step.updated_at!)
+        .maybeSingle();
+      alreadyApplied = !appliedStepError && Boolean(appliedStep);
+    }
     if (!alreadyApplied) {
       return {
         ok: false,

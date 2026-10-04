@@ -66,7 +66,7 @@ export async function createAdminDb() {
 ${type("verification_status")}
 CREATE TABLE public.verification_steps(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL,
   step_type verification_step_type NOT NULL, status verification_status NOT NULL DEFAULT 'pending',
-  risk_level text, created_at timestamptz NOT NULL DEFAULT now());
+  risk_level text, updated_at timestamptz NOT NULL DEFAULT now(), created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE public.content_edit_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), owner_id uuid NOT NULL,
   status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now());
 ${type("dsar_type")}

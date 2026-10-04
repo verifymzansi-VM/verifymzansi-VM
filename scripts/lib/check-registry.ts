@@ -203,13 +203,23 @@ export const CHECKS: Check[] = [
   ),
   check(
     "kyc-auth-browser",
-    [],
-    "authenticated synthetic KYC submission, evidence access and manual reviewer decisions",
+    ["test:browser:isolated"],
+    "authenticated synthetic ID/selfie, evidence, final approval and independent high-risk governance UI",
     ["release", "payments", "kyc"],
     {
-      unavailable:
-        "Isolated KYC browser fixtures currently cover anonymous/callback boundaries only; authenticated submission and reviewer fixtures need expansion",
-      tests: ["e2e/kyc-verification.spec.ts", "src/app/api/admin/kyc/**/route.test.ts"],
+      coveredBy: "browser",
+      dependencies: [
+        "isolated production Next build",
+        "Chromium",
+        "synthetic auth/database/storage fixtures",
+      ],
+      timeoutMs: 1_800_000,
+      exclusions: "Real PostgreSQL/RLS and genuine provider delivery are separate requirements",
+      tests: [
+        "e2e/kyc-authenticated.spec.ts",
+        "src/lib/supabase/playwright-governance.test.ts",
+        "scripts/lib/kyc-browser-evidence.ts",
+      ],
     }
   ),
   check(

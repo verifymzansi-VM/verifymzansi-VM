@@ -60,6 +60,12 @@ export function handlePlaywrightStubRouting(
       pathname.startsWith("/admin/") ||
       pathname.startsWith("/api/admin/")
     ) {
+      // Let the actual API/page guards verify the synthetic database staff role.
+      if (
+        stubUser.app_metadata.role === "moderator" ||
+        stubUser.app_metadata.role === "governance_controller"
+      )
+        return NextResponse.next();
       if (isApiRoute) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }

@@ -60,4 +60,16 @@ describe("checkStaffApiMfa", () => {
     evaluateStaffMfa.mockResolvedValue({ status: "verified", lastVerifiedAt: recently() });
     await expect(checkStaffApiMfa(supabase, "user-1", { stepUp: true })).resolves.toBeNull();
   });
+  it.each([null, new Date(Date.now() - 16 * 60_000)])(
+    "requires re-verification when the second factor is missing or stale: %s",
+    async (lastVerifiedAt) => {
+      evaluateStaffMfa.mockResolvedValue({ status: "verified", lastVerifiedAt });
+      const response = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
+      expect(response?.status).toBe(403);
+      await expect(response?.json()).resolves.toMatchObject({
+        code: "step_up_required",
+        verifyUrl: "/staff/two-step?confirm=1",
+      });
+    }
+  );
 });

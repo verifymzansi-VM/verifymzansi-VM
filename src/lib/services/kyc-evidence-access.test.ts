@@ -12,6 +12,35 @@ function createQueryBuilder(result: unknown) {
 }
 
 describe("getLinkedEvidenceArtifactIds", () => {
+  it("starts independent artifact lookups concurrently while preserving evidence order", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    const adminClient = {
+      from: vi.fn((table: string) => {
+        const query = createQueryBuilder(null);
+        if (table === "verification_sessions") {
+          query.maybeSingle.mockResolvedValue({
+            data: { location_submitted_at: "2026-10-04T00:00:00Z" },
+            error: null,
+          });
+        } else {
+          query.maybeSingle.mockImplementation(
+            () =>
+              new Promise((resolve) => {
+                resolvers.push(resolve);
+              })
+          );
+        }
+        return query;
+      }),
+    };
+    const pending = getLinkedEvidenceArtifactIds(adminClient as never, "user-1");
+    await vi.waitFor(() => expect(resolvers).toHaveLength(3));
+    // Complete in reverse order to verify output doesn't depend on network timing.
+    resolvers[2]({ data: { id: "location" }, error: null });
+    resolvers[1]({ data: { id: "selfie" }, error: null });
+    resolvers[0]({ data: { id: "id" }, error: null });
+    await expect(pending).resolves.toEqual(["id", "selfie", "location"]);
+  });
   it("returns linked session artifacts when present", async () => {
     const sessionBuilder = {
       select: vi.fn().mockReturnThis(),

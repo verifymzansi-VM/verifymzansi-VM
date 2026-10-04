@@ -22,9 +22,20 @@ const log = createLogger("AdminVerification");
 
 function sameInstant(stored: string | null | undefined, expected: string): boolean {
   if (!stored) return false;
-  const a = Date.parse(stored);
-  const b = Date.parse(expected);
-  return Number.isFinite(a) && Number.isFinite(b) ? a === b : stored === expected;
+  // PostgreSQL preserves microseconds; Date.parse alone truncates them and
+  // could accept an older submission from within the same millisecond.
+  const timestamp = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/i;
+  const a = stored.match(timestamp);
+  const b = expected.match(timestamp);
+  if (!a || !b) return false;
+  const secondsA = Date.parse(`${a[1]}${a[3]}`);
+  const secondsB = Date.parse(`${b[1]}${b[3]}`);
+  return (
+    Number.isFinite(secondsA) &&
+    Number.isFinite(secondsB) &&
+    secondsA === secondsB &&
+    (a[2] ?? "").padEnd(6, "0") === (b[2] ?? "").padEnd(6, "0")
+  );
 }
 const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" };
 
@@ -125,6 +136,7 @@ export async function POST(request: Request) {
         p_risk_level: step.risk_level,
         p_override_reason: overrideReasonCode,
         p_note: reasonNote ?? null,
+        p_expected_updated_at: step.updated_at ?? null,
       });
       if (error) {
         log.error("KYC override proposal failed", { stepId, error: error.message });

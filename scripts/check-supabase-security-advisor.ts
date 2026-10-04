@@ -1,6 +1,16 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";
+import { fetchManagementApi } from "./lib/supabase-management";
+import reviewData from "./security-reviews/supabase-controls.json";
+import {
+  SECURITY_CONTROL_QUERY,
+  classifySecurityLint,
+  inspectSecurityControls,
+  type SecurityControlReview,
+} from "./lib/supabase-security-controls";
+
+const controlReview = reviewData as SecurityControlReview;
 
 type Args = {
   envFile: string | null;
@@ -43,7 +53,7 @@ type AdvisorLint = {
 
 type ClassifiedLint = {
   lint: AdvisorLint;
-  state: "actionable" | "plan-blocked";
+  state: "actionable" | "plan-blocked" | "reviewed-control";
   reason: string;
 };
 
@@ -211,38 +221,6 @@ function resolveProjectRef(explicitRef: string | null): string {
   return ref;
 }
 
-async function fetchManagementApi<T>(token: string, pathname: string): Promise<T> {
-  const response = await fetch(`https://api.supabase.com/v1${pathname}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Supabase Management API ${pathname} failed (${response.status}): ${text}`);
-  }
-
-  return (await response.json()) as T;
-}
-
-function classifyLint(lint: AdvisorLint, organizationPlan: string): ClassifiedLint {
-  if (lint.name === "auth_leaked_password_protection" && organizationPlan === "free") {
-    return {
-      lint,
-      state: "plan-blocked",
-      reason:
-        "HaveIBeenPwned leaked-password protection is only available on Supabase Pro plans and above.",
-    };
-  }
-
-  return {
-    lint,
-    state: "actionable",
-    reason: "This finding is actionable from project configuration, schema, or app changes.",
-  };
-}
-
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   await loadEnvFile(args.envFile);
@@ -250,12 +228,17 @@ async function main(): Promise<void> {
   const accessToken = requireEnv("SUPABASE_ACCESS_TOKEN");
   const projectRef = resolveProjectRef(args.projectRef);
 
-  const [project, authConfig, securityAdvisor] = await Promise.all([
+  const [project, authConfig, securityAdvisor, metadata] = await Promise.all([
     fetchManagementApi<ProjectResponse>(accessToken, `/projects/${projectRef}`),
     fetchManagementApi<AuthConfigResponse>(accessToken, `/projects/${projectRef}/config/auth`),
     fetchManagementApi<SecurityAdvisorResponse>(
       accessToken,
       `/projects/${projectRef}/advisors/security`
+    ),
+    fetchManagementApi<Array<{ controls: unknown }>>(
+      accessToken,
+      `/projects/${projectRef}/database/query`,
+      { method: "POST", body: JSON.stringify({ query: SECURITY_CONTROL_QUERY, read_only: true }) }
     ),
   ]);
 
@@ -277,9 +260,15 @@ async function main(): Promise<void> {
     )
   )
     throw new Error("Malformed Security Advisor response");
-  const classifiedLints = rawLints.map((lint) => classifyLint(lint, organization.plan));
+  const controls = Array.isArray(metadata) ? metadata[0]?.controls : undefined;
+  const attestation = inspectSecurityControls(controls, controlReview);
+  const classifiedLints: ClassifiedLint[] = rawLints.map((lint) => ({
+    ...classifySecurityLint(lint, organization.plan, controls, controlReview),
+    lint,
+  }));
   const actionable = classifiedLints.filter((lint) => lint.state === "actionable");
   const planBlocked = classifiedLints.filter((lint) => lint.state === "plan-blocked");
+  const reviewedControls = classifiedLints.filter((lint) => lint.state === "reviewed-control");
 
   if (args.json) {
     console.log(
@@ -301,7 +290,9 @@ async function main(): Promise<void> {
             total: classifiedLints.length,
             actionable: actionable.length,
             planBlocked: planBlocked.length,
+            reviewedControls: reviewedControls.length,
           },
+          controlReview: { reviewedAt: controlReview.reviewedAt, errors: attestation.errors },
           findings: classifiedLints.map((item) => ({
             name: item.lint.name,
             title: item.lint.title,
@@ -328,7 +319,7 @@ async function main(): Promise<void> {
       console.log("Security Advisor reports no current security findings.");
     } else {
       console.log(
-        `Security Advisor findings: ${classifiedLints.length} total (${actionable.length} actionable, ${planBlocked.length} plan-blocked)`
+        `Security Advisor findings: ${classifiedLints.length} total (${actionable.length} actionable, ${planBlocked.length} plan-blocked, ${reviewedControls.length} reviewed controls)`
       );
 
       for (const item of classifiedLints) {
@@ -346,8 +337,15 @@ async function main(): Promise<void> {
     }
   }
 
+  for (const error of attestation.errors) console.error(`Control verification failed: ${error}`);
+  if (!args.json && reviewedControls.length)
+    console.warn(
+      `WARN: ${reviewedControls.length} intentional control findings remain visible with exact metadata/source attestation`
+    );
+
   const shouldFail =
-    (args.strict && (actionable.length > 0 || planBlocked.length > 0)) ||
+    (args.strict &&
+      (actionable.length > 0 || planBlocked.length > 0 || attestation.errors.length > 0)) ||
     (args.failOnPlanBlocked && planBlocked.length > 0);
 
   if (shouldFail) {

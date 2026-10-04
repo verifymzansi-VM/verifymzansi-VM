@@ -89,6 +89,31 @@ describe("POST /api/profile/avatar", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects an oversized streamed body with a false length before storage", async () => {
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+    const request = createRequest(new FormData(), {
+      "content-type": "multipart/form-data; boundary=b",
+      "content-length": "1",
+    });
+    const cancel = vi.fn();
+    Object.defineProperty(request, "body", {
+      value: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(3 * 1024 * 1024));
+        },
+        cancel,
+      }),
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(413);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+  });
+
   it("rate limits authenticated avatar uploads by user id", async () => {
     mockCheckRateLimit
       .mockResolvedValueOnce({ limited: false })

@@ -107,7 +107,9 @@ export async function GET(request: NextRequest) {
     value: token,
     httpOnly: false,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // The isolated production build is served over HTTP loopback. Match the
+    // actual transport; real production environments cannot enable this endpoint.
+    secure: new URL(request.url).protocol === "https:",
     path: "/",
   });
 

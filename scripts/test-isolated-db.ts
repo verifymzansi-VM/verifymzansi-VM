@@ -45,7 +45,7 @@ async function main() {
     const evidence = path.join(output, `${project}-${name}.log`);
     await writeFile(
       evidence,
-      name === "status"
+      name === "status" || name === "start"
         ? `Status: ${result.status}; local credentials withheld from persisted evidence`
         : result.output
     );
@@ -173,6 +173,139 @@ async function main() {
     );
     if (!unauthorized.error) throw new Error("Anonymous callback RPC bypass");
     results.push({ name: "Final grants and independent-session races", status: "PASS" });
+
+    const governors = await Promise.all(
+      Array.from({ length: 4 }, async () => {
+        const created = await admin.auth.admin.createUser({
+          email: `${randomUUID()}@example.invalid`,
+          email_confirm: true,
+        });
+        if (created.error || !created.data.user)
+          throw new Error("Synthetic governor could not be created");
+        return created.data.user.id;
+      })
+    );
+    await sql(
+      `INSERT INTO public.staff_roles(user_id,role,status) VALUES ${governors.map((id) => `('${id}','governance_controller','active')`).join(",")};`
+    );
+    const overrideStep = randomUUID();
+    await sql(
+      `INSERT INTO public.verification_steps(id,user_id,step_type,status,risk_score,risk_level) VALUES ('${overrideStep}','${user}','selfie','pending',80,'high');`
+    );
+    const { data: versionedStep, error: versionedStepError } = await admin
+      .from("verification_steps")
+      .select("updated_at")
+      .eq("id", overrideStep)
+      .single();
+    if (versionedStepError || !versionedStep?.updated_at)
+      throw new Error("Synthetic step version missing");
+    const proposalArgs = {
+      p_actor: governors[0],
+      p_step: overrideStep,
+      p_user: user,
+      p_risk_level: "high",
+      p_override_reason: "verified_in_person",
+      p_note: "Synthetic original evidence reviewed",
+      p_expected_updated_at: versionedStep.updated_at,
+    };
+    const legacyArgs = {
+      p_actor: governors[0],
+      p_step: overrideStep,
+      p_user: user,
+      p_risk_level: "high",
+      p_override_reason: "verified_in_person",
+      p_note: "Synthetic legacy call",
+    };
+    const legacyProposal = await admin.rpc("propose_kyc_override", legacyArgs);
+    if (legacyProposal.error || legacyProposal.data?.error !== "step_changed")
+      throw new Error("Unversioned override did not fail closed");
+    const microsecondOlder = await sql(
+      `SELECT (updated_at - interval '1 microsecond')::text FROM public.verification_steps WHERE id='${overrideStep}';`
+    );
+    const staleProposal = await admin.rpc("propose_kyc_override", {
+      ...proposalArgs,
+      p_expected_updated_at: microsecondOlder,
+    });
+    if (staleProposal.error || staleProposal.data?.error !== "step_changed")
+      throw new Error("Override proposal rounded away microsecond drift");
+    const competingProposals = await Promise.all(
+      governors.slice(0, 2).map((actor) =>
+        createClient(status.API_URL, status.SERVICE_ROLE_KEY).rpc("propose_kyc_override", {
+          ...proposalArgs,
+          p_actor: actor,
+        })
+      )
+    );
+    if (
+      competingProposals.some((result) => result.error) ||
+      competingProposals.filter((result) => result.data?.ok === true).length !== 1 ||
+      competingProposals.filter((result) => result.data?.error === "pending_exists").length !== 1
+    )
+      throw new Error("Concurrent KYC proposals were not serialized");
+    const winner = competingProposals.find((result) => result.data?.ok === true)!.data.decision_id;
+    const { data: pendingDecision, error: pendingDecisionError } = await admin
+      .from("decision_records")
+      .select("recommender_id")
+      .eq("id", winner)
+      .single();
+    if (pendingDecisionError || !pendingDecision) throw new Error("Winning proposal missing");
+    const approvalArgs = {
+      p_actor: governors[2],
+      p_decision: winner,
+      p_payload_version: 1,
+      p_note: "Synthetic independent review",
+    };
+    const selfApproval = await admin.rpc("approve_decision", {
+      ...approvalArgs,
+      p_actor: pendingDecision.recommender_id,
+    });
+    if (selfApproval.error || selfApproval.data?.error !== "not_independent")
+      throw new Error("Proposer approved their own override");
+    const changedPayload = await admin.rpc("approve_decision", {
+      ...approvalArgs,
+      p_payload_version: 2,
+    });
+    if (changedPayload.error || changedPayload.data?.error !== "payload_changed")
+      throw new Error("Changed override payload was accepted");
+    const competingApprovals = await Promise.all(
+      governors.slice(2).map((actor) =>
+        createClient(status.API_URL, status.SERVICE_ROLE_KEY).rpc("approve_decision", {
+          ...approvalArgs,
+          p_actor: actor,
+        })
+      )
+    );
+    if (
+      competingApprovals.some((result) => result.error) ||
+      competingApprovals.filter((result) => result.data?.ok === true).length !== 1 ||
+      competingApprovals.filter((result) => result.data?.error === "not_pending").length !== 1
+    )
+      throw new Error("Concurrent KYC approvals were not serialized");
+    if (
+      (await sql(
+        `SELECT count(*) FROM public.decision_approvals WHERE decision_id='${winner}';`
+      )) !== "1"
+    )
+      throw new Error("Duplicate KYC approval was recorded");
+    const nextProposal = await admin.rpc("propose_kyc_override", proposalArgs);
+    if (nextProposal.error || !nextProposal.data?.ok)
+      throw new Error("Replacement fixture proposal failed");
+    await sql(`UPDATE public.verification_steps SET risk_score=81 WHERE id='${overrideStep}';`);
+    const replacementApproval = await admin.rpc("approve_decision", {
+      ...approvalArgs,
+      p_decision: nextProposal.data.decision_id,
+    });
+    if (replacementApproval.error || replacementApproval.data?.error !== "step_changed")
+      throw new Error("Replacement evidence inherited an old approval");
+    const privateProposalGrant = await sql(
+      `SELECT has_function_privilege('service_role','public.propose_kyc_override(uuid,uuid,uuid,text,text,text,timestamp with time zone)','EXECUTE') AND NOT has_function_privilege('anon','public.propose_kyc_override(uuid,uuid,uuid,text,text,text,timestamp with time zone)','EXECUTE') AND NOT has_function_privilege('authenticated','public.propose_kyc_override(uuid,uuid,uuid,text,text,text,timestamp with time zone)','EXECUTE');`
+    );
+    if (privateProposalGrant !== "t")
+      throw new Error("Versioned KYC proposal grants are not service-only");
+    results.push({
+      name: "Versioned KYC overrides and independent-session proposal/approval races",
+      status: "PASS",
+    });
     passed = true;
   } catch (error) {
     results.push({ name: "Final-state verification", status: "FAIL", reason: String(error) });

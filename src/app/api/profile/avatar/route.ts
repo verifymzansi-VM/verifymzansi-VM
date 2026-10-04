@@ -8,6 +8,7 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import { scanForMalware } from "@/lib/utils/malware-scan";
+import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 import {
   stripExifFromJpeg,
   stripMetadataFromPng,
@@ -60,8 +61,11 @@ export async function POST(request: NextRequest) {
   // Parse multipart form data
   let formData: FormData;
   try {
-    formData = await request.formData();
-  } catch {
+    formData = await readBoundedRequestFormData(request, MAX_SIZE + 64 * 1024);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
     return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
   }
 

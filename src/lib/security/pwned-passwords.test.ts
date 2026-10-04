@@ -53,4 +53,45 @@ describe("pwned password checks", () => {
       PwnedPasswordCheckUnavailableError
     );
   });
+
+  it.each([
+    "",
+    "<html>upstream error</html>",
+    "1E4C9B93F3F0682250B6CF8331B7EE68FD8:not-a-count",
+    "1E4C9B93F3F0682250B6CF8331B7EE68FD8:-1",
+    "1E4C9B93F3F0682250B6CF8331B7EE68FD8:9007199254740992",
+    "1E4C9B93F3F0682250B6CF8331B7EE68FD8:42\r\nbroken",
+  ])(
+    "rejects malformed successful responses rather than accepting a password: %s",
+    async (body) => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+      await expect(getPwnedPasswordCount("password")).rejects.toBeInstanceOf(
+        PwnedPasswordCheckUnavailableError
+      );
+    }
+  );
+
+  it("preserves zero-count privacy padding and case-insensitive suffix matching", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            "00000000000000000000000000000000000:0\r\n1e4c9b93f3f0682250b6cf8331b7ee68fd8:42\r\n"
+          )
+        )
+    );
+    await expect(getPwnedPasswordCount("password")).resolves.toBe(42);
+  });
+
+  it("rejects an oversized response even when its declared length is false", async () => {
+    const response = new Response("0".repeat(256 * 1024 + 1), {
+      headers: { "content-length": "1" },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    await expect(getPwnedPasswordCount("password")).rejects.toBeInstanceOf(
+      PwnedPasswordCheckUnavailableError
+    );
+  });
 });

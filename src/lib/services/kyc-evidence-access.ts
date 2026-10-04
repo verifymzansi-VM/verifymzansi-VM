@@ -1,12 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-async function addLatestArtifactId(
+async function getLatestArtifactId(
   adminClient: SupabaseClient,
-  allowedArtifactIds: Set<string>,
   userId: string,
   stepType: string,
   artifactKind?: string
-): Promise<void> {
+): Promise<string | undefined> {
   let query = adminClient
     .from("kyc_artifacts")
     .select("id")
@@ -22,9 +21,7 @@ async function addLatestArtifactId(
     .limit(1)
     .maybeSingle();
 
-  if (artifact?.id) {
-    allowedArtifactIds.add(artifact.id);
-  }
+  return artifact?.id;
 }
 
 export async function getLinkedEvidenceArtifactIds(
@@ -38,28 +35,27 @@ export async function getLinkedEvidenceArtifactIds(
     .maybeSingle();
 
   const allowedArtifactIds = new Set<string>();
+  // Independent lookups share one round-trip window instead of serial waits.
+  const [idArtifactId, selfieArtifactId, locationArtifactId] = await Promise.all([
+    getLatestArtifactId(adminClient, userId, "id_doc"),
+    getLatestArtifactId(adminClient, userId, "selfie"),
+    session?.location_submitted_at
+      ? getLatestArtifactId(adminClient, userId, "location", "proof_of_address")
+      : undefined,
+  ]);
 
   if (session?.id_artifact_id) {
     allowedArtifactIds.add(session.id_artifact_id);
   }
 
-  await addLatestArtifactId(adminClient, allowedArtifactIds, userId, "id_doc");
+  if (idArtifactId) allowedArtifactIds.add(idArtifactId);
 
   if (session?.selfie_artifact_id) {
     allowedArtifactIds.add(session.selfie_artifact_id);
   }
 
-  await addLatestArtifactId(adminClient, allowedArtifactIds, userId, "selfie");
-
-  if (session?.location_submitted_at) {
-    await addLatestArtifactId(
-      adminClient,
-      allowedArtifactIds,
-      userId,
-      "location",
-      "proof_of_address"
-    );
-  }
+  if (selfieArtifactId) allowedArtifactIds.add(selfieArtifactId);
+  if (locationArtifactId) allowedArtifactIds.add(locationArtifactId);
 
   return Array.from(allowedArtifactIds);
 }

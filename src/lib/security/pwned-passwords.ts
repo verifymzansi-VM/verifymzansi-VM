@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readBoundedRequestText } from "@/lib/utils/request-body";
 
 export const PWNED_PASSWORD_ERROR =
   "This password has appeared in a known data breach. Choose a different password.";
@@ -49,15 +50,23 @@ export async function getPwnedPasswordCount(password: string): Promise<number> {
     throw new PwnedPasswordCheckUnavailableError(`HIBP responded with ${response.status}`);
   }
 
-  const body = await response.text();
-  for (const line of body.split(/\r?\n/)) {
-    const [candidateSuffix, count] = line.trim().split(":");
-    if (candidateSuffix === suffix) {
-      return Number.parseInt(count ?? "0", 10) || 0;
-    }
+  let body: string;
+  try {
+    body = await readBoundedRequestText(response, 256 * 1024);
+  } catch {
+    throw new PwnedPasswordCheckUnavailableError("Invalid HIBP response body");
   }
-
-  return 0;
+  const lines = body.trim().split(/\r?\n/);
+  let matchedCount = 0;
+  for (const line of lines) {
+    const match = /^([A-F0-9]{35}):(\d+)$/i.exec(line.trim());
+    const count = match ? Number(match[2]) : NaN;
+    if (!match || !Number.isSafeInteger(count)) {
+      throw new PwnedPasswordCheckUnavailableError("Malformed HIBP range response");
+    }
+    if (match[1].toUpperCase() === suffix) matchedCount = Math.max(matchedCount, count);
+  }
+  return matchedCount;
 }
 
 export async function isPwnedPassword(password: string): Promise<boolean> {

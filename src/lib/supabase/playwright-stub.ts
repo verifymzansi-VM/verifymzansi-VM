@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "node:crypto";
 import { fulfillPlaywrightPayment } from "./playwright-payment-fulfillment";
+import { handlePlaywrightKycDecisionRpc } from "./playwright-governance";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import {
   createPlaywrightSession,
@@ -573,6 +574,26 @@ export function createPlaywrightStubSupabaseClient(
 
   return {
     auth: {
+      mfa: {
+        async getAuthenticatorAssuranceLevel() {
+          const user = resolveStubUser(cookieStore, options.sessionToken);
+          const staff =
+            user &&
+            listPlaywrightTableRows("staff_roles").some(
+              (row) => row.user_id === user.id && row.status === "active"
+            );
+          return {
+            data: {
+              currentLevel: staff ? "aal2" : "aal1",
+              nextLevel: staff ? "aal2" : "aal1",
+              currentAuthenticationMethods: staff
+                ? [{ method: "totp", timestamp: Math.floor(Date.now() / 1000) }]
+                : [],
+            },
+            error: null,
+          };
+        },
+      },
       async getUser() {
         return { data: { user: resolveStubUser(cookieStore, options.sessionToken) }, error: null };
       },
@@ -707,6 +728,71 @@ export function createPlaywrightStubSupabaseClient(
       return new PlaywrightQueryBuilder(table);
     },
     async rpc(fn: string, params?: Record<string, unknown>) {
+      const decision = handlePlaywrightKycDecisionRpc(fn, params);
+      if (decision !== undefined) return { data: decision, error: null };
+      if (fn === "staff_access_of") {
+        const role = listPlaywrightTableRows("staff_roles").find(
+          (row) => row.user_id === params?.p_user && row.status === "active"
+        );
+        const profile = listPlaywrightTableRows("account_profiles").find(
+          (row) => row.user_id === params?.p_user
+        );
+        return {
+          data:
+            role && profile && !["banned", "suspended"].includes(String(profile.account_status))
+              ? [role]
+              : [],
+          error: null,
+        };
+      }
+      if (fn === "check_kyc_velocity") {
+        const recent = listPlaywrightTableRows("kyc_artifacts").filter(
+          (row) =>
+            row.user_id === params?.p_user_id &&
+            row.step_type === params?.p_step_type &&
+            Date.parse(String(row.created_at)) >= Date.now() - 86400000
+        );
+        return { data: recent.length < Number(params?.p_max_per_24h ?? 3), error: null };
+      }
+      if (fn === "check_queue_claim") {
+        if (params?.p_item_type !== "verification_step")
+          return { data: { ok: false, error: "forbidden" }, error: null };
+        const step = listPlaywrightTableRows("verification_steps").find(
+          (row) => row.id === params?.p_item_id
+        );
+        const role = listPlaywrightTableRows("staff_roles").find(
+          (row) => row.user_id === params?.p_actor && row.status === "active"
+        );
+        const claim = listPlaywrightTableRows("queue_claims").find(
+          (row) =>
+            row.item_id === params?.p_item_id &&
+            row.item_type === params?.p_item_type &&
+            Date.parse(String(row.expires_at)) > Date.now()
+        );
+        const refusal =
+          !role || !step
+            ? "forbidden"
+            : step?.user_id === params?.p_actor
+              ? "not_independent"
+              : !claim
+                ? "claim_required"
+                : claim.claimed_by !== params?.p_actor
+                  ? "claimed_by_other"
+                  : null;
+        return { data: refusal ? { ok: false, error: refusal } : { ok: true }, error: null };
+      }
+      if (fn === "release_queue_claims") {
+        const rows = listPlaywrightTableRows("queue_claims");
+        const remaining = rows.filter(
+          (row) =>
+            !(
+              row.claimed_by === params?.p_actor &&
+              (!params?.p_item_id || row.item_id === params.p_item_id)
+            )
+        );
+        writePlaywrightTableRows("queue_claims", remaining);
+        return { data: rows.length - remaining.length, error: null };
+      }
       if (fn === "media_storage_used") {
         const used = listPlaywrightTableRows("media_uploads")
           .filter((row) => row.user_id === params?.p_user)

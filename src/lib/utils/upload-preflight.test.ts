@@ -8,6 +8,8 @@ describe("checkUploadServiceReachable", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("resolves when server returns 200", async () => {
@@ -90,6 +92,45 @@ describe("checkUploadServiceReachable", () => {
       .mockResolvedValueOnce(new Response(null, { status: 200 }));
     await expect(checkUploadServiceReachable()).resolves.toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries the TimeoutError emitted by AbortSignal.timeout", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new DOMException("Timed out", "TimeoutError"))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const result = checkUploadServiceReachable();
+    await vi.advanceTimersByTimeAsync(800);
+    await expect(result).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases fallback timers after a successful request", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("AbortSignal", { timeout: undefined });
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
+    await checkUploadServiceReachable();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("bounds every fallback attempt and releases all timers after repeated timeouts", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("AbortSignal", { timeout: undefined });
+    vi.mocked(fetch).mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+            once: true,
+          });
+        })
+    );
+    const assertion = expect(checkUploadServiceReachable()).rejects.toThrow(
+      UploadServiceUnreachableError
+    );
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("does not retry on non-retryable errors", async () => {

@@ -21,17 +21,23 @@ export class UploadServiceUnreachableError extends Error {
  * Create a timeout AbortSignal that works on older mobile browsers where
  * `AbortSignal.timeout` is unavailable (iOS Safari < 17.4).
  */
-function safeTimeoutSignal(ms: number): AbortSignal {
+function safeTimeoutSignal(ms: number): { signal: AbortSignal; cleanup: () => void } {
   if (typeof AbortSignal.timeout === "function") {
-    return AbortSignal.timeout(ms);
+    return { signal: AbortSignal.timeout(ms), cleanup: () => {} };
   }
   const controller = new AbortController();
-  setTimeout(() => controller.abort(new DOMException("TimeoutError", "TimeoutError")), ms);
-  return controller.signal;
+  const timer = setTimeout(
+    () => controller.abort(new DOMException("TimeoutError", "TimeoutError")),
+    ms
+  );
+  return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
 function isRetryableError(err: unknown): boolean {
-  return err instanceof TypeError || (err instanceof DOMException && err.name === "AbortError");
+  return (
+    err instanceof TypeError ||
+    (err instanceof DOMException && (err.name === "AbortError" || err.name === "TimeoutError"))
+  );
 }
 
 function delay(ms: number): Promise<void> {
@@ -55,11 +61,12 @@ export async function checkUploadServiceReachable(): Promise<void> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= MAX_PREFLIGHT_RETRIES; attempt++) {
+    const timeout = safeTimeoutSignal(PREFLIGHT_TIMEOUT_MS);
     try {
       // Fresh timeout per attempt so retries get the full window
       const res = await fetch("/api/media/upload", {
         method: "HEAD",
-        signal: safeTimeoutSignal(PREFLIGHT_TIMEOUT_MS),
+        signal: timeout.signal,
       });
 
       // Any HTTP response (even 401/405) means the server is reachable.
@@ -84,6 +91,8 @@ export async function checkUploadServiceReachable(): Promise<void> {
         nextDelayMs: backoff,
       });
       await delay(backoff);
+    } finally {
+      timeout.cleanup();
     }
   }
 

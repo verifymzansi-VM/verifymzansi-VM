@@ -399,6 +399,7 @@ describe("POST /api/admin/verification/decide", () => {
       p_risk_level: "high",
       p_override_reason: "verified_in_person",
       p_note: null,
+      p_expected_updated_at: null,
     });
     expect(update).not.toHaveBeenCalled();
   });
@@ -1244,98 +1245,113 @@ describe("POST /api/admin/verification/decide", () => {
     expect(mockSendVerificationApprovedEmail).not.toHaveBeenCalled();
   });
 
-  it("returns 409 step_changed when expectedUpdatedAt does not match the step version", async () => {
-    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
+  it.each([
+    ["2026-09-01T10:00:00.000Z", "2026-09-01T09:55:00.000Z"],
+    ["2026-09-01T10:00:00.123457Z", "2026-09-01T10:00:00.123456Z"],
+    ["2026-09-01T10:00:00.123456Z", "2026-09-01T10:00:00.123457Z"],
+    ["2026-09-01T10:00:00.000Z", "not-a-timestamp"],
+  ])(
+    "returns 409 step_changed for a changed or invalid submission version: %s / %s",
+    async (storedVersion, reviewedVersion) => {
+      mockAuth({ id: crypto.randomUUID(), app_metadata: { role: "admin" } });
 
-    const versionedStep = { ...baseStep, updated_at: "2026-09-01T10:00:00.000Z" };
-    const update = vi.fn();
-    mockFrom.mockImplementation((table: string) =>
-      table === "verification_steps"
-        ? {
+      const versionedStep = { ...baseStep, updated_at: storedVersion, risk_level: "high" };
+      const update = vi.fn();
+      mockFrom.mockImplementation((table: string) =>
+        table === "verification_steps"
+          ? {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({ data: versionedStep, error: null }),
+                }),
+              }),
+              update,
+            }
+          : {}
+      );
+
+      const response = await POST(
+        createMockRequest({
+          stepId: STEP_UUID,
+          decision: "approved",
+          // The member re-uploaded after the reviewer loaded the step.
+          expectedUpdatedAt: reviewedVersion,
+        })
+      );
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ code: "step_changed" });
+      expect(update).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ["2026-09-01T10:00:00+00:00", "2026-09-01T10:00:00.000Z"],
+    ["2026-09-01T10:00:00.123456+00:00", "2026-09-01T12:00:00.123456+02:00"],
+    ["2026-09-01T10:00:00.1234+00:00", "2026-09-01T10:00:00.123400Z"],
+  ])(
+    "applies the decision under an optimistic lock for equivalent timestamps: %s / %s",
+    async (storedVersion, reviewedVersion) => {
+      mockAuth({ id: crypto.randomUUID(), app_metadata: { role: "admin" } });
+
+      // Same instant as the reviewer's copy, serialized differently.
+      const versionedStep = { ...baseStep, updated_at: storedVersion };
+
+      const profileUpdate = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      });
+      const updatedAtEq = vi.fn().mockReturnValue({
+        select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+      });
+      const updateMock = vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({ eq: updatedAtEq }),
+        }),
+      });
+
+      let artifactLookupReturned = false;
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "verification_steps") {
+          return {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 single: vi.fn().mockResolvedValue({ data: versionedStep, error: null }),
               }),
             }),
-            update,
-          }
-        : {}
-    );
-
-    const response = await POST(
-      createMockRequest({
-        stepId: STEP_UUID,
-        decision: "approved",
-        // The member re-uploaded after the reviewer loaded the step.
-        expectedUpdatedAt: "2026-09-01T09:55:00.000Z",
-      })
-    );
-
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({ code: "step_changed" });
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it("applies the decision under an optimistic lock when expectedUpdatedAt matches the step version", async () => {
-    mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
-
-    // Same instant as the reviewer's copy, serialized differently.
-    const versionedStep = { ...baseStep, updated_at: "2026-09-01T10:00:00+00:00" };
-
-    const profileUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        in: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    });
-    const updatedAtEq = vi.fn().mockReturnValue({
-      select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
-    });
-    const updateMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        in: vi.fn().mockReturnValue({ eq: updatedAtEq }),
-      }),
-    });
-
-    let artifactLookupReturned = false;
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "verification_steps") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: versionedStep, error: null }),
-            }),
-          }),
-          update: updateMock,
-        };
-      }
-      if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
-        return {
-          update: profileUpdate,
-        };
-      }
-      if (table === "kyc_artifacts") {
-        if (!artifactLookupReturned) {
-          artifactLookupReturned = true;
-          return artifactLookupChain();
+            update: updateMock,
+          };
         }
+        if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+          return {
+            update: profileUpdate,
+          };
+        }
+        if (table === "kyc_artifacts") {
+          if (!artifactLookupReturned) {
+            artifactLookupReturned = true;
+            return artifactLookupChain();
+          }
 
-        return artifactStatusUpdateChain();
-      }
-      return {};
-    });
+          return artifactStatusUpdateChain();
+        }
+        return {};
+      });
 
-    const response = await POST(
-      createMockRequest({
-        stepId: STEP_UUID,
-        decision: "rejected",
-        reasonCode: "blurry_image",
-        reasonNote: "The photo is very blurry",
-        expectedUpdatedAt: "2026-09-01T10:00:00.000Z",
-      })
-    );
+      const response = await POST(
+        createMockRequest({
+          stepId: STEP_UUID,
+          decision: "rejected",
+          reasonCode: "blurry_image",
+          reasonNote: "The photo is very blurry",
+          expectedUpdatedAt: reviewedVersion,
+        })
+      );
 
-    expect(response.status).toBe(200);
-    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "rejected" }));
-    expect(updatedAtEq).toHaveBeenCalledWith("updated_at", versionedStep.updated_at);
-  });
+      expect(response.status).toBe(200);
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "rejected" }));
+      expect(updatedAtEq).toHaveBeenCalledWith("updated_at", versionedStep.updated_at);
+    }
+  );
 });

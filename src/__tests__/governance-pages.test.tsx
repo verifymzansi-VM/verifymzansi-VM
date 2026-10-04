@@ -182,7 +182,7 @@ describe("governance page regressions", () => {
                 created_at: "2026-03-26T09:00:00.000Z",
                 recommendation: "ban",
                 approval_rationale: "Repeated fraud reports",
-                approved_by: "governance-123456",
+                approver_id: "governance-123456",
                 decided_at: "2026-03-26T11:00:00.000Z",
               }),
             }),

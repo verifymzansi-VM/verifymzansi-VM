@@ -7,11 +7,10 @@ export class RequestBodyTooLargeError extends Error {
 
 type TextRequest = Pick<Request, "text"> & Partial<Pick<Request, "body" | "headers">>;
 
-/** Limit actual UTF-8 bytes, including requests without a Content-Length header. */
-export async function readBoundedRequestText(
-  request: TextRequest,
+async function checkDeclaredBodySize(
+  request: Partial<Pick<Request, "body" | "headers">>,
   maxBytes: number
-): Promise<string> {
+): Promise<void> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
     throw new RangeError("Invalid request body limit");
   }
@@ -20,6 +19,67 @@ export async function readBoundedRequestText(
     await request.body?.cancel().catch(() => {});
     throw new RequestBodyTooLargeError();
   }
+}
+
+/** Bound the complete multipart stream before the parser can buffer it. */
+export async function readBoundedRequestFormData(
+  request: Pick<Request, "formData"> & Partial<Pick<Request, "body" | "headers">>,
+  maxBytes: number
+): Promise<FormData> {
+  await checkDeclaredBodySize(request, maxBytes);
+  // Internal adapters already have parsed data. Production Requests always expose body.
+  if (request.body === undefined) {
+    const form = await request.formData();
+    let bytes = 0;
+    const encoder = new TextEncoder();
+    for (const [key, value] of form) {
+      bytes += encoder.encode(key).byteLength;
+      bytes += typeof value === "string" ? encoder.encode(value).byteLength : value.size;
+      if (bytes > maxBytes) throw new RequestBodyTooLargeError();
+    }
+    return form;
+  }
+  const contentType = request.headers?.get("content-type") ?? "";
+  if (
+    !/^multipart\/form-data\s*;/i.test(contentType) ||
+    !/(?:^|;)\s*boundary=(?:"[^"]+"|[^;\s]+)(?:\s*;|\s*$)/i.test(contentType)
+  ) {
+    await request.body?.cancel().catch(() => {});
+    throw new TypeError("Invalid multipart content type");
+  }
+  let bytes = 0;
+  let tooLarge = false;
+  const body = request.body?.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        bytes += chunk.byteLength;
+        if (bytes > maxBytes) {
+          tooLarge = true;
+          throw new RequestBodyTooLargeError();
+        }
+        controller.enqueue(chunk);
+      },
+    })
+  );
+  try {
+    return await new Response(body, {
+      headers: { "Content-Type": contentType },
+    }).formData();
+  } catch (error) {
+    // A parser can reject the content type before consuming the stream.
+    await body?.cancel().catch(() => {});
+    // Multipart parsers may wrap stream errors in a TypeError.
+    if (tooLarge) throw new RequestBodyTooLargeError();
+    throw error;
+  }
+}
+
+/** Limit actual UTF-8 bytes, including requests without a Content-Length header. */
+export async function readBoundedRequestText(
+  request: TextRequest,
+  maxBytes: number
+): Promise<string> {
+  await checkDeclaredBodySize(request, maxBytes);
 
   // Text-only adapters are used by internal callers and test fixtures.
   if (request.body === undefined) {

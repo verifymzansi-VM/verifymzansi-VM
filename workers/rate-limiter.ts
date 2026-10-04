@@ -136,6 +136,10 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 10, ttl: 60 },
     { limit: 60, ttl: 3600 },
   ],
+  "admin:governance:decide": [
+    { limit: 10, ttl: 60 },
+    { limit: 60, ttl: 3600 },
+  ],
   "admin:dsar:export": [
     { limit: 10, ttl: 60 },
     { limit: 50, ttl: 3600 },

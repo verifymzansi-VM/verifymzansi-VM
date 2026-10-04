@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { PLANS, isActiveMarketplaceArea } from "@/lib/constants/pricing";
 import { getStablePlanId } from "@/lib/constants/plan-ids";
+import { getPlaywrightPersonaRole } from "@/lib/supabase/playwright-session";
 
 type StubUser = {
   id: string;
@@ -53,6 +54,8 @@ function stableUuid(input: string): string {
 }
 
 function playwrightUserId(persona: string): string {
+  if (/^kyc-(member|reviewer|governor)(?:-[A-Za-z0-9]+)*$/.test(persona))
+    return stableUuid(`user:${persona}`);
   return `pw-${persona}`;
 }
 
@@ -222,7 +225,7 @@ export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
       password,
       persona,
       is_anonymous: false,
-      app_metadata: { role: "member" },
+      app_metadata: { role: getPlaywrightPersonaRole(persona) },
       user_metadata: { display_name: `Playwright ${persona}` },
       identities: [{ id: stableUuid(`identity:${persona}`) }],
     };
@@ -230,6 +233,17 @@ export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
   }
 
   const profiles = ensureTable(store, "account_profiles");
+  const staffRole = getPlaywrightPersonaRole(persona);
+  if (staffRole !== "member") {
+    const roles = ensureTable(store, "staff_roles");
+    if (!roles.some((row) => row.user_id === userId))
+      roles.push({
+        user_id: userId,
+        role: staffRole,
+        status: "active",
+        mfa_required_after: "2026-01-01T00:00:00.000Z",
+      });
+  }
   const existingProfileIndex = profiles.findIndex((row) => row.user_id === userId);
   const profile = {
     id: stableUuid(`profile:${persona}`),
