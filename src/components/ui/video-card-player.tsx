@@ -370,6 +370,34 @@ export function VideoCardPlayer({
   // Image slides also retain their decoded frame when carousel controls change.
   const mediaKey = `${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}|${isVideoMedia && showPlaybackControl ? "controls" : "no-controls"}`;
 
+  // Image cards do not need playback subscriptions, video state or visibility
+  // effects. Keep their server-rendered media while hydrating only image logic.
+  if (!isVideoMedia) {
+    return (
+      <ImageCardPlayer
+        key={`${normalizedSrc ?? "none"}|${normalizedPoster ?? "none"}`}
+        normalizedSrc={normalizedSrc}
+        normalizedPoster={normalizedPoster}
+        alt={alt}
+        sizes={sizes}
+        className={className}
+        mediaClassName={mediaClassName}
+        hoverScale={hoverScale}
+        mediaFitClassName={mediaFitClassName}
+        priority={priority}
+        canHover={canHover}
+        fitStrategy={fitStrategy}
+        containerAspectRatio={containerAspectRatio}
+        mediaWidth={mediaWidth}
+        mediaHeight={mediaHeight}
+        focalX={focalX}
+        focalY={focalY}
+        disableNativeDrag={disableNativeDrag}
+        fallback={fallback}
+      />
+    );
+  }
+
   if (effectiveMode === "hover" && isVideoMedia) {
     return (
       <HoverVideoPlayer
@@ -465,6 +493,99 @@ export function VideoCardPlayer({
       disableNativeDrag={disableNativeDrag}
       fallback={fallback}
     />
+  );
+}
+
+function ImageCardPlayer({
+  normalizedSrc,
+  normalizedPoster,
+  alt,
+  sizes,
+  className,
+  mediaClassName,
+  hoverScale,
+  mediaFitClassName,
+  priority,
+  canHover,
+  fitStrategy,
+  containerAspectRatio,
+  mediaWidth,
+  mediaHeight,
+  focalX,
+  focalY,
+  disableNativeDrag,
+  fallback,
+}: Pick<
+  VideoCardPlayerInnerProps,
+  | "normalizedSrc"
+  | "normalizedPoster"
+  | "alt"
+  | "sizes"
+  | "className"
+  | "mediaClassName"
+  | "hoverScale"
+  | "mediaFitClassName"
+  | "priority"
+  | "canHover"
+  | "fitStrategy"
+  | "containerAspectRatio"
+  | "mediaWidth"
+  | "mediaHeight"
+  | "focalX"
+  | "focalY"
+  | "disableNativeDrag"
+  | "fallback"
+>) {
+  const [hasError, setHasError] = useState(false);
+  const [measuredAspectRatio, setMeasuredAspectRatio] = useState<number | null>(null);
+  const mediaAspectRatio =
+    measuredAspectRatio ?? getInitialMediaAspectRatio(mediaWidth, mediaHeight);
+  const usesSmartFit = shouldUseSmartFit(fitStrategy, mediaAspectRatio, containerAspectRatio);
+
+  if (!normalizedSrc || hasError) return <MediaFallback fallback={fallback} />;
+
+  const image = (
+    <Image
+      src={normalizedSrc}
+      alt={alt}
+      fill
+      className={
+        usesSmartFit
+          ? getForegroundMediaClassName(mediaFitClassName, true, mediaClassName)
+          : cn(
+              getAnimatedMediaClassName(mediaFitClassName, false, hoverScale, mediaClassName),
+              "focal-position-object",
+              getFocalPositionClassName(focalX, focalY)
+            )
+      }
+      sizes={sizes}
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
+      onLoad={(event) => {
+        const image = event.currentTarget;
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+          setMeasuredAspectRatio(image.naturalWidth / image.naturalHeight);
+        }
+      }}
+      onError={() => setHasError(true)}
+      data-media-fit={usesSmartFit ? "smart" : "cover"}
+      unoptimized={normalizedSrc.startsWith("blob:") || normalizedSrc.startsWith("data:")}
+      draggable={disableNativeDrag ? false : undefined}
+      onDragStart={disableNativeDrag ? (event) => event.preventDefault() : undefined}
+    />
+  );
+
+  if (!usesSmartFit) return image;
+
+  return (
+    <div className={cn("relative h-full w-full", className)} data-media-fit="smart">
+      {canHover ? (
+        <SmartFitBackdrop src={normalizedPoster || normalizedSrc} sizes={sizes} priority={false} />
+      ) : (
+        <SmartFitStaticBackdrop />
+      )}
+      {image}
+    </div>
   );
 }
 
