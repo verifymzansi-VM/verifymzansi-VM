@@ -7,7 +7,7 @@ function runProfile(failingRequests: Set<number>, iterations: number) {
   const source = readFileSync("scripts/load-test.js", "utf8")
     .replace(/^import .*;\r?\n/gm, "")
     .replace("export const options =", "const options =")
-    .replace("export default function ()", "function scenario()");
+    .replace(/export default function \w*\s*\(\)/, "function scenario()");
   let requests = 0;
   const samples: number[] = [];
   runInNewContext(`${source}\nfor (let i = 0; i < ${iterations}; i++) scenario();`, {
