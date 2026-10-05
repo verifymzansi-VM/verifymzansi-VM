@@ -13,7 +13,7 @@ process.on("uncaughtException", (error) => {
 const { db, uuid, person, rows, scalar, asService, call, migrate } = await createAdminDb();
 
 const admin = await person("admin");
-const admin2 = await person("admin");
+await person("admin"); // a second admin must exist
 const governor = await person("governance_controller");
 const governor2 = await person("governance_controller");
 const moderator = await person("moderator");

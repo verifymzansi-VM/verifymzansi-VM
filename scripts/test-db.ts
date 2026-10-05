@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import { printSchemaVerificationResult, verifySupabaseSchema } from "./check-supabase-schema";

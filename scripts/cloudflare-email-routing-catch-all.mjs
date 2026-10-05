@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
@@ -13,21 +12,24 @@ const accountId = process.env.CF_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID
 const zoneId = process.env.CF_ZONE_ID || "05204c43f4378589a4cabecbe66917cc";
 const domain = process.env.CF_DOMAIN || "verifymzansi.com";
 const destinationEmail = process.env.CF_EMAIL_ROUTING_DESTINATION || "verifymzansi2s@gmail.com";
-const routeName = process.env.CF_EMAIL_ROUTING_RULE_NAME || `Catch-all ${domain} -> ${destinationEmail}`;
+const routeName =
+  process.env.CF_EMAIL_ROUTING_RULE_NAME || `Catch-all ${domain} -> ${destinationEmail}`;
 
 function printHelp() {
-  console.log(`Usage: node scripts/cloudflare-email-routing-catch-all.mjs [--apply]\n\n` +
-    `Configures a catch-all Cloudflare Email Routing rule for ${domain}.\n\n` +
-    `Environment variables:\n` +
-    `  CF_API_TOKEN or CLOUDFLARE_API_TOKEN             Cloudflare API token\n` +
-    `  CF_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID           Cloudflare account ID\n` +
-    `  CF_ZONE_ID                                       Cloudflare zone ID\n` +
-    `  CF_DOMAIN                                        Zone apex domain\n` +
-    `  CF_EMAIL_ROUTING_DESTINATION                     Destination inbox\n` +
-    `  CF_EMAIL_ROUTING_RULE_NAME                       Catch-all rule name\n\n` +
-    `Flags:\n` +
-    `  --apply                                          Apply changes instead of dry-run\n` +
-    `  --help                                           Show this help text`);
+  console.log(
+    `Usage: node scripts/cloudflare-email-routing-catch-all.mjs [--apply]\n\n` +
+      `Configures a catch-all Cloudflare Email Routing rule for ${domain}.\n\n` +
+      `Environment variables:\n` +
+      `  CF_API_TOKEN or CLOUDFLARE_API_TOKEN             Cloudflare API token\n` +
+      `  CF_ACCOUNT_ID or CLOUDFLARE_ACCOUNT_ID           Cloudflare account ID\n` +
+      `  CF_ZONE_ID                                       Cloudflare zone ID\n` +
+      `  CF_DOMAIN                                        Zone apex domain\n` +
+      `  CF_EMAIL_ROUTING_DESTINATION                     Destination inbox\n` +
+      `  CF_EMAIL_ROUTING_RULE_NAME                       Catch-all rule name\n\n` +
+      `Flags:\n` +
+      `  --apply                                          Apply changes instead of dry-run\n` +
+      `  --help                                           Show this help text`
+  );
 }
 
 if (showHelp) {
@@ -57,7 +59,9 @@ async function cfRequest(method, path, body) {
 
   const data = await response.json();
   if (!response.ok || !data.success) {
-    const details = data?.errors?.map((error) => `${error.code}: ${error.message}`).join("; ") || response.statusText;
+    const details =
+      data?.errors?.map((error) => `${error.code}: ${error.message}`).join("; ") ||
+      response.statusText;
     throw new Error(`${method} ${path} failed: ${details}`);
   }
 
@@ -88,7 +92,9 @@ async function ensureDestinationAddress() {
     : null;
 
   if (existing) {
-    console.log(`Destination exists: ${existing.email}${existing.verified ? " (verified)" : " (verification pending)"}`);
+    console.log(
+      `Destination exists: ${existing.email}${existing.verified ? " (verified)" : " (verification pending)"}`
+    );
     return existing;
   }
 
@@ -101,7 +107,9 @@ async function ensureDestinationAddress() {
     email: destinationEmail,
   });
 
-  console.log(`Created destination address ${created.email}. Verification email should be sent by Cloudflare.`);
+  console.log(
+    `Created destination address ${created.email}. Verification email should be sent by Cloudflare.`
+  );
   return created;
 }
 
@@ -110,7 +118,9 @@ async function ensureEmailRoutingEnabled() {
   const dns = await getRoutingDns();
   const isReady = settings?.enabled === true && settings?.status === "ready";
 
-  console.log(`Current routing status: enabled=${String(settings?.enabled)} status=${settings?.status || "unknown"}`);
+  console.log(
+    `Current routing status: enabled=${String(settings?.enabled)} status=${settings?.status || "unknown"}`
+  );
 
   if (isReady) {
     console.log("Email Routing is already enabled and ready.");
@@ -176,7 +186,9 @@ async function ensureCatchAllRule() {
   }
 
   if (!applyChanges) {
-    console.log(`[dry-run] Would set catch-all rule to forward all mail for ${domain} to ${destinationEmail}`);
+    console.log(
+      `[dry-run] Would set catch-all rule to forward all mail for ${domain} to ${destinationEmail}`
+    );
     if (current) {
       console.log(`Current catch-all rule: ${JSON.stringify(current, null, 2)}`);
     }
@@ -197,7 +209,9 @@ async function main() {
   printSection("Destination Address");
   const destination = await ensureDestinationAddress();
   if (destination && !destination.verified) {
-    console.log("Destination exists but is not verified yet. Complete the verification email before applying the catch-all rule.");
+    console.log(
+      "Destination exists but is not verified yet. Complete the verification email before applying the catch-all rule."
+    );
   }
 
   printSection("Email Routing DNS");
@@ -205,7 +219,9 @@ async function main() {
   printDnsRecords(dns);
 
   if (applyChanges && destination && !destination.verified) {
-    console.log("Skipping catch-all rule update until the destination inbox is verified in Cloudflare.");
+    console.log(
+      "Skipping catch-all rule update until the destination inbox is verified in Cloudflare."
+    );
     return;
   }
 
@@ -213,9 +229,15 @@ async function main() {
   await ensureCatchAllRule();
 
   printSection("Next Steps");
-  console.log("1. If Cloudflare created a new destination, open the verification email in Gmail and confirm it.");
-  console.log("2. Rerun this script with --apply after verification if the catch-all step was skipped.");
-  console.log("3. Send test mail to support@, hello@, privacy@, security@, and a random alias at the domain.");
+  console.log(
+    "1. If Cloudflare created a new destination, open the verification email in Gmail and confirm it."
+  );
+  console.log(
+    "2. Rerun this script with --apply after verification if the catch-all step was skipped."
+  );
+  console.log(
+    "3. Send test mail to support@, hello@, privacy@, security@, and a random alias at the domain."
+  );
 }
 
 main().catch((error) => {

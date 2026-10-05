@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { spawnSync } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";

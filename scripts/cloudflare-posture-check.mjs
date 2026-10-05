@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -118,7 +117,9 @@ async function hasDsRecordViaDoh(domain) {
       if (!response.ok) continue;
       const data = await response.json();
       const answers = Array.isArray(data?.Answer) ? data.Answer : [];
-      const hasDs = answers.some((record) => Number(record?.type) === 43 || /\bDS\b/i.test(String(record?.data ?? "")));
+      const hasDs = answers.some(
+        (record) => Number(record?.type) === 43 || /\bDS\b/i.test(String(record?.data ?? ""))
+      );
       if (hasDs) {
         return { ok: true, source: url };
       }
@@ -181,7 +182,9 @@ function emitOutput(checks) {
       reportResult(check.severity, `${check.name}: ${check.detail}`);
     }
     console.log("----------------------------------------");
-    console.log(`Summary: ${summary.failCount} fail, ${summary.warnCount} warn, ${summary.passCount} pass`);
+    console.log(
+      `Summary: ${summary.failCount} fail, ${summary.warnCount} warn, ${summary.passCount} pass`
+    );
 
     if (strictMode || strictAllWarnings) {
       const strictLabel = strictAllWarnings

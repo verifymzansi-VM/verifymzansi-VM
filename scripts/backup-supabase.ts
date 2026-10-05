@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { copyFile, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvConfig } from "@next/env";

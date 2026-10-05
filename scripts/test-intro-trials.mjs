@@ -33,7 +33,9 @@ for (const f of [
 ])
   await db.exec(fs.readFileSync("supabase/migrations/" + f, "utf8"));
 // Staff role authority: from here on, staff_roles (not auth metadata) grants staff powers.
-await db.exec(fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8"));
+await db.exec(
+  fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8")
+);
 staffRolesReady = true;
 const scalar = async (sql, args) => (await db.query(sql, args)).rows[0];
 const uuid = () => crypto.randomUUID();

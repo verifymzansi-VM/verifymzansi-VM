@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { pathToFileURL } from "node:url";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";

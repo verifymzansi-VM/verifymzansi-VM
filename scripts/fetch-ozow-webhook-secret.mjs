@@ -65,18 +65,14 @@ const clientId = get("OZOW_CLIENT_ID");
 const clientSecret = get("OZOW_CLIENT_SECRET");
 const ozowEnv = get("OZOW_ENV") || "staging";
 const oauthScope = get("OZOW_WEBHOOK_OAUTH_SCOPE") || "webhooks";
-const requestedWebhookId =
-  getArg("--webhook-id") || getArg("-w") || get("OZOW_WEBHOOK_ID") || "";
+const requestedWebhookId = getArg("--webhook-id") || getArg("-w") || get("OZOW_WEBHOOK_ID") || "";
 
 if (!clientId || !clientSecret) {
   console.error("ERROR: OZOW_CLIENT_ID and OZOW_CLIENT_SECRET must be set.");
   process.exit(1);
 }
 
-const baseUrl =
-  ozowEnv === "production"
-    ? "https://one.ozow.com"
-    : "https://stagingone.ozow.com";
+const baseUrl = ozowEnv === "production" ? "https://one.ozow.com" : "https://stagingone.ozow.com";
 
 console.log(`Environment: ${ozowEnv}`);
 console.log(`Base URL:    ${baseUrl}`);
@@ -166,9 +162,7 @@ if (requestedWebhookId) {
   console.log(`   Found ${webhookIds.length} webhook(s)`);
   for (const wh of items) {
     if (!wh?.id) continue;
-    console.log(
-      `   - ID: ${wh.id}  URL: ${wh.endpoint || wh.url || wh.callbackUrl || "?"}`
-    );
+    console.log(`   - ID: ${wh.id}  URL: ${wh.endpoint || wh.url || wh.callbackUrl || "?"}`);
   }
   console.log();
 }

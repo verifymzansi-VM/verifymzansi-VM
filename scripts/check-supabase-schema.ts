@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 

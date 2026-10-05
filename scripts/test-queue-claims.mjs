@@ -26,13 +26,20 @@ await migrate(
 );
 
 const claim = (actor, queue, limit = 10) =>
-  asService(async () => (await db.query(`SELECT * FROM public.claim_queue_items($1,$2,$3)`, [actor, queue, limit])).rows);
+  asService(
+    async () =>
+      (await db.query(`SELECT * FROM public.claim_queue_items($1,$2,$3)`, [actor, queue, limit]))
+        .rows
+  );
 const check = (actor, type, id) =>
   call(`SELECT public.check_queue_claim($1,$2,$3) AS result`, [actor, type, id]);
 
 async function report(severity = "standard", reporter = null, listingOwner = null) {
   const owner = listingOwner ?? (await person("member"));
-  const listing = await scalar(`INSERT INTO listings(owner_id,status) VALUES ($1,'live') RETURNING id`, [owner]);
+  const listing = await scalar(
+    `INSERT INTO listings(owner_id,status) VALUES ($1,'live') RETURNING id`,
+    [owner]
+  );
   return scalar(
     `INSERT INTO reports(target_id,target_type,area,category,severity,description,reporter_user_id,reporter_ip_hash)
      VALUES ($1,'listing','MZANSI_MARKET','scam',$2,'This listing asks for payment outside the platform',$3,'h') RETURNING id`,
@@ -41,9 +48,9 @@ async function report(severity = "standard", reporter = null, listingOwner = nul
 }
 
 // ── Reports: high severity first, disjoint between moderators ─────────────
-const standard1 = await report("standard");
+await report("standard");
 const high1 = await report("high");
-const standard2 = await report("standard");
+await report("standard");
 const ownReport = await report("high", modB); // modB filed this one
 const aboutModB = await report("high", null, modB); // and this one is about modB's listing
 
@@ -52,7 +59,10 @@ assert.equal(a[0].item_id, high1, "high severity comes first");
 assert.equal(a.length, 2);
 let b = await claim(modB, "reports", 10);
 const aIds = new Set(a.map((c) => c.item_id));
-assert(b.every((c) => !aIds.has(c.item_id)), "moderators never receive the same item");
+assert(
+  b.every((c) => !aIds.has(c.item_id)),
+  "moderators never receive the same item"
+);
 assert(!b.some((c) => c.item_id === ownReport), "nobody claims a report they filed");
 assert(!b.some((c) => c.item_id === aboutModB), "nobody claims a report about themselves");
 assert(
@@ -64,27 +74,55 @@ assert(
 assert.deepEqual(await check(modA, "report", high1), { ok: true, claimed: true });
 assert.equal((await check(modB, "report", high1)).error, "claimed_by_other");
 const unclaimed = await report("standard");
-assert.equal((await check(modA, "report", unclaimed)).error, "claim_required", "moderators work from claims");
+assert.equal(
+  (await check(modA, "report", unclaimed)).error,
+  "claim_required",
+  "moderators work from claims"
+);
 assert.deepEqual(await check(governor, "report", unclaimed), { ok: true, claimed: false });
-assert.equal((await check(admin, "report", high1)).error, "claimed_by_other", "not even admins act on a held item");
+assert.equal(
+  (await check(admin, "report", high1)).error,
+  "claimed_by_other",
+  "not even admins act on a held item"
+);
 assert.equal((await check(modB, "report", ownReport)).error, "not_independent");
 
 // Release after deciding: only the holder's claim goes.
-assert.equal(await call(`SELECT public.release_queue_claims($1,'report',$2) AS result`, [modB, high1]), 0);
-assert.equal(await call(`SELECT public.release_queue_claims($1,'report',$2) AS result`, [modA, high1]), 1);
+assert.equal(
+  await call(`SELECT public.release_queue_claims($1,'report',$2) AS result`, [modB, high1]),
+  0
+);
+assert.equal(
+  await call(`SELECT public.release_queue_claims($1,'report',$2) AS result`, [modA, high1]),
+  1
+);
 assert.equal(await scalar(`SELECT count(*)::int FROM queue_claims WHERE item_id=$1`, [high1]), 0);
 
 // ── Expiry, renewal, personal cap ──────────────────────────────────────────
-await db.query(`UPDATE queue_claims SET expires_at = now() - interval '1 second' WHERE claimed_by=$1`, [modA]);
-assert.equal((await check(modA, "report", a[1].item_id)).error, "claim_required", "an expired claim is no claim");
+await db.query(
+  `UPDATE queue_claims SET expires_at = now() - interval '1 second' WHERE claimed_by=$1`,
+  [modA]
+);
+assert.equal(
+  (await check(modA, "report", a[1].item_id)).error,
+  "claim_required",
+  "an expired claim is no claim"
+);
 const adminClaims = await claim(admin, "reports", 25);
-assert(adminClaims.some((c) => c.item_id === a[1].item_id), "expired items return to the queue");
+assert(
+  adminClaims.some((c) => c.item_id === a[1].item_id),
+  "expired items return to the queue"
+);
 await call(`SELECT public.release_queue_claims($1,NULL,NULL) AS result`, [admin]);
 b = await claim(modB, "reports", 10);
 
-assert.equal(await call(`SELECT public.renew_queue_claims($1) AS result`, [modB]) > 0, true);
+assert.equal((await call(`SELECT public.renew_queue_claims($1) AS result`, [modB])) > 0, true);
 await db.query(`UPDATE queue_claims SET renewals = 4 WHERE claimed_by=$1`, [modB]);
-assert.equal(await call(`SELECT public.renew_queue_claims($1) AS result`, [modB]), 0, "at most 4 renewals");
+assert.equal(
+  await call(`SELECT public.renew_queue_claims($1) AS result`, [modB]),
+  0,
+  "at most 4 renewals"
+);
 
 for (let i = 0; i < 25; i += 1) await report("standard");
 const big = await claim(modA, "reports", 25);
@@ -96,20 +134,41 @@ await call(`SELECT public.release_queue_claims($1,NULL,NULL) AS result`, [modA])
 await assert.rejects(claim(governor, "reports"), /claim_forbidden/);
 const held = b[0].item_id;
 assert.equal(
-  (await call(`SELECT public.reassign_queue_claim($1,'report',$2,$3,'x') AS result`, [governor, held, modA])).error,
+  (
+    await call(`SELECT public.reassign_queue_claim($1,'report',$2,$3,'x') AS result`, [
+      governor,
+      held,
+      modA,
+    ])
+  ).error,
   "reason_required"
 );
 assert.equal(
-  (await call(`SELECT public.reassign_queue_claim($1,'report',$2,$3,'Moderator is off sick') AS result`, [modA, held, modA])).error,
+  (
+    await call(
+      `SELECT public.reassign_queue_claim($1,'report',$2,$3,'Moderator is off sick') AS result`,
+      [modA, held, modA]
+    )
+  ).error,
   "forbidden"
 );
 assert.equal(
-  (await call(`SELECT public.reassign_queue_claim($1,'report',$2,$3,'Moderator is off sick') AS result`, [governor, held, modA])).status,
+  (
+    await call(
+      `SELECT public.reassign_queue_claim($1,'report',$2,$3,'Moderator is off sick') AS result`,
+      [governor, held, modA]
+    )
+  ).status,
   "reassigned"
 );
 assert.equal(await scalar(`SELECT claimed_by FROM queue_claims WHERE item_id=$1`, [held]), modA);
 assert.equal(
-  (await call(`SELECT public.reassign_queue_claim($1,'report',$2,$3,'Balance the load') AS result`, [governor, ownReport, modB])).error,
+  (
+    await call(
+      `SELECT public.reassign_queue_claim($1,'report',$2,$3,'Balance the load') AS result`,
+      [governor, ownReport, modB]
+    )
+  ).error,
   "not_claimed"
 );
 assert.equal(
@@ -119,22 +178,48 @@ assert.equal(
 
 // ── KYC: highest risk first, never your own ────────────────────────────────
 const applicant = await person("member");
-const low = await scalar(`INSERT INTO verification_steps(user_id,step_type,risk_level) VALUES ($1,'selfie','low') RETURNING id`, [applicant]);
-const critical = await scalar(`INSERT INTO verification_steps(user_id,step_type,risk_level) VALUES ($1,'id_doc','critical') RETURNING id`, [applicant]);
-await scalar(`INSERT INTO verification_steps(user_id,step_type,risk_level,status) VALUES ($1,'location','low','pending') RETURNING id`, [applicant]);
-const mine = await scalar(`INSERT INTO verification_steps(user_id,step_type,risk_level) VALUES ($1,'id_doc','critical') RETURNING id`, [modB]);
+const low = await scalar(
+  `INSERT INTO verification_steps(user_id,step_type,risk_level) VALUES ($1,'selfie','low') RETURNING id`,
+  [applicant]
+);
+const critical = await scalar(
+  `INSERT INTO verification_steps(user_id,step_type,risk_level) VALUES ($1,'id_doc','critical') RETURNING id`,
+  [applicant]
+);
+await scalar(
+  `INSERT INTO verification_steps(user_id,step_type,risk_level,status) VALUES ($1,'location','low','pending') RETURNING id`,
+  [applicant]
+);
+const mine = await scalar(
+  `INSERT INTO verification_steps(user_id,step_type,risk_level) VALUES ($1,'id_doc','critical') RETURNING id`,
+  [modB]
+);
 const kyc = await claim(modB, "kyc", 5);
-assert.deepEqual(kyc.map((c) => c.item_id), [critical, low], "risk order, no location steps, not their own");
+assert.deepEqual(
+  kyc.map((c) => c.item_id),
+  [critical, low],
+  "risk order, no location steps, not their own"
+);
 assert(!kyc.some((c) => c.item_id === mine));
 
 // ── Content: all tables and edit requests, oldest first ────────────────────
 const seller = await person("member");
 const oldListing = await scalar(
-  `INSERT INTO listings(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`, [seller]);
+  `INSERT INTO listings(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`,
+  [seller]
+);
 await db.query(`UPDATE listings SET owner_id = owner_id WHERE id=$1`, [oldListing]);
-const promo = await scalar(`INSERT INTO promotions(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`, [seller]);
-const edit = await scalar(`INSERT INTO content_edit_requests(owner_id) VALUES ($1) RETURNING id`, [seller]);
-const ownPending = await scalar(`INSERT INTO listings(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`, [modA]);
+const promo = await scalar(
+  `INSERT INTO promotions(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`,
+  [seller]
+);
+const edit = await scalar(`INSERT INTO content_edit_requests(owner_id) VALUES ($1) RETURNING id`, [
+  seller,
+]);
+const ownPending = await scalar(
+  `INSERT INTO listings(owner_id,status) VALUES ($1,'pending_moderation') RETURNING id`,
+  [modA]
+);
 const content = await claim(modA, "content", 10);
 assert.deepEqual(
   new Set(content.map((c) => `${c.item_type}:${c.item_id}`)),
@@ -143,17 +228,23 @@ assert.deepEqual(
 assert(!content.some((c) => c.item_id === ownPending));
 
 // ── Losing staff access releases claims ────────────────────────────────────
-assert(await scalar(`SELECT count(*)::int FROM queue_claims WHERE claimed_by=$1`, [modA]) > 0);
-await call(`SELECT public.propose_staff_role_change($1,$2,'member','Left the team') AS result`, [admin, modA]);
+assert((await scalar(`SELECT count(*)::int FROM queue_claims WHERE claimed_by=$1`, [modA])) > 0);
+await call(`SELECT public.propose_staff_role_change($1,$2,'member','Left the team') AS result`, [
+  admin,
+  modA,
+]);
 assert.equal(await scalar(`SELECT count(*)::int FROM queue_claims WHERE claimed_by=$1`, [modA]), 0);
 await assert.rejects(claim(modA, "content"), /claim_forbidden/);
 
 // ── Expiry job and member access ───────────────────────────────────────────
 await db.query(`UPDATE queue_claims SET expires_at = now() - interval '1 second'`);
-assert(await call(`SELECT public.expire_queue_claims() AS result`) > 0);
+assert((await call(`SELECT public.expire_queue_claims() AS result`)) > 0);
 assert.equal(await scalar(`SELECT count(*)::int FROM queue_claims`), 0);
 await db.exec(`SET ROLE authenticated`);
-await assert.rejects(db.query(`SELECT * FROM public.claim_queue_items('${uuid()}','reports',5)`), /permission denied/);
+await assert.rejects(
+  db.query(`SELECT * FROM public.claim_queue_items('${uuid()}','reports',5)`),
+  /permission denied/
+);
 await db.exec(`RESET ROLE`);
 
 console.log("Queue claim checks passed.");

@@ -1,5 +1,3 @@
-/* eslint-disable no-console -- CLI script, console output is intentional */
-
 /**
  * Batch media reprocessing script.
  *

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 const token = process.env.CF_API_TOKEN;
@@ -24,7 +23,8 @@ async function cfRequest(method, path, body) {
 
   const data = await response.json();
   if (!response.ok || !data.success) {
-    const details = data?.errors?.map((e) => `${e.code}: ${e.message}`).join("; ") || response.statusText;
+    const details =
+      data?.errors?.map((e) => `${e.code}: ${e.message}`).join("; ") || response.statusText;
     throw new Error(`${method} ${path} failed: ${details}`);
   }
 
@@ -82,7 +82,9 @@ async function main() {
     console.log("DS record (publish at registrar):");
     console.log(dnssec.ds);
   } else {
-    console.log("DNSSEC enabled, but DS value unavailable in response. Check Cloudflare DNSSEC panel.");
+    console.log(
+      "DNSSEC enabled, but DS value unavailable in response. Check Cloudflare DNSSEC panel."
+    );
   }
 }
 

@@ -63,7 +63,9 @@ try {
   for (const role of ["anon", "authenticated"]) {
     for (const userId of [owner, victim]) {
       await assert.rejects(
-        asRole(role, owner, () => db.query(insert, [userId, "victim-key", "private", "https://media.example/victim-key"])),
+        asRole(role, owner, () =>
+          db.query(insert, [userId, "victim-key", "private", "https://media.example/victim-key"])
+        ),
         (error) => error.code === "42501",
         `${role} must not forge tracking for self or another account`
       );
@@ -74,27 +76,38 @@ try {
   // server role; authenticated readers only see their own tracking records.
   const records = [];
   for (const userId of [owner, victim]) {
-    const result = await asRole("service_role", "", () => db.query(
-      `INSERT INTO media_uploads(user_id,r2_key,bucket,url) VALUES ($1,$2,'public',$3) RETURNING id`,
-      [userId, `media/listing/${userId}/video.mp4`, `https://media.example/${userId}.mp4`]
-    ));
+    const result = await asRole("service_role", "", () =>
+      db.query(
+        `INSERT INTO media_uploads(user_id,r2_key,bucket,url) VALUES ($1,$2,'public',$3) RETURNING id`,
+        [userId, `media/listing/${userId}/video.mp4`, `https://media.example/${userId}.mp4`]
+      )
+    );
     records.push(result.rows[0].id);
   }
-  await asRole("service_role", "", () => db.query(
-    "UPDATE media_uploads SET validated_at=now(),confirmed_at=now() WHERE id=$1", [records[0]]
-  ));
-  const visible = await asRole("authenticated", owner, () => db.query("SELECT id,validated_at,confirmed_at FROM media_uploads"));
+  await asRole("service_role", "", () =>
+    db.query("UPDATE media_uploads SET validated_at=now(),confirmed_at=now() WHERE id=$1", [
+      records[0],
+    ])
+  );
+  const visible = await asRole("authenticated", owner, () =>
+    db.query("SELECT id,validated_at,confirmed_at FROM media_uploads")
+  );
   assert.equal(visible.rows.length, 1);
   assert.equal(visible.rows[0].id, records[0]);
   assert(visible.rows[0].validated_at && visible.rows[0].confirmed_at);
   const anonymous = await asRole("anon", "", () => db.query("SELECT id FROM media_uploads"));
   assert.equal(anonymous.rows.length, 0);
   for (const sql of ["UPDATE media_uploads SET validated_at=now()", "DELETE FROM media_uploads"]) {
-    await assert.rejects(asRole("authenticated", owner, () => db.exec(sql)), (error) => error.code === "42501");
+    await assert.rejects(
+      asRole("authenticated", owner, () => db.exec(sql)),
+      (error) => error.code === "42501"
+    );
   }
   await asRole("service_role", "", () => db.exec("DELETE FROM media_uploads"));
   assert.equal((await db.query("SELECT count(*)::integer AS n FROM media_uploads")).rows[0].n, 0);
-  console.log("Media tracking authorization passed: original forgery reproduced; client writes denied; owner reads and service upload/cleanup writes preserved (isolated PGlite, not deployed PostgREST/R2).");
+  console.log(
+    "Media tracking authorization passed: original forgery reproduced; client writes denied; owner reads and service upload/cleanup writes preserved (isolated PGlite, not deployed PostgREST/R2)."
+  );
 } finally {
   await db.close();
 }

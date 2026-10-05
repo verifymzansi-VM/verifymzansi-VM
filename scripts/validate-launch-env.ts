@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { loadEnvConfig } from "@next/env";
 import {
   resolveLaunchValidationMode,

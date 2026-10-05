@@ -79,7 +79,7 @@ export const options = {
   },
 };
 
-export default function () {
+export default function browsePublicPages() {
   // ── Homepage ────────────────────────────────────────────
   const homeRes = http.get(`${BASE}/`);
   homepageLatency.add(homeRes.timings.duration);

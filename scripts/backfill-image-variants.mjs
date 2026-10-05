@@ -196,6 +196,8 @@ for await (const key of listAllObjects()) {
 }
 await Promise.all(inFlight);
 
-console.log(`\nScanned ${scanned} originals, processed ${processed}, generated ${totalGenerated} variant(s), failed ${failed}.`);
+console.log(
+  `\nScanned ${scanned} originals, processed ${processed}, generated ${totalGenerated} variant(s), failed ${failed}.`
+);
 if (!WRITE) console.log("Dry-run — re-run with --write to upload variants.");
 if (failed > 0) process.exitCode = 1;

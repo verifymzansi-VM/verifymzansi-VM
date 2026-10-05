@@ -58,7 +58,7 @@ const blockedProductionVars = [
 function readText(filePath) {
   try {
     return fs.readFileSync(filePath, "utf8");
-  } catch (error) {
+  } catch {
     return null;
   }
 }

@@ -45,14 +45,21 @@ const days = await scalar(
   [fresh]
 );
 assert.equal(days, 30, "a caller cannot set a later due date");
-assert.match(await scalar(`SELECT legal_basis FROM dsar_cases WHERE id=$1`, [fresh]), /Internal target/);
+assert.match(
+  await scalar(`SELECT legal_basis FROM dsar_cases WHERE id=$1`, [fresh]),
+  /Internal target/
+);
 
 // ── Extensions: access only, once, with a reason and a notice ──────────────
 const extend = (actor, id, reason = "Records held in two systems need retrieving") =>
   call(`SELECT public.extend_dsar_deadline($1,$2,$3) AS result`, [actor, id, reason]);
 assert.equal((await extend(moderator, legacy)).error, "forbidden");
 assert.equal((await extend(governor, legacy, "short")).error, "reason_required");
-assert.equal((await extend(governor, fresh)).error, "extension_not_allowed", "deletion has no statutory extension");
+assert.equal(
+  (await extend(governor, fresh)).error,
+  "extension_not_allowed",
+  "deletion has no statutory extension"
+);
 const r = await extend(governor, legacy);
 assert.equal(r.status, "extended");
 const extendedDays = await scalar(
@@ -67,7 +74,9 @@ assert.equal(
 );
 assert.equal((await extend(admin, legacy)).error, "already_extended");
 assert.equal(
-  await scalar(`SELECT count(*)::int FROM operation_jobs WHERE operation_key=$1`, [`dsar_extension:${legacy}`]),
+  await scalar(`SELECT count(*)::int FROM operation_jobs WHERE operation_key=$1`, [
+    `dsar_extension:${legacy}`,
+  ]),
   1,
   "the requester is notified through a durable job"
 );
@@ -77,7 +86,11 @@ const late = await scalar(
   `INSERT INTO dsar_cases(type,requester_email,requester_phone,description,due_by,received_at)
    VALUES ('access','late@example.com','n/a','x', now(), now() - interval '40 days') RETURNING id`
 );
-assert.equal((await extend(governor, late)).error, "already_overdue", "extensions must be given before the deadline");
+assert.equal(
+  (await extend(governor, late)).error,
+  "already_overdue",
+  "extensions must be given before the deadline"
+);
 
 // ── Retention overview ──────────────────────────────────────────────────────
 await db.query(
