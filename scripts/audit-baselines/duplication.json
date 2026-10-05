@@ -4,9 +4,9 @@
   "rationale": "Existing non-security duplication across expanded src/scripts/workers scope. Exact fragment/file-pair hashes block new findings; no security finding is excused.",
   "roots": ["src", "scripts", "workers"],
   "total": {
-    "clones": 34,
-    "duplicatedLines": 820,
-    "percentage": 0.45
+    "clones": 33,
+    "duplicatedLines": 804,
+    "percentage": 0.42
   },
   "fingerprints": [
     "BygnLVrarTRffVrn0cqwKX3LvXDokrn7QoxFaV-iuwU",
@@ -26,7 +26,6 @@
     "WEPdZA7WM36cHWS9GdgLUdvP-c9UsWPHvbtpaVGq1QM",
     "alqPPqhW4y1xL7CrHA7Xv8SJ0fMBCsDFLyY7EO6tOnk",
     "exKNb69XtzupSAHj6i2Q9Tnxs0_WuBU7OrDRQUObPiY",
-    "l9FtEpza4f3GGieI6miMxhBKHQ2VXhtDxf5TBOdPj7Y",
     "mBM5sdAaJqwO0VKPslkTXmXUxOF5zwQB-L_uwr4qL9c",
     "r0ZYczY7i5m24Vj3hGZxoZjbCnqDpdcduC330gIKU7s",
     "slgy2BIWxIVXaIn91bwemvbkl4vFy62LunIztbzLlSc",

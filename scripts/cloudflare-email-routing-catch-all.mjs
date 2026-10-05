@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const API_BASE = "https://api.cloudflare.com/client/v4";
+import { createCloudflareRequest } from "./lib/cloudflare-api.mjs";
 
 const rawArgs = process.argv.slice(2);
 const args = new Set(rawArgs);
@@ -47,26 +47,7 @@ if (!accountId) {
   process.exit(1);
 }
 
-async function cfRequest(method, path, body) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    const details =
-      data?.errors?.map((error) => `${error.code}: ${error.message}`).join("; ") ||
-      response.statusText;
-    throw new Error(`${method} ${path} failed: ${details}`);
-  }
-
-  return data.result;
-}
+const cfRequest = createCloudflareRequest(token);
 
 function printSection(title) {
   console.log(`\n${title}`);

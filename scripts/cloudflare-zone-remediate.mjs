@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const API_BASE = "https://api.cloudflare.com/client/v4";
+import { createCloudflareRequest } from "./lib/cloudflare-api.mjs";
 const token = process.env.CF_API_TOKEN;
 const zoneId = process.env.CF_ZONE_ID || "05204c43f4378589a4cabecbe66917cc";
 const apexDomain = process.env.CF_DOMAIN || "verifymzansi.com";
@@ -11,25 +11,7 @@ if (!token) {
   process.exit(1);
 }
 
-async function cfRequest(method, path, body) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data.success) {
-    const details =
-      data?.errors?.map((e) => `${e.code}: ${e.message}`).join("; ") || response.statusText;
-    throw new Error(`${method} ${path} failed: ${details}`);
-  }
-
-  return data.result;
-}
+const cfRequest = createCloudflareRequest(token);
 
 async function ensureWwwCname() {
   const records = await cfRequest(
