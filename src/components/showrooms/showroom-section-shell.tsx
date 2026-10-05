@@ -1,6 +1,14 @@
 import Image from "next/image";
 import type { CSSProperties, ReactNode, Ref } from "react";
+import { preload } from "react-dom";
 import { cn } from "@/lib/utils";
+
+/** Screens that get the mobile artwork: everything the <picture> source does not cover. */
+const MOBILE_ARTWORK_MEDIA = "(max-width: 767.98px) and (orientation: portrait)";
+const DESKTOP_ARTWORK_MEDIA = "(min-width: 768px), (orientation: landscape)";
+// React sends high-priority image preloads as a Link header, where it escapes
+// commas; this is the same query as DESKTOP_ARTWORK_MEDIA without one.
+const DESKTOP_ARTWORK_PRELOAD_MEDIA = `not all and ${MOBILE_ARTWORK_MEDIA}`;
 
 export type ShowroomBackgroundOverlayPreset = "market" | "business" | "tourism";
 
@@ -57,6 +65,22 @@ export function getBackgroundOverlayClasses(preset: ShowroomBackgroundOverlayPre
           "bg-[radial-gradient(circle,rgba(15,23,42,0.38)_0%,rgba(15,23,42,0.1)_40%,transparent_72%)]",
       };
   }
+}
+
+/**
+ * Starts the showroom artwork (the LCP element) downloading before a page
+ * finishes loading its showroom data. Call it before the page's first await.
+ */
+export function preloadShowroomBackground(background: ShowroomDecorativeBackground): void {
+  const mobileSrc = background.mobileSrc ?? background.src;
+  // A single shared image is a next/image with `preload`; it hints itself.
+  if (!background.src || mobileSrc === background.src) return;
+  preload(background.src, {
+    as: "image",
+    fetchPriority: "high",
+    media: DESKTOP_ARTWORK_PRELOAD_MEDIA,
+  });
+  preload(mobileSrc, { as: "image", fetchPriority: "high", media: MOBILE_ARTWORK_MEDIA });
 }
 
 export function ShowroomSectionShell({
@@ -118,7 +142,7 @@ export function ShowroomSectionShell({
             />
           ) : (
             <picture>
-              <source media="(min-width: 768px), (orientation: landscape)" srcSet={backgroundSrc} />
+              <source media={DESKTOP_ARTWORK_MEDIA} srcSet={backgroundSrc} />
               {/* Precompressed local artwork: picture selects one file before downloading.
                   It is the LCP element on showroom pages, so fetch it at high priority. */}
               <img
@@ -129,10 +153,10 @@ export function ShowroomSectionShell({
                 loading="eager"
                 decoding="async"
                 fetchPriority="high"
-                className={cn(
-                  "showroom-artwork absolute inset-0 h-full w-full object-cover",
-                  hasListings && "scale-[1.01]"
-                )}
+                // Same scale with and without listings: the populated showroom
+                // replaces the loading one, and a larger artwork would be
+                // recorded as a new, later Largest Contentful Paint.
+                className="showroom-artwork absolute inset-0 h-full w-full object-cover scale-[1.01]"
                 style={
                   {
                     "--showroom-desktop-position": desktopPosition,

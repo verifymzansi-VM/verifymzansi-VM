@@ -1,6 +1,30 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PromotionsPage from "./page";
+import {
+  ShowroomWithData,
+  type StreamedShowroomProps,
+} from "@/components/showrooms/streamed-showroom";
+import type * as StreamedShowroomModule from "@/components/showrooms/streamed-showroom";
+
+const { streamedShowroomSpy } = vi.hoisted(() => ({
+  streamedShowroomSpy: vi.fn(),
+}));
+
+vi.mock("@/components/showrooms/streamed-showroom", async (importOriginal) => ({
+  ...(await importOriginal<typeof StreamedShowroomModule>()),
+  StreamedShowroom: (props: StreamedShowroomProps) => {
+    streamedShowroomSpy(props);
+    return null;
+  },
+}));
+
+/** Renders the page, then the showroom it streams in after its shell. */
+async function renderPage() {
+  render(await PromotionsPage());
+  const [showroomProps] = streamedShowroomSpy.mock.calls.at(-1) as [StreamedShowroomProps];
+  render(await ShowroomWithData(showroomProps));
+}
 
 const { mockCreateClient, mockCookies, mockGetOwnerColumn } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -142,7 +166,7 @@ describe("PromotionsPage", () => {
     ];
     mockLoadShowroomItems.mockResolvedValue(items);
 
-    render(await PromotionsPage());
+    await renderPage();
 
     expect(mockLoadShowroomItems).toHaveBeenCalledWith("tourism", {
       province: "Western Cape",
@@ -166,7 +190,7 @@ describe("PromotionsPage", () => {
       })
     );
 
-    render(await PromotionsPage());
+    await renderPage();
 
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -186,7 +210,7 @@ describe("PromotionsPage", () => {
       })
     );
 
-    render(await PromotionsPage());
+    await renderPage();
 
     expect(screen.queryByText("Phone & ID checked")).not.toBeInTheDocument();
   });
@@ -197,7 +221,7 @@ describe("PromotionsPage", () => {
       from: () => createRejectedQueryResult(),
     });
 
-    render(await PromotionsPage());
+    await renderPage();
 
     expect(screen.getByTestId("showroom-card-carousel")).toBeInTheDocument();
     expect(carouselSpy).toHaveBeenCalledWith(

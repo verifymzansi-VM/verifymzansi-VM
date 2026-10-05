@@ -1,6 +1,30 @@
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MzansiMarketPage from "./page";
+import {
+  ShowroomWithData,
+  type StreamedShowroomProps,
+} from "@/components/showrooms/streamed-showroom";
+import type * as StreamedShowroomModule from "@/components/showrooms/streamed-showroom";
+
+const { streamedShowroomSpy } = vi.hoisted(() => ({
+  streamedShowroomSpy: vi.fn(),
+}));
+
+vi.mock("@/components/showrooms/streamed-showroom", async (importOriginal) => ({
+  ...(await importOriginal<typeof StreamedShowroomModule>()),
+  StreamedShowroom: (props: StreamedShowroomProps) => {
+    streamedShowroomSpy(props);
+    return null;
+  },
+}));
+
+/** Renders the page, then the showroom it streams in after its shell. */
+async function renderPage() {
+  render(await MzansiMarketPage());
+  const [showroomProps] = streamedShowroomSpy.mock.calls.at(-1) as [StreamedShowroomProps];
+  render(await ShowroomWithData(showroomProps));
+}
 
 const { mockCreateClient } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -91,7 +115,7 @@ describe("MzansiMarketPage", () => {
   });
 
   it("passes the market decorative background into the showroom", async () => {
-    render(await MzansiMarketPage());
+    await renderPage();
 
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -104,13 +128,13 @@ describe("MzansiMarketPage", () => {
   });
 
   it("shows no trust strip under the market showroom", async () => {
-    render(await MzansiMarketPage());
+    await renderPage();
 
     expect(screen.queryByText("Phone & ID checked")).not.toBeInTheDocument();
   });
 
   it("uses Mzansi Market as the primary page heading", async () => {
-    render(await MzansiMarketPage());
+    await renderPage();
 
     expect(pageHeaderSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Mzansi Market" }));
   });

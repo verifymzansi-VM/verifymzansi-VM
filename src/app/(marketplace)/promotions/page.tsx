@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
-import {
-  ShowroomCardCarousel,
-  type CarouselItem,
-} from "@/components/showrooms/showroom-card-carousel";
 import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
+import { StreamedShowroom } from "@/components/showrooms/streamed-showroom";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
-import { loadShowroomItems, type ShowroomClient } from "@/lib/showroom/feed";
-import { getVisitorProvince } from "@/lib/showroom/visitor-province";
 
 import {
   PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
@@ -56,26 +50,6 @@ export default async function PromotionsPage() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const supabase = await createClient();
-  const visitor = await getVisitorProvince();
-  // Tourism businesses and events share one fair rotation.
-  const carouselItems: CarouselItem[] = await loadShowroomItems("tourism", {
-    province: visitor.province,
-    hideFixtures,
-    client: supabase as unknown as ShowroomClient,
-  });
-
-  if (carouselItems.length === 0) {
-    carouselItems.push({
-      id: "tourism-events-empty",
-      type: "promotion",
-      href: "/post/create-tourism",
-      title: "Tourism & Events",
-      description: categorySeo.description,
-      location: "South Africa",
-      mediaUrl: "/images/fallbacks/hero-shop.svg",
-    });
-  }
 
   return (
     <DisableMobileAutoplay>
@@ -84,13 +58,22 @@ export default async function PromotionsPage() {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
         />
-        {/* ── Card Carousel Showroom ── */}
-        <ShowroomCardCarousel
-          items={carouselItems}
+        {/* ── Card Carousel Showroom: tourism businesses and events share one fair rotation ── */}
+        <StreamedShowroom
+          feed="tourism"
           surface="showroom:tourism"
-          visitorProvince={visitor}
+          hideFixtures={hideFixtures}
           emptyTitle="Tourism & Events"
           emptyDescription={categorySeo.description}
+          emptyItem={{
+            id: "tourism-events-empty",
+            type: "promotion",
+            href: "/post/create-tourism",
+            title: "Tourism & Events",
+            description: categorySeo.description,
+            location: "South Africa",
+            mediaUrl: "/images/fallbacks/hero-shop.svg",
+          }}
           background={tourismEventsShowroomBackground}
         />
 

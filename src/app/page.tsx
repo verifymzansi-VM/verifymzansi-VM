@@ -10,6 +10,8 @@ import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { HomeAboutSection } from "@/components/home/home-about-section";
+import { generatedMzansiShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
+import { preloadShowroomBackground } from "@/components/showrooms/showroom-section-shell";
 import { HomeSponsorsSection } from "@/components/home/home-sponsors-section";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
@@ -34,6 +36,8 @@ export const metadata: Metadata = {
 export const revalidate = 60;
 
 export default async function HomePage() {
+  // The showroom artwork is the LCP element; request it with the response headers.
+  preloadShowroomBackground(generatedMzansiShowroomBackground);
   const runtimeConfig = getServerPublicRuntimeConfig();
   const url = runtimeConfig.appUrl || "https://verifymzansi.com";
   const sameAs = getOfficialSocialSameAs(runtimeConfig.officialSocialLinks);

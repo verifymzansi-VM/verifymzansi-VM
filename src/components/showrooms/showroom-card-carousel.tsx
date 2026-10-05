@@ -859,28 +859,33 @@ export function ShowroomCardCarousel({
 
   if (count === 0) {
     return (
-      <SectionShell
-        sectionClassName={SECTION_SPACING}
-        extraClassName={className}
-        background={background}
-      >
-        <div className="container-page flex items-center justify-center lg:h-full">
-          <div className="flex w-full max-w-5xl flex-col items-center gap-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
-            {/* Area-branded artwork card */}
-            <div className={cn(CARD_W, "shrink-0")}>
-              <PosterCardShell
-                href="/search"
-                title={emptyTitle}
-                description={emptyDescription}
-                location="South Africa"
-                mediaUrl={emptyMediaUrl}
-                cardVariant="hero"
-                mediaControlVariant="hero"
-              />
+      <>
+        <SectionShell
+          sectionClassName={SECTION_SPACING}
+          extraClassName={className}
+          background={background}
+        >
+          <div className="container-page flex items-center justify-center lg:h-full">
+            <div className="flex w-full max-w-5xl flex-col items-center gap-6 sm:gap-8 lg:flex-row lg:justify-center lg:gap-14">
+              {/* Area-branded artwork card */}
+              <div className={cn(CARD_W, "shrink-0")}>
+                <PosterCardShell
+                  href="/search"
+                  title={emptyTitle}
+                  description={emptyDescription}
+                  location="South Africa"
+                  mediaUrl={emptyMediaUrl}
+                  cardVariant="hero"
+                  mediaControlVariant="hero"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      </SectionShell>
+        </SectionShell>
+        {/* An empty feed has no province to change, but keep the chip's room so the
+          page below stays where the loading skeleton put it. */}
+        {visitorProvince ? <div className="h-14" aria-hidden="true" /> : null}
+      </>
     );
   }
 

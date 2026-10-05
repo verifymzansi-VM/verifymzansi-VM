@@ -1,12 +1,8 @@
 import type { Metadata } from "next";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { SponsorStrip } from "@/components/organisations/sponsor-strip";
-import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
-import { type CarouselItem } from "@/components/showrooms/carousel-item-transforms";
-import { loadShowroomItems, type ShowroomClient } from "@/lib/showroom/feed";
-import { createClient } from "@/lib/supabase/server";
-import { getVisitorProvince } from "@/lib/showroom/visitor-province";
+import { StreamedShowroom } from "@/components/showrooms/streamed-showroom";
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { PageHeader } from "@/components/layout";
@@ -66,28 +62,6 @@ export default async function MzansiBusinessPage() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     cookieStore.get(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value
   );
-  const visitor = await getVisitorProvince();
-  const supabase = await createClient();
-  const visibleTopBusinesses = await loadShowroomItems("business", {
-    province: visitor.province,
-    hideFixtures,
-    client: supabase as unknown as ShowroomClient,
-  });
-
-  const carouselItems: CarouselItem[] =
-    visibleTopBusinesses.length > 0
-      ? visibleTopBusinesses
-      : [
-          {
-            id: "mzansi-business-empty",
-            type: "business",
-            href: "/post/create-business",
-            title: "Mzansi Business",
-            description: categorySeo.description,
-            location: "South Africa",
-            mediaUrl: "/images/fallbacks/hero-business.svg",
-          },
-        ];
 
   return (
     <DisableMobileAutoplay>
@@ -101,12 +75,21 @@ export default async function MzansiBusinessPage() {
         </Suspense>
 
         {/* ── Card Carousel Showroom ─────────────── */}
-        <ShowroomCardCarousel
-          items={carouselItems}
+        <StreamedShowroom
+          feed="business"
           surface="showroom:business"
-          visitorProvince={visitor}
+          hideFixtures={hideFixtures}
           emptyTitle="Mzansi Business"
           emptyDescription={categorySeo.description}
+          emptyItem={{
+            id: "mzansi-business-empty",
+            type: "business",
+            href: "/post/create-business",
+            title: "Mzansi Business",
+            description: categorySeo.description,
+            location: "South Africa",
+            mediaUrl: "/images/fallbacks/hero-business.svg",
+          }}
           background={mzansiBusinessShowroomBackground}
         />
 

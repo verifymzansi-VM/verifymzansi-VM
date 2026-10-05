@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { Suspense } from "react";
-import { ShowroomCardCarousel } from "@/components/showrooms/showroom-card-carousel";
 import { mzansiMarketShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
-import { loadShowroomItems, type ShowroomClient } from "@/lib/showroom/feed";
-import { createClient } from "@/lib/supabase/server";
-import { getVisitorProvince } from "@/lib/showroom/visitor-province";
+import { StreamedShowroom } from "@/components/showrooms/streamed-showroom";
 import { PageHeader } from "@/components/layout";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 import { ListingFilterSidebar } from "@/components/listings/listing-filter-sidebar";
@@ -61,13 +58,6 @@ export default async function MzansiMarketPage() {
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
-  const visitor = await getVisitorProvince();
-  const supabase = await createClient();
-  const carouselItems = await loadShowroomItems("market", {
-    province: visitor.province,
-    hideFixtures,
-    client: supabase as unknown as ShowroomClient,
-  });
 
   return (
     <DisableMobileAutoplay>
@@ -81,10 +71,10 @@ export default async function MzansiMarketPage() {
         </Suspense>
 
         {/* ── Card Carousel Showroom ─────────────── */}
-        <ShowroomCardCarousel
-          items={carouselItems}
+        <StreamedShowroom
+          feed="market"
           surface="showroom:market"
-          visitorProvince={visitor}
+          hideFixtures={hideFixtures}
           emptyTitle="Mzansi Market"
           emptyDescription={categorySeo.description}
           emptyMediaUrl="/images/fallbacks/hero-listing.svg"

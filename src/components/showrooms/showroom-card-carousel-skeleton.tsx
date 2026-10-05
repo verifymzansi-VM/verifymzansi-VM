@@ -13,39 +13,43 @@ export function ShowroomCardCarouselSkeleton({
   className?: string;
 }) {
   return (
-    <ShowroomSectionShell
-      sectionClassName="showroom-viewport"
-      extraClassName={className}
-      background={background}
-    >
-      <div
-        role="status"
-        aria-busy="true"
-        aria-label="Loading"
-        className="relative z-10 mx-auto flex w-full items-center justify-center overflow-hidden px-4 lg:h-full"
+    <>
+      <ShowroomSectionShell
+        sectionClassName="showroom-viewport"
+        extraClassName={className}
+        background={background}
       >
-        {/* Left card (scaled down) */}
         <div
-          className="showroom-card-frame absolute left-[3%] origin-center scale-[0.82] sm:left-[8%] lg:left-[15%]"
-          aria-hidden="true"
+          role="status"
+          aria-busy="true"
+          aria-label="Loading"
+          className="relative z-10 mx-auto flex w-full items-center justify-center overflow-hidden px-4 lg:h-full"
         >
-          <CardSkeleton />
-        </div>
+          {/* Left card (scaled down) */}
+          <div
+            className="showroom-card-frame absolute left-[3%] origin-center scale-[0.82] sm:left-[8%] lg:left-[15%]"
+            aria-hidden="true"
+          >
+            <CardSkeleton />
+          </div>
 
-        {/* Center card (full size) */}
-        <div className="showroom-card-frame z-10" aria-hidden="true">
-          <CardSkeleton />
-        </div>
+          {/* Center card (full size) */}
+          <div className="showroom-card-frame z-10" aria-hidden="true">
+            <CardSkeleton />
+          </div>
 
-        {/* Right card (scaled down) */}
-        <div
-          className="showroom-card-frame absolute right-[3%] origin-center scale-[0.82] sm:right-[8%] lg:right-[15%]"
-          aria-hidden="true"
-        >
-          <CardSkeleton />
+          {/* Right card (scaled down) */}
+          <div
+            className="showroom-card-frame absolute right-[3%] origin-center scale-[0.82] sm:right-[8%] lg:right-[15%]"
+            aria-hidden="true"
+          >
+            <CardSkeleton />
+          </div>
         </div>
-      </div>
-    </ShowroomSectionShell>
+      </ShowroomSectionShell>
+      {/* Holds the place of the province chip shown under the populated showroom. */}
+      <div className="h-14" aria-hidden="true" />
+    </>
   );
 }
 

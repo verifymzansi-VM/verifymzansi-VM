@@ -265,6 +265,14 @@ describe("ShowroomCardCarousel", () => {
     expect(container.querySelector('[data-showroom-background="responsive"]')).toBeTruthy();
   });
 
+  it("keeps the province chip's room under an empty showroom, as the skeleton does", () => {
+    const { container } = render(
+      <ShowroomCardCarousel items={[]} visitorProvince={{ province: null, source: null }} />
+    );
+
+    expect(container.querySelector("section + .h-14[aria-hidden='true']")).not.toBeNull();
+  });
+
   it("announces active slide changes via aria-live", () => {
     render(<ShowroomCardCarousel items={mockItems} />);
     expect(screen.getByText("Slide 1 of 3")).toBeInTheDocument();
