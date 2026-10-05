@@ -34,6 +34,7 @@ import { TrustBadge } from "@/components/trust/trust-badge";
 import { MarketplaceSwitcher } from "./marketplace-switcher";
 import { VideoModeEntry } from "@/components/video-mode/video-mode-entry";
 import { useAuth } from "@/hooks/use-auth";
+import { useSignedInShell } from "@/components/providers/session-hint-provider";
 import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { cn } from "@/lib/utils";
 import type { TrustLevel } from "@/types/enums";
@@ -96,7 +97,8 @@ function HeaderInner({
   // Use the shared auth store via useAuth() instead of a duplicate Supabase subscription
   const auth = useAuth();
 
-  const isAuthenticated = isAuthProp ?? auth.isAuthenticated;
+  const signedInShell = useSignedInShell(auth);
+  const isAuthenticated = isAuthProp ?? signedInShell;
   const finalDisplayName = displayNameProp || auth.user?.displayName || "";
   const email = auth.user?.email || "";
   const initials = finalDisplayName
@@ -106,7 +108,9 @@ function HeaderInner({
         .join("")
         .toUpperCase()
         .slice(0, 2)
-    : "U";
+    : auth.isLoading
+      ? "" // The session hint can show the avatar before the name has loaded.
+      : "U";
   const hasAdminAccess = auth.isModerator; // isModerator already includes admin role
   const activeTheme = theme === "system" ? resolvedTheme : theme;
   const isDarkMode = activeTheme === "dark";

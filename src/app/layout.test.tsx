@@ -11,6 +11,7 @@ vi.mock("next/headers", () => ({
       return null;
     }),
   }),
+  cookies: vi.fn().mockResolvedValue({ getAll: () => [] }),
 }));
 
 vi.mock("next/font/google", () => ({

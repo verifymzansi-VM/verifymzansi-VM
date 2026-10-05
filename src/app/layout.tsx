@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AcquisitionCapture } from "@/components/analytics/acquisition-capture";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 
@@ -18,6 +18,9 @@ const fontBody = Plus_Jakarta_Sans({
   fallback: ["Segoe UI", "system-ui", "sans-serif"],
 });
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { SessionHintProvider } from "@/components/providers/session-hint-provider";
+import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
+import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { PublicRuntimeConfigBridge } from "@/components/providers/public-runtime-config";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { Toaster } from "@/components/ui/toaster";
@@ -228,6 +231,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     currentPathname === "/reset-password" ||
     currentPathname.startsWith("/auth/");
   const isPlaywrightTestMode = process.env.PLAYWRIGHT_TEST_MODE === "1";
+  // Lets the header render its signed-in shell on the first paint instead of
+  // swapping to it once the browser finishes its session lookup.
+  const hasSessionCookie = hasAuthSessionCookie(
+    (await cookies()).getAll().map((cookie) => cookie.name),
+    isPlaywrightSupabaseStubMode()
+  );
 
   return (
     <html
@@ -272,18 +281,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           disableTransitionOnChange
           nonce={nonce}
         >
-          <DesktopPageShell>
-            <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
-            <MobileNav />
-            <Toaster />
-            <PointerGlow />
-            <AutoReveal />
-            <PwaInstallPrompt />
-            <ServiceWorkerRegistrar />
-            <SiteVisitTracker />
-            <FeedSourceCapture />
-            <AcquisitionCapture />
-          </DesktopPageShell>
+          <SessionHintProvider hasSession={hasSessionCookie}>
+            <DesktopPageShell>
+              <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
+              <MobileNav />
+              <Toaster />
+              <PointerGlow />
+              <AutoReveal />
+              <PwaInstallPrompt />
+              <ServiceWorkerRegistrar />
+              <SiteVisitTracker />
+              <FeedSourceCapture />
+              <AcquisitionCapture />
+            </DesktopPageShell>
+          </SessionHintProvider>
         </ThemeProvider>
         <noscript>
           <div className="mx-auto max-w-[600px] p-8 text-center font-sans">

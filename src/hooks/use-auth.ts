@@ -7,6 +7,7 @@ import {
   normalizeUserRole,
   readAccountVerificationStatus,
 } from "@/lib/account/compat";
+import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { toast } from "@/hooks/use-toast";
@@ -41,11 +42,6 @@ function getSupabaseClient(): Promise<SupabaseClient> {
   return supabaseClientPromise;
 }
 
-// @supabase/ssr stores the browser session in cookies named
-// `sb-<project-ref>-auth-token` (chunked as `-auth-token.0`, `.1`, ... when large).
-const SUPABASE_AUTH_COOKIE_PATTERN = /(?:^|;\s*)sb-[^=;\s]*-auth-token(\.\d+)?=/;
-const PLAYWRIGHT_SESSION_COOKIE_NAME = "vmz_pw_session";
-
 /**
  * Cheap pre-flight check for a persisted auth session. Anonymous visitors get
  * a signed-out state immediately without paying for the Supabase bundle or a
@@ -58,11 +54,8 @@ export function hasBrowserAuthSession(): boolean {
     return true;
   }
 
-  if (isPlaywrightSupabaseStubMode()) {
-    return document.cookie.includes(`${PLAYWRIGHT_SESSION_COOKIE_NAME}=`);
-  }
-
-  return SUPABASE_AUTH_COOKIE_PATTERN.test(document.cookie);
+  const cookieNames = document.cookie.split(";").map((entry) => entry.split("=", 1)[0].trim());
+  return hasAuthSessionCookie(cookieNames, isPlaywrightSupabaseStubMode());
 }
 
 /**

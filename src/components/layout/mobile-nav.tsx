@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Clapperboard, Home, Plus, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useSignedInShell } from "@/components/providers/session-hint-provider";
 import { triggerHaptic } from "@/lib/utils/haptics";
 import { useOpenVideoMode } from "@/components/video-mode/video-mode-entry";
 
@@ -67,7 +68,7 @@ export function MobileNav() {
 }
 
 function MobileNavBar({ pathname }: { pathname: string }) {
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSignedInShell(useAuth());
   // Search sits in the header on phones, so Video mode takes its slot here.
   const openVideoMode = useOpenVideoMode();
 
