@@ -258,12 +258,17 @@ test("message rail opens a private enquiry and action labels stay plain", async 
 
 test("both appearances meet profile accessibility and contrast checks", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
+  // A weekday morning, so the "Open now" chip (the tightest contrast) is always checked,
+  // whatever time of day the suite runs.
+  await page.clock.setFixedTime(new Date("2026-10-07T10:00:00+02:00"));
   await page.addInitScript(() => localStorage.setItem("theme", "dark"));
   await page.goto("/dev/immersive");
   await expect(page.getByRole("button", { name: "Next profile", exact: true })).toBeEnabled();
+  let openChipsChecked = 0;
   for (const theme of ["dark", "light"]) {
     if (theme === "light") await page.getByRole("button", { name: "Switch to light mode" }).click();
     for (let index = 0; index < 4; index++) {
+      openChipsChecked += await page.getByText(/^Open now, closes/).count();
       const results = await new AxeBuilder({ page })
         .include('[aria-roledescription="post viewer"]')
         .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
@@ -274,6 +279,7 @@ test("both appearances meet profile accessibility and contrast checks", async ({
     for (let index = 0; index < 3; index++)
       await page.getByRole("button", { name: "Previous profile", exact: true }).click();
   }
+  expect(openChipsChecked).toBeGreaterThan(0);
 });
 
 test("empty media, next/previous, and end of feed stay navigable", async ({ page }) => {
