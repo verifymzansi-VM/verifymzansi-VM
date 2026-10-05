@@ -84,6 +84,8 @@ for (const viewport of sizes) {
       }
 
       await expect(showroom).toBeAttached();
+      // The cards stream in and replace the loading showroom; measure the final one.
+      await expect(showroom.locator('[role="status"][aria-busy="true"]')).toHaveCount(0);
       await showroom.scrollIntoViewIfNeeded();
       await expect(showroom).toBeVisible();
       const card = showroom
