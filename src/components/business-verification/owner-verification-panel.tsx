@@ -77,6 +77,18 @@ type Preview = {
   ownerListedAs: string | null;
 };
 
+/** Shown when the automatic read failed; the owner types the number. */
+const UNREAD_PREVIEW: Preview = {
+  readable: false,
+  docType: null,
+  registrationNumber: null,
+  registeredName: null,
+  status: null,
+  directors: [],
+  registeredOffice: null,
+  ownerListedAs: null,
+};
+
 const REASONS: Record<string, string> = {
   not_in_business: "CIPC doesn't show the company as In Business.",
   owner_not_director:
@@ -291,7 +303,7 @@ function RepresentativeSteps({
   const [position, setPosition] = useState(rep?.position ?? "");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
 
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -302,8 +314,9 @@ function RepresentativeSteps({
       body: JSON.stringify({ caseId: caseItem.id, ...body }),
     });
     setBusy(false);
-    if (!res.ok) return setMessage(await readError(res));
-    if (body.action === "send") setMessage("Code sent. Check your work inbox.");
+    if (!res.ok) return setMessage({ text: await readError(res), error: true });
+    if (body.action === "send")
+      setMessage({ text: "Code sent. Check your work inbox.", error: false });
     onDone();
   }
 
@@ -375,8 +388,11 @@ function RepresentativeSteps({
         </div>
       )}
       {message && (
-        <p role="status" className="text-sm">
-          {message}
+        <p
+          role={message.error ? "alert" : "status"}
+          className={cn("text-sm", message.error && "text-brand-red-700 dark:text-brand-red-300")}
+        >
+          {message.text}
         </p>
       )}
     </div>
@@ -404,7 +420,14 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
       body: form,
     });
     setBusy(null);
-    if (!res.ok) return setError(await readError(res));
+    if (!res.ok) {
+      setError(await readError(res));
+      // If reading failed on our side (busy or down), the owner can still send
+      // the document; our team reads every file anyway. Upload errors (size,
+      // type) stay errors.
+      if (res.status === 429 || res.status >= 500) setPreview(UNREAD_PREVIEW);
+      return;
+    }
     const data = (await res.json()) as { preview: Preview };
     setPreview(data.preview);
     setNumber(data.preview.registrationNumber ?? "");
@@ -449,9 +472,12 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
           accept="application/pdf,image/jpeg,image/png,image/webp"
           onChange={(e) => {
             const selected = e.target.files?.[0];
+            // Clear so choosing the same file again (to retry) fires again.
+            e.currentTarget.value = "";
             if (selected) void read(selected);
           }}
         />
+        {file && <p className="text-xs text-muted-foreground">Selected: {file.name}</p>}
       </div>
 
       {busy === "reading" && (
@@ -531,8 +557,9 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
             <Input
               id="cipc-number"
               value={number}
-              inputMode="numeric"
-              maxLength={20}
+              inputMode="text"
+              autoCapitalize="characters"
+              maxLength={24}
               placeholder="e.g. 2020/123456/07"
               onChange={(e) => setNumber(e.target.value)}
             />
@@ -584,6 +611,7 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
   const [renewing, setRenewing] = useState(false);
+  const [savingOffice, setSavingOffice] = useState(false);
 
   const load = useCallback(async () => {
     const result = await fetchVerificationState(businessId);
@@ -628,12 +656,31 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
     void load();
   }
 
+  async function switchToRepresentative(caseId: string) {
+    if (
+      !window.confirm(
+        "Switch to the company representative route? We'll confirm you with your company by work email and phone."
+      )
+    )
+      return;
+    setActionError(null);
+    const res = await fetch(`/api/businesses/${businessId}/verification/route-switch`, {
+      method: "POST",
+      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ caseId }),
+    });
+    if (!res.ok) return setActionError(await readError(res));
+    void load();
+  }
+
   async function setOfficeVisibility(showFull: boolean) {
+    setActionError(null);
+    setSavingOffice(true);
     const res = await fetch(`/api/businesses/${businessId}/verification/office-visibility`, {
       method: "PATCH",
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ showFull }),
-    });
+    }).finally(() => setSavingOffice(false));
     if (!res.ok) return setActionError(await readError(res));
     void load();
   }
@@ -679,6 +726,8 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
         : stickers.seen
           ? "done"
           : "todo";
+  // A sticker that came from linking renews with the source company's profile.
+  const linkSourced = cipcCases.find((c) => c.status === "approved")?.kind === "cipc_link";
   const lastClosed = cipcCases.find(
     (c) => c.status === "rejected" || c.status === "revoked" || c.status === "expired"
   );
@@ -737,111 +786,135 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
       </StepShell>
 
       <StepShell icon={Building2} title="CIPC registered" state={cipcState}>
-        {stickers.cipc && !openCipc ? (
-          <div className="space-y-3 text-sm">
-            <p>
-              Registered as <span className="font-medium">{stickers.cipc.registeredName}</span> ·{" "}
-              {stickers.cipc.registrationNumber}
-              {stickers.cipc.position ? ` · you: ${stickers.cipc.position}` : ""}
-            </p>
-            <p className="text-muted-foreground">
-              Checked {formatDate(stickers.cipc.verifiedAt)}
-              {stickers.cipc.expiresAt ? ` · renew by ${formatDate(stickers.cipc.expiresAt)}` : ""}
-            </p>
-            <label className="flex min-h-11 cursor-pointer items-start gap-2.5">
-              <input
-                type="checkbox"
-                checked={stickers.cipc.showFullRegisteredOffice}
-                onChange={(e) => setOfficeVisibility(e.target.checked)}
-                className="mt-1 h-4 w-4 accent-brand-green-700"
-              />
-              <span>
-                Show the full street address of my registered office.{" "}
-                <span className="text-muted-foreground">
-                  Off: only suburb, city and province show.
+        <div className="space-y-4">
+          {stickers.cipc && (
+            <div className="space-y-3 text-sm">
+              <p>
+                Registered as <span className="font-medium">{stickers.cipc.registeredName}</span> ·{" "}
+                {stickers.cipc.registrationNumber}
+                {stickers.cipc.position ? ` · you: ${stickers.cipc.position}` : ""}
+              </p>
+              <p className="text-muted-foreground">
+                Checked {formatDate(stickers.cipc.verifiedAt)}
+                {stickers.cipc.expiresAt
+                  ? ` · renew by ${formatDate(stickers.cipc.expiresAt)}`
+                  : ""}
+              </p>
+              <label className="flex min-h-11 cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={stickers.cipc.showFullRegisteredOffice}
+                  disabled={savingOffice}
+                  onChange={(e) => setOfficeVisibility(e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-brand-green-700"
+                />
+                <span>
+                  Show the full street address of my registered office.{" "}
+                  <span className="text-muted-foreground">
+                    {savingOffice ? "Saving…" : "Off: only suburb, city and province show."}
+                  </span>
                 </span>
-              </span>
-            </label>
-            {renewDue(stickers.cipc.expiresAt) && (
-              <Button className="h-11" onClick={renew} disabled={renewing}>
-                {renewing && <Loader2 aria-hidden="true" className="mr-1 h-4 w-4 animate-spin" />}
-                Renew now
-              </Button>
-            )}
-          </div>
-        ) : !stickers.idReviewed ? (
-          <p className="text-sm text-muted-foreground">Available once your ID is reviewed.</p>
-        ) : openCipc ? (
-          <div className="space-y-3">
-            <p className="text-sm">
-              {openCipc.status === "info_requested"
-                ? "Our team needs something from you — see the message below."
-                : openCipc.kind === "cipc_link"
-                  ? "We're confirming this profile belongs to your verified company."
-                  : "We're checking your document against CIPC's records. This usually takes one business day."}
-            </p>
-            {openCipc.route === "representative" && (
-              <RepresentativeSteps caseItem={openCipc} businessId={businessId} onDone={load} />
-            )}
-            <Thread caseItem={openCipc} businessId={businessId} onSent={load} />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-11"
-              onClick={() => withdraw(openCipc.id, "request")}
-            >
-              Cancel this request
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {lastClosed?.status === "expired" && (
-              <Button className="h-11" onClick={renew} disabled={renewing}>
-                {renewing && <Loader2 aria-hidden="true" className="mr-1 h-4 w-4 animate-spin" />}
-                Renew in one tap
-              </Button>
-            )}
-            {lastClosed && lastClosed.status !== "expired" && (
-              <div className="rounded-xl border border-brand-red-200 bg-brand-red-50 p-3 text-sm dark:border-brand-red-500/30 dark:bg-brand-red-500/10">
-                <p className="font-semibold">Last request not approved</p>
-                <p>
-                  {(lastClosed.reasonCode && REASONS[lastClosed.reasonCode]) ||
-                    "See the note from our team."}
-                </p>
-                {lastClosed.note && <p className="mt-1 text-muted-foreground">{lastClosed.note}</p>}
-              </div>
-            )}
-            {state.linkable.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Same company as another of your profiles?</p>
-                {state.linkable.map((l) => (
-                  <Button
-                    key={l.businessId}
-                    variant="outline"
-                    className="h-11 w-full justify-start gap-2 sm:w-auto"
-                    disabled={linking !== null}
-                    onClick={() => link(l.businessId)}
-                  >
-                    <Link2 aria-hidden="true" className="h-4 w-4" />
-                    Link to {l.registeredName ?? l.businessName}
+              </label>
+              {!openCipc &&
+                renewDue(stickers.cipc.expiresAt) &&
+                (linkSourced ? (
+                  <p className="text-muted-foreground">
+                    This profile renews with your main company profile.
+                  </p>
+                ) : (
+                  <Button className="h-11" onClick={renew} disabled={renewing}>
+                    {renewing && (
+                      <Loader2 aria-hidden="true" className="mr-1 h-4 w-4 animate-spin" />
+                    )}
+                    Renew now
                   </Button>
                 ))}
+            </div>
+          )}
+
+          {openCipc ? (
+            <div className="space-y-3">
+              <p className="text-sm">
+                {openCipc.status === "info_requested"
+                  ? "Our team needs something from you — see the message below."
+                  : openCipc.kind === "cipc_link"
+                    ? "We're confirming this profile belongs to your verified company."
+                    : "We're checking your document against CIPC's records. This usually takes one business day."}
+              </p>
+              {openCipc.route === "representative" && (
+                <RepresentativeSteps caseItem={openCipc} businessId={businessId} onDone={load} />
+              )}
+              <Thread caseItem={openCipc} businessId={businessId} onSent={load} />
+              <div className="flex flex-wrap gap-2">
+                {openCipc.kind === "cipc" && openCipc.route !== "representative" && (
+                  <Button
+                    variant="outline"
+                    className="h-11"
+                    onClick={() => switchToRepresentative(openCipc.id)}
+                  >
+                    I&apos;m not a director
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  className="h-11"
+                  onClick={() => withdraw(openCipc.id, "request")}
+                >
+                  Cancel this request
+                </Button>
               </div>
-            )}
-            <CipcUpload businessId={businessId} onSubmitted={load} />
-          </div>
-        )}
+            </div>
+          ) : !stickers.idReviewed ? (
+            <p className="text-sm text-muted-foreground">Available once your ID is reviewed.</p>
+          ) : stickers.cipc ? null : (
+            <div className="space-y-4">
+              {lastClosed?.status === "expired" && !linkSourced && (
+                <Button className="h-11" onClick={renew} disabled={renewing}>
+                  {renewing && <Loader2 aria-hidden="true" className="mr-1 h-4 w-4 animate-spin" />}
+                  Renew in one tap
+                </Button>
+              )}
+              {lastClosed && lastClosed.status !== "expired" && (
+                <div className="rounded-xl border border-brand-red-200 bg-brand-red-50 p-3 text-sm dark:border-brand-red-500/30 dark:bg-brand-red-500/10">
+                  <p className="font-semibold">
+                    {lastClosed.status === "revoked"
+                      ? "Sticker removed"
+                      : "Last request not approved"}
+                  </p>
+                  <p>
+                    {(lastClosed.reasonCode && REASONS[lastClosed.reasonCode]) ||
+                      "See the note from our team."}
+                  </p>
+                  {lastClosed.note && (
+                    <p className="mt-1 text-muted-foreground">{lastClosed.note}</p>
+                  )}
+                </div>
+              )}
+              {state.linkable.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Same company as another of your profiles?</p>
+                  {state.linkable.map((l) => (
+                    <Button
+                      key={l.businessId}
+                      variant="outline"
+                      className="h-11 w-full justify-start gap-2 sm:w-auto"
+                      disabled={linking !== null}
+                      onClick={() => link(l.businessId)}
+                    >
+                      <Link2 aria-hidden="true" className="h-4 w-4" />
+                      Link to {l.registeredName ?? l.businessName}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              <CipcUpload businessId={businessId} onSubmitted={load} />
+            </div>
+          )}
+        </div>
       </StepShell>
 
       <StepShell icon={Eye} title="Seen by VerifyMzansi" state={seenState}>
-        {stickers.seen && !openSeen ? (
-          <p className="text-sm text-muted-foreground">
-            {stickers.seen.method === "visit" ? "Visited" : "Seen on live video"} ·{" "}
-            {formatDate(stickers.seen.verifiedAt)}
-          </p>
-        ) : !stickers.idReviewed ? (
-          <p className="text-sm text-muted-foreground">Available once your ID is reviewed.</p>
-        ) : openSeen ? (
+        {openSeen ? (
           <div className="space-y-3">
             <p className="text-sm">
               {openSeen.seenScheduledFor
@@ -849,15 +922,17 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
                 : "We'll book a time from the options you gave and let you know."}
             </p>
             <Thread caseItem={openSeen} businessId={businessId} onSent={load} />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-11"
-              onClick={() => withdraw(openSeen.id, "check")}
-            >
+            <Button variant="ghost" className="h-11" onClick={() => withdraw(openSeen.id, "check")}>
               Cancel this check
             </Button>
           </div>
+        ) : stickers.seen ? (
+          <p className="text-sm text-muted-foreground">
+            {stickers.seen.method === "visit" ? "Visited" : "Seen on live video"} ·{" "}
+            {formatDate(stickers.seen.verifiedAt)}
+          </p>
+        ) : !stickers.idReviewed ? (
+          <p className="text-sm text-muted-foreground">Available once your ID is reviewed.</p>
         ) : (
           <SeenRequest businessId={businessId} onBooked={load} />
         )}

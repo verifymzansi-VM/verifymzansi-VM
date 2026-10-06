@@ -70,6 +70,8 @@ export type AdminCopy = {
   enterpriseStatus: string | null;
   directors: Array<{ name: string; role: string | null; idHmac: string | null }>;
   registeredOffice: RegisteredOfficeView | null;
+  /** The office as printed, kept so a new owner upload can be re-compared. */
+  registeredOfficeLines?: string[];
   cipcReference: string | null;
   differences: Array<{ field: string; owner: string | null; cipc: string | null }>;
 };

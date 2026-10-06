@@ -70,7 +70,7 @@ export function SeenRequest({
         ).map(([value, label, hint]) => (
           <label
             key={value}
-            aria-label={label}
+            aria-label={`${label}. ${hint}`}
             className={cn(
               "flex min-h-11 cursor-pointer items-start gap-2.5 rounded-xl border p-3",
               method === value &&
@@ -108,8 +108,8 @@ export function SeenRequest({
         </div>
       )}
 
-      <div className="space-y-2">
-        <p className="font-medium">Three times that suit you</p>
+      <fieldset className="space-y-2">
+        <legend className="font-medium">Three times that suit you</legend>
         {slots.map((slot, i) => (
           <div key={i} className="space-y-1">
             <Label htmlFor={`seen-slot-${i}`} className="sr-only">
@@ -124,7 +124,7 @@ export function SeenRequest({
             />
           </div>
         ))}
-      </div>
+      </fieldset>
 
       <label className="flex min-h-11 cursor-pointer items-start gap-2.5">
         <input

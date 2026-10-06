@@ -2,12 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { isIntakeError, readCipcFile } from "@/lib/business-verification/intake";
+import { withoutException, type AdminCopy } from "@/lib/business-verification/decide";
 import {
   discardStoredFile,
   fileRow,
+  notifyConflictHolders,
   screenUpload,
   storeCaseFile,
 } from "@/lib/business-verification/service";
+import { compareWithAdminCopy } from "@/lib/cipc/screen";
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
@@ -48,7 +51,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data: openCase, error: caseError } = await admin
       .from("business_verifications")
-      .select("id, kind, status, owner_id, business_id, updated_at")
+      .select(
+        "id, kind, status, owner_id, business_id, registration_number, admin_copy, checks, updated_at"
+      )
       .eq("id", caseId.data)
       .eq("business_id", business.id)
       .maybeSingle();
@@ -64,6 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let attachmentId: string | null = null;
+    let newClaimNotice: (() => Promise<void>) | null = null;
     const casePatch: Record<string, unknown> = { status: "pending" };
 
     if (upload) {
@@ -92,13 +98,36 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       attachmentId = fileRowData.id;
 
       if (isCipcCase) {
-        const { findings, registrationNumber } = await screenUpload(admin, {
+        const { findings, registrationNumber, conflictHolders } = await screenUpload(admin, {
           file,
           userId,
           businessId: business.id,
           businessName: business.business_name,
           enteredNumber: null,
         });
+        // Staff compared the old document; compare the new one with their copy.
+        const adminCopy = openCase.admin_copy as AdminCopy | null;
+        const reCompared = adminCopy
+          ? {
+              ...adminCopy,
+              differences: compareWithAdminCopy(
+                {
+                  registrationNumber: file.stored?.registrationNumber ?? null,
+                  registeredName: file.stored?.registeredName ?? null,
+                  enterpriseStatus: file.stored?.enterpriseStatus ?? null,
+                  registeredOfficeLines: file.stored?.registeredOfficeLines ?? [],
+                },
+                {
+                  registrationNumber: adminCopy.registrationNumber,
+                  registeredName: adminCopy.registeredName,
+                  enterpriseStatus: adminCopy.enterpriseStatus,
+                  registeredOfficeLines: adminCopy.registeredOfficeLines ?? [],
+                },
+                file.directorIdHmacs,
+                adminCopy.directors.flatMap((d) => (d.idHmac ? [d.idHmac] : []))
+              ),
+            }
+          : null;
         Object.assign(casePatch, {
           doc_type: file.stored?.docType ?? null,
           parsed: file.stored ?? {},
@@ -106,8 +135,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           findings,
           registered_office: file.office,
           ...(registrationNumber ? { registration_number: registrationNumber } : {}),
+          ...(reCompared ? { admin_copy: reCompared } : {}),
+          // New evidence voids an exception proposed on the old document.
+          checks: withoutException(openCase.checks as Record<string, unknown> | null),
         });
+        if (registrationNumber && registrationNumber !== openCase.registration_number) {
+          newClaimNotice = () => notifyConflictHolders(admin, conflictHolders, registrationNumber);
+        }
       }
+    }
+
+    // Update the case first: if it closed meanwhile, nothing is recorded.
+    const { data: updated, error: updateError } = await admin
+      .from("business_verifications")
+      .update(casePatch)
+      .eq("id", openCase.id)
+      .in("status", ["pending", "info_requested"])
+      .select("id");
+    if (updateError) throw new Error(updateError.message);
+    if (!updated?.length) {
+      if (attachmentId) {
+        await admin.from("business_verification_files").delete().eq("id", attachmentId);
+      }
+      if (storedKey) await discardStoredFile(storedKey);
+      return NextResponse.json(
+        { error: "This case just closed. Start a new verification instead.", code: "case_closed" },
+        { status: 409 }
+      );
     }
 
     const { error: messageError } = await admin.from("business_verification_messages").insert({
@@ -118,13 +172,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       attachment_file_id: attachmentId,
     });
     if (messageError) throw new Error(messageError.message);
-
-    const { error: updateError } = await admin
-      .from("business_verifications")
-      .update(casePatch)
-      .eq("id", openCase.id)
-      .in("status", ["pending", "info_requested"]);
-    if (updateError) throw new Error(updateError.message);
+    if (newClaimNotice) await newClaimNotice();
 
     await Promise.all([
       logAuditEvent({

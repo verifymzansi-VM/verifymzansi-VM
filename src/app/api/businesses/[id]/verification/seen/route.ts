@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ctx = await requireVerificationOwner(request, params, {
       log,
       mutation: true,
-      rateAction: "business-verification:submit",
+      rateAction: "business-verification:seen",
     });
     if (ctx instanceof NextResponse) return ctx;
     const { admin, business, userId } = ctx;

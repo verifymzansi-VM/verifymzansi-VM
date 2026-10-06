@@ -81,6 +81,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         idHmac: d.idHmac,
       })),
       registeredOffice: file.office,
+      registeredOfficeLines: file.stored.registeredOfficeLines ?? [],
       cipcReference: reference,
       differences: compareWithAdminCopy(
         {

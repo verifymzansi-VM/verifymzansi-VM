@@ -6,6 +6,9 @@ import { createLogger } from "@/lib/utils/logger";
 
 import { requireVerificationOwner } from "../_lib/owner-guard";
 
+/** Matches the owner page, which offers Renew from 60 days before expiry. */
+const RENEWAL_WINDOW_DAYS = 60;
+
 const log = createLogger("BusinessVerificationRenew");
 
 /**
@@ -18,10 +21,50 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ctx = await requireVerificationOwner(request, params, {
       log,
       mutation: true,
-      rateAction: "business-verification:submit",
+      rateAction: "business-verification:renew",
     });
     if (ctx instanceof NextResponse) return ctx;
     const { admin, business, userId } = ctx;
+
+    // What the business holds now decides whether a renewal makes sense.
+    const [{ data: latest }, { data: biz }] = await Promise.all([
+      admin
+        .from("business_verifications")
+        .select("kind, status")
+        .eq("business_id", business.id)
+        .eq("owner_id", userId)
+        .in("kind", ["cipc", "cipc_link"])
+        .in("status", ["approved", "expired", "revoked"])
+        .order("decided_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle(),
+      admin.from("businesses").select("cipc_expires_at").eq("id", business.id).maybeSingle(),
+    ]);
+    if (latest?.status === "revoked") {
+      return NextResponse.json(
+        { error: "This sticker was removed. Send a new CIPC document instead.", code: "revoked" },
+        { status: 409 }
+      );
+    }
+    if (latest?.kind === "cipc_link") {
+      return NextResponse.json(
+        {
+          error: "This profile renews together with your main company profile. Renew that one.",
+          code: "renews_with_source",
+        },
+        { status: 409 }
+      );
+    }
+    const expiresAt = biz?.cipc_expires_at ? Date.parse(biz.cipc_expires_at as string) : null;
+    if (expiresAt && expiresAt - Date.now() > RENEWAL_WINDOW_DAYS * 86_400_000) {
+      return NextResponse.json(
+        {
+          error: `Renewal opens ${RENEWAL_WINDOW_DAYS} days before your sticker expires.`,
+          code: "too_early",
+        },
+        { status: 409 }
+      );
+    }
 
     const { data: previous, error } = await admin
       .from("business_verifications")

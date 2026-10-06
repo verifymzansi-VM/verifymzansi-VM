@@ -197,7 +197,11 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 10, ttl: 60 },
     { limit: 40, ttl: 3600 },
   ],
-  "business-verification:submit": [{ limit: 5, ttl: 86400 }],
+  // One budget per sticker, so failed CIPC attempts never block booking a check.
+  "business-verification:cipc": [{ limit: 5, ttl: 86400 }],
+  "business-verification:renew": [{ limit: 5, ttl: 86400 }],
+  "business-verification:seen": [{ limit: 3, ttl: 86400 }],
+  "business-verification:settings": [{ limit: 20, ttl: 3600 }],
   "business-verification:message": [
     { limit: 10, ttl: 600 },
     { limit: 40, ttl: 86400 },

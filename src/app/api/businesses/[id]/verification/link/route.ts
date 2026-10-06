@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ctx = await requireVerificationOwner(request, params, {
       log,
       mutation: true,
-      rateAction: "business-verification:submit",
+      rateAction: "business-verification:renew",
     });
     if (ctx instanceof NextResponse) return ctx;
     const { admin, business, userId } = ctx;
@@ -41,7 +41,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const live =
       source?.cipc_verified_at &&
       (!source.cipc_expires_at || Date.parse(source.cipc_expires_at) > Date.now());
-    if (!source || source.owner_id !== userId || !live || !source.cipc_registration_number) {
+    if (
+      !source ||
+      source.id === business.id ||
+      source.owner_id !== userId ||
+      !live ||
+      !source.cipc_registration_number
+    ) {
       return NextResponse.json(
         { error: "Pick one of your CIPC-verified profiles." },
         { status: 400 }

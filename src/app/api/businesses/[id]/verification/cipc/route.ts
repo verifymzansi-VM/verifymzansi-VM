@@ -4,11 +4,12 @@ import { isIntakeError, readCipcFile } from "@/lib/business-verification/intake"
 import {
   discardStoredFile,
   fileRow,
+  notifyConflictHolders,
   screenUpload,
   storeCaseFile,
 } from "@/lib/business-verification/service";
 import { normaliseRegistrationNumber } from "@/lib/cipc/parse";
-import { createNotification, notifyStaffForAdminEvent } from "@/lib/notifications";
+import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ctx = await requireVerificationOwner(request, params, {
       log,
       mutation: true,
-      rateAction: "business-verification:submit",
+      rateAction: "business-verification:cipc",
     });
     if (ctx instanceof NextResponse) return ctx;
     const { admin, business, userId } = ctx;
@@ -137,17 +138,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         href: `/admin/business-verification/${created.id}`,
         excludeUserId: userId,
       }),
-      // Like an ownership claim on a map listing: the current holder hears
-      // about it straight away, and nothing changes unless staff decide so.
-      ...conflictHolders.map((holder) =>
-        createNotification({
-          userId: holder.ownerId,
-          type: "warning",
-          title: "Someone else claimed your company",
-          message: `Another account asked for the CIPC sticker using ${registrationNumber}, the number on ${holder.businessName}. Your sticker stays in place while our team reviews it. If you don't know about this, contact us.`,
-          href: "/contact",
-        })
-      ),
+      notifyConflictHolders(admin, conflictHolders, registrationNumber),
     ]);
 
     return NextResponse.json({ caseId: created.id, status: "pending" }, { status: 201 });

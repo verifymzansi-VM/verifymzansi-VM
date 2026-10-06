@@ -61,6 +61,24 @@ const FREE_MAIL_DOMAINS = new Set([
   "cybersmart.co.za",
   "afrihost.co.za",
   "polka.co.za",
+  "pm.me",
+  "mac.com",
+  "yahoo.co.uk",
+  "hotmail.co.uk",
+  "outlook.co.za",
+  "gmx.net",
+  "yandex.com",
+  "mail.ru",
+  "tutanota.com",
+  "fastmail.com",
+  // Throwaway inboxes.
+  "mailinator.com",
+  "guerrillamail.com",
+  "sharklasers.com",
+  "10minutemail.com",
+  "temp-mail.org",
+  "yopmail.com",
+  "trashmail.com",
 ]);
 
 function emailDomain(email: string): string | null {

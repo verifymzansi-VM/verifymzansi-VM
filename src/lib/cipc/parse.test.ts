@@ -10,13 +10,20 @@ describe("normaliseRegistrationNumber", () => {
     ["2020/123456/07", "2020/123456/07"],
     ["2020-123456-07", "2020/123456/07"],
     [" 1999/000001/23 ", "1999/000001/23"],
+    ["2020 123456 07", "2020/123456/07"],
+    ["202012345607", "2020/123456/07"],
+    ["CK1998/012345/23", "1998/012345/23"],
+    ["ck 1998-012345-23", "1998/012345/23"],
   ])("normalises %s", (input, expected) => {
     expect(normaliseRegistrationNumber(input)).toBe(expected);
   });
 
-  it.each(["2020/12345/07", "abcd/123456/07", "2020/123456/7", ""])("rejects %s", (input) => {
-    expect(normaliseRegistrationNumber(input)).toBeNull();
-  });
+  it.each(["2020/12345/07", "abcd/123456/07", "2020/123456/7", "", "20201234567"])(
+    "rejects %s",
+    (input) => {
+      expect(normaliseRegistrationNumber(input)).toBeNull();
+    }
+  );
 });
 
 describe("parseCipcText", () => {
@@ -80,6 +87,15 @@ describe("parseCipcText", () => {
         dateOfBirth: "1975-11-02",
       }),
     ]);
+  });
+
+  it("reads directors whose names have accents", () => {
+    const parsed = parseCipcText(
+      cipcItems({
+        directors: [{ name: "DU PLESSIS, RENÉ", role: "Director", id: "8001015009087" }],
+      })
+    );
+    expect(parsed.directors.map((d) => d.name)).toEqual(["DU PLESSIS, RENÉ"]);
   });
 
   it("returns empty fields for an unrelated page", () => {

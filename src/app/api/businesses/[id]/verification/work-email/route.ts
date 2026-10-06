@@ -13,12 +13,14 @@ import {
 } from "@/lib/business-verification/representative";
 import { logAuditEvent } from "@/lib/services/audit";
 import { sendWorkEmailCode } from "@/lib/services/email";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
 
-import { requireVerificationOwner } from "../_lib/owner-guard";
+import { loadOwnCase, requireOwnerJson } from "../_lib/owner-guard";
 
 const log = createLogger("BusinessVerificationWorkEmail");
+
+/** One code a minute per case. */
+const RESEND_COOLDOWN_MS = 60_000;
 
 const schema = z.discriminatedUnion("action", [
   z.object({
@@ -44,24 +46,22 @@ const schema = z.discriminatedUnion("action", [
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ctx = await requireVerificationOwner(request, params, {
+    const gate = await requireOwnerJson(request, params, schema, {
       log,
-      mutation: true,
       rateAction: "business-verification:message",
     });
-    if (ctx instanceof NextResponse) return ctx;
+    if (gate instanceof NextResponse) return gate;
+    const { ctx } = gate;
     const { admin, business, userId } = ctx;
-    const body = await parseAndValidateJsonRequest(request, schema);
-    if (!body.success) return body.response;
+    const body = { data: gate.body };
 
-    const { data: row, error } = await admin
-      .from("business_verifications")
-      .select("id, route, status, representative, updated_at")
-      .eq("id", body.data.caseId)
-      .eq("business_id", business.id)
-      .eq("owner_id", userId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    const row = await loadOwnCase<{
+      id: string;
+      route: string | null;
+      status: string;
+      representative: unknown;
+      updated_at: string;
+    }>(ctx, body.data.caseId, "id, route, status, representative, updated_at");
     if (
       !row ||
       row.route !== "representative" ||
@@ -74,15 +74,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const state = (row.representative ?? {}) as RepresentativeState;
 
+    // Compare-and-set on the case version; each successful save moves it on.
+    let version = row.updated_at as string;
     const save = async (next: RepresentativeState) => {
       const { data, error: updateError } = await admin
         .from("business_verifications")
         .update({ representative: { ...next, confirmed: isRepresentativeConfirmed(next) } })
         .eq("id", row.id)
-        .eq("updated_at", row.updated_at)
-        .select("id");
+        .eq("updated_at", version)
+        .select("id, updated_at");
       if (updateError) throw new Error(updateError.message);
-      return (data?.length ?? 0) > 0;
+      if (!data?.length) return false;
+      version = data[0].updated_at as string;
+      return true;
     };
 
     if (body.data.action === "send") {
@@ -93,6 +97,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               "Use your work email on your company's own website domain, not a personal mailbox.",
           },
           { status: 400 }
+        );
+      }
+      const lastSentAt = state.codeExpiresAt
+        ? Date.parse(state.codeExpiresAt) - CODE_TTL_MINUTES * 60_000
+        : 0;
+      if (Date.now() - lastSentAt < RESEND_COOLDOWN_MS) {
+        return NextResponse.json(
+          { error: "We just sent a code. Wait a minute before asking for another." },
+          { status: 429 }
         );
       }
       const code = newCode();
@@ -128,8 +141,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if ((state.attempts ?? 0) >= MAX_CODE_ATTEMPTS) {
       return NextResponse.json({ error: "Too many tries. Send a new code." }, { status: 429 });
     }
+    // Count the attempt before comparing, so parallel guesses can't share one
+    // try: only the request that wins this write may check its code.
+    const attempts = (state.attempts ?? 0) + 1;
+    if (!(await save({ ...state, attempts }))) {
+      return NextResponse.json({ error: "Please try again." }, { status: 409 });
+    }
     if (!codesMatch(state.codeHash, row.id, body.data.code)) {
-      await save({ ...state, attempts: (state.attempts ?? 0) + 1 });
       return NextResponse.json({ error: "That code isn't right." }, { status: 400 });
     }
     const ok = await save({

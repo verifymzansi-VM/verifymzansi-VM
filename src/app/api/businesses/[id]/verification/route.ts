@@ -44,7 +44,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .select("id, business_name, cipc_registration_number, cipc_registered_name")
         .eq("owner_id", userId)
         .neq("id", business.id)
-        .not("cipc_verified_at", "is", null),
+        .not("cipc_verified_at", "is", null)
+        // Only live stickers can be joined (the daily job clears expired ones later).
+        .gt("cipc_expires_at", new Date().toISOString()),
     ]);
     if (bizRes.error) throw new Error(bizRes.error.message);
     if (casesRes.error) throw new Error(casesRes.error.message);

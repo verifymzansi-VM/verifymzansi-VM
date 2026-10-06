@@ -9,7 +9,8 @@ import type { RegisteredOffice } from "@/lib/cipc/address";
 
 /** Location fields from a CIPC-verified registered office. */
 export function officeToLocation(office: RegisteredOffice): LocationValue | null {
-  if (!office.province || !office.city) return null;
+  // Only a city we know fits the location picker; otherwise the owner types it.
+  if (!office.province || !office.city || office.cityKnown === false) return null;
   return {
     province: office.province,
     city: office.city,
@@ -48,7 +49,7 @@ export function UseRegisteredOffice({
 
   if (!location) return null;
   return (
-    <Button type="button" variant="outline" size="sm" onClick={() => onUse(location)}>
+    <Button type="button" variant="outline" className="h-11" onClick={() => onUse(location)}>
       <Building2 aria-hidden="true" className="h-4 w-4" />
       Use registered office
     </Button>

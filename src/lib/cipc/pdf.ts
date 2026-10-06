@@ -1,4 +1,8 @@
+import type { getDocumentProxy } from "unpdf";
+
 import type { PdfTextItem } from "./parse";
+
+type PdfDocument = Awaited<ReturnType<typeof getDocumentProxy>>;
 
 export type PdfStructure = {
   producer: string | null;
@@ -24,29 +28,43 @@ function metaString(info: Record<string, unknown>, key: string): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+/** CIPC documents are one or two pages; more is never a real disclosure. */
+const MAX_PAGES = 5;
+
 /**
- * Positioned text and file metadata from the first page of a PDF. Returns
- * null when the bytes cannot be opened as a PDF (corrupt or encrypted); the
- * caller records that as a finding rather than rejecting the upload.
+ * Positioned text and file metadata from the first pages of a PDF. Later
+ * pages are placed below earlier ones (y keeps falling), so a director list
+ * that continues onto page 2 reads as one list. Returns null when the bytes
+ * cannot be opened as a PDF (corrupt or encrypted); the caller records that
+ * as a finding rather than rejecting the upload.
  */
 export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf | null> {
   const raw = new TextDecoder("latin1").decode(bytes);
+  // Web-optimised (linearized) files carry two xref sections from the start.
+  const linearized = /\/Linearized\s/.test(raw.slice(0, 2048));
   const revisionCount = Math.max(
-    countOccurrences(raw, "startxref"),
-    countOccurrences(raw, "%%EOF")
+    1,
+    Math.max(countOccurrences(raw, "startxref"), countOccurrences(raw, "%%EOF")) -
+      (linearized ? 1 : 0)
   );
 
+  let pdf: PdfDocument | null = null;
   try {
     const { getDocumentProxy, getMeta } = await import("unpdf");
-    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    pdf = await getDocumentProxy(new Uint8Array(bytes));
     const meta = await getMeta(pdf);
     const info = (meta.info ?? {}) as Record<string, unknown>;
-    const page = await pdf.getPage(1);
-    const content = await page.getTextContent();
     const items: PdfTextItem[] = [];
-    for (const item of content.items) {
-      if (!("str" in item) || !item.str.trim()) continue;
-      items.push({ x: item.transform[4], y: item.transform[5], text: item.str });
+    let offset = 0;
+    for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES); n++) {
+      const page = await pdf.getPage(n);
+      const height = page.getViewport({ scale: 1 }).height;
+      const content = await page.getTextContent();
+      for (const item of content.items) {
+        if (!("str" in item) || !item.str.trim()) continue;
+        items.push({ x: item.transform[4], y: item.transform[5] - offset, text: item.str });
+      }
+      offset += height;
     }
     return {
       items,
@@ -62,5 +80,7 @@ export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf | null
     };
   } catch {
     return null;
+  } finally {
+    await pdf?.cleanup().catch(() => undefined);
   }
 }

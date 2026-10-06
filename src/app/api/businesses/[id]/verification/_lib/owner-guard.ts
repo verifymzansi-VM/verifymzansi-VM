@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { z } from "zod";
 
 import { idRouteParamsSchema } from "@/app/api/_lib/route-params";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@/lib/business-verification/service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { parseAndValidateRouteParams } from "@/lib/utils/api";
+import { parseAndValidateJsonRequest, parseAndValidateRouteParams } from "@/lib/utils/api";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import type { createLogger } from "@/lib/utils/logger";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
@@ -89,4 +90,35 @@ export async function requireVerificationOwner(
   }
 
   return { userId: user.id, admin, business };
+}
+
+/** One of the caller's own verification cases on this business, or null. */
+export async function loadOwnCase<T>(
+  ctx: OwnerContext,
+  caseId: string,
+  columns: string
+): Promise<T | null> {
+  const { data, error } = await ctx.admin
+    .from("business_verifications")
+    .select(columns)
+    .eq("id", caseId)
+    .eq("business_id", ctx.business.id)
+    .eq("owner_id", ctx.userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as T | null) ?? null;
+}
+
+/** The owner gate for a JSON mutation, plus its validated body. */
+export async function requireOwnerJson<S extends z.ZodTypeAny>(
+  request: NextRequest,
+  params: Promise<{ id: string }>,
+  schema: S,
+  options: Omit<Options, "mutation">
+): Promise<{ ctx: OwnerContext; body: z.infer<S> } | NextResponse> {
+  const ctx = await requireVerificationOwner(request, params, { ...options, mutation: true });
+  if (ctx instanceof NextResponse) return ctx;
+  const body = await parseAndValidateJsonRequest(request, schema);
+  if (!body.success) return body.response;
+  return { ctx, body: body.data };
 }

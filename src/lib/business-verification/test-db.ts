@@ -1,7 +1,7 @@
 /**
  * Minimal in-memory stand-in for the Supabase query builder, for unit tests
  * of business verification services. Supports the filters those services
- * use: eq, neq, in, not(col,"is",null), is(col,null), order, limit, and
+ * use: eq, neq, in, not(col,"is",null), is(col,null), gt/gte/lt, like, order, limit, and
  * select / insert / update / delete with maybeSingle / single.
  */
 type Row = Record<string, unknown>;
@@ -64,6 +64,25 @@ export function createFakeDb(seed: Record<string, Row[]>) {
       in: (col: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[col])), api),
       not: (col: string, _op: string, _v: null) => (filters.push((r) => r[col] != null), api),
       is: (col: string, _v: null) => (filters.push((r) => r[col] == null), api),
+      // Comparisons on numbers or ISO timestamps (which sort as strings).
+      gt: (col: string, v: string | number) => (
+        filters.push((r) => r[col] != null && (r[col] as string | number) > v),
+        api
+      ),
+      gte: (col: string, v: string | number) => (
+        filters.push((r) => r[col] != null && (r[col] as string | number) >= v),
+        api
+      ),
+      lt: (col: string, v: string | number) => (
+        filters.push((r) => r[col] != null && (r[col] as string | number) < v),
+        api
+      ),
+      like: (col: string, pattern: string) => {
+        const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*");
+        const re = new RegExp(`^${escaped}$`);
+        filters.push((r) => typeof r[col] === "string" && re.test(r[col] as string));
+        return api;
+      },
       order: () => api,
       limit: (n: number) => ((limit = n), api),
       maybeSingle: async () => ({ data: run()[0] ?? null, error: null }),

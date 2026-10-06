@@ -24,6 +24,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       log,
       mutation: true,
       requireIdReviewed: false,
+      rateAction: "business-verification:settings",
     });
     if (ctx instanceof NextResponse) return ctx;
     const body = await parseAndValidateJsonRequest(request, schema);

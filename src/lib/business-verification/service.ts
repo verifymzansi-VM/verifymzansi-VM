@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { registeredOfficeSummary } from "@/lib/cipc/address";
 import { normaliseRegistrationNumber } from "@/lib/cipc/parse";
 import { screenCipcSubmission, type Finding } from "@/lib/cipc/screen";
+import { createNotification } from "@/lib/notifications";
 import { deleteFromR2, uploadKycDocument } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -111,7 +112,7 @@ export async function ownerIdHmac(admin: Admin, userId: string): Promise<string 
   return (data?.id_number_hmac as string | null) ?? null;
 }
 
-type StickerHolder = { ownerId: string; businessId: string; businessName: string };
+export type StickerHolder = { ownerId: string; businessId: string; businessName: string };
 
 /** Other owners who already hold the CIPC sticker for this company number. */
 async function holdersForOtherOwners(
@@ -163,8 +164,12 @@ export async function screenUpload(
   conflictHolders: StickerHolder[];
 }> {
   const { file } = input;
+  // The owner's confirmed number wins; a different number on the document is
+  // still reported to staff as a finding.
   const registrationNumber =
-    file.parsed?.registrationNumber ?? normaliseRegistrationNumber(input.enteredNumber ?? "");
+    normaliseRegistrationNumber(input.enteredNumber ?? "") ??
+    file.parsed?.registrationNumber ??
+    null;
   const [ownerHmac, conflictHolders, reused] = await Promise.all([
     ownerIdHmac(admin, input.userId),
     holdersForOtherOwners(admin, input.userId, registrationNumber),
@@ -242,4 +247,45 @@ export function fileRow(
     quarantined: file.activeContent !== null,
     extracted_text: file.extractedText,
   };
+}
+
+const CONFLICT_NOTICE_TITLE = "Someone else claimed your company";
+const CONFLICT_NOTICE_QUIET_DAYS = 30;
+
+/**
+ * Tell each current holder that another account claimed their company number
+ * (like an ownership claim on a map listing). Nothing about the claimant is
+ * shared, and a holder hears about the same number at most once a month so
+ * repeated claims can't be used to pester them.
+ */
+export async function notifyConflictHolders(
+  admin: Admin,
+  holders: StickerHolder[],
+  registrationNumber: string
+): Promise<void> {
+  const since = new Date(Date.now() - CONFLICT_NOTICE_QUIET_DAYS * 86_400_000).toISOString();
+  for (const holder of holders) {
+    try {
+      const { data: recent } = await admin
+        .from("notifications")
+        .select("id")
+        .eq("user_id", holder.ownerId)
+        .eq("title", CONFLICT_NOTICE_TITLE)
+        .like("message", `%${registrationNumber}%`)
+        .gte("created_at", since)
+        .limit(1);
+      if (recent?.length) continue;
+      await createNotification({
+        userId: holder.ownerId,
+        type: "warning",
+        title: CONFLICT_NOTICE_TITLE,
+        message: `Another account asked for the CIPC sticker using ${registrationNumber}, the number on ${holder.businessName}. Your sticker stays in place while our team reviews it. If you don't know about this, contact us.`,
+        href: "/contact",
+      });
+    } catch (error) {
+      log.error("Conflict notice failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 }

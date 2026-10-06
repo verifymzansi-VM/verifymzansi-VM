@@ -41,11 +41,18 @@ export type ParsedCipcDocument = {
 
 const SAME_LINE = 3;
 
-const REG_NUMBER = /^(\d{4})\s*\/\s*(\d{6})\s*\/\s*(\d{2})$/;
+const REG_NUMBER = /^(\d{4})[\s/]*(\d{6})[\s/]*(\d{2})$/;
 
-/** "2026 / 155305 / 07" or "2026-155305-07" → "2026/155305/07". */
+/**
+ * "2026 / 155305 / 07", "2026-155305-07", "2026 155305 07", "202615530507"
+ * and close corporations' "CK1998/012345/23" → "2026/155305/07".
+ */
 export function normaliseRegistrationNumber(value: string): string | null {
-  const match = value.trim().replace(/-/g, "/").match(REG_NUMBER);
+  const cleaned = value
+    .trim()
+    .replace(/^c?k\s*/i, "")
+    .replace(/[-.]/g, "/");
+  const match = cleaned.match(REG_NUMBER);
   return match ? `${match[1]}/${match[2]}/${match[3]}` : null;
 }
 
@@ -121,7 +128,8 @@ function registeredOffice(items: PdfTextItem[]): string[] {
     .map((i) => i.text);
 }
 
-const DIRECTOR_NAME = /^[A-Z][A-Z'’ .-]*,\s*[A-Z][A-Z'’ .-]*$/;
+// Upper-case names, including accented letters ("DU PLESSIS, RENÉ").
+const DIRECTOR_NAME = /^\p{Lu}[\p{Lu}'’ .-]*,\s*\p{Lu}[\p{Lu}'’ .-]*$/u;
 
 function directors(items: PdfTextItem[]): ParsedDirector[] {
   const section = find(items, (t) => /^ACTIVE MEMBERS\s*\/\s*DIRECTORS$/i.test(t));
