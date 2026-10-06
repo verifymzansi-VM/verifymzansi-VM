@@ -91,6 +91,7 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "approved",
+      expectedUpdatedAt: "2026-10-01T10:00:00.000Z",
     });
     expect(result.success).toBe(true);
   });
@@ -119,6 +120,7 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "approved",
+      expectedUpdatedAt: "2026-10-01T10:00:00.000Z",
       overrideReasonCode: "manual_override",
     });
     expect(result.success).toBe(false);
@@ -128,6 +130,7 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "approved",
+      expectedUpdatedAt: "2026-10-01T10:00:00.000Z",
       overrideReasonCode: OVERRIDE_REASON_CODES[0],
     });
     expect(result.success).toBe(true);
@@ -205,6 +208,7 @@ describe("adminVerificationDecideSchema", () => {
     const result = adminVerificationDecideSchema.safeParse({
       stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       decision: "approved",
+      expectedUpdatedAt: "2026-10-01T10:00:00.000Z",
     });
     expect(result.success).toBe(true);
   });
@@ -316,6 +320,16 @@ describe("adminDsarCompleteSchema", () => {
   it("rejects missing requestId", () => {
     const result = adminDsarCompleteSchema.safeParse({
       notes: "done",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("adminVerificationDecideSchema stale-review guard", () => {
+  it("requires expectedUpdatedAt for approvals", () => {
+    const result = adminVerificationDecideSchema.safeParse({
+      stepId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      decision: "approved",
     });
     expect(result.success).toBe(false);
   });

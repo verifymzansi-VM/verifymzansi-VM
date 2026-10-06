@@ -72,6 +72,10 @@ export const adminVerificationDecideSchema = z
     /** updated_at of the step the reviewer looked at; refuses stale decisions. */
     expectedUpdatedAt: z.string().max(64).optional(),
   })
+  .refine((data) => data.decision !== "approved" || !!data.expectedUpdatedAt, {
+    message: "Reload the step before approving it",
+    path: ["expectedUpdatedAt"],
+  })
   .refine((data) => data.decision === "approved" || data.reasonCode, {
     message: "Reason code is required for rejection or resubmission",
     path: ["reasonCode"],

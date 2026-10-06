@@ -719,17 +719,3 @@ export async function downloadKycDocumentWithMetrics(
     decryptMs,
   };
 }
-
-/**
- * Generate a temporary presigned URL for admin to view encrypted KYC document.
- * The URL expires quickly and requires decryption client-side or via API.
- *
- * @param key - The storage key from database
- * @param expiresIn - Expiry time in seconds (default: 15 minutes for security)
- * @returns Presigned download URL
- */
-export async function getKycDocumentViewUrl(key: string, expiresIn: number = 900): Promise<string> {
-  assertSafeStorageKey(key);
-  const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
-  return generatePresignedDownloadUrl(privateBucket, key, expiresIn);
-}

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { stripExifFromJpeg, stripMetadataFromPng } from "@/lib/utils/exif-strip";
+import {
+  stripExifFromJpeg,
+  stripMetadataFromPng,
+  stripMetadataFromWebp,
+} from "@/lib/utils/exif-strip";
 import { inspectJpegExif, type ExifSignals } from "@/lib/utils/exif-inspect";
 import { getImageDimensions } from "@/lib/utils/image-dimensions";
 import { decodeImageToPixels, computeLaplacianVariance } from "@/lib/utils/blur-detection";
@@ -135,6 +139,9 @@ export async function analyzeKycUploadFile(params: {
     fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
   } else if (file.type === "image/png" || integrity.detectedMime === "image/png") {
     fileBuffer = Buffer.from(stripMetadataFromPng(fileBuffer));
+  } else if (file.type === "image/webp" || integrity.detectedMime === "image/webp") {
+    // Phone WebP exports can carry EXIF/XMP, including GPS location.
+    fileBuffer = Buffer.from(stripMetadataFromWebp(fileBuffer));
   }
 
   return {

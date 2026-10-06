@@ -1638,10 +1638,17 @@ describe("POST /api/verification/upload", () => {
     const artifactDeleteEq = vi.fn().mockResolvedValue({ error: null });
     const artifactDelete = vi.fn().mockReturnValue({ eq: artifactDeleteEq });
 
+    const artifactUpdatePayloads: Record<string, unknown>[] = [];
+
     mockFrom.mockImplementation((table: string) => {
       if (table === "kyc_artifacts") {
+        const base = baseFromImpl(table) as { update?: (p: Record<string, unknown>) => unknown };
         return {
-          ...baseFromImpl(table),
+          ...base,
+          update: (payload: Record<string, unknown>) => {
+            artifactUpdatePayloads.push(payload);
+            return base.update?.(payload);
+          },
           delete: artifactDelete,
         };
       }
@@ -1672,6 +1679,8 @@ describe("POST /api/verification/upload", () => {
     expect(artifactDelete).toHaveBeenCalled();
     expect(artifactDeleteEq).toHaveBeenCalledWith("id", "artifact-1");
     expect(mockDeleteFromR2).toHaveBeenCalled();
+    // Earlier evidence must not be superseded by an upload that failed.
+    expect(artifactUpdatePayloads).not.toContainEqual({ status: "rejected" });
   });
 
   it("rejects retired proof-of-address uploads before storage or database changes", async () => {

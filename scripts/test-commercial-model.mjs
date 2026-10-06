@@ -130,6 +130,7 @@ await migration("20260925090400_event_archiving.sql");
 await migration("20260925090500_commercial_fixes.sql");
 await migration("20260925090600_commercial_completion.sql");
 await migration("20261003010000_ozow_transaction_confirmation.sql");
+await migration("20261006093026_org_admin_requires_verified.sql");
 // Staff role authority: from here on, staff_roles (not auth metadata) grants staff powers.
 await db.exec(
   fs.readFileSync("supabase/migrations/20260927110000_staff_roles_authority.sql", "utf8")

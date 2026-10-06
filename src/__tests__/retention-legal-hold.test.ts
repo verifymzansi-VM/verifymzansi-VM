@@ -106,6 +106,7 @@ const baseStep = {
   // Approving an id_doc step requires the ID number hash (duplicate-identity check).
   id_number_hmac: "hmac-seller-1",
   submitted_at: new Date().toISOString(),
+  updated_at: "2026-10-01T10:00:00.000Z",
 };
 
 /** Duplicate-ID lookup run before approving an id_doc step:
@@ -156,7 +157,10 @@ describe("Retention & Legal Hold", () => {
       const stepUpdateMock = vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           in: vi.fn().mockReturnValue({
-            select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+            // Approvals add the optimistic lock .eq("updated_at", …) after .in().
+            eq: vi.fn().mockReturnValue({
+              select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+            }),
           }),
         }),
       });
@@ -244,7 +248,13 @@ describe("Retention & Legal Hold", () => {
         return {};
       });
 
-      await postDecide(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+      await postDecide(
+        createMockRequest({
+          stepId: STEP_UUID,
+          decision: "approved",
+          expectedUpdatedAt: baseStep.updated_at,
+        })
+      );
 
       // Verify purge_after was set on artifacts
       // First update call is artifact sync ({status}), second call is purge scheduling ({purge_after})
@@ -350,7 +360,10 @@ describe("Retention & Legal Hold", () => {
             update: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
                 in: vi.fn().mockReturnValue({
-                  select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+                  // Approvals add the optimistic lock .eq("updated_at", …) after .in().
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({ data: [{ id: STEP_UUID }], error: null }),
+                  }),
                 }),
               }),
             }),
@@ -369,7 +382,13 @@ describe("Retention & Legal Hold", () => {
         return {};
       });
 
-      await postDecide(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
+      await postDecide(
+        createMockRequest({
+          stepId: STEP_UUID,
+          decision: "approved",
+          expectedUpdatedAt: baseStep.updated_at,
+        })
+      );
 
       // Check that kyc_purge_scheduled was logged
       const purgeAuditCall = mockLogAuditEvent.mock.calls.find(

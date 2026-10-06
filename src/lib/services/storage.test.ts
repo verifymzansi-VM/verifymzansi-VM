@@ -51,7 +51,6 @@ import {
   generatePresignedDownloadUrl,
   uploadKycDocument,
   downloadKycDocument,
-  getKycDocumentViewUrl,
   hasR2WriteAccess,
   getR2ObjectSize,
   getR2ObjectBytes,
@@ -348,13 +347,6 @@ describe("storage service", () => {
       expect(get).toHaveBeenCalledTimes(1);
       expect(mockSend).not.toHaveBeenCalled();
       expect(buffer).toEqual(Buffer.from("decrypted-data"));
-    });
-  });
-
-  describe("getKycDocumentViewUrl", () => {
-    it("returns a presigned URL for KYC document", async () => {
-      const url = await getKycDocumentViewUrl("kyc/doc.bin");
-      expect(url).toBe("https://signed-url.example.com");
     });
   });
 });

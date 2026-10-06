@@ -88,6 +88,7 @@ docs/*
 !docs/DESIGN-SYSTEM.md
 !docs/mobile-app-agent-build-brief.md
 !docs/mobile-app-build-spec.md
+!docs/business-verification-spec.md
 !docs/mobile-build-progress.md
 !docs/mobile/
 !docs/mobile/store-review-log.md

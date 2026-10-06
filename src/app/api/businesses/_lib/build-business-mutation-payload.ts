@@ -35,7 +35,10 @@ export function buildBusinessMutationPayload(
     businessProfile.load_shedding_ready = data.load_shedding_ready;
   if (data.number_of_employees) businessProfile.number_of_employees = data.number_of_employees;
 
-  const categoryDetails = { ...(data.category_details ?? {}) };
+  // business_profile is rebuilt only from the validated extras above; a client
+  // copy inside category_details would bypass their length and enum checks.
+  const { business_profile: _clientProfile, ...clientDetails } = data.category_details ?? {};
+  const categoryDetails: Record<string, unknown> = { ...clientDetails };
   if (data.contact_methods) categoryDetails.contact_methods = data.contact_methods;
   const parsedAccess = customerAccessSchema.safeParse(categoryDetails.customer_access);
   const access = parsedAccess.success ? cleanCustomerAccess(parsedAccess.data) : undefined;

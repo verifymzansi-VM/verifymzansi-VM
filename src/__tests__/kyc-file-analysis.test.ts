@@ -10,6 +10,7 @@ const {
   mockComputePerceptualHash,
   mockStripExifFromJpeg,
   mockStripMetadataFromPng,
+  mockStripMetadataFromWebp,
 } = vi.hoisted(() => ({
   mockValidateBufferIntegrity: vi.fn(),
   mockScanForMalware: vi.fn(),
@@ -20,6 +21,7 @@ const {
   mockComputePerceptualHash: vi.fn(),
   mockStripExifFromJpeg: vi.fn(),
   mockStripMetadataFromPng: vi.fn(),
+  mockStripMetadataFromWebp: vi.fn(),
 }));
 
 vi.mock("@/lib/utils/file-validation", () => ({
@@ -38,6 +40,7 @@ vi.mock("@/lib/utils/perceptual-hash", () => ({
 vi.mock("@/lib/utils/exif-strip", () => ({
   stripExifFromJpeg: mockStripExifFromJpeg,
   stripMetadataFromPng: mockStripMetadataFromPng,
+  stripMetadataFromWebp: mockStripMetadataFromWebp,
 }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() }),
@@ -61,6 +64,7 @@ describe("analyzeKycUploadFile", () => {
     mockComputePerceptualHash.mockResolvedValue("abcd1234abcd1234");
     mockStripExifFromJpeg.mockImplementation((buffer: Buffer) => buffer);
     mockStripMetadataFromPng.mockImplementation((buffer: Buffer) => buffer);
+    mockStripMetadataFromWebp.mockImplementation((buffer: Buffer) => buffer);
   });
 
   it("rejects files whose declared MIME type does not match their bytes", async () => {
@@ -112,6 +116,24 @@ describe("analyzeKycUploadFile", () => {
       expect(result.fileBuffer).toEqual(fileBuffer);
     }
     expect(mockStripExifFromJpeg).toHaveBeenCalledWith(fileBuffer);
+  });
+
+  it("strips WebP metadata (EXIF/XMP, including GPS) before storage", async () => {
+    mockValidateBufferIntegrity.mockReturnValue({ valid: true, detectedMime: "image/webp" });
+    const fileBuffer = Buffer.from([1, 2, 3]);
+    const stripped = Buffer.from([9]);
+    mockStripMetadataFromWebp.mockReturnValue(stripped);
+
+    const result = await analyzeKycUploadFile({
+      file: makeFile("image/webp", "selfie.webp"),
+      fileBuffer,
+      requestId: "req-webp",
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.fileBuffer).toEqual(stripped);
+    expect(mockStripMetadataFromWebp).toHaveBeenCalledWith(fileBuffer);
   });
 
   it("rejects undersized images", async () => {

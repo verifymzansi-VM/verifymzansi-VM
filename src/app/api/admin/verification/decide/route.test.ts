@@ -94,13 +94,53 @@ import { POST } from "./route";
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function createMockRequest(body: Record<string, unknown>) {
+const BASE_UPDATED_AT = "2026-10-01T10:00:00.000Z";
+
+/** Approvals must name the version reviewed; default to the base step's. */
+function createMockRequest(rawBody: Record<string, unknown>) {
+  const body =
+    rawBody.decision === "approved" && !("expectedUpdatedAt" in rawBody)
+      ? { ...rawBody, expectedUpdatedAt: BASE_UPDATED_AT }
+      : rawBody;
   const json = JSON.stringify(body);
   return {
     text: async () => json,
     headers: new Headers(),
     url: "https://verifymzansi.com/api/admin/verification/decide",
   } as unknown as Request;
+}
+
+/**
+ * Approvals always carry expectedUpdatedAt, which adds `.eq("updated_at", …)`
+ * after `.in("status", …)` on the step update. Let the inline mocks below
+ * accept that extra link without restating it in every test.
+ */
+function tolerateUpdatedAtLock(tableMock: unknown): unknown {
+  const mock = tableMock as { update?: (...args: unknown[]) => unknown } | undefined;
+  if (!mock || typeof mock.update !== "function") return tableMock;
+  const update = mock.update;
+  return { ...mock, update: (...args: unknown[]) => withLockLink(update(...args)) };
+}
+
+function withLockLink(node: unknown): unknown {
+  if (!node || typeof node !== "object" || "then" in node) return node;
+  const chain = node as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...chain };
+  for (const key of ["eq", "neq"]) {
+    const fn = chain[key];
+    if (typeof fn === "function") out[key] = (...a: unknown[]) => withLockLink(fn(...a));
+  }
+  const inFn = chain.in;
+  if (typeof inFn === "function") {
+    out.in = (...a: unknown[]) => {
+      const result = inFn(...a);
+      if (!result || typeof result !== "object" || "then" in result || "eq" in result) {
+        return result;
+      }
+      return { ...result, eq: () => result };
+    };
+  }
+  return out;
 }
 
 function createCrossSiteMockRequest(body: Record<string, unknown>) {
@@ -186,6 +226,7 @@ const baseStep = {
   // Approving an id_doc step requires the ID number hash (duplicate-identity check).
   id_number_hmac: "hmac-member-1",
   submitted_at: new Date().toISOString(),
+  updated_at: BASE_UPDATED_AT,
 };
 
 /** Duplicate-ID lookup run before approving an id_doc step:
@@ -214,7 +255,7 @@ describe("POST /api/admin/verification/decide", () => {
     vi.clearAllMocks();
     mockCheckSensitiveActionRateLimit.mockResolvedValue({ limited: false });
     mockCreateAdminClient.mockReturnValue({
-      from: mockFrom,
+      from: (table: string) => tolerateUpdatedAtLock(mockFrom(table)),
       auth: {
         admin: {
           getUserById: mockGetUserById,
@@ -299,6 +340,16 @@ describe("POST /api/admin/verification/decide", () => {
     expect(response.status).toBe(404);
   });
 
+  it("refuses an approval that does not name the reviewed version", async () => {
+    mockAuth({ id: crypto.randomUUID(), app_metadata: { role: "admin" } });
+
+    const response = await POST(
+      createMockRequest({ stepId: STEP_UUID, decision: "approved", expectedUpdatedAt: undefined })
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("requires override reason when approving high-risk step", async () => {
     mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
@@ -377,7 +428,10 @@ describe("POST /api/admin/verification/decide", () => {
       data: { ok: true, status: "proposed", decision_id: "decision-1" },
       error: null,
     });
-    mockCreateAdminClient.mockReturnValue({ from: mockFrom, rpc });
+    mockCreateAdminClient.mockReturnValue({
+      from: (table: string) => tolerateUpdatedAtLock(mockFrom(table)),
+      rpc,
+    });
 
     const response = await POST(
       createMockRequest({
@@ -399,7 +453,7 @@ describe("POST /api/admin/verification/decide", () => {
       p_risk_level: "high",
       p_override_reason: "verified_in_person",
       p_note: null,
-      p_expected_updated_at: null,
+      p_expected_updated_at: BASE_UPDATED_AT,
     });
     expect(update).not.toHaveBeenCalled();
   });

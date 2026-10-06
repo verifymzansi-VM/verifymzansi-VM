@@ -533,35 +533,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: supersedeError } = await admin
-      .from("kyc_artifacts")
-      .update({ status: "rejected" })
-      .eq("user_id", user.id)
-      .eq("step_type", stepType)
-      .neq("id", artifact.id)
-      .in("status", ["pending", "needs_resubmission"]);
-
-    if (supersedeError) {
-      log.error("Failed to supersede prior KYC artifacts — duplicates may confuse review", {
-        error: supersedeError.message,
-        userId: user.id,
-        stepType,
-      });
-      await cleanupPersistedKycUpload({
-        admin,
-        artifactId: artifact.id,
-        bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
-        key: uploadResult.key,
-        requestId,
-        reason: "supersede_prior_artifacts_failed",
-        uploadedToR2,
-      });
-      return jsonError(
-        { error: "Failed to finalize upload — please retry", code: "supersede_failed" },
-        { status: 500 }
-      );
-    }
-
     // ── Phone linked to flagged/rejected account signal ──────
     if (phoneFlaggedUserId) {
       log.warn("Phone linked to flagged account", {
@@ -663,6 +634,24 @@ export async function POST(request: NextRequest) {
       submitted_at: new Date().toISOString(),
     });
 
+    // A benign re-upload must not erase an earlier, worse risk posture. Keep
+    // the higher score in the same write so reviewers never see a window
+    // where a flagged step looks low-risk.
+    if (
+      typeof existingStep?.risk_score === "number" &&
+      existingStep.risk_score > engineResult.riskScore
+    ) {
+      log.warn("Re-upload scored lower than the existing step — keeping the higher risk", {
+        userId: user.id,
+        stepType,
+        existingScore: existingStep.risk_score,
+        newScore: engineResult.riskScore,
+      });
+      stepData.risk_score = existingStep.risk_score;
+      stepData.risk_level = existingStep.risk_level;
+      stepData.auto_status = existingStep.auto_status;
+    }
+
     if (engineResult.autoStatus === "approved" && engineResult.riskLevel === "low") {
       log.info("Low-risk step approved by engine and queued for admin review", {
         userId: user.id,
@@ -677,6 +666,16 @@ export async function POST(request: NextRequest) {
       const encKey = process.env.ID_ENCRYPTION_KEY; // 32-byte hex key
       if (!encKey) {
         log.error("ID_ENCRYPTION_KEY not set");
+        // Without this the pending artifact would block every later upload.
+        await cleanupPersistedKycUpload({
+          admin,
+          artifactId: artifact.id,
+          bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+          key: uploadResult.key,
+          requestId,
+          reason: "config_missing",
+          uploadedToR2,
+        });
         return NextResponse.json(
           { error: "Server configuration error", code: "config_missing" },
           { status: 500 }
@@ -892,58 +891,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If the pre-existing step had a higher (worse) risk score than the new
-    // upload, restore the original risk posture. This prevents a benign
-    // re-upload from silently erasing a previously flagged risk signal.
-    // The new artifact is still saved so admins can review both.
-    //
-    // Re-read the step after upsert to avoid TOCTOU — a concurrent upload
-    // may have written a higher score between our pre-read and now.
-    const { data: currentStep, error: currentStepErr } = await admin
-      .from("verification_steps")
-      .select("risk_score, risk_level, auto_status")
+    // Supersede earlier reviewable artifacts only once the new upload is fully
+    // recorded; doing it earlier left the prior evidence marked rejected
+    // whenever a later step failed and rolled the new artifact back.
+    const { error: supersedeError } = await admin
+      .from("kyc_artifacts")
+      .update({ status: "rejected" })
       .eq("user_id", user.id)
       .eq("step_type", stepType)
-      .maybeSingle();
+      .neq("id", artifact.id)
+      .in("status", ["pending", "needs_resubmission"]);
 
-    if (currentStepErr) {
-      log.error("Failed to re-read step for risk-score restoration", {
-        error: currentStepErr.message,
+    if (supersedeError) {
+      log.error("Failed to supersede prior KYC artifacts — reviewers may see both", {
+        error: supersedeError.message,
         userId: user.id,
         stepType,
       });
-    }
-
-    if (
-      existingStep &&
-      typeof existingStep.risk_score === "number" &&
-      currentStep &&
-      typeof currentStep.risk_score === "number" &&
-      currentStep.risk_score < existingStep.risk_score
-    ) {
-      log.warn("Step upsert lowered risk score — restoring higher-risk record", {
-        userId: user.id,
-        stepType,
-        existingScore: existingStep.risk_score,
-        currentScore: currentStep.risk_score,
-        newScore: engineResult.riskScore,
-      });
-      const { error: restoreErr } = await admin
-        .from("verification_steps")
-        .update({
-          risk_score: existingStep.risk_score,
-          risk_level: existingStep.risk_level,
-          auto_status: existingStep.auto_status,
-        })
-        .eq("user_id", user.id)
-        .eq("step_type", stepType);
-      if (restoreErr) {
-        log.error("Failed to restore higher risk score (non-fatal)", {
-          error: restoreErr.message,
-          userId: user.id,
-          stepType,
-        });
-      }
     }
 
     // ── Update verification_sessions ──────────────────────────
