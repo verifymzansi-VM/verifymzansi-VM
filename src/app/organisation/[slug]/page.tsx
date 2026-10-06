@@ -8,6 +8,7 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
 import {
   BusinessCardGridItem,
   type BusinessCardGridRow,
@@ -24,6 +25,9 @@ import {
   sponsorArea,
 } from "@/lib/organisations/sponsors";
 import { cn } from "@/lib/utils";
+
+/** Card fields only: never select("*") into a public page. */
+const ORG_CARD_COLUMNS = `id, business_type, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, gallery_photos, location_province, location_city, category, subcategory, boost_until, featured_until, service_areas, focal_x, focal_y, media_width, media_height, view_count, ${CARD_STICKER_COLUMNS}`;
 
 export const revalidate = 300;
 
@@ -179,12 +183,14 @@ export default async function OrganisationPage({
   const total = Number(rows[0]?.total_count ?? 0);
   const ids = rows.map((row) => row.business_id);
   const { data: businessRows } = ids.length
-    ? await supabase.from("businesses").select("*").in("id", ids)
+    ? await supabase.from("businesses").select(ORG_CARD_COLUMNS).in("id", ids)
     : { data: [] as BusinessCardGridRow[] };
   // Keep the directory order (the RPC sorts and filters).
   const businesses = ids
     .map((id) => (businessRows ?? []).find((row) => row.id === id))
-    .filter(Boolean) as BusinessCardGridRow[];
+    .filter(Boolean)
+    // Expired stickers never show, even before the daily job clears them.
+    .map((row) => toPublicVerification(row as BusinessCardGridRow));
 
   const sponsor = sponsors.find((row) => row.id === org.id);
   const isProgramme = ["founding_trial", "active_paid"].includes(org.programme_status);

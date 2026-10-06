@@ -331,13 +331,25 @@ describe("decideBusinessVerification", () => {
       kind: "cipc",
       status: "approved",
       registration_number: NUMBER,
+      registered_office: {
+        streetLines: ["12 Main Road"],
+        suburb: "KwaDlangezwa",
+        city: "Empangeni",
+        province: "KwaZulu-Natal",
+        postalCode: "3886",
+      },
     });
     expect(await decide({ checks: undefined })).toEqual({ ok: true, status: "approved" });
     expect(biz()).toMatchObject({
       cipc_registration_number: NUMBER,
-      cipc_registered_office: { city: "Empangeni" },
       cipc_expires_at: future,
       owner_verified_role: "director",
+    });
+    // Only the public view is stored on the business; the street stays on the case.
+    expect(biz().cipc_registered_office).toEqual({
+      suburb: "KwaDlangezwa",
+      city: "Empangeni",
+      province: "KwaZulu-Natal",
     });
   });
 });

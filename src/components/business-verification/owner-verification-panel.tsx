@@ -580,6 +580,8 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
 export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
   const [state, setState] = useState<State | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Errors from actions on a loaded page (renew, link, cancel, visibility).
+  const [actionError, setActionError] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
   const [renewing, setRenewing] = useState(false);
 
@@ -601,16 +603,20 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
     };
   }, [businessId]);
 
-  async function withdraw(caseId: string) {
+  async function withdraw(caseId: string, what: string) {
+    if (!window.confirm(`Cancel this ${what}? You can start again later.`)) return;
+    setActionError(null);
     const res = await fetch(`/api/businesses/${businessId}/verification/withdraw`, {
       method: "POST",
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ caseId }),
     });
-    if (res.ok) void load();
+    if (!res.ok) return setActionError(await readError(res));
+    void load();
   }
 
   async function renew() {
+    setActionError(null);
     setRenewing(true);
     const res = await fetch(`/api/businesses/${businessId}/verification/renew`, {
       method: "POST",
@@ -618,7 +624,7 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
       body: "{}",
     });
     setRenewing(false);
-    if (!res.ok) return setLoadError(await readError(res));
+    if (!res.ok) return setActionError(await readError(res));
     void load();
   }
 
@@ -628,11 +634,12 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ showFull }),
     });
-    if (!res.ok) return setLoadError(await readError(res));
+    if (!res.ok) return setActionError(await readError(res));
     void load();
   }
 
   async function link(sourceBusinessId: string) {
+    setActionError(null);
     setLinking(sourceBusinessId);
     const res = await fetch(`/api/businesses/${businessId}/verification/link`, {
       method: "POST",
@@ -640,7 +647,7 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
       body: JSON.stringify({ sourceBusinessId }),
     });
     setLinking(null);
-    if (!res.ok) return setLoadError(await readError(res));
+    if (!res.ok) return setActionError(await readError(res));
     void load();
   }
 
@@ -704,6 +711,15 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
           />
         </CardContent>
       </Card>
+
+      {actionError && (
+        <p
+          role="alert"
+          className="rounded-xl border border-brand-red-200 bg-brand-red-50 p-3 text-sm text-brand-red-800 dark:border-brand-red-500/30 dark:bg-brand-red-500/10 dark:text-brand-red-200"
+        >
+          {actionError}
+        </p>
+      )}
 
       <StepShell icon={IdCard} title="ID reviewed" state={stickers.idReviewed ? "done" : "todo"}>
         {stickers.idReviewed ? (
@@ -772,7 +788,7 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
               variant="ghost"
               size="sm"
               className="h-11"
-              onClick={() => withdraw(openCipc.id)}
+              onClick={() => withdraw(openCipc.id, "request")}
             >
               Cancel this request
             </Button>
@@ -837,7 +853,7 @@ export function OwnerVerificationPanel({ businessId }: { businessId: string }) {
               variant="ghost"
               size="sm"
               className="h-11"
-              onClick={() => withdraw(openSeen.id)}
+              onClick={() => withdraw(openSeen.id, "check")}
             >
               Cancel this check
             </Button>

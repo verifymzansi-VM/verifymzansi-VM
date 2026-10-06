@@ -15,7 +15,8 @@ import {
 import { createLogger } from "@/lib/utils/logger";
 
 import { seenApprovalGaps, type SeenState } from "./seen";
-import { FILE_RETENTION_DAYS, STICKER_TTL_DAYS } from "./service";
+import { publicOffice, type RegisteredOfficeView } from "./public";
+import { caseOffice, FILE_RETENTION_DAYS, STICKER_TTL_DAYS } from "./service";
 
 const log = createLogger("BusinessVerificationDecide");
 
@@ -47,7 +48,7 @@ type CaseRow = {
   status: string;
   registration_number: string | null;
   parsed: Record<string, unknown>;
-  registered_office: Record<string, unknown> | null;
+  registered_office: RegisteredOfficeView | null;
   admin_copy: AdminCopy | null;
   representative: { confirmed?: boolean; position?: string | null } | null;
   seen: Record<string, unknown> | null;
@@ -61,7 +62,7 @@ export type AdminCopy = {
   registeredName: string | null;
   enterpriseStatus: string | null;
   directors: Array<{ name: string; role: string | null; idHmac: string | null }>;
-  registeredOffice: Record<string, unknown> | null;
+  registeredOffice: RegisteredOfficeView | null;
   cipcReference: string | null;
   differences: Array<{ field: string; owner: string | null; cipc: string | null }>;
 };
@@ -309,62 +310,79 @@ async function linkedProfiles(admin: Admin, row: CaseRow): Promise<string[]> {
 
 async function grantSticker(admin: Admin, row: CaseRow, evidence: Evidence, expiresAt: string) {
   const now = new Date().toISOString();
-  const office =
-    row.registered_office ??
-    (row.admin_copy?.registeredOffice as Record<string, unknown> | null) ??
-    null;
+  // The full office comes from the case (a link follows its source company's
+  // case); businesses only ever store the public view of it.
+  let office = caseOffice(row);
+  let stickerExpiry = expiresAt;
+  if (row.kind === "cipc_link") {
+    const { data: source } = await admin
+      .from("business_verifications")
+      .select("business_id, registered_office, admin_copy")
+      .eq("id", row.linked_case_id ?? "00000000-0000-0000-0000-000000000000")
+      .maybeSingle();
+    office = source ? caseOffice(source as Parameters<typeof caseOffice>[0]) : null;
+    if (source) {
+      const { data: srcBiz } = await admin
+        .from("businesses")
+        .select("cipc_expires_at")
+        .eq("id", source.business_id)
+        .maybeSingle();
+      // A linked profile shares the source company's renewal date.
+      stickerExpiry = (srcBiz?.cipc_expires_at as string | null) ?? expiresAt;
+    }
+  }
+
+  // A renewal carries the company's linked profiles to the new expiry date.
+  const linked = await linkedProfiles(admin, row);
+  const { data: flags, error: flagError } = await admin
+    .from("businesses")
+    .select("id, show_full_registered_office")
+    .in("id", [row.business_id, ...linked]);
+  if (flagError) throw new Error(flagError.message);
+  const showFull = new Map(
+    (flags ?? []).map((b) => [b.id as string, b.show_full_registered_office === true])
+  );
+
   const { error } = await admin
     .from("businesses")
     .update({
       cipc_verified_at: now,
-      cipc_expires_at: expiresAt,
+      cipc_expires_at: stickerExpiry,
       cipc_registration_number: row.registration_number,
       cipc_registered_name: evidence.registeredName,
-      ...(row.kind === "cipc" ? { cipc_registered_office: office } : {}),
+      cipc_registered_office: publicOffice(office, showFull.get(row.business_id) ?? false),
       owner_verified_role: evidence.role,
       owner_position_title: evidence.position?.slice(0, 40) ?? null,
     })
     .eq("id", row.business_id)
     .eq("owner_id", row.owner_id);
   if (error) throw new Error(error.message);
+  if (row.kind === "cipc_link" && stickerExpiry !== expiresAt) {
+    await admin
+      .from("business_verifications")
+      .update({ expires_at: stickerExpiry })
+      .eq("id", row.id);
+  }
 
-  // A renewal carries the company's linked profiles to the new expiry date.
-  const linked = await linkedProfiles(admin, row);
-  if (linked.length) {
-    await admin
+  for (const id of linked) {
+    const { error: linkError } = await admin
       .from("businesses")
-      .update({ cipc_expires_at: expiresAt, cipc_registered_office: office })
-      .in("id", linked)
+      .update({
+        cipc_expires_at: expiresAt,
+        cipc_registered_office: publicOffice(office, showFull.get(id) ?? false),
+      })
+      .eq("id", id)
       .eq("owner_id", row.owner_id);
-    await admin
+    if (linkError) log.error("Linked profile renewal failed", { id, error: linkError.message });
+  }
+  if (linked.length) {
+    const { error: caseError } = await admin
       .from("business_verifications")
       .update({ expires_at: expiresAt })
       .in("business_id", linked)
       .eq("kind", "cipc_link")
       .eq("status", "approved");
-  }
-
-  if (row.kind === "cipc_link" && row.linked_case_id) {
-    const { data: source } = await admin
-      .from("business_verifications")
-      .select("business_id")
-      .eq("id", row.linked_case_id)
-      .maybeSingle();
-    if (source) {
-      const { data: srcBiz } = await admin
-        .from("businesses")
-        .select("cipc_registered_office, cipc_expires_at")
-        .eq("id", source.business_id)
-        .maybeSingle();
-      // A linked profile shares the source company's office and renewal date.
-      await admin
-        .from("businesses")
-        .update({
-          cipc_registered_office: srcBiz?.cipc_registered_office ?? null,
-          cipc_expires_at: srcBiz?.cipc_expires_at ?? expiresAt,
-        })
-        .eq("id", row.business_id);
-    }
+    if (caseError) log.error("Linked case renewal failed", { error: caseError.message });
   }
 }
 

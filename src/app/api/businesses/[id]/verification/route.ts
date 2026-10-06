@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { isIdReviewed } from "@/lib/business-verification/service";
+import { approvedOffice, isIdReviewed } from "@/lib/business-verification/service";
 import { createLogger } from "@/lib/utils/logger";
 
 import { requireVerificationOwner } from "./_lib/owner-guard";
@@ -18,12 +18,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (ctx instanceof NextResponse) return ctx;
     const { admin, business, userId } = ctx;
 
-    const [idReviewed, bizRes, casesRes, linkableRes] = await Promise.all([
+    const [idReviewed, fullOffice, bizRes, casesRes, linkableRes] = await Promise.all([
       isIdReviewed(admin, userId),
+      approvedOffice(admin, business.id),
       admin
         .from("businesses")
         .select(
-          "cipc_verified_at, cipc_expires_at, cipc_registration_number, cipc_registered_name, cipc_registered_office, show_full_registered_office, seen_verified_at, seen_expires_at, seen_method, seen_city, owner_verified_role, owner_position_title"
+          "cipc_verified_at, cipc_expires_at, cipc_registration_number, cipc_registered_name, show_full_registered_office, seen_verified_at, seen_expires_at, seen_method, seen_city, owner_verified_role, owner_position_title"
         )
         .eq("id", business.id)
         .single(),
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               position: b.owner_position_title,
               showFullRegisteredOffice: b.show_full_registered_office,
               // Owner only: the full office, for "Use registered office" on the edit form.
-              registeredOffice: b.cipc_registered_office,
+              registeredOffice: fullOffice,
             }
           : null,
         seen: live(b.seen_verified_at, b.seen_expires_at)

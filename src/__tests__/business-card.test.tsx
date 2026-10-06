@@ -136,4 +136,27 @@ describe("BusinessCard", () => {
 
     expect(screen.getByRole("link")).toHaveAttribute("href", "/mzansi-business/business-1");
   });
+
+  it("shows the CIPC and Seen stickers on the card image", () => {
+    render(
+      <BusinessCard
+        {...defaultProps}
+        stickers={{
+          idReviewed: false,
+          cipcCheckedAt: "2026-10-01T10:00:00.000Z",
+          seenAt: "2026-10-02T10:00:00.000Z",
+          seenMethod: "video",
+        }}
+      />
+    );
+    const stickers = screen.getByRole("list", { name: "Verification" });
+    expect(stickers.closest("[data-card-overlay]")).not.toBeNull();
+    expect(screen.getByText(/CIPC registered · checked/)).toBeInTheDocument();
+    expect(screen.getByText(/Seen on live video/)).toBeInTheDocument();
+  });
+
+  it("shows no stickers when the business holds none", () => {
+    render(<BusinessCard {...defaultProps} stickers={{ idReviewed: false }} />);
+    expect(screen.queryByRole("list", { name: "Verification" })).toBeNull();
+  });
 });

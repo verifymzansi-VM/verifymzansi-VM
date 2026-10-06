@@ -18,6 +18,11 @@ const log = createLogger("CipcIntake");
 const CIPC_ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const CIPC_MAX_FILE_BYTES = 5 * 1024 * 1024;
 
+/** SA ID numbers (13 digits, optionally spaced 6-4-3) are never stored as text. */
+export function maskIdNumbers(text: string): string {
+  return text.replace(/(?<!\d)\d{6}\s?\d{4}\s?\d{3}(?!\d)/g, "[ID number]");
+}
+
 /** A director as stored: never the raw ID number, only its HMAC. */
 export type StoredDirector = {
   name: string;
@@ -125,10 +130,7 @@ export async function readCipcFile(file: File): Promise<CipcFile | IntakeError> 
       : null,
     extractedText:
       activeContent && extracted
-        ? extracted.items
-            .map((i) => i.text)
-            .join("\n")
-            .slice(0, 20000)
+        ? maskIdNumbers(extracted.items.map((i) => i.text).join("\n")).slice(0, 20000)
         : null,
   };
 }

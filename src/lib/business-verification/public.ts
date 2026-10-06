@@ -17,6 +17,27 @@ export type RegisteredOfficeView = {
   postalCode?: string | null;
 };
 
+/**
+ * The registered office as the public may see it: suburb, city and province,
+ * plus street lines and postal code only when the owner chose to show them.
+ * This is all that is ever stored on `businesses` (anyone can read live
+ * business rows); the full office stays on the staff-only case.
+ */
+export function publicOffice(
+  office: RegisteredOfficeView | null | undefined,
+  showFull: boolean
+): RegisteredOfficeView | null {
+  if (!office) return null;
+  const base = {
+    suburb: office.suburb ?? null,
+    city: office.city ?? null,
+    province: office.province ?? null,
+  };
+  return showFull
+    ? { streetLines: office.streetLines ?? [], ...base, postalCode: office.postalCode ?? null }
+    : base;
+}
+
 const live = (verifiedAt: unknown, expiresAt: unknown, now: number) =>
   typeof verifiedAt === "string" && (typeof expiresAt !== "string" || Date.parse(expiresAt) > now);
 
@@ -31,21 +52,16 @@ const CIPC_FIELDS = [
 ] as const;
 const SEEN_FIELDS = ["seen_verified_at", "seen_expires_at", "seen_method", "seen_city"] as const;
 
-export function toPublicVerification<T extends Record<string, unknown>>(
-  row: T,
-  now = Date.now()
-): T {
+export function toPublicVerification<T extends object>(row: T, now = Date.now()): T {
   if (!("cipc_verified_at" in row) && !("seen_verified_at" in row)) return row;
-  const out: Record<string, unknown> = { ...row };
+  const out: Record<string, unknown> = { ...(row as Record<string, unknown>) };
   if (!live(out.cipc_verified_at, out.cipc_expires_at, now)) {
     for (const f of CIPC_FIELDS) out[f] = null;
-  } else if (out.show_full_registered_office !== true && out.cipc_registered_office) {
-    const office = out.cipc_registered_office as RegisteredOfficeView;
-    out.cipc_registered_office = {
-      suburb: office.suburb ?? null,
-      city: office.city ?? null,
-      province: office.province ?? null,
-    };
+  } else {
+    out.cipc_registered_office = publicOffice(
+      out.cipc_registered_office as RegisteredOfficeView | null,
+      out.show_full_registered_office === true
+    );
   }
   if (!live(out.seen_verified_at, out.seen_expires_at, now)) {
     for (const f of SEEN_FIELDS) out[f] = null;

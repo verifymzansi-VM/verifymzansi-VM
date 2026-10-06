@@ -164,7 +164,7 @@ export default function BusinessVerificationHelpPage() {
             </ul>
           </section>
 
-          <section aria-labelledby="documents" id="documents">
+          <section aria-labelledby="documents-title" id="documents">
             <SectionHeading
               id="documents-title"
               title="CIPC documents we accept"
@@ -242,10 +242,9 @@ export default function BusinessVerificationHelpPage() {
                 logged.
               </li>
               <li>
-                ID numbers on your document are never stored — only a one-way code used for
-                matching.
+                Your document is kept encrypted until 30 days after a decision, then deleted. The ID
+                numbers we read from it are kept only as a one-way code used for matching.
               </li>
-              <li>Files are deleted 30 days after a decision.</li>
               <li>
                 Your profile shows the suburb, city and province of your registered office. The
                 street address appears only if you choose to show it.

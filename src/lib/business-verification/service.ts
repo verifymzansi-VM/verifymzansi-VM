@@ -7,6 +7,7 @@ import { deleteFromR2, uploadKycDocument } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
 
 import type { CipcFile } from "./intake";
+import type { RegisteredOfficeView } from "./public";
 
 const log = createLogger("BusinessVerification");
 
@@ -50,6 +51,51 @@ export async function isIdReviewed(admin: Admin, userId: string): Promise<boolea
     data?.account_verification_status === "verified" &&
     ["active", "warned"].includes(String(data?.account_status ?? "active"))
   );
+}
+
+type OfficeCase = {
+  kind: string;
+  registered_office: RegisteredOfficeView | null;
+  admin_copy: { registeredOffice?: RegisteredOfficeView | null } | null;
+  linked_case_id: string | null;
+};
+
+/** The full registered office a case rests on (staff-corrected, else CIPC's copy). */
+export function caseOffice(row: Pick<OfficeCase, "registered_office" | "admin_copy">) {
+  return row.registered_office ?? row.admin_copy?.registeredOffice ?? null;
+}
+
+/**
+ * The full registered office behind a business's live CIPC sticker, read from
+ * the approved case (a linked profile follows its source company's case).
+ * Never public: `businesses` only ever holds publicOffice().
+ */
+export async function approvedOffice(
+  admin: Admin,
+  businessId: string
+): Promise<RegisteredOfficeView | null> {
+  const cols = "kind, registered_office, admin_copy, linked_case_id";
+  const { data, error } = await admin
+    .from("business_verifications")
+    .select(cols)
+    .eq("business_id", businessId)
+    .in("kind", ["cipc", "cipc_link"])
+    .eq("status", "approved")
+    .order("decided_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const row = data as OfficeCase | null;
+  if (!row) return null;
+  if (row.kind !== "cipc_link") return caseOffice(row);
+  if (!row.linked_case_id) return null;
+  const { data: source, error: sourceError } = await admin
+    .from("business_verifications")
+    .select(cols)
+    .eq("id", row.linked_case_id)
+    .maybeSingle();
+  if (sourceError) throw new Error(sourceError.message);
+  return source ? caseOffice(source as OfficeCase) : null;
 }
 
 /** HMAC of the owner's approved SA ID number (null if none on file). */

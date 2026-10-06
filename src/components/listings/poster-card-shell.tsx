@@ -52,6 +52,8 @@ interface PosterCardShellProps {
   location?: string | null;
   /** Secondary organisation affiliation line (never replaces verification or branding). */
   affiliation?: ReactNode;
+  /** Verification stickers; shown on the image overlay in immersive cards. */
+  badges?: ReactNode;
   /** ISO date string — shown as compact relative time ("2h ago") */
   createdAt?: string | null;
   /** View count — shown in the card engagement row. */
@@ -123,6 +125,7 @@ export function PosterCardShell({
   description,
   location,
   affiliation,
+  badges,
   createdAt: _createdAt,
   viewCount: _viewCount,
   fitStrategy = "contain",
@@ -309,6 +312,7 @@ export function PosterCardShell({
             ) : null}
           </p>
         ) : null}
+        {badges && !isHeroVariant ? <div className="mt-1">{badges}</div> : null}
         {affiliation && !isHeroVariant ? affiliation : null}
       </div>
     </div>
@@ -462,6 +466,7 @@ export function PosterCardShell({
                   <span className="truncate">{location}</span>
                 </p>
               ) : null}
+              {badges ? <div className="mt-1.5">{badges}</div> : null}
             </div>
             {normalizedLogoUrl ? (
               <Image

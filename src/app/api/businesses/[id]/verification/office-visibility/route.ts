@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
+import { publicOffice } from "@/lib/business-verification/public";
+import { approvedOffice } from "@/lib/business-verification/service";
 import { logAuditEvent } from "@/lib/services/audit";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
@@ -27,9 +29,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await parseAndValidateJsonRequest(request, schema);
     if (!body.success) return body.response;
 
+    // The public column is rebuilt from the approved case's full office, so
+    // hidden street lines are never stored where anyone can read them.
+    const office = await approvedOffice(ctx.admin, ctx.business.id);
     const { data, error } = await ctx.admin
       .from("businesses")
-      .update({ show_full_registered_office: body.data.showFull })
+      .update({
+        show_full_registered_office: body.data.showFull,
+        cipc_registered_office: publicOffice(office, body.data.showFull),
+      })
       .eq("id", ctx.business.id)
       .eq("owner_id", ctx.userId)
       .not("cipc_verified_at", "is", null)

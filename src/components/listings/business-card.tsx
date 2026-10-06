@@ -111,12 +111,8 @@ export function BusinessCard({
       title={businessName}
       description={cardDescription}
       location={city || null}
-      affiliation={
-        <span className="flex flex-wrap items-center gap-1.5">
-          {stickers ? <BusinessStickers state={stickers} /> : null}
-          <AffiliationBadge businessId={id} />
-        </span>
-      }
+      badges={stickers ? <BusinessStickers state={stickers} /> : null}
+      affiliation={<AffiliationBadge businessId={id} />}
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}
