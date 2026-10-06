@@ -86,6 +86,13 @@ export default async function AdminHomePage() {
                         0,
                         dashboard.queues.content.pending - dashboard.queues.content.claimed
                       ),
+                    business_kyc:
+                      dashboard.queues.business_kyc &&
+                      Math.max(
+                        0,
+                        dashboard.queues.business_kyc.pending -
+                          dashboard.queues.business_kyc.claimed
+                      ),
                   }}
                 />
               ) : (

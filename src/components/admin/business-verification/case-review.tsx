@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { CaseDetail } from "@/lib/business-verification/admin-queries";
 import { cn } from "@/lib/utils";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 type Detail = NonNullable<CaseDetail>;
@@ -67,6 +68,15 @@ const REASONS: Array<{ code: string; label: string; note: string }> = [
   { code: "other", label: "Other", note: "" },
 ];
 
+const SEEN_REASONS: typeof REASONS = [
+  {
+    code: "visit_not_confirmed",
+    label: "Couldn't confirm the business",
+    note: "We couldn't confirm the business on the check. You can book a new check when you're ready.",
+  },
+  { code: "other", label: "Other", note: "" },
+];
+
 const SEVERITY = {
   attention: {
     icon: CircleAlert,
@@ -91,8 +101,17 @@ async function postJson(url: string, body: unknown, method = "POST") {
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(data.error ?? "That did not work. Try again.");
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    code?: string;
+    verifyUrl?: string;
+  };
+  if (!res.ok) {
+    throw Object.assign(new Error(data.error ?? "That did not work. Try again."), {
+      code: data.code,
+      verifyUrl: data.verifyUrl,
+    });
+  }
   return data;
 }
 
@@ -248,7 +267,9 @@ function Compare({ detail }: { detail: Detail }) {
               key={field}
               className={cn(
                 "border-t",
-                differs.has(field) && "bg-brand-red-50 dark:bg-brand-red-500/10"
+                (differs.has(field) ||
+                  (field === "Owner on director list" && differs.has("Directors"))) &&
+                  "bg-brand-red-50 dark:bg-brand-red-500/10"
               )}
             >
               <th scope="row" className="py-2 pr-3 text-left font-medium">
@@ -308,6 +329,7 @@ function AdminCopyForm({
     const form = new FormData();
     form.set("file", file);
     if (reference.trim()) form.set("cipcReference", reference.trim());
+    form.set("expectedUpdatedAt", detail.updatedAt);
     const res = await fetch(`/api/admin/business-verification/${detail.id}/admin-copy`, {
       method: "POST",
       headers: withCsrfHeaders(),
@@ -420,6 +442,7 @@ function OfficeForm({
       await postJson(
         `/api/admin/business-verification/${detail.id}/office`,
         {
+          expectedUpdatedAt: detail.updatedAt,
           streetLines: values.street
             .split(",")
             .map((s) => s.trim())
@@ -554,9 +577,12 @@ function Decide({
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const exception = detail.checks?.exception;
   const exceptionPending = Boolean(exception?.proposedBy && !exception.confirmedBy);
   const open = detail.status === "pending" || detail.status === "info_requested";
+  // Approve and exceptions need the case back with staff, not with the owner.
+  const waitingOnStaff = detail.status === "pending";
 
   async function run(action: string, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -569,6 +595,11 @@ function Decide({
       });
       onDone();
     } catch (err) {
+      const { code, verifyUrl } = err as { code?: string; verifyUrl?: string };
+      if ((code === "step_up_required" || code === "mfa_required") && verifyUrl) {
+        router.push(staffVerifyHref(verifyUrl, `/admin/business-verification/${detail.id}`));
+        return;
+      }
       setError(err instanceof Error ? err.message : "That did not work.");
     } finally {
       setBusy(null);
@@ -585,7 +616,13 @@ function Decide({
             : ""}
           .
         </p>
-        <ReasonPicker reason={reason} setReason={setReason} note={note} setNote={setNote} />
+        <ReasonPicker
+          reasons={detail.kind === "seen" ? SEEN_REASONS : REASONS}
+          reason={reason}
+          setReason={setReason}
+          note={note}
+          setNote={setNote}
+        />
         <Button
           variant="destructive"
           className="h-11"
@@ -641,6 +678,16 @@ function Decide({
               A different governance controller or admin must confirm it.
             </p>
           )}
+          {(exception?.proposedBy === viewerId || canDecideSenior) && (
+            <Button
+              variant="ghost"
+              className="h-11"
+              disabled={busy !== null || blocked}
+              onClick={() => run("withdraw_exception")}
+            >
+              Withdraw exception
+            </Button>
+          )}
         </div>
       ) : (
         <>
@@ -681,6 +728,7 @@ function Decide({
             disabled={
               busy !== null ||
               blocked ||
+              !waitingOnStaff ||
               missing.length > 0 ||
               (!isLink && (!inBusiness || !ownerConfirmed))
             }
@@ -698,8 +746,19 @@ function Decide({
         </>
       )}
 
+      {!waitingOnStaff && (
+        <p className="rounded-xl bg-muted p-3 text-sm">
+          Waiting on the owner. Approve once they reply and the case is back with staff.
+        </p>
+      )}
       <div className="space-y-3 border-t pt-4">
-        <ReasonPicker reason={reason} setReason={setReason} note={note} setNote={setNote} />
+        <ReasonPicker
+          reasons={isSeen ? SEEN_REASONS : REASONS}
+          reason={reason}
+          setReason={setReason}
+          note={note}
+          setNote={setNote}
+        />
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -717,20 +776,24 @@ function Decide({
           >
             Reject
           </Button>
-          {!exceptionPending && missing.length > 0 && (
-            <Button
-              variant="ghost"
-              className="h-11"
-              disabled={busy !== null || blocked || note.trim().length < 10}
-              onClick={() => run("propose_exception", { note })}
-            >
-              Propose exception
-            </Button>
-          )}
+          {!exceptionPending &&
+            waitingOnStaff &&
+            detail.kind === "cipc" &&
+            missing.length > 0 &&
+            (detail.evidence?.unwaivable ?? []).length === 0 && (
+              <Button
+                variant="ghost"
+                className="h-11"
+                disabled={busy !== null || blocked || note.trim().length < 10}
+                onClick={() => run("propose_exception", { note })}
+              >
+                Propose exception
+              </Button>
+            )}
         </div>
         <p className="text-xs text-muted-foreground">
-          The note is sent to the owner. An exception approves despite the items above and needs a
-          second, senior reviewer.
+          The note is sent to the owner. An exception can cover only a missing director match or
+          company status, and needs a second, senior reviewer.
         </p>
       </div>
       {error && (
@@ -743,11 +806,13 @@ function Decide({
 }
 
 function ReasonPicker({
+  reasons = REASONS,
   reason,
   setReason,
   note,
   setNote,
 }: {
+  reasons?: typeof REASONS;
   reason: string;
   setReason: (v: string) => void;
   note: string;
@@ -762,13 +827,13 @@ function ReasonPicker({
           value={reason}
           onChange={(e) => {
             setReason(e.target.value);
-            const preset = REASONS.find((r) => r.code === e.target.value)?.note;
+            const preset = reasons.find((r) => r.code === e.target.value)?.note;
             if (preset && !note.trim()) setNote(preset);
           }}
           className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm"
         >
           <option value="">Choose…</option>
-          {REASONS.map((r) => (
+          {reasons.map((r) => (
             <option key={r.code} value={r.code}>
               {r.label}
             </option>
@@ -899,7 +964,7 @@ export function CaseReview({
 
         {detail.kind === "cipc" && open && (
           <Section title="Registered office">
-            <OfficeForm detail={detail} onDone={refresh} blocked={blocked} />
+            <OfficeForm key={detail.updatedAt} detail={detail} onDone={refresh} blocked={blocked} />
           </Section>
         )}
 

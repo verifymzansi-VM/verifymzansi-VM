@@ -21,6 +21,7 @@ const schema = z.object({
     "approve",
     "propose_exception",
     "confirm_exception",
+    "withdraw_exception",
     "request_info",
     "reject",
     "revoke",

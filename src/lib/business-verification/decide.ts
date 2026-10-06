@@ -12,6 +12,7 @@ import {
   sendBusinessVerificationEmail,
   type BusinessVerificationEmailKind,
 } from "@/lib/services/email";
+import { normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
 
 import { seenApprovalGaps, type SeenState } from "./seen";
@@ -23,7 +24,13 @@ const log = createLogger("BusinessVerificationDecide");
 type Admin = SupabaseClient;
 
 export type DecisionAction =
-  "approve" | "propose_exception" | "confirm_exception" | "request_info" | "reject" | "revoke";
+  | "approve"
+  | "propose_exception"
+  | "confirm_exception"
+  | "withdraw_exception"
+  | "request_info"
+  | "reject"
+  | "revoke";
 
 export type DecisionInput = {
   action: DecisionAction;
@@ -76,13 +83,32 @@ const fail = (status: number, code: string, error: string): DecisionResult => ({
   error,
 });
 
-/** An exception can waive a director match or status, never CIPC's own record. */
-const adminCopyRequired = () =>
-  fail(
-    400,
-    "admin_copy_required",
-    "Attach the copy you fetched from CIPC first. Exceptions never skip CIPC's own record."
-  );
+/** Case checks without a pending exception (new evidence voids a proposal). */
+export function withoutException(checks: Record<string, unknown> | null | undefined) {
+  if (!checks?.exception) return checks ?? null;
+  const { exception: _dropped, ...rest } = checks;
+  return rest;
+}
+
+/** Why an exception can't be proposed or confirmed on this case, if it can't. */
+function exceptionRefusal(row: CaseRow, evidence: Evidence): DecisionResult | null {
+  if (row.kind !== "cipc") {
+    return fail(
+      400,
+      "exception_not_allowed",
+      row.kind === "seen"
+        ? "Seen checks can't be approved by exception. Book a new check instead."
+        : "A linked profile needs a live sticker on its source company; no exception applies."
+    );
+  }
+  if (evidence.unwaivable.length) {
+    return fail(400, "not_waivable", `An exception can't cover: ${evidence.unwaivable.join(" ")}`);
+  }
+  if (!evidence.missing.length) {
+    return fail(409, "nothing_to_waive", "Nothing is missing. Approve the case instead.");
+  }
+  return null;
+}
 
 function stickerName(kind: CaseRow["kind"]) {
   return kind === "seen" ? "Seen by VerifyMzansi" : "CIPC registered";
@@ -107,6 +133,8 @@ async function ownerHmac(admin: Admin, ownerId: string): Promise<string | null> 
 type Evidence = {
   ready: boolean;
   missing: string[];
+  /** Gaps a two-person exception may never waive. */
+  unwaivable: string[];
   role: "director" | "member" | "representative" | null;
   position: string | null;
   registeredName: string | null;
@@ -145,16 +173,23 @@ export async function approvalEvidence(admin: Admin, row: CaseRow): Promise<Evid
     return {
       ready: missing.length === 0,
       missing,
+      unwaivable: [...missing],
       role: (sourceBiz?.owner_verified_role as Evidence["role"]) ?? null,
       position: (sourceBiz?.owner_position_title as string | null) ?? null,
       registeredName: (sourceBiz?.cipc_registered_name as string | null) ?? null,
     };
   }
 
+  // An exception may waive only the director match and the company status.
+  const unwaivable: string[] = [];
+  const hard = (text: string) => {
+    missing.push(text);
+    unwaivable.push(text);
+  };
   const copy = row.admin_copy;
-  if (!copy) missing.push("Attach the copy you fetched from CIPC.");
+  if (!copy) hard("Attach the copy you fetched from CIPC.");
   if (copy && copy.registrationNumber !== row.registration_number) {
-    missing.push("Your CIPC copy is for a different registration number.");
+    hard("Your CIPC copy is for a different registration number.");
   }
   if (copy && !/^in business$/i.test(copy.enterpriseStatus ?? "")) {
     missing.push("CIPC does not show the company as In Business.");
@@ -164,7 +199,7 @@ export async function approvalEvidence(admin: Admin, row: CaseRow): Promise<Evid
   let position: string | null = null;
   if (row.route === "representative") {
     if (!row.representative?.confirmed)
-      missing.push("Confirm the representative (work email and call-back).");
+      hard("Confirm the representative (work email and call-back).");
     role = "representative";
     position = row.representative?.position ?? null;
   } else if (copy) {
@@ -185,11 +220,12 @@ export async function approvalEvidence(admin: Admin, row: CaseRow): Promise<Evid
     .not("cipc_verified_at", "is", null)
     .neq("owner_id", row.owner_id)
     .limit(1);
-  if (conflict?.length) missing.push("Another owner already holds this company's sticker.");
+  if (conflict?.length) hard("Another owner already holds this company's sticker.");
 
   return {
     ready: missing.length === 0,
     missing,
+    unwaivable,
     role,
     position,
     registeredName: copy?.registeredName ?? null,
@@ -397,7 +433,7 @@ async function approveThenGrant(
   input: DecisionInput,
   evidence: Evidence,
   patch: Record<string, unknown>
-): Promise<boolean> {
+): Promise<boolean | "held_by_other_owner"> {
   const decidedAt = new Date().toISOString();
   const expiresAt = addDays(STICKER_TTL_DAYS);
   const ok = await updateCase(admin, row, input.expectedUpdatedAt, {
@@ -415,7 +451,24 @@ async function approveThenGrant(
       .from("business_verifications")
       .update({ status: "pending", reviewed_by: null, decided_at: null, expires_at: null })
       .eq("id", row.id);
+    // The database allows one owner per company (one_cipc_holder_per_company).
+    if (error instanceof Error && error.message.includes("cipc_held_by_other_owner")) {
+      return "held_by_other_owner";
+    }
     throw error;
+  }
+  if (row.kind === "cipc") {
+    // A renewal supersedes the previous approval, so only the live case can
+    // later be revoked (revoking an old case must not wipe the renewal).
+    const { error: supersedeError } = await admin
+      .from("business_verifications")
+      .update({ status: "expired", reason_code: "renewed" })
+      .eq("business_id", row.business_id)
+      .eq("kind", "cipc")
+      .eq("status", "approved")
+      .neq("id", row.id);
+    if (supersedeError)
+      log.error("Previous approval not superseded", { error: supersedeError.message });
   }
   await scheduleFilePurge(admin, row.id);
   return true;
@@ -435,9 +488,13 @@ async function approveSeen(admin: Admin, row: CaseRow, input: DecisionInput, not
   const seen = row.seen as SeenState;
   const { data: biz } = await admin
     .from("businesses")
-    .select("location_city")
+    .select("location_city, location_province")
     .eq("id", row.business_id)
     .maybeSingle();
+  // The town the verifier typed is public, so it must be a place we know.
+  const province = normalizeProvinceName(String(biz?.location_province ?? ""));
+  const visitedCity =
+    seen.report?.city && province ? resolveCityName(province, seen.report.city) : null;
   const { error } = await admin
     .from("businesses")
     .update({
@@ -447,7 +504,7 @@ async function approveSeen(admin: Admin, row: CaseRow, input: DecisionInput, not
       // Only the city is public; the visited address stays in the case.
       seen_city:
         seen.method === "visit"
-          ? seen.report?.city || ((biz?.location_city as string | null) ?? null)
+          ? (visitedCity ?? (biz?.location_city as string | null) ?? null)
           : null,
     })
     .eq("id", row.business_id)
@@ -498,7 +555,9 @@ export async function decideBusinessVerification(
     case "request_info": {
       if (!open) return fail(409, "case_closed", "This case is closed.");
       if (!note) return fail(400, "note_required", "Write what you need from the owner.");
-      if (!(await updateCase(admin, row, input.expectedUpdatedAt, { status: "info_requested" }))) {
+      // New evidence will come back, so any proposed exception lapses.
+      const patch = { status: "info_requested", checks: withoutException(row.checks) };
+      if (!(await updateCase(admin, row, input.expectedUpdatedAt, patch))) {
         return fail(409, "case_changed", "This case changed. Reload and check again.");
       }
       await admin.from("business_verification_messages").insert({
@@ -559,6 +618,13 @@ export async function decideBusinessVerification(
           approvedBy: input.actorId,
         },
       });
+      if (ok === "held_by_other_owner") {
+        return fail(
+          409,
+          "conflict_other_owner",
+          "Another owner already holds this company's sticker."
+        );
+      }
       if (!ok) return fail(409, "case_changed", "This case changed. Reload and check again.");
       await notifyOwner(admin, row, "approved", null);
       break;
@@ -569,7 +635,8 @@ export async function decideBusinessVerification(
         return fail(409, "case_not_pending", "Only cases waiting on staff can be approved.");
       if (!note || note.length < 10)
         return fail(400, "reason_required", "Explain why this should be approved anyway.");
-      if (row.kind === "cipc" && !row.admin_copy) return adminCopyRequired();
+      const refused = exceptionRefusal(row, await approvalEvidence(admin, row));
+      if (refused) return refused;
       if (exception?.proposedBy)
         return fail(
           409,
@@ -600,8 +667,9 @@ export async function decideBusinessVerification(
       if (exception.proposedBy === input.actorId) {
         return fail(403, "not_independent", "A different reviewer must confirm your exception.");
       }
-      if (row.kind === "cipc" && !row.admin_copy) return adminCopyRequired();
       const evidence = await approvalEvidence(admin, row);
+      const refused = exceptionRefusal(row, evidence);
+      if (refused) return refused;
       const ok = await approveThenGrant(
         admin,
         row,
@@ -618,8 +686,29 @@ export async function decideBusinessVerification(
           },
         }
       );
+      if (ok === "held_by_other_owner") {
+        return fail(
+          409,
+          "conflict_other_owner",
+          "Another owner already holds this company's sticker."
+        );
+      }
       if (!ok) return fail(409, "case_changed", "This case changed. Reload and check again.");
       await notifyOwner(admin, row, "approved", null);
+      break;
+    }
+
+    case "withdraw_exception": {
+      if (!exception?.proposedBy) {
+        return fail(409, "no_exception", "There is no exception to withdraw.");
+      }
+      if (exception.proposedBy !== input.actorId && !DECISION_STAFF.has(input.actorRole)) {
+        return fail(403, "forbidden", "Only the proposer or senior staff can withdraw it.");
+      }
+      const ok = await updateCase(admin, row, input.expectedUpdatedAt, {
+        checks: withoutException(row.checks),
+      });
+      if (!ok) return fail(409, "case_changed", "This case changed. Reload and check again.");
       break;
     }
 
@@ -662,9 +751,16 @@ export async function decideBusinessVerification(
         .from("businesses")
         .update(clear)
         .in("id", [row.business_id, ...linked]);
-      if (clearError) throw new Error(clearError.message);
-      if (linked.length) {
+      if (clearError) {
+        // Never leave a revoked case behind a sticker that is still public.
         await admin
+          .from("business_verifications")
+          .update({ status: "approved", reason_code: null, reviewed_by: null })
+          .eq("id", row.id);
+        throw new Error(clearError.message);
+      }
+      if (linked.length) {
+        const { error: linkError } = await admin
           .from("business_verifications")
           .update({
             status: "revoked",
@@ -676,6 +772,7 @@ export async function decideBusinessVerification(
           .in("business_id", linked)
           .eq("kind", "cipc_link")
           .eq("status", "approved");
+        if (linkError) log.error("Linked cases not revoked", { error: linkError.message });
       }
       await notifyOwner(admin, row, "revoked", note);
       break;
@@ -696,7 +793,7 @@ export async function decideBusinessVerification(
   const status =
     input.action === "request_info"
       ? "info_requested"
-      : input.action === "propose_exception"
+      : input.action === "propose_exception" || input.action === "withdraw_exception"
         ? "pending"
         : input.action === "reject"
           ? "rejected"

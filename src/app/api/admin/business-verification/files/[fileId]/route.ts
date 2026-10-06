@@ -36,14 +36,23 @@ export async function GET(
     const { data: file, error } = await admin
       .from("business_verification_files")
       .select(
-        "id, case_id, r2_key, quarantined, extracted_text, purged_at, business_verifications!inner(owner_id)"
+        "id, case_id, r2_key, quarantined, extracted_text, purged_at, business_verifications!inner(owner_id, business_id)"
       )
       .eq("id", fileId.data)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!file) return NextResponse.json({ error: "File not found" }, { status: 404 });
-    const ownerId = (file.business_verifications as unknown as { owner_id: string }).owner_id;
-    if (ownerId === auth.user.id) {
+    const verification = file.business_verifications as unknown as {
+      owner_id: string;
+      business_id: string;
+    };
+    // Neither the owner who applied nor whoever owns the business now.
+    const { data: business } = await admin
+      .from("businesses")
+      .select("owner_id")
+      .eq("id", verification.business_id)
+      .maybeSingle();
+    if (verification.owner_id === auth.user.id || business?.owner_id === auth.user.id) {
       return NextResponse.json({ error: "You can't review your own business." }, { status: 403 });
     }
     if (file.purged_at) {

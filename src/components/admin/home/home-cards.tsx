@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock, Flag, IdCard, Inbox, ScanEye } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Flag,
+  IdCard,
+  Inbox,
+  ScanEye,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils/format";
 import type { StaffDashboard } from "@/lib/services/staff-dashboard";
@@ -249,9 +258,9 @@ export function OldestLine({ at }: { at: string | null | undefined }) {
 
 /** The four work queues, with size, age and pressure. */
 export function QueueOverview({ queues }: { queues: StaffDashboard["queues"] }) {
-  const { reports, kyc, content, support } = queues;
+  const { reports, kyc, content, support, business_kyc: business } = queues;
   return (
-    <div className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 2xl:grid-cols-5">
       <StatCard
         label="Open reports"
         icon={Flag}
@@ -291,6 +300,30 @@ export function QueueOverview({ queues }: { queues: StaffDashboard["queues"] }) 
                   : "None high risk"}
               {kyc.claimed > 0 && ` · ${formatCount(kyc.claimed)} being worked`}
               <OldestLine at={kyc.oldest_at} />
+            </>
+          )
+        }
+      />
+      <StatCard
+        label="Business checks"
+        icon={Building2}
+        value={business?.pending}
+        href="/admin/business-verification"
+        urgent={Boolean(business && business.breached > 0)}
+        detail={
+          business && (
+            <>
+              {business.pending === 0 ? (
+                "Nothing waiting"
+              ) : business.breached > 0 ? (
+                <span className="font-medium text-destructive">
+                  {formatCount(business.breached)} past 24 hours
+                </span>
+              ) : (
+                "All within 24 hours"
+              )}
+              {business.claimed > 0 && ` · ${formatCount(business.claimed)} being worked`}
+              <OldestLine at={business.oldest_at} />
             </>
           )
         }

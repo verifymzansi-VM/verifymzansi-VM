@@ -3,13 +3,13 @@ import { z } from "zod";
 
 import { MIN_SEEN_PHOTOS, PREMISES_TYPES, type SeenState } from "@/lib/business-verification/seen";
 import { createNotification } from "@/lib/notifications";
-import { releaseDecidedClaim } from "@/lib/services/queue-claims";
+import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
 
-import { requireStaffCase } from "../../_lib/staff-guard";
+import { loadOpenSeenCase, requireStaffCase } from "../../_lib/staff-guard";
 
 const log = createLogger("AdminBusinessVerificationVisit");
 
@@ -41,7 +41,13 @@ const schema = z.discriminatedUnion("action", [
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requireStaffCase(request, params, { log, capability: "queue:claim" });
+    // Claims are checked below: the assigned verifier keeps working their
+    // booked check without re-claiming it.
+    const guard = await requireStaffCase(request, params, {
+      log,
+      capability: "queue:claim",
+      requireClaim: false,
+    });
     if (guard instanceof NextResponse) return guard;
 
     const body = await parseAndValidateJsonRequest(request, schema, {
@@ -49,23 +55,37 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     if (!body.success) return body.response;
 
+    const row = await loadOpenSeenCase(guard);
+    if (row instanceof NextResponse) return row;
     const admin = createAdminClient();
-    const { data: row, error } = await admin
-      .from("business_verifications")
-      .select("id, business_id, owner_id, kind, status, seen, updated_at")
-      .eq("id", guard.caseId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!row || row.kind !== "seen" || row.status !== "pending") {
-      return NextResponse.json({ error: "Open Seen case not found" }, { status: 404 });
-    }
-    if (row.owner_id === guard.user.id) {
-      return NextResponse.json({ error: "You can't check your own business." }, { status: 403 });
-    }
-    const seen = (row.seen ?? {}) as SeenState;
+    const seen = row.seen;
     let next: SeenState;
 
+    const previousVerifier =
+      seen.assignedTo && seen.assignedTo !== guard.user.id ? seen.assignedTo : null;
     if (body.data.action === "schedule") {
+      if (seen.report) {
+        return NextResponse.json(
+          { error: "The report is already sent; this check can't be rebooked." },
+          { status: 409 }
+        );
+      }
+      if (previousVerifier && !["governance_controller", "admin"].includes(guard.actorRole)) {
+        return NextResponse.json(
+          {
+            error:
+              "Another verifier booked this check. Ask a governance controller to reassign it.",
+          },
+          { status: 403 }
+        );
+      }
+      if (seen.assignedTo !== guard.user.id) {
+        const refused = await checkQueueClaim(guard.user.id, {
+          type: "business_verification",
+          id: row.id,
+        });
+        if (refused) return refused;
+      }
       if (Date.parse(body.data.scheduledFor) < Date.now() - 3_600_000) {
         return NextResponse.json({ error: "Choose a time in the future." }, { status: 400 });
       }
@@ -121,6 +141,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         message: `${when} with ${firstName} from VerifyMzansi. Reply on your Verify page to change it.`,
         href: `/dashboard/businesses/${row.business_id}/verification`,
       });
+      if (previousVerifier) {
+        await createNotification({
+          userId: previousVerifier,
+          type: "info",
+          title: "A Seen check was reassigned",
+          message: `${firstName} now runs this check (${when}).`,
+          href: `/admin/business-verification/${row.id}`,
+        });
+      }
     }
 
     if (body.data.action === "report") {

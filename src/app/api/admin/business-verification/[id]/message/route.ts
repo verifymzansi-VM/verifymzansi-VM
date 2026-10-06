@@ -44,6 +44,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (row.owner_id === guard.user.id) {
       return NextResponse.json({ error: "You can't review your own business." }, { status: 403 });
     }
+    if (!["pending", "info_requested"].includes(row.status as string)) {
+      return NextResponse.json(
+        { error: "This case is closed. The owner can start a new request." },
+        { status: 409 }
+      );
+    }
 
     const { error: insertError } = await admin.from("business_verification_messages").insert({
       case_id: row.id,

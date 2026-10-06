@@ -559,3 +559,19 @@ Built as specified, with these deliberate differences:
 - **No masked-ID reveal on the case screen.** Staff never see the owner's ID
   number: the director match runs on HMACs and the screen shows only matched or
   not matched. The `reveal_id` access-log action is kept for a future need.
+- **Debug pass (2026-10-06, fourth pass)** — three audits plus live checks:
+  - posting (listings, promotions, businesses) was broken since 2026-09-29: the
+    insert RPCs turned omitted keys into NULLs over NOT NULL defaults. They now
+    insert only the payload's columns (`insert_jsonb_row`);
+  - `businesses.cipc_registered_office` (publicly readable) holds only the
+    public view; a trigger strips hidden street lines; ID numbers are masked in
+    stored PDF text;
+  - stickers now render on business cards (the immersive card hid the slot);
+  - exceptions only on CIPC cases, only for the director match or company
+    status; withdraw action; new evidence voids a proposal;
+  - one holder per company enforced in the database; renewals supersede the
+    previous approval; revoke rolls back if the sticker can't be cleared;
+  - visit photos append atomically; the assigned verifier works their check
+    without re-claiming; claim-next skips cases the claimer can't act on;
+  - staff queue tabs are exclusive and no longer truncate at 200; the staff home
+    shows business checks.

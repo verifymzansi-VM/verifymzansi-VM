@@ -13,6 +13,7 @@ const log = createLogger("AdminBusinessVerificationOffice");
 
 const text = (max: number) => z.string().trim().max(max).nullable();
 const schema = z.object({
+  expectedUpdatedAt: z.string().min(10).max(64),
   streetLines: z.array(z.string().trim().min(1).max(120)).max(3),
   suburb: text(80),
   city: z.string().trim().min(1).max(80),
@@ -53,15 +54,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     };
 
     const admin = createAdminClient();
+    const { data: current, error: readError } = await admin
+      .from("business_verifications")
+      .select("checks")
+      .eq("id", guard.caseId)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    // Recorded so a re-attached CIPC copy never overwrites the correction.
+    const checks = {
+      ...((current?.checks ?? {}) as Record<string, unknown>),
+      officeCorrectedBy: guard.user.id,
+    };
     const { data, error } = await admin
       .from("business_verifications")
-      .update({ registered_office: office })
+      .update({ registered_office: office, checks })
       .eq("id", guard.caseId)
       .eq("kind", "cipc")
+      .eq("updated_at", body.data.expectedUpdatedAt)
       .in("status", ["pending", "info_requested"])
       .select("business_id");
     if (error) throw new Error(error.message);
-    if (!data?.length) return NextResponse.json({ error: "Open case not found" }, { status: 404 });
+    if (!data?.length) {
+      return NextResponse.json(
+        { error: "This case changed or closed. Reload and check again." },
+        { status: 409 }
+      );
+    }
 
     await logAuditEvent({
       actorId: guard.user.id,

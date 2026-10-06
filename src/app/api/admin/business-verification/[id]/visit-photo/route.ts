@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { isIntakeError, readCipcFile } from "@/lib/business-verification/intake";
-import type { SeenState } from "@/lib/business-verification/seen";
 import { discardStoredFile, fileRow, storeCaseFile } from "@/lib/business-verification/service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
 
-import { readStaffUpload, requireStaffCase } from "../../_lib/staff-guard";
+import { loadOpenSeenCase, readStaffUpload, requireStaffCase } from "../../_lib/staff-guard";
 
 const log = createLogger("AdminBusinessVerificationVisitPhoto");
 
@@ -25,25 +24,27 @@ function coordinate(value: FormDataEntryValue | null, limit: number): number | n
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   let storedKey: string | null = null;
   try {
-    const guard = await requireStaffCase(request, params, { log, capability: "queue:claim" });
+    // The assigned verifier works their booked check without re-claiming it
+    // (claims last 15 minutes; a visit is days later). Checked below.
+    const guard = await requireStaffCase(request, params, {
+      log,
+      capability: "queue:claim",
+      requireClaim: false,
+    });
     if (guard instanceof NextResponse) return guard;
     const received = await readStaffUpload(request, "Choose a photo.");
     if (received instanceof NextResponse) return received;
     const { form, file: upload } = received;
 
+    const row = await loadOpenSeenCase(guard);
+    if (row instanceof NextResponse) return row;
     const admin = createAdminClient();
-    const { data: row, error } = await admin
-      .from("business_verifications")
-      .select("id, owner_id, kind, status, seen")
-      .eq("id", guard.caseId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!row || row.kind !== "seen" || row.status !== "pending") {
-      return NextResponse.json({ error: "Open Seen case not found" }, { status: 404 });
-    }
-    const seen = (row.seen ?? {}) as SeenState;
+    const seen = row.seen;
     if (seen.assignedTo !== guard.user.id) {
       return NextResponse.json({ error: "Book the check before adding photos." }, { status: 403 });
+    }
+    if (seen.report) {
+      return NextResponse.json({ error: "The report is already sent." }, { status: 409 });
     }
 
     const file = await readCipcFile(upload);
@@ -71,13 +72,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       throw new Error(fileError?.message ?? "file insert failed");
     }
 
-    // Re-read so concurrent uploads don't overwrite each other's entries.
-    const { data: fresh } = await admin
-      .from("business_verifications")
-      .select("seen")
-      .eq("id", row.id)
-      .single();
-    const current = ((fresh?.seen ?? seen) as SeenState) ?? seen;
     const photo = {
       fileId: stored.id as string,
       takenAt: new Date().toISOString(),
@@ -85,11 +79,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       lng: seen.method === "visit" ? coordinate(form.get("lng"), 180) : null,
       by: guard.user.id,
     };
-    const { error: updateError } = await admin
-      .from("business_verifications")
-      .update({ seen: { ...current, photos: [...(current.photos ?? []), photo] } })
-      .eq("id", row.id);
-    if (updateError) throw new Error(updateError.message);
+    // One atomic append, only for the assigned verifier and before the report.
+    const { data: appended, error: appendError } = await admin.rpc("append_seen_photo", {
+      p_case: row.id,
+      p_actor: guard.user.id,
+      p_photo: photo,
+    });
+    if (appendError || appended !== true) {
+      await admin.from("business_verification_files").delete().eq("id", stored.id);
+      await discardStoredFile(storedKey);
+      if (appendError) throw new Error(appendError.message);
+      return NextResponse.json(
+        { error: "This check changed (report sent or reassigned). Reload the case." },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({ photo }, { status: 201 });
   } catch (error) {

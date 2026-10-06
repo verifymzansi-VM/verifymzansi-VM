@@ -263,6 +263,88 @@ assert.equal((await check(modB, "business_verification", modBCase)).error, "not_
 const navCounts = await call(`SELECT public.staff_nav_counts($1) AS result`, [modB]);
 assert.equal(navCounts.business_kyc, 2);
 
+// ── Debug pass B: only claim what you can act on; atomic photos; one holder ──
+await migrate("20261006193226_business_verification_staff_logic.sql");
+await db.query(`DELETE FROM queue_claims WHERE item_type='business_verification'`);
+await db.query(`UPDATE business_verifications SET status='rejected' WHERE status='pending'`);
+async function seenCase(seen) {
+  const owner = await person("member");
+  const biz = await scalar(
+    `INSERT INTO businesses(owner_id,status) VALUES ($1,'live') RETURNING id`,
+    [owner]
+  );
+  return scalar(
+    `INSERT INTO business_verifications(business_id,owner_id,kind,seen) VALUES ($1,$2,'seen',$3::jsonb) RETURNING id`,
+    [biz, owner, JSON.stringify(seen)]
+  );
+}
+const bookedByA = await seenCase({ method: "video", assignedTo: modA });
+const reportedByB = await seenCase({
+  method: "video",
+  assignedTo: modB,
+  report: { by: modB, outcome: "seen" },
+});
+const unbooked = await seenCase({ method: "video" });
+const awaitingSenior = await bvCase(await person("member"), []);
+await db.query(
+  `UPDATE business_verifications SET checks='{"exception":{"proposedBy":"x"}}'::jsonb WHERE id=$1`,
+  [awaitingSenior]
+);
+const plain = await bvCase(await person("member"), []);
+const claimedByB = (await claim(modB, "business_kyc", 10)).map((c) => c.item_id);
+assert(claimedByB.includes(unbooked), "unbooked Seen checks can be claimed");
+assert(claimedByB.includes(plain));
+assert(!claimedByB.includes(bookedByA), "another verifier's booked check is theirs");
+assert(!claimedByB.includes(reportedByB), "you never approve your own report");
+assert(!claimedByB.includes(awaitingSenior), "exceptions wait for a senior reviewer");
+const claimedByA = (await claim(modA, "business_kyc", 10)).map((c) => c.item_id);
+assert(claimedByA.includes(bookedByA), "the booked verifier can claim their own check");
+assert(claimedByA.includes(reportedByB), "someone else approves modB's report");
+
+const photo = (n) => JSON.stringify({ fileId: `f${n}`, by: modA });
+const append = (id, actor, n) =>
+  scalar(`SELECT coalesce(public.append_seen_photo($1,$2,$3::jsonb), false)`, [
+    id,
+    actor,
+    photo(n),
+  ]);
+assert.equal(await append(bookedByA, modA, 1), true);
+assert.equal(await append(bookedByA, modA, 2), true);
+assert.equal(await append(bookedByA, modB, 3), false, "only the assigned verifier adds photos");
+assert.equal(await append(reportedByB, modB, 4), false, "no photos after the report");
+assert.equal(
+  await scalar(
+    `SELECT jsonb_array_length(seen->'photos') FROM business_verifications WHERE id=$1`,
+    [bookedByA]
+  ),
+  2
+);
+
+const holderA = await person("member");
+const holderB = await person("member");
+const companyA = await scalar(
+  `INSERT INTO businesses(owner_id,status) VALUES ($1,'live') RETURNING id`,
+  [holderA]
+);
+const branchA = await scalar(
+  `INSERT INTO businesses(owner_id,status) VALUES ($1,'live') RETURNING id`,
+  [holderA]
+);
+const companyB = await scalar(
+  `INSERT INTO businesses(owner_id,status) VALUES ($1,'live') RETURNING id`,
+  [holderB]
+);
+const grant = (id) =>
+  asService(() =>
+    db.query(
+      `UPDATE businesses SET cipc_registration_number='2019/000001/07', cipc_verified_at=now() WHERE id=$1`,
+      [id]
+    )
+  );
+await grant(companyA);
+await grant(branchA); // same owner: a linked branch may share the number
+await assert.rejects(grant(companyB), /cipc_held_by_other_owner/);
+
 // ── Losing staff access releases claims ────────────────────────────────────
 assert((await scalar(`SELECT count(*)::int FROM queue_claims WHERE claimed_by=$1`, [modA])) > 0);
 await call(`SELECT public.propose_staff_role_change($1,$2,'member','Left the team') AS result`, [

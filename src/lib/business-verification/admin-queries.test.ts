@@ -50,4 +50,20 @@ describe("listQueue", () => {
     expect(renewals.rows.map((r) => r.id)).toEqual(["renew"]);
     expect(renewals.counts).toMatchObject({ review: 1, renewals: 1, conflicts: 1, visits: 1 });
   });
+
+  it("puts every open case in exactly one tab", async () => {
+    state.db!.tables.business_verifications.push({
+      ...base,
+      id: "clash-exception",
+      business_id: "b5",
+      findings: [{ code: "conflict_other_owner", severity: "attention" }],
+      checks: { exception: { proposedBy: "mod-1" } },
+    });
+    const { counts } = await listQueue("review");
+    const open = Object.entries(counts)
+      .filter(([tab]) => tab !== "decided")
+      .reduce((sum, [, n]) => sum + (n ?? 0), 0);
+    expect(open).toBe(state.db!.tables.business_verifications.length);
+    expect(counts).toMatchObject({ exceptions: 1, conflicts: 1 });
+  });
 });

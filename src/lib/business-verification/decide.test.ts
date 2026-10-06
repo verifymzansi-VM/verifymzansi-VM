@@ -205,7 +205,7 @@ describe("decideBusinessVerification", () => {
     const { decide } = setup();
     expect(
       await decide({ action: "propose_exception", note: "Director recently appointed." })
-    ).toMatchObject({ code: "admin_copy_required" });
+    ).toMatchObject({ code: "not_waivable" });
   });
 
   it("needs a second, senior reviewer for an exception", async () => {
@@ -252,6 +252,78 @@ describe("decideBusinessVerification", () => {
       expectedUpdatedAt: fake.tables.business_verifications[0].updated_at as string,
     });
     expect(result).toMatchObject({ code: "not_independent" });
+  });
+
+  it("refuses exceptions on Seen checks and linked profiles", async () => {
+    const seen = setup({ kind: "seen", route: null, registration_number: null, seen: {} });
+    expect(
+      await seen.decide({ action: "propose_exception", note: "Video dropped, saw enough." })
+    ).toMatchObject({ code: "exception_not_allowed" });
+    const link = setup({ kind: "cipc_link", linked_case_id: "gone", route: null });
+    expect(
+      await link.decide({ action: "propose_exception", note: "Source lapsed last week." })
+    ).toMatchObject({ code: "exception_not_allowed" });
+    expect(link.biz().cipc_verified_at).toBeNull();
+  });
+
+  it("never waives a copy for another company number", async () => {
+    const { decide } = setup({
+      admin_copy: adminCopy({ registrationNumber: "2019/999999/07", directors: [] }),
+    });
+    expect(
+      await decide({ action: "propose_exception", note: "Owner says this is the same firm." })
+    ).toMatchObject({ code: "not_waivable" });
+  });
+
+  it("lets the proposer withdraw an exception, and new evidence voids it", async () => {
+    const { fake, decide, caseRow } = setup({ admin_copy: adminCopy({ directors: [] }) });
+    const version = () => fake.tables.business_verifications[0].updated_at as string;
+    await decide({ action: "propose_exception", note: "Director recently appointed." });
+    expect(
+      await decide({
+        action: "withdraw_exception",
+        actorId: "someone",
+        expectedUpdatedAt: version(),
+      })
+    ).toMatchObject({ code: "forbidden" });
+    expect(await decide({ action: "withdraw_exception", expectedUpdatedAt: version() })).toEqual({
+      ok: true,
+      status: "pending",
+    });
+    expect((caseRow().checks as Record<string, unknown> | null)?.exception).toBeUndefined();
+
+    await decide({
+      action: "propose_exception",
+      note: "Director recently appointed.",
+      expectedUpdatedAt: version(),
+    });
+    await decide({
+      action: "request_info",
+      note: "Send the new CoR39.",
+      expectedUpdatedAt: version(),
+    });
+    expect((caseRow().checks as Record<string, unknown> | null)?.exception).toBeUndefined();
+  });
+
+  it("does not approve a case that is waiting on the owner", async () => {
+    const { decide } = setup({ admin_copy: adminCopy(), status: "info_requested" });
+    expect(await decide({})).toMatchObject({ code: "case_not_pending" });
+  });
+
+  it("supersedes the previous approval when a renewal is approved", async () => {
+    const { fake, decide } = setup({ admin_copy: adminCopy() });
+    fake.tables.business_verifications.push({
+      id: "case-old",
+      business_id: "biz-1",
+      owner_id: OWNER,
+      kind: "cipc",
+      status: "approved",
+      registration_number: NUMBER,
+      updated_at: V1,
+    });
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    const old = fake.tables.business_verifications.find((c) => c.id === "case-old");
+    expect(old).toMatchObject({ status: "expired", reason_code: "renewed" });
   });
 
   it("lets only senior staff remove a sticker, clearing the business", async () => {
@@ -516,7 +588,13 @@ describe("Seen by VerifyMzansi approvals", () => {
       },
       {
         businesses: [
-          { id: "biz-1", owner_id: OWNER, business_name: "Branch", location_city: "Empangeni" },
+          {
+            id: "biz-1",
+            owner_id: OWNER,
+            business_name: "Branch",
+            location_city: "Empangeni",
+            location_province: "KwaZulu-Natal",
+          },
         ],
       }
     );

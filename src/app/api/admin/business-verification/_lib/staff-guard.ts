@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import { idRouteParamsSchema } from "@/app/api/_lib/route-params";
 import type { Capability } from "@/lib/auth/roles";
+import type { SeenState } from "@/lib/business-verification/seen";
 import { checkQueueClaim } from "@/lib/services/queue-claims";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { parseAndValidateRouteParams } from "@/lib/utils/api";
 import type { createLogger } from "@/lib/utils/logger";
@@ -76,4 +78,37 @@ export async function readStaffUpload(
     return NextResponse.json({ error: missingMessage }, { status: 400 });
   }
   return { form, file };
+}
+
+export type OpenSeenCase = {
+  id: string;
+  business_id: string;
+  owner_id: string;
+  seen: SeenState;
+  updated_at: string;
+};
+
+/** The open Seen case this staff member may work on (never their own business). */
+export async function loadOpenSeenCase(
+  ctx: StaffCaseContext
+): Promise<OpenSeenCase | NextResponse> {
+  const { data: row, error } = await createAdminClient()
+    .from("business_verifications")
+    .select("id, business_id, owner_id, kind, status, seen, updated_at")
+    .eq("id", ctx.caseId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row || row.kind !== "seen" || row.status !== "pending") {
+    return NextResponse.json({ error: "Open Seen case not found" }, { status: 404 });
+  }
+  if (row.owner_id === ctx.user.id) {
+    return NextResponse.json({ error: "You can't check your own business." }, { status: 403 });
+  }
+  return {
+    id: row.id as string,
+    business_id: row.business_id as string,
+    owner_id: row.owner_id as string,
+    seen: (row.seen ?? {}) as SeenState,
+    updated_at: row.updated_at as string,
+  };
 }

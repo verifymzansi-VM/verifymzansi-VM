@@ -1,8 +1,11 @@
 import { suggestNextStep, type Finding } from "@/lib/cipc/screen";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createLogger } from "@/lib/utils/logger";
 
 import { approvalEvidence, type AdminCopy } from "./decide";
 import type { StoredParse } from "./intake";
+
+const log = createLogger("BusinessVerificationQueue");
 
 export const QUEUE_TABS = [
   { key: "review", label: "CIPC" },
@@ -49,40 +52,23 @@ type RawCase = {
   decided_at: string | null;
 };
 
-function inTab(row: QueueRow, tab: QueueTab): boolean {
-  const open = row.status === "pending";
-  switch (tab) {
-    case "review":
-      return (
-        open &&
-        row.kind !== "seen" &&
-        row.route !== "representative" &&
-        !row.conflict &&
-        !row.renewal &&
-        !row.exceptionPending
-      );
-    case "representatives":
-      return open && row.route === "representative" && !row.exceptionPending;
-    case "visits":
-      return open && row.kind === "seen";
-    case "conflicts":
-      return open && row.conflict;
-    case "renewals":
-      return (
-        open &&
-        row.renewal &&
-        row.route !== "representative" &&
-        !row.conflict &&
-        !row.exceptionPending
-      );
-    case "exceptions":
-      return open && row.exceptionPending;
-    case "waiting":
-      return row.status === "info_requested";
-    case "decided":
-      return !["pending", "info_requested"].includes(row.status);
-  }
+/**
+ * Each open case belongs to exactly one tab, so tab counts add up to the
+ * queue. The first matching rule wins.
+ */
+function tabOf(row: QueueRow): QueueTab {
+  if (!["pending", "info_requested"].includes(row.status)) return "decided";
+  if (row.status === "info_requested") return "waiting";
+  if (row.exceptionPending) return "exceptions";
+  if (row.conflict) return "conflicts";
+  if (row.kind === "seen") return "visits";
+  if (row.route === "representative") return "representatives";
+  if (row.renewal) return "renewals";
+  return "review";
 }
+
+/** Open cases are few; read them all (with a generous cap) so no tab drops any. */
+const OPEN_CASE_CAP = 1000;
 
 export async function listQueue(tab: QueueTab, includeIds: string[] = []) {
   const admin = createAdminClient();
@@ -91,15 +77,22 @@ export async function listQueue(tab: QueueTab, includeIds: string[] = []) {
     .from("business_verifications")
     .select(
       "id, kind, route, status, business_id, owner_id, registration_number, findings, checks, created_at, updated_at, decided_at"
-    )
-    .limit(200);
+    );
   query = decided
     ? query
         .not("status", "in", "(pending,info_requested)")
-        .order("decided_at", { ascending: false })
-    : query.in("status", ["pending", "info_requested"]).order("created_at", { ascending: true });
+        // Cases closed by a change of owner have no decided_at; keep them last.
+        .order("decided_at", { ascending: false, nullsFirst: false })
+        .limit(200)
+    : query
+        .in("status", ["pending", "info_requested"])
+        .order("created_at", { ascending: true })
+        .limit(OPEN_CASE_CAP);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
+  if (!decided && (data?.length ?? 0) >= OPEN_CASE_CAP) {
+    log.warn("Business verification queue reached its read cap", { cap: OPEN_CASE_CAP });
+  }
   const raw = (data ?? []) as RawCase[];
 
   const businessIds = [...new Set(raw.map((r) => r.business_id))];
@@ -143,12 +136,12 @@ export async function listQueue(tab: QueueTab, includeIds: string[] = []) {
   const counts = Object.fromEntries(
     QUEUE_TABS.map((t) => [
       t.key,
-      t.key === "decided" ? null : rows.filter((r) => inTab(r, t.key)).length,
+      t.key === "decided" ? null : rows.filter((r) => tabOf(r) === t.key).length,
     ])
   ) as Record<QueueTab, number | null>;
   const include = new Set(includeIds);
   const shown = rows
-    .filter((r) => inTab(r, tab) || (!decided && include.has(r.id)))
+    .filter((r) => tabOf(r) === tab || (!decided && include.has(r.id)))
     .sort((a, b) => (decided ? 0 : b.red - a.red || a.createdAt.localeCompare(b.createdAt)));
   return { rows: shown, counts };
 }

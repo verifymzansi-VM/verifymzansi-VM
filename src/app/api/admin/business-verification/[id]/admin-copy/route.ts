@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { AdminCopy } from "@/lib/business-verification/decide";
+import { withoutException, type AdminCopy } from "@/lib/business-verification/decide";
 import { isIntakeError, readCipcFile, type StoredParse } from "@/lib/business-verification/intake";
 import { discardStoredFile, fileRow, storeCaseFile } from "@/lib/business-verification/service";
 import { compareWithAdminCopy } from "@/lib/cipc/screen";
@@ -36,7 +36,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const admin = createAdminClient();
     const { data: row, error } = await admin
       .from("business_verifications")
-      .select("id, owner_id, kind, status, parsed, director_id_hmacs, business_id")
+      .select(
+        "id, owner_id, kind, status, parsed, director_id_hmacs, business_id, checks, updated_at"
+      )
       .eq("id", ctx.caseId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -44,6 +46,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     if (!["pending", "info_requested"].includes(row.status)) {
       return NextResponse.json({ error: "This case is closed." }, { status: 409 });
+    }
+    const expectedUpdatedAt = String(form.get("expectedUpdatedAt") ?? "");
+    if (!expectedUpdatedAt || Date.parse(expectedUpdatedAt) !== Date.parse(row.updated_at)) {
+      return NextResponse.json(
+        { error: "This case changed while you were reviewing it. Reload and check again." },
+        { status: 409 }
+      );
     }
 
     const file = await readCipcFile(upload);
@@ -100,12 +109,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       throw new Error(fileError.message);
     }
 
-    // CIPC's own record is the source for the registered office.
-    const { error: updateError } = await admin
+    // CIPC's own record is the source for the registered office, unless staff
+    // already corrected it by hand or this copy has no office to offer.
+    const checks = (row.checks ?? null) as Record<string, unknown> | null;
+    const keepOffice = Boolean(checks?.officeCorrectedBy) || !file.office;
+    const { data: updated, error: updateError } = await admin
       .from("business_verifications")
-      .update({ admin_copy: copy, registered_office: file.office })
-      .eq("id", row.id);
+      .update({
+        admin_copy: copy,
+        ...(keepOffice ? {} : { registered_office: file.office }),
+        // New evidence voids any exception proposed on the old evidence.
+        checks: withoutException(checks),
+      })
+      .eq("id", row.id)
+      .eq("updated_at", row.updated_at)
+      .in("status", ["pending", "info_requested"])
+      .select("id");
     if (updateError) throw new Error(updateError.message);
+    if (!updated?.length) {
+      await admin.from("business_verification_files").delete().eq("r2_key", storedKey);
+      await discardStoredFile(storedKey);
+      return NextResponse.json(
+        { error: "This case changed while you were reviewing it. Reload and check again." },
+        { status: 409 }
+      );
+    }
 
     await logAuditEvent({
       actorId: guard.user.id,

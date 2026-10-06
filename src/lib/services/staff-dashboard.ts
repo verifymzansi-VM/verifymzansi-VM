@@ -24,6 +24,13 @@ export interface StaffDashboard {
     kyc: { pending: Count; oldest_at: Timestamp; high_risk: Count; claimed: Count } | null;
     content: { pending: Count; oldest_at: Timestamp; claimed: Count } | null;
     support: { new: Count; oldest_at: Timestamp } | null;
+    /** Business verification cases waiting on staff (read here, not in the RPC). */
+    business_kyc?: {
+      pending: Count;
+      oldest_at: Timestamp;
+      breached: Count;
+      claimed: Count;
+    } | null;
   };
   shift?: {
     claims: Array<{
@@ -81,8 +88,51 @@ export const getStaffDashboard = cache(async (actorId: string): Promise<StaffDas
     log.error("Staff dashboard read failed", { error: error?.message ?? "no data" });
     return null;
   }
-  return data as StaffDashboard;
+  const dashboard = data as StaffDashboard;
+  dashboard.queues = { ...dashboard.queues, business_kyc: await businessKycQueue() };
+  return dashboard;
 });
+
+/** 24-hour target for business verification cases (spec §3.5). */
+const BUSINESS_KYC_SLA_MS = 24 * 3_600_000;
+
+async function businessKycQueue(): Promise<StaffDashboard["queues"]["business_kyc"]> {
+  const admin = createAdminClient();
+  const now = new Date();
+  const breachedBefore = new Date(now.getTime() - BUSINESS_KYC_SLA_MS).toISOString();
+  const pending = () =>
+    admin
+      .from("business_verifications")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+  const [all, breached, oldest, claimed] = await Promise.all([
+    pending(),
+    pending().lt("created_at", breachedBefore),
+    admin
+      .from("business_verifications")
+      .select("created_at")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("queue_claims")
+      .select("item_id", { count: "exact", head: true })
+      .eq("queue", "business_kyc")
+      .gt("expires_at", now.toISOString()),
+  ]);
+  const failed = [all, breached, oldest, claimed].find((r) => r.error);
+  if (failed?.error) {
+    log.warn("Business verification queue unavailable", { error: failed.error.message });
+    return null;
+  }
+  return {
+    pending: all.count ?? 0,
+    oldest_at: (oldest.data?.created_at as string | undefined) ?? null,
+    breached: breached.count ?? 0,
+    claimed: claimed.count ?? 0,
+  };
+}
 
 /** Sidebar badge counts; an empty object (no badges) if they cannot be read. */
 export const getStaffNavCounts = cache(async (actorId: string): Promise<StaffNavCounts> => {
