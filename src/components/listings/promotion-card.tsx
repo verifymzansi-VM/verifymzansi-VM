@@ -96,13 +96,15 @@ function formatPromotionEyebrow(
   urgency?: string | null
 ) {
   const parts: string[] = [];
+  // "SAT 15 MAR" — when an event happens matters more than its price, so it leads.
+  const date = startDate ? formatSaShortDate(startDate).toUpperCase() : null;
+  if (date && promotionType === "event") parts.push(date);
 
   if (price != null && price > 0) {
     const formatted = formatZARShort(price);
     parts.push(negotiable ? `${formatted} · Neg` : formatted);
-  } else if (startDate) {
-    // "SAT 15 MAR" — includes day-of-week for better scannability
-    parts.push(formatSaShortDate(startDate).toUpperCase());
+  } else if (date && promotionType !== "event") {
+    parts.push(date);
   }
 
   if (urgency) parts.push(urgency);

@@ -1,3 +1,5 @@
+import { normalizeUserEnteredUrl } from "@/lib/utils/external-url";
+
 /**
  * Strip all HTML from user-supplied text by escaping dangerous characters.
  *
@@ -35,10 +37,12 @@ export function sanitizeUserMessage(input: string): string {
  * preventing XSS via `<a href={userInput}>`.
  */
 export function safeExternalHref(url: string): string {
+  // Owners type "www.site.co.za" or paste "Website:https://…"; link what they meant.
+  const href = normalizeUserEnteredUrl(url);
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(href);
     if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return url;
+      return href;
     }
     return "#";
   } catch {

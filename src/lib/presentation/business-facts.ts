@@ -74,41 +74,9 @@ export function getSubcategoryLabel(category: string, subcategory: string | null
   return match?.label ?? humanizeKey(subcategory);
 }
 
-export function normalizeList(values: unknown): string[] {
+function normalizeList(values: unknown): string[] {
   if (!Array.isArray(values)) return [];
   return values.filter((value): value is string => typeof value === "string" && value.length > 0);
-}
-
-function getTourismQuickFacts(business: BusinessDetailRecord): FactItem[] {
-  const details = (business.category_details ?? {}) as Record<string, unknown>;
-  const facts: FactItem[] = [];
-
-  if (typeof details.star_rating === "number" && details.star_rating > 0) {
-    facts.push({ label: "Star Rating", value: `${details.star_rating}-star` });
-  }
-  if (typeof details.price_range === "string") {
-    facts.push({ label: "Price range", value: details.price_range.replace(/_/g, " ") });
-  }
-  if (typeof details.number_of_rooms === "number") {
-    facts.push({ label: "Rooms / Units", value: String(details.number_of_rooms) });
-  }
-  if (typeof details.check_in_time === "string") {
-    facts.push({ label: "Check-in", value: details.check_in_time });
-  }
-  if (typeof details.check_out_time === "string") {
-    facts.push({ label: "Check-out", value: details.check_out_time });
-  }
-  if (typeof details.tour_duration === "string") {
-    facts.push({ label: "Tour duration", value: details.tour_duration.replace(/_/g, " ") });
-  }
-  if (typeof details.visit_duration === "string") {
-    facts.push({ label: "Visit Duration", value: details.visit_duration.replace(/_/g, " ") });
-  }
-  if (typeof details.max_group_size === "number") {
-    facts.push({ label: "Group Size", value: `${details.max_group_size} guests` });
-  }
-
-  return facts;
 }
 
 /** Profiles saved with explicit contact methods only show the inbox when the owner chose it. */
@@ -172,9 +140,8 @@ export function getBusinessQuickFacts(
   const paymentCount = business.payment_methods_accepted?.length ?? 0;
   const serviceAreaCount = business.service_areas?.areas?.length ?? 0;
 
-  if (family === "tourism") {
-    return getTourismQuickFacts(business);
-  }
+  // A stay's rooms, rates and times are all in its details card; don't repeat them.
+  if (family === "tourism") return [];
 
   if (family === "professional") {
     return [
@@ -196,19 +163,9 @@ export function getBusinessQuickFacts(
   ].filter((fact): fact is FactItem => Boolean(fact));
 }
 
-/** Tourism stay details (languages, policies, grading…) in the order the profile shows them. */
+/** Stay facts the tourism details card does not show (grading, minimum stay, children…). */
 export function getTourismSpotlightFacts(details: Record<string, unknown>): SpotlightFact[] {
   const facts: SpotlightFact[] = [];
-  if (typeof details.languages_spoken === "string" && details.languages_spoken) {
-    facts.push({ label: "Languages", value: details.languages_spoken });
-  }
-  if (typeof details.cancellation_policy === "string" && details.cancellation_policy) {
-    facts.push({ label: "Cancellation", value: humanizeKey(details.cancellation_policy) });
-  }
-  const meals = normalizeList(details.meal_options);
-  if (meals.length > 0) facts.push({ label: "Meal options", value: meals.join(", ") });
-  const activities = normalizeList(details.activity_types);
-  if (activities.length > 0) facts.push({ label: "Activities", value: activities.join(", ") });
   if (typeof details.tgcsa_grading === "string" && details.tgcsa_grading) {
     facts.push({
       label: "TGCSA Grading",
@@ -401,7 +358,8 @@ export function getBusinessTypeDetails(business: BusinessDetailRecord): {
           ? PRIMARY_ORDER_CHANNEL_LABELS[details.primary_order_channel]
           : null
       );
-      add("Replies within", details.support_response_time);
+      // The form's choices already start with "Within"; don't say it twice.
+      add("Replies within", details.support_response_time?.replace(/^within\s+/i, ""));
       orderUrl = details.order_url ?? null;
       if (details.delivery_regions?.length) {
         lists.push({ label: "Delivers to", items: details.delivery_regions });

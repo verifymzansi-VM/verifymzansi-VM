@@ -225,10 +225,10 @@ describe("ListingDetailContent", () => {
     expect(screen.getByText("Preview mode")).toBeTruthy();
   });
 
-  it("normalizes the brand logo image through the media proxy", () => {
+  it("shows the brand logo as the seller avatar, through the media proxy", () => {
     listingDetailClientState.shouldThrow = false;
 
-    render(
+    const { container } = render(
       <ListingDetailContent
         listing={{
           id: "listing-4",
@@ -257,9 +257,10 @@ describe("ListingDetailContent", () => {
       />
     );
 
-    expect(screen.getByAltText("Logo listing logo")).toHaveAttribute(
-      "src",
-      "/api/media/serve/media/listing/logo.jpg"
-    );
+    // The logo sits beside the seller name, so it is decorative there.
+    expect(
+      container.querySelector('img[src="/api/media/serve/media/listing/logo.jpg"]')
+    ).toHaveAttribute("alt", "");
+    expect(screen.queryByText("Shown on the marketplace card and detail page")).toBeNull();
   });
 });

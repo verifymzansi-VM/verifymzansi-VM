@@ -164,6 +164,48 @@ describe("presentBusinessSlide", () => {
   });
 });
 
+describe("presentBusinessSlide shows each fact once", () => {
+  const shop = {
+    ...business,
+    business_type: "standalone_shop",
+    category: "general_other",
+    location_town: "Richards Bay",
+    location_city: "Richards Bay",
+    location_address: "9B Dollar Drive, Richards Bay Central",
+    website: "Website:https://www.skytentsa.co.za",
+    operating_hours: { Mon_Fri: "00:00 - 00:00", Sat: "08:00 - 13:00" },
+    services_offered: ["Tent hire, gazebos; tables and chairs", "Tent hire"],
+    business_details: {
+      type: "standalone_shop",
+      street_address: "9B Dollar Drive",
+      suburb: "Richards Bay central",
+      landmark: "Next to the Spar",
+    },
+  } as unknown as BusinessDetailRecord;
+
+  it("drops repeated place names, address parts and services", () => {
+    const slide = presentBusinessSlide(shop, owner, [], engagement);
+    expect(slide.headline.meta[0]?.text).toBe("Richards Bay, KwaZulu-Natal");
+    const location = slide.right.find((section) => section.id === "location");
+    expect(location?.type === "rows" && location.rows.map((row) => row.label)).toEqual([
+      "Address",
+      "Landmark",
+    ]);
+    const services = slide.left.find((section) => section.id === "services");
+    expect(services?.type === "chips" && services.items).toEqual([
+      "Tent hire",
+      "Gazebos",
+      "Tables and chairs",
+    ]);
+  });
+
+  it("reads equal opening and closing times as 24 hours and recovers a labelled link", () => {
+    const slide = presentBusinessSlide(shop, owner, [], engagement);
+    expect(slide.headline.hours).toEqual({ Mon_Fri: "Open 24 hours", Sat: "08:00 - 13:00" });
+    expect(slide.website).toBe("https://www.skytentsa.co.za");
+  });
+});
+
 describe("presentEventSlide", () => {
   it("leads with the lowest ticket price and keeps the venue line readable", () => {
     const slide = presentEventSlide(event, owner, null, engagement);

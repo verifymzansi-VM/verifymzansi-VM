@@ -11,6 +11,7 @@ import type { ListingDetailRecord } from "@/components/listings/listing-detail-c
 import type { PromotionDetailRecord } from "@/components/listings/promotion-detail-content";
 import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
+import { displayHoursText } from "@/lib/business/open-status";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { canonicalHref } from "@/lib/feed/refs";
@@ -58,6 +59,7 @@ import {
   formatZAR,
   formatZARShort,
 } from "@/lib/utils/format";
+import { placeLine } from "@/lib/utils/place-line";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { getPromotionCategoryDisplayLabel } from "@/lib/utils/promotion-category";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
@@ -107,10 +109,6 @@ function venueLine(venue: string | null | undefined, parts: Array<string | null 
     venue,
     ...parts.filter((part) => !part || !named.includes(part.toLowerCase())),
   ]);
-}
-
-function placeLine(parts: Array<string | null | undefined>) {
-  return parts.filter((part): part is string => Boolean(part && part.trim())).join(", ");
 }
 
 /** Only real web links survive; "#" and script URLs fall out. */
@@ -288,12 +286,29 @@ function businessMedia(business: BusinessDetailRecord): FeedMediaItem[] {
   return items;
 }
 
+/** Owners sometimes type a whole list into one entry; give each item its own chip. */
+function splitListItems(items: string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  return (items ?? [])
+    .flatMap((item) => item.split(/\s*[,;]\s*/))
+    .map((item) => item.trim())
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (!item || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((item) => item.charAt(0).toUpperCase() + item.slice(1));
+}
+
 function normalizeHours(value: unknown): FeedOpeningHours | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const hours: FeedOpeningHours = {};
   for (const key of ["Mon_Fri", "Sat", "Sun"] as const) {
-    if (typeof record[key] === "string" && record[key].trim()) hours[key] = record[key].trim();
+    if (typeof record[key] === "string" && record[key].trim()) {
+      hours[key] = displayHoursText(record[key].trim());
+    }
   }
   return Object.keys(hours).length > 0 ? hours : null;
 }
@@ -404,6 +419,14 @@ export function presentBusinessSlide(
       : null;
 
   const typeDetails = getBusinessTypeDetails(business);
+  // The form asks for the street twice (location step and shop step); show it once.
+  const shownPlace = `${business.location_address ?? ""} ${place}`.toLowerCase();
+  const typeRows = typeDetails.rows.filter(
+    (row) =>
+      !["Building", "Unit", "Street", "Suburb", "Area served"].includes(row.label) ||
+      !shownPlace.includes(row.value.toLowerCase())
+  );
+  const deliversTo = typeDetails.lists.some((list) => list.label === "Delivers to");
   const orderUrl = externalLink(typeDetails.orderUrl);
   const links: FeedLink[] = (
     [
@@ -437,7 +460,7 @@ export function presentBusinessSlide(
             .join(", "),
         }
       : null,
-    deliveryAvailable ? { label: "Delivery", value: "Available" } : null,
+    deliveryAvailable && !deliversTo ? { label: "Delivery", value: "Available" } : null,
   ].filter((row): row is FeedFact => Boolean(row));
   const accessRows = customerAccessRows(details.customer_access, details.meeting_point);
   // Customer access already says how delivery works; don't repeat it under payment.
@@ -513,7 +536,7 @@ export function presentBusinessSlide(
             family === "professional"
               ? "Service scope"
               : (ctaConfig?.servicesHeading ?? "Services"),
-          items: business.services_offered ?? [],
+          items: splitListItems(business.services_offered),
         },
         {
           type: "chips",
@@ -551,7 +574,7 @@ export function presentBusinessSlide(
           type: "rows",
           id: "location",
           title: "Where to find us",
-          rows: [...addressRows, ...typeDetails.rows],
+          rows: [...addressRows, ...typeRows],
         },
         ...typeDetails.lists.map((list): FeedSection => ({
           type: "chips",

@@ -6,6 +6,7 @@ import {
   BusinessDetailsCard,
   type BusinessDetailRecord,
 } from "@/components/business/business-detail-content";
+import { displayHoursText } from "@/lib/business/open-status";
 import type { BusinessType } from "@/types/enums";
 
 /* ── Types ─────────────────────────────────────────────── */
@@ -50,19 +51,19 @@ function OperatingHoursInline({ hours }: { hours: Record<string, string> }) {
       {hours.Mon_Fri && (
         <div className="flex items-center justify-between py-1">
           <dt className="text-muted-foreground">Mon – Fri</dt>
-          <dd className="font-medium">{hours.Mon_Fri}</dd>
+          <dd className="font-medium">{displayHoursText(hours.Mon_Fri)}</dd>
         </div>
       )}
       {hours.Sat && (
         <div className="flex items-center justify-between border-t py-1">
           <dt className="text-muted-foreground">Saturday</dt>
-          <dd className="font-medium">{hours.Sat}</dd>
+          <dd className="font-medium">{displayHoursText(hours.Sat)}</dd>
         </div>
       )}
       {hours.Sun && (
         <div className="flex items-center justify-between border-t py-1">
           <dt className="text-muted-foreground">Sunday / Holidays</dt>
-          <dd className="font-medium">{hours.Sun}</dd>
+          <dd className="font-medium">{displayHoursText(hours.Sun)}</dd>
         </div>
       )}
     </dl>

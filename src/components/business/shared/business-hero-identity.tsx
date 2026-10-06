@@ -12,6 +12,7 @@ import {
   type BusinessType,
 } from "@/types/enums";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
+import { placeLine } from "@/lib/utils/place-line";
 
 interface BusinessHeroIdentityProps {
   business: BusinessDetailRecord;
@@ -99,9 +100,11 @@ export function BusinessHeroIdentity({
               }`}
             >
               <MapPin className="h-3 w-3" />
-              {[business.location_town, business.location_city, business.location_province]
-                .filter(Boolean)
-                .join(", ")}
+              {placeLine([
+                business.location_town,
+                business.location_city,
+                business.location_province,
+              ])}
             </span>
           )}
         </div>

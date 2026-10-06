@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getOpenStatus, parseIntervals } from "./open-status";
+import { displayHoursText, getOpenStatus, parseIntervals } from "./open-status";
 
 /** A moment in South African time (UTC+2, no daylight saving). */
 function sa(isoLocal: string) {
@@ -83,5 +83,16 @@ describe("parseIntervals", () => {
 
   it("applies the end meridiem to a bare start", () => {
     expect(parseIntervals("8 - 5pm")).toEqual([{ start: 480, end: 1020 }]);
+  });
+});
+
+describe("same opening and closing time", () => {
+  it("means open 24 hours, not closing at midnight", () => {
+    expect(displayHoursText("00:00 - 00:00")).toBe("Open 24 hours");
+    expect(displayHoursText("08:00 - 17:00")).toBe("08:00 - 17:00");
+    expect(getOpenStatus({ Mon_Fri: "00:00 - 00:00" }, sa("2026-10-05T23:45:00"))).toEqual({
+      state: "open",
+      label: "Open 24 hours",
+    });
   });
 });

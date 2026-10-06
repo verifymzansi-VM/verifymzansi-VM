@@ -151,6 +151,18 @@ test.describe("Singleton video playback", () => {
 
     await installSingletonMediaShim(page);
     await stubMarketplaceWithMultipleVideos(page, 3);
+    // The first tap turns autoplay on, so visible cards load their (stub) videos.
+    // The shim tests playback arbitration, not decoding: keep load errors from
+    // replacing the cards' controls with the media fallback.
+    await page.addInitScript(() => {
+      document.addEventListener(
+        "error",
+        (event) => {
+          if (event.target instanceof HTMLVideoElement) event.stopImmediatePropagation();
+        },
+        true
+      );
+    });
 
     await page.goto("/mzansi-market", { waitUntil: "domcontentloaded" });
 

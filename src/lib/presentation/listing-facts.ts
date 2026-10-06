@@ -43,7 +43,13 @@ function formatFactValue(value: unknown, unit?: string, options?: AttributeOptio
   }
   if (typeof value === "number") {
     // Group digits for measured values (mileage, size) but never for years or counts.
-    return unit ? `${formatRandAmount(value)} ${unit}` : String(value);
+    if (!unit) return String(value);
+    // Keep what the seller typed: a 6.68 in screen is not a 7 in screen.
+    const amount = Number.isInteger(value)
+      ? formatRandAmount(value)
+      : formatRandAmount(value, 2).replace(/\.?0+$/, "");
+    if (unit === "months" && value === 1) return "1 month";
+    return unit === "%" ? `${amount}%` : `${amount} ${unit}`;
   }
   const label = optionLabel(value, options);
   return unit ? `${label} ${unit}` : label;

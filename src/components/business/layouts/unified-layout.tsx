@@ -61,9 +61,9 @@ import {
   getBusinessQuickFacts,
   getSubcategoryLabel,
   getTourismSpotlightFacts,
-  normalizeList,
   SOCIAL_LABELS,
 } from "@/lib/presentation/business-facts";
+import { placeLine } from "@/lib/utils/place-line";
 
 interface UnifiedLayoutProps {
   family: BusinessProfileFamily;
@@ -471,7 +471,6 @@ export function UnifiedLayout({
     business.business_details,
     business.category_details
   );
-  const amenityHighlights = normalizeList(tourismDetails.amenities);
   const bookingUrl =
     family === "tourism" && typeof tourismDetails.booking_url === "string"
       ? tourismDetails.booking_url
@@ -493,7 +492,7 @@ export function UnifiedLayout({
   const introBody = (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        {typeLabel ? (
+        {typeLabel && family !== "tourism" ? (
           <Badge variant="outline" className="text-[11px]">
             {typeLabel}
           </Badge>
@@ -514,9 +513,11 @@ export function UnifiedLayout({
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <MapPin className="h-4 w-4 text-brand-blue" />
           <span>
-            {[business.location_town, business.location_city, business.location_province]
-              .filter(Boolean)
-              .join(", ")}
+            {placeLine([
+              business.location_town,
+              business.location_city,
+              business.location_province,
+            ])}
           </span>
         </div>
       )}
@@ -594,15 +595,6 @@ export function UnifiedLayout({
   const spotlightBody =
     family === "tourism" ? (
       <div className="space-y-3">
-        {amenityHighlights.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {amenityHighlights.map((amenity) => (
-              <Badge key={amenity} variant="outline">
-                {amenity.replace(/_/g, " ")}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           {getTourismSpotlightFacts(tourismDetails).map((fact) => (
             <div
@@ -666,11 +658,6 @@ export function UnifiedLayout({
   const hasSpotlight =
     family !== "tourism" ||
     [
-      "amenities",
-      "languages_spoken",
-      "cancellation_policy",
-      "meal_options",
-      "activity_types",
       "tgcsa_grading",
       "minimum_stay_nights",
       "child_policy",

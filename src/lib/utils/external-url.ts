@@ -9,7 +9,10 @@ const BARE_DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+(?::\d+)?(?:[/?#]|$)/i;
  * even though the intended URL is unambiguous.
  */
 export function normalizeUserEnteredUrl(value: string): string {
-  const compact = value.trim().replace(/\s+/g, "");
+  let compact = value.trim().replace(/\s+/g, "");
+  // A label typed or pasted in front ("Website:https://…") hides a good link.
+  const embedded = compact.search(/https?:\/\//i);
+  if (embedded > 0) compact = compact.slice(embedded);
   if (compact && !HAS_SCHEME.test(compact) && BARE_DOMAIN.test(compact)) {
     return `https://${compact}`;
   }

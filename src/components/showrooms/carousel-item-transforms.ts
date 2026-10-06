@@ -113,7 +113,9 @@ export function promotionToCarouselItem(
     photos?: string[] | null;
     videos?: string[] | null;
     video_thumbnail?: string | null;
+    logo_url?: string | null;
     price_cents?: number | null;
+    event_details?: { ticket_tiers?: Array<{ price_cents?: number | null }> } | null;
     location_city?: string | null;
     location_province?: string | null;
     focal_x?: number | null;
@@ -123,6 +125,19 @@ export function promotionToCarouselItem(
   },
   hrefOverride?: string
 ): CarouselItem {
+  // Same figure as the event page: the cheapest ticket, "From" when there are several.
+  const tierPrices = (p.event_details?.ticket_tiers ?? []).map((tier) => tier.price_cents ?? 0);
+  const paid = tierPrices.filter((cents) => cents > 0);
+  const lowest = paid.length > 0 ? Math.min(...paid) : null;
+  const eyebrow =
+    lowest != null
+      ? `${tierPrices.length > 1 ? "From " : ""}${formatCardPrice(lowest)}`
+      : tierPrices.length > 0
+        ? "Free entry"
+        : p.price_cents
+          ? formatCardPrice(p.price_cents)
+          : null;
+  const priceCents = lowest ?? (tierPrices.length > 0 ? null : p.price_cents);
   return {
     id: p.id,
     type: "promotion",
@@ -138,8 +153,9 @@ export function promotionToCarouselItem(
       : p.photos?.[0]
         ? normalizeMediaUrl(p.photos[0])
         : undefined,
-    price: p.price_cents ? p.price_cents / 100 : null,
-    eyebrow: p.price_cents ? formatCardPrice(p.price_cents) : null,
+    logoUrl: p.logo_url ? normalizeMediaUrl(p.logo_url) : undefined,
+    price: priceCents ? priceCents / 100 : null,
+    eyebrow,
     focalX: p.focal_x ?? null,
     focalY: p.focal_y ?? null,
     mediaWidth: p.media_width ?? null,

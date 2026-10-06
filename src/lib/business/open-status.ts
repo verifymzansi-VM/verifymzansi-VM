@@ -87,8 +87,19 @@ function southAfricanClock(now: Date) {
   return { weekday, minutes: Number(read("hour")) * 60 + Number(read("minute")) };
 }
 
+/**
+ * The form offers 30-minute slots and no "24 hours" choice, so owners who never
+ * close pick the same opening and closing time ("00:00 - 00:00"). Say what they meant.
+ */
+export function displayHoursText(text: string): string {
+  const match = text.trim().match(/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/);
+  return match && match[1] === match[2] ? "Open 24 hours" : text;
+}
+
 function classify(text: string | null | undefined) {
-  const value = (text ?? "").trim().toLowerCase();
+  const value = displayHoursText(text ?? "")
+    .trim()
+    .toLowerCase();
   if (!value) return { kind: "missing" as const, intervals: [] };
   if (/\b24\s*(hours|hrs|h|\/7)\b/.test(value)) {
     return { kind: "always" as const, intervals: [{ start: 0, end: DAY_MINUTES }] };

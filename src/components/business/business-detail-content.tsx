@@ -18,7 +18,6 @@ import {
   TOURISM_ACCOMMODATION_TYPES,
   TOURISM_CANCELLATION_POLICIES,
   TOURISM_PRICE_RANGES,
-  TOURISM_SUBCATEGORIES,
   TOURISM_TOUR_DURATIONS,
   TOURISM_DIFFICULTY_LEVELS,
   TOURISM_AGE_RESTRICTIONS,
@@ -109,6 +108,14 @@ export function BusinessDetailsCard({
   serviceAreas: { areas?: string[] } | null;
 }) {
   const canShowMapDirections = businessType !== "home_business";
+  const shownPlace = [
+    business.location_address,
+    business.location_town,
+    business.location_city,
+    business.location_province,
+  ]
+    .join(" ")
+    .toLowerCase();
   const mallDetails =
     businessType === "mall_store" && businessDetails?.type === "mall_store"
       ? businessDetails
@@ -124,11 +131,12 @@ export function BusinessDetailsCard({
   }
 
   return (
-    <Card>
+    // Hidden when every row repeated the address already shown under the title.
+    <Card className="[&:has(.business-details-rows:empty)]:hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Business details</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="business-details-rows space-y-3 text-sm">
         {businessType === "mall_store" && (
           <>
             {mallDetails?.mall_name && (
@@ -178,14 +186,24 @@ export function BusinessDetailsCard({
 
         {businessType === "standalone_shop" && businessDetails?.type === "standalone_shop" && (
           <>
-            <div className="flex items-start justify-between gap-4">
-              <span className="text-muted-foreground">Street address</span>
-              <span className="text-right font-medium">{businessDetails.street_address}</span>
-            </div>
-            <div className="flex items-start justify-between gap-4">
-              <span className="text-muted-foreground">Suburb</span>
-              <span className="text-right font-medium">{businessDetails.suburb}</span>
-            </div>
+            {(
+              [
+                ["Building", businessDetails.building_name],
+                ["Unit", businessDetails.suite_or_unit],
+                ["Street address", businessDetails.street_address],
+                ["Suburb", businessDetails.suburb],
+              ] as const
+            )
+              // The address and area are already under the title; only new parts show.
+              .filter(
+                ([, value]) => value?.trim() && !shownPlace.includes(value.trim().toLowerCase())
+              )
+              .map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="text-right font-medium">{value}</span>
+                </div>
+              ))}
             {businessDetails.landmark && (
               <div className="flex items-start justify-between gap-4">
                 <span className="text-muted-foreground">Landmark</span>
@@ -371,7 +389,6 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
     details.meal_options?.length ||
     details.languages_spoken ||
     details.cancellation_policy ||
-    details.booking_url ||
     details.pets_allowed != null ||
     details.smoking_allowed != null ||
     details.treatment_types?.length ||
@@ -395,10 +412,6 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
 
   if (!hasContent) return null;
 
-  const subcategoryLabel = details.subcategory
-    ? TOURISM_SUBCATEGORIES.find((s) => s.value === details.subcategory)?.label
-    : null;
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -408,13 +421,6 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        {subcategoryLabel && (
-          <div className="flex items-start justify-between gap-4">
-            <span className="text-muted-foreground">Type</span>
-            <Badge variant="secondary">{subcategoryLabel}</Badge>
-          </div>
-        )}
-
         {typeof details.star_rating === "number" && details.star_rating > 0 && (
           <div className="flex items-start justify-between gap-4">
             <span className="text-muted-foreground">Rating</span>
@@ -537,19 +543,6 @@ export function TourismDetailsCard({ details }: { details: TourismCategoryDetail
               </div>
             )}
           </div>
-        )}
-
-        {details.booking_url && (
-          <Button asChild variant="outline" className="w-full gap-2">
-            <a
-              href={safeExternalHref(details.booking_url)}
-              target="_blank"
-              rel="noopener noreferrer nofollow ugc"
-            >
-              <Globe className="h-4 w-4" />
-              Book online
-            </a>
-          </Button>
         )}
 
         {/* ── Spa fields ── */}

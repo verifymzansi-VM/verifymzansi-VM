@@ -9,6 +9,7 @@ import type {
   BusinessDetailRecord,
   BusinessOwnerRecord,
 } from "@/components/business/business-detail-content";
+import { displayHoursText } from "@/lib/business/open-status";
 import type { TrustLevel } from "@/types/enums";
 
 /* ── Operating Hours Card ─────────────────────────────── */
@@ -33,19 +34,19 @@ export function OperatingHoursCard({ operatingHours }: OperatingHoursCardProps) 
           {operatingHours.Mon_Fri && (
             <div className="flex items-center justify-between py-1">
               <dt className="text-muted-foreground">Mon - Fri</dt>
-              <dd className="font-medium">{operatingHours.Mon_Fri}</dd>
+              <dd className="font-medium">{displayHoursText(operatingHours.Mon_Fri)}</dd>
             </div>
           )}
           {operatingHours.Sat && (
             <div className="flex items-center justify-between border-t py-1">
               <dt className="text-muted-foreground">Saturday</dt>
-              <dd className="font-medium">{operatingHours.Sat}</dd>
+              <dd className="font-medium">{displayHoursText(operatingHours.Sat)}</dd>
             </div>
           )}
           {operatingHours.Sun && (
             <div className="flex items-center justify-between border-t py-1">
               <dt className="text-muted-foreground">Sunday / Holidays</dt>
-              <dd className="font-medium">{operatingHours.Sun}</dd>
+              <dd className="font-medium">{displayHoursText(operatingHours.Sun)}</dd>
             </div>
           )}
         </dl>

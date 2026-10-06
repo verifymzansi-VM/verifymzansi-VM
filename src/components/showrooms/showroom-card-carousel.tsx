@@ -1037,6 +1037,8 @@ export function ShowroomCardCarousel({
                   onVideoEnded={offset === 0 ? handleVideoEnded : undefined}
                   showPlaybackControl={offset === 0}
                   stickyAutoplay={offset === 0}
+                  // Peeking side cards never autoplay; only the centered card plays.
+                  feedPlaybackActive={offset === 0}
                   makeEntireCardClickable
                   cardVariant="hero"
                   mediaControlVariant={offset === 0 ? "hero" : "default"}

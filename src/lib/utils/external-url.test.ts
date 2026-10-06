@@ -8,6 +8,12 @@ describe("normalizeUserEnteredUrl", () => {
     );
   });
 
+  it("keeps the link when a label was typed in front of it", () => {
+    expect(normalizeUserEnteredUrl("Websithttps://www.example.co.za")).toBe(
+      "https://www.example.co.za"
+    );
+  });
+
   it("adds https:// to bare domains people commonly type", () => {
     expect(normalizeUserEnteredUrl("www.example.co.za")).toBe("https://www.example.co.za");
     expect(normalizeUserEnteredUrl("facebook.com/mypage")).toBe("https://facebook.com/mypage");

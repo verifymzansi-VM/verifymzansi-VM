@@ -375,7 +375,13 @@ export const ProfileVideoPlayer = forwardRef<HTMLVideoElement, ProfileVideoPlaye
               onPause={() => setIsPlaying(false)}
               onEnded={onEnded}
               onError={handleVideoError}
-              className={cn("absolute inset-0 h-full w-full", mediaFitClassName, videoClassName)}
+              // Tapping the picture pauses; while paused the play overlay covers it.
+              onClick={togglePlay}
+              className={cn(
+                "absolute inset-0 h-full w-full cursor-pointer",
+                mediaFitClassName,
+                videoClassName
+              )}
               aria-label={`${title} video`}
             >
               <track kind="captions" />

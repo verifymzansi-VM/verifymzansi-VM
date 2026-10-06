@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { VideoPlaybackProvider } from "@/contexts/video-playback-context";
 import { AutoplayPolicyProvider } from "@/contexts/autoplay-policy-context";
+import { useVideoAutoplayStore } from "@/stores/video-autoplay-store";
 import { useVideoFeed } from "./use-video-feed";
 
 vi.mock("./use-reduced-motion", () => ({ useReducedMotion: () => false }));
@@ -11,15 +12,20 @@ let observe: IntersectionObserverCallback;
 function Probe({
   src = "https://example.com/clip.mp4",
   eligible = true,
+  label = "",
 }: {
   src?: string;
   eligible?: boolean;
+  label?: string;
 }) {
   const { videoRef, isPlaying, togglePlayback } = useVideoFeed(src, eligible);
   return (
     <>
-      <video ref={videoRef} />
-      <button onClick={togglePlayback}>{isPlaying ? "Pause" : "Play"}</button>
+      <video ref={videoRef} data-testid={`video${label}`} />
+      <button onClick={togglePlayback}>
+        {isPlaying ? "Pause" : "Play"}
+        {label}
+      </button>
     </>
   );
 }
@@ -75,6 +81,7 @@ describe("mobile feed playback", () => {
   });
 
   beforeEach(() => {
+    useVideoAutoplayStore.setState({ autoplayEnabled: true });
     vi.useFakeTimers();
     vi.stubGlobal(
       "IntersectionObserver",
@@ -113,6 +120,7 @@ describe("mobile feed playback", () => {
   });
 
   it("skips autoplay when the page disables autoplay (mobile policy)", () => {
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
     render(
       <VideoPlaybackProvider>
         <AutoplayPolicyProvider disableAutoplay>
@@ -124,6 +132,39 @@ describe("mobile feed playback", () => {
     const video = document.querySelector("video")!;
     expect(video.getAttribute("src")).toBeNull();
     expect(video.paused).toBe(true);
+  });
+
+  it("keeps the tapped card playing when the first Play lifts the mobile policy", () => {
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
+    render(
+      <VideoPlaybackProvider>
+        <AutoplayPolicyProvider disableAutoplay>
+          <Probe label="A" />
+          <Probe label="B" src="https://example.com/other.mp4" />
+        </AutoplayPolicyProvider>
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    fireEvent.click(screen.getByRole("button", { name: "PlayB" }));
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(screen.getByTestId("videoB")).toHaveProperty("paused", false);
+    expect(screen.getByTestId("videoA")).toHaveProperty("paused", true);
+  });
+
+  it("autoplays under the mobile policy once the user has pressed play", () => {
+    render(
+      <VideoPlaybackProvider>
+        <AutoplayPolicyProvider disableAutoplay>
+          <Probe />
+        </AutoplayPolicyProvider>
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    const video = document.querySelector("video")!;
+    expect(video.src).toBe("https://example.com/clip.mp4");
+    expect(video.paused).toBe(false);
   });
 
   it("loads a visible card when it becomes eligible without another intersection", () => {
@@ -140,6 +181,50 @@ describe("mobile feed playback", () => {
       </VideoPlaybackProvider>
     );
     expect(document.querySelector("video")!.src).toBe("https://example.com/clip.mp4");
+  });
+
+  it("does not autoplay any card until the user presses play", () => {
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
+    render(
+      <VideoPlaybackProvider>
+        <Probe />
+      </VideoPlaybackProvider>
+    );
+    visibility(0.75);
+    const video = document.querySelector("video")!;
+    expect(video.getAttribute("src")).toBeNull();
+    expect(video.paused).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(video.paused).toBe(false);
+    expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(true);
+  });
+
+  it("pausing one card stops every card and keeps autoplay off", () => {
+    render(
+      <VideoPlaybackProvider>
+        <Probe label="A" />
+        <Probe label="B" src="https://example.com/other.mp4" />
+      </VideoPlaybackProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "PlayB" }));
+    expect(screen.getByTestId("videoB")).toHaveProperty("paused", false);
+    fireEvent.click(screen.getByRole("button", { name: "PauseB" }));
+    expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(false);
+    visibility(0.75);
+    expect(screen.getByTestId("videoA")).toHaveProperty("paused", true);
+    expect(screen.getByTestId("videoB")).toHaveProperty("paused", true);
+  });
+
+  it("stops a playing card when pause is pressed on another card", () => {
+    render(
+      <VideoPlaybackProvider>
+        <Probe />
+      </VideoPlaybackProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    expect(document.querySelector("video")!.paused).toBe(false);
+    act(() => useVideoAutoplayStore.getState().setAutoplayEnabled(false));
+    expect(document.querySelector("video")!.paused).toBe(true);
   });
 
   it("keeps a manual pause through visibility changes and resumes on tap", () => {

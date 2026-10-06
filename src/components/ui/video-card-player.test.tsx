@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useShowroomAutoplayStore } from "@/stores/showroom-autoplay-store";
+import { useVideoAutoplayStore } from "@/stores/video-autoplay-store";
 
 const {
   useVideoVisibilityMock,
@@ -168,7 +168,7 @@ describe("VideoCardPlayer", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
     useHoverCapabilityMock.mockReturnValue(true);
     useVideoVisibilityMock.mockReturnValue({
       videoRef: { current: null },
@@ -608,7 +608,7 @@ describe("VideoCardPlayer", () => {
 
     it("starts paused by default until the user presses play", () => {
       render(stickyShowroomCard);
-      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(false);
+      expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(false);
       expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([undefined, false, false]);
     });
 
@@ -616,7 +616,7 @@ describe("VideoCardPlayer", () => {
       const { unmount } = render(stickyShowroomCard);
 
       fireEvent.click(screen.getByRole("button", { name: "Play video" }));
-      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(true);
+      expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(true);
 
       // The next showroom card loads and auto-plays on its own.
       unmount();
@@ -632,18 +632,32 @@ describe("VideoCardPlayer", () => {
       const { unmount } = render(stickyShowroomCard);
 
       fireEvent.click(screen.getByRole("button", { name: "Play video" }));
-      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(true);
+      expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(true);
 
       // Press pause while the card is playing.
       const video = document.querySelector("video")!;
       fireEvent.play(video);
       fireEvent.click(screen.getByRole("button", { name: "Pause video" }));
-      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(false);
+      expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(false);
 
       // The next showroom card starts paused again.
       unmount();
       render(stickyShowroomCard);
       expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([undefined, false, false]);
+    });
+
+    it("follows play and pause pressed on another card while mounted", () => {
+      render(stickyShowroomCard);
+
+      act(() => useVideoAutoplayStore.getState().setAutoplayEnabled(true));
+      expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([
+        "https://example.com/clip.mp4",
+        true,
+        true,
+      ]);
+
+      act(() => useVideoAutoplayStore.getState().setAutoplayEnabled(false));
+      expect(useVideoVisibilityMock.mock.calls.at(-1)?.[1]).toBe(false);
     });
 
     it("does not link non-showroom cards to the sticky intent", () => {
@@ -658,7 +672,7 @@ describe("VideoCardPlayer", () => {
         />
       );
       fireEvent.click(screen.getByRole("button", { name: "Play video" }));
-      expect(useShowroomAutoplayStore.getState().autoplayEnabled).toBe(false);
+      expect(useVideoAutoplayStore.getState().autoplayEnabled).toBe(false);
     });
   });
 });
@@ -708,7 +722,7 @@ describe("hydration-safe initial playback state", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
     useHoverCapabilityMock.mockReturnValue(true);
     useVideoVisibilityMock.mockReturnValue({ videoRef: { current: null }, reducedMotion: false });
     useGlobalMuteMock.mockReturnValue({ isMuted: true, toggleMute: vi.fn() });
@@ -720,7 +734,7 @@ describe("hydration-safe initial playback state", () => {
       writable: true,
       value: originalMatchMedia,
     });
-    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
   });
 
   async function expectHydratesCleanly(element: React.ReactElement, applyClientPrefs: () => void) {
@@ -728,7 +742,7 @@ describe("hydration-safe initial playback state", () => {
     const { hydrateRoot } = await import("react-dom/client");
     // Server defaults: no persisted sticky intent, no reduced motion.
     setReducedMotion(false);
-    useShowroomAutoplayStore.setState({ autoplayEnabled: false });
+    useVideoAutoplayStore.setState({ autoplayEnabled: false });
     const html = renderToString(element);
     // Only record the client renders from here on.
     useVideoVisibilityMock.mockClear();
@@ -790,7 +804,7 @@ describe("hydration-safe initial playback state", () => {
       />
     );
     const { cleanup } = await expectHydratesCleanly(element, () =>
-      useShowroomAutoplayStore.setState({ autoplayEnabled: true })
+      useVideoAutoplayStore.setState({ autoplayEnabled: true })
     );
     expect(useVideoVisibilityMock.mock.calls[0]).toEqual([undefined, false, false]);
     expect(useVideoVisibilityMock.mock.calls.at(-1)).toEqual([

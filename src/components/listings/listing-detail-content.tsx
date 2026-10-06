@@ -30,6 +30,7 @@ import {
 } from "@/lib/presentation/listing-facts";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
+import { placeLine } from "@/lib/utils/place-line";
 
 export interface ListingDetailRecord {
   id: string;
@@ -219,7 +220,8 @@ export function ListingDetailContent({
                     {getListingConditionLabel(listing.condition)}
                   </Badge>
                 ) : null}
-                {contactMethodLabels.map((label) => (
+                {/* The contact buttons say this already; only a preview without buttons needs it. */}
+                {(showContactActions ? [] : contactMethodLabels).map((label) => (
                   <Badge key={label} variant="outline" className="text-[11px]">
                     {label}
                   </Badge>
@@ -306,9 +308,11 @@ export function ListingDetailContent({
                     <MapPin className="h-4 w-4 text-brand-green" />
                     <div>
                       <p className="font-medium">
-                        {[listing.location_suburb, listing.location_city, listing.location_province]
-                          .filter(Boolean)
-                          .join(", ")}
+                        {placeLine([
+                          listing.location_suburb,
+                          listing.location_city,
+                          listing.location_province,
+                        ])}
                       </p>
                       <p className="text-xs text-muted-foreground">Listed location</p>
                     </div>
@@ -408,9 +412,21 @@ export function ListingDetailContent({
               <h2 className="font-display text-lg font-semibold">Seller</h2>
 
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green text-lg font-bold text-white">
-                  {sellerInitial}
-                </div>
+                {listing.logo_url ? (
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border bg-white p-1 dark:bg-warm-900">
+                    <Image
+                      src={normalizeMediaUrl(listing.logo_url)}
+                      alt=""
+                      width={44}
+                      height={44}
+                      className="h-full w-full rounded-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-green text-lg font-bold text-white">
+                    {sellerInitial}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <p className="break-words font-medium">
                     {seller?.display_name || "Account name unavailable"}
@@ -483,28 +499,6 @@ export function ListingDetailContent({
               </div>
             </CardContent>
           </Card>
-
-          {listing.logo_url ? (
-            <Card className="surface-card elev-sm">
-              <CardContent className="flex items-center gap-3 p-5">
-                <div className="h-12 w-12 overflow-hidden rounded-2xl border bg-white p-1 dark:bg-warm-900">
-                  <Image
-                    src={normalizeMediaUrl(listing.logo_url)}
-                    alt={`${listing.title} logo`}
-                    width={48}
-                    height={48}
-                    className="h-full w-full rounded-xl object-contain"
-                  />
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Brand
-                  </p>
-                  <p className="font-medium">Shown on the marketplace card and detail page</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
         </div>
       </article>
 

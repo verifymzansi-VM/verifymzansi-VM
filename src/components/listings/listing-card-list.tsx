@@ -107,6 +107,7 @@ export const ListingCardList = memo(function ListingCardList({
                       sizes="160px"
                       mode="ambient"
                       showPlaybackControl
+                      stickyAutoplay
                       fitStrategy="contain"
                       containerAspectRatio={frameAspectRatio}
                       muteControlVisibility="auto"

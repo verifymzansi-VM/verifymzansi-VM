@@ -8,7 +8,6 @@ import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import Image from "next/image";
 import {
   Building2,
-  Calendar,
   CalendarPlus,
   ChevronDown,
   Eye,
@@ -32,13 +31,7 @@ import { PromotionContactActions } from "@/components/listings/promotion-contact
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
-import {
-  formatRandAmount,
-  formatSaLongDate,
-  formatSaShortDate,
-  formatZAR,
-  formatZARShort,
-} from "@/lib/utils/format";
+import { formatRandAmount, formatSaLongDate, formatZAR, formatZARShort } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
@@ -62,7 +55,9 @@ import {
   formatLooseDate,
   getEventState,
   type EventState,
+  formatEventWhen,
 } from "@/lib/presentation/event-facts";
+import { placeLine } from "@/lib/utils/place-line";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -395,20 +390,21 @@ export function PromotionDetailContent({
       humanizeKey(promotion.event_details.event_type))
     : null;
   const venueLabel = promotion.event_details?.venue_name ?? null;
-  // Multi-day events: show when they finish, not only when they start.
-  const showEndDate = Boolean(
-    promotion.start_date &&
-    promotion.end_date &&
-    formatSaShortDate(promotion.end_date) !== formatSaShortDate(promotion.start_date)
+  // Date and the time the organiser chose, with the finish when it differs.
+  const whenLabel = formatEventWhen(promotion.start_date, promotion.end_date);
+  // The tiers are listed further down; up here the cheapest price says more.
+  const tierPrices = (promotion.event_details?.ticket_tiers ?? []).map(
+    (tier) => tier.price_cents ?? 0
   );
+  const paidPrices = tierPrices.filter((cents) => cents > 0);
   const ticketSummary =
-    promotion.event_details?.ticket_tiers && promotion.event_details.ticket_tiers.length > 0
-      ? `${promotion.event_details.ticket_tiers.length} ticket tier${
-          promotion.event_details.ticket_tiers.length === 1 ? "" : "s"
-        }`
-      : promotion.event_details?.tickets_url
-        ? "Tickets available"
-        : null;
+    paidPrices.length > 0
+      ? `${tierPrices.length > 1 ? "From " : ""}${formatZARShort(Math.min(...paidPrices))}`
+      : tierPrices.length > 0
+        ? "Free entry"
+        : promotion.event_details?.tickets_url
+          ? "Tickets available"
+          : null;
 
   const calendarUrl = buildEventCalendarUrl({
     title: promotion.title,
@@ -590,9 +586,11 @@ export function PromotionDetailContent({
               )}
               <span className="flex items-center gap-1">
                 <MapPin className="h-3 w-3" />
-                {[promotion.location_town, promotion.location_city, promotion.location_province]
-                  .filter(Boolean)
-                  .join(", ")}
+                {placeLine([
+                  promotion.location_town,
+                  promotion.location_city,
+                  promotion.location_province,
+                ])}
               </span>
               {promotion.price_cents != null && promotion.price_cents > 0 && (
                 <span className="font-bold">
@@ -615,23 +613,13 @@ export function PromotionDetailContent({
                 </TitleTag>
               ) : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {promotion.start_date ? (
+                {whenLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Starts
+                      When
                     </p>
                     <p className="mt-1 text-sm font-medium">
-                      {formatSaShortDate(promotion.start_date)}
-                    </p>
-                  </div>
-                ) : null}
-                {showEndDate ? (
-                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Ends
-                    </p>
-                    <p className="mt-1 text-sm font-medium">
-                      {formatSaShortDate(promotion.end_date!)}
+                      <time dateTime={promotion.start_date ?? undefined}>{whenLabel}</time>
                     </p>
                   </div>
                 ) : null}
@@ -669,9 +657,11 @@ export function PromotionDetailContent({
                         {promotion.location_address}
                       </span>
                     ) : null}
-                    {[promotion.location_town, promotion.location_city, promotion.location_province]
-                      .filter(Boolean)
-                      .join(", ")}
+                    {placeLine([
+                      promotion.location_town,
+                      promotion.location_city,
+                      promotion.location_province,
+                    ])}
                   </span>
                 </div>
               )}
@@ -770,30 +760,6 @@ export function PromotionDetailContent({
                     </>
                   )}
 
-                  {promotion.start_date && (
-                    <>
-                      <dt className="text-muted-foreground">Starts</dt>
-                      <dd className="flex items-center gap-1 font-medium">
-                        <Calendar className="h-3 w-3" />
-                        <time dateTime={promotion.start_date}>
-                          {formatSaShortDate(promotion.start_date)}
-                        </time>
-                      </dd>
-                    </>
-                  )}
-
-                  {promotion.end_date && (
-                    <>
-                      <dt className="text-muted-foreground">Ends</dt>
-                      <dd className="flex items-center gap-1 font-medium">
-                        <Calendar className="h-3 w-3" />
-                        <time dateTime={promotion.end_date}>
-                          {formatSaShortDate(promotion.end_date)}
-                        </time>
-                      </dd>
-                    </>
-                  )}
-
                   <dt className="text-muted-foreground">Views</dt>
                   <dd className="flex items-center gap-1 font-medium">
                     <Eye className="h-3 w-3" />
@@ -801,10 +767,11 @@ export function PromotionDetailContent({
                   </dd>
                 </dl>
 
-                {(showContactSummary || contactMethods.length > 0) && contactMethods.length > 0 && (
+                {/* Public visitors have the contact buttons; only the owner's preview lists them. */}
+                {showContactSummary && contactMethods.length > 0 && (
                   <div className="mt-3 border-t pt-3">
                     <p className="text-xs font-medium text-muted-foreground">
-                      {showContactSummary ? "Saved contact methods" : "Contact options"}
+                      Saved contact methods
                     </p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {contactMethods.map((method) => (
@@ -823,17 +790,11 @@ export function PromotionDetailContent({
           {promotion.event_details &&
             (() => {
               const ed = promotion.event_details!;
-              const eventTypeLabel = ed.event_type
-                ? (EVENT_TYPES.find((t) => t.value === ed.event_type)?.label ??
-                  humanizeKey(ed.event_type))
-                : null;
               const ageLabel = ed.age_restriction
                 ? (EVENT_AGE_RESTRICTIONS.find((a) => a.value === ed.age_restriction)?.label ??
                   humanizeKey(ed.age_restriction))
                 : null;
               const hasContent =
-                ed.event_type ||
-                ed.venue_name ||
                 ed.venue_capacity ||
                 (ed.ticket_tiers && ed.ticket_tiers.length > 0) ||
                 ed.tickets_url ||
@@ -858,22 +819,6 @@ export function PromotionDetailContent({
                     </h2>
 
                     <dl className="grid grid-cols-1 gap-x-4 gap-y-2.5 sm:grid-cols-2">
-                      {eventTypeLabel && (
-                        <>
-                          <dt className="text-muted-foreground">Event type</dt>
-                          <dd>
-                            <Badge variant="secondary">{eventTypeLabel}</Badge>
-                          </dd>
-                        </>
-                      )}
-
-                      {ed.venue_name && (
-                        <>
-                          <dt className="text-muted-foreground">Venue</dt>
-                          <dd className="font-medium">{ed.venue_name}</dd>
-                        </>
-                      )}
-
                       {typeof ed.venue_capacity === "number" && (
                         <>
                           <dt className="flex items-center gap-1 text-muted-foreground">
@@ -1254,7 +1199,7 @@ export function PromotionDetailContent({
               asChild
             >
               <a href={`tel:${contactPhone(advertiserProfile?.phone)}`}>
-                <Phone className="h-4 w-4" /> Call advertiser
+                <Phone className="h-4 w-4" /> Call organiser
               </a>
             </Button>
           )}

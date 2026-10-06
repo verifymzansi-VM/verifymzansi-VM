@@ -211,4 +211,20 @@ describe("promotionToCarouselItem", () => {
     expect(item.price).toBeNull();
     expect(item.eyebrow).toBeNull();
   });
+  it("leads with the cheapest ticket tier, like the event page", () => {
+    const tiers = [{ price_cents: 70_000 }, { price_cents: 15_000 }];
+    const item = promotionToCarouselItem({
+      ...base,
+      price_cents: 99_900,
+      logo_url: "https://media.verifymzansi.com/media/promotion/logo.jpg",
+      event_details: { ticket_tiers: tiers },
+    });
+    expect(item.eyebrow).toBe("From R 150");
+    expect(item.price).toBe(150);
+    expect(item.logoUrl).toContain("logo.jpg");
+    expect(
+      promotionToCarouselItem({ ...base, event_details: { ticket_tiers: [{ price_cents: 0 }] } })
+        .eyebrow
+    ).toBe("Free entry");
+  });
 });

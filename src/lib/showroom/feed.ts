@@ -41,7 +41,7 @@ const COLUMNS: Record<ContentTable, string> = {
   listings:
     "id, owner_id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, category, focal_x, focal_y, media_width, media_height",
   promotions:
-    "id, owner_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, location_city, location_province, price_cents, focal_x, focal_y, media_width, media_height",
+    "id, owner_id, title, description, promotion_type, category, category_key, photos, videos, video_thumbnail, logo_url, event_details, location_city, location_province, price_cents, focal_x, focal_y, media_width, media_height",
 };
 
 /** How many leading posts take turns at the front between ranking refreshes. */

@@ -14,7 +14,7 @@ import { useVideoVisibility } from "@/hooks/use-video-visibility";
 import { useVideoHover } from "@/hooks/use-video-hover";
 import { useVideoFeed } from "@/hooks/use-video-feed";
 import { useGlobalMute } from "@/hooks/use-global-mute";
-import { useShowroomAutoplayStore } from "@/stores/showroom-autoplay-store";
+import { useVideoAutoplayStore } from "@/stores/video-autoplay-store";
 
 const DEFAULT_MEDIA_FIT = "object-cover";
 const DEFAULT_CONTAINER_ASPECT_RATIO = 9 / 16;
@@ -285,7 +285,7 @@ export interface VideoCardPlayerProps {
   /** Notifies callers when the ambient playback control changes state. */
   onPlaybackStateChange?: (isPlaying: boolean) => void;
   /**
-   * Links this card to the sticky showroom autoplay intent: pressing play/pause
+   * Links this card to the shared autoplay intent: pressing play/pause
    * on the card updates the shared preference (like the mute button), and while
    * the preference is "play" the card starts playback automatically when focused.
    */
@@ -677,9 +677,9 @@ function VideoCardPlayerInner({
   const srcNeedsUnoptimized =
     normalizedSrc?.startsWith("blob:") || normalizedSrc?.startsWith("data:");
 
-  const setStickyAutoplayEnabled = useShowroomAutoplayStore((s) => s.setAutoplayEnabled);
-  // Only showroom center cards opt in: their play/pause toggle drives the
-  // shared sticky intent (like the mute button) across all showroom cards.
+  const setStickyAutoplayEnabled = useVideoAutoplayStore((s) => s.setAutoplayEnabled);
+  // Showroom center cards and market list cards opt in: their play/pause
+  // toggle drives the shared sticky intent (like the mute button) across all cards.
   const linkStickyAutoplay = Boolean(
     stickyAutoplay && isVideo && mode === "ambient" && showPlaybackControl
   );
@@ -703,13 +703,13 @@ function VideoCardPlayerInner({
      preferences once after hydration; reading them during render would make
      the first client render differ from the server HTML (React #418). */
   useLayoutEffect(() => {
-    // Sticky intent (mute-button style): when the user has pressed play on a
-    // showroom card, newly focused showroom cards start playing on their own
+    // Sticky intent (mute-button style): when the user has pressed play on
+    // any card, newly focused showroom cards start playing on their own
     // (desktop and mobile) until the user presses pause. The inner player
     // remounts whenever a card becomes the focused showroom card, so applying
     // the persisted preference once on mount covers every focus change.
     const inputs = mountPlaybackInputsRef.current;
-    if (inputs.linkStickyAutoplay && useShowroomAutoplayStore.getState().autoplayEnabled) {
+    if (inputs.linkStickyAutoplay && useVideoAutoplayStore.getState().autoplayEnabled) {
       setIsPlaybackPaused(false);
       setHasActivatedPlayback(true);
       return;
@@ -737,6 +737,21 @@ function VideoCardPlayerInner({
     shouldAutoplay,
     hasActivatedPlayback
   );
+  // Follow play/pause pressed on any other card (feed cards, other pages)
+  // while this showroom card stays mounted.
+  useEffect(() => {
+    if (!linkStickyAutoplay) return;
+    return useVideoAutoplayStore.subscribe((state, previous) => {
+      if (state.autoplayEnabled === previous.autoplayEnabled) return;
+      if (state.autoplayEnabled) {
+        setIsPlaybackPaused(false);
+        setHasActivatedPlayback(true);
+      } else {
+        videoRef.current?.pause();
+        setIsPlaybackPaused(true);
+      }
+    });
+  }, [linkStickyAutoplay, videoRef]);
   const [videoReady, setVideoReady] = useState(false);
   const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
