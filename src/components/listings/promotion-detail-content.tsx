@@ -101,6 +101,7 @@ export interface PromotionAdvertiserRecord {
 
 export interface LinkedBusinessRecord {
   id: string;
+  owner_id?: string | null;
   business_name: string;
   logo_url: string | null;
   cipc_verified_at?: string | null;
@@ -385,14 +386,17 @@ export function PromotionDetailContent({
   const trustLevel = advertiserProfile
     ? computeTrustLevel(readAccountVerificationStatus(advertiserProfile))
     : 0;
-  // A promotion's owner always owns its linked business (DB trigger), so the
-  // business's verified position is the advertiser's.
-  const advertiserPosition = (
+  // The business's verified position is the advertiser's only when they own
+  // it (a business can change hands after the advert was linked).
+  const advertiserOwnsBusiness = Boolean(
+    linkedBusiness?.owner_id && linkedBusiness.owner_id === promotion.owner_id
+  );
+  const advertiserPosition = advertiserOwnsBusiness ? (
     <VerifiedPosition
       position={linkedBusiness?.owner_position_title}
       source={linkedBusiness?.owner_verified_role}
     />
-  );
+  ) : null;
   // The ID sticker is the advertiser's trust badge; the card adds CIPC and Seen.
   const linkedStickers = linkedBusiness ? (
     <BusinessStickers

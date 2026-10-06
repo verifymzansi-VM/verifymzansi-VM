@@ -575,3 +575,18 @@ Built as specified, with these deliberate differences:
     without re-claiming; claim-next skips cases the claimer can't act on;
   - staff queue tabs are exclusive and no longer truncate at 200; the staff home
     shows business checks.
+  - owner flow (pass C): registration numbers accept 12 digits/spaces/CK; PDFs
+    read up to 5 pages; owner replies re-compare with the admin copy and void
+    exceptions; renew/link rules; "I'm not a director" route switch; atomic
+    work-email attempts with a resend cooldown; per-sticker rate limits;
+  - display and jobs (pass D): the immersive event/advert view shows the linked
+    business's stickers and position; the position only shows when the
+    advertiser owns the linked business; sticker dates use SA time and the
+    profile stickers carry visible short labels; the dashboard nudge skips
+    tourism profiles and businesses already in review; renewal reminders are
+    de-duplicated, once per company, with a Seen reminder too; a change of owner
+    removes linked profiles' stickers; public sticker data fails closed.
+- **ID sticker and suspended owners.** The ID sticker follows the same trust
+  level as the site-wide trust badge (verification status). Capping it for
+  suspended or struck owners would change every trust badge, so it is left to
+  the trust-scale work rather than done here.

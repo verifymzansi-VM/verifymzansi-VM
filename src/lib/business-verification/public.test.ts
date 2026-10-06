@@ -73,3 +73,17 @@ describe("maskIdNumbers", () => {
     );
   });
 });
+
+describe("toPublicVerification fails closed", () => {
+  it("hides a sticker whose expiry was not loaded", () => {
+    const row = toPublicVerification({ cipc_verified_at: "2026-10-01T00:00:00Z" });
+    expect(row.cipc_verified_at).toBeNull();
+  });
+
+  it("drops an office selected without its sticker state", () => {
+    expect(toPublicVerification({ id: "b", cipc_registered_office: office })).toEqual({
+      id: "b",
+      cipc_registered_office: null,
+    });
+  });
+});

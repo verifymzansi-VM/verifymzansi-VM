@@ -15,6 +15,7 @@ import {
   withOwnerColumn,
 } from "@/lib/account/compat";
 import { selectBusinessWithFallback } from "@/lib/business/business-detail-select";
+import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
 import type { ContentTargetType } from "@/lib/engagement";
 import {
   getOptionalContentShareCountMap,
@@ -26,6 +27,7 @@ import {
   presentEventSlide,
   presentListingSlide,
   type EngagementInput,
+  type LinkedBusinessInput,
   type OwnerSummaryInput,
 } from "@/lib/feed/presenters";
 import { refKey } from "@/lib/feed/refs";
@@ -226,20 +228,19 @@ async function loadEventSlides(context: SlideLoadContext, ids: string[]) {
       ? applyVisibleExpiryFilter(
           context.supabase
             .from("businesses")
-            .select("id, business_name, logo_url")
+            .select(
+              `id, owner_id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
+            )
             .eq("status", "live")
             .in("id", businessIds)
         )
       : Promise.resolve({ data: [] }),
   ]);
   const businessById = new Map(
-    (
-      (businesses.data ?? []) as Array<{
-        id: string;
-        business_name: string;
-        logo_url: string | null;
-      }>
-    ).map((business) => [business.id, business])
+    ((businesses.data ?? []) as LinkedBusinessInput[]).map((business) => [
+      business.id,
+      toPublicVerification(business),
+    ])
   );
   for (const row of visible) {
     slides.set(

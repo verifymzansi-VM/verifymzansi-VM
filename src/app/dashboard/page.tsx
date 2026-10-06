@@ -217,14 +217,19 @@ export default async function DashboardPage() {
       leadsOwnerColumn,
       user.id
     ),
-    /* 15 — live businesses without a CIPC or Seen sticker */
+    /* 15 — live Mzansi Business profiles without a CIPC or Seen sticker */
     applyOwnerFilter(
-      supabase
-        .from("businesses")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "live")
-        .is("cipc_verified_at", null)
-        .is("seen_verified_at", null),
+      applyVisibleExpiryFilter(
+        supabase
+          .from("businesses")
+          .select("id")
+          .eq("status", "live")
+          .neq("category", "tourism_hospitality")
+          .or("area.is.null,area.neq.PROMOTIONS_EVENTS")
+          .is("cipc_verified_at", null)
+          .is("seen_verified_at", null)
+          .limit(50)
+      ),
       businessOwnerColumn,
       user.id
     ),
@@ -254,7 +259,23 @@ export default async function DashboardPage() {
   const expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
-  const unstickeredBusinessCount = settled(results[15], EMPTY_OK).count || 0;
+  // Businesses with a request already in review don't need a nudge.
+  const unstickeredIds = (
+    (settled(results[15], EMPTY_LIST_OK).data ?? []) as Array<{ id: string }>
+  ).map((row) => row.id);
+  const inReview = new Set<string>();
+  const verificationAdmin = unstickeredIds.length ? tryCreateAdminClient() : null;
+  if (verificationAdmin) {
+    const { data: openCases } = await verificationAdmin
+      .from("business_verifications")
+      .select("business_id")
+      .in("business_id", unstickeredIds)
+      .in("status", ["pending", "info_requested"]);
+    for (const row of (openCases ?? []) as Array<{ business_id: string }>) {
+      inReview.add(row.business_id);
+    }
+  }
+  const unstickered = unstickeredIds.filter((id) => !inReview.has(id));
   const tourismEventsCount = activePromos + (tourismBusinessCountResult.count || 0);
 
   const verificationSummary = summarizeVerification(
@@ -463,7 +484,12 @@ export default async function DashboardPage() {
         verificationStatus={verificationSummary.accountVerificationStatus}
         stepsRemaining={stepsRemaining}
         includeVerification={false}
-        unstickeredBusinessCount={isVerified ? unstickeredBusinessCount : 0}
+        unstickeredBusinessCount={isVerified ? unstickered.length : 0}
+        unstickeredBusinessHref={
+          unstickered.length === 1
+            ? `/dashboard/businesses/${unstickered[0]}/verification`
+            : "/dashboard/listings?area=MZANSI_BUSINESS"
+        }
       />
 
       {/* ───── Main content ───── */}

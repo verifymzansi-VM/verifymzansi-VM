@@ -235,6 +235,7 @@ describe("PromotionDetailContent", () => {
           id: "business-1",
           business_name: "Nomsa Events",
           logo_url: null,
+          owner_id: "owner-1",
           cipc_verified_at: "2026-10-01T00:00:00.000Z",
           seen_verified_at: null,
           owner_verified_role: "director",

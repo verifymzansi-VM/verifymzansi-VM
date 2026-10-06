@@ -38,8 +38,10 @@ export function publicOffice(
     : base;
 }
 
+// Fail closed: every granted sticker has an expiry, so a row without one
+// (or a select that forgot the column) shows no sticker.
 const live = (verifiedAt: unknown, expiresAt: unknown, now: number) =>
-  typeof verifiedAt === "string" && (typeof expiresAt !== "string" || Date.parse(expiresAt) > now);
+  typeof verifiedAt === "string" && typeof expiresAt === "string" && Date.parse(expiresAt) > now;
 
 const CIPC_FIELDS = [
   "cipc_verified_at",
@@ -53,7 +55,10 @@ const CIPC_FIELDS = [
 const SEEN_FIELDS = ["seen_verified_at", "seen_expires_at", "seen_method", "seen_city"] as const;
 
 export function toPublicVerification<T extends object>(row: T, now = Date.now()): T {
-  if (!("cipc_verified_at" in row) && !("seen_verified_at" in row)) return row;
+  if (!("cipc_verified_at" in row) && !("seen_verified_at" in row)) {
+    // An office without its sticker state can't be shown safely.
+    return "cipc_registered_office" in row ? { ...row, cipc_registered_office: null } : row;
+  }
   const out: Record<string, unknown> = { ...(row as Record<string, unknown>) };
   if (!live(out.cipc_verified_at, out.cipc_expires_at, now)) {
     for (const f of CIPC_FIELDS) out[f] = null;

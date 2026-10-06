@@ -74,7 +74,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
           supabase
             .from("businesses")
             .select(
-              `id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
+              `id, owner_id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
             )
             .eq("id", promotion.business_id)
             .eq("status", "live")

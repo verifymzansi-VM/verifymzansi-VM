@@ -33,6 +33,8 @@ interface NeedsAttentionProps {
   includeVerification?: boolean;
   /** Live businesses with neither the CIPC nor the Seen sticker. */
   unstickeredBusinessCount?: number;
+  /** Where the nudge goes: the one business's verification page, or the list. */
+  unstickeredBusinessHref?: string;
 }
 
 const iconTones = {
@@ -53,6 +55,7 @@ export function NeedsAttention({
   stepsRemaining,
   includeVerification = true,
   unstickeredBusinessCount = 0,
+  unstickeredBusinessHref = "/dashboard/listings?area=MZANSI_BUSINESS",
 }: NeedsAttentionProps) {
   const items: NeedsAttentionItem[] = [];
 
@@ -125,7 +128,7 @@ export function NeedsAttention({
         unstickeredBusinessCount > 1
           ? `Verify ${unstickeredBusinessCount} businesses`
           : "Verify your business",
-      href: "/dashboard/listings?area=MZANSI_BUSINESS",
+      href: unstickeredBusinessHref,
       icon: BadgeCheck,
       variant: "info",
     });

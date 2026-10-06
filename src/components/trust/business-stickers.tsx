@@ -4,8 +4,16 @@ import type { BusinessStickerState } from "@/lib/business-verification/public";
 import { cn } from "@/lib/utils";
 
 function monthYear(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-ZA", { month: "short", year: "numeric" });
+  // Fixed time zone: server (UTC) and browser render the same month.
+  return new Date(iso).toLocaleDateString("en-ZA", {
+    month: "short",
+    year: "numeric",
+    timeZone: "Africa/Johannesburg",
+  });
 }
+
+/** Visible short names on the larger (profile) stickers; touch has no hover. */
+const SHORT = { id: "ID reviewed", cipc: "CIPC registered", seen: "Seen" } as const;
 
 /** Tooltip copy for each sticker, in display order. Missing stickers are omitted. */
 function businessStickerLabels(state: BusinessStickerState): Array<{
@@ -52,21 +60,35 @@ export function BusinessStickers({
   const icon = size === "md" ? "h-4 w-4" : "h-3.5 w-3.5";
 
   return (
-    <ul aria-label="Verification" className={cn("flex items-center gap-1", className)}>
+    <ul
+      aria-label="Verification"
+      className={cn("flex flex-wrap items-center gap-1", size === "md" && "gap-1.5", className)}
+    >
       {labels.map(({ key, label }) => {
         const Icon = ICONS[key];
         return (
           <li key={key}>
-            <span
-              title={label}
-              className={cn(
-                "inline-flex items-center justify-center rounded-full bg-brand-green-700 text-brand-gold-300 ring-1 ring-brand-gold-400/50 dark:bg-brand-green-800",
-                box
-              )}
-            >
-              <Icon aria-hidden="true" className={icon} />
-              <span className="sr-only">{label}</span>
-            </span>
+            {size === "md" ? (
+              <span
+                title={label}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-brand-green-700 px-3 text-xs font-semibold text-brand-gold-200 ring-1 ring-brand-gold-400/50 dark:bg-brand-green-800"
+              >
+                <Icon aria-hidden="true" className={icon} />
+                <span aria-hidden="true">{SHORT[key]}</span>
+                <span className="sr-only">{label}</span>
+              </span>
+            ) : (
+              <span
+                title={label}
+                className={cn(
+                  "inline-flex items-center justify-center rounded-full bg-brand-green-700 text-brand-gold-300 ring-1 ring-brand-gold-400/50 dark:bg-brand-green-800",
+                  box
+                )}
+              >
+                <Icon aria-hidden="true" className={icon} />
+                <span className="sr-only">{label}</span>
+              </span>
+            )}
           </li>
         );
       })}

@@ -20,6 +20,8 @@ interface DashboardLiveLeadAlertsProps {
   includeVerification?: boolean;
   /** Live businesses that could get the CIPC or Seen sticker. */
   unstickeredBusinessCount?: number;
+  /** Where the nudge goes: the one business's verification page, or the list. */
+  unstickeredBusinessHref?: string;
 }
 
 export function DashboardLiveLeadAlerts({
@@ -35,6 +37,7 @@ export function DashboardLiveLeadAlerts({
   stepsRemaining,
   includeVerification = true,
   unstickeredBusinessCount = 0,
+  unstickeredBusinessHref = "/dashboard/listings?area=MZANSI_BUSINESS",
 }: DashboardLiveLeadAlertsProps) {
   const { unreadCount, isLoading } = useLeadsUnread();
   const unreadLeadCount = isLoading ? initialUnreadLeadCount : unreadCount;
@@ -59,6 +62,7 @@ export function DashboardLiveLeadAlerts({
         stepsRemaining={stepsRemaining}
         includeVerification={includeVerification}
         unstickeredBusinessCount={unstickeredBusinessCount}
+        unstickeredBusinessHref={unstickeredBusinessHref}
       />
     </>
   );

@@ -702,10 +702,24 @@ function ticketFigure(promotion: PromotionDetailRecord, tiers: TicketTier[]) {
   return null;
 }
 
+/** The business an event or advert is linked to, with its verification. */
+export type LinkedBusinessInput = {
+  id: string;
+  business_name: string;
+  logo_url: string | null;
+  owner_id?: string | null;
+  cipc_verified_at?: string | null;
+  seen_verified_at?: string | null;
+  seen_method?: string | null;
+  seen_city?: string | null;
+  owner_verified_role?: string | null;
+  owner_position_title?: string | null;
+};
+
 export function presentEventSlide(
   promotion: PromotionDetailRecord,
   advertiser: OwnerSummaryInput | null,
-  linkedBusiness: { id: string; business_name: string; logo_url: string | null } | null,
+  linkedBusiness: LinkedBusinessInput | null,
   engagement: EngagementInput
 ): FeedSlide {
   const href = canonicalHref("event", promotion.id);
@@ -836,6 +850,22 @@ export function presentEventSlide(
       href: linkedBusiness ? `/mzansi-business/${linkedBusiness.id}` : null,
       initials: initialsOf(linkedBusiness?.business_name || advertiser?.display_name, "E"),
       trustLevel: trustOf(advertiser),
+      // The position is the advertiser's only when they own the linked business.
+      ...(linkedBusiness && linkedBusiness.owner_id === promotion.owner_id
+        ? {
+            position: linkedBusiness.owner_position_title ?? null,
+            positionSource: linkedBusiness.owner_verified_role ?? null,
+          }
+        : {}),
+      stickers: linkedBusiness
+        ? {
+            idReviewed: (trustOf(advertiser) ?? 0) >= ID_REVIEWED_TRUST_LEVEL,
+            cipcCheckedAt: linkedBusiness.cipc_verified_at ?? null,
+            seenAt: linkedBusiness.seen_verified_at ?? null,
+            seenMethod: linkedBusiness.seen_method ?? null,
+            seenCity: linkedBusiness.seen_city ?? null,
+          }
+        : null,
       logoUrl: promotion.logo_url
         ? normalizeMediaUrl(promotion.logo_url)
         : linkedBusiness?.logo_url
