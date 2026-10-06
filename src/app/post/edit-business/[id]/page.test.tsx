@@ -8,6 +8,11 @@ const { businessLayoutRouterSpy } = vi.hoisted(() => ({
   businessLayoutRouterSpy: vi.fn(),
 }));
 
+// Has its own tests; here it would take a fetch response meant for the form.
+vi.mock("@/components/business-verification/use-registered-office", () => ({
+  UseRegisteredOffice: () => null,
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useParams: vi.fn(),

@@ -32,6 +32,7 @@ import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/uplo
 import { FocalPointPicker, type FocalPoint } from "@/components/ui/focal-point-picker";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { useToast } from "@/hooks/use-toast";
+import { UseRegisteredOffice } from "@/components/business-verification/use-registered-office";
 import { LocationSelector } from "@/components/ui/location-selector";
 import {
   ALL_BUSINESS_CATEGORIES,
@@ -1124,6 +1125,15 @@ export default function EditBusinessPage() {
                   want to appear in local search results.
                 </p>
               )}
+              <UseRegisteredOffice
+                businessId={businessId}
+                onUse={(office) => {
+                  setProvince(office.province);
+                  setCity(office.city);
+                  setLocationTown(office.town || "");
+                  setLocationAddress(office.address || "");
+                }}
+              />
               <LocationSelector
                 value={{
                   province,

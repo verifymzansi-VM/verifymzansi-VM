@@ -189,4 +189,66 @@ describe("PromotionDetailContent", () => {
     expect(screen.getByText("Saved contact methods")).toBeInTheDocument();
     expect(screen.getByText("Phone Call")).toBeInTheDocument();
   });
+  it("shows the verified position and business stickers on the linked business", () => {
+    const futureStart = "2099-03-10T00:00:00.000Z";
+    const futureEnd = "2099-03-12T00:00:00.000Z";
+    const { container } = render(
+      <PromotionDetailContent
+        promotion={{
+          id: "promotion-1",
+          owner_id: "owner-1",
+          business_id: "business-1",
+          title: "Soweto Food Festival",
+          description: "A long-form preview description for review mode.",
+          promotion_type: "event",
+          category: "Festival",
+          category_key: "events_entertainment",
+          photos: ["https://example.com/photo.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          price_cents: 15000,
+          price_negotiable: false,
+          location_province: "Gauteng",
+          location_city: "Johannesburg",
+          location_town: "Soweto",
+          location_address: null,
+          contact_methods: ["call", "whatsapp"],
+          start_date: futureStart,
+          end_date: futureEnd,
+          boost_until: null,
+          featured_until: null,
+          view_count: 0,
+          created_at: futureStart,
+          event_details: {
+            event_type: "festival_concert",
+            venue_name: "Vilakazi Street",
+            ticket_tiers: [{ name: "General", price_cents: 15000 }],
+          },
+        }}
+        advertiserProfile={{
+          display_name: "You",
+          account_verification_status: null,
+          phone: "27821234567",
+          masked_phone_public: "082 123 4567",
+        }}
+        linkedBusiness={{
+          id: "business-1",
+          business_name: "Nomsa Events",
+          logo_url: null,
+          cipc_verified_at: "2026-10-01T00:00:00.000Z",
+          seen_verified_at: null,
+          owner_verified_role: "director",
+          owner_position_title: "Director",
+        }}
+        showContactActions={false}
+        showContactSummary
+        layoutMode="review"
+      />
+    );
+
+    expect(container).toBeTruthy();
+    expect(screen.getAllByText("Director").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/confirmed on CIPC records/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CIPC registered · checked/).length).toBeGreaterThan(0);
+  });
 });

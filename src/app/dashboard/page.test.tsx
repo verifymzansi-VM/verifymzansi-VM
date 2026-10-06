@@ -130,6 +130,7 @@ function createQueryResult(result: { data?: unknown; count?: number | null }) {
     in: vi.fn(() => builder),
     or: vi.fn(() => builder),
     neq: vi.fn(() => builder),
+    is: vi.fn(() => builder),
     lt: vi.fn(() => builder),
     gt: vi.fn(() => builder),
     order: vi.fn(() => builder),

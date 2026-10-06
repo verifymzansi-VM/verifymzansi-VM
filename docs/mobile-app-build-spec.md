@@ -404,6 +404,10 @@ they return to where they were)
 - **Android seller mode** (posting, my posts, leads and plan status, with no
   purchase paths) is a possible separate phase after launch. It needs its own
   policy check and the owner's written approval.
+- Business verification (CIPC Registered and Seen by VerifyMzansi stickers) in
+  the app. It stays on the website for v1. The owner endpoints under
+  `/api/businesses/[id]/verification/*` are plain JSON/multipart routes and can
+  be reused by the app later; staff review stays web-only.
 
 ---
 

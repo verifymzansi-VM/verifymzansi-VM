@@ -3,6 +3,7 @@
 import { Clock, UserRound } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrustBadge } from "@/components/trust/trust-badge";
+import { VerifiedPosition } from "@/components/trust/verified-position";
 import { ShareButton } from "@/components/shared/share-button";
 import { ReportDialog } from "@/components/shared/report-dialog";
 import type {
@@ -85,19 +86,7 @@ export function ManagedByCard({
             <p className="break-words font-medium">
               {ownerProfile?.display_name || "Account name unavailable"}
             </p>
-            {position ? (
-              <p className="text-sm text-muted-foreground">
-                {position}
-                <span className="sr-only">
-                  {positionSource === "representative"
-                    ? ", confirmed by the company"
-                    : ", confirmed on CIPC records"}
-                </span>
-                <span aria-hidden="true">
-                  {positionSource === "representative" ? " · confirmed by company" : " · CIPC"}
-                </span>
-              </p>
-            ) : null}
+            <VerifiedPosition position={position} source={positionSource} />
             {trustLevel != null && <TrustBadge level={trustLevel} size="sm" />}
           </div>
         </div>

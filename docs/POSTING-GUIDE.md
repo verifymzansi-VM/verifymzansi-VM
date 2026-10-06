@@ -163,6 +163,24 @@ Tourism providers use the Tourism route instead.
 - The review shows exactly what will be public, with an **Edit** link for each
   section. Submit for review.
 
+### After you publish — verification stickers
+
+A business can earn up to three stickers. Each one is checked by our team; you
+can't type them in yourself.
+
+- **ID Reviewed** — your own ID and selfie verification.
+- **CIPC Registered** — upload a CIPC document for your company from **Dashboard
+  → My listings → Verify** on the business. You must be a listed director or
+  member, or a representative confirmed by the company. When it is approved, the
+  registered office and your position appear on the profile, and the edit form
+  offers **Use registered office** for your location.
+- **Seen by VerifyMzansi** — book a live video call or a visit so we can see the
+  business operating. Any business can apply, registered or not.
+
+See
+[/help/business-verification](https://verifymzansi.com/help/business-verification)
+for examples of accepted documents.
+
 ## 3. Tourism & Events
 
 ### Stays, experiences and attractions

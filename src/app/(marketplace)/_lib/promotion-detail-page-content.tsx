@@ -19,6 +19,7 @@ import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { PROMOTION_DETAIL_SELECT } from "@/lib/promotions/detail-select";
+import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
   const supabase = await createClient();
@@ -67,17 +68,20 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         .maybeSingle()
     : { data: null };
 
-  const linkedBusiness = promotion.business_id
+  const linkedBusinessRow = promotion.business_id
     ? (
         await applyVisibleExpiryFilter(
           supabase
             .from("businesses")
-            .select("id, business_name, logo_url")
+            .select(
+              `id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
+            )
             .eq("id", promotion.business_id)
             .eq("status", "live")
         ).maybeSingle()
       ).data
     : null;
+  const linkedBusiness = linkedBusinessRow ? toPublicVerification(linkedBusinessRow) : null;
   const cookieStore = await getOptionalCookieStore();
   const {
     data: { user },

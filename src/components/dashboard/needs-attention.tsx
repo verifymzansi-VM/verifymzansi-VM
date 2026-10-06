@@ -1,6 +1,13 @@
 import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
 import Link from "next/link";
-import { AlertTriangle, MessageSquare, Clock, Hourglass, ChevronRight } from "lucide-react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  MessageSquare,
+  Clock,
+  Hourglass,
+  ChevronRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AccountVerificationStatus } from "@/types/enums";
 
@@ -24,6 +31,8 @@ interface NeedsAttentionProps {
    * verification card is already on screen so the reminder is not repeated.
    */
   includeVerification?: boolean;
+  /** Live businesses with neither the CIPC nor the Seen sticker. */
+  unstickeredBusinessCount?: number;
 }
 
 const iconTones = {
@@ -43,6 +52,7 @@ export function NeedsAttention({
   verificationStatus,
   stepsRemaining,
   includeVerification = true,
+  unstickeredBusinessCount = 0,
 }: NeedsAttentionProps) {
   const items: NeedsAttentionItem[] = [];
 
@@ -107,6 +117,18 @@ export function NeedsAttention({
         variant: "warning",
       });
     }
+  }
+
+  if (unstickeredBusinessCount > 0) {
+    items.push({
+      label:
+        unstickeredBusinessCount > 1
+          ? `Verify ${unstickeredBusinessCount} businesses`
+          : "Verify your business",
+      href: "/dashboard/listings?area=MZANSI_BUSINESS",
+      icon: BadgeCheck,
+      variant: "info",
+    });
   }
 
   // Nothing to show — hide completely to save space

@@ -65,22 +65,28 @@ export async function ownerIdHmac(admin: Admin, userId: string): Promise<string 
   return (data?.id_number_hmac as string | null) ?? null;
 }
 
-/** Another owner already holds the CIPC sticker for this company number. */
-async function verifiedForUnrelatedOwner(
+type StickerHolder = { ownerId: string; businessId: string; businessName: string };
+
+/** Other owners who already hold the CIPC sticker for this company number. */
+async function holdersForOtherOwners(
   admin: Admin,
   userId: string,
   registrationNumber: string | null
-): Promise<boolean> {
-  if (!registrationNumber) return false;
+): Promise<StickerHolder[]> {
+  if (!registrationNumber) return [];
   const { data, error } = await admin
     .from("businesses")
-    .select("id")
+    .select("id, owner_id, business_name")
     .eq("cipc_registration_number", registrationNumber)
     .not("cipc_verified_at", "is", null)
     .neq("owner_id", userId)
-    .limit(1);
+    .limit(5);
   if (error) throw new Error(error.message);
-  return (data?.length ?? 0) > 0;
+  return (data ?? []).map((row) => ({
+    ownerId: row.owner_id as string,
+    businessId: row.id as string,
+    businessName: row.business_name as string,
+  }));
 }
 
 async function sameFileOnOtherBusiness(admin: Admin, sha256: string, businessId: string) {
@@ -104,13 +110,18 @@ export async function screenUpload(
     enteredNumber: string | null;
     today?: Date;
   }
-): Promise<{ findings: Finding[]; registrationNumber: string | null; ownerHmac: string | null }> {
+): Promise<{
+  findings: Finding[];
+  registrationNumber: string | null;
+  ownerHmac: string | null;
+  conflictHolders: StickerHolder[];
+}> {
   const { file } = input;
   const registrationNumber =
     file.parsed?.registrationNumber ?? normaliseRegistrationNumber(input.enteredNumber ?? "");
-  const [ownerHmac, conflict, reused] = await Promise.all([
+  const [ownerHmac, conflictHolders, reused] = await Promise.all([
     ownerIdHmac(admin, input.userId),
-    verifiedForUnrelatedOwner(admin, input.userId, registrationNumber),
+    holdersForOtherOwners(admin, input.userId, registrationNumber),
     sameFileOnOtherBusiness(admin, file.sha256, input.businessId),
   ]);
   const findings = screenCipcSubmission({
@@ -123,12 +134,12 @@ export async function screenUpload(
     directorIdHmacs: file.directorIdHmacs,
     directorsWithoutSaId: file.directorsWithoutSaId,
     sameFileOnOtherBusiness: reused,
-    verifiedForUnrelatedOwner: conflict,
+    verifiedForUnrelatedOwner: conflictHolders.length > 0,
     profileName: input.businessName,
     office: file.office,
     today: input.today ?? new Date(),
   });
-  return { findings, registrationNumber, ownerHmac };
+  return { findings, registrationNumber, ownerHmac, conflictHolders };
 }
 
 /** What the owner sees after we read their document (names only, no IDs). */

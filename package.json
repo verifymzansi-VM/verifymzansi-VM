@@ -161,7 +161,7 @@
     "react-hook-form": "^7.89.0",
     "resend": "^6.30.0",
     "server-only": "^0.0.1",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "svix": "^1.92.2",
     "tailwind-merge": "^3.7.0",
     "tailwindcss-animate": "^1.0.7",
@@ -259,7 +259,8 @@
       "postcss-selector-parser@<7.1.6": "7.1.6",
       "smol-toml@<1.9.0": "1.9.0",
       "source-map-js@<1.2.2": "1.2.2",
-      "proxy-addr@<2.0.8": "2.0.8"
+      "proxy-addr@<2.0.8": "2.0.8",
+      "sharp@<0.35.5": "0.35.5"
     },
     "patchedDependencies": {
       "braces@3.0.3": "patches/braces@3.0.3.patch"

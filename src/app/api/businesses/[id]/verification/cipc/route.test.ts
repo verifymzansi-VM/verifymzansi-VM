@@ -18,7 +18,9 @@ vi.mock("@/lib/utils/mutation-origin", () => ({ enforceSameOriginMutation: () =>
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: () => null }));
 vi.mock("@/lib/utils/rate-limit", () => ({ checkRateLimit: async () => ({ limited: false }) }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: vi.fn().mockResolvedValue(undefined) }));
+const notify = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock("@/lib/notifications", () => ({
+  createNotification: notify,
   notifyStaffForAdminEvent: vi.fn().mockResolvedValue(true),
 }));
 const upload = vi.hoisted(() =>
@@ -32,10 +34,19 @@ const OWNER = "owner-1";
 const BIZ = "11111111-1111-4111-8111-111111111111";
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 0xff, 0xd9]);
 
+const HOLDER_BIZ = "22222222-2222-4222-8222-222222222222";
+
 function seed(verification = "verified") {
   state.db = createFakeDb({
     businesses: [
       { id: BIZ, owner_id: OWNER, business_name: "Example Kitchen", cipc_verified_at: null },
+      {
+        id: HOLDER_BIZ,
+        owner_id: "holder-1",
+        business_name: "Example Trading",
+        cipc_registration_number: "2020/123456/07",
+        cipc_verified_at: "2026-09-01T00:00:00Z",
+      },
     ],
     account_profiles: [
       { user_id: OWNER, account_verification_status: verification, account_status: "active" },
@@ -130,5 +141,30 @@ describe("POST /api/businesses/[id]/verification/cipc", () => {
       content_type: "image/jpeg",
       quarantined: false,
     });
+  });
+
+  it("tells the current holder when another owner claims their company", async () => {
+    const res = await POST(
+      request({ file: photo(), registrationNumber: "2020/123456/07" }) as never,
+      { params }
+    );
+    expect(res.status).toBe(201);
+    const [created] = state.db!.tables.business_verifications;
+    expect((created.findings as Array<{ code: string }>).map((f) => f.code)).toContain(
+      "conflict_other_owner"
+    );
+    expect(notify).toHaveBeenCalledOnce();
+    expect(notify.mock.calls[0][0]).toMatchObject({
+      userId: "holder-1",
+      title: "Someone else claimed your company",
+    });
+    expect(JSON.stringify(notify.mock.calls[0][0])).not.toContain(OWNER);
+  });
+
+  it("does not notify anyone when the number is unclaimed", async () => {
+    await POST(request({ file: photo(), registrationNumber: "2019/000001/07" }) as never, {
+      params,
+    });
+    expect(notify).not.toHaveBeenCalled();
   });
 });

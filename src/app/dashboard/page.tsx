@@ -217,6 +217,17 @@ export default async function DashboardPage() {
       leadsOwnerColumn,
       user.id
     ),
+    /* 15 — live businesses without a CIPC or Seen sticker */
+    applyOwnerFilter(
+      supabase
+        .from("businesses")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "live")
+        .is("cipc_verified_at", null)
+        .is("seen_verified_at", null),
+      businessOwnerColumn,
+      user.id
+    ),
   ]);
 
   const profileResult = settled(results[0], EMPTY_OK);
@@ -243,6 +254,7 @@ export default async function DashboardPage() {
   const expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
+  const unstickeredBusinessCount = settled(results[15], EMPTY_OK).count || 0;
   const tourismEventsCount = activePromos + (tourismBusinessCountResult.count || 0);
 
   const verificationSummary = summarizeVerification(
@@ -451,6 +463,7 @@ export default async function DashboardPage() {
         verificationStatus={verificationSummary.accountVerificationStatus}
         stepsRemaining={stepsRemaining}
         includeVerification={false}
+        unstickeredBusinessCount={isVerified ? unstickeredBusinessCount : 0}
       />
 
       {/* ───── Main content ───── */}

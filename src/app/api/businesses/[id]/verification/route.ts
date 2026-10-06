@@ -23,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       admin
         .from("businesses")
         .select(
-          "cipc_verified_at, cipc_expires_at, cipc_registration_number, cipc_registered_name, show_full_registered_office, seen_verified_at, seen_expires_at, seen_method, seen_city, owner_verified_role, owner_position_title"
+          "cipc_verified_at, cipc_expires_at, cipc_registration_number, cipc_registered_name, cipc_registered_office, show_full_registered_office, seen_verified_at, seen_expires_at, seen_method, seen_city, owner_verified_role, owner_position_title"
         )
         .eq("id", business.id)
         .single(),
@@ -75,6 +75,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               role: b.owner_verified_role,
               position: b.owner_position_title,
               showFullRegisteredOffice: b.show_full_registered_office,
+              // Owner only: the full office, for "Use registered office" on the edit form.
+              registeredOffice: b.cipc_registered_office,
             }
           : null,
         seen: live(b.seen_verified_at, b.seen_expires_at)

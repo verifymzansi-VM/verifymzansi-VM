@@ -187,9 +187,10 @@ export async function approvalEvidence(admin: Admin, row: CaseRow): Promise<Evid
   };
 }
 
-async function notifyOwner(
+/** In-app notice and email to the owner. Failures are logged, never thrown. */
+export async function notifyOwner(
   admin: Admin,
-  row: CaseRow,
+  row: Pick<CaseRow, "id" | "owner_id" | "business_id" | "kind">,
   kind: BusinessVerificationEmailKind,
   note: string | null
 ) {
@@ -208,12 +209,20 @@ async function notifyOwner(
     const title = {
       approved: `${sticker} sticker approved`,
       info_requested: "We need something from you",
+      message: "Message about your business verification",
       rejected: `${sticker} not approved`,
       revoked: `${sticker} sticker removed`,
     }[kind];
     await createNotification({
       userId: row.owner_id,
-      type: kind === "approved" ? "success" : kind === "info_requested" ? "warning" : "error",
+      type:
+        kind === "approved"
+          ? "success"
+          : kind === "info_requested"
+            ? "warning"
+            : kind === "message"
+              ? "info"
+              : "error",
       title,
       message: note ? `${businessName}: ${note}`.slice(0, 300) : businessName,
       href: `/dashboard/businesses/${row.business_id}/verification`,

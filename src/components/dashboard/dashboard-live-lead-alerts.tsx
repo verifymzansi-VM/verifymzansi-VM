@@ -18,6 +18,8 @@ interface DashboardLiveLeadAlertsProps {
   stepsRemaining: number;
   /** Repeat verification reminders in the attention list (off when a verification card is shown). */
   includeVerification?: boolean;
+  /** Live businesses that could get the CIPC or Seen sticker. */
+  unstickeredBusinessCount?: number;
 }
 
 export function DashboardLiveLeadAlerts({
@@ -32,6 +34,7 @@ export function DashboardLiveLeadAlerts({
   verificationStatus,
   stepsRemaining,
   includeVerification = true,
+  unstickeredBusinessCount = 0,
 }: DashboardLiveLeadAlertsProps) {
   const { unreadCount, isLoading } = useLeadsUnread();
   const unreadLeadCount = isLoading ? initialUnreadLeadCount : unreadCount;
@@ -55,6 +58,7 @@ export function DashboardLiveLeadAlerts({
         verificationStatus={verificationStatus}
         stepsRemaining={stepsRemaining}
         includeVerification={includeVerification}
+        unstickeredBusinessCount={unstickeredBusinessCount}
       />
     </>
   );

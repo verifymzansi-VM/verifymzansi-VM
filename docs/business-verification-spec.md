@@ -517,3 +517,23 @@ Built as specified, with these deliberate differences:
   profile**, where the owner's verification status is already loaded.
 - **Cases waiting on the owner for 30 days close as withdrawn** (daily job), and
   the owner is told.
+- **Plan check (2026-10-06, second pass).** Everything in the approved plan was
+  checked against the code. These were added in the follow-up commit:
+  - the current sticker holder is notified when another owner claims their
+    company number (no details of the claimant are shared);
+  - promotion pages show the CIPC and Seen stickers on the linked business and
+    the owner's verified position beside the advertiser;
+  - staff messages are emailed to the owner as well as shown in-app;
+  - "Use registered office" pre-fills the location on the business edit form;
+  - the dashboard's "Needs your attention" list prompts ID-verified owners whose
+    live businesses have no CIPC or Seen sticker.
+- **Where the nudge lives.** The getting-started checklist only shows to
+  accounts with no businesses, so the verification prompt is in "Needs your
+  attention" instead.
+- **"Use registered office" is on the edit form only.** A new business can't
+  hold the CIPC sticker yet, so the create form has nothing to pre-fill.
+- **Showroom carousel tiles carry no stickers.** They show artwork and a title
+  only, with no trust badges for any content; business cards, profile pages, the
+  immersive view and promotion pages show the stickers.
+- **Visits use the existing `queue:claim` capability** (moderator and up)
+  instead of a new `visit:conduct`; the people allowed are the same.

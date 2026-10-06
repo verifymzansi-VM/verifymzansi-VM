@@ -28,7 +28,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { PromotionContactActions } from "@/components/listings/promotion-contact-actions";
+import { BusinessStickers } from "@/components/trust/business-stickers";
 import { TrustBadge } from "@/components/trust/trust-badge";
+import { VerifiedPosition } from "@/components/trust/verified-position";
 import { MediaLightbox } from "@/components/ui/media-lightbox";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
 import { formatRandAmount, formatSaLongDate, formatZAR, formatZARShort } from "@/lib/utils/format";
@@ -101,6 +103,12 @@ export interface LinkedBusinessRecord {
   id: string;
   business_name: string;
   logo_url: string | null;
+  cipc_verified_at?: string | null;
+  seen_verified_at?: string | null;
+  seen_method?: string | null;
+  seen_city?: string | null;
+  owner_verified_role?: string | null;
+  owner_position_title?: string | null;
 }
 
 type PromotionMediaItem = {
@@ -377,6 +385,27 @@ export function PromotionDetailContent({
   const trustLevel = advertiserProfile
     ? computeTrustLevel(readAccountVerificationStatus(advertiserProfile))
     : 0;
+  // A promotion's owner always owns its linked business (DB trigger), so the
+  // business's verified position is the advertiser's.
+  const advertiserPosition = (
+    <VerifiedPosition
+      position={linkedBusiness?.owner_position_title}
+      source={linkedBusiness?.owner_verified_role}
+    />
+  );
+  // The ID sticker is the advertiser's trust badge; the card adds CIPC and Seen.
+  const linkedStickers = linkedBusiness ? (
+    <BusinessStickers
+      className="my-1"
+      state={{
+        idReviewed: false,
+        cipcCheckedAt: linkedBusiness.cipc_verified_at,
+        seenAt: linkedBusiness.seen_verified_at,
+        seenMethod: linkedBusiness.seen_method,
+        seenCity: linkedBusiness.seen_city,
+      }}
+    />
+  ) : null;
 
   // Countdown to event start (upcoming) or end (ongoing)
   const countdownTarget =
@@ -687,6 +716,7 @@ export function PromotionDetailContent({
                     <p className="break-words text-sm font-medium">
                       {advertiserProfile?.display_name || "Account name unavailable"}
                     </p>
+                    {advertiserPosition}
                     <TrustBadge level={trustLevel} size="sm" />
                   </div>
                 </CardContent>
@@ -1061,6 +1091,7 @@ export function PromotionDetailContent({
                 </div>
                 <div className="min-w-0">
                   <p className="break-words text-sm font-medium">{linkedBusiness.business_name}</p>
+                  {linkedStickers}
                   <p className="text-xs text-brand-blue">View Business</p>
                 </div>
               </Link>
@@ -1107,6 +1138,7 @@ export function PromotionDetailContent({
                 <p className="text-sm font-medium">
                   {advertiserProfile?.display_name || "Account name unavailable"}
                 </p>
+                {advertiserPosition}
                 <TrustBadge level={trustLevel} size="sm" />
               </div>
             </div>
@@ -1156,6 +1188,7 @@ export function PromotionDetailContent({
                 </div>
                 <div className="min-w-0">
                   <p className="break-words text-sm font-medium">{linkedBusiness.business_name}</p>
+                  {linkedStickers}
                   <p className="text-xs text-brand-blue">View Business</p>
                 </div>
               </Link>

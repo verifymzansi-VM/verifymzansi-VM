@@ -945,7 +945,8 @@ export async function sendTrialExtensionEmail(params: {
   });
 }
 
-export type BusinessVerificationEmailKind = "approved" | "info_requested" | "rejected" | "revoked";
+export type BusinessVerificationEmailKind =
+  "approved" | "info_requested" | "message" | "rejected" | "revoked";
 
 const BUSINESS_VERIFICATION_COPY: Record<
   BusinessVerificationEmailKind,
@@ -962,6 +963,12 @@ const BUSINESS_VERIFICATION_COPY: Record<
     title: "We need something from you",
     body: "Our team has a question about your business verification. Reply on your Verify page.",
     cta: "Reply now",
+  },
+  message: {
+    tone: "success",
+    title: "A message from our team",
+    body: "Our team sent you a message about your business verification. Nothing else changed.",
+    cta: "Read it",
   },
   rejected: {
     tone: "danger",
@@ -995,7 +1002,10 @@ export async function sendBusinessVerificationEmail(params: {
     ["Sticker", params.sticker],
   ];
   if (params.note)
-    details.push([params.kind === "info_requested" ? "Message" : "Reason", params.note]);
+    details.push([
+      params.kind === "info_requested" || params.kind === "message" ? "Message" : "Reason",
+      params.note,
+    ]);
 
   const html = brandedEmail({
     tone: copy.tone,

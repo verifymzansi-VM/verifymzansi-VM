@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createNotification } from "@/lib/notifications";
+import { notifyOwner } from "@/lib/business-verification/decide";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const admin = createAdminClient();
     const { data: row, error } = await admin
       .from("business_verifications")
-      .select("id, owner_id, business_id, status")
+      .select("id, owner_id, business_id, kind, status")
       .eq("id", guard.caseId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -54,13 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (insertError) throw new Error(insertError.message);
 
     await Promise.all([
-      createNotification({
-        userId: row.owner_id,
-        type: "info",
-        title: "Message about your business verification",
-        message: body.data.body.slice(0, 300),
-        href: `/dashboard/businesses/${row.business_id}/verification`,
-      }),
+      notifyOwner(admin, row, "message", body.data.body),
       logAuditEvent({
         actorId: guard.user.id,
         actorRole: guard.actorRole,
