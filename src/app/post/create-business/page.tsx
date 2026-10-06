@@ -342,7 +342,6 @@ function CreateBusinessContent() {
   const [trialDays, setTrialDays] = useState<7 | 30>(7);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [yearEstablished, setYearEstablished] = useState("");
-  const [cipcRegistration, setCipcRegistration] = useState("");
   const [bbbeeLevel, setBbbeeLevel] = useState("");
   const [languagesSpoken, setLanguagesSpoken] = useState("");
   const [loadSheddingReady, setLoadSheddingReady] = useState(false);
@@ -1029,7 +1028,6 @@ function CreateBusinessContent() {
         focal_x: focalPoint.x,
         focal_y: focalPoint.y,
         year_established: yearEstablished ? Number(yearEstablished) : undefined,
-        cipc_registration: cipcRegistration || undefined,
         bbbee_level: bbbeeLevel || undefined,
         languages_spoken: languagesSpoken || undefined,
         load_shedding_ready: loadSheddingReady || undefined,
@@ -1226,7 +1224,6 @@ function CreateBusinessContent() {
     // same way for the layout's facts tiles to show.
     const previewBusinessProfile: Record<string, unknown> = {};
     if (yearEstablished) previewBusinessProfile.year_established = Number(yearEstablished);
-    if (cipcRegistration) previewBusinessProfile.cipc_registration = cipcRegistration;
     if (bbbeeLevel) previewBusinessProfile.bbbee_level = bbbeeLevel;
     if (languagesSpoken) previewBusinessProfile.languages_spoken = languagesSpoken;
     if (loadSheddingReady) previewBusinessProfile.load_shedding_ready = true;
@@ -1802,7 +1799,6 @@ function CreateBusinessContent() {
                         values={{
                           yearEstablished,
                           numberOfEmployees,
-                          cipcRegistration,
                           bbbeeLevel,
                           languagesSpoken,
                           loadSheddingReady,
@@ -1812,8 +1808,6 @@ function CreateBusinessContent() {
                             setYearEstablished(patch.yearEstablished);
                           if (patch.numberOfEmployees !== undefined)
                             setNumberOfEmployees(patch.numberOfEmployees);
-                          if (patch.cipcRegistration !== undefined)
-                            setCipcRegistration(patch.cipcRegistration);
                           if (patch.bbbeeLevel !== undefined) setBbbeeLevel(patch.bbbeeLevel);
                           if (patch.languagesSpoken !== undefined)
                             setLanguagesSpoken(patch.languagesSpoken);

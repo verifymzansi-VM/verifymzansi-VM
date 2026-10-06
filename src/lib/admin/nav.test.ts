@@ -38,6 +38,7 @@ function adminPages(dir = path.join(APP_DIR, "admin"), route = "/admin"): string
  * its parent entry's capability, checked below.
  */
 const SUB_PAGES: Record<string, string> = {
+  "/admin/business-verification/[id]": "/admin/business-verification",
   "/admin/dsar/new": "/admin/dsar",
   "/admin/governance/appeals/[id]": "/admin/governance/appeals",
   "/admin/governance/escalations/[id]": "/admin/governance/escalations",

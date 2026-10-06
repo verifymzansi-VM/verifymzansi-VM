@@ -20,12 +20,13 @@ const itemType = z.enum([
   "business",
   "promotion",
   "content_edit",
+  "business_verification",
 ]);
 
 const schema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("claim"),
-    queue: z.enum(["reports", "kyc", "content"]),
+    queue: z.enum(["reports", "kyc", "content", "business_kyc"]),
     limit: z.number().int().min(1).max(25).default(10),
   }),
   z.object({ action: z.literal("renew") }),

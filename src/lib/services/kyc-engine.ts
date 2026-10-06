@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { createLogger } from "@/lib/utils/logger";
-import { env } from "@/lib/config/env";
+import { getIdNumberHmacSecret, hmacIdNumber } from "./id-number-hmac";
 import { getConfiguredProvider } from "./kyc-provider";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RiskLevel } from "@/types/enums";
@@ -197,17 +197,8 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
   // ── 3. ID number HMAC reuse check (id_doc only) ──────────
   let idNumberHmac: string | undefined;
   if (stepType === "id_doc" && idNumber) {
-    const hmacSecret = env("HMAC_SECRET");
-    const ZERO_KEY = "0".repeat(64);
-    const CAFEBABE_PLACEHOLDER = "cafebabe".repeat(8);
-    const isLowEntropy =
-      hmacSecret != null && hmacSecret.length === 64 && new Set(hmacSecret).size < 8;
-    if (
-      !hmacSecret ||
-      hmacSecret === ZERO_KEY ||
-      hmacSecret === CAFEBABE_PLACEHOLDER ||
-      isLowEntropy
-    ) {
+    const hmacSecret = getIdNumberHmacSecret();
+    if (!hmacSecret) {
       if (process.env.NODE_ENV === "production") {
         throw new Error(
           "HMAC_SECRET is not configured — cannot process KYC artifacts in production"
@@ -224,10 +215,7 @@ export async function processKycArtifact(input: KycEngineInput): Promise<KycEngi
       });
       signalScore += SEVERITY_WEIGHT.warn;
     } else {
-      idNumberHmac = crypto
-        .createHmac("sha256", Buffer.from(hmacSecret, "hex"))
-        .update(idNumber)
-        .digest("hex");
+      idNumberHmac = hmacIdNumber(idNumber, hmacSecret);
 
       const { data: hmacRows, error: hmacErr } = await adminClient
         .from("verification_steps")

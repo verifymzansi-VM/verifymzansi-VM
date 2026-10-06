@@ -165,6 +165,7 @@
     "svix": "^1.92.2",
     "tailwind-merge": "^3.7.0",
     "tailwindcss-animate": "^1.0.7",
+    "unpdf": "1.8.1",
     "zod": "^4.6.5",
     "zustand": "^5.0.15"
   },

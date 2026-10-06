@@ -13,6 +13,7 @@ import { CATEGORY_CTA_CONFIG } from "@/lib/business/category-layout-map";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { displayHoursText } from "@/lib/business/open-status";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
+import { ID_REVIEWED_TRUST_LEVEL } from "@/lib/business-verification/public";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
 import { canonicalHref } from "@/lib/feed/refs";
 import type {
@@ -29,6 +30,7 @@ import { hasBusinessDeliveryAvailable } from "@/lib/forms/business-type-details"
 import {
   acceptsInboxEnquiries,
   getBusinessProfileFacts,
+  getBusinessVerificationFacts,
   getBusinessTypeDetails,
   getSubcategoryLabel,
   getTourismViewerDetails,
@@ -411,6 +413,7 @@ export function presentBusinessSlide(
   const mapUrl =
     business.business_type === "home_business" ? null : externalLink(business.map_directions);
   const profileFacts = getBusinessProfileFacts(business, { includeLanguages: !isTourism });
+  const verificationFacts = getBusinessVerificationFacts(business);
   const starRating =
     typeof details.star_rating === "number" && details.star_rating > 0 ? details.star_rating : null;
   const grading =
@@ -525,6 +528,7 @@ export function presentBusinessSlide(
           title: "Stay details",
           facts: stay.facts.filter((fact) => fact.label !== "Price range"),
         },
+        { type: "facts", id: "registration", title: "Registration", facts: verificationFacts },
         ...stayLists,
         about
       )
@@ -544,7 +548,12 @@ export function presentBusinessSlide(
           title: "Service areas",
           items: business.service_areas?.areas ?? [],
         },
-        { type: "facts", id: "glance", title: "Business details", facts: profileFacts },
+        {
+          type: "facts",
+          id: "glance",
+          title: "Business details",
+          facts: [...verificationFacts, ...profileFacts],
+        },
         { type: "facts", id: "more", title: "More details", facts: categoryDetailFacts(business) },
         about
       );
@@ -633,6 +642,15 @@ export function presentBusinessSlide(
       trustLevel: trustOf(owner),
       logoUrl: business.logo_url ? normalizeMediaUrl(business.logo_url) : null,
       href: null,
+      position: business.owner_position_title ?? null,
+      positionSource: business.owner_verified_role ?? null,
+      stickers: {
+        idReviewed: (trustOf(owner) ?? 0) >= ID_REVIEWED_TRUST_LEVEL,
+        cipcCheckedAt: business.cipc_verified_at ?? null,
+        seenAt: business.seen_verified_at ?? null,
+        seenMethod: business.seen_method ?? null,
+        seenCity: business.seen_city ?? null,
+      },
     },
     contact: {
       phone: business.phone,

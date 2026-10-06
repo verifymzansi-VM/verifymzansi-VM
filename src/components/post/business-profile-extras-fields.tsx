@@ -1,6 +1,7 @@
 "use client";
 
-import { FieldHelp } from "./field-help";
+import Link from "next/link";
+
 import { PostLabel as Label } from "./post-label";
 import { PostSelect } from "./post-select";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,6 @@ const SELECT_CLASS =
 export type BusinessProfileExtras = {
   yearEstablished: string;
   numberOfEmployees: string;
-  cipcRegistration: string;
   bbbeeLevel: string;
   languagesSpoken: string;
   loadSheddingReady: boolean;
@@ -20,7 +20,6 @@ export type BusinessProfileExtras = {
 export const EMPTY_BUSINESS_PROFILE_EXTRAS: BusinessProfileExtras = {
   yearEstablished: "",
   numberOfEmployees: "",
-  cipcRegistration: "",
   bbbeeLevel: "",
   languagesSpoken: "",
   loadSheddingReady: false,
@@ -41,7 +40,6 @@ export function readBusinessProfileExtras(categoryDetails: unknown): BusinessPro
     yearEstablished:
       typeof profile.year_established === "number" ? String(profile.year_established) : "",
     numberOfEmployees: text(profile.number_of_employees),
-    cipcRegistration: text(profile.cipc_registration),
     bbbeeLevel: text(profile.bbbee_level),
     languagesSpoken: text(profile.languages_spoken),
     loadSheddingReady: profile.load_shedding_ready === true,
@@ -52,7 +50,6 @@ export function readBusinessProfileExtras(categoryDetails: unknown): BusinessPro
 export function businessProfileExtrasPayload(extras: BusinessProfileExtras) {
   return {
     year_established: extras.yearEstablished ? Number(extras.yearEstablished) : undefined,
-    cipc_registration: extras.cipcRegistration.trim() || undefined,
     bbbee_level: extras.bbbeeLevel || undefined,
     languages_spoken: extras.languagesSpoken.trim() || undefined,
     load_shedding_ready: extras.loadSheddingReady || undefined,
@@ -105,23 +102,6 @@ export function BusinessProfileExtrasFields({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="cipcRegistration">Company registration number (CIPC) (Optional)</Label>
-          <FieldHelp label="company registration number">
-            Add your company registration number if you have one. You can leave this blank.
-          </FieldHelp>
-          <Input
-            id="cipcRegistration"
-            value={values.cipcRegistration}
-            onChange={(e) => onChange({ cipcRegistration: e.target.value })}
-            placeholder="e.g. 2023/123456/07"
-            maxLength={30}
-          />
-          <p className="text-xs text-muted-foreground">
-            Shown as provided. We verify people, not company records.
-          </p>
-        </div>
-
-        <div className="space-y-1">
           <Label htmlFor="bbbeeLevel">B-BBEE Level</Label>
           <PostSelect
             id="bbbeeLevel"
@@ -143,17 +123,17 @@ export function BusinessProfileExtrasFields({
             <option value="exempt">Exempt (EME)</option>
           </PostSelect>
         </div>
-      </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="languagesSpoken">Languages Spoken</Label>
-        <Input
-          id="languagesSpoken"
-          value={values.languagesSpoken}
-          onChange={(e) => onChange({ languagesSpoken: e.target.value })}
-          placeholder="e.g. English, isiZulu, Afrikaans"
-          maxLength={200}
-        />
+        <div className="space-y-1">
+          <Label htmlFor="languagesSpoken">Languages Spoken</Label>
+          <Input
+            id="languagesSpoken"
+            value={values.languagesSpoken}
+            onChange={(e) => onChange({ languagesSpoken: e.target.value })}
+            placeholder="e.g. English, isiZulu, Afrikaans"
+            maxLength={200}
+          />
+        </div>
       </div>
 
       <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border border-input bg-card px-3 text-sm">
@@ -165,6 +145,14 @@ export function BusinessProfileExtrasFields({
         />
         Load-shedding ready (generator / inverter / solar)
       </label>
+
+      <p className="text-sm text-muted-foreground">
+        Registered with CIPC? We check that from your CIPC documents — after posting, choose{" "}
+        <span className="font-medium text-foreground">Verify</span> on your business in My posts.{" "}
+        <Link href="/help/business-verification" className="underline underline-offset-2">
+          How it works
+        </Link>
+      </p>
     </>
   );
 }

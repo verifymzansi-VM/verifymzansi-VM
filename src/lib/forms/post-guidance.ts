@@ -6,8 +6,6 @@ export const POST_FIELD_GUIDANCE: Record<string, string> = {
   condition:
     "New means unused. Like new means used with almost no visible wear. Good means working with normal wear. Fair means noticeable wear that you should describe. For parts means the item is not fully working.",
   slug: "We create your profile link from your business name. You only need to change it if you want a different link. Use lowercase letters, numbers and hyphens.",
-  cipcRegistration:
-    "CIPC is the Companies and Intellectual Property Commission. Add your company registration number if you have one. You can leave this blank.",
   bbbeeLevel:
     "Enter the level shown on your current B-BBEE certificate or affidavit. Leave this blank if you do not know; do not guess a level.",
   starRating:

@@ -124,8 +124,7 @@ Choose Business when customers should be able to find your business over time.
 - **Products and services** (Optional) — list anything else you offer.
 - **Custom profile link** (Optional) — created from your business name.
 - **Additional business information** (Optional) — year established, number of
-  employees, CIPC registration number, B-BBEE level, languages and load-shedding
-  readiness.
+  employees, B-BBEE level, languages and load-shedding readiness.
 
 Tourism providers use the Tourism route instead.
 

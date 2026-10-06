@@ -11,6 +11,8 @@ export interface FeedRef {
   id: string;
 }
 
+import type { BusinessStickerState } from "@/lib/business-verification/public";
+
 export type FeedSlideKind = "listing" | "business" | "tourism" | "event";
 export type FeedVertical = "market" | "business" | "tourism";
 
@@ -114,6 +116,11 @@ export interface FeedSlide {
     logoUrl: string | null;
     /** Profile to open from the owner card (an event's organiser business). */
     href: string | null;
+    /** Verified position on a business: from CIPC, or confirmed by the company. */
+    position?: string | null;
+    positionSource?: string | null;
+    /** Business verification stickers (businesses only). */
+    stickers?: BusinessStickerState | null;
   };
   contact: FeedContact;
   engagement: { views: number; likes: number; viewerHasLiked: boolean; shares?: number | null };

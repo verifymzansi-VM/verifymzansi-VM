@@ -14,6 +14,8 @@ const SA_PROVINCE_ALIASES: Record<string, string> = {
   gt: "Gauteng",
   "kwazulu-natal": "KwaZulu-Natal",
   "kwazulu natal": "KwaZulu-Natal",
+  // CIPC prints the province as "KWA-ZULU NATAL".
+  "kwa zulu natal": "KwaZulu-Natal",
   kzn: "KwaZulu-Natal",
   limpopo: "Limpopo",
   lp: "Limpopo",
@@ -138,6 +140,7 @@ export const SA_PROVINCES: Province[] = [
       "Durban",
       "Pietermaritzburg",
       "Richards Bay",
+      "Empangeni",
       "Newcastle",
       "Umhlanga",
       "Ballito",

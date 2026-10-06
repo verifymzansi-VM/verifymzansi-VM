@@ -12,9 +12,15 @@ const log = createLogger("QueueClaims");
  * receive the same item.
  */
 
-export type ClaimQueue = "reports" | "kyc" | "content";
+export type ClaimQueue = "reports" | "kyc" | "content" | "business_kyc";
 export type ClaimItemType =
-  "report" | "verification_step" | "listing" | "business" | "promotion" | "content_edit";
+  | "report"
+  | "verification_step"
+  | "listing"
+  | "business"
+  | "promotion"
+  | "content_edit"
+  | "business_verification";
 
 export interface ClaimedItem {
   item_type: ClaimItemType;

@@ -1,4 +1,5 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
 import { businessCategoryFilterValues } from "@/lib/constants/categories";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
@@ -653,35 +654,35 @@ export async function GET(request: NextRequest) {
     const selectAttempts = [
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height",
+          `id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height, ${CARD_STICKER_COLUMNS}`,
           ownerColumn
         ),
         omittedFields: [] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height",
+          `id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, business_details, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height, ${CARD_STICKER_COLUMNS}`,
           ownerColumn
         ),
         omittedFields: ["gallery_photos"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height",
+          `id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height, ${CARD_STICKER_COLUMNS}`,
           ownerColumn
         ),
         omittedFields: ["business_details"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height",
+          `id, owner_id, business_type, business_name, slug, description, category, subcategory, logo_url, cover_photo, cover_video, video_thumbnail, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, featured_until, published_at, created_at, focal_x, focal_y, media_width, media_height, ${CARD_STICKER_COLUMNS}`,
           ownerColumn
         ),
         omittedFields: ["gallery_photos", "business_details"] as const,
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, description, category, subcategory, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at, focal_x, focal_y, media_width, media_height",
+          `id, owner_id, business_type, business_name, description, category, subcategory, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at, focal_x, focal_y, media_width, media_height, ${CARD_STICKER_COLUMNS}`,
           ownerColumn
         ),
         omittedFields: [
@@ -695,7 +696,7 @@ export async function GET(request: NextRequest) {
       },
       {
         select: withOwnerColumn(
-          "id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at, focal_x, focal_y, media_width, media_height",
+          `id, owner_id, business_type, business_name, description, category, logo_url, cover_photo, cover_video, location_province, location_city, store_number, website, services_offered, service_areas, operating_hours, payment_methods_accepted, delivery_options, boost_until, created_at, focal_x, focal_y, media_width, media_height, ${CARD_STICKER_COLUMNS}`,
           ownerColumn
         ),
         omittedFields: [
@@ -864,7 +865,11 @@ export async function GET(request: NextRequest) {
       const businessId = String(business.id ?? "");
       const likeSummary = engagementAvailable ? likeSummaryResult.data.get(businessId) : undefined;
       // Account ids stay server-side (POPIA), as for listings and promotions.
-      const { owner_id: _ownerId, seller_id: _sellerId, ...publicBusiness } = business;
+      const {
+        owner_id: _ownerId,
+        seller_id: _sellerId,
+        ...publicBusiness
+      } = toPublicVerification(business as Record<string, unknown>);
 
       return {
         ...publicBusiness,

@@ -16,6 +16,7 @@ const QUEUES: Record<Queue, { label: string; href: string }> = {
   reports: { label: "reports", href: "/admin/reports" },
   kyc: { label: "identity checks", href: "/admin/verification" },
   content: { label: "content items", href: "/admin/moderation" },
+  business_kyc: { label: "business checks", href: "/admin/business-verification" },
 };
 
 const ITEM_LABELS: Record<string, string> = {
@@ -23,6 +24,7 @@ const ITEM_LABELS: Record<string, string> = {
   verification_step: "Identity check",
   listing: "Listing",
   business: "Business",
+  business_verification: "Business check",
   promotion: "Tourism or event",
   content_edit: "Content edit",
 };

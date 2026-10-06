@@ -191,6 +191,17 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   ],
   "verification:status": [{ limit: 30, ttl: 60 }], // polling-friendly
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
+  // Business verification (CIPC / Seen stickers). Submissions are keyed per
+  // account + business: five a day is ample for honest retries.
+  "business-verification:preview": [
+    { limit: 10, ttl: 60 },
+    { limit: 40, ttl: 3600 },
+  ],
+  "business-verification:submit": [{ limit: 5, ttl: 86400 }],
+  "business-verification:message": [
+    { limit: 10, ttl: 600 },
+    { limit: 40, ttl: 86400 },
+  ],
   "verify-buyer": [
     { limit: 10, ttl: 60 }, // 10 per minute
     { limit: 30, ttl: 3600 }, // 30 per hour

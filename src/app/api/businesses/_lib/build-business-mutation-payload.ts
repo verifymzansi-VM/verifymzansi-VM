@@ -28,7 +28,6 @@ export function buildBusinessMutationPayload(
   // category_details jsonb column under a stable key.
   const businessProfile: Record<string, unknown> = {};
   if (data.year_established !== undefined) businessProfile.year_established = data.year_established;
-  if (data.cipc_registration) businessProfile.cipc_registration = data.cipc_registration;
   if (data.bbbee_level) businessProfile.bbbee_level = data.bbbee_level;
   if (data.languages_spoken) businessProfile.languages_spoken = data.languages_spoken;
   if (data.load_shedding_ready !== undefined)

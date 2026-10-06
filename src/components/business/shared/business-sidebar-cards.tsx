@@ -60,9 +60,17 @@ export function OperatingHoursCard({ operatingHours }: OperatingHoursCardProps) 
 interface ManagedByCardProps {
   ownerProfile: BusinessOwnerRecord | null;
   trustLevel: TrustLevel | null;
+  /** Verified position: from CIPC (director/member) or confirmed by the company. */
+  position?: string | null;
+  positionSource?: string | null;
 }
 
-export function ManagedByCard({ ownerProfile, trustLevel }: ManagedByCardProps) {
+export function ManagedByCard({
+  ownerProfile,
+  trustLevel,
+  position,
+  positionSource,
+}: ManagedByCardProps) {
   return (
     <Card>
       <CardContent className="space-y-4 p-5">
@@ -77,6 +85,19 @@ export function ManagedByCard({ ownerProfile, trustLevel }: ManagedByCardProps) 
             <p className="break-words font-medium">
               {ownerProfile?.display_name || "Account name unavailable"}
             </p>
+            {position ? (
+              <p className="text-sm text-muted-foreground">
+                {position}
+                <span className="sr-only">
+                  {positionSource === "representative"
+                    ? ", confirmed by the company"
+                    : ", confirmed on CIPC records"}
+                </span>
+                <span aria-hidden="true">
+                  {positionSource === "representative" ? " · confirmed by company" : " · CIPC"}
+                </span>
+              </p>
+            ) : null}
             {trustLevel != null && <TrustBadge level={trustLevel} size="sm" />}
           </div>
         </div>

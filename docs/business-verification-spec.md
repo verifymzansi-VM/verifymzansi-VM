@@ -489,3 +489,31 @@ and appointment date; registered office.
   - **Expiry:** back-date → cron clears the stickers → renew.
 - **Open item:** one free CIPC disclosure sample, to fingerprint it and to learn
   whether the admin's CIPC copy can be free.
+
+---
+
+## Implementation notes (2026-10-06)
+
+Built as specified, with these deliberate differences:
+
+- **Two-person exceptions live on the case, not in the shared decision ledger.**
+  A reviewer proposes an exception with a reason; a different governance
+  controller or admin confirms it (step-up MFA). Wiring a new category into
+  `approve_decision` would have meant rewriting a function that live KYC
+  overrides depend on. Removing a sticker is a senior, single-person action with
+  a written reason and step-up MFA.
+- **Seen identity check uses the owner's verified legal name, not the KYC
+  selfie.** Approved KYC images are deleted after 30 days, so the verifier
+  checks that the person shows an ID matching the name on the owner's reviewed
+  ID.
+- **Visit photos are never published.** They are private evidence and are
+  deleted 30 days after the decision, like every other case file.
+- **Owners read their cases only through the API.** RLS gives owners no direct
+  access, so staff-only fields (forensic findings, the admin's CIPC copy,
+  work-email code hashes) cannot leak through PostgREST.
+- **Work-email codes are stored on the case** (HMAC-hashed, 15 minutes, 5 tries)
+  rather than in `otp_challenges`, which is keyed on phone numbers.
+- **Cards show the CIPC and Seen stickers; the ID sticker appears on the
+  profile**, where the owner's verification status is already loaded.
+- **Cases waiting on the owner for 30 days close as withdrawn** (daily job), and
+  the owner is told.

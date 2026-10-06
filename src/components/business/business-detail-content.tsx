@@ -26,6 +26,7 @@ import {
 
 import type { TourismCategoryDetails } from "@/types/tourism-details";
 import type { BusinessDetails } from "@/types/business-details";
+import type { RegisteredOfficeView } from "@/lib/business-verification/public";
 
 import { formatRandAmount } from "@/lib/utils/format";
 
@@ -63,6 +64,16 @@ export interface BusinessDetailRecord {
   business_details: BusinessDetails | null;
   layout_template?: string | null;
   view_count?: number | null;
+  // Verification stickers (public view: expired stickers and private street lines removed).
+  cipc_verified_at?: string | null;
+  cipc_registration_number?: string | null;
+  cipc_registered_name?: string | null;
+  cipc_registered_office?: RegisteredOfficeView | null;
+  seen_verified_at?: string | null;
+  seen_method?: string | null;
+  seen_city?: string | null;
+  owner_verified_role?: string | null;
+  owner_position_title?: string | null;
 }
 
 export interface BusinessOwnerRecord {

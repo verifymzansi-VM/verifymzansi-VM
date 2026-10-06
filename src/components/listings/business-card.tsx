@@ -3,6 +3,8 @@
 import { Store } from "lucide-react";
 import { AffiliationBadge } from "@/components/organisations/affiliation-badges";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
+import { BusinessStickers } from "@/components/trust/business-stickers";
+import type { BusinessStickerState } from "@/lib/business-verification/public";
 import { BUSINESS_CATEGORIES, BUSINESS_TYPE_OPTIONS } from "@/lib/constants/categories";
 import type { BusinessType, BusinessCategory } from "@/types/enums";
 
@@ -27,6 +29,8 @@ interface BusinessCardProps {
   focalY?: number | null;
   mediaWidth?: number | null;
   mediaHeight?: number | null;
+  /** CIPC and Seen stickers; the ID sticker shows on the profile page. */
+  stickers?: BusinessStickerState;
 }
 
 function buildBusinessDescription(
@@ -83,6 +87,7 @@ export function BusinessCard({
   focalY,
   mediaWidth,
   mediaHeight,
+  stickers,
 }: BusinessCardProps) {
   const displayCover =
     coverVideo ||
@@ -106,7 +111,12 @@ export function BusinessCard({
       title={businessName}
       description={cardDescription}
       location={city || null}
-      affiliation={<AffiliationBadge businessId={id} />}
+      affiliation={
+        <span className="flex flex-wrap items-center gap-1.5">
+          {stickers ? <BusinessStickers state={stickers} /> : null}
+          <AffiliationBadge businessId={id} />
+        </span>
+      }
       mediaUrl={displayCover}
       posterUrl={posterUrl}
       mediaAlt={businessName}

@@ -206,7 +206,6 @@ describe("businessSchema", () => {
         suburb: "Orlando West",
       },
       year_established: 2018,
-      cipc_registration: "2023/123456/07",
       bbbee_level: "level_2",
       languages_spoken: "English, isiZulu",
       load_shedding_ready: true,

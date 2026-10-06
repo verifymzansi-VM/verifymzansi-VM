@@ -1,3 +1,8 @@
+import {
+  BUSINESS_VERIFICATION_COLUMNS,
+  toPublicVerification,
+} from "@/lib/business-verification/public";
+
 /**
  * Public business detail columns, newest schema first. Older databases miss a
  * few optional columns; each fallback drops them so profiles still load.
@@ -47,7 +52,12 @@ const BUSINESS_DETAIL_SELECT_MIN_SCHEMA_LEGACY = `
   created_at, updated_at
 `;
 
+// Verification sticker columns; older databases fall back to the shapes below.
+const BUSINESS_DETAIL_SELECT_VERIFIED = `${BUSINESS_DETAIL_SELECT.trimEnd()}, ${BUSINESS_VERIFICATION_COLUMNS}
+`;
+
 const BUSINESS_DETAIL_SELECT_CANDIDATES = [
+  BUSINESS_DETAIL_SELECT_VERIFIED,
   BUSINESS_DETAIL_SELECT,
   BUSINESS_DETAIL_SELECT_LEGACY,
   BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY,
@@ -63,7 +73,12 @@ function isMissingBusinessOptionalColumnError(error: QueryError) {
   return (
     message.includes("layout_template") ||
     message.includes("view_count") ||
-    message.includes("expires_at")
+    message.includes("expires_at") ||
+    message.includes("cipc_") ||
+    message.includes("seen_") ||
+    message.includes("owner_verified_role") ||
+    message.includes("owner_position_title") ||
+    message.includes("show_full_registered_office")
   );
 }
 
@@ -78,6 +93,11 @@ export async function selectBusinessWithFallback<T>(
     data = (result.data as T | null) ?? null;
     error = (result.error as QueryError) ?? null;
     if (!error || !isMissingBusinessOptionalColumnError(error)) break;
+  }
+  if (Array.isArray(data)) {
+    data = (data as Record<string, unknown>[]).map((row) => toPublicVerification(row)) as T;
+  } else if (data && typeof data === "object") {
+    data = toPublicVerification(data as Record<string, unknown>) as T;
   }
   return { data, error };
 }

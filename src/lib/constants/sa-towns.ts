@@ -478,6 +478,7 @@ const SA_TOWNS: Record<string, Record<string, string[]>> = {
       "Imbali",
       "Sobantu",
     ],
+    Empangeni: ["Empangeni CBD", "KwaDlangezwa", "Ngwelezane", "Esikhawini", "Felixton"],
     "Richards Bay": [
       "Richards Bay CBD",
       "Meerensee",

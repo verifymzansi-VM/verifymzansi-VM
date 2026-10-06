@@ -41,6 +41,7 @@ export type NavIcon =
 export type NavBadge =
   | "reports"
   | "kyc"
+  | "business_kyc"
   | "content"
   | "support"
   | "decisions"
@@ -114,6 +115,14 @@ export const ADMIN_NAV: readonly NavItem[] = [
     section: "queues",
     capability: "queue:view",
     flag: "kyc_evidence_desk",
+  },
+  {
+    href: "/admin/business-verification",
+    label: "Verify businesses",
+    icon: "building",
+    section: "queues",
+    capability: "queue:view",
+    badge: "business_kyc",
   },
   {
     href: "/admin/moderation",

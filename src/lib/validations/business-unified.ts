@@ -216,7 +216,6 @@ export const businessSchema = z
     // columns — the API payload builder folds them into
     // category_details.business_profile.
     year_established: z.number().int().min(1900).max(new Date().getFullYear()).optional(),
-    cipc_registration: optionalText(30),
     bbbee_level: z
       .enum([
         "level_1",

@@ -227,6 +227,42 @@ assert.deepEqual(
 );
 assert(!content.some((c) => c.item_id === ownPending));
 
+// ── Business verification queue: red findings first, never your own ──────
+await db.exec(`CREATE OR REPLACE FUNCTION public.set_updated_at() RETURNS trigger LANGUAGE plpgsql
+  AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END $$`);
+await migrate(
+  "20261006124457_business_verifications.sql",
+  "20261006124608_business_verification_queue.sql"
+);
+async function bvCase(owner, findings) {
+  const biz = await scalar(
+    `INSERT INTO businesses(owner_id,status) VALUES ($1,'live') RETURNING id`,
+    [owner]
+  );
+  return scalar(
+    `INSERT INTO business_verifications(business_id,owner_id,kind,registration_number,findings)
+     VALUES ($1,$2,'cipc','2020/123456/07',$3::jsonb) RETURNING id`,
+    [biz, owner, JSON.stringify(findings)]
+  );
+}
+const calmCase = await bvCase(seller, [{ severity: "ok" }]);
+const redCase = await bvCase(await person("member"), [
+  { severity: "attention" },
+  { severity: "attention" },
+]);
+const modBCase = await bvCase(modB, [{ severity: "attention" }]);
+await db.query(`UPDATE business_verifications SET status='info_requested' WHERE id=$1`, [calmCase]);
+const bv = await claim(modB, "business_kyc", 10);
+assert.deepEqual(
+  bv.map((c) => c.item_id),
+  [redCase],
+  "pending only, red first, never the moderator's own case, not waiting on the owner"
+);
+assert.equal(bv[0].item_type, "business_verification");
+assert.equal((await check(modB, "business_verification", modBCase)).error, "not_independent");
+const navCounts = await call(`SELECT public.staff_nav_counts($1) AS result`, [modB]);
+assert.equal(navCounts.business_kyc, 2);
+
 // ── Losing staff access releases claims ────────────────────────────────────
 assert((await scalar(`SELECT count(*)::int FROM queue_claims WHERE claimed_by=$1`, [modA])) > 0);
 await call(`SELECT public.propose_staff_role_change($1,$2,'member','Left the team') AS result`, [

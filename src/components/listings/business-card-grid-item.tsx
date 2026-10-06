@@ -23,6 +23,10 @@ export interface BusinessCardGridRow {
   media_width: number | null;
   media_height: number | null;
   view_count?: number | null;
+  cipc_verified_at?: string | null;
+  seen_verified_at?: string | null;
+  seen_method?: string | null;
+  seen_city?: string | null;
 }
 
 export function BusinessCardGridItem({
@@ -57,6 +61,13 @@ export function BusinessCardGridItem({
         focalY={business.focal_y}
         mediaWidth={business.media_width}
         mediaHeight={business.media_height}
+        stickers={{
+          idReviewed: false,
+          cipcCheckedAt: business.cipc_verified_at,
+          seenAt: business.seen_verified_at,
+          seenMethod: business.seen_method,
+          seenCity: business.seen_city,
+        }}
       />
     </div>
   );

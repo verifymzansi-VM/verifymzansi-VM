@@ -9,7 +9,16 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CheckCircle2, Eye, ExternalLink, Pencil, Plus, XCircle, Package } from "lucide-react";
+import {
+  CheckCircle2,
+  Eye,
+  ExternalLink,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  XCircle,
+  Package,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { getAuthAdminUserSummary } from "@/lib/supabase/auth-admin-user";
@@ -912,6 +921,14 @@ function ListingList({
                     </Link>
                   </Button>
                   <LifecycleActions item={listing} />
+                  {listing.source === "business" && (
+                    <Button asChild variant="ghost" size="sm" className="h-11 gap-1.5 px-3">
+                      <Link href={`/dashboard/businesses/${listing.id}/verification`}>
+                        <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
+                        Verify
+                      </Link>
+                    </Button>
+                  )}
                   {listing.source === "business" && isLive && (
                     <PostAccountButton
                       accountTitle={listing.title}

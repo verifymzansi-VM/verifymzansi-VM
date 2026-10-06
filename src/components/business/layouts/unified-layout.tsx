@@ -58,12 +58,15 @@ import { humanizeKey } from "@/lib/presentation/listing-facts";
 import {
   acceptsInboxEnquiries,
   getBusinessProfileFacts,
+  getBusinessVerificationFacts,
   getBusinessQuickFacts,
   getSubcategoryLabel,
   getTourismSpotlightFacts,
   SOCIAL_LABELS,
 } from "@/lib/presentation/business-facts";
 import { placeLine } from "@/lib/utils/place-line";
+import { BusinessStickers } from "@/components/trust/business-stickers";
+import { ID_REVIEWED_TRUST_LEVEL } from "@/lib/business-verification/public";
 
 interface UnifiedLayoutProps {
   family: BusinessProfileFamily;
@@ -466,6 +469,7 @@ export function UnifiedLayout({
   const profileFacts = getBusinessProfileFacts(business, {
     includeLanguages: family !== "tourism",
   });
+  const verificationFacts = getBusinessVerificationFacts(business);
   const tourismDetails = (business.category_details ?? {}) as Record<string, unknown>;
   const venuePhotos = getBusinessVenuePhotoUrls(
     business.business_details,
@@ -491,6 +495,16 @@ export function UnifiedLayout({
 
   const introBody = (
     <div className="space-y-4">
+      <BusinessStickers
+        size="md"
+        state={{
+          idReviewed: trustLevel != null && trustLevel >= ID_REVIEWED_TRUST_LEVEL,
+          cipcCheckedAt: business.cipc_verified_at,
+          seenAt: business.seen_verified_at,
+          seenMethod: business.seen_method,
+          seenCity: business.seen_city,
+        }}
+      />
       <div className="flex flex-wrap items-center gap-2">
         {typeLabel && family !== "tourism" ? (
           <Badge variant="outline" className="text-[11px]">
@@ -538,7 +552,7 @@ export function UnifiedLayout({
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {[...quickFacts, ...profileFacts].map((fact) => (
+        {[...quickFacts, ...verificationFacts, ...profileFacts].map((fact) => (
           <div
             key={`${fact.label}-${fact.value}`}
             className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
@@ -826,7 +840,12 @@ export function UnifiedLayout({
         <div className="space-y-5">{infoColumn}</div>
 
         <div className={isReviewLayout ? "space-y-4 2xl:col-span-2" : "space-y-4"}>
-          <ManagedByCard ownerProfile={ownerProfile} trustLevel={trustLevel} />
+          <ManagedByCard
+            ownerProfile={ownerProfile}
+            trustLevel={trustLevel}
+            position={business.owner_position_title ?? null}
+            positionSource={business.owner_verified_role ?? null}
+          />
           <Card className="surface-card elev-sm">
             <CardContent className="space-y-4 p-5">
               <h2 className="font-display text-lg font-semibold">Contact</h2>

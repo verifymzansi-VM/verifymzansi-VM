@@ -13,6 +13,7 @@ import {
   TOURISM_VISIT_DURATIONS,
 } from "@/lib/constants/categories";
 import type { BusinessProfileFamily } from "@/lib/presentation/profile-variants";
+import { registeredOfficeLine } from "@/lib/business-verification/public";
 import { humanizeKey, type FactItem } from "@/lib/presentation/listing-facts";
 import {
   PRIMARY_ORDER_CHANNEL_LABELS,
@@ -86,6 +87,33 @@ export function acceptsInboxEnquiries(categoryDetails: unknown): boolean {
 }
 
 /**
+ * CIPC facts confirmed by VerifyMzansi staff. Only present while the CIPC
+ * sticker is live; the registered office is shown once — skipped when it is
+ * the same place as the trading location already on the page.
+ */
+export function getBusinessVerificationFacts(business: BusinessDetailRecord): FactItem[] {
+  if (!business.cipc_verified_at) return [];
+  const facts: FactItem[] = [];
+  if (business.cipc_registered_name) {
+    facts.push({ label: "Registered as", value: business.cipc_registered_name });
+  }
+  if (business.cipc_registration_number) {
+    facts.push({ label: "CIPC Reg.", value: business.cipc_registration_number });
+  }
+  const office = business.cipc_registered_office;
+  const officeLine = registeredOfficeLine(office);
+  const same = (a: string | null | undefined, b: string | null | undefined) =>
+    Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
+  const sameAsTrading =
+    !office?.streetLines?.length &&
+    same(office?.city, business.location_city) &&
+    same(office?.province, business.location_province) &&
+    (!office?.suburb || same(office.suburb, business.location_town));
+  if (officeLine && !sameAsTrading) facts.push({ label: "Registered office", value: officeLine });
+  return facts;
+}
+
+/**
  * Facts the owner entered under "Additional Business Details" in the create
  * form. The API folds them into `category_details.business_profile` — render
  * them so the form data actually reaches the public profile.
@@ -111,9 +139,6 @@ export function getBusinessProfileFacts(
   }
   if (typeof p.bbbee_level === "string" && p.bbbee_level) {
     facts.push({ label: "B-BBEE", value: BBBEE_LEVEL_LABELS[p.bbbee_level] ?? p.bbbee_level });
-  }
-  if (typeof p.cipc_registration === "string" && p.cipc_registration) {
-    facts.push({ label: "CIPC Reg.", value: p.cipc_registration });
   }
   if (
     options?.includeLanguages !== false &&

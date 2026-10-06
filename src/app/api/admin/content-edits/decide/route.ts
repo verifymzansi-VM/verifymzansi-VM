@@ -46,6 +46,19 @@ const SYSTEM_CONTROLLED_COLUMNS = new Set([
   "social_distribution_authorized",
   "social_distribution_authorized_at",
   "social_distribution_revoked_at",
+  // Business verification stickers are set only by verification decisions.
+  "cipc_verified_at",
+  "cipc_expires_at",
+  "cipc_registration_number",
+  "cipc_registered_name",
+  "cipc_registered_office",
+  "show_full_registered_office",
+  "seen_verified_at",
+  "seen_expires_at",
+  "seen_method",
+  "seen_city",
+  "owner_verified_role",
+  "owner_position_title",
 ]);
 
 const targetConfig: Record<

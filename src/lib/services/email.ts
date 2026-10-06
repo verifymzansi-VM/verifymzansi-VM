@@ -944,3 +944,110 @@ export async function sendTrialExtensionEmail(params: {
     idempotencyKey: params.idempotencyKey,
   });
 }
+
+export type BusinessVerificationEmailKind = "approved" | "info_requested" | "rejected" | "revoked";
+
+const BUSINESS_VERIFICATION_COPY: Record<
+  BusinessVerificationEmailKind,
+  { tone: "success" | "warning" | "danger"; title: string; body: string; cta: string }
+> = {
+  approved: {
+    tone: "success",
+    title: "Your sticker is live",
+    body: "Our team checked your business and the sticker now shows on your profile.",
+    cta: "See your verification",
+  },
+  info_requested: {
+    tone: "warning",
+    title: "We need something from you",
+    body: "Our team has a question about your business verification. Reply on your Verify page.",
+    cta: "Reply now",
+  },
+  rejected: {
+    tone: "danger",
+    title: "Verification not approved",
+    body: "We couldn't approve this request. The reason is below, and you can try again.",
+    cta: "Try again",
+  },
+  revoked: {
+    tone: "danger",
+    title: "A sticker was removed",
+    body: "We removed a verification sticker from your business. The reason is below.",
+    cta: "See your verification",
+  },
+};
+
+/** Owner notice for a business verification decision or staff question. */
+export async function sendBusinessVerificationEmail(params: {
+  email: string;
+  accountName: string;
+  businessName: string;
+  businessId: string;
+  sticker: string;
+  kind: BusinessVerificationEmailKind;
+  note?: string | null;
+}): Promise<SendEmailResult> {
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const copy = BUSINESS_VERIFICATION_COPY[params.kind];
+  const href = `${appUrl}/dashboard/businesses/${encodeURIComponent(params.businessId)}/verification`;
+  const details: Array<[string, string]> = [
+    ["Business", params.businessName],
+    ["Sticker", params.sticker],
+  ];
+  if (params.note)
+    details.push([params.kind === "info_requested" ? "Message" : "Reason", params.note]);
+
+  const html = brandedEmail({
+    tone: copy.tone,
+    eyebrow: "Business verification",
+    title: copy.title,
+    intro: "This email is about verifying your business on VerifyMzansi.",
+    bodyHtml: `
+      ${paragraph(`Hi ${params.accountName},`)}
+      ${paragraph(copy.body)}
+      ${detailList(details)}
+    `,
+    cta: { label: copy.cta, href, tone: copy.tone },
+    reason: "Your business verification changed on VerifyMzansi.",
+  });
+  const text = [
+    `Hi ${params.accountName},`,
+    "",
+    copy.body,
+    "",
+    ...details.map(([label, value]) => `${label}: ${value}`),
+    "",
+    `${copy.cta}: ${href}`,
+  ].join("\n");
+
+  return sendEmail({ to: params.email, subject: `VerifyMzansi: ${copy.title}`, html, text });
+}
+
+/** One-time code proving a company representative controls a work mailbox. */
+export async function sendWorkEmailCode(params: {
+  email: string;
+  businessName: string;
+  code: string;
+}): Promise<SendEmailResult> {
+  const html = brandedEmail({
+    tone: "success",
+    eyebrow: "Business verification",
+    title: "Your work email code",
+    intro: "Use this code to confirm you represent the company on VerifyMzansi.",
+    bodyHtml: `
+      ${detailList([
+        ["Business", params.businessName],
+        ["Code", params.code],
+      ])}
+      ${paragraph("The code expires in 15 minutes. If you didn't ask for it, you can ignore this email.")}
+    `,
+    reason: "Someone asked to confirm this work email for a business verification on VerifyMzansi.",
+  });
+  const text = `Your VerifyMzansi code for ${params.businessName} is ${params.code}. It expires in 15 minutes. If you didn't ask for it, ignore this email.`;
+  return sendEmail({
+    to: params.email,
+    subject: `${params.code} is your VerifyMzansi code`,
+    html,
+    text,
+  });
+}

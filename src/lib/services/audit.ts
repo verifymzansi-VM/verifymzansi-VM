@@ -102,7 +102,8 @@ export type AuditAction =
   | `affiliation_${string}`
   | `sponsorship_${string}`
   | `partner_${string}`
-  | `commission_${string}`;
+  | `commission_${string}`
+  | `business_verification_${string}`;
 
 interface AuditLogEntry {
   actorId: string;

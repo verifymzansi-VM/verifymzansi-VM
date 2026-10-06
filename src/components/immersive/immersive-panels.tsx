@@ -22,6 +22,7 @@ import { BrandShield } from "@/components/shared/brand-shield";
 import { ContentContactActions } from "@/components/listings/content-contact-actions";
 import { feedContactConfig } from "@/components/listings/contact-action-configs";
 import { TrustBadge } from "@/components/trust/trust-badge";
+import { BusinessStickers } from "@/components/trust/business-stickers";
 import { getOpenStatus, type OpenStatus } from "@/lib/business/open-status";
 import type { FeedLink, FeedSection, FeedSlide } from "@/lib/feed/types";
 import { getEventState, type EventState } from "@/lib/presentation/event-facts";
@@ -275,7 +276,14 @@ function ContactBlock({ slide }: { slide: FeedSlide }) {
         <div className="min-w-0 space-y-1">
           <p className="text-xs text-[color:var(--viewer-muted)]">{slide.owner.label}</p>
           {name}
+          {slide.owner.position ? (
+            <p className="text-xs text-[color:var(--viewer-muted)]">
+              {slide.owner.position} ·{" "}
+              {slide.owner.positionSource === "representative" ? "confirmed by company" : "CIPC"}
+            </p>
+          ) : null}
           {slide.owner.trustLevel ? <TrustBadge level={slide.owner.trustLevel} size="sm" /> : null}
+          {slide.owner.stickers ? <BusinessStickers state={slide.owner.stickers} /> : null}
           {slide.table === "businesses" ? (
             <p className="text-xs leading-5 text-[color:var(--viewer-muted)]">
               Identity review applies to the profile manager.

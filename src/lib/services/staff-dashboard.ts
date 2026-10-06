@@ -29,7 +29,7 @@ export interface StaffDashboard {
     claims: Array<{
       item_type: string;
       item_id: string;
-      queue: "reports" | "kyc" | "content";
+      queue: "reports" | "kyc" | "content" | "business_kyc";
       expires_at: string;
       renewals: number;
     }>;
