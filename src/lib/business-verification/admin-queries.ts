@@ -9,6 +9,7 @@ export const QUEUE_TABS = [
   { key: "representatives", label: "Representatives" },
   { key: "visits", label: "Visits" },
   { key: "conflicts", label: "Conflicts" },
+  { key: "renewals", label: "Renewals" },
   { key: "exceptions", label: "Second review" },
   { key: "waiting", label: "Waiting on owner" },
   { key: "decided", label: "Decided" },
@@ -30,6 +31,7 @@ export type QueueRow = {
   updatedAt: string;
   exceptionPending: boolean;
   conflict: boolean;
+  renewal: boolean;
 };
 
 type RawCase = {
@@ -56,6 +58,7 @@ function inTab(row: QueueRow, tab: QueueTab): boolean {
         row.kind !== "seen" &&
         row.route !== "representative" &&
         !row.conflict &&
+        !row.renewal &&
         !row.exceptionPending
       );
     case "representatives":
@@ -64,6 +67,14 @@ function inTab(row: QueueRow, tab: QueueTab): boolean {
       return open && row.kind === "seen";
     case "conflicts":
       return open && row.conflict;
+    case "renewals":
+      return (
+        open &&
+        row.renewal &&
+        row.route !== "representative" &&
+        !row.conflict &&
+        !row.exceptionPending
+      );
     case "exceptions":
       return open && row.exceptionPending;
     case "waiting":
@@ -124,6 +135,8 @@ export async function listQueue(tab: QueueTab, includeIds: string[] = []) {
       updatedAt: r.updated_at,
       exceptionPending: Boolean(exception?.proposedBy && !exception.confirmedBy),
       conflict: findings.some((f) => f.code === "conflict_other_owner"),
+      // The renew route marks one-tap renewals (no new upload).
+      renewal: findings.some((f) => f.code === "renewal"),
     };
   });
 

@@ -537,3 +537,25 @@ Built as specified, with these deliberate differences:
   immersive view and promotion pages show the stickers.
 - **Visits use the existing `queue:claim` capability** (moderator and up)
   instead of a new `visit:conduct`; the people allowed are the same.
+- **Logic review (2026-10-06, third pass)** fixed:
+  - staff could not see PDF evidence: the site CSP blocked `blob:` frames, so
+    the case screen (and the KYC evidence viewer) showed an empty frame.
+    `frame-src` now allows `blob:` (tested in Chromium with `object-src 'none'`
+    kept);
+  - the claim is released after an exception is proposed and after a Seen
+    report, so the second reviewer can act straight away instead of waiting 15
+    minutes for the claim to expire;
+  - an exception can waive a director match or status but never the admin's own
+    CIPC copy;
+  - linked profiles follow their source company: a renewal moves them to the new
+    expiry date, and removing the source sticker removes theirs
+    (`source_revoked`);
+  - the verifier records the town visited, which the Seen sticker shows (it fell
+    back to the profile's city even for visits elsewhere);
+  - a **Renewals** tab in the staff queue, as the plan listed.
+  - the owner's verification page listed every case on the business, so after a
+    change of owner the new owner could read the previous owner's staff notes
+    and messages. It now lists only the caller's own cases.
+- **No masked-ID reveal on the case screen.** Staff never see the owner's ID
+  number: the director match runs on HMACs and the screen shows only matched or
+  not matched. The `reveal_id` access-log action is kept for a future need.

@@ -87,6 +87,9 @@ const REASONS: Record<string, string> = {
   conflict_other_owner: "Another account already holds this company's sticker. Contact support.",
   unreadable: "We couldn't read the file. Download a fresh copy from CIPC.",
   ownership_changed: "The business changed owner.",
+  source_revoked:
+    "The company's main profile lost its CIPC sticker, so this linked profile did too.",
+  no_reply: "We closed the request because we didn't hear back in 30 days.",
 };
 
 const DOC_NAMES: Record<string, string> = {

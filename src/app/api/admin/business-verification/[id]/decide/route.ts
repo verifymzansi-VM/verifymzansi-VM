@@ -80,7 +80,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: result.status }
       );
     }
-    if (body.data.action !== "propose_exception") await releaseDecidedClaim(guard.user.id, item);
+    // Release after every action, including a proposed exception: the second
+    // reviewer who confirms it must be able to claim the case.
+    await releaseDecidedClaim(guard.user.id, item);
     return NextResponse.json({ status: result.status });
   } catch (error) {
     logApiError(log, "Business verification decision failed", error);

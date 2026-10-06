@@ -75,6 +75,14 @@ const fail = (status: number, code: string, error: string): DecisionResult => ({
   error,
 });
 
+/** An exception can waive a director match or status, never CIPC's own record. */
+const adminCopyRequired = () =>
+  fail(
+    400,
+    "admin_copy_required",
+    "Attach the copy you fetched from CIPC first. Exceptions never skip CIPC's own record."
+  );
+
 function stickerName(kind: CaseRow["kind"]) {
   return kind === "seen" ? "Seen by VerifyMzansi" : "CIPC registered";
 }
@@ -273,6 +281,32 @@ async function scheduleFilePurge(admin: Admin, caseId: string) {
   if (error) log.error("Could not schedule file purge", { caseId, error: error.message });
 }
 
+/**
+ * Other profiles of the same owner that joined this company's sticker through
+ * an approved link (branches, brands). They share the company's sticker, so
+ * they renew and lose it together with the source.
+ */
+async function linkedProfiles(admin: Admin, row: CaseRow): Promise<string[]> {
+  if (row.kind !== "cipc" || !row.registration_number) return [];
+  const { data: sameCompany, error } = await admin
+    .from("businesses")
+    .select("id")
+    .eq("owner_id", row.owner_id)
+    .eq("cipc_registration_number", row.registration_number)
+    .neq("id", row.business_id);
+  if (error) throw new Error(error.message);
+  const ids = (sameCompany ?? []).map((b) => b.id as string);
+  if (!ids.length) return [];
+  const { data: links, error: linkError } = await admin
+    .from("business_verifications")
+    .select("business_id")
+    .in("business_id", ids)
+    .eq("kind", "cipc_link")
+    .eq("status", "approved");
+  if (linkError) throw new Error(linkError.message);
+  return [...new Set((links ?? []).map((l) => l.business_id as string))];
+}
+
 async function grantSticker(admin: Admin, row: CaseRow, evidence: Evidence, expiresAt: string) {
   const now = new Date().toISOString();
   const office =
@@ -293,6 +327,22 @@ async function grantSticker(admin: Admin, row: CaseRow, evidence: Evidence, expi
     .eq("id", row.business_id)
     .eq("owner_id", row.owner_id);
   if (error) throw new Error(error.message);
+
+  // A renewal carries the company's linked profiles to the new expiry date.
+  const linked = await linkedProfiles(admin, row);
+  if (linked.length) {
+    await admin
+      .from("businesses")
+      .update({ cipc_expires_at: expiresAt, cipc_registered_office: office })
+      .in("id", linked)
+      .eq("owner_id", row.owner_id);
+    await admin
+      .from("business_verifications")
+      .update({ expires_at: expiresAt })
+      .in("business_id", linked)
+      .eq("kind", "cipc_link")
+      .eq("status", "approved");
+  }
 
   if (row.kind === "cipc_link" && row.linked_case_id) {
     const { data: source } = await admin
@@ -377,7 +427,10 @@ async function approveSeen(admin: Admin, row: CaseRow, input: DecisionInput, not
       seen_expires_at: expiresAt,
       seen_method: seen.method,
       // Only the city is public; the visited address stays in the case.
-      seen_city: seen.method === "visit" ? ((biz?.location_city as string | null) ?? null) : null,
+      seen_city:
+        seen.method === "visit"
+          ? seen.report?.city || ((biz?.location_city as string | null) ?? null)
+          : null,
     })
     .eq("id", row.business_id)
     .eq("owner_id", row.owner_id);
@@ -498,6 +551,7 @@ export async function decideBusinessVerification(
         return fail(409, "case_not_pending", "Only cases waiting on staff can be approved.");
       if (!note || note.length < 10)
         return fail(400, "reason_required", "Explain why this should be approved anyway.");
+      if (row.kind === "cipc" && !row.admin_copy) return adminCopyRequired();
       if (exception?.proposedBy)
         return fail(
           409,
@@ -528,6 +582,7 @@ export async function decideBusinessVerification(
       if (exception.proposedBy === input.actorId) {
         return fail(403, "not_independent", "A different reviewer must confirm your exception.");
       }
+      if (row.kind === "cipc" && !row.admin_copy) return adminCopyRequired();
       const evidence = await approvalEvidence(admin, row);
       const ok = await approveThenGrant(
         admin,
@@ -583,11 +638,27 @@ export async function decideBusinessVerification(
               owner_verified_role: null,
               owner_position_title: null,
             };
+      // Removing a company's sticker also removes it from profiles linked to it.
+      const linked = row.kind === "seen" ? [] : await linkedProfiles(admin, row);
       const { error: clearError } = await admin
         .from("businesses")
         .update(clear)
-        .eq("id", row.business_id);
+        .in("id", [row.business_id, ...linked]);
       if (clearError) throw new Error(clearError.message);
+      if (linked.length) {
+        await admin
+          .from("business_verifications")
+          .update({
+            status: "revoked",
+            reason_code: "source_revoked",
+            review_note: note,
+            reviewed_by: input.actorId,
+            decided_at: new Date().toISOString(),
+          })
+          .in("business_id", linked)
+          .eq("kind", "cipc_link")
+          .eq("status", "approved");
+      }
       await notifyOwner(admin, row, "revoked", note);
       break;
     }

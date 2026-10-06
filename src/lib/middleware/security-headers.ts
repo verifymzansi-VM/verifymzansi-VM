@@ -87,7 +87,9 @@ export function buildCsp(
     `media-src 'self' blob:${cdnOrigin ? " " + cdnOrigin : ""} https://media.verifymzansi.com https://media-staging.verifymzansi.com https://*.r2.cloudflarestorage.com https://storage.googleapis.com`,
     "font-src 'self'",
     connectSrc,
-    "frame-src https://challenges.cloudflare.com",
+    // blob: lets staff read decrypted PDF evidence in an iframe (KYC and CIPC
+    // case files are fetched, then shown from a same-origin blob URL).
+    "frame-src https://challenges.cloudflare.com blob:",
     "form-action 'self'",
     "worker-src 'self' blob:",
   ];

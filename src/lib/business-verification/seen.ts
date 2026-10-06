@@ -30,6 +30,8 @@ export type SeenReport = {
   productsSeen: string;
   premisesType: (typeof PREMISES_TYPES)[number];
   notes: string | null;
+  /** Visits: the town or city seen; falls back to the profile's city. */
+  city?: string | null;
   by: string;
   at: string;
 };

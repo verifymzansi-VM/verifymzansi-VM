@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { MIN_SEEN_PHOTOS, PREMISES_TYPES, type SeenState } from "@/lib/business-verification/seen";
 import { createNotification } from "@/lib/notifications";
+import { releaseDecidedClaim } from "@/lib/services/queue-claims";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -27,6 +28,8 @@ const schema = z.discriminatedUnion("action", [
     productsSeen: z.string().trim().min(3).max(500),
     premisesType: z.enum(PREMISES_TYPES),
     notes: z.string().trim().max(1000).nullable(),
+    /** Visits: the town or city where the business was seen (public on the sticker). */
+    city: z.string().trim().max(80).nullable().optional(),
   }),
 ]);
 
@@ -118,6 +121,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         message: `${when} with ${firstName} from VerifyMzansi. Reply on your Verify page to change it.`,
         href: `/dashboard/businesses/${row.business_id}/verification`,
       });
+    }
+
+    if (body.data.action === "report") {
+      // A different staff member approves the report, so let them claim it.
+      await releaseDecidedClaim(guard.user.id, { type: "business_verification", id: row.id });
     }
 
     await logAuditEvent({

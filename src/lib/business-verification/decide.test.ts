@@ -201,8 +201,16 @@ describe("decideBusinessVerification", () => {
     expect(caseRow()).toMatchObject({ status: "rejected", reason_code: "unreadable" });
   });
 
+  it("never lets an exception skip the admin's own CIPC copy", async () => {
+    const { decide } = setup();
+    expect(
+      await decide({ action: "propose_exception", note: "Director recently appointed." })
+    ).toMatchObject({ code: "admin_copy_required" });
+  });
+
   it("needs a second, senior reviewer for an exception", async () => {
-    const { fake, decide, biz } = setup();
+    // The owner isn't on the director list yet, so a normal approval fails.
+    const { fake, decide, biz } = setup({ admin_copy: adminCopy({ directors: [] }) });
     const version = () => fake.tables.business_verifications[0].updated_at as string;
     expect(
       await decide({
@@ -230,7 +238,7 @@ describe("decideBusinessVerification", () => {
   });
 
   it("stops the proposer confirming their own exception", async () => {
-    const { fake, decide } = setup();
+    const { fake, decide } = setup({ admin_copy: adminCopy({ directors: [] }) });
     await decide({
       action: "propose_exception",
       actorId: ADMIN_A,
@@ -334,6 +342,65 @@ describe("decideBusinessVerification", () => {
   });
 });
 
+function withLinkedBranch(caseOverrides: Record<string, unknown> = {}) {
+  const ctx = setup(
+    { admin_copy: adminCopy(), ...caseOverrides },
+    {
+      businesses: [
+        { id: "biz-1", owner_id: OWNER, business_name: "Example Kitchen", cipc_verified_at: null },
+        {
+          id: "biz-branch",
+          owner_id: OWNER,
+          business_name: "Example Kitchen Branch",
+          cipc_verified_at: V1,
+          cipc_expires_at: "2026-11-01T00:00:00.000Z",
+          cipc_registration_number: NUMBER,
+        },
+      ],
+    }
+  );
+  ctx.fake.tables.business_verifications.push({
+    id: "case-branch",
+    business_id: "biz-branch",
+    owner_id: OWNER,
+    kind: "cipc_link",
+    status: "approved",
+    registration_number: NUMBER,
+    expires_at: "2026-11-01T00:00:00.000Z",
+  });
+  return {
+    ...ctx,
+    branch: () => ctx.fake.tables.businesses[1],
+    branchCase: () => ctx.fake.tables.business_verifications[1],
+  };
+}
+
+describe("profiles linked to a verified company", () => {
+  it("carry the renewed expiry date with the source company", async () => {
+    const { decide, biz, branch, branchCase } = withLinkedBranch();
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    expect(branch().cipc_expires_at).toBe(biz().cipc_expires_at);
+    expect(branchCase().expires_at).toBe(biz().cipc_expires_at);
+  });
+
+  it("lose the sticker when the source company's sticker is removed", async () => {
+    const { fake, decide, branch, branchCase } = withLinkedBranch();
+    await decide({});
+    expect(
+      await decide({
+        action: "revoke",
+        actorId: ADMIN_B,
+        actorRole: "admin",
+        reasonCode: "not_in_business",
+        note: "Deregistered.",
+        expectedUpdatedAt: fake.tables.business_verifications[0].updated_at as string,
+      })
+    ).toEqual({ ok: true, status: "revoked" });
+    expect(branch()).toMatchObject({ cipc_verified_at: null, cipc_registration_number: null });
+    expect(branchCase()).toMatchObject({ status: "revoked", reason_code: "source_revoked" });
+  });
+});
+
 describe("Seen by VerifyMzansi approvals", () => {
   const photos = (by: string) =>
     [1, 2, 3].map((n) => ({ fileId: `p${n}`, takenAt: V1, lat: null, lng: null, by }));
@@ -420,5 +487,28 @@ describe("Seen by VerifyMzansi approvals", () => {
     expect(biz()).toMatchObject({ seen_method: "visit", seen_city: "Empangeni" });
     expect(biz().seen_verified_at).toBeTruthy();
     expect(JSON.stringify(biz())).not.toContain("12 Main Road");
+  });
+
+  it("uses the town the verifier visited when it differs from the profile", async () => {
+    const { decide, biz } = setup(
+      {
+        kind: "seen",
+        route: null,
+        registration_number: null,
+        seen: {
+          method: "visit",
+          address: "Shop 4, Richards Bay Mall",
+          photos: photos("verifier"),
+          report: report("verifier", { city: "Richards Bay" }),
+        },
+      },
+      {
+        businesses: [
+          { id: "biz-1", owner_id: OWNER, business_name: "Branch", location_city: "Empangeni" },
+        ],
+      }
+    );
+    expect(await decide({ checks: undefined })).toEqual({ ok: true, status: "approved" });
+    expect(biz()).toMatchObject({ seen_city: "Richards Bay" });
   });
 });

@@ -33,6 +33,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           "id, kind, status, route, registration_number, reason_code, review_note, created_at, decided_at, expires_at, seen, representative"
         )
         .eq("business_id", business.id)
+        // Only this owner's own cases: after a change of owner, the previous
+        // owner's notes and messages stay private.
+        .eq("owner_id", userId)
         .order("created_at", { ascending: false })
         .limit(20),
       admin

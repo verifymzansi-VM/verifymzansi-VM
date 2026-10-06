@@ -149,7 +149,7 @@ describe("buildCsp", () => {
 
   it("includes Cloudflare Turnstile in frame-src and script-src", () => {
     const csp = buildCsp(null);
-    expect(csp).toContain("frame-src https://challenges.cloudflare.com");
+    expect(csp).toContain("frame-src https://challenges.cloudflare.com blob:");
     expect(csp).toContain("https://challenges.cloudflare.com");
   });
 });

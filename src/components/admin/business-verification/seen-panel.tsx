@@ -71,6 +71,7 @@ export function SeenPanel({
     productsSeen: "",
     premisesType: "shop" as (typeof PREMISES_TYPES)[number],
     notes: "",
+    city: "",
   });
   const mine = seen.assignedTo === viewerId;
   const myPhotos = (seen.photos ?? []).filter((p) => p.by === viewerId).length;
@@ -242,6 +243,18 @@ export function SeenPanel({
                 ))}
               </select>
             </div>
+            {seen.method === "visit" && (
+              <div className="space-y-1">
+                <Label htmlFor="seen-city">Town or city visited (shown on the sticker)</Label>
+                <Input
+                  id="seen-city"
+                  value={report.city}
+                  maxLength={80}
+                  autoComplete="off"
+                  onChange={(e) => setReport({ ...report, city: e.target.value })}
+                />
+              </div>
+            )}
             <div className="space-y-1">
               <Label htmlFor="seen-notes">Notes</Label>
               <Textarea
@@ -268,6 +281,7 @@ export function SeenPanel({
                       ...report,
                       outcome: "seen",
                       notes: report.notes.trim() || null,
+                      city: report.city.trim() || null,
                     })
                   )
                 }
@@ -289,6 +303,7 @@ export function SeenPanel({
                       ...report,
                       outcome: "not_confirmed",
                       notes: report.notes.trim() || null,
+                      city: report.city.trim() || null,
                     })
                   )
                 }
