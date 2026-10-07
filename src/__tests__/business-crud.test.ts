@@ -1223,7 +1223,7 @@ describe("POST /api/businesses", () => {
       createRequest({
         ...VALID_BODY,
         subcategory: "Streetwear",
-        category_details: { fitting_room: true },
+        category_details: { meeting_point: "Gate 2", fitting_room: true },
         year_established: 2018,
         bbbee_level: "level_2",
         languages_spoken: "English, isiZulu",
@@ -1239,7 +1239,7 @@ describe("POST /api/businesses", () => {
         p_data: expect.objectContaining({
           subcategory: "Streetwear",
           category_details: expect.objectContaining({
-            fitting_room: true,
+            meeting_point: "Gate 2",
             business_profile: {
               year_established: 2018,
               bbbee_level: "level_2",
@@ -1260,6 +1260,7 @@ describe("POST /api/businesses", () => {
       createRequest({
         ...VALID_BODY,
         category_details: {
+          meeting_point: "Gate 2",
           fitting_room: true,
           business_profile: { bbbee_level: "x".repeat(5000), cipc_verified: true },
         },
@@ -1270,7 +1271,8 @@ describe("POST /api/businesses", () => {
     const insertArgs = rpcSpy.mock.calls.find(
       ([fn]) => fn === "insert_business_with_limit"
     )?.[1] as { p_data?: Record<string, unknown> } | undefined;
-    expect(insertArgs?.p_data?.category_details).toEqual({ fitting_room: true });
+    // Unknown keys are dropped; a client business_profile never survives.
+    expect(insertArgs?.p_data?.category_details).toEqual({ meeting_point: "Gate 2" });
   });
 
   it("ignores a self-typed CIPC number from older clients", async () => {

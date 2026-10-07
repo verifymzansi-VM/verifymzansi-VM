@@ -1,7 +1,13 @@
 import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
-import { externalUrlOrEmptySchema, externalUrlSchema } from "./shared";
+import {
+  externalUrlOrEmptySchema,
+  externalUrlSchema,
+  hasSpoofingChars,
+  NO_HIDDEN_CHARS_MESSAGE,
+  postMediaMetadataFields,
+} from "./shared";
 
 /** Tourism activities whose visitors join at a meeting point or are collected. */
 const TOUR_ACTIVITIES = new Set(["tour_operator", "safari_wildlife", "adventure_activities"]);
@@ -146,6 +152,8 @@ export const businessSchema = z
   .object({
     business_name: z
       .string()
+      .trim()
+      .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
       .min(2, "Business name must be at least 2 characters")
       .max(100, "Business name cannot exceed 100 characters"),
     slug: z
@@ -158,6 +166,8 @@ export const businessSchema = z
     subcategory: optionalText(80),
     description: z
       .string()
+      .trim()
+      .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
       .max(3000, "Description cannot exceed 3000 characters")
       .optional()
       .default(""),
@@ -211,7 +221,13 @@ export const businessSchema = z
     services_offered: z.array(z.string().max(200)).max(30).optional().default([]),
     service_areas: serviceAreasSchema.optional(),
     business_details: businessDetailsSchema.nullable().optional(),
-    category_details: z.record(z.string(), z.unknown()).optional().default({}),
+    // Shape-checked per category by sanitizeCategoryDetails; the size cap
+    // stops a single post bloating the row.
+    category_details: z
+      .record(z.string().max(60), z.unknown())
+      .refine((value) => JSON.stringify(value).length <= 20_000, "Too many details")
+      .optional()
+      .default({}),
     // Optional public business profile extras. These have no dedicated DB
     // columns — the API payload builder folds them into
     // category_details.business_profile.
@@ -233,7 +249,16 @@ export const businessSchema = z
     languages_spoken: optionalText(200),
     load_shedding_ready: z.boolean().optional(),
     number_of_employees: z.enum(["1", "2_5", "6_10", "11_50", "51_200", "200_plus"]).optional(),
-    operating_hours: z.record(z.string().max(20), z.unknown()).optional().default({}),
+    // Mon_Fri / Sat / Sun free text (e.g. "08:00-17:00", "Closed"); other keys
+    // are dropped. Non-text values used to crash the public page.
+    operating_hours: z
+      .object({
+        Mon_Fri: z.string().trim().max(60).optional(),
+        Sat: z.string().trim().max(60).optional(),
+        Sun: z.string().trim().max(60).optional(),
+      })
+      .optional()
+      .default({}),
     payment_methods_accepted: z
       .array(z.enum(["cash", "card", "eft", "snapscan", "capitec_pay", "other"]))
       .optional()
@@ -244,10 +269,7 @@ export const businessSchema = z
       .default([]),
     social_links: z.record(z.string(), externalUrlOrEmptySchema()).optional(),
     layout_template: z.enum(["cinematic", "showcase", "professional"]).nullable().optional(),
-    media_width: z.number().int().positive().optional(),
-    media_height: z.number().int().positive().optional(),
-    focal_x: z.number().min(0).max(1).optional(),
-    focal_y: z.number().min(0).max(1).optional(),
+    ...postMediaMetadataFields,
     trialDays: z
       .union([z.literal(7), z.literal(30)])
       .optional()

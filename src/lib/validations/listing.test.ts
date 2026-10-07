@@ -139,6 +139,37 @@ describe("listingSchema", () => {
 
   // ── Common validation ──────────────────────────────────
 
+  it("rejects titles with hidden text-direction characters", () => {
+    const result = listingSchema.safeParse({
+      ...baseFields,
+      title: `iPhone 15 for R${String.fromCharCode(0x202e)}0001`,
+      category: "electronics",
+      attributes: { device_type: "phone" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("trims titles and caps attribute lists", () => {
+    const result = listingSchema.safeParse({
+      ...baseFields,
+      title: "   Valid Listing Title Here   ",
+      category: "property",
+      attributes: {
+        property_type: "apartment",
+        listing_intent: "sale",
+        security_features: Array.from({ length: 31 }, (_, i) => `feature ${i}`),
+      },
+    });
+    expect(result.success).toBe(false);
+    const ok = listingSchema.safeParse({
+      ...baseFields,
+      title: "   Valid Listing Title Here   ",
+      category: "property",
+      attributes: { property_type: "apartment", listing_intent: "sale" },
+    });
+    expect(ok.success && ok.data.title).toBe("Valid Listing Title Here");
+  });
+
   it("rejects listing with title too short", () => {
     const result = listingSchema.safeParse({
       ...baseFields,

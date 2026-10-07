@@ -756,27 +756,53 @@ export async function sendModerationNoticeEmail(params: {
   });
 }
 
-export async function sendPasswordChangeNotification(email: string): Promise<SendEmailResult> {
+/** A "something on your account changed" security notice. */
+function sendAccountChangeNotice(
+  email: string,
+  change: { thing: string; title: string; changed: string; ifNotYou: string }
+): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const subject = "VerifyMzansi - Your password was changed";
+  const subject = `VerifyMzansi - Your ${change.thing} was changed`;
   const html = brandedEmail({
     tone: "danger",
     eyebrow: "Security notice",
-    title: "Password changed",
-    intro: "This security notice was sent because your VerifyMzansi password changed.",
+    title: change.title,
+    intro: `This security notice was sent because your VerifyMzansi ${change.thing} changed.`,
     bodyHtml: `
       ${paragraph("Hi,")}
-      ${paragraph("Your VerifyMzansi account password was just changed.")}
+      ${paragraph(change.changed)}
       ${paragraph("If you made this change, no further action is needed.")}
-      <p><strong>If you did not change your password</strong>, please reset it immediately.</p>
+      <p><strong>If you did not make this change</strong>, ${escapeHtml(change.ifNotYou)}</p>
     `,
     cta: { label: "Reset password", href: `${appUrl}/forgot-password`, tone: "danger" },
-    reason: "Your VerifyMzansi account password was changed.",
+    reason: `Your VerifyMzansi account ${change.thing} was changed.`,
   });
 
-  const text = `Hi,\n\nYour VerifyMzansi account password was just changed.\n\nIf you made this change, no further action is needed.\n\nIf you did not change your password, reset it immediately: ${appUrl}/forgot-password`;
+  const text = `Hi,\n\n${change.changed}\n\nIf you made this change, no further action is needed.\n\nIf you did not make this change, ${change.ifNotYou} ${appUrl}/forgot-password`;
 
   return sendEmail({ to: email, subject, html, text });
+}
+
+export async function sendPasswordChangeNotification(email: string): Promise<SendEmailResult> {
+  return sendAccountChangeNotice(email, {
+    thing: "password",
+    title: "Password changed",
+    changed: "Your VerifyMzansi account password was just changed.",
+    ifNotYou: "please reset your password immediately:",
+  });
+}
+
+/** The verified phone is the number buyers reach, so a change is announced by email. */
+export async function sendPhoneChangeNotification(
+  email: string,
+  newPhoneLast3: string
+): Promise<SendEmailResult> {
+  return sendAccountChangeNotice(email, {
+    thing: "phone number",
+    title: "Phone number changed",
+    changed: `The verified phone number on your VerifyMzansi account was changed to a number ending in ${newPhoneLast3}. Buyers who tap to see your number now see this one.`,
+    ifNotYou: "reset your password immediately and contact support:",
+  });
 }
 
 export async function sendSupportRequestNotification(

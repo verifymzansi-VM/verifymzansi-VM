@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { MessageSquare } from "lucide-react";
+import { MailCheck, MailQuestion, MessageSquare } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/utils/format";
@@ -28,6 +28,7 @@ export interface LeadRow {
   status: string;
   buyer_name: string | null;
   buyer_email: string | null;
+  email_confirmed?: boolean;
   buyer_phone?: string | null;
   created_at: string;
   listings: { title: string } | null;
@@ -92,6 +93,7 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
           status: nextRow.status || "new",
           buyer_name: nextRow.buyer_name || null,
           buyer_email: nextRow.buyer_email || null,
+          email_confirmed: nextRow.email_confirmed === true,
           buyer_phone: nextRow.buyer_phone || null,
           created_at: nextRow.created_at || new Date().toISOString(),
           listings: null,
@@ -261,8 +263,21 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
                       <Button asChild variant="outline" size="sm" className="h-11 px-4">
                         <a
                           href={`mailto:${encodeURIComponent(lead.buyer_email)}?subject=${encodeURIComponent(`Re: ${lead.listings?.title || "Your enquiry"}`)}`}
+                          title={
+                            lead.email_confirmed
+                              ? "The sender's own account email"
+                              : "Typed into the form — not confirmed as the sender's"
+                          }
                         >
+                          {lead.email_confirmed ? (
+                            <MailCheck aria-hidden className="mr-1.5 h-4 w-4" />
+                          ) : (
+                            <MailQuestion aria-hidden className="mr-1.5 h-4 w-4" />
+                          )}
                           Reply by email
+                          <span className="sr-only">
+                            {lead.email_confirmed ? " (confirmed email)" : " (unconfirmed email)"}
+                          </span>
                         </a>
                       </Button>
                     )}

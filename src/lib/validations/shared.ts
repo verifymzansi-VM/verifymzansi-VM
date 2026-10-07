@@ -160,8 +160,8 @@ export const postLocationFields = {
 };
 
 export const postMediaMetadataFields = {
-  media_width: z.number().int().positive().optional(),
-  media_height: z.number().int().positive().optional(),
+  media_width: z.number().int().positive().max(20_000).optional(),
+  media_height: z.number().int().positive().max(20_000).optional(),
   focal_x: z.number().min(0).max(1).optional(),
   focal_y: z.number().min(0).max(1).optional(),
 };
@@ -268,3 +268,28 @@ export function createBooleanFlagSchema(defaultValue = false) {
     z.boolean({ error: "Expected true or false" })
   );
 }
+
+/**
+ * Text-direction overrides/isolates and control characters (except newline,
+ * carriage return and tab). They can make a title display a fake price or
+ * number ("R1 000" shown for "R100 0"), so posts reject them.
+ */
+const SPOOFING_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x00, 0x08],
+  [0x0b, 0x0c],
+  [0x0e, 0x1f],
+  [0x7f, 0x7f],
+  [0x202a, 0x202e], // embeddings and overrides
+  [0x2066, 0x2069], // isolates
+  [0xfeff, 0xfeff], // zero-width no-break space
+];
+
+export function hasSpoofingChars(value: string): boolean {
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (SPOOFING_RANGES.some(([from, to]) => code >= from && code <= to)) return true;
+  }
+  return false;
+}
+
+export const NO_HIDDEN_CHARS_MESSAGE = "Remove hidden formatting characters from this text";

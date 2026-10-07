@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { profileUpdateSchema } from "@/lib/validations/profile";
+import { isReservedDisplayName, profileUpdateSchema } from "@/lib/validations/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
@@ -17,8 +17,8 @@ import { enforceAuthenticatedMutationRequest } from "@/lib/utils/authenticated-m
 const log = createLogger("ProfileUpdate");
 
 const PROFILE_POLICY_SELECT =
-  "legal_name_locked_at, location_verified_at, account_verification_status, phone, contact_last_phone_change_at, location_province, location_city";
-const PROFILE_POLICY_LEGACY_SELECT = "account_verification_status, phone";
+  "display_name, legal_name_locked_at, location_verified_at, account_verification_status, phone, contact_last_phone_change_at, location_province, location_city";
+const PROFILE_POLICY_LEGACY_SELECT = "display_name, account_verification_status, phone";
 
 function isMissingPolicyColumnError(error: {
   code?: string;
@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
 
       if (!legacyFetchError) {
         policyProfile = {
+          display_name: legacyProfile?.display_name ?? null,
           legal_name_locked_at: null,
           location_verified_at: null,
           account_verification_status: legacyProfile?.account_verification_status ?? null,
@@ -174,7 +175,14 @@ export async function POST(request: NextRequest) {
 
     // display_name: writable only before legal name is locked from verified ID
     if (!policyProfile?.legal_name_locked_at) {
-      updatePayload.display_name = parsedBody.data.displayName;
+      const nextName = parsedBody.data.displayName;
+      if (nextName !== policyProfile?.display_name && isReservedDisplayName(nextName)) {
+        return NextResponse.json(
+          { error: "Choose a name that isn't a VerifyMzansi role or team name." },
+          { status: 400 }
+        );
+      }
+      updatePayload.display_name = nextName;
     }
 
     // location: writable only before location is verified

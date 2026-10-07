@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
 
     const { user } = prelude;
     const buyerEmail = parsedBody.data.buyerEmail || user?.email;
+    // Only a signed-in sender's own confirmed address counts as confirmed;
+    // anything typed into the form could be someone else's.
+    const emailConfirmed =
+      !!user?.email &&
+      !!user.email_confirmed_at &&
+      buyerEmail?.trim().toLowerCase() === user.email.toLowerCase();
     if (!buyerEmail) {
       return NextResponse.json(
         { error: "Provide a reply email so the recipient can respond." },
@@ -202,6 +208,7 @@ export async function POST(request: NextRequest) {
         owner_id: targetOwnerId,
         buyer_name: parsedBody.data.buyerName || null,
         buyer_email: buyerEmail,
+        email_confirmed: emailConfirmed,
         buyer_phone: parsedBody.data.buyerPhone
           ? normalizeSaPhone(parsedBody.data.buyerPhone)
           : null,

@@ -1,3 +1,5 @@
+import type { BusinessCategory } from "@/types/enums";
+import { sanitizeCategoryDetails } from "@/lib/forms/business-category-details";
 import {
   customerAccessSchema,
   cleanCustomerAccess,
@@ -36,7 +38,10 @@ export function buildBusinessMutationPayload(
 
   // business_profile is rebuilt only from the validated extras above; a client
   // copy inside category_details would bypass their length and enum checks.
-  const { business_profile: _clientProfile, ...clientDetails } = data.category_details ?? {};
+  const { business_profile: _clientProfile, ...clientDetails } = sanitizeCategoryDetails(
+    data.category as BusinessCategory,
+    data.category_details
+  );
   const categoryDetails: Record<string, unknown> = { ...clientDetails };
   if (data.contact_methods) categoryDetails.contact_methods = data.contact_methods;
   const parsedAccess = customerAccessSchema.safeParse(categoryDetails.customer_access);
@@ -94,11 +99,14 @@ export function buildBusinessMutationPayload(
         : null
       : data.service_areas || null,
     // Legacy details survive only while they still describe the derived business type.
-    business_details: access
-      ? data.business_details && primaryBusinessType(access) === data.business_type
-        ? data.business_details
-        : null
-      : data.business_details || null,
+    business_details: withoutHiddenStreet(
+      access
+        ? data.business_details && primaryBusinessType(access) === data.business_type
+          ? data.business_details
+          : null
+        : data.business_details || null,
+      hideAddress
+    ),
     operating_hours: data.operating_hours,
     payment_methods_accepted: data.payment_methods_accepted,
     delivery_options: access
@@ -116,4 +124,21 @@ export function buildBusinessMutationPayload(
     focal_x: data.focal_x ?? mediaFallbacks?.focal_x ?? 0.5,
     focal_y: data.focal_y ?? mediaFallbacks?.focal_y ?? 0.5,
   };
+}
+
+/** A shop that keeps its address private must not publish it through its shop details. */
+function withoutHiddenStreet<T extends { type: string } | null | undefined>(
+  details: T,
+  hideAddress: boolean
+): T {
+  if (!hideAddress || !details || details.type !== "standalone_shop") return details;
+  const {
+    street_address: _street,
+    suite_or_unit: _unit,
+    ...rest
+  } = details as T & {
+    street_address?: string;
+    suite_or_unit?: string;
+  };
+  return rest as T;
 }

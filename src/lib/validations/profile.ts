@@ -2,15 +2,32 @@ import { z } from "zod";
 import { saPhoneSchema } from "./shared";
 
 /**
+ * Names a person could mistake for the platform or its staff. Checked by the
+ * update route only when the name changes, so an existing name never blocks
+ * saving other profile fields.
+ */
+export function isReservedDisplayName(name: string): boolean {
+  return RESERVED_NAME.test(name);
+}
+
+const RESERVED_NAME = /verify\s*mzansi|\b(admin|administrator|moderator|support|staff|official)\b/i;
+
+/** Same letters-only rule as sign-up (plus "." for initials and accents). */
+function displayNameSchema() {
+  return z
+    .string()
+    .trim()
+    .min(2, "Display name must be at least 2 characters")
+    .max(50, "Display name cannot exceed 50 characters")
+    .regex(/^[\p{L}\p{M}\s'.-]+$/u, "Use letters only in your name");
+}
+
+/**
  * Zod schema for account profile updates.
  * Validates display name, bio, phone (SA format), province, and city.
  */
 export const profileUpdateSchema = z.object({
-  displayName: z
-    .string()
-    .trim()
-    .min(2, "Display name must be at least 2 characters")
-    .max(50, "Display name cannot exceed 50 characters"),
+  displayName: displayNameSchema(),
   bio: z.string().trim().max(300, "Bio cannot exceed 300 characters").optional().or(z.literal("")),
   phone: z.union([saPhoneSchema, z.literal("")]).optional(),
   province: z.string().max(100, "Province value is too long").optional().or(z.literal("")),
@@ -38,11 +55,7 @@ type _ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
  * Validates only the display name field.
  */
 const _settingsDisplayNameSchema = z.object({
-  displayName: z
-    .string()
-    .trim()
-    .min(2, "Display name must be at least 2 characters")
-    .max(50, "Display name cannot exceed 50 characters"),
+  displayName: displayNameSchema(),
 });
 
 /** Inferred type for settings display name update. */

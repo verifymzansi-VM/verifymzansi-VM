@@ -42,6 +42,29 @@ describe("customer access", () => {
     expect(saved.service_areas).toEqual({ areas: ["Soweto", "Sandton"] });
     expect(saved.category_details.customer_access).toMatchObject({ methods: ["visit", "travel"] });
   });
+  it("keeps a private shop's street out of its public shop details", () => {
+    const data = businessSchema.parse({
+      business_name: "Corner tailor",
+      slug: "corner-tailor",
+      description: "Alterations while you wait",
+      category: "professional_services",
+      business_type: "standalone_shop",
+      phone: "0821234567",
+      location_province: "Gauteng",
+      location_city: "Soweto",
+      business_details: {
+        type: "standalone_shop",
+        street_address: "12 Private Rd",
+        suite_or_unit: "Flat 4",
+        suburb: "Orlando",
+      },
+      category_details: {
+        customer_access: { version: 2, methods: ["visit"], premises: "standalone_shop" },
+      },
+    });
+    const saved = buildBusinessMutationPayload(data);
+    expect(saved.business_details).toEqual({ type: "standalone_shop", suburb: "Orlando" });
+  });
   it("requires service and delivery areas only when relevant", () => {
     expect(customerAccessSchema.safeParse({ version: 2, methods: ["travel"] }).success).toBe(false);
     expect(customerAccessSchema.safeParse({ version: 2, methods: ["delivery"] }).success).toBe(

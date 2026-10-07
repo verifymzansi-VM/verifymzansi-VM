@@ -5,6 +5,7 @@ import { POST as verifyOtp } from "@/app/api/otp/verify/route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import * as smsService from "@/lib/services/sms";
+import { sendPhoneChangeNotification } from "@/lib/services/email";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 
@@ -47,6 +48,14 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/services/sms", () => ({
   sendOtpSms: vi.fn(),
   sendSms: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+vi.mock("@/lib/services/email", () => ({
+  sendPhoneChangeNotification: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+vi.mock("@/lib/notifications", () => ({
+  createNotification: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -883,6 +892,35 @@ describe("OTP Routes", () => {
 
         expect(res.status).toBe(200);
         expect(mocks.profileUpdate).toHaveBeenCalledTimes(1);
+      });
+
+      it("emails the account owner when a verified phone is replaced", async () => {
+        mockUserClient.auth.getUser.mockResolvedValue({
+          data: {
+            user: { id: "user-1", email: "owner@example.com", email_confirmed_at: "2026-01-01" },
+          },
+          error: null,
+        });
+        mockUserClient.from.mockImplementation(() => ({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { pending_phone: "+27821234567", phone: "+27829990000" },
+                error: null,
+              }),
+            }),
+          }),
+        }));
+        buildVerifyAdmin({ storedHash: await hashOtpForTest("123456"), attemptCount: 1 });
+
+        const res = await verifyOtp(
+          createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+        );
+
+        expect(res.status).toBe(200);
+        await vi.waitFor(() =>
+          expect(sendPhoneChangeNotification).toHaveBeenCalledWith("owner@example.com", "567")
+        );
       });
 
       it("returns 429 once attempts are exhausted, even for the correct code", async () => {

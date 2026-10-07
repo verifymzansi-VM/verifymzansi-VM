@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { priceSchema } from "./shared";
+import {
+  hasSpoofingChars,
+  NO_HIDDEN_CHARS_MESSAGE,
+  postMediaMetadataFields,
+  priceSchema,
+} from "./shared";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
 import { ELECTRONICS_DEVICE_TYPES } from "@/lib/constants/categories";
 import type { ContactMethod } from "@/types/enums";
@@ -13,10 +18,14 @@ const trustedMediaUrl = z.string().url().refine(isTrustedPlatformMediaUrl, {
 const listingBase = z.object({
   title: z
     .string()
+    .trim()
+    .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
     .min(5, "Title must be at least 5 characters")
     .max(100, "Title cannot exceed 100 characters"),
   description: z
     .string()
+    .trim()
+    .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
     .min(20, "Description must be at least 20 characters")
     .max(5000, "Description cannot exceed 5000 characters"),
   price_zar: priceSchema,
@@ -53,11 +62,9 @@ const listingBase = z.object({
   contactMethods: z
     .array(z.enum(CONTACT_METHODS))
     .min(1, "Choose at least one contact method.")
+    .max(5)
     .default(["call"]),
-  media_width: z.number().int().positive().optional(),
-  media_height: z.number().int().positive().optional(),
-  focal_x: z.number().min(0).max(1).optional(),
-  focal_y: z.number().min(0).max(1).optional(),
+  ...postMediaMetadataFields,
   trialDays: z
     .union([z.literal(7), z.literal(30)])
     .optional()
@@ -69,13 +76,13 @@ const listingBase = z.object({
 const propertyAttrs = z.object({
   property_type: z.enum(["house", "apartment", "land", "commercial", "room"]),
   listing_intent: z.enum(["sale", "rent"]),
-  monthly_rent_zar: z.number().min(0).optional(),
+  monthly_rent_zar: z.number().min(0).max(1_000_000_000).optional(),
   bedrooms: z.number().int().min(0).max(20).optional(),
   bathrooms: z.number().int().min(0).max(10).optional(),
   floor_size_sqm: z.number().min(1).max(100000).optional(),
   erf_size_sqm: z.number().min(1).max(1000000).optional(),
-  levy_zar: z.number().min(0).optional(),
-  rates_taxes_zar: z.number().min(0).optional(),
+  levy_zar: z.number().min(0).max(1_000_000_000).optional(),
+  rates_taxes_zar: z.number().min(0).max(1_000_000_000).optional(),
   property_subtype: z
     .enum([
       "townhouse",
@@ -90,14 +97,14 @@ const propertyAttrs = z.object({
   parking_spots: z.number().int().min(0).max(10).optional(),
   furnished: z.boolean().optional(),
   pets_allowed: z.boolean().optional(),
-  security_features: z.array(z.string()).optional(),
+  security_features: z.array(z.string().max(80)).max(30).optional(),
   pool: z.boolean().optional(),
   garden: z.enum(["none", "small", "medium", "large", "communal"]).optional(),
   domestic_quarters: z.boolean().optional(),
   garage: z.number().int().min(0).max(20).optional(),
   carport: z.number().int().min(0).max(20).optional(),
-  energy_features: z.array(z.string()).optional(),
-  water_source: z.array(z.string()).optional(),
+  energy_features: z.array(z.string().max(80)).max(30).optional(),
+  water_source: z.array(z.string().max(80)).max(30).optional(),
   fibre: z.enum(["not_available", "fibre_ready", "fibre_installed"]).optional(),
   available_from: z.string().max(30).optional(),
 });
@@ -123,7 +130,7 @@ const carsAttrs = z.object({
   number_of_owners: z.number().int().min(1).max(20).optional(),
   accident_free: z.boolean().optional(),
   registration_province: z.string().max(30).optional(),
-  extras: z.array(z.string()).optional(),
+  extras: z.array(z.string().max(80)).max(30).optional(),
   finance_available: z.boolean().optional(),
   trade_in_accepted: z.boolean().optional(),
 });
@@ -143,9 +150,9 @@ const electronicsAttrs = z.object({
   device_type: z.enum(ELECTRONICS_DEVICE_TYPES),
   brand: z.string().min(1, "Brand is required").max(80),
   model_name: z.string().max(100).optional(),
-  storage_gb: z.number().int().min(1).optional(),
+  storage_gb: z.number().int().min(1).max(1_000_000_000).optional(),
   screen_size_inches: z.number().min(1).max(100).optional(),
-  warranty_months: z.number().int().min(0).optional(),
+  warranty_months: z.number().int().min(0).max(1_000_000_000).optional(),
   network_lock: z.enum(["unlocked", "vodacom", "mtn", "cell_c", "telkom", "rain"]).optional(),
   battery_health_pct: z.number().int().min(0).max(100).optional(),
   ram_gb: z.number().int().min(1).max(256).optional(),
@@ -192,11 +199,11 @@ const jobsAttrs = z.object({
   qualification_required: z
     .enum(["none", "matric", "certificate", "diploma", "degree", "postgraduate"])
     .optional(),
-  salary_min: z.number().min(0).optional(),
-  salary_max: z.number().min(0).optional(),
+  salary_min: z.number().min(0).max(1_000_000_000).optional(),
+  salary_max: z.number().min(0).max(1_000_000_000).optional(),
   salary_period: z.enum(["per_hour", "per_day", "per_month", "per_year"]).optional(),
   company_name: z.string().max(120).optional(),
-  benefits: z.array(z.string()).optional(),
+  benefits: z.array(z.string().max(80)).max(30).optional(),
   ee_preference: z.enum(["not_applicable", "aa_candidates_preferred", "open_to_all"]).optional(),
   application_deadline: z.string().max(30).optional(),
 });
@@ -215,10 +222,10 @@ const farmingAgricultureAttrs = z.object({
     .enum(["cattle", "sheep", "goats", "poultry", "pigs", "horses", "game", "other"])
     .optional(),
   breed: z.string().max(80).optional(),
-  age_months: z.number().int().min(0).optional(),
-  quantity: z.number().int().min(1).optional(),
+  age_months: z.number().int().min(0).max(1_000_000_000).optional(),
+  quantity: z.number().int().min(1).max(1_000_000_000).optional(),
   equipment_condition: z.enum(["new", "used", "refurbished"]).optional(),
-  hectares: z.number().min(0).optional(),
+  hectares: z.number().min(0).max(1_000_000_000).optional(),
   irrigation: z.enum(["none", "drip", "sprinkler", "pivot", "flood"]).optional(),
   delivery_available: z.boolean().optional(),
 });

@@ -422,6 +422,7 @@ export interface Lead {
   owner_id: string;
   buyer_name: string | null;
   buyer_email: string | null;
+  email_confirmed?: boolean;
   buyer_phone: string | null;
   message: string;
   status: LeadStatus;

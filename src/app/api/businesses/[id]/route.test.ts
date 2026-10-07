@@ -327,7 +327,7 @@ describe("PATCH /api/businesses/[id]", () => {
         description: "Updated business profile",
         location_province: "Gauteng",
         location_city: "Johannesburg",
-        category_details: { warranty_offered: true },
+        category_details: { meeting_point: "Gate 2" },
         year_established: 2019,
         bbbee_level: "exempt",
         business_details: {
@@ -346,7 +346,7 @@ describe("PATCH /api/businesses/[id]", () => {
       expect.objectContaining({
         subcategory: "Refurbished phones",
         category_details: expect.objectContaining({
-          warranty_offered: true,
+          meeting_point: "Gate 2",
           business_profile: expect.objectContaining({
             year_established: 2019,
             bbbee_level: "exempt",

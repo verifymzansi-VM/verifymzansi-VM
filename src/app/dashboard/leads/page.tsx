@@ -35,6 +35,7 @@ export default async function LeadsPage() {
       status,
       buyer_name,
       buyer_email,
+      email_confirmed,
       buyer_phone,
       created_at
     `

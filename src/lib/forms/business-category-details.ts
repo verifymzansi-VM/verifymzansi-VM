@@ -439,3 +439,79 @@ export function getDefaultCategoryDetails(
   }
   return defaults;
 }
+
+const MAX_TEXT = 500;
+const MAX_LIST_ITEMS = 30;
+const MAX_LIST_ITEM = 120;
+
+/** Keys the app itself stores in category_details (not per-category fields). */
+const SYSTEM_KEYS = new Set([
+  "contact_methods",
+  "customer_access",
+  "business_profile",
+  "venue_photos",
+  "meeting_point",
+  "subcategory",
+]);
+
+function cleanField(field: BusinessDetailsFieldConfig, value: unknown): unknown {
+  switch (field.kind) {
+    case "checkbox":
+      return typeof value === "boolean" ? value : undefined;
+    case "number": {
+      const n = typeof value === "number" ? value : Number(value);
+      return Number.isFinite(n) && n >= (field.min ?? 0) && n <= 1_000_000 ? n : undefined;
+    }
+    case "list":
+      return Array.isArray(value)
+        ? value
+            .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+            .map((item) => item.trim().slice(0, MAX_LIST_ITEM))
+            .slice(0, MAX_LIST_ITEMS)
+        : undefined;
+    case "select":
+      return typeof value === "string" &&
+        (!field.options || field.options.some((option) => option.value === value))
+        ? value
+        : undefined;
+    case "url":
+      return typeof value === "string" && /^https?:\/\//i.test(value.trim())
+        ? value.trim().slice(0, MAX_TEXT)
+        : undefined;
+    default:
+      return typeof value === "string" ? value.trim().slice(0, MAX_TEXT) : undefined;
+  }
+}
+
+/**
+ * Server-side shape check for the per-category details a client sends: each
+ * configured field keeps its expected type and a size cap; unknown keys are
+ * dropped. A wrong type (e.g. a string where the page maps over a list) used
+ * to be stored and then crashed the public business page.
+ */
+export function sanitizeCategoryDetails(
+  category: BusinessCategory | null | undefined,
+  details: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!details || typeof details !== "object") return out;
+  const fields = new Map(getCategoryDetailFields(category).map((field) => [field.name, field]));
+  for (const [key, value] of Object.entries(details)) {
+    const field = fields.get(key);
+    if (field) {
+      const cleaned = cleanField(field, value);
+      if (cleaned !== undefined) out[key] = cleaned;
+    } else if (key === "venue_photos") {
+      if (Array.isArray(value)) {
+        out.venue_photos = value
+          .filter((url): url is string => typeof url === "string" && url.length <= MAX_TEXT)
+          .slice(0, 10);
+      }
+    } else if (key === "meeting_point" || key === "subcategory") {
+      if (typeof value === "string") out[key] = value.trim().slice(0, MAX_TEXT);
+    } else if (SYSTEM_KEYS.has(key)) {
+      out[key] = value; // validated separately (contact methods, access, profile)
+    }
+  }
+  return out;
+}

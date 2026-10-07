@@ -15,6 +15,8 @@ import {
   normalizeSaPhone,
 } from "@/lib/utils/phone";
 import { sendSms } from "@/lib/services/sms";
+import { sendPhoneChangeNotification } from "@/lib/services/email";
+import { createNotification } from "@/lib/notifications";
 import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constants/verification-email-confirmation";
 
 const log = createLogger("OTPVerify");
@@ -175,6 +177,20 @@ async function finalizePhoneVerification(
   }
 
   return { success: true };
+}
+
+async function announcePhoneChange(userId: string, email: string | null, phone: string) {
+  const last3 = phone.slice(-3);
+  await Promise.allSettled([
+    createNotification({
+      userId,
+      type: "warning",
+      title: "Your phone number was changed",
+      message: `Buyers now see a number ending in ${last3}. If this wasn't you, reset your password.`,
+      href: "/dashboard/settings",
+    }),
+    email ? sendPhoneChangeNotification(email, last3) : Promise.resolve(),
+  ]);
 }
 
 async function claimOtpChallenge(
@@ -348,7 +364,7 @@ export async function POST(request: NextRequest) {
     // This prevents verifying a phone number that was not explicitly staged for this user.
     const { data: profileGuard, error: profileGuardErr } = await supabase
       .from(ACCOUNT_PROFILE_WRITE_TABLE)
-      .select("pending_phone")
+      .select("pending_phone, phone")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -457,6 +473,16 @@ export async function POST(request: NextRequest) {
 
     // Best-effort: invalidate sibling pending challenges after successful verification.
     await markSiblingChallengesVerified(adminSupabase, user.id, phone, challenge.id, nowIso);
+
+    // The verified phone is what buyers reach; replacing one is announced to
+    // the account email (the SMS below only reaches the new number).
+    const previousPhone = profileGuard?.phone ? normalizeSaPhone(profileGuard.phone) : null;
+    if (previousPhone && previousPhone !== phone) {
+      scheduleBackgroundTask(
+        announcePhoneChange(user.id, user.email ?? null, phone),
+        "phone change security notice"
+      );
+    }
 
     // Non-blocking security confirmation so users can spot unauthorized phone changes.
     scheduleBackgroundTask(

@@ -7,6 +7,8 @@ import {
   postMediaMetadataFields,
   priceSchema,
   externalUrlOrEmptySchema,
+  hasSpoofingChars,
+  NO_HIDDEN_CHARS_MESSAGE,
 } from "./shared";
 import type { BusinessCategory } from "@/types/enums";
 
@@ -48,10 +50,14 @@ export const promotionSchema = z
   .object({
     title: z
       .string()
+      .trim()
+      .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
       .min(5, "Title must be at least 5 characters")
       .max(120, "Title cannot exceed 120 characters"),
     description: z
       .string()
+      .trim()
+      .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
       .min(20, "Description must be at least 20 characters")
       .max(5000, "Description cannot exceed 5000 characters"),
     promotion_type: z.literal("event"),

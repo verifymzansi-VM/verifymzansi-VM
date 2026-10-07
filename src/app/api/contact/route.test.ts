@@ -451,6 +451,8 @@ describe("POST /api/contact", () => {
       expect.objectContaining({
         target_id: promotionId,
         target_type: "promotion",
+        // A signed-out sender's typed address is never marked as theirs.
+        email_confirmed: false,
       })
     );
     expect(mockCreateNotification).toHaveBeenCalledWith(

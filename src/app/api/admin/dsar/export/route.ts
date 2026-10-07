@@ -93,6 +93,9 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
     introductoryTrials,
     restrictions,
     appeals,
+    businessVerifications,
+    enquiriesSent,
+    enquiriesReceived,
   ] = await Promise.all([
     fetchAll("account profile", () =>
       admin
@@ -120,21 +123,21 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
       "listings",
       byOwner(
         "listings",
-        "id, title, category, price_cents, price_negotiable, location_province, location_city, status, status_reason, published_at, expires_at, created_at, updated_at"
+        "id, title, description, category, price_cents, price_zar, price_negotiable, location_province, location_city, location_address, status, status_reason, published_at, expires_at, created_at, updated_at"
       )
     ),
     fetchAll(
       "businesses",
       byOwner(
         "businesses",
-        "id, business_name, business_type, category, phone, whatsapp, email, website, location_province, location_city, status, status_reason, published_at, created_at, updated_at"
+        "id, business_name, description, business_type, category, phone, whatsapp, email, website, location_province, location_city, location_address, map_directions, status, status_reason, published_at, created_at, updated_at"
       )
     ),
     fetchAll(
       "promotions",
       byOwner(
         "promotions",
-        "id, business_id, title, promotion_type, category, price_cents, price_negotiable, location_province, location_city, start_date, end_date, status, status_reason, published_at, created_at, updated_at"
+        "id, business_id, title, description, promotion_type, category, price_cents, price_negotiable, location_province, location_city, start_date, end_date, status, status_reason, published_at, created_at, updated_at"
       )
     ),
     fetchAll("contact events", () =>
@@ -181,6 +184,28 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
         .eq("appellant_id", subjectId)
         .order("created_at", { ascending: true })
     ),
+    fetchAll(
+      "business verifications",
+      byOwner(
+        "business_verifications",
+        "id, business_id, kind, route, status, registration_number, doc_type, registered_office, reason_code, decided_at, expires_at, created_at, updated_at"
+      )
+    ),
+    fetchAll("enquiries sent", () =>
+      admin
+        .from("contact_events")
+        .select("target_id, target_type, contact_type, created_at")
+        .eq("sender_user_id", subjectId)
+        .order("created_at", { ascending: true })
+    ),
+    // Messages other people sent the subject, without the senders' contact details.
+    fetchAll("enquiries received", () =>
+      admin
+        .from("leads")
+        .select("target_id, target_type, message, status, created_at")
+        .eq("owner_id", subjectId)
+        .order("created_at", { ascending: true })
+    ),
   ]);
 
   return {
@@ -200,6 +225,23 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
     introductoryTrials,
     moderationDecisions: restrictions,
     appeals,
+    businessVerifications,
+    // Only what the subject did; never the other side's identity.
+    enquiriesSent: enquiriesSent.map(({ target_id, target_type, contact_type, created_at }) => ({
+      target_id,
+      target_type,
+      contact_type,
+      created_at,
+    })),
+    enquiriesReceived: enquiriesReceived.map(
+      ({ target_id, target_type, message, status, created_at }) => ({
+        target_id,
+        target_type,
+        message,
+        status,
+        created_at,
+      })
+    ),
   };
 }
 

@@ -19,7 +19,7 @@ const lead = {
 describe("seller enquiry inbox", () => {
   it("offers replies to the buyer with the correct event context", () => {
     render(<LeadsFeed initialLeads={[lead]} ownerColumn="owner_id" ownerId="owner" />);
-    expect(screen.getByRole("link", { name: "Reply by email" }).getAttribute("href")).toContain(
+    expect(screen.getByRole("link", { name: /Reply by email/ }).getAttribute("href")).toContain(
       "buyer%40example.com"
     );
     const href = screen.getByRole("link", { name: "Reply on WhatsApp" }).getAttribute("href")!;
