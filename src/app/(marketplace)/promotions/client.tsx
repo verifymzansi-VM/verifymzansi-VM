@@ -5,7 +5,7 @@ import { feedSourceAttribute } from "@/lib/feed/session";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, TreePalm, CalendarDays } from "lucide-react";
+import { ArrowRight, TreePalm, CalendarDays, LayoutGrid } from "lucide-react";
 import { PageHeader } from "@/components/layout";
 import {
   BusinessCardGridItem,
@@ -33,7 +33,12 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("PromotionsExplorer");
 
-type ActiveTab = "tourism" | "events";
+type ActiveTab = "all" | "tourism" | "events";
+
+const TAB_ORDER: ActiveTab[] = ["all", "tourism", "events"];
+
+// The mixed view loads half a page from each feed so one page stays 24 cards.
+const MIXED_FEED_LIMIT = 12;
 
 interface PromotionRow {
   id: string;
@@ -136,10 +141,13 @@ export function PromotionsExplorer() {
   const currentSearchParams = useMemo(() => new URLSearchParams(searchParamKey), [searchParamKey]);
 
   /* ── Active tab ── */
+  // No tab in the URL is the landing view: tourism and events mixed together.
   const activeTab: ActiveTab =
     currentSearchParams.get("tab") === "events" || currentSearchParams.get("type") === "event"
       ? "events"
-      : "tourism";
+      : currentSearchParams.get("tab") === "tourism"
+        ? "tourism"
+        : "all";
   const createHref =
     activeTab === "events" ? "/post/create-tourism?type=event" : "/post/create-tourism";
   const createLabel = activeTab === "events" ? "List an event" : "List a stay or place";
@@ -188,7 +196,7 @@ export function PromotionsExplorer() {
     (updates: Record<string, string | undefined>, options?: { preservePage?: boolean }) => {
       const next = new URLSearchParams();
       const nextFilters = {
-        tab: activeTab,
+        tab: activeTab === "all" ? undefined : activeTab,
         q: filters.query,
         type: filters.type,
         category: filters.category,
@@ -226,9 +234,10 @@ export function PromotionsExplorer() {
 
   const clearAllFilters = () => {
     const params = new URLSearchParams();
-    params.set("tab", activeTab);
+    if (activeTab !== "all") params.set("tab", activeTab);
     if (activeTab === "events") params.set("type", "event");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    const nextKey = params.toString();
+    router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });
   };
 
   const handleTypeChange = useCallback(
@@ -279,30 +288,33 @@ export function PromotionsExplorer() {
     (tab: ActiveTab) => {
       // Reset filters when switching tabs, but keep location filters
       const next = new URLSearchParams();
-      next.set("tab", tab);
+      if (tab !== "all") next.set("tab", tab);
       if (tab === "events") next.set("type", "event");
       if (filters.province) next.set("province", filters.province);
       if (filters.city) next.set("city", filters.city);
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+      const nextKey = next.toString();
+      router.replace(nextKey ? `${pathname}?${nextKey}` : pathname, { scroll: false });
     },
     [filters.province, filters.city, pathname, router]
   );
 
   /* ── Tabs keyboard support (roving tabindex, arrow keys) ── */
-  const tourismTabRef = useRef<HTMLButtonElement>(null);
-  const eventsTabRef = useRef<HTMLButtonElement>(null);
+  const tabRefs = useRef<Partial<Record<ActiveTab, HTMLButtonElement | null>>>({});
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const index = TAB_ORDER.indexOf(activeTab);
     let target: ActiveTab | null = null;
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      target = activeTab === "tourism" ? "events" : "tourism";
+    if (event.key === "ArrowRight") {
+      target = TAB_ORDER[(index + 1) % TAB_ORDER.length];
+    } else if (event.key === "ArrowLeft") {
+      target = TAB_ORDER[(index - 1 + TAB_ORDER.length) % TAB_ORDER.length];
     } else if (event.key === "Home") {
-      target = "tourism";
+      target = TAB_ORDER[0];
     } else if (event.key === "End") {
-      target = "events";
+      target = TAB_ORDER[TAB_ORDER.length - 1];
     }
     if (!target) return;
     event.preventDefault();
-    (target === "tourism" ? tourismTabRef : eventsTabRef).current?.focus();
+    tabRefs.current[target]?.focus();
     if (target !== activeTab) switchTab(target);
   };
 
@@ -323,50 +335,84 @@ export function PromotionsExplorer() {
         if (filters.province) params.set("province", filters.province);
         if (filters.city) params.set("city", filters.city);
         params.set("page", String(filters.page));
-        params.set("limit", "24");
+        params.set("limit", activeTab === "all" ? String(MIXED_FEED_LIMIT) : "24");
 
-        if (activeTab === "tourism") {
-          params.set("category", "tourism_hospitality");
-          if (filters.subcategory) params.set("subcategory", filters.subcategory);
+        const tourismParams = new URLSearchParams(params);
+        tourismParams.set("category", "tourism_hospitality");
+        if (activeTab === "tourism" && filters.subcategory) {
+          tourismParams.set("subcategory", filters.subcategory);
+        }
 
-          const res = await fetch(`/api/businesses?${params.toString()}`, { cache: "no-store" });
-          // A non-JSON error page (e.g. a 502) must not surface as a parser error.
+        const eventParams = new URLSearchParams(params);
+        eventParams.set("type", "event");
+        if (activeTab === "events") {
+          if (filters.eventType) eventParams.set("event_type", filters.eventType);
+          if (filters.eventState) eventParams.set("event_state", filters.eventState);
+        }
+
+        // A non-JSON error page (e.g. a 502) must not surface as a parser error.
+        const loadTourism = async () => {
+          const res = await fetch(`/api/businesses?${tourismParams.toString()}`, {
+            cache: "no-store",
+          });
           const payload = (await res.json().catch(() => ({}))) as BusinessesResponse;
-
-          if (!active) return;
-          if (!res.ok) {
-            setError(payload.error || "Failed to load tourism businesses.");
-            setTourismResponse({ businesses: [], total: 0, page: 1, limit: 24 });
-          } else {
-            setTourismResponse(payload);
-            setFeedSource(
-              sourceFor("/api/businesses", "Tourism stays and places", params, payload.total)
-            );
-          }
-        } else {
-          params.set("type", "event");
-          if (filters.eventType) params.set("event_type", filters.eventType);
-          if (filters.eventState) params.set("event_state", filters.eventState);
-
-          const res = await fetch(`/api/promotions?${params.toString()}`, { cache: "no-store" });
+          return { ok: res.ok, payload };
+        };
+        const loadEvents = async () => {
+          const res = await fetch(`/api/promotions?${eventParams.toString()}`, {
+            cache: "no-store",
+          });
           const payload = (await res.json().catch(() => ({}))) as PromotionsResponse;
+          return { ok: res.ok, payload };
+        };
 
-          if (!active) return;
-          if (!res.ok) {
-            setError(payload.error || "Failed to load events.");
-            setEventsResponse({
-              promotions: [],
-              accountProfiles: [],
-              sellers: [],
-              businesses: [],
-              total: 0,
-              page: 1,
-              limit: 24,
-            });
-          } else {
-            setEventsResponse(payload);
-            setFeedSource(sourceFor("/api/promotions", "Events", params, payload.total));
-          }
+        const [tourismResult, eventsResult] = await Promise.all([
+          activeTab === "events" ? null : loadTourism(),
+          activeTab === "tourism" ? null : loadEvents(),
+        ]);
+
+        if (!active) return;
+
+        setTourismResponse(
+          tourismResult?.ok
+            ? tourismResult.payload
+            : { businesses: [], total: 0, page: 1, limit: 24 }
+        );
+        setEventsResponse(
+          eventsResult?.ok
+            ? eventsResult.payload
+            : {
+                promotions: [],
+                accountProfiles: [],
+                sellers: [],
+                businesses: [],
+                total: 0,
+                page: 1,
+                limit: 24,
+              }
+        );
+        if (tourismResult && !tourismResult.ok) {
+          setError(tourismResult.payload.error || "Failed to load tourism businesses.");
+        } else if (eventsResult && !eventsResult.ok) {
+          setError(eventsResult.payload.error || "Failed to load events.");
+        }
+
+        // The post viewer continues through one feed, so the mixed view has no source.
+        if (activeTab === "tourism" && tourismResult?.ok) {
+          setFeedSource(
+            sourceFor(
+              "/api/businesses",
+              "Tourism stays and places",
+              tourismParams,
+              tourismResult.payload.total
+            )
+          );
+        } else if (activeTab === "events" && eventsResult?.ok) {
+          setFeedSource(
+            sourceFor("/api/promotions", "Events", eventParams, eventsResult.payload.total)
+          );
+        } else {
+          setFeedSource(null);
         }
 
         setLoading(false);
@@ -407,18 +453,35 @@ export function PromotionsExplorer() {
   );
 
   /* ── Pagination ── */
-  const currentResponse = activeTab === "tourism" ? tourismResponse : eventsResponse;
-  const total = currentResponse.total ?? 0;
-  const page = currentResponse.page ?? filters.page;
-  const limit = currentResponse.limit ?? 24;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const tourismTotal = activeTab === "events" ? 0 : (tourismResponse.total ?? 0);
+  const eventsTotal = activeTab === "tourism" ? 0 : (eventsResponse.total ?? 0);
+  const total = tourismTotal + eventsTotal;
+  const page =
+    (activeTab === "events" ? eventsResponse.page : tourismResponse.page) ?? filters.page;
+  const pagesFor = (count: number, limit: number | undefined) => Math.ceil(count / (limit ?? 24));
+  const totalPages = Math.max(
+    1,
+    pagesFor(tourismTotal, tourismResponse.limit),
+    pagesFor(eventsTotal, eventsResponse.limit)
+  );
 
   /* ── Tourism data ── */
-  const tourismBusinesses = tourismResponse.businesses ?? [];
+  const tourismBusinesses = activeTab === "events" ? [] : (tourismResponse.businesses ?? []);
 
   /* ── Events data ── */
-  const promotions = eventsResponse.promotions ?? [];
+  const promotions = activeTab === "tourism" ? [] : (eventsResponse.promotions ?? []);
   const now = new Date();
+
+  /* ── Grid items: the mixed view alternates a stay/place with an event ── */
+  const gridItems: Array<
+    { kind: "tourism"; business: BusinessRow } | { kind: "event"; promotion: PromotionRow }
+  > = [];
+  for (let i = 0; i < Math.max(tourismBusinesses.length, promotions.length); i++) {
+    if (i < tourismBusinesses.length) {
+      gridItems.push({ kind: "tourism", business: tourismBusinesses[i] });
+    }
+    if (i < promotions.length) gridItems.push({ kind: "event", promotion: promotions[i] });
+  }
   const filterPanelProps = {
     filters,
     activeTab,
@@ -435,19 +498,16 @@ export function PromotionsExplorer() {
     onClearAll: clearAllFilters,
     onBusinessClear: () => updateFilters({ business_id: undefined }),
   };
-  // Only the active tab's grid is rendered, and only when it has results, so
-  // aria-controls must never point at a panel that is not in the DOM.
-  const activePanelRendered =
-    !loading &&
-    !error &&
-    (activeTab === "tourism" ? tourismBusinesses.length > 0 : promotions.length > 0);
-  const tourismPanelId =
-    activeTab === "tourism" && activePanelRendered ? "tab-panel-tourism" : undefined;
-  const eventsPanelId =
-    activeTab === "events" && activePanelRendered ? "tab-panel-events" : undefined;
+
+  // The grid is rendered only when it has results, so aria-controls must never
+  // point at a panel that is not in the DOM.
+  const activePanelRendered = !loading && !error && gridItems.length > 0;
+  const panelId = `tab-panel-${activeTab}`;
 
   const tabBaseClasses =
     "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  const allTabActiveClasses =
+    "border-primary/40 bg-primary/10 text-primary dark:border-primary/60 dark:bg-primary/20";
   const tourismTabActiveClasses =
     "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200";
   const inactiveTabClasses = "border-transparent text-muted-foreground hover:bg-muted/60";
@@ -455,6 +515,27 @@ export function PromotionsExplorer() {
     "border-amber-500 bg-amber-500 text-white shadow-sm shadow-amber-500/30 hover:bg-amber-600 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950";
   const eventTabInactiveClasses =
     "border-amber-300 bg-amber-50 text-amber-800 shadow-sm shadow-amber-200/70 hover:border-amber-400 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-200 dark:shadow-none dark:hover:bg-amber-500/25";
+  const tabClasses = (tab: ActiveTab, selected: boolean) => {
+    if (tab === "events") return selected ? eventTabActiveClasses : eventTabInactiveClasses;
+    if (!selected) return inactiveTabClasses;
+    return tab === "all" ? allTabActiveClasses : tourismTabActiveClasses;
+  };
+  const tabIcons = { all: LayoutGrid, tourism: TreePalm, events: CalendarDays } as const;
+  const tabLabels = { all: "All", tourism: "Tourism", events: "Events" } as const;
+
+  const loadingLabel =
+    activeTab === "all"
+      ? "Loading stays, places and events…"
+      : activeTab === "tourism"
+        ? "Loading stays and places…"
+        : "Loading events…";
+  const resultNoun =
+    activeTab === "all"
+      ? `listing${total === 1 ? "" : "s"}`
+      : activeTab === "tourism"
+        ? `tourism business${total === 1 ? "" : "es"}`
+        : `event${total === 1 ? "" : "s"}`;
+  const EmptyIcon = activeTab === "events" ? CalendarDays : TreePalm;
 
   return (
     <div className="container-page py-8 space-y-7 lg:py-10">
@@ -480,73 +561,30 @@ export function PromotionsExplorer() {
         aria-label="Tourism & Events sections"
         className="flex items-center gap-1.5 rounded-[1.25rem] border border-border/70 bg-background/95 p-1.5 elev-sm"
       >
-        {activeTab === "tourism" ? (
-          <button
-            type="button"
-            role="tab"
-            onKeyDown={handleTabKeyDown}
-            aria-selected="true"
-            tabIndex={0}
-            ref={tourismTabRef}
-            id="tab-tourism"
-            aria-controls={tourismPanelId}
-            className={cn(tabBaseClasses, tourismTabActiveClasses)}
-            onClick={() => switchTab("tourism")}
-          >
-            <TreePalm className="h-4 w-4" />
-            Tourism
-          </button>
-        ) : (
-          <button
-            type="button"
-            role="tab"
-            onKeyDown={handleTabKeyDown}
-            aria-selected="false"
-            tabIndex={-1}
-            ref={tourismTabRef}
-            id="tab-tourism"
-            aria-controls={tourismPanelId}
-            className={cn(tabBaseClasses, inactiveTabClasses)}
-            onClick={() => switchTab("tourism")}
-          >
-            <TreePalm className="h-4 w-4" />
-            Tourism
-          </button>
-        )}
-
-        {activeTab === "events" ? (
-          <button
-            type="button"
-            role="tab"
-            onKeyDown={handleTabKeyDown}
-            aria-selected="true"
-            tabIndex={0}
-            ref={eventsTabRef}
-            id="tab-events"
-            aria-controls={eventsPanelId}
-            className={cn(tabBaseClasses, eventTabActiveClasses)}
-            onClick={() => switchTab("events")}
-          >
-            <CalendarDays className="h-4 w-4" />
-            Events
-          </button>
-        ) : (
-          <button
-            type="button"
-            role="tab"
-            onKeyDown={handleTabKeyDown}
-            aria-selected="false"
-            tabIndex={-1}
-            ref={eventsTabRef}
-            id="tab-events"
-            aria-controls={eventsPanelId}
-            className={cn(tabBaseClasses, eventTabInactiveClasses)}
-            onClick={() => switchTab("events")}
-          >
-            <CalendarDays className="h-4 w-4" />
-            Events
-          </button>
-        )}
+        {TAB_ORDER.map((tab) => {
+          const selected = tab === activeTab;
+          const Icon = tabIcons[tab];
+          return (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              onKeyDown={handleTabKeyDown}
+              aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
+              ref={(node) => {
+                tabRefs.current[tab] = node;
+              }}
+              id={`tab-${tab}`}
+              aria-controls={selected && activePanelRendered ? panelId : undefined}
+              className={cn(tabBaseClasses, tabClasses(tab, selected))}
+              onClick={() => switchTab(tab)}
+            >
+              <Icon className="h-4 w-4" />
+              {tabLabels[tab]}
+            </button>
+          );
+        })}
       </div>
 
       {/* Mobile filter drawer (FAB visible < lg only) */}
@@ -560,22 +598,14 @@ export function PromotionsExplorer() {
         </aside>
 
         <div className="min-w-0 flex-1 space-y-6">
-          {/* ── Results Count + CTA ── */}
+          {/* ── Results Count ── */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground" aria-live="polite" role="status">
               {loading ? (
-                activeTab === "tourism" ? (
-                  "Loading stays and places…"
-                ) : (
-                  "Loading events…"
-                )
+                loadingLabel
               ) : (
                 <>
-                  <span className="font-medium text-foreground">{total}</span>{" "}
-                  {activeTab === "tourism"
-                    ? `tourism business${total === 1 ? "" : "es"}`
-                    : `event${total === 1 ? "" : "s"}`}{" "}
-                  found
+                  <span className="font-medium text-foreground">{total}</span> {resultNoun} found
                 </>
               )}
             </p>
@@ -591,9 +621,11 @@ export function PromotionsExplorer() {
               tone="teal"
               state="error"
               title={
-                activeTab === "tourism"
-                  ? "Unable to load tourism businesses"
-                  : "Unable to load events"
+                activeTab === "all"
+                  ? "Unable to load tourism and events"
+                  : activeTab === "tourism"
+                    ? "Unable to load tourism businesses"
+                    : "Unable to load events"
               }
               body={error}
               icon={<TreePalm className="h-7 w-7 text-teal-600 dark:text-teal-300" />}
@@ -603,25 +635,19 @@ export function PromotionsExplorer() {
                 Retry
               </Button>
             </GridStateMessage>
-          ) : (
-              activeTab === "tourism" ? tourismBusinesses.length === 0 : promotions.length === 0
-            ) ? (
+          ) : gridItems.length === 0 ? (
             <GridStateMessage
               tone="teal"
               state="filtered-empty"
               title={
-                activeTab === "tourism"
-                  ? "No tourism businesses match your filters"
-                  : "No events match your filters"
+                activeTab === "all"
+                  ? "Nothing matches your filters"
+                  : activeTab === "tourism"
+                    ? "No tourism businesses match your filters"
+                    : "No events match your filters"
               }
               body="Try broadening the filters or clearing a location filter."
-              icon={
-                activeTab === "tourism" ? (
-                  <TreePalm className="h-7 w-7 text-teal-600 dark:text-teal-300" />
-                ) : (
-                  <CalendarDays className="h-7 w-7 text-teal-600 dark:text-teal-300" />
-                )
-              }
+              icon={<EmptyIcon className="h-7 w-7 text-teal-600 dark:text-teal-300" />}
               testId="promotions-grid-empty"
             >
               <Button asChild size="sm" className="h-11 gap-1">
@@ -634,44 +660,27 @@ export function PromotionsExplorer() {
                 Clear all filters
               </Button>
             </GridStateMessage>
-          ) : activeTab === "tourism" ? (
-            /* ── Tourism Grid ── */
-            <>
-              <div
-                id="tab-panel-tourism"
-                role="tabpanel"
-                data-feed-source={feedSource ?? undefined}
-                aria-labelledby="tab-tourism"
-                className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
-              >
-                {tourismBusinesses.map((business, index) => (
-                  <BusinessCardGridItem key={business.id} business={business} index={index} />
-                ))}
-              </div>
-
-              {totalPages > 1 && (
-                <MarketplacePaginationControls
-                  page={page}
-                  totalPages={totalPages}
-                  onPageChange={(p) => {
-                    triggerHaptic("light");
-                    updateFilters({ page: String(p) }, { preservePage: true });
-                    window.scrollTo({ top: 0, behavior: "smooth" });
-                  }}
-                />
-              )}
-            </>
           ) : (
-            /* ── Events Grid ── */
             <>
               <div
-                id="tab-panel-events"
+                id={panelId}
                 role="tabpanel"
                 data-feed-source={feedSource ?? undefined}
-                aria-labelledby="tab-events"
+                aria-labelledby={`tab-${activeTab}`}
                 className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5 xl:gap-6"
               >
-                {promotions.map((promotion, index) => {
+                {gridItems.map((item, index) => {
+                  if (item.kind === "tourism") {
+                    return (
+                      <BusinessCardGridItem
+                        key={`tourism-${item.business.id}`}
+                        business={item.business}
+                        index={index}
+                      />
+                    );
+                  }
+
+                  const promotion = item.promotion;
                   const accountProfile = promotion.account_profile;
                   const businessName = promotion.business_id
                     ? businessMap.get(promotion.business_id)
@@ -688,7 +697,7 @@ export function PromotionsExplorer() {
 
                   return (
                     <div
-                      key={promotion.id}
+                      key={`event-${promotion.id}`}
                       className="content-auto motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-both [animation-duration:400ms] sm:slide-in-from-bottom-2"
                       style={{ animationDelay: `${Math.min(index * 50, 400)}ms` }}
                     >

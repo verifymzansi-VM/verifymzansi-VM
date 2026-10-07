@@ -144,7 +144,7 @@ describe("PromotionsExplorer", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("renders Tourism and Events tabs", async () => {
+  it("renders All, Tourism and Events tabs", async () => {
     render(<PromotionsExplorer />);
 
     await waitFor(() => {
@@ -156,10 +156,63 @@ describe("PromotionsExplorer", () => {
       .getAllByRole("tab")
       .map((tab) => tab.textContent?.trim());
 
-    expect(tabs).toEqual(expect.arrayContaining(["Tourism", "Events"]));
+    expect(tabs).toEqual(["All", "Tourism", "Events"]);
   });
 
-  it("highlights the Events tab as a visible discovery option when Tourism is selected", async () => {
+  it("mixes tourism businesses and events on the landing view", async () => {
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/businesses?page=1&limit=12&category=tourism_hospitality"),
+        expect.anything()
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/promotions?page=1&limit=12&type=event"),
+        expect.anything()
+      );
+    });
+
+    expect(screen.getByRole("tab", { name: /All/i })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows only tourism businesses on the Tourism tab", async () => {
+    useSearchParamsMock.mockReturnValue(
+      new URLSearchParams("tab=tourism") as ReturnType<typeof useSearchParamsMock>
+    );
+
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/businesses?page=1&limit=24&category=tourism_hospitality"),
+        expect.anything()
+      );
+    });
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("/api/promotions"),
+      expect.anything()
+    );
+  });
+
+  it("returns to the mixed view from a single tab", async () => {
+    useSearchParamsMock.mockReturnValue(
+      new URLSearchParams("tab=events&type=event") as ReturnType<typeof useSearchParamsMock>
+    );
+
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: /All/i }));
+
+    expect(replaceMock).toHaveBeenCalledWith("/tourism-events", expect.anything());
+  });
+
+  it("highlights the Events tab as a visible discovery option when it is not selected", async () => {
     render(<PromotionsExplorer />);
 
     await waitFor(() => {
@@ -195,13 +248,21 @@ describe("PromotionsExplorer", () => {
       expect(fetchMock).toHaveBeenCalled();
     });
 
+    const allTab = screen.getByRole("tab", { name: /All/i });
     const tourismTab = screen.getByRole("tab", { name: /Tourism/i });
     const eventsTab = screen.getByRole("tab", { name: /Events/i });
-    expect(tourismTab).toHaveAttribute("tabindex", "0");
+    expect(allTab).toHaveAttribute("tabindex", "0");
+    expect(tourismTab).toHaveAttribute("tabindex", "-1");
     expect(eventsTab).toHaveAttribute("tabindex", "-1");
 
-    fireEvent.keyDown(tourismTab, { key: "ArrowRight" });
+    fireEvent.keyDown(allTab, { key: "ArrowRight" });
+    expect(tourismTab).toHaveFocus();
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.stringContaining("tab=tourism"),
+      expect.anything()
+    );
 
+    fireEvent.keyDown(allTab, { key: "End" });
     expect(eventsTab).toHaveFocus();
     expect(replaceMock).toHaveBeenCalledWith(
       expect.stringContaining("tab=events"),

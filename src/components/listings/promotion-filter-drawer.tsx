@@ -18,7 +18,7 @@ import { ActiveFilterChips, type FilterChip } from "./active-filter-chips";
 
 interface PromotionFilterDrawerProps extends PromotionFilterCallbacks {
   filters: PromotionFilterState;
-  activeTab: "tourism" | "events";
+  activeTab: "all" | "tourism" | "events";
   cities: string[];
   businessMap: Map<string, string>;
 }

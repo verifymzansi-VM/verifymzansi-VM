@@ -45,7 +45,7 @@ export interface PromotionFilterCallbacks {
 
 interface PromotionFilterPanelProps extends PromotionFilterCallbacks {
   filters: PromotionFilterState;
-  activeTab: "tourism" | "events";
+  activeTab: "all" | "tourism" | "events";
   cities: string[];
   businessMap: Map<string, string>;
   className?: string;
@@ -127,7 +127,7 @@ export function PromotionFilterPanel({
               ))}
             </select>
           </div>
-        ) : (
+        ) : activeTab === "events" ? (
           <div className="space-y-1.5">
             <Label htmlFor={fieldId("event-type")}>Event type</Label>
             <select
@@ -144,7 +144,7 @@ export function PromotionFilterPanel({
               ))}
             </select>
           </div>
-        )}
+        ) : null}
 
         <div className={cn("gap-3", mode === "mobile" ? "grid grid-cols-2" : "space-y-4")}>
           <div className="space-y-1.5">
