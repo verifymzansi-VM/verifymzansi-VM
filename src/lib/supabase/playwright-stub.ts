@@ -407,10 +407,7 @@ class PlaywrightQueryBuilder<TData = unknown> implements PromiseLike<QueryResult
   }
 
   private executeSelectRows() {
-    let rows = applyFilters(
-      listPlaywrightTableRows(this.table) as Array<Record<string, unknown>>,
-      this.filters
-    );
+    let rows = applyFilters(stubTableRows(this.table), this.filters);
     const count = rows.length;
     rows = applyOrdering(rows, this.orders);
 
@@ -558,6 +555,29 @@ function createStubSession(token: string | null, user: StubAuthUser): Session | 
     expires_at: Math.floor(Date.now() / 1000) + 3600,
     user,
   } as unknown as Session;
+}
+
+/**
+ * The stub has no triggers, so the server-only private tables
+ * (20261007121453_private_post_tables.sql) are served as views over the post
+ * rows, which hold the same values the triggers would copy.
+ */
+const PRIVATE_TABLES: Record<string, { source: string; key: string; columns: string[] }> = {
+  business_private: {
+    source: "businesses",
+    key: "business_id",
+    columns: ["phone", "whatsapp", "email", "location_address", "map_directions"],
+  },
+  listing_private: { source: "listings", key: "listing_id", columns: ["location_address"] },
+};
+
+function stubTableRows(table: string): Array<Record<string, unknown>> {
+  const view = PRIVATE_TABLES[table];
+  if (!view) return listPlaywrightTableRows(table) as Array<Record<string, unknown>>;
+  return (listPlaywrightTableRows(view.source) as Array<Record<string, unknown>>).map((row) => ({
+    [view.key]: row.id,
+    ...Object.fromEntries(view.columns.map((column) => [column, row[column] ?? null])),
+  }));
 }
 
 export function createPlaywrightStubSupabaseClient(
