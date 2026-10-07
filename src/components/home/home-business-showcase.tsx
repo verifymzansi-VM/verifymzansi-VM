@@ -30,7 +30,14 @@ export async function HomeBusinessShowcase() {
   const supabase = await createClient();
   const engagementAdmin = tryCreateAdminClient();
   const { data: businesses } = await applyVisibleExpiryFilter(
-    supabase.from("businesses").select("*").eq("status", "live").eq("area", "MZANSI_BUSINESS")
+    supabase
+      .from("businesses")
+      // Card fields only; contact details and addresses aren't publicly readable.
+      .select(
+        "id, owner_id, business_name, business_type, description, logo_url, cover_photo, cover_video, video_thumbnail, location_city, location_province, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
+      )
+      .eq("status", "live")
+      .eq("area", "MZANSI_BUSINESS")
   )
     // Fair rotation: new posts first for 72 hours, then everyone takes turns.
     .order("fair_rotation_key", { ascending: true })

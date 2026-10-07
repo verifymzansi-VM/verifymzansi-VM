@@ -1,5 +1,7 @@
 import "server-only";
 
+import { withPublicName } from "@/lib/account/public-name";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   BusinessDetailRecord,
@@ -16,6 +18,7 @@ import {
 } from "@/lib/account/compat";
 import { selectBusinessWithFallback } from "@/lib/business/business-detail-select";
 import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
+import { withVisibleBusinessPrivateFields } from "@/lib/content/private-fields";
 import type { ContentTargetType } from "@/lib/engagement";
 import {
   getOptionalContentShareCountMap,
@@ -38,7 +41,7 @@ import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content
 
 /** Public listing columns only; never select("*") into something sent to browsers. */
 const LISTING_SLIDE_SELECT =
-  "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, location_suburb, location_address, contact_methods, created_at, media_width, media_height, focal_x, focal_y";
+  "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, location_suburb, contact_methods, created_at, media_width, media_height, focal_x, focal_y";
 
 const BUSINESS_POST_SELECT =
   "id, business_id, title, photos, video_thumbnail, start_date, location_city";
@@ -70,7 +73,7 @@ async function ownerProfiles(
   return new Map(
     ((data ?? []) as unknown as Array<OwnerSummaryInput & { user_id: string }>).map((row) => [
       row.user_id,
-      row,
+      withPublicName(row),
     ])
   );
 }
@@ -141,7 +144,14 @@ async function loadBusinessSlides(context: SlideLoadContext, ids: string[]) {
         .in("id", ids)
     )
   );
-  const rows = normalizeOwnerRecords((data ?? []) as Row[]) as unknown as BusinessDetailRecord[];
+  // Public slides: the street address only when published, contact details
+  // never (they're revealed on tap); flags say which contact methods exist.
+  const rows = (await withVisibleBusinessPrivateFields(
+    normalizeOwnerRecords((data ?? []) as Row[]) as unknown as Array<
+      BusinessDetailRecord & { owner_id?: string | null }
+    >,
+    null
+  )) as unknown as BusinessDetailRecord[];
   const visible = rows.filter(
     (row) =>
       row.business_name && !isPlaceholderMarketplaceContent(row.business_name, row.description)

@@ -4,13 +4,15 @@ import {
 } from "@/lib/business-verification/public";
 
 /**
- * Public business detail columns, newest schema first. Older databases miss a
+ * Public business detail columns, newest schema first. Contact details and
+ * the street address are not here: anon and signed-in users can't read them
+ * (see src/lib/content/private-fields.ts); servers add them after checks. Older databases miss a
  * few optional columns; each fallback drops them so profiles still load.
  */
 const BUSINESS_DETAIL_SELECT = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  location_city, location_town, store_number, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area, layout_template, view_count,
   expires_at, created_at, updated_at
@@ -19,7 +21,7 @@ const BUSINESS_DETAIL_SELECT = `
 const BUSINESS_DETAIL_SELECT_LEGACY = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  location_city, location_town, store_number, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area, view_count,
   expires_at, created_at, updated_at
@@ -28,7 +30,7 @@ const BUSINESS_DETAIL_SELECT_LEGACY = `
 const BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  location_city, location_town, store_number, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area, layout_template,
   expires_at, created_at, updated_at
@@ -37,7 +39,7 @@ const BUSINESS_DETAIL_SELECT_VIEW_COUNT_LEGACY = `
 const BUSINESS_DETAIL_SELECT_MIN_LEGACY = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  location_city, location_town, store_number, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area,
   expires_at, created_at, updated_at
@@ -46,7 +48,7 @@ const BUSINESS_DETAIL_SELECT_MIN_LEGACY = `
 const BUSINESS_DETAIL_SELECT_MIN_SCHEMA_LEGACY = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
   logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province,
-  location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links,
+  location_city, location_town, store_number, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, boost_until, featured_until, published_at, status, area,
   created_at, updated_at

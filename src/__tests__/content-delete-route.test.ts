@@ -7,6 +7,8 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent } = vi.hoiste
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+const mockDeleteOwned = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }));
+vi.mock("@/lib/content/delete-owned", () => ({ deleteOwnedContent: mockDeleteOwned }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -152,15 +154,18 @@ describe("POST /api/content/delete", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(deleteChain.eq).toHaveBeenCalledWith("id", ITEM_ID);
-    expect(deleteChain.eq).toHaveBeenCalledWith("owner_id", "user-1");
-    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockDeleteOwned).toHaveBeenCalledWith(expect.any(String), ITEM_ID, "owner_id", "user-1");
     expect(mockLogAuditEvent).toHaveBeenCalled();
     expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 
   it("returns 409 when row-level security deletes zero rows", async () => {
     const deleteChain = createDeleteChain([]);
+    mockDeleteOwned.mockResolvedValueOnce({
+      ok: false,
+      reason: "not_deletable",
+      message: "This post cannot be deleted in its current state",
+    });
     const from = vi.fn((table: string) => {
       if (table === "listings") {
         return {
@@ -196,7 +201,7 @@ describe("POST /api/content/delete", () => {
       error: "This post cannot be deleted in its current state",
       code: "CONTENT_STATE",
     });
-    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockDeleteOwned).toHaveBeenCalled();
     // Nothing was deleted, so no media cleanup, claim release, or audit event.
     expect(mockCreateAdminClient).not.toHaveBeenCalled();
     expect(mockLogAuditEvent).not.toHaveBeenCalled();
@@ -513,9 +518,12 @@ describe("POST /api/content/delete", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(deleteChain.eq).toHaveBeenCalledWith("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
-    expect(deleteChain.eq).toHaveBeenCalledWith("seller_id", "user-1");
-    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockDeleteOwned).toHaveBeenCalledWith(
+      expect.any(String),
+      "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      "seller_id",
+      "user-1"
+    );
     expect(mockCreateAdminClient().rpc).toHaveBeenCalledWith(
       "release_intro_trial",
       expect.objectContaining({ p_user_id: "user-1", p_reason: "rejected_deleted" })

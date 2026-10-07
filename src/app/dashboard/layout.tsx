@@ -49,19 +49,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           accountProfile,
         ] = await Promise.all([
           applyOwnerFilter(
-            supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
+            supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
             leadOwnerColumn,
             user.id
           ),
           supabase
             .from("notifications")
-            .select("*", { count: "exact", head: true })
+            .select("id", { count: "exact", head: true })
             .eq("user_id", user.id)
             .eq("read", false),
           applyOwnerFilter(
             supabase
               .from("listings")
-              .select("*", { count: "exact", head: true })
+              .select("id", { count: "exact", head: true })
               .eq("status", "rejected"),
             listingOwnerColumn,
             user.id
@@ -69,7 +69,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           applyOwnerFilter(
             supabase
               .from("listings")
-              .select("*", { count: "exact", head: true })
+              .select("id", { count: "exact", head: true })
               .in("status", ["pending_moderation", "flagged_for_review"]),
             listingOwnerColumn,
             user.id

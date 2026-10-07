@@ -334,7 +334,7 @@ describe("POST /api/account/delete", () => {
     );
   });
 
-  it("removes the user's stored media and avatar files before deleting the auth user", async () => {
+  it("deletes the auth user first, then removes stored media and avatar files", async () => {
     createSupabaseClientMock(GOOGLE_USER);
     const uploadUrl = "https://media.example.com/uploads/user-1/photo.jpg";
     const mocks = createAdminClientMock({
@@ -358,10 +358,11 @@ describe("POST /api/account/delete", () => {
     expect(mocks.avatarList).toHaveBeenCalledWith("user-1");
     expect(mocks.avatarRemove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.png"]);
 
+    // Nothing irreversible happens before the account itself is deleted.
     const deleteOrder = mocks.deleteUser.mock.invocationCallOrder[0];
     expect(deleteOrder).toBeDefined();
-    expect(mockQueuePublicMediaCleanup.mock.invocationCallOrder[0]).toBeLessThan(deleteOrder);
-    expect(mocks.avatarRemove.mock.invocationCallOrder[0]).toBeLessThan(deleteOrder);
+    expect(mockQueuePublicMediaCleanup.mock.invocationCallOrder[0]).toBeGreaterThan(deleteOrder);
+    expect(mocks.avatarRemove.mock.invocationCallOrder[0]).toBeGreaterThan(deleteOrder);
   });
 
   it("skips media queueing and avatar removal when the user has no stored files", async () => {
@@ -377,8 +378,17 @@ describe("POST /api/account/delete", () => {
     expect(deleteUser).toHaveBeenCalledWith("user-1");
   });
 
+  it("returns 500 and keeps the auth user when the media_uploads lookup fails", async () => {
+    createSupabaseClientMock(GOOGLE_USER);
+    const { deleteUser } = createAdminClientMock({ mediaUploadsError: { message: "db down" } });
+
+    const res = await POST(createRequest({ confirmation: "DELETE" }));
+
+    expect(res.status).toBe(500);
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
   it.each<[string, Parameters<typeof createAdminClientMock>[0], boolean]>([
-    ["the media_uploads lookup fails", { mediaUploadsError: { message: "db down" } }, false],
     ["media cleanup queueing fails", { mediaUploads: [{ url: "https://x.example/y.jpg" }] }, true],
     ["avatar listing fails", { avatarListError: { message: "storage down" } }, false],
     [
@@ -386,21 +396,21 @@ describe("POST /api/account/delete", () => {
       { avatarFiles: [{ name: "avatar.jpg" }], avatarRemoveError: { message: "storage down" } },
       false,
     ],
-  ])("returns 500 and keeps the auth user when %s", async (_label, options, queueFails) => {
-    createSupabaseClientMock(GOOGLE_USER);
-    if (queueFails) {
-      mockQueuePublicMediaCleanup.mockRejectedValueOnce(new Error("queue insert failed"));
+  ])(
+    "still deletes the account when %s afterwards (logged)",
+    async (_label, options, queueFails) => {
+      createSupabaseClientMock(GOOGLE_USER);
+      if (queueFails) {
+        mockQueuePublicMediaCleanup.mockRejectedValueOnce(new Error("queue insert failed"));
+      }
+      const { deleteUser } = createAdminClientMock(options);
+
+      const res = await POST(createRequest({ confirmation: "DELETE" }));
+
+      expect(res.status).toBe(200);
+      expect(deleteUser).toHaveBeenCalledWith("user-1");
     }
-    const { deleteUser } = createAdminClientMock(options);
-
-    const res = await POST(createRequest({ confirmation: "DELETE" }));
-
-    expect(res.status).toBe(500);
-    await expect(res.json()).resolves.toMatchObject({
-      error: "Unable to delete account right now",
-    });
-    expect(deleteUser).not.toHaveBeenCalled();
-  });
+  );
 
   it("blocks legal-hold accounts", async () => {
     createSupabaseClientMock({
@@ -468,7 +478,7 @@ describe("POST /api/account/delete", () => {
     expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it("does not delete the account if the audit redaction fails", async () => {
+  it("deletes the account even if the audit redaction afterwards fails (logged)", async () => {
     createSupabaseClientMock({
       id: "user-1",
       email: "user@gmail.com",
@@ -479,7 +489,7 @@ describe("POST /api/account/delete", () => {
 
     const res = await POST(createRequest({ confirmation: "DELETE" }));
 
-    expect(res.status).toBe(500);
-    expect(deleteUser).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(deleteUser).toHaveBeenCalledWith("user-1");
   });
 });

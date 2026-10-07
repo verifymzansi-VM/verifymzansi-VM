@@ -43,6 +43,8 @@ import {
 } from "@/types/enums";
 
 export interface ModerationItem {
+  /** The version the moderator reviewed; approval must match it. */
+  updated_at?: string | null;
   id: string;
   title?: string;
   status: string;

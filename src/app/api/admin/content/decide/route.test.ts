@@ -116,6 +116,7 @@ describe("POST /api/admin/content/decide", () => {
         itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         area: "PROMOTIONS_EVENTS",
         decision: "approve",
+        expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
       })
     );
 
@@ -129,8 +130,11 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "promotions") {
+        const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null });
         const eqStatus = vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+          select: updateSelect,
+          // The reviewed-version check (.eq("updated_at", ...)) before select.
+          eq: vi.fn().mockReturnValue({ select: updateSelect }),
         });
         const pendingRow = {
           id: itemId,
@@ -169,6 +173,7 @@ describe("POST /api/admin/content/decide", () => {
         itemId,
         area: "PROMOTIONS_EVENTS",
         decision: "approve",
+        expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
       })
     );
 
@@ -194,8 +199,11 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "businesses") {
+        const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null });
         const eqStatus = vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+          select: updateSelect,
+          // The reviewed-version check (.eq("updated_at", ...)) before select.
+          eq: vi.fn().mockReturnValue({ select: updateSelect }),
         });
         return {
           update: vi.fn().mockReturnValue({
@@ -246,8 +254,11 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "promotions") {
+        const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null });
         const eqStatus = vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+          select: updateSelect,
+          // The reviewed-version check (.eq("updated_at", ...)) before select.
+          eq: vi.fn().mockReturnValue({ select: updateSelect }),
         });
         const pendingRow = {
           id: itemId,
@@ -284,6 +295,7 @@ describe("POST /api/admin/content/decide", () => {
         itemId,
         area: "PROMOTIONS_EVENTS",
         decision: "approve",
+        expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
       })
     );
 
@@ -328,6 +340,7 @@ describe("POST /api/admin/content/decide", () => {
         itemId,
         area: "MZANSI_MARKET",
         decision: "approve",
+        expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
       })
     );
 
@@ -343,8 +356,11 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "listings") {
+        const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null });
         const eqStatus = vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+          select: updateSelect,
+          // The reviewed-version check (.eq("updated_at", ...)) before select.
+          eq: vi.fn().mockReturnValue({ select: updateSelect }),
         });
         const pendingRow = {
           id: itemId,
@@ -379,6 +395,7 @@ describe("POST /api/admin/content/decide", () => {
         itemId,
         area: "MZANSI_MARKET",
         decision: "approve",
+        expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
       })
     );
 
@@ -390,8 +407,11 @@ describe("POST /api/admin/content/decide", () => {
 
     mockFrom.mockImplementation((table: string) => {
       if (table === "businesses") {
+        const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null });
         const eqStatus = vi.fn().mockReturnValue({
-          select: vi.fn().mockResolvedValue({ data: [{ id: itemId }], error: null }),
+          select: updateSelect,
+          // The reviewed-version check (.eq("updated_at", ...)) before select.
+          eq: vi.fn().mockReturnValue({ select: updateSelect }),
         });
         const pendingRow = {
           id: itemId,
@@ -429,6 +449,7 @@ describe("POST /api/admin/content/decide", () => {
         area: "PROMOTIONS_EVENTS",
         contentType: "business",
         decision: "approve",
+        expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
       })
     );
 

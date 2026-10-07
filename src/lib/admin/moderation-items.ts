@@ -9,13 +9,13 @@ import type { MarketplaceArea } from "@/types/enums";
  */
 
 export const LISTING_FIELDS =
-  "id, title, status, created_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required" as const;
+  "id, title, status, created_at, updated_at, category, owner_id, description, photos, videos, video_thumbnail, price_cents, price_negotiable, location_province, location_city, location_suburb, attributes, contact_methods, buyer_verification_required" as const;
 
 export const BUSINESS_FIELDS =
-  "id, business_name, business_type, status, created_at, owner_id, area, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details" as const;
+  "id, business_name, business_type, status, created_at, updated_at, owner_id, area, description, category, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, payment_methods_accepted, delivery_options, service_areas, business_details" as const;
 
 export const PROMOTION_FIELDS =
-  "id, title, status, created_at, category, category_key, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type" as const;
+  "id, title, status, created_at, updated_at, category, category_key, owner_id, description, photos, videos, video_thumbnail, logo_url, price_cents, price_negotiable, location_province, location_city, contact_methods, promotion_type" as const;
 
 export const EDIT_FIELDS =
   "id, target_type, target_id, owner_id, area, status, proposed_data, current_snapshot, created_at" as const;

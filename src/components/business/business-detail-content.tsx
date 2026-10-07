@@ -54,13 +54,17 @@ export interface BusinessDetailRecord {
   location_city: string | null;
   location_province: string | null;
   location_town: string | null;
-  location_address: string | null;
-  phone: string | null;
-  whatsapp: string | null;
-  email: string | null;
+  // Private columns: present only for the owner, or the address when the
+  // business publishes it (src/lib/content/private-fields.ts).
+  location_address?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  /** Which contact methods exist, for "Show number" (numbers aren't sent). */
+  contact_available?: { phone: boolean; whatsapp: boolean; email: boolean };
   website: string | null;
   store_number: string | null;
-  map_directions: string | null;
+  map_directions?: string | null;
   business_details: BusinessDetails | null;
   layout_template?: string | null;
   view_count?: number | null;

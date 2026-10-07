@@ -108,14 +108,14 @@ export default async function DashboardPage() {
       user.id
     ),
     /* 3 */ applyOwnerFilter(
-      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
       leadsOwnerColumn,
       user.id
     ),
     /* 4 — active listings count */
     applyOwnerFilter(
       applyVisibleExpiryFilter(
-        supabase.from("listings").select("*", { count: "exact", head: true }).eq("status", "live"),
+        supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "live"),
         now
       ),
       listingOwnerColumn,
@@ -139,7 +139,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("listings")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "rejected"),
       listingOwnerColumn,
       user.id
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("listings")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .in("status", ["pending_moderation", "flagged_for_review"]),
       listingOwnerColumn,
       user.id
@@ -157,7 +157,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("listings")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .eq("status", "live")
         .lt("expires_at", sevenDaysFromNow)
         .gt("expires_at", now),
@@ -180,7 +180,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("businesses")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .neq("category", "tourism_hospitality")
         .or("area.is.null,area.neq.PROMOTIONS_EVENTS"),
       businessOwnerColumn,
@@ -190,7 +190,7 @@ export default async function DashboardPage() {
     applyOwnerFilter(
       supabase
         .from("businesses")
-        .select("*", { count: "exact", head: true })
+        .select("id", { count: "exact", head: true })
         .or("area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"),
       businessOwnerColumn,
       user.id

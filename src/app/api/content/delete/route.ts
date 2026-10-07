@@ -1,3 +1,4 @@
+import { deleteOwnedContent } from "@/lib/content/delete-owned";
 import { NextResponse } from "next/server";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { z } from "zod";
@@ -164,21 +165,19 @@ export async function POST(request: Request) {
         return forbiddenResponse();
       }
 
-      // Select the deleted id: row-level security silently skips rows the
-      // owner may not delete in this state (e.g. a live Tourism & Events post).
-      const deleteQuery = applyOwnerFilter(
-        supabase.from(config.table).delete().eq("id", itemId),
-        ownerColumn,
-        user.id
-      ).select("id");
-      const deleteResult = await deleteQuery;
-      deleteErrorMessage =
-        (deleteResult.error as unknown as { message?: string | null } | null)?.message ?? null;
-      if (!deleteErrorMessage && (deleteResult.data ?? []).length === 0) {
-        return NextResponse.json(
-          { error: "This post cannot be deleted in its current state", code: "CONTENT_STATE" },
-          { status: 409 }
-        );
+      const deleted = await deleteOwnedContent(config.table, itemId, ownerColumn, user.id);
+      if (!deleted.ok) {
+        if (deleted.reason === "error") {
+          deleteErrorMessage = deleted.message;
+        } else {
+          return NextResponse.json(
+            {
+              error: deleted.message,
+              code: deleted.reason === "legal_hold" ? "LEGAL_HOLD" : "CONTENT_STATE",
+            },
+            { status: 409 }
+          );
+        }
       }
     } else {
       const admin = createAdminClient();

@@ -49,7 +49,8 @@ export interface ListingDetailRecord {
   location_province: string | null;
   location_city: string | null;
   location_suburb: string | null;
-  location_address: string | null;
+  /** Private: never loaded into public pages (the form promises it stays private). */
+  location_address?: string | null;
   contact_methods: string[] | null;
   view_count?: number | null;
   created_at: string;
@@ -66,6 +67,8 @@ export interface ListingSellerRecord {
   account_verification_status: AccountVerificationStatus | null;
   phone?: string | null;
   masked_phone_public?: string | null;
+  /** The seller has a number a signed-in visitor can reveal. */
+  has_phone?: boolean;
 }
 
 export interface SimilarListingRow {
@@ -151,7 +154,15 @@ export function ListingDetailContent({
     showContactActions &&
     Boolean(sellerWhatsappUrl) &&
     Boolean(listing.contact_methods?.includes("whatsapp"));
-  const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
+  // Numbers aren't in the page for visitors: they reveal them in the contact card.
+  const revealable =
+    showContactActions && !sellerPhone && seller?.has_phone
+      ? {
+          phone: Boolean(listing.contact_methods?.includes("call")),
+          whatsapp: Boolean(listing.contact_methods?.includes("whatsapp")),
+        }
+      : null;
+  const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp || Boolean(revealable));
   const facts = useMemo(() => buildListingFacts(listing), [listing]);
   const [viewCount, setViewCount] = useState(listing.view_count ?? 0);
   const quickFacts = facts.slice(0, 6);
@@ -447,17 +458,20 @@ export function ListingDetailContent({
               <Separator />
 
               {showContactActions ? (
-                <ListingContactActions
-                  listingId={listing.id}
-                  listingTitle={listing.title}
-                  contactMethods={listing.contact_methods}
-                  sellerPhone={
-                    listing.contact_methods?.includes("call") ? (seller?.phone ?? null) : null
-                  }
-                  sellerWhatsapp={
-                    listing.contact_methods?.includes("whatsapp") ? (seller?.phone ?? null) : null
-                  }
-                />
+                <div id="contact" className="scroll-mt-24">
+                  <ListingContactActions
+                    listingId={listing.id}
+                    listingTitle={listing.title}
+                    contactMethods={listing.contact_methods}
+                    sellerPhone={
+                      listing.contact_methods?.includes("call") ? (seller?.phone ?? null) : null
+                    }
+                    sellerWhatsapp={
+                      listing.contact_methods?.includes("whatsapp") ? (seller?.phone ?? null) : null
+                    }
+                    revealable={revealable}
+                  />
+                </div>
               ) : seller?.phone === null && seller?.masked_phone_public === null ? (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">Contact seller</p>
@@ -504,6 +518,18 @@ export function ListingDetailContent({
 
       {showStickyBar ? (
         <StickyMobileBar>
+          {revealable ? (
+            <Button
+              type="button"
+              className="h-12 flex-1 gap-2 rounded-full font-semibold"
+              size="lg"
+              asChild
+            >
+              <a href="#contact">
+                <Phone className="h-4 w-4" /> Contact seller
+              </a>
+            </Button>
+          ) : null}
           {canCall ? (
             <Button
               type="button"

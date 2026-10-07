@@ -1,3 +1,4 @@
+import { publicPersonName } from "@/lib/account/public-name";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
@@ -879,7 +880,7 @@ export async function GET(request: NextRequest) {
     const serializedAccountProfiles =
       accountProfiles?.map((accountProfile) => ({
         user_id: accountProfile.user_id,
-        display_name: accountProfile.display_name,
+        display_name: publicPersonName(accountProfile.display_name),
         trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
       })) ?? [];
     const accountProfileByUserId = new Map(
@@ -901,7 +902,10 @@ export async function GET(request: NextRequest) {
       return {
         ...publicPromotion,
         account_profile: accountProfile
-          ? { display_name: accountProfile.display_name, trust: accountProfile.trust }
+          ? {
+              display_name: publicPersonName(accountProfile.display_name),
+              trust: accountProfile.trust,
+            }
           : null,
         view_count:
           typeof promotion.view_count === "number"

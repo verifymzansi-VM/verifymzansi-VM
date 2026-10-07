@@ -17,6 +17,12 @@ export const adminContentDecideSchema = z
     }),
     contentType: z.enum(["listing", "business", "promotion"]).optional(),
     reason: optionalTrimmedStringSchema.pipe(z.string().max(500).optional()),
+    /** The version the moderator reviewed; required to approve (no swap after review). */
+    expectedUpdatedAt: z.string().min(10).max(64).optional(),
+  })
+  .refine((data) => data.decision !== "approve" || Boolean(data.expectedUpdatedAt), {
+    message: "Reload the queue and review the current version before approving",
+    path: ["expectedUpdatedAt"],
   })
   .refine((data) => data.decision === "approve" || (data.reason && data.reason.trim().length > 0), {
     message: "A reason is required when rejecting content",

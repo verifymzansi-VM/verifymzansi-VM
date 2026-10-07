@@ -64,7 +64,9 @@ function buildClient(options?: {
       if (table === "listings") {
         return {
           select: (query: string) => {
-            if (query === "*") {
+            // The detail query: explicit public columns, never "*" and never the
+            // private street address.
+            if (query.includes("contact_methods") && !query.includes("location_address")) {
               return {
                 eq: () => ({
                   eq: () => ({
@@ -169,7 +171,8 @@ describe("ListingDetailPage", () => {
 
     expect(screen.getByText("Listing Detail Mock")).toBeInTheDocument();
     expect(screen.getAllByText("Used iPhone 15")).toHaveLength(2);
-    expect(screen.getByText("Nomsa Seller")).toBeInTheDocument();
+    // Public names show the first name and surname initial.
+    expect(screen.getByText("Nomsa S.")).toBeInTheDocument();
     expect(screen.getByText("Brand Apple")).toBeInTheDocument();
     expect(screen.getByText("Similar count: 1")).toBeInTheDocument();
     expect(screen.getByText("Similar seller count: 1")).toBeInTheDocument();

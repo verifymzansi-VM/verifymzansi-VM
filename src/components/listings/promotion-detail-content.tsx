@@ -97,6 +97,8 @@ export interface PromotionAdvertiserRecord {
   account_verification_status?: AccountVerificationStatus | null;
   phone: string | null;
   masked_phone_public: string | null;
+  /** A number exists that a signed-in visitor can reveal. */
+  has_phone?: boolean;
 }
 
 export interface LinkedBusinessRecord {
@@ -371,7 +373,13 @@ export function PromotionDetailContent({
     showContactActions &&
     contactMethods.includes("whatsapp") &&
     Boolean(contactPhone(advertiserProfile?.phone));
-  const showStickyBar = layoutMode === "public" && (canCall || canWhatsapp);
+  // Visitors don't get the number in the page; they reveal it in the contact card.
+  const advertiserRevealable =
+    showContactActions && !advertiserProfile?.phone && advertiserProfile?.has_phone
+      ? { phone: contactMethods.includes("call"), whatsapp: contactMethods.includes("whatsapp") }
+      : null;
+  const showStickyBar =
+    layoutMode === "public" && (canCall || canWhatsapp || Boolean(advertiserRevealable));
   const eventState =
     nowMs == null ? null : getEventState(promotion.start_date, promotion.end_date, nowMs);
   const rawCategoryLabel = getPromotionCategoryDisplayLabel(
@@ -725,7 +733,7 @@ export function PromotionDetailContent({
                   </div>
                 </CardContent>
               </Card>
-              <div className="mt-2">
+              <div id="contact" className="mt-2 scroll-mt-24">
                 <PromotionContactActions
                   promotionId={promotion.id}
                   contactMethods={contactMethods}
@@ -735,6 +743,7 @@ export function PromotionDetailContent({
                   advertiserWhatsapp={
                     contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
                   }
+                  revealable={advertiserRevealable}
                 />
               </div>
             </div>
@@ -1159,6 +1168,7 @@ export function PromotionDetailContent({
                 advertiserWhatsapp={
                   contactMethods.includes("whatsapp") ? (advertiserProfile?.phone ?? null) : null
                 }
+                revealable={advertiserRevealable}
               />
             ) : (
               <div className="space-y-2 text-sm text-muted-foreground">
@@ -1228,6 +1238,18 @@ export function PromotionDetailContent({
 
       {showStickyBar && (
         <StickyMobileBar>
+          {advertiserRevealable && (
+            <Button
+              type="button"
+              className="h-12 flex-1 gap-2 rounded-full font-semibold"
+              size="lg"
+              asChild
+            >
+              <a href="#contact">
+                <Phone className="h-4 w-4" /> Contact organiser
+              </a>
+            </Button>
+          )}
           {canCall && (
             <Button
               type="button"

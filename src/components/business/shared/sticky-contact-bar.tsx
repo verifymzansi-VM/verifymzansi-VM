@@ -21,7 +21,23 @@ export function StickyContactBar({ business, ctaLabel }: StickyContactBarProps) 
   const phone = contactPhone(business.phone);
   const whatsapp = contactPhone(business.whatsapp);
 
-  if (!phone && !whatsapp) return null;
+  // Visitors don't get the numbers in the page: send them to the contact card,
+  // where signed-in members tap "Show contact number".
+  if (!phone && !whatsapp) {
+    const available = business.contact_available;
+    if (!available?.phone && !available?.whatsapp) return null;
+    return (
+      <StickyMobileBar>
+        <a
+          href="#contact"
+          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground shadow-lg transition-all duration-200 hover:-translate-y-px active:bg-primary/90"
+        >
+          <Phone className="h-4 w-4" />
+          {ctaLabel ?? "Contact"}
+        </a>
+      </StickyMobileBar>
+    );
+  }
 
   return (
     <StickyMobileBar>

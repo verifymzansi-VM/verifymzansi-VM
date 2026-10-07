@@ -70,6 +70,41 @@ type ListingUpdateRow = {
  * Server-side listing update with full validation, auth, ownership check,
  * and photo/video limit enforcement.
  */
+/**
+ * GET /api/listings/[id]
+ * The owner's own listing for the edit form, including the private street
+ * address the public can't read. Everyone else gets 404.
+ */
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const id = uuidSchema.safeParse((await params).id);
+    if (!id.success) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const admin = createAdminClient();
+    const ownerColumn = await getOwnerColumn(admin, "listings");
+    const { data, error } = await applyOwnerFilter(
+      admin.from("listings").select("*").eq("id", id.data),
+      ownerColumn,
+      user.id
+    ).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    return NextResponse.json(
+      { listing: data },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  } catch (error) {
+    log.error("Owner listing read failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json({ error: "Could not load the listing" }, { status: 500 });
+  }
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // ── CSRF protection ───────────────────────────────────────
@@ -156,12 +191,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // ── Check listing exists and user owns it ────────────────
+    // Ownership via the caller's own client (row security proves it); the
+    // private street address is read separately just below.
     const { data: rawListing, error: listingError } = await applyOwnerFilter(
       supabase
         .from("listings")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, title, description, price_cents, price_negotiable, category, attributes, condition, location_province, location_city, location_suburb, location_address, photos, videos, video_thumbnail, logo_url, contact_methods, media_width, media_height, focal_x, focal_y, updated_at, approved_edit_count",
+            "id, owner_id, status, area, title, description, price_cents, price_negotiable, category, attributes, condition, location_province, location_city, location_suburb, photos, videos, video_thumbnail, logo_url, contact_methods, media_width, media_height, focal_x, focal_y, updated_at, approved_edit_count",
             ownerColumn
           )
         )
@@ -178,11 +215,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       });
       return NextResponse.json({ error: "Unable to load listing" }, { status: 503 });
     }
-    const listing = rawListing as ListingUpdateRow | null;
+    const ownListing = rawListing as ListingUpdateRow | null;
 
-    if (!listing) {
+    if (!ownListing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
+    // The street address is private to the database API; add it for the edit snapshot.
+    const { data: privateRow } = await createAdminClient()
+      .from("listings")
+      .select("location_address")
+      .eq("id", listingId)
+      .maybeSingle();
+    const listing = { ...ownListing, ...(privateRow ?? {}) } as ListingUpdateRow;
 
     // Defense-in-depth: applyOwnerFilter already scopes results to the current
     // user, so this check should never trigger. Kept as a safety net.

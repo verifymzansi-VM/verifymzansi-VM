@@ -78,6 +78,8 @@ export interface OwnerSummaryInput {
   display_name: string | null;
   account_verification_status?: AccountVerificationStatus | string | null;
   phone?: string | null;
+  /** Set where the number itself was withheld from the page. */
+  has_phone?: boolean;
 }
 
 export interface EngagementInput {
@@ -157,9 +159,12 @@ export function presentListingSlide(
 ): FeedSlide {
   const href = canonicalHref("listing", listing.id);
   const methods = listing.contact_methods ?? [];
-  // Phone numbers are published only for the methods the seller chose.
-  const phone = methods.includes("call") ? (seller?.phone ?? null) : null;
-  const whatsapp = methods.includes("whatsapp") ? (seller?.phone ?? null) : null;
+  // Numbers never enter a slide; a signed-in visitor reveals the ones the
+  // seller chose (call / WhatsApp) on tap.
+  const revealable = {
+    phone: methods.includes("call") && Boolean(seller?.phone),
+    whatsapp: methods.includes("whatsapp") && Boolean(seller?.phone),
+  };
   const facts = buildListingFacts(listing);
   const price = describeListingPrice(listing);
   const photos = (listing.photos ?? []).map(normalizeMediaUrl).filter(Boolean);
@@ -216,8 +221,9 @@ export function presentListingSlide(
       href: null,
     },
     contact: {
-      phone,
-      whatsapp,
+      phone: null,
+      whatsapp: null,
+      revealable,
       showPhoneButton: true,
       showMessageButton:
         listing.contact_methods == null || methods.some((m) => ["form", "in_app"].includes(m)),
@@ -247,10 +253,7 @@ export function presentListingSlide(
     ),
     right: sections(
       { type: "contact", id: "contact" },
-      // The area is already under the title; only the street address adds anything.
-      listing.location_address
-        ? { type: "text", id: "address", title: "Address", body: listing.location_address }
-        : null,
+      // The street address is private (the form promises it); only the area shows.
       { type: "rows", id: "breakdown", title: "Full listing breakdown", rows: facts.slice(6) },
       { type: "safety", id: "safety" }
     ),
@@ -653,8 +656,14 @@ export function presentBusinessSlide(
       },
     },
     contact: {
-      phone: business.phone,
-      whatsapp: business.whatsapp,
+      phone: null,
+      whatsapp: null,
+      revealable: business.contact_available
+        ? {
+            phone: business.contact_available.phone,
+            whatsapp: business.contact_available.whatsapp,
+          }
+        : null,
       showPhoneButton: true,
       showMessageButton: acceptsInboxEnquiries(business.category_details),
       cta: bookingUrl
@@ -725,8 +734,10 @@ export function presentEventSlide(
   const href = canonicalHref("event", promotion.id);
   const details: EventDetails = promotion.event_details ?? {};
   const methods = promotion.contact_methods ?? [];
-  const phone = methods.includes("call") ? (advertiser?.phone ?? null) : null;
-  const whatsapp = methods.includes("whatsapp") ? (advertiser?.phone ?? null) : null;
+  const revealable = {
+    phone: methods.includes("call") && Boolean(advertiser?.phone || advertiser?.has_phone),
+    whatsapp: methods.includes("whatsapp") && Boolean(advertiser?.phone || advertiser?.has_phone),
+  };
   const tiers = details.ticket_tiers ?? [];
   const ticketsUrl = externalLink(details.tickets_url);
   const isEvent = promotion.promotion_type === "event";
@@ -873,8 +884,9 @@ export function presentEventSlide(
           : null,
     },
     contact: {
-      phone,
-      whatsapp,
+      phone: null,
+      whatsapp: null,
+      revealable,
       showPhoneButton: methods.includes("call"),
       showMessageButton: methods.includes("form") || methods.includes("in_app"),
       cta: ticketsUrl ? { label: "Get tickets", href: ticketsUrl, icon: "tickets" } : null,

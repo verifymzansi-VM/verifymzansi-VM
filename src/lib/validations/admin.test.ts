@@ -14,6 +14,7 @@ describe("adminContentDecideSchema", () => {
       itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       area: "MZANSI_MARKET",
       decision: "approve",
+      expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
     });
     expect(result.success).toBe(true);
   });
@@ -24,6 +25,7 @@ describe("adminContentDecideSchema", () => {
       area: "PROMOTIONS_EVENTS",
       contentType: "promotion",
       decision: "approve",
+      expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
     });
     expect(result.success).toBe(true);
   });
@@ -34,6 +36,7 @@ describe("adminContentDecideSchema", () => {
       area: "PROMOTIONS_EVENTS",
       contentType: "business",
       decision: "approve",
+      expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
     });
     expect(result.success).toBe(true);
   });
@@ -43,6 +46,16 @@ describe("adminContentDecideSchema", () => {
       itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       area: "MZANSI_MARKET",
       contentType: "business",
+      decision: "approve",
+      expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires the reviewed version to approve", () => {
+    const result = adminContentDecideSchema.safeParse({
+      itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+      area: "MZANSI_MARKET",
       decision: "approve",
     });
     expect(result.success).toBe(false);
@@ -63,6 +76,7 @@ describe("adminContentDecideSchema", () => {
       itemId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       area: "INVALID",
       decision: "approve",
+      expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
     });
     expect(result.success).toBe(false);
   });
@@ -72,6 +86,7 @@ describe("adminContentDecideSchema", () => {
       itemId: "not-a-uuid",
       area: "MZANSI_MARKET",
       decision: "approve",
+      expectedUpdatedAt: "2026-10-07T08:00:00.000Z",
     });
     expect(result.success).toBe(false);
   });

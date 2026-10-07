@@ -316,6 +316,7 @@ function ContactBlock({ slide }: { slide: FeedSlide }) {
           showPhoneButton={slide.contact.showPhoneButton}
           showMessageButton={slide.contact.showMessageButton}
           messageIcon={MessageSquare}
+          revealable={slide.contact.revealable}
           config={feedContactConfig(slide)}
           showShare={false}
         />

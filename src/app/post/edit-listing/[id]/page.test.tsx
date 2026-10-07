@@ -110,6 +110,15 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
   getTownsForCity: () => [],
 }));
 
+// The page loads the owner's listing from the API; the test serves it from
+// the same mock the supabase client used to.
+vi.mock("./load-own-listing", () => ({
+  loadOwnListing: async () => {
+    const { data, error } = await mockMaybeSingle();
+    return { data: data ?? null, error: error ?? null };
+  },
+}));
+
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: {

@@ -488,7 +488,11 @@ export function UnifiedLayout({
   const showStickyContactBar = layoutMode === "public" && showPublicActions;
   const shellClassName = isReviewLayout
     ? "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start"
-    : showStickyContactBar && (contactPhone(business.phone) || contactPhone(business.whatsapp))
+    : showStickyContactBar &&
+        (contactPhone(business.phone) ||
+          contactPhone(business.whatsapp) ||
+          business.contact_available?.phone ||
+          business.contact_available?.whatsapp)
       ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
       : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
   const viewCountLabel = `${viewCount} ${viewCount === 1 ? "view" : "views"}`;
@@ -907,11 +911,19 @@ export function UnifiedLayout({
           </Card>
 
           {showPublicActions ? (
-            <Card>
+            <Card id="contact" className="scroll-mt-24">
               <CardContent className="space-y-3 p-5">
                 <ContentContactActions
                   phone={business.phone}
                   whatsapp={business.whatsapp}
+                  revealable={
+                    business.contact_available && !business.phone && !business.whatsapp
+                      ? {
+                          phone: business.contact_available.phone,
+                          whatsapp: business.contact_available.whatsapp,
+                        }
+                      : null
+                  }
                   showPhoneButton={true}
                   showMessageButton={acceptsInboxEnquiries(business.category_details)}
                   messageIcon={MessageSquare}

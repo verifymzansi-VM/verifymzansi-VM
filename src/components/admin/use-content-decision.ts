@@ -9,6 +9,7 @@ export function useContentDecision<T extends { id: string }>({
   getContentType,
   getEndpoint = () => "/api/admin/content/decide",
   getItemId = (item) => item.id,
+  getExpectedUpdatedAt,
   onDecisionComplete,
   rejectReasonRequiredMessage,
 }: {
@@ -16,6 +17,8 @@ export function useContentDecision<T extends { id: string }>({
   getContentType?: (item: T) => string | undefined;
   getEndpoint?: (item: T) => string;
   getItemId?: (item: T) => string;
+  /** The version reviewed: the server refuses if the content changed since. */
+  getExpectedUpdatedAt?: (item: T) => string | null | undefined;
   onDecisionComplete?: () => void;
   rejectReasonRequiredMessage: string;
 }) {
@@ -59,7 +62,12 @@ export function useContentDecision<T extends { id: string }>({
         body: JSON.stringify({
           ...(isContentEdit
             ? { requestId: itemId }
-            : { itemId, area: getArea(selectedItem), contentType: getContentType?.(selectedItem) }),
+            : {
+                itemId,
+                area: getArea(selectedItem),
+                contentType: getContentType?.(selectedItem),
+                expectedUpdatedAt: getExpectedUpdatedAt?.(selectedItem) ?? undefined,
+              }),
           decision,
           reason: decision === "reject" ? rejectReason : undefined,
         }),

@@ -1,3 +1,4 @@
+import { withPublicName } from "@/lib/account/public-name";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import type { Metadata } from "next";
 import { cache } from "react";
@@ -35,6 +36,7 @@ import {
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visibility";
 import { selectBusinessWithFallback } from "@/lib/business/business-detail-select";
+import { withVisibleBusinessPrivateFields } from "@/lib/content/private-fields";
 import { isTourismBusinessRecord } from "@/lib/presentation/business-facts";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { presentBusinessSlide } from "@/lib/feed/presenters";
@@ -95,16 +97,20 @@ const loadBusinessDetail = cache(async function loadBusinessDetail(
     business.status === "live" &&
     !isVisibleByExpiry(business.expires_at, new Date(), businessCreatedAt);
   const isOwnerPreview = business.status !== "live" || isExpiredLivePost;
+  const {
+    data: { user: viewer },
+  } = await supabase.auth.getUser();
 
-  if (isOwnerPreview) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user || user.id !== readOwnerId(business)) {
-      return null;
-    }
+  if (isOwnerPreview && (!viewer || viewer.id !== readOwnerId(business))) {
+    return null;
   }
+
+  // Contact details and a hidden street address aren't readable by the
+  // public; add only what this viewer may see (owner: everything).
+  const [visibleBusiness] = await withVisibleBusinessPrivateFields(
+    [{ ...business, owner_id: readOwnerId(business) }],
+    viewer?.id ?? null
+  );
 
   const ownerId = readOwnerId(business);
   const { data: ownerProfile } = ownerId
@@ -126,8 +132,8 @@ const loadBusinessDetail = cache(async function loadBusinessDetail(
     .limit(12);
 
   return {
-    business,
-    ownerProfile: ownerProfile ?? null,
+    business: visibleBusiness as typeof business,
+    ownerProfile: withPublicName(ownerProfile ?? null),
     promotions: (promotions ?? []) as BusinessPromotionRecord[],
     isOwnerPreview,
   };

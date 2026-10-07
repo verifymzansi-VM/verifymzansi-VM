@@ -1,3 +1,4 @@
+import { deleteOwnedContent } from "@/lib/content/delete-owned";
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 
@@ -104,21 +105,16 @@ export function createOwnedContentDeleteRoute<Params extends Record<string, stri
         return NextResponse.json({ error: invalidStatusMessage }, { status: 400 });
       }
 
-      // Select the deleted id: row-level security silently skips rows the
-      // owner may not delete, which must not be reported as a success.
-      const { data: deletedRows, error: deleteError } = await applyOwnerFilter(
-        supabase.from(table).delete().eq("id", entityId),
-        ownerColumn,
-        user.id
-      ).select("id");
-
-      if (deleteError) {
-        log.error(deleteErrorLogMessage, { error: deleteError.message });
-        return NextResponse.json({ error: deleteErrorMessage }, { status: 500 });
-      }
-
-      if ((deletedRows ?? []).length === 0) {
-        return NextResponse.json({ error: invalidStatusMessage }, { status: 409 });
+      const deleted = await deleteOwnedContent(table, entityId, ownerColumn, user.id);
+      if (!deleted.ok) {
+        if (deleted.reason === "error") {
+          log.error(deleteErrorLogMessage, { error: deleted.message });
+          return NextResponse.json({ error: deleteErrorMessage }, { status: 500 });
+        }
+        return NextResponse.json(
+          { error: deleted.reason === "legal_hold" ? deleted.message : invalidStatusMessage },
+          { status: 409 }
+        );
       }
 
       const deletedMediaUrls = collectDeletedMediaUrls(existing);

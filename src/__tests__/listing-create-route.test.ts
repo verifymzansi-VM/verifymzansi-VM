@@ -1564,7 +1564,9 @@ describe("GET /api/listings", () => {
     expect(json.listings).toHaveLength(1);
     expect(json.listings[0].id).toBe("listing-live");
     expect(json.total).toBe(1);
-    expect(json.sellers).toHaveLength(1);
+    // Seller account ids are never returned (POPIA); each listing carries
+    // its seller's public name instead.
+    expect(json.sellers).toBeUndefined();
   });
 
   it("falls back to seller_id for owner scoping and strips owner identifiers from public rows", async () => {
@@ -1649,12 +1651,8 @@ describe("GET /api/listings", () => {
         account_verification_status: "verified",
       },
     });
-    expect(json.sellers).toMatchObject([
-      {
-        user_id: USER_ID,
-        display_name: "Nomsa",
-      },
-    ]);
+    expect(json.sellers).toBeUndefined();
+    expect(JSON.stringify(json)).not.toContain(USER_ID);
   });
 
   it.each([

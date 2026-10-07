@@ -135,7 +135,8 @@ describe("TourismEventDetailPage", () => {
 
     expect(screen.getByText("Tourism Detail Mock")).toBeInTheDocument();
     expect(screen.getAllByText("Night Market")).toHaveLength(2);
-    expect(screen.getByText("Nomsa Advertiser")).toBeInTheDocument();
+    // Public names show the first name and surname initial.
+    expect(screen.getByText("Nomsa A.")).toBeInTheDocument();
     expect(screen.getByText("Nomsa Kitchen")).toBeInTheDocument();
     expect(screen.queryByText("Header")).not.toBeInTheDocument();
     expect(screen.queryByText("Footer")).not.toBeInTheDocument();

@@ -31,6 +31,8 @@ const {
   mockShouldSendOwnerLifecycleNotifications: vi.fn().mockReturnValue(true),
 }));
 
+const mockDeleteOwned = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }));
+vi.mock("@/lib/content/delete-owned", () => ({ deleteOwnedContent: mockDeleteOwned }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
@@ -1468,6 +1470,11 @@ describe("DELETE /api/promotions/[id]", () => {
 
   it("returns 409 when row-level security deletes zero rows", async () => {
     const deleteChain = createDeleteChain([]);
+    mockDeleteOwned.mockResolvedValueOnce({
+      ok: false,
+      reason: "not_deletable",
+      message: "This post cannot be deleted in its current state",
+    });
     mockCreateClient.mockResolvedValue({
       from: vi.fn((table: string) => {
         if (table === "promotions") {
@@ -1497,7 +1504,7 @@ describe("DELETE /api/promotions/[id]", () => {
     expect(res.status).toBe(409);
     const json = await res.json();
     expect(json.error).toMatch(/draft or rejected/i);
-    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockDeleteOwned).toHaveBeenCalled();
     expect(mockCreateAdminClient).not.toHaveBeenCalled();
   });
 
@@ -1535,9 +1542,12 @@ describe("DELETE /api/promotions/[id]", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.success).toBe(true);
-    expect(deleteChain.eq).toHaveBeenCalledWith("id", VALID_UUID);
-    expect(deleteChain.eq).toHaveBeenCalledWith("owner_id", USER_ID);
-    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockDeleteOwned).toHaveBeenCalledWith(
+      expect.any(String),
+      VALID_UUID,
+      "owner_id",
+      USER_ID
+    );
   });
 
   it("deletes rejected promotion successfully", async () => {
@@ -1572,8 +1582,11 @@ describe("DELETE /api/promotions/[id]", () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(200);
-    expect(deleteChain.eq).toHaveBeenCalledWith("id", VALID_UUID);
-    expect(deleteChain.eq).toHaveBeenCalledWith("owner_id", USER_ID);
-    expect(deleteChain.select).toHaveBeenCalledWith("id");
+    expect(mockDeleteOwned).toHaveBeenCalledWith(
+      expect.any(String),
+      VALID_UUID,
+      "owner_id",
+      USER_ID
+    );
   });
 });

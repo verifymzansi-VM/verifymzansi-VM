@@ -1,3 +1,4 @@
+import { publicPersonName } from "@/lib/account/public-name";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Calendar } from "lucide-react";
@@ -148,8 +149,10 @@ export default async function EventsPage() {
   );
   const allEvents = [...upcoming, ...past];
   const accountIds = [...new Set(allEvents.map((event) => readOwnerId(event)).filter(Boolean))];
+  // Organiser names: account profiles are owner-only to the visitor's session,
+  // so read them with the service client (public-safe name only, below).
   const { data: accountProfiles } = accountIds.length
-    ? await admin
+    ? await (engagementAdmin ?? admin)
         .from(ACCOUNT_PROFILE_TABLE)
         .select("user_id, display_name, account_verification_status")
         .in("user_id", accountIds)
@@ -159,7 +162,7 @@ export default async function EventsPage() {
     (accountProfiles ?? []).map((accountProfile) => [
       accountProfile.user_id,
       {
-        name: accountProfile.display_name,
+        name: publicPersonName(accountProfile.display_name) ?? undefined,
         trust: computeTrustLevel(readAccountVerificationStatus(accountProfile)),
       },
     ])

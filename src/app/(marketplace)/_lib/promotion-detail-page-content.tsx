@@ -1,3 +1,4 @@
+import { publicPersonName } from "@/lib/account/public-name";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
@@ -124,14 +125,17 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
     }),
   };
 
+  // The number reaches the page only for the advertiser; visitors reveal it.
+  const publishesPhone = Boolean(
+    promotion.contact_methods?.some((method: string) => ["call", "whatsapp"].includes(method))
+  );
+  const viewerIsAdvertiser = Boolean(user && user.id === promotionOwnerId);
   const safeAdvertiser = advertiserProfile
     ? {
         ...advertiserProfile,
-        phone: promotion.contact_methods?.some((method: string) =>
-          ["call", "whatsapp"].includes(method)
-        )
-          ? advertiserProfile.phone
-          : null,
+        display_name: publicPersonName(advertiserProfile.display_name),
+        phone: publishesPhone && viewerIsAdvertiser ? advertiserProfile.phone : null,
+        has_phone: publishesPhone && Boolean(advertiserProfile.phone),
         masked_phone_public: null,
       }
     : null;

@@ -50,13 +50,17 @@ import {
   isEditLimitReached,
 } from "@/lib/content-edit-requests";
 import { applyVisibleExpiryFilter, isVisibleByExpiry } from "@/lib/posting/visibility";
+import {
+  loadBusinessPrivateFields,
+  withVisibleBusinessPrivateFields,
+} from "@/lib/content/private-fields";
 
 const log = createLogger("BusinessDetail");
 const BUSINESS_DETAIL_SELECT = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details, logo_url,
   cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city,
-  location_town, location_address,
-  store_number, map_directions, phone, whatsapp, email, website, social_links,
+  location_town,
+  store_number, website, social_links,
   services_offered, service_areas, business_details, operating_hours, payment_methods_accepted,
   delivery_options, layout_template, boost_until, featured_until, published_at, status, area, created_at,
   expires_at, updated_at, media_width, media_height, focal_x, focal_y
@@ -166,23 +170,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Views are counted by the browser (page opens and video plays), not by
     // API reads: a script calling this endpoint must not add views.
 
+    // Contact details and a hidden address: everything for the owner, the
+    // address when published for others, contact details never (tap-to-reveal).
+    const [visibleBusiness] = await withVisibleBusinessPrivateFields(
+      [{ ...normalizedBusiness, owner_id: readOwnerId(normalizedBusiness) }],
+      currentUser?.id ?? null
+    );
     // Strip owner identifiers from public response (POPIA data minimization)
-    const { owner_id: _oid, ...publicBusiness } = normalizedBusiness;
-
-    // M3: Redact contact fields for unauthenticated requests to prevent
-    // email/phone harvesting. Authenticated users can see full details.
-    // Reuse the user fetched above for non-live checks; fetch lazily otherwise.
-    if (!currentUser) {
-      const { phone: _p, whatsapp: _w, email: _e, ...redactedBusiness } = publicBusiness;
-      return createViewerCookieJsonResponse(
-        {
-          business: redactedBusiness,
-          promotions: promotions ?? [],
-        },
-        existingViewerId,
-        nextViewerId
-      );
-    }
+    const { owner_id: _oid, ...publicBusiness } = visibleBusiness;
 
     return createViewerCookieJsonResponse(
       { business: publicBusiness, promotions: promotions ?? [] },
@@ -228,13 +223,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const ownerColumn = await getOwnerColumn(supabase, "businesses");
 
-    // Check ownership
-    const { data: rawExisting } = await applyOwnerFilter(
+    // Check ownership with the caller's own client (row security proves it);
+    // the private columns (contact details, address) are added just below.
+    const { data: rawOwnRow } = await applyOwnerFilter(
       supabase
         .from("businesses")
         .select(
           withOwnerColumn(
-            "id, owner_id, status, area, business_name, slug, business_type, description, category, subcategory, category_details, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, location_town, location_address, store_number, map_directions, phone, whatsapp, email, website, social_links, operating_hours, services_offered, service_areas, business_details, payment_methods_accepted, delivery_options, layout_template, media_width, media_height, focal_x, focal_y, approved_edit_count",
+            "id, owner_id, status, area, business_name, slug, business_type, description, category, subcategory, category_details, logo_url, cover_photo, cover_video, video_thumbnail, gallery_photos, location_province, location_city, location_town, store_number, website, social_links, operating_hours, services_offered, service_areas, business_details, payment_methods_accepted, delivery_options, layout_template, media_width, media_height, focal_x, focal_y, approved_edit_count",
             ownerColumn
           )
         )
@@ -242,7 +238,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       ownerColumn,
       user.id
     ).maybeSingle();
-    const existing = rawExisting as BusinessOwnerRow | null;
+    const privateFields = rawOwnRow
+      ? (await loadBusinessPrivateFields([(rawOwnRow as unknown as { id: string }).id])).get(
+          (rawOwnRow as unknown as { id: string }).id
+        )
+      : undefined;
+    const existing = (
+      rawOwnRow ? { ...(rawOwnRow as object), ...privateFields } : null
+    ) as BusinessOwnerRow | null;
 
     if (!existing) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 });

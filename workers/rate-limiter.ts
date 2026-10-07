@@ -244,6 +244,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "media:upload-complete": [{ limit: 20, ttl: 60 }],
 
   // ── Contact ──────────────────────────────────────────
+  // Tap-to-reveal of a poster's number: enough for real buyers, too slow to harvest.
+  "contact:reveal": [
+    { limit: 10, ttl: 60 },
+    { limit: 40, ttl: 3600 },
+    { limit: 120, ttl: 86400 },
+  ],
   "contact:send": [
     { limit: 5, ttl: 60 },
     { limit: 15, ttl: 3600 },

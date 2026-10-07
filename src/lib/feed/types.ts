@@ -75,8 +75,11 @@ export interface FeedOpeningHours {
 }
 
 export interface FeedContact {
+  /** Never set on public slides: numbers are revealed on tap (see revealable). */
   phone: string | null;
   whatsapp: string | null;
+  /** Which methods a signed-in visitor can reveal through /api/contact/reveal. */
+  revealable?: { phone: boolean; whatsapp: boolean } | null;
   showPhoneButton: boolean;
   showMessageButton: boolean;
   /** The main action when it is not a phone call: a stay's booking page. */

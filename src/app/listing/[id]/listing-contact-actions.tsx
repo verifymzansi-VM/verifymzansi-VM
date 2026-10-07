@@ -19,6 +19,8 @@ interface ListingContactActionsProps {
   sellerPhone?: string | null;
   /** @deprecated Use ownerWhatsapp instead */
   sellerWhatsapp?: string | null;
+  /** Which methods a signed-in visitor can reveal (numbers aren't in the page). */
+  revealable?: { phone: boolean; whatsapp: boolean } | null;
 }
 
 export function ListingContactActions({
@@ -29,6 +31,7 @@ export function ListingContactActions({
   ownerWhatsapp,
   sellerPhone,
   sellerWhatsapp,
+  revealable,
 }: ListingContactActionsProps) {
   const contactPhone = ownerPhone ?? sellerPhone;
   const contactWhatsapp = ownerWhatsapp ?? sellerWhatsapp;
@@ -42,6 +45,7 @@ export function ListingContactActions({
         contactMethods.some((method) => ["form", "in_app"].includes(method))
       }
       messageIcon={MessageSquare}
+      revealable={revealable}
       config={listingContactConfig(listingId, listingTitle)}
     />
   );

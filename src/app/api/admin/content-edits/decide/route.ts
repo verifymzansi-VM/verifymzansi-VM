@@ -113,6 +113,48 @@ function collectRequestMedia(data: Record<string, unknown>) {
   );
 }
 
+/** Fields that change without content review (crop, counters, bookkeeping). */
+const NOT_CONTENT_COLUMNS = new Set([
+  "id",
+  "owner_id",
+  "status",
+  "updated_at",
+  "focal_x",
+  "focal_y",
+  "media_width",
+  "media_height",
+  "view_count",
+  "engaged_view_count",
+  "approved_edit_count",
+]);
+
+/** Stable JSON (sorted keys) so equal values compare equal. */
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b)
+    );
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stable(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/** Whether any snapshotted field differs from the live row now. */
+function snapshotIsStale(
+  snapshot: Record<string, unknown> | null | undefined,
+  current: Record<string, unknown>
+): boolean {
+  if (!snapshot) return false;
+  return Object.entries(snapshot).some(
+    ([column, value]) =>
+      !SYSTEM_CONTROLLED_COLUMNS.has(column) &&
+      !NOT_CONTENT_COLUMNS.has(column) &&
+      column in current &&
+      stable(value) !== stable(current[column])
+  );
+}
+
 async function releaseApprovalClaim({
   admin,
   requestId,
@@ -139,6 +181,9 @@ async function releaseApprovalClaim({
 }
 
 export async function POST(request: Request) {
+  // Set once this request holds the approval claim, so an unexpected error
+  // releases it instead of leaving the edit stuck in "processing".
+  let heldClaim: { requestId: string; reviewerId: string } | null = null;
   try {
     const guard = await enforceAdminMutationGuard({
       request,
@@ -280,6 +325,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Edit request was already reviewed" }, { status: 409 });
     }
 
+    heldClaim = { requestId, reviewerId: guard.user.id };
     editRequest = claimedRequest as ContentEditRequest;
     config = targetConfig[editRequest.target_type];
     contentTitle = getContentTitle(editRequest);
@@ -312,6 +358,27 @@ export async function POST(request: Request) {
         {
           error: "This post has reached the maximum of two approved edits.",
           code: "edit_limit_reached",
+        },
+        { status: 409 }
+      );
+    }
+
+    // The edit was requested against current_snapshot. If those fields have
+    // changed since (the owner edited while the post was hidden, or another
+    // edit was approved), applying it would overwrite newer content.
+    if (snapshotIsStale(editRequest.current_snapshot, targetRow)) {
+      await admin
+        .from("content_edit_requests")
+        .update({
+          status: "rejected",
+          reason: "The post changed after this edit was requested. Ask the owner to resubmit.",
+        })
+        .eq("id", requestId)
+        .eq("status", "processing");
+      return NextResponse.json(
+        {
+          error: "The post changed after this edit was requested, so it was closed.",
+          code: "edit_superseded",
         },
         { status: 409 }
       );
@@ -354,6 +421,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Edit could not be applied" }, { status: 409 });
     }
 
+    // The edit is applied: from here a failure must not reopen the request.
+    heldClaim = null;
     const { data: approvedRequests, error: markApprovedError } = await admin
       .from("content_edit_requests")
       .update({
@@ -432,6 +501,11 @@ export async function POST(request: Request) {
     log.error("Content edit decide failed", {
       error: err instanceof Error ? err.message : "Unknown error",
     });
+    if (heldClaim) {
+      await releaseApprovalClaim({ admin: createAdminClient(), ...heldClaim }).catch(
+        () => undefined
+      );
+    }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,3 +1,4 @@
+import { publicPersonName } from "@/lib/account/public-name";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
@@ -368,7 +369,7 @@ export async function GET(request: NextRequest) {
     const serializedSellers =
       sellers?.map((seller) => ({
         user_id: seller.user_id,
-        display_name: seller.display_name,
+        display_name: publicPersonName(seller.display_name),
         account_verification_status: readAccountVerificationStatus(seller),
       })) ?? [];
     const sellersByUserId = new Map(
@@ -390,7 +391,7 @@ export async function GET(request: NextRequest) {
         ...publicListing,
         seller: seller
           ? {
-              display_name: seller.display_name,
+              display_name: publicPersonName(seller.display_name),
               account_verification_status: seller.account_verification_status,
             }
           : null,
@@ -402,7 +403,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       listings: serializedListings,
-      sellers: serializedSellers,
       engagement_available: engagementAvailable,
       total,
       page: filters.page,

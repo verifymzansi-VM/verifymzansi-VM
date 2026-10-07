@@ -10,6 +10,8 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRat
     mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
   }));
 
+const mockDeleteOwned = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }));
+vi.mock("@/lib/content/delete-owned", () => ({ deleteOwnedContent: mockDeleteOwned }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));

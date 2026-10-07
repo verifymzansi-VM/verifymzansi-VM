@@ -10,6 +10,7 @@ interface PromotionContactActionsProps {
   contactMethods: string[];
   advertiserPhone?: string | null;
   advertiserWhatsapp?: string | null;
+  revealable?: { phone: boolean; whatsapp: boolean } | null;
 }
 
 export function PromotionContactActions({
@@ -17,6 +18,7 @@ export function PromotionContactActions({
   contactMethods,
   advertiserPhone,
   advertiserWhatsapp,
+  revealable,
 }: PromotionContactActionsProps) {
   return (
     <ContentContactActions
@@ -25,6 +27,7 @@ export function PromotionContactActions({
       showPhoneButton={contactMethods.includes("call")}
       showMessageButton={contactMethods.includes("form") || contactMethods.includes("in_app")}
       messageIcon={MessageCircle}
+      revealable={revealable}
       config={promotionContactConfig(promotionId)}
     />
   );

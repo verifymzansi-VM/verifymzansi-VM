@@ -216,7 +216,12 @@ function primaryContact(slide: FeedSlide) {
   const whatsapp = whatsappLink(slide.contact.whatsapp, slide.shareTitle, slide.href);
   if (whatsapp) return { kind: "whatsapp" as const, href: whatsapp };
   const phone = slide.contact.showPhoneButton ? contactPhone(slide.contact.phone) : null;
-  return phone ? { kind: "call" as const, href: `tel:${phone}`, phone } : null;
+  if (phone) return { kind: "call" as const, href: `tel:${phone}`, phone };
+  // Numbers aren't in public slides: the details page reveals them on tap.
+  const revealable = slide.contact.revealable;
+  return revealable?.phone || revealable?.whatsapp
+    ? { kind: "reveal" as const, href: `${slide.href}#contact` }
+    : null;
 }
 
 export function PostActionRow({
@@ -260,6 +265,17 @@ export function PostActionRow({
             <WhatsAppIcon className={VM_GLYPH} />
           </span>
         </a>
+      ) : contact?.kind === "reveal" ? (
+        <Link
+          href={contact.href}
+          prefetch={false}
+          aria-label={`Contact ${slide.owner.name}`}
+          className={cn("rounded-full p-0.5", FOCUS)}
+        >
+          <span className={cn(VM_CIRCLE, "bg-brand-green-700")}>
+            <Phone className={VM_GLYPH} aria-hidden="true" />
+          </span>
+        </Link>
       ) : contact?.kind === "call" ? (
         <a
           href={contact.href}

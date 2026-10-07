@@ -154,17 +154,9 @@ async function cleanupBlockingUserReferences(
  */
 async function removeUserStoredFiles(
   admin: ReturnType<typeof createAdminClient>,
-  userId: string
+  userId: string,
+  urls: string[]
 ): Promise<{ error: string | null }> {
-  const { data: uploads, error: uploadsError } = await admin
-    .from("media_uploads")
-    .select("url")
-    .eq("user_id", userId);
-  if (uploadsError) {
-    return { error: uploadsError.message };
-  }
-
-  const urls = (uploads ?? []).map((upload) => upload.url as string).filter(Boolean);
   if (urls.length > 0) {
     try {
       await queuePublicMediaCleanup(admin, urls, "account_deleted", userId);
@@ -317,18 +309,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: redactError } = await admin.rpc("redact_personal_audit_data", {
-      p_user: user.id,
-      p_reason: "Account deleted by the account holder",
-    });
-    if (redactError) {
-      log.error("Audit redaction failed before account deletion", {
-        userId: user.id,
-        error: redactError.message,
-      });
-      return internalApiError("Unable to delete account right now");
-    }
-
+    // Nothing irreversible happens before the account itself is deleted: a
+    // failure here leaves the account, its posts and its records intact.
     const cleanupResult = await cleanupBlockingUserReferences(admin, user.id);
     if (cleanupResult.error) {
       log.error("Account deletion cleanup failed", {
@@ -339,18 +321,22 @@ export async function POST(request: NextRequest) {
       return internalApiError("Unable to delete account right now");
     }
 
-    // Stored files are not removed by the database cascade. KYC documents are
-    // queued by a delete trigger on kyc_artifacts; public media and the avatar
-    // are handled here, before the rows that reference them disappear.
-    const storageResult = await removeUserStoredFiles(admin, user.id);
-    if (storageResult.error) {
-      log.error("Account deletion storage cleanup failed", {
+    // Collect stored media first: the rows that list it go with the account.
+    const { data: uploads, error: uploadsError } = await admin
+      .from("media_uploads")
+      .select("url")
+      .eq("user_id", user.id);
+    if (uploadsError) {
+      log.error("Could not list media before account deletion", {
         userId: user.id,
-        error: storageResult.error,
+        error: uploadsError.message,
       });
       return internalApiError("Unable to delete account right now");
     }
+    const mediaUrls = (uploads ?? []).map((upload) => upload.url as string).filter(Boolean);
 
+    // Posts, enquiries and verification cases go with the account (ON DELETE
+    // CASCADE); payments and invoices stay for tax records, unlinked.
     const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
     if (deleteError) {
       log.error("Supabase auth user deletion failed", {
@@ -358,6 +344,24 @@ export async function POST(request: NextRequest) {
         error: deleteError.message,
       });
       return internalApiError("Unable to delete account right now");
+    }
+
+    const { error: redactError } = await admin.rpc("redact_personal_audit_data", {
+      p_user: user.id,
+      p_reason: "Account deleted by the account holder",
+    });
+    if (redactError) {
+      log.error("Audit redaction failed after account deletion", {
+        userId: user.id,
+        error: redactError.message,
+      });
+    }
+    const storageResult = await removeUserStoredFiles(admin, user.id, mediaUrls);
+    if (storageResult.error) {
+      log.error("Storage cleanup failed after account deletion", {
+        userId: user.id,
+        error: storageResult.error,
+      });
     }
 
     await supabase.auth.signOut().catch((error: unknown) => {

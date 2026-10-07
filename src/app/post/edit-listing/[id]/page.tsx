@@ -16,6 +16,7 @@ import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
+import { loadOwnListing } from "./load-own-listing";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
@@ -128,11 +129,7 @@ export default function EditListingPage() {
           return;
         }
 
-        const { data, error } = await supabase
-          .from("listings")
-          .select("*")
-          .eq("id", id)
-          .maybeSingle();
+        const { data, error } = await loadOwnListing(id);
 
         if (error) {
           log.error("Failed to load listing", {

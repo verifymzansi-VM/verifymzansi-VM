@@ -113,8 +113,11 @@ describe("presentListingSlide", () => {
       owner,
       engagement
     );
-    expect(slide.contact.phone).toBe("0821234567");
-    expect(slide.contact.whatsapp).toBe("0821234567");
+    // Numbers never enter a slide; the chosen methods are revealed on tap.
+    expect(slide.contact.phone).toBeNull();
+    expect(slide.contact.whatsapp).toBeNull();
+    expect(slide.contact.revealable).toEqual({ phone: true, whatsapp: true });
+    expect(JSON.stringify(slide)).not.toContain("0821234567");
   });
 
   it("puts videos first and shows price, negotiable and canonical link", () => {

@@ -32,6 +32,11 @@ type ContentContactActionsProps = {
   messageIcon: LucideIcon;
   /** Off where the page already has its own share button (the desktop viewer's rail). */
   showShare?: boolean;
+  /**
+   * Numbers aren't in public pages: when set, a signed-in visitor taps "Show
+   * number" to fetch them (rate-limited, recorded). Says which methods exist.
+   */
+  revealable?: { phone: boolean; whatsapp: boolean } | null;
 };
 
 export function ContentContactActions({
@@ -42,7 +47,54 @@ export function ContentContactActions({
   config,
   messageIcon: MessageIcon,
   showShare = true,
+  revealable = null,
 }: ContentContactActionsProps) {
+  const [revealed, setRevealed] = useState<{
+    phone: string | null;
+    whatsapp: string | null;
+  } | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const [signInHref, setSignInHref] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
+  if (revealed) {
+    phone = revealed.phone;
+    whatsapp = revealed.whatsapp;
+  }
+  const canReveal =
+    !revealed && !phone && !whatsapp && Boolean(revealable?.phone || revealable?.whatsapp);
+
+  async function reveal() {
+    setRevealing(true);
+    setRevealError(null);
+    try {
+      const res = await fetch("/api/contact/reveal", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ targetType: config.reportTargetType, targetId: config.targetId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        phone?: string | null;
+        whatsapp?: string | null;
+        code?: string;
+        error?: string;
+      };
+      if (res.status === 401) {
+        const back = `${window.location.pathname}${window.location.search}`;
+        setSignInHref(`/login?returnUrl=${encodeURIComponent(back)}`);
+        return;
+      }
+      if (!res.ok) {
+        setRevealError(data.error ?? "Couldn't show the number. Try again.");
+        return;
+      }
+      setRevealed({ phone: data.phone ?? null, whatsapp: data.whatsapp ?? null });
+    } catch {
+      setRevealError("Couldn't show the number. Try again.");
+    } finally {
+      setRevealing(false);
+    }
+  }
+
   const phoneNumber = contactPhone(phone);
   const whatsappUrl = whatsappLink(whatsapp, config.shareTitle, config.sharePath);
   // One number is shown once: on the call button when both buttons use it.
@@ -137,6 +189,40 @@ export function ContentContactActions({
   return (
     <>
       <div className="space-y-2">
+        {canReveal && (
+          <Button
+            className="w-full gap-2"
+            size="lg"
+            onClick={reveal}
+            disabled={revealing}
+            aria-describedby="contact-reveal-note"
+          >
+            {revealing ? (
+              <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+            ) : (
+              <Phone aria-hidden="true" className="h-4 w-4" />
+            )}
+            Show contact number
+          </Button>
+        )}
+        {canReveal && (
+          <p id="contact-reveal-note" className="text-xs text-muted-foreground">
+            Signed-in members can see numbers. This keeps sellers&apos; numbers from spammers.
+          </p>
+        )}
+        {signInHref && (
+          <p role="alert" className="text-sm">
+            <a href={signInHref} className="font-medium text-brand-green underline">
+              Sign in to see the number
+            </a>
+            . It keeps sellers&apos; numbers away from spammers.
+          </p>
+        )}
+        {revealError && (
+          <p role="alert" className="text-sm text-destructive">
+            {revealError}
+          </p>
+        )}
         {whatsappUrl && (
           <Button className="w-full gap-2" size="lg" asChild>
             <a href={whatsappUrl} target="_blank" rel="noopener noreferrer nofollow ugc">
@@ -154,7 +240,7 @@ export function ContentContactActions({
           </Button>
         )}
 
-        {!whatsappUrl && !(showPhoneButton && phoneNumber) && !showMessageButton && (
+        {!canReveal && !whatsappUrl && !(showPhoneButton && phoneNumber) && !showMessageButton && (
           <p className="text-sm text-muted-foreground">No contact details added.</p>
         )}
 

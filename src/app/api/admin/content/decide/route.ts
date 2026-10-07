@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       return bodyResult.response;
     }
 
-    const { itemId, area, decision, reason, contentType } = bodyResult.data;
+    const { itemId, area, decision, reason, contentType, expectedUpdatedAt } = bodyResult.data;
 
     const admin = createAdminClient();
 
@@ -136,12 +136,15 @@ export async function POST(request: Request) {
       updatePayload.status_reason = null;
     }
 
-    const { data: updatedRows, error: updateError } = await admin
+    // Approve only the version the moderator reviewed: an owner may still edit
+    // a pending post, and an edit after review must not go live unseen.
+    let decideQuery = admin
       .from(table)
       .update(updatePayload)
       .eq("id", itemId)
-      .eq("status", "pending_moderation")
-      .select("id");
+      .eq("status", "pending_moderation");
+    if (expectedUpdatedAt) decideQuery = decideQuery.eq("updated_at", expectedUpdatedAt);
+    const { data: updatedRows, error: updateError } = await decideQuery.select("id");
 
     if (updateError) {
       const trialMessage = trialErrorMessage(updateError.message);
@@ -150,7 +153,15 @@ export async function POST(request: Request) {
     }
 
     if (!updatedRows || updatedRows.length === 0) {
-      return NextResponse.json({ error: "Content item not found" }, { status: 404 });
+      return expectedUpdatedAt
+        ? NextResponse.json(
+            {
+              error: "The owner changed this post after you opened it. Reload and review again.",
+              code: "content_changed",
+            },
+            { status: 409 }
+          )
+        : NextResponse.json({ error: "Content item not found" }, { status: 404 });
     }
 
     const auditConfig: Record<

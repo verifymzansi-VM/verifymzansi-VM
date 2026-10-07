@@ -245,7 +245,11 @@ describe("HomeMzansiMarketShowcase", () => {
 
     await HomeMzansiMarketShowcase();
 
-    expect(builder.select).toHaveBeenCalledWith("*");
+    // Card columns only: never "*", and never the private street address.
+    const columns = String((builder.select as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+    expect(columns).toContain("owner_id");
+    expect(columns).not.toContain("*");
+    expect(columns).not.toContain("location_address");
   });
 
   it("returns null and logs a warning when the listings query fails", async () => {

@@ -1,3 +1,4 @@
+import { publicPersonName } from "@/lib/account/public-name";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +31,10 @@ import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { ImmersiveDetailGate } from "@/components/immersive/immersive-detail-gate";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { presentListingSlide } from "@/lib/feed/presenters";
+
+/** Public listing columns (no street address, which stays private). */
+const LISTING_DETAIL_SELECT =
+  "id, owner_id, title, description, price_cents, price_negotiable, category, condition, attributes, photos, videos, video_thumbnail, logo_url, location_province, location_city, location_suburb, contact_methods, status, area, view_count, boost_until, featured_until, urgent_until, expires_at, created_at, updated_at, media_width, media_height, focal_x, focal_y, blurhash";
 
 interface ListingDetailPageProps {
   params: Promise<{ id: string }>;
@@ -77,7 +82,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   // Fetch listing
   const { data: rawListing } = await applyVisibleExpiryFilter(
-    supabase.from("listings").select("*").eq("id", id).eq("status", "live")
+    supabase.from("listings").select(LISTING_DETAIL_SELECT).eq("id", id).eq("status", "live")
   ).single();
 
   const listing = rawListing ? normalizeOwnerRecord(rawListing) : null;
@@ -98,10 +103,15 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const publishesPhone = listing.contact_methods?.some((method: string) =>
     ["call", "whatsapp"].includes(method)
   );
+  // The number reaches the page only for the seller; everyone else taps
+  // "Show contact number" (signed in, rate-limited) to get it.
+  const viewerIsSeller = Boolean(user && user.id === listingOwnerId);
   const safeSeller = seller
     ? {
         ...seller,
-        phone: publishesPhone ? seller.phone : null,
+        display_name: publicPersonName(seller.display_name),
+        phone: publishesPhone && viewerIsSeller ? seller.phone : null,
+        has_phone: Boolean(publishesPhone && seller.phone),
         masked_phone_public: null,
         // Use the location selected for this post, never a private account location.
         location_city: listing.location_city,
@@ -150,11 +160,17 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         similarItems.map((item) => readOwnerId(item)).filter((id): id is string => Boolean(id))
       )
     );
-    const { data: ownerData } = await supabase
+    // Other sellers' profiles are owner-only to the visitor's session.
+    const { data: ownerData } = await (engagementAdmin ?? supabase)
       .from(ACCOUNT_PROFILE_TABLE)
       .select("user_id, display_name, account_verification_status")
       .in("user_id", ownerIds);
-    similarSellers = new Map((ownerData ?? []).map((s) => [s.user_id, s]));
+    similarSellers = new Map(
+      (ownerData ?? []).map((s) => [
+        s.user_id,
+        { ...s, display_name: publicPersonName(s.display_name) ?? "" },
+      ])
+    );
   }
   const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
   const viewerKey = buildViewerKey(viewerId, user?.id);
@@ -180,7 +196,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     listing,
     seller
       ? {
-          display_name: seller.display_name,
+          display_name: publicPersonName(seller.display_name),
           account_verification_status: seller.account_verification_status,
           phone: seller.phone,
         }
