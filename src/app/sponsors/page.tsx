@@ -142,8 +142,8 @@ export default async function SponsorsPage() {
                 Want to support local businesses?
               </h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-                Give 25 to 250 businesses a reviewed profile, a branded showcase and an activity
-                summary every 30 days.
+                Give 25 to 250 businesses a free profile (each owner still passes our ID review), a
+                branded showcase and an activity summary every 30 days.
               </p>
             </div>
             <Button asChild variant="ink" className="h-11 shrink-0 rounded-full px-5">

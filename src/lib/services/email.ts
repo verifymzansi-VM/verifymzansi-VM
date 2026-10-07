@@ -159,21 +159,21 @@ export async function sendVerificationApprovedEmail(
   accountName: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const subject = "Your VerifyMzansi Account is Verified";
+  const subject = "Your VerifyMzansi ID has been reviewed";
   const html = brandedEmail({
     tone: "success",
     eyebrow: "Verification complete",
-    title: "Your account is verified",
-    intro: "This email confirms your VerifyMzansi account review is complete.",
+    title: "Your ID has been reviewed",
+    intro: "Our team has reviewed your phone, ID and selfie. You can now post on VerifyMzansi.",
     bodyHtml: `
       ${paragraph(`Hi ${accountName},`)}
-      ${paragraph("Great news. Your VerifyMzansi account has been successfully verified.")}
+      ${paragraph("Good news. Our team has reviewed your details and your account now shows the ID reviewed sticker.")}
       <p>You can now:</p>
       <ul>
-        <li>Create and publish listings in Mzansi Market</li>
-        <li>Set up a business profile as its accountable representative</li>
-        <li>Add shop, service, or mall-store details where relevant</li>
-        <li>Start connecting with identity-reviewed members</li>
+        <li>Post products and rentals on Mzansi Market</li>
+        <li>Set up a business profile on Mzansi Business</li>
+        <li>Post stays, experiences and events on Tourism &amp; Events</li>
+        <li>Ask for the CIPC registered or Seen by VerifyMzansi sticker for your business</li>
       </ul>
       ${paragraph("Thank you for choosing VerifyMzansi.")}
     `,
@@ -181,7 +181,17 @@ export async function sendVerificationApprovedEmail(
     reason: "Your account verification status changed on VerifyMzansi.",
   });
 
-  const text = `Hi ${accountName},\n\nGreat news. Your VerifyMzansi account has been successfully verified.\n\nYou can now create listings, set up profiles, and connect with identity-reviewed members.\n\nGo to dashboard: ${appUrl}/dashboard\n\nThis email was sent because your account verification status changed on VerifyMzansi.\n\nThank you for choosing VerifyMzansi.`;
+  const text = `Hi ${accountName},
+
+Good news. Our team has reviewed your phone, ID and selfie, and your account now shows the ID reviewed sticker.
+
+You can now post on Mzansi Market, Mzansi Business and Tourism & Events, and ask for the CIPC registered or Seen by VerifyMzansi sticker for your business.
+
+Go to dashboard: ${appUrl}/dashboard
+
+This email was sent because your account verification status changed on VerifyMzansi.
+
+Thank you for choosing VerifyMzansi.`;
 
   return sendEmail({ to: email, subject, html, text });
 }

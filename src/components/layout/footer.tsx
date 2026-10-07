@@ -122,7 +122,15 @@ export function Footer() {
               <BrandLogo size="sm" tone="inverse" />
             </Link>
             <p className="max-w-xs text-sm text-white/70">
-              South Africa&apos;s trust-first marketplace.
+              A South African platform connecting people with verified businesses, products,
+              services, tourism and events.{" "}
+              <Link
+                href="/help/business-verification"
+                prefetch={false}
+                className="font-semibold text-brand-gold-300 underline-offset-2 hover:underline"
+              >
+                What we check
+              </Link>
             </p>
           </div>
 

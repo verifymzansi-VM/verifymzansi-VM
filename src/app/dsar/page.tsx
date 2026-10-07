@@ -44,7 +44,7 @@ function formatDsarSubmissionFailure(payload: DsarFailurePayload | null): string
 
 const NEXT_STEPS = [
   { title: "We confirm it's you", body: "So nobody else can get your data." },
-  { title: "We respond within 30 days", body: "As POPIA Section 23 requires." },
+  { title: "We aim to respond within 30 days", body: "The PAIA section 25 timeframe." },
   { title: "You can escalate", body: "To the Information Regulator South Africa." },
 ] as const;
 

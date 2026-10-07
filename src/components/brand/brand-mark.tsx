@@ -2,7 +2,10 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 // Pre-compressed 96px shield served as-is so every instance shares one cached URL.
-export const BRAND_SHIELD_SRC = "/images/brand-shield-small.png?v=20261005";
+const BRAND_SHIELD_SRC = "/images/brand-shield-small.png?v=20261005";
+// 352px shield for displays over ~48 CSS px; the 96px file blurs when stretched
+// to 112-176 px (224-352 device px on high-DPI screens).
+export const BRAND_SHIELD_LARGE_SRC = "/images/brand-shield-large.webp?v=20261007";
 
 type BrandMarkSize = "sm" | "md" | "lg";
 

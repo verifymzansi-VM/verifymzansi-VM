@@ -1,24 +1,18 @@
 import Link from "next/link";
-import { Fingerprint, LifeBuoy, LockKeyhole, MessageSquareText } from "lucide-react";
-import { BrandMark, BrandPointCards, BrandSurface, VerificationEmblem } from "@/components/brand";
+import { ArrowRight, LifeBuoy } from "lucide-react";
+import { BrandMark, BrandSurface, VerificationChips, VerificationEmblem } from "@/components/brand";
+import { VERIFY_MZANSI_SITE_DESCRIPTION } from "@/lib/seo/public-categories";
 
 export const metadata = {
   title: "Account",
-  description:
-    "Sign in or create a VerifyMzansi account to post marketplace listings, business services, tourism offers, venues, and events.",
+  description: VERIFY_MZANSI_SITE_DESCRIPTION,
   robots: { index: false, follow: false },
 };
 
-const PANEL_POINTS = [
-  { icon: Fingerprint, title: "Phone and ID checked before posting" },
-  { icon: MessageSquareText, title: "Enquiries in one dashboard" },
-  { icon: LockKeyhole, title: "Documents kept private" },
-] as const;
-
 /**
  * Auth shell. Mobile: a focused single column with the logo on top. Desktop:
- * the form on the right and a deep-green panel on the left with three short
- * trust points. Spacing is kept tight so the sign-in form fits one screen.
+ * the form on the right and a deep-green panel on the left that follows the
+ * brand banner: shield, "Do business with confidence." and the three checks. Spacing is kept tight so the sign-in form fits one screen.
  * The panel comes after <main> in the DOM so keyboard and screen-reader users
  * reach the form first.
  */
@@ -101,19 +95,35 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <BrandMark inverse decorative />
           </Link>
 
-          <div className="flex min-h-[18rem] flex-1 items-center justify-center">
-            <VerificationEmblem />
+          <div className="flex min-h-[16rem] flex-1 items-center justify-center">
+            <VerificationEmblem chips={false} />
           </div>
 
           <div>
             <h2
               id="auth-panel-title"
-              className="max-w-[28rem] font-display text-[1.875rem] font-bold leading-[1.08] tracking-[-0.03em] xl:text-[2.25rem]"
+              className="max-w-[28rem] font-display text-[2.25rem] font-bold leading-[1.05] tracking-[-0.03em] xl:text-[2.75rem]"
             >
-              Trade with people who&apos;ve been{" "}
-              <span className="gold-shine text-brand-gold-300">checked.</span>
+              Do business{" "}
+              <span className="gold-shine block text-brand-gold-300">with confidence.</span>
             </h2>
-            <BrandPointCards points={PANEL_POINTS} className="mt-6" />
+            <p className="mt-3 max-w-[26rem] text-base leading-relaxed text-white/80">
+              Discover local products, businesses, services, stays and events across South Africa.
+            </p>
+            <VerificationChips className="mt-5" />
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-bold uppercase tracking-[0.14em] text-brand-gold-300">
+                Discover <span aria-hidden="true">·</span> Connect
+              </p>
+              <Link
+                href="/help/business-verification"
+                prefetch={false}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-white/85 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                What we check
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+            </div>
           </div>
         </div>
       </BrandSurface>

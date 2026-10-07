@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckCircle2 } from "lucide-react";
-import { BRAND_SHIELD_SRC, BrandSurface } from "@/components/brand";
+import { BRAND_SHIELD_LARGE_SRC, BrandSurface } from "@/components/brand";
 import { cn } from "@/lib/utils";
 import { formatCount } from "./home-cards";
 import type { AttentionItem } from "./attention";
@@ -62,7 +62,7 @@ export function HomeBanner({
       className="grid gap-6 rounded-3xl px-5 pb-8 pt-6 sm:px-8 sm:pb-10 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-center"
     >
       <Image
-        src={BRAND_SHIELD_SRC}
+        src={BRAND_SHIELD_LARGE_SRC}
         alt=""
         aria-hidden="true"
         width={160}

@@ -17,7 +17,7 @@ const ORDER_RULES = [
     icon: Shuffle,
     name: "Everyone takes turns",
     description:
-      "Every post pays the same, so every live post gets an equal turn at the front of the showroom. The posts that have been seen least this week go next.",
+      "Free or paid, every live post gets an equal turn at the front of the showroom; Boost and Featured don't buy a better place here. The posts that have been seen least this week go next.",
   },
   {
     icon: Sparkles,
@@ -44,7 +44,7 @@ const COUNTING_RULES = [
     icon: PlayCircle,
     name: "A video view",
     description:
-      "The video played for 2 seconds in a row with at least half of it on screen. This is the international standard for video advertising, and close to how TikTok, Instagram and Facebook count.",
+      "The video played for 2 seconds in a row with at least half of it on screen. This follows the common industry standard for counting a video ad view.",
   },
   {
     icon: Eye,

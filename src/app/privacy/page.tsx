@@ -26,22 +26,26 @@ export default function PrivacyPolicyPage() {
       dataType: "ID number",
       purpose: "Identity verification, duplicate-account checks, fraud prevention",
       recipients: "Internal reviewers and KYC/infrastructure providers where required",
-      retention: "Successful checks: up to 90 days unless fraud, dispute, or legal hold applies",
-      deletion: "Request through privacy contact or signed-in data-rights form",
+      retention:
+        "Kept encrypted while your account exists, to stop one ID being used for several accounts; deleted with the account (see the identity token above)",
+      deletion:
+        "Deleted when you delete your account, unless a fraud, dispute or legal hold applies",
     },
     {
       dataType: "ID document image",
       purpose: "Evidence review and identity matching",
       recipients: "Restricted verification reviewers and secure storage/KYC providers",
       retention:
-        "Successful checks: target deletion within 30 days after review unless hold applies",
+        "Approved: deleted 30 days after review. Rejected: deleted 30 days after upload. Unfinished uploads: deleted after 90 days. Longer only if a fraud, dispute or legal hold applies",
       deletion: "Reviewed against fraud, dispute, accounting, and legal-hold obligations",
     },
     {
       dataType: "Selfie image",
-      purpose: "Selfie-to-ID comparison and liveness-style review where enabled",
-      recipients: "Restricted verification reviewers and KYC/infrastructure providers",
-      retention: "Failed checks: up to 90 days for appeal and abuse checks unless hold applies",
+      purpose:
+        "Our reviewers compare the selfie with the ID photo; an in-browser movement check helps show it is live",
+      recipients: "Restricted verification reviewers and secure storage providers",
+      retention:
+        "Approved: deleted 30 days after review. Rejected: deleted 30 days after upload. Unfinished uploads: deleted after 90 days. Longer only if a fraud, dispute or legal hold applies",
       deletion: "Request deletion; closed-account evidence is reviewed for deletion within 90 days",
     },
     {
@@ -52,11 +56,20 @@ export default function PrivacyPolicyPage() {
       deletion: "Update or delete through account/data-rights workflow where legally allowed",
     },
     {
-      dataType: "GPS/location",
-      purpose: "Location verification and marketplace location display",
+      dataType: "Location",
+      purpose: "The province and city you give us, shown on your profile and posts",
       recipients: "Internal platform systems and infrastructure providers",
       retention: "Kept while profile/listing uses the location or while needed for disputes",
       deletion: "Remove from profile/listing or request correction/deletion",
+    },
+    {
+      dataType: "Business verification files",
+      purpose:
+        "CIPC registered and Seen by VerifyMzansi checks: CIPC documents, call notes and visit photos",
+      recipients: "Restricted business-verification reviewers; never public",
+      retention:
+        "Deleted 30 days after the decision. The sticker, its date and the town visited stay on the profile for 12 months",
+      deletion: "Request through the data-rights workflow; calls are not recorded",
     },
     {
       dataType: "Payment data",
@@ -78,6 +91,7 @@ export default function PrivacyPolicyPage() {
         "• Listing content (titles, descriptions, images, pricing)",
         "• Communication records and payment information handled by Ozow and payment providers",
         "We also collect device/browser info, IP address, and usage data automatically.",
+        "Error monitoring: when the site breaks we use Sentry to record what went wrong. For a small share of visits, and for visits where an error happens, it records a replay of the page with all text masked and images blocked.",
         "Showroom location: when you open a page with a showroom, we estimate your province from your internet connection so we can show local posts first. The network address is used only while the page loads and is not stored. If you pick a province yourself, it is remembered in a cookie on your device.",
         "View counting: to count views fairly we keep a random browser identifier and a one-way hash of your network address for 90 days. These cannot be turned back into your address and are never shown to post owners, who only see totals.",
       ],
@@ -88,9 +102,21 @@ export default function PrivacyPolicyPage() {
       title: "How verification data is used",
       content: [
         "ID numbers, ID document images, selfies, phone numbers, and location data are used to run verification checks, reduce fraud, review account safety, and support legal compliance.",
-        "Verification may include internal review, automated validation checks, SMS delivery providers, secure file storage, and third-party KYC or infrastructure providers where needed to deliver the service.",
-        "VerifyMzansi verifies people and account evidence. We do not verify that a business itself is official; business-profile trust signals refer to the person posting or managing the profile unless stated otherwise.",
+        "Verification is reviewed by our own team, supported by format checks, an SMS provider and secure file storage. We do not check IDs against Home Affairs or run criminal or credit checks.",
+        "Businesses can also ask for two optional stickers. CIPC registered: we check CIPC's records that the company is In Business and that the person running the profile is a director or confirmed representative. Seen by VerifyMzansi: we see the business operating, in person or on a live video call. Without these stickers, business-profile signals refer only to the person running the profile.",
         "Verification does not guarantee that a person, business profile, product, rental, event, job, or transaction is safe. It only means specific platform checks were completed or reviewed.",
+      ],
+    },
+    {
+      id: "public-information",
+      navLabel: "What others can see",
+      title: "What other people can see",
+      content: [
+        "Anyone can browse VerifyMzansi without signing in. Signing in is only needed to post.",
+        "• Your public name is your first name and the first letter of your surname (for example, Thando D.). Only our staff see your full legal name.",
+        "• Businesses: the phone, WhatsApp and email a business chooses to show are visible to every visitor. A street address shows only if the business publishes it; otherwise we show suburb, city and province.",
+        "• Private sellers and event posters: your number stays hidden behind a Show number button. Any visitor can tap it; each tap is limited per visitor and logged so we can stop number harvesting.",
+        "• Your ID number, ID images, selfie and verification files are never shown publicly.",
       ],
     },
     {
@@ -99,8 +125,9 @@ export default function PrivacyPolicyPage() {
       title: "Data retention and deletion",
       content: [
         "We retain account and listing data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
-        "Successful ID/selfie verification evidence is targeted for deletion within 30 days after review, while failed or appealed verification evidence may be retained for up to 90 days for appeal, abuse, and duplicate-account checks unless a fraud, dispute, security, accounting, or legal hold applies.",
-        "After account closure, public listings and profile content may be removed or anonymised, while limited operational records may remain where required by law, accounting rules, abuse prevention, or unresolved disputes.",
+        "ID and selfie files are deleted 30 days after an approved review, and 30 days after upload if rejected; unfinished uploads are deleted after 90 days. A fraud, dispute, security or legal hold can pause deletion.",
+        "Security and moderation audit logs are kept for up to 24 months.",
+        "When you delete your account, your posts, enquiries and media are deleted with it. Payments and invoices are kept for tax and accounting, no longer linked to you. Limited records may remain where the law, abuse prevention or an unresolved dispute requires it.",
       ],
     },
     {
@@ -217,7 +244,7 @@ export default function PrivacyPolicyPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="Privacy Policy"
-          meta="Updated March 2026"
+          meta="Updated October 2026"
           description="How we collect, use and protect your personal information under POPIA."
           breadcrumbs={[{ label: "Privacy Policy" }]}
           sections={sections}

@@ -43,11 +43,11 @@ describe("AuthLayout", () => {
     );
 
     const main = screen.getByRole("main");
-    const panel = screen.getByRole("complementary", { name: /people who've been checked/i });
+    const panel = screen.getByRole("complementary", { name: /do business with confidence/i });
     expect(main.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("keeps the brand panel short: one headline and three trust points", () => {
+  it("keeps the brand panel short: one headline and the three banner checks", () => {
     render(
       <AuthLayout>
         <div>Sign in form</div>
@@ -56,7 +56,14 @@ describe("AuthLayout", () => {
 
     const panel = screen.getByRole("complementary");
     expect(within(panel).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(panel).getByText(/phone and id checked/i)).toBeInTheDocument();
+    expect(within(panel).getByText("Poster ID reviewed")).toBeInTheDocument();
+    expect(
+      within(panel).getByText(/CIPC check applies to registered businesses/i)
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: /what we check/i })).toHaveAttribute(
+      "href",
+      "/help/business-verification"
+    );
     // The panel must never contain a second "sign in" heading or button: e2e
     // specs rely on those names being unique on the page.
     expect(screen.queryByRole("heading", { name: /sign in|create your account/i })).toBeNull();

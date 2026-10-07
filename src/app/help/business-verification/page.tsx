@@ -17,7 +17,7 @@ const STICKERS = [
   {
     icon: IdCard,
     name: "ID reviewed",
-    means: "Our team reviewed the ID and selfie of the person who runs the profile.",
+    means: "Our team reviewed the phone, ID and selfie of the person who runs the profile.",
     not: "It doesn't check the business itself.",
   },
   {
@@ -249,7 +249,10 @@ export default function BusinessVerificationHelpPage() {
                 Your profile shows the suburb, city and province of your registered office. The
                 street address appears only if you choose to show it.
               </li>
-              <li>Stickers last 12 months. Renewal is one tap.</li>
+              <li>
+                The CIPC and Seen stickers last 12 months. Renewing CIPC is a fresh records check;
+                renewing Seen needs a new visit or video call.
+              </li>
             </ul>
           </section>
         </div>

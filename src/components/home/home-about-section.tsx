@@ -11,7 +11,7 @@ const ADVANTAGES = [
   {
     icon: ShieldCheck,
     title: "Checked before they post",
-    body: "Our team reviews each poster's phone, ID and selfie, so you know who is behind every post.",
+    body: "Our team reviews each poster's phone, ID and selfie before they can post.",
   },
   {
     icon: MessageCircle,
@@ -21,7 +21,7 @@ const ADVANTAGES = [
   {
     icon: Tag,
     title: "Simple, fair pricing",
-    body: "Your first post is free. After that you pay once, it never renews, and events are always free.",
+    body: "Your first post is free once your ID is reviewed. After that you pay once, it never renews, and events are always free.",
   },
 ] as const;
 

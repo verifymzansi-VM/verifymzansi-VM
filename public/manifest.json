@@ -1,7 +1,7 @@
 {
   "name": "VerifyMzansi",
   "short_name": "VerifyMzansi",
-  "description": "South Africa's verification-first marketplace. Buy & sell with people you can trust.",
+  "description": "VerifyMzansi is a trusted South African platform connecting people with verified businesses, products, services, tourism and events. Discover, connect and do business with confidence.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f7f4",
@@ -47,20 +47,6 @@
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/images/promo/screenshot-wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/images/promo/screenshot-narrow.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow"
     }
   ],
   "shortcuts": [

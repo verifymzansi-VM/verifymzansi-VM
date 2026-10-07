@@ -156,7 +156,7 @@ export function AuthIconTile({
 
 const REASSURANCE = [
   { icon: Store, text: "Free to join" },
-  { icon: BrandShield, text: "ID checks only to post" },
+  { icon: BrandShield, text: "ID review only to post" },
   { icon: LockKeyhole, text: "Documents kept private" },
 ] as const;
 

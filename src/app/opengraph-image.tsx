@@ -114,7 +114,7 @@ export default function OpenGraphImage() {
           <img src={shieldData} alt="VerifyMzansi shield" width={128} height={128} />
 
           <div style={brandTextStyle}>
-            <div style={eyebrowStyle}>Find And Post With Trust</div>
+            <div style={eyebrowStyle}>Discover · Connect</div>
             <div style={wordmarkStyle}>
               <span style={{ color: "#fffaf5" }}>Verify</span>
               <span style={{ color: "#b4e2c0" }}>Mzansi</span>
@@ -124,10 +124,9 @@ export default function OpenGraphImage() {
         </div>
 
         <div style={copyWrapStyle}>
-          <div style={headlineStyle}>South African listings, business, tourism, and events.</div>
+          <div style={headlineStyle}>Do business with confidence.</div>
           <div style={subheadStyle}>
-            Browse or post local listings, business services, tourism stays, experiences, venues,
-            and live events.
+            Discover local products, businesses, services, stays and events across South Africa.
           </div>
         </div>
       </div>

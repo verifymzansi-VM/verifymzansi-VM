@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { ComponentType, ReactNode } from "react";
-import { BRAND_SHIELD_SRC, BrandSurface, VerificationEmblem } from "@/components/brand";
+import { BRAND_SHIELD_LARGE_SRC, BrandSurface, VerificationEmblem } from "@/components/brand";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/layout/breadcrumbs";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +92,7 @@ function LegalShield() {
       <div className="absolute inset-4 rounded-full bg-brand-gold-400/15 blur-2xl" />
       <div className="absolute inset-0 rounded-full border border-white/10" />
       <Image
-        src={BRAND_SHIELD_SRC}
+        src={BRAND_SHIELD_LARGE_SRC}
         alt=""
         width={112}
         height={112}

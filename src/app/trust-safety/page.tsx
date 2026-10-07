@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type React from "react";
 import {
-  BadgeCheck,
   Building2,
   Check,
   CreditCard,
+  Eye,
   FileLock2,
   Fingerprint,
   LifeBuoy,
@@ -43,14 +43,13 @@ const journeySteps = [
     title: "ID & selfie reviewed",
     body: "Checked by our team, then encrypted.",
   },
-  { icon: MapPin, title: "Location checked", body: "GPS or manual check of where they trade." },
+  { icon: MapPin, title: "Area shared", body: "Province and city, as given by the poster." },
   { icon: BrandShield, title: "Badge shown", body: "On their profile and posts." },
 ] as const;
 
-const otherSignals = [
-  "Email confirmed",
-  "Official representative reviewed",
-  "Payment processed",
+const businessStickers = [
+  { icon: Building2, label: "CIPC registered" },
+  { icon: Eye, label: "Seen by VerifyMzansi" },
 ] as const;
 
 const tierOrder: TrustLevel[] = [3, 4, 2, 1, 0];
@@ -188,16 +187,22 @@ export default function TrustSafetyPage() {
             </ol>
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground">Also shown:</span>
-              {otherSignals.map((signal) => (
-                <span key={signal} className="chip">
-                  <BadgeCheck
+              <span className="text-sm text-muted-foreground">Businesses can also earn:</span>
+              {businessStickers.map(({ icon: Icon, label }) => (
+                <span key={label} className="chip">
+                  <Icon
                     className="h-3.5 w-3.5 text-brand-green-700 dark:text-brand-green-300"
                     aria-hidden="true"
                   />
-                  {signal}
+                  {label}
                 </span>
               ))}
+              <Link
+                href="/help/business-verification"
+                className="text-sm font-semibold text-brand-green-700 underline-offset-2 hover:underline dark:text-brand-green-300"
+              >
+                What each sticker means
+              </Link>
             </div>
           </section>
 

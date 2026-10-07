@@ -238,7 +238,7 @@ export default function VerifyBuyerPage() {
                 )}
 
                 {result === "valid" && buyerInfo && (
-                  <ResultPanel tone="success" icon={CheckCircle2} title="Verified buyer">
+                  <ResultPanel tone="success" icon={CheckCircle2} title="Buyer's ID reviewed">
                     <p className="text-base font-semibold text-foreground">
                       {buyerInfo.displayName}
                     </p>

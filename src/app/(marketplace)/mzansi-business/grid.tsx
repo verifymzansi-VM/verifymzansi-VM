@@ -196,7 +196,7 @@ export function MzansiBusinessGrid() {
       ? "Something went wrong on our side. Try again in a moment."
       : hasFilters
         ? "Change or clear your filters to see more."
-        : "Be the first verified business owner to list on Mzansi Business.";
+        : "Be the first ID-reviewed business owner to list on Mzansi Business.";
 
     return (
       <GridStateMessage

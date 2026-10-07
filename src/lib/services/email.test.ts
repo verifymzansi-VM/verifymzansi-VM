@@ -84,7 +84,7 @@ describe("email service", () => {
       expect(mockSend).toHaveBeenCalledWith(
         expect.objectContaining({
           to: "user@example.com",
-          subject: expect.stringContaining("Verified"),
+          subject: expect.stringContaining("ID has been reviewed"),
         }),
         expect.objectContaining({ idempotencyKey: expect.any(String) })
       );

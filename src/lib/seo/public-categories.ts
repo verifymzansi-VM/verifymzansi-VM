@@ -1,5 +1,5 @@
 export const VERIFY_MZANSI_SITE_DESCRIPTION =
-  "VerifyMzansi helps South Africans find and post trusted local listings across Mzansi Market, Mzansi Business, and Tourism and Events.";
+  "VerifyMzansi is a trusted South African platform connecting people with verified businesses, products, services, tourism and events. Discover, connect and do business with confidence.";
 
 export const VERIFY_MZANSI_CATEGORY_SEO = [
   {

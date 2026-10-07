@@ -9,7 +9,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { BRAND_SHIELD_SRC, BrandSurface, brandOutlineButtonClassName } from "@/components/brand";
+import {
+  BRAND_SHIELD_LARGE_SRC,
+  BrandSurface,
+  brandOutlineButtonClassName,
+} from "@/components/brand";
 import { Plus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerifiedTick } from "@/components/trust/verified-tick";
@@ -418,7 +422,7 @@ export default async function DashboardPage() {
         className="flex flex-col gap-5 rounded-3xl px-5 pb-7 pt-6 sm:flex-row sm:items-end sm:justify-between sm:px-8 sm:pb-9 sm:pt-8"
       >
         <Image
-          src={BRAND_SHIELD_SRC}
+          src={BRAND_SHIELD_LARGE_SRC}
           alt=""
           aria-hidden="true"
           width={160}

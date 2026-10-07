@@ -23,7 +23,7 @@ const PHASES: ChecklistPhase[] = [
     title: "Before",
     icon: Clock,
     items: [
-      { id: "badge", text: "Check their trust badge" },
+      { id: "badge", text: "Check for the ID reviewed sticker" },
       { id: "call", text: "Have a quick phone or video call" },
       { id: "tell", text: "Share your live location with someone" },
       { id: "daylight", text: "Meet in daylight" },

@@ -46,7 +46,7 @@ const SCAM_TYPES = [
     title: "Off-platform chats",
     description: "Pushing you to WhatsApp or Telegram straight away.",
     redFlags: ["Links to “payment portals”", "Asks for an OTP or PIN"],
-    whatToDo: ["Keep chats on VerifyMzansi", "Never share an OTP or PIN"],
+    whatToDo: ["Use the enquiry form or keep your WhatsApp history", "Never share an OTP or PIN"],
   },
 ] as const;
 

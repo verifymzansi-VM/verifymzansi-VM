@@ -120,10 +120,10 @@ const CHECKS = {
     "Phone number confirmed",
     "SA ID or passport and a live selfie reviewed by our team",
     "Every post moderated before it goes live",
-    "Badges show what was checked and when",
+    "Stickers show what was checked and when: ID reviewed, CIPC registered, Seen by VerifyMzansi",
   ],
   no: [
-    "We do not visit premises or inspect goods",
+    "We only visit a business (in person or on live video) if it asks for the Seen sticker",
     "We do not check property, vehicles or quality",
     "We do not hold money or guarantee transactions",
     "“Supported by” is programme membership, not a verification",
@@ -205,10 +205,10 @@ const PACKAGES: readonly PackageDetail[] = [
     ],
     includes: [
       "1 live slot in Mzansi Market, Mzansi Business or Tourism & Events",
-      "A verified-poster badge showing what was checked and when",
+      "An ID reviewed sticker, plus optional CIPC registered and Seen stickers for businesses",
       "Photos and a short video on your post",
       "Calls and WhatsApp straight to you, with no commission",
-      "Your first post free for 7 days, then 30, 90 or 180 days",
+      "Your first post free for 7 days once your ID is reviewed, then 30, 90 or 180 days",
       "Reuse the slot when something sells or you take a post down",
     ],
     notIncluded: "Not included: guaranteed views, enquiries or sales.",
@@ -413,7 +413,7 @@ const FAQ = [
   },
   {
     q: "Can I cancel?",
-    a: "Yes. You can cancel and receive a pro-rata refund for the unused part of your term. Your statutory cooling-off rights also apply.",
+    a: "Yes, you can take your post down at any time. Unused days are not refunded automatically; we refund rejected posts, duplicate charges and billing errors, and your statutory cooling-off rights apply.",
   },
   {
     q: "Do you take commission?",

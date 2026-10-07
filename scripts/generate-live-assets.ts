@@ -133,7 +133,7 @@ async function writeFallbackAssets() {
   const entries = [
     {
       filename: "hero-business.svg",
-      title: "Verified local businesses",
+      title: "Local businesses, ID-reviewed owners",
       eyebrow: "MZANSI BUSINESS",
       accent: "#002395",
       label: "Live-inspired fallback for the current business surface",
@@ -151,34 +151,6 @@ async function writeFallbackAssets() {
       eyebrow: "TOURISM & EVENTS",
       accent: "#0EA5A4",
       label: "Live-inspired fallback for current promotions surfaces",
-    },
-    {
-      filename: "side-card-list-business.svg",
-      title: "List your business",
-      eyebrow: "ADVERTISE",
-      accent: "#002395",
-      label: "Derived from the live advertise flow",
-    },
-    {
-      filename: "side-card-promote-event.svg",
-      title: "Promote an event",
-      eyebrow: "EVENTS",
-      accent: "#0EA5A4",
-      label: "Derived from the live promotions entry point",
-    },
-    {
-      filename: "side-card-sell-market.svg",
-      title: "Sell on market",
-      eyebrow: "MARKET",
-      accent: "#00833E",
-      label: "Derived from the live market surface",
-    },
-    {
-      filename: "side-card-trusted-marketplace.svg",
-      title: "Trusted marketplace",
-      eyebrow: "VERIFYMZANSI",
-      accent: "#FFB81C",
-      label: "Aligned to the current homepage visual system",
     },
   ];
 

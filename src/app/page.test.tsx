@@ -119,9 +119,9 @@ describe("HomePage", () => {
     expect(metadata.title).toBe(
       "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events"
     );
-    expect(metadata.description).toContain("Mzansi Market");
-    expect(metadata.description).toContain("Mzansi Business");
-    expect(metadata.description).toContain("Tourism and Events");
+    // The description is the brand positioning statement; the categories live in
+    // the title and the structured data below.
+    expect(metadata.description).toContain("businesses, products, services, tourism and events");
 
     const jsonLdScript = container.querySelector('script[type="application/ld+json"]');
     expect(jsonLdScript).not.toBeNull();

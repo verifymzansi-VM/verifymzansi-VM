@@ -46,7 +46,7 @@ describe("public trust pages", () => {
     expect(screen.getAllByText("security@verifymzansi.com").length).toBeGreaterThan(0);
     expect(screen.getByText(/VerifyMzansi verifies people who post/i)).toBeInTheDocument();
     // The verification journey and every trust tier label are explained.
-    for (const step of ["Phone confirmed", "ID & selfie reviewed", "Location checked"]) {
+    for (const step of ["Phone confirmed", "ID & selfie reviewed", "Area shared"]) {
       expect(screen.getByRole("heading", { name: step })).toBeInTheDocument();
     }
     for (const label of ["Pending Review", "Incomplete", "Unregistered", "ID Reviewed Pro"]) {
@@ -94,14 +94,18 @@ describe("public trust pages", () => {
     expect(screen.getByText(/ID numbers, ID document images, selfies/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Sensitive data handling" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Third parties" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What other people can see" })).toBeInTheDocument();
     expect(screen.getByText(/If we discover a data breach/i)).toBeInTheDocument();
-    expect(screen.getByText(/targeted for deletion within 30 days/i)).toBeInTheDocument();
+    expect(screen.getByText(/deleted 30 days after an approved review/i)).toBeInTheDocument();
   });
 
   it("renders payment and verification disclaimers in terms", () => {
     render(<TermsPage />);
 
-    expect(screen.getByRole("heading", { name: "Verification signals" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What our checks mean" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Our role" })).toBeInTheDocument();
+    expect(screen.getByText(/not a party to any deal between users/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Who we are" })).toBeInTheDocument();
     expect(screen.getByText(/does not guarantee that a user/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Payments & billing" })).toBeInTheDocument();
     expect(screen.getByText(/paid content is rejected/i)).toBeInTheDocument();

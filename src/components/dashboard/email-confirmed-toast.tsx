@@ -11,7 +11,7 @@ export function EmailConfirmedToast() {
     if (params.get("confirmed") === "true") {
       toast({
         title: "Email confirmed!",
-        description: "Your account is verified. Welcome to VerifyMzansi!",
+        description: "Welcome to VerifyMzansi! Verify your phone and ID next to start posting.",
       });
       // Clean the URL so the toast doesn't re-fire on refresh
       window.history.replaceState({}, "", window.location.pathname);

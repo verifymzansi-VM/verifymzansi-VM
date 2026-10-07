@@ -69,7 +69,7 @@ describe("VerifyBuyerPage", () => {
       );
     });
 
-    expect(await screen.findByText("Verified buyer")).toBeInTheDocument();
+    expect(await screen.findByText("Buyer's ID reviewed")).toBeInTheDocument();
     expect(screen.getByText("S")).toBeInTheDocument();
   });
 

@@ -14,6 +14,7 @@ export interface TrustPublicConfig {
   responsibleOfficer?: string;
   informationOfficerName?: string;
   informationOfficerEmail: string;
+  informationOfficerRegistration?: string;
   informationOfficerPhone?: string;
   informationOfficerWhatsapp?: string;
   supportEmail: string;
@@ -94,6 +95,7 @@ export function getTrustPublicConfig(): TrustPublicConfig {
       "VERIFYMZANSI_INFORMATION_OFFICER_EMAIL",
       PRIVACY_CONTACT_EMAIL
     ),
+    informationOfficerRegistration: optionalEnv("VERIFYMZANSI_INFORMATION_OFFICER_REGISTRATION"),
     informationOfficerPhone: envOrDefault("VERIFYMZANSI_INFORMATION_OFFICER_PHONE", "0717484185"),
     informationOfficerWhatsapp: envOrDefault(
       "VERIFYMZANSI_INFORMATION_OFFICER_WHATSAPP",

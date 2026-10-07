@@ -158,7 +158,7 @@ export const metadata: Metadata = {
   description: VERIFY_MZANSI_SITE_DESCRIPTION,
   keywords: [
     "South Africa",
-    "verified marketplace",
+    "online marketplace",
     "classified ads",
     "business directory",
     "business profiles",
@@ -207,7 +207,7 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png?v=20260924",
   },
-  manifest: "/manifest.json?v=20260924",
+  manifest: "/manifest.json?v=20261007",
 };
 
 export const viewport: Viewport = {

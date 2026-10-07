@@ -3,23 +3,25 @@ import { Mail } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalBlocks, LegalDocument, type LegalSection } from "@/components/safety/legal-document";
-import { getTrustPublicConfig } from "@/lib/trust-public-config";
+import { getConfiguredLegalIdentityRows, getTrustPublicConfig } from "@/lib/trust-public-config";
 
 export const metadata = {
   title: "Terms of Service",
   description:
-    "VerifyMzansi terms of service for posting and browsing marketplace listings, business services, tourism offers, venues, and events in South Africa.",
+    "VerifyMzansi terms of service: our role, what our checks mean, payments, refunds and posting rules for marketplace listings, businesses, tourism and events in South Africa.",
 };
 
 export default function TermsPage() {
   const trustConfig = getTrustPublicConfig();
+  const legalRows = getConfiguredLegalIdentityRows(trustConfig);
   const textSections = [
     {
       id: "acceptance",
       navLabel: "Acceptance",
       title: "Acceptance of terms",
       content: [
-        'By accessing or using VerifyMzansi ("the Platform"), you agree to these Terms. We may modify terms at any time — continued use constitutes acceptance.',
+        'By accessing or using VerifyMzansi ("the Platform"), you agree to these Terms.',
+        "We may update these Terms. For a material change we give at least 14 days' notice by email or on the Platform before it takes effect. If you keep using the Platform after that date, the updated Terms apply; if you do not agree, you may stop using it and close your account.",
       ],
     },
     {
@@ -58,18 +60,31 @@ export default function TermsPage() {
         "• Hate speech, harassment, or discriminatory content",
         "• Illegal goods, spam, phishing, or malware",
         "• Impersonation or IP infringement",
-        "Violation may result in immediate suspension or permanent ban without refund.",
+        "Violation may result in immediate suspension or a permanent ban. Any refund is handled under the Payments & billing section below and your statutory rights.",
+      ],
+    },
+    {
+      id: "our-role",
+      navLabel: "Our role",
+      title: "Our role",
+      content: [
+        "VerifyMzansi is a South African platform that connects people with businesses, products, services, tourism and events. We publish posts and pass on enquiries; we are not a party to any deal between users.",
+        "We do not sell, deliver, hold, inspect or insure the goods, services, stays or events posted, and we do not handle payments between users. Any agreement, payment or delivery is between the buyer and the poster.",
+        "We cannot recover money or goods lost in a deal between users, but we will act on reports, remove content and restrict accounts where our rules are broken, and we cooperate with law enforcement.",
       ],
     },
     {
       id: "verification-signals",
-      navLabel: "Verification signals",
-      title: "Verification signals",
+      navLabel: "What our checks mean",
+      title: "What our checks mean",
       content: [
-        "Verification badges and trust signals mean specific platform checks were completed, submitted, or reviewed for the person or account using the platform.",
-        "VerifyMzansi does not verify that a business itself is official. A business profile may be posted by a person who submitted phone, ID, and selfie evidence, but that does not prove the business is officially claimed unless the page says an official representative was reviewed.",
-        "Verification does not guarantee that a user, business profile, product, rental, job, event, price, payment, or transaction is safe, lawful, available, or free from risk.",
-        "Users must still follow safe trading practices, inspect goods, verify ownership, keep records, and report suspicious behaviour.",
+        "Stickers and badges show which checks were completed and when. They are signals, not guarantees.",
+        "• ID reviewed — before anyone can post, our team reviews their phone number (by one-time code), their SA ID or passport and a selfie. This is a staff review of the documents submitted; it is not a Home Affairs, criminal or credit check. Location is the province and city the poster gives us.",
+        "• CIPC registered (optional, for registered companies) — our team checked CIPC's records that the company is registered and In Business, and that the person who runs the profile is a director or member, or a confirmed company representative. It is not a tax, B-BBEE, credit or quality check.",
+        "• Seen by VerifyMzansi (optional, any business) — our team saw the business operating, in person or on a live video call, and the sticker shows where and when. It is not a quality rating or an endorsement.",
+        "The CIPC registered and Seen stickers last 12 months and are removed if they expire, if ownership changes or if we revoke them. A business without these stickers has simply not asked for, or not yet passed, those checks.",
+        "Verification does not guarantee that a user, business profile, product, rental, job, event, price, payment or transaction is safe, lawful, available or free from risk.",
+        "Users must still follow safe trading practices, inspect goods, verify ownership, keep records and report suspicious behaviour.",
       ],
     },
     {
@@ -90,6 +105,7 @@ export default function TermsPage() {
         "You may buy additional plans at any time to add more active posting slots. Organisation, bulk and sponsored programmes are governed by their written agreement and do not renew automatically.",
         "If paid content is rejected after moderation, VerifyMzansi may correct, resubmit, credit, or refund according to the Consumer Protection Act, the plan terms, and the payment provider record.",
         "Refunds are reviewed for rejected or failed paid content, duplicate charges, billing errors, or payment-provider failures; unused time on an active plan is not automatically refunded. A refund or chargeback withdraws the paid visibility it funded.",
+        "Cooling-off: where section 44 of the Electronic Communications and Transactions Act applies, you may cancel a purchase within 7 days of payment. Under section 42(2) this right does not apply to a service that started, with your consent, before the 7 days ended — for example, paid visibility that is already live. Nothing in these Terms limits your rights under the Consumer Protection Act.",
         "Invoices or payment records are issued from the billing flow or support channel after successful payment confirmation.",
       ],
     },
@@ -117,7 +133,8 @@ export default function TermsPage() {
       navLabel: "Limitation of liability",
       title: "Limitation of liability",
       content: [
-        "VerifyMzansi connects buyers, account holders, businesses, and advertisers — we are not a party to transactions. We do not guarantee quality, safety, or legality of listed items or promotions. Liability is limited to the maximum extent permitted by SA law.",
+        "We do not guarantee the quality, safety or legality of posted items, services or promotions, or the conduct of users. To the extent the law allows, VerifyMzansi is not liable for loss arising from deals between users or from relying on a post.",
+        "This limitation does not apply to loss caused by our gross negligence or wilful misconduct, and does not exclude any right you have under the Consumer Protection Act that cannot lawfully be excluded.",
       ],
     },
   ];
@@ -129,6 +146,21 @@ export default function TermsPage() {
       title: section.title,
       content: <LegalBlocks paragraphs={section.content} />,
     })),
+    {
+      id: "about-us",
+      navLabel: "About us",
+      title: "Who we are",
+      content: (
+        <dl className="grid max-w-prose gap-x-6 gap-y-2 text-[15px] leading-7 sm:grid-cols-[auto_1fr]">
+          {legalRows.map((row) => (
+            <div key={row.label} className="contents">
+              <dt className="font-semibold text-foreground">{row.label}</dt>
+              <dd className="text-foreground/80">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ),
+    },
     {
       id: "privacy-contact",
       navLabel: "Privacy & contact",
@@ -165,7 +197,7 @@ export default function TermsPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="Terms of Service"
-          meta="Updated May 2026"
+          meta="Updated October 2026"
           description="Governed by South African law."
           breadcrumbs={[{ label: "Terms of Service" }]}
           sections={sections}

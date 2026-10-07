@@ -273,7 +273,7 @@ export function brandedEmail(params: BrandedEmailParams): string {
           <tr><td class="vm-pad" align="center" style="padding:26px 40px 30px;background:${C.green950};color:rgba(255,255,255,0.68);font-size:13px;line-height:1.6;">
             <p style="margin:0 0 8px;">${escapeHtml(footerNote)}</p>
             <p style="margin:0 0 8px;">Questions? Email <a href="mailto:${SUPPORT_EMAIL}" style="color:${C.gold300};font-weight:700;text-decoration:none;">${SUPPORT_EMAIL}</a></p>
-            <p style="margin:0;color:#ffffff;font-weight:700;">${BRAND_NAME} <span style="color:rgba(255,255,255,0.55);font-weight:400;">· South Africa&#39;s trust-first marketplace</span></p>
+            <p style="margin:0;color:#ffffff;font-weight:700;">${BRAND_NAME} <span style="color:rgba(255,255,255,0.55);font-weight:400;">· Discover, connect and do business with confidence · <a href="${escapeHtml(appUrl)}/help/business-verification" style="color:${C.gold300};text-decoration:none;">What we check</a></span></p>
           </td></tr>
         </table>
       </td></tr>

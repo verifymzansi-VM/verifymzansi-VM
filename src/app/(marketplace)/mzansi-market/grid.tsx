@@ -289,7 +289,7 @@ export function MzansiMarketGrid() {
       ? fetchError.body
       : hasFilters
         ? "Change your search or clear your filters to see more."
-        : "Be the first verified seller to post on Mzansi Market.";
+        : "Be the first ID-reviewed seller to post on Mzansi Market.";
     const suggestedCats = CATEGORIES.slice(0, 4);
 
     return (
