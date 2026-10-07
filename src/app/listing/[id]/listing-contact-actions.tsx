@@ -19,7 +19,7 @@ interface ListingContactActionsProps {
   sellerPhone?: string | null;
   /** @deprecated Use ownerWhatsapp instead */
   sellerWhatsapp?: string | null;
-  /** Which methods a signed-in visitor can reveal (numbers aren't in the page). */
+  /** Which methods any visitor can reveal (numbers aren't in the page). */
   revealable?: { phone: boolean; whatsapp: boolean } | null;
 }
 

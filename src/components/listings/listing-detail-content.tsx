@@ -67,7 +67,7 @@ export interface ListingSellerRecord {
   account_verification_status: AccountVerificationStatus | null;
   phone?: string | null;
   masked_phone_public?: string | null;
-  /** The seller has a number a signed-in visitor can reveal. */
+  /** The seller has a number any visitor can reveal. */
   has_phone?: boolean;
 }
 

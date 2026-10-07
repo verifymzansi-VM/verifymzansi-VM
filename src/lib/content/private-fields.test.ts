@@ -64,19 +64,22 @@ const home = {
 };
 
 describe("withVisibleBusinessPrivateFields", () => {
-  it("gives visitors a published address but never contact details", async () => {
-    const [row] = await withVisibleBusinessPrivateFields([{ ...shop, phone: "leaked" }], null);
+  it("gives visitors the business's contact details and published address", async () => {
+    const [row] = await withVisibleBusinessPrivateFields([{ ...shop, phone: "stale" }], null);
     expect(row).toMatchObject({
+      phone: "+27821111111",
+      whatsapp: null,
+      email: "shop@example.co.za",
       location_address: "1 Main Rd",
       map_directions: "https://maps.example/shop",
     });
-    expect(row).not.toHaveProperty("phone");
     expect(row.contact_available).toEqual({ phone: true, whatsapp: false, email: true });
   });
 
-  it("never shows a home business's address to visitors", async () => {
+  it("never shows a home business's address to visitors, but still its number", async () => {
     const [row] = await withVisibleBusinessPrivateFields([home], "someone-else");
     expect(row).not.toHaveProperty("location_address");
+    expect(row).toMatchObject({ phone: "+27822222222" });
   });
 
   it("gives the owner everything", async () => {

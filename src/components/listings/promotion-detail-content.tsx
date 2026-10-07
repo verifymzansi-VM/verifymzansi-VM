@@ -97,7 +97,7 @@ export interface PromotionAdvertiserRecord {
   account_verification_status?: AccountVerificationStatus | null;
   phone: string | null;
   masked_phone_public: string | null;
-  /** A number exists that a signed-in visitor can reveal. */
+  /** A number exists that any visitor can reveal. */
   has_phone?: boolean;
 }
 

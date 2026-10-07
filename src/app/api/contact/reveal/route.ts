@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
-import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 
 const log = createLogger("ContactReveal");
 
@@ -31,10 +31,11 @@ const TABLES = { listing: "listings", business: "businesses", promotion: "promot
 
 /**
  * POST /api/contact/reveal
- * Tap-to-reveal for a post's contact details. Numbers and emails are never in
- * public pages or readable through the database API; a signed-in visitor gets
- * them here, rate-limited and recorded, and only for the methods the poster
- * chose on a live post.
+ * "Show number" for a private seller's or event poster's contact details. Any
+ * visitor can use it, no sign-in needed; it is rate-limited per visitor (the
+ * account, or the network address when signed out) so numbers can't be
+ * collected in bulk, recorded for the poster, and only answers for the
+ * methods the poster chose on a live post.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -45,14 +46,11 @@ export async function POST(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Sign in to see contact details.", code: "sign_in_required" },
-        { status: 401 }
-      );
-    }
 
-    const limit = await checkRateLimit({ key: user.id, action: "contact:reveal" });
+    const limit = await checkRateLimit({
+      key: user?.id ?? `ip:${getClientIp(request)}`,
+      action: "contact:reveal",
+    });
     if (limit.limited) {
       return NextResponse.json(
         { error: "You've revealed a lot of numbers. Please try again later." },
@@ -110,14 +108,14 @@ export async function POST(request: NextRequest) {
       whatsapp = allows("whatsapp") ? accountPhone : null;
     }
 
-    if (user.id !== target.owner_id) {
+    if (user?.id !== target.owner_id) {
       const { error: eventError } = await admin.from("contact_events").insert({
         target_id: target.id,
         target_type: targetType,
         owner_id: target.owner_id,
         member_verified: readAccountVerificationStatus(owner) === "verified",
         contact_type: "reveal",
-        sender_user_id: user.id,
+        sender_user_id: user?.id ?? null,
       });
       if (eventError) log.warn("Reveal not recorded", { error: eventError.message });
     }

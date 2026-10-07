@@ -16,6 +16,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => state.db!.clie
 vi.mock("@/lib/utils/mutation-guard", () => ({ enforceMutationRequest: () => null }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: async () => ({ limited: state.limited, retryAfter: 60 }),
+  getClientIp: () => "198.51.100.7",
 }));
 
 import { POST } from "./route";
@@ -80,11 +81,14 @@ beforeEach(() => {
 });
 
 describe("POST /api/contact/reveal", () => {
-  it("asks signed-out visitors to sign in", async () => {
+  it("shows the number to signed-out visitors too, recorded without an account", async () => {
     state.user = null;
     const res = await reveal("listing", LISTING);
-    expect(res.status).toBe(401);
-    expect(await res.json()).toMatchObject({ code: "sign_in_required" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ phone: "+27833333333", whatsapp: null, email: null });
+    expect(state.db!.tables.contact_events).toEqual([
+      expect.objectContaining({ contact_type: "reveal", sender_user_id: null }),
+    ]);
   });
 
   it("reveals only the methods the seller chose, and records it", async () => {

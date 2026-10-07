@@ -159,8 +159,8 @@ export function presentListingSlide(
 ): FeedSlide {
   const href = canonicalHref("listing", listing.id);
   const methods = listing.contact_methods ?? [];
-  // Numbers never enter a slide; a signed-in visitor reveals the ones the
-  // seller chose (call / WhatsApp) on tap.
+  // A private seller's number never enters a slide; any visitor reveals the
+  // ones the seller chose (call / WhatsApp) on tap.
   const revealable = {
     phone: methods.includes("call") && Boolean(seller?.phone),
     whatsapp: methods.includes("whatsapp") && Boolean(seller?.phone),
@@ -656,8 +656,9 @@ export function presentBusinessSlide(
       },
     },
     contact: {
-      phone: null,
-      whatsapp: null,
+      // A business's chosen numbers are public, like any business page.
+      phone: business.phone ?? null,
+      whatsapp: business.whatsapp ?? null,
       revealable: business.contact_available
         ? {
             phone: business.contact_available.phone,

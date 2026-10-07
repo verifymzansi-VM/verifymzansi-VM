@@ -33,8 +33,8 @@ type ContentContactActionsProps = {
   /** Off where the page already has its own share button (the desktop viewer's rail). */
   showShare?: boolean;
   /**
-   * Numbers aren't in public pages: when set, a signed-in visitor taps "Show
-   * number" to fetch them (rate-limited, recorded). Says which methods exist.
+   * A private seller's number isn't in the page: when set, any visitor taps
+   * "Show number" to fetch it (rate-limited, recorded). Says which methods exist.
    */
   revealable?: { phone: boolean; whatsapp: boolean } | null;
 };
@@ -54,7 +54,6 @@ export function ContentContactActions({
     whatsapp: string | null;
   } | null>(null);
   const [revealing, setRevealing] = useState(false);
-  const [signInHref, setSignInHref] = useState<string | null>(null);
   const [revealError, setRevealError] = useState<string | null>(null);
   if (revealed) {
     phone = revealed.phone;
@@ -75,14 +74,8 @@ export function ContentContactActions({
       const data = (await res.json().catch(() => ({}))) as {
         phone?: string | null;
         whatsapp?: string | null;
-        code?: string;
         error?: string;
       };
-      if (res.status === 401) {
-        const back = `${window.location.pathname}${window.location.search}`;
-        setSignInHref(`/login?returnUrl=${encodeURIComponent(back)}`);
-        return;
-      }
       if (!res.ok) {
         setRevealError(data.error ?? "Couldn't show the number. Try again.");
         return;
@@ -190,13 +183,7 @@ export function ContentContactActions({
     <>
       <div className="space-y-2">
         {canReveal && (
-          <Button
-            className="w-full gap-2"
-            size="lg"
-            onClick={reveal}
-            disabled={revealing}
-            aria-describedby="contact-reveal-note"
-          >
+          <Button className="w-full gap-2" size="lg" onClick={reveal} disabled={revealing}>
             {revealing ? (
               <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
             ) : (
@@ -204,19 +191,6 @@ export function ContentContactActions({
             )}
             Show contact number
           </Button>
-        )}
-        {canReveal && (
-          <p id="contact-reveal-note" className="text-xs text-muted-foreground">
-            Signed-in members can see numbers. This keeps sellers&apos; numbers from spammers.
-          </p>
-        )}
-        {signInHref && (
-          <p role="alert" className="text-sm">
-            <a href={signInHref} className="font-medium text-brand-green underline">
-              Sign in to see the number
-            </a>
-            . It keeps sellers&apos; numbers away from spammers.
-          </p>
         )}
         {revealError && (
           <p role="alert" className="text-sm text-destructive">

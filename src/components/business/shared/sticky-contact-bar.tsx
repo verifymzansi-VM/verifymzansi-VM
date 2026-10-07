@@ -21,8 +21,8 @@ export function StickyContactBar({ business, ctaLabel }: StickyContactBarProps) 
   const phone = contactPhone(business.phone);
   const whatsapp = contactPhone(business.whatsapp);
 
-  // Visitors don't get the numbers in the page: send them to the contact card,
-  // where signed-in members tap "Show contact number".
+  // Without numbers in the page (they couldn't be loaded), send visitors to
+  // the contact card.
   if (!phone && !whatsapp) {
     const available = business.contact_available;
     if (!available?.phone && !available?.whatsapp) return null;

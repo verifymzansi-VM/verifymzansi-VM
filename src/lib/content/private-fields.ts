@@ -127,9 +127,12 @@ function businessAddressIsPublic(business: {
 }
 
 /**
- * Adds the private fields a viewer may see to business rows: everything for
- * the owner; the street address and map pin for everyone when the business
- * publishes them; contact details never (they come from the reveal endpoint).
+ * Adds the private fields a viewer may see to business rows, one page at a
+ * time (the tables are never readable in bulk): the business's chosen contact
+ * details for everyone, no sign-in needed; the street address and map pin when
+ * the business publishes them; everything for the owner. Private sellers'
+ * numbers are not here: listings and events use the "Show number" button
+ * (/api/contact/reveal).
  */
 export async function withVisibleBusinessPrivateFields<
   T extends {
@@ -151,21 +154,23 @@ export async function withVisibleBusinessPrivateFields<
     for (const column of BUSINESS_PRIVATE_COLUMNS) delete (row as Record<string, unknown>)[column];
     const f = fields.get(fullRow.id);
     if (!f) return row;
-    // Which contact methods exist, so the page can offer "Show number".
+    // Which contact methods exist (contact buttons and the sticky bar).
     const contact_available = {
       phone: Boolean(f.phone),
       whatsapp: Boolean(f.whatsapp),
       email: Boolean(f.email),
     };
     if (viewerId && row.owner_id === viewerId) return { ...row, ...f, contact_available };
+    const contact = { phone: f.phone, whatsapp: f.whatsapp, email: f.email };
     return businessAddressIsPublic(row)
       ? {
           ...row,
+          ...contact,
           location_address: f.location_address,
           map_directions: f.map_directions,
           contact_available,
         }
-      : { ...row, contact_available };
+      : { ...row, ...contact, contact_available };
   });
 }
 

@@ -5,9 +5,10 @@ import {
 
 /**
  * Public business detail columns, newest schema first. Contact details and
- * the street address are not here: anon and signed-in users can't read them
- * (see src/lib/content/private-fields.ts); servers add them after checks. Older databases miss a
- * few optional columns; each fallback drops them so profiles still load.
+ * the street address live in the server-only business_private table; the
+ * page adds them per business (see src/lib/content/private-fields.ts). Older
+ * databases miss a few optional columns; each fallback drops them so profiles
+ * still load.
  */
 const BUSINESS_DETAIL_SELECT = `
   id, owner_id, business_type, business_name, slug, description, category, subcategory, category_details,
