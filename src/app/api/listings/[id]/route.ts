@@ -1,6 +1,7 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listingSchema } from "@/lib/validations/listing";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -93,10 +94,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     ).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
-    return NextResponse.json(
-      { listing: data },
-      { headers: { "Cache-Control": "private, no-store" } }
-    );
+    // The street address lives in the server-only listing_private table.
+    const [listing] = await withAllPrivateFields("listings", [data as { id: string }]);
+    return NextResponse.json({ listing }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     log.error("Owner listing read failed", {
       error: error instanceof Error ? error.message : String(error),
@@ -220,13 +220,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (!ownListing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
-    // The street address is private to the database API; add it for the edit snapshot.
-    const { data: privateRow } = await createAdminClient()
-      .from("listings")
-      .select("location_address")
-      .eq("id", listingId)
-      .maybeSingle();
-    const listing = { ...ownListing, ...(privateRow ?? {}) } as ListingUpdateRow;
+    // The street address lives in the server-only listing_private table; add
+    // it for the edit snapshot.
+    const [listing] = (await withAllPrivateFields("listings", [
+      ownListing as unknown as { id: string },
+    ])) as unknown as ListingUpdateRow[];
 
     // Defense-in-depth: applyOwnerFilter already scopes results to the current
     // user, so this check should never trigger. Kept as a safety net.

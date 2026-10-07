@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -123,14 +124,14 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
       "listings",
       byOwner(
         "listings",
-        "id, title, description, category, price_cents, price_zar, price_negotiable, location_province, location_city, location_address, status, status_reason, published_at, expires_at, created_at, updated_at"
+        "id, title, description, category, price_cents, price_zar, price_negotiable, location_province, location_city, status, status_reason, published_at, expires_at, created_at, updated_at"
       )
     ),
     fetchAll(
       "businesses",
       byOwner(
         "businesses",
-        "id, business_name, description, business_type, category, phone, whatsapp, email, website, location_province, location_city, location_address, map_directions, status, status_reason, published_at, created_at, updated_at"
+        "id, business_name, description, business_type, category, website, location_province, location_city, status, status_reason, published_at, created_at, updated_at"
       )
     ),
     fetchAll(
@@ -212,8 +213,9 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
     accountProfile: accountProfile[0] ?? null,
     verificationSteps,
     kycArtifacts,
-    listings,
-    businesses,
+    // Contact details and street addresses live in the server-only private tables.
+    listings: await withAllPrivateFields("listings", listings as Array<Row & { id: string }>),
+    businesses: await withAllPrivateFields("businesses", businesses as Array<Row & { id: string }>),
     promotions,
     // Messages from other members: the sender is not identified.
     contactEvents: contactEvents.map(({ sender_user_id, ...rest }) => ({

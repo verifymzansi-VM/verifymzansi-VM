@@ -1,4 +1,5 @@
 import { toContentEditModerationItem } from "@/lib/content-edit-moderation";
+import { withAllPrivateFields } from "@/lib/content/private-fields";
 import {
   BUSINESS_FIELDS,
   EDIT_FIELDS,
@@ -407,7 +408,8 @@ async function getPendingNewContent(area: MarketplaceArea) {
         .eq("area", "MZANSI_BUSINESS")
         .or(MZANSI_BUSINESS_FILTER)
     );
-    return businesses.map(businessItem);
+    // Contact details and address come from the server-only private table.
+    return (await withAllPrivateFields("businesses", businesses)).map(businessItem);
   }
 
   if (area === "PROMOTIONS_EVENTS") {
@@ -417,7 +419,9 @@ async function getPendingNewContent(area: MarketplaceArea) {
     ]);
     return oldestFirst([
       ...rowsOrThrow(promotions).map(promotionItem),
-      ...rowsOrThrow(tourismBusinesses).map(businessItem),
+      ...(await withAllPrivateFields("businesses", rowsOrThrow(tourismBusinesses))).map(
+        businessItem
+      ),
     ]);
   }
 

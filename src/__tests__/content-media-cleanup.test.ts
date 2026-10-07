@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse, type NextRequest } from "next/server";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
+import type * as PrivateFields from "@/lib/content/private-fields";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRateLimit } =
   vi.hoisted(() => ({
@@ -11,6 +12,12 @@ const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockCheckRat
   }));
 
 const mockDeleteOwned = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true }));
+// The private-table merge is covered in private-fields tests.
+vi.mock("@/lib/content/private-fields", async (importOriginal) => ({
+  ...(await importOriginal<typeof PrivateFields>()),
+  withAllPrivateFields: async (_table: string, rows: unknown[]) => rows,
+}));
+
 vi.mock("@/lib/content/delete-owned", () => ({ deleteOwnedContent: mockDeleteOwned }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));

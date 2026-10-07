@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createNotification } from "@/lib/notifications";
@@ -366,7 +367,13 @@ export async function POST(request: Request) {
     // The edit was requested against current_snapshot. If those fields have
     // changed since (the owner edited while the post was hidden, or another
     // edit was approved), applying it would overwrite newer content.
-    if (snapshotIsStale(editRequest.current_snapshot, targetRow)) {
+    // Contact details and addresses live in the server-only private tables;
+    // compare against their real values, as the owner's snapshot did.
+    const currentRow =
+      config.table === "promotions"
+        ? targetRow
+        : (await withAllPrivateFields(config.table, [targetRow as { id: string }]))[0];
+    if (snapshotIsStale(editRequest.current_snapshot, currentRow)) {
       await admin
         .from("content_edit_requests")
         .update({

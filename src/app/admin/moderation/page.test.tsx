@@ -22,6 +22,9 @@ vi.mock(
   async () => (await import("@/test/staff-guard")).staffGuardModule
 );
 
+vi.mock("@/lib/content/private-fields", () => ({
+  withAllPrivateFields: async (_table: string, rows: unknown[]) => rows,
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
 }));

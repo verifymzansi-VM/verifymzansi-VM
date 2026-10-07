@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
 import { QueueClaimBar, QueueClaimsProvider } from "@/components/admin/queue-claims";
@@ -131,7 +132,8 @@ export default async function AdminModerationPage() {
     .reduce((a, b) => a + b, 0);
 
   const pendingListings = listingsResult.data ?? [];
-  const pendingBusinesses = businessesResult.data ?? [];
+  // Contact details and address come from the server-only private table.
+  const pendingBusinesses = await withAllPrivateFields("businesses", businessesResult.data ?? []);
   const pendingPromotions = promotionsResult.data ?? [];
   const pendingEditRequests = editRequestsResult.data ?? [];
   const failedAreas = [

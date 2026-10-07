@@ -32,6 +32,11 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: mockCreateAdminClient,
 }));
 
+// The private-table merge is covered in private-fields tests.
+vi.mock("@/lib/content/private-fields", () => ({
+  withAllPrivateFields: async (_table: string, rows: unknown[]) => rows,
+}));
+
 vi.mock("@/lib/services/audit", () => ({
   logAuditEvent: mockLogAuditEvent,
 }));

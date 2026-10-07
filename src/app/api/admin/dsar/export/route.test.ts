@@ -55,6 +55,8 @@ function tables(
     const q: Record<string, unknown> = {};
     for (const m of ["select", "eq", "or", "order"]) q[m] = vi.fn(() => q);
     q.maybeSingle = vi.fn(async () => ({ data: dsarCase, error: null }));
+    // Private-table lookups (contact details, addresses) by id.
+    q.in = vi.fn(async () => ({ data: datasets[table] ?? [], error: null }));
     q.range = vi.fn(async (fromRow: number, toRow: number) =>
       table === failing
         ? { data: null, error: { message: "timeout" } }
@@ -108,6 +110,23 @@ describe("POST /api/admin/dsar/export", () => {
     const body = await res.json();
     expect(body.data.listings).toHaveLength(2345);
     expect(res.headers.get("Content-Disposition")).toContain("attachment");
+  });
+
+  it("includes the subject's own contact details and addresses from the private tables", async () => {
+    tables({
+      businesses: [{ id: "b1", business_name: "Shop" }],
+      business_private: [{ business_id: "b1", phone: "+27821111111", location_address: "1 Main" }],
+      listings: [{ id: "l1", title: "Bike" }],
+      listing_private: [{ listing_id: "l1", location_address: "3 Home St" }],
+    });
+
+    const body = await (await POST(request({ requestId: CASE_ID }))).json();
+
+    expect(body.data.businesses[0]).toMatchObject({
+      phone: "+27821111111",
+      location_address: "1 Main",
+    });
+    expect(body.data.listings[0]).toMatchObject({ location_address: "3 Home St" });
   });
 
   it("does not identify other people", async () => {

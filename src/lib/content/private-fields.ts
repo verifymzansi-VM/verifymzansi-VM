@@ -5,8 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 
 /**
- * Columns anon and signed-in users cannot read through the database API
- * (20261007130000_private_contact_columns.sql). Server code reads them with the
+ * Business contact details and street addresses live in server-only tables
+ * (business_private, listing_private; 20261007121453_private_post_tables.sql),
+ * never on the rows the public can read. Server code reads them with the
  * service role after its own checks: contact details go out only through the
  * tap-to-reveal endpoint or to the owner; a street address only when public.
  */
@@ -28,29 +29,89 @@ export type BusinessPrivateFields = {
 
 const log = createLogger("ContentPrivateFields");
 
-/** The private columns of the given businesses, by id (service role). */
+/** Reads business_private for the given ids (service role); throws on failure. */
+async function queryBusinessPrivate(ids: string[]): Promise<Map<string, BusinessPrivateFields>> {
+  const out = new Map<string, BusinessPrivateFields>();
+  if (!ids.length) return out;
+  const { data, error } = await createAdminClient()
+    .from("business_private")
+    .select("business_id, phone, whatsapp, email, location_address, map_directions")
+    .in("business_id", ids);
+  if (error) throw new Error(error.message);
+  for (const row of (data ?? []) as unknown as Array<
+    BusinessPrivateFields & { business_id: string }
+  >) {
+    const { business_id, ...fields } = row;
+    out.set(business_id, fields);
+  }
+  return out;
+}
+
+/** The private fields of the given businesses, by id; empty when unreadable. */
 export async function loadBusinessPrivateFields(
   ids: string[]
 ): Promise<Map<string, BusinessPrivateFields>> {
-  const out = new Map<string, BusinessPrivateFields>();
-  if (!ids.length) return out;
   try {
-    const { data, error } = await createAdminClient()
-      .from("businesses")
-      .select("id, phone, whatsapp, email, location_address, map_directions")
-      .in("id", ids);
-    if (error) throw new Error(error.message);
-    for (const row of (data ?? []) as unknown as Array<BusinessPrivateFields & { id: string }>) {
-      const { id, ...fields } = row;
-      out.set(id, fields);
-    }
+    return await queryBusinessPrivate(ids);
   } catch (error) {
     // Without them the page shows no address or "Show number"; never crash.
     log.error("Could not read business private fields", {
       error: error instanceof Error ? error.message : String(error),
     });
+    return new Map();
   }
+}
+
+/** The private street address of the given listings, by id (service role). */
+async function loadListingAddresses(ids: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (!ids.length) return out;
+  const { data, error } = await createAdminClient()
+    .from("listing_private")
+    .select("listing_id, location_address")
+    .in("listing_id", ids);
+  if (error) throw new Error(error.message);
+  for (const row of (data ?? []) as Array<{ listing_id: string; location_address: string | null }>)
+    out.set(row.listing_id, row.location_address);
   return out;
+}
+
+/**
+ * Staff and owner views (moderation, edit review, data exports): the rows with
+ * every private field filled in from the private tables. Throws on failure so
+ * a decision is never made against missing contact details.
+ */
+export async function withAllPrivateFields<T extends { id: string }>(
+  table: "businesses",
+  rows: T[]
+): Promise<Array<T & BusinessPrivateFields>>;
+export async function withAllPrivateFields<T extends { id: string }>(
+  table: "listings",
+  rows: T[]
+): Promise<Array<T & { location_address: string | null }>>;
+export async function withAllPrivateFields<T extends { id: string }>(
+  table: "businesses" | "listings",
+  rows: T[]
+): Promise<Array<T & Partial<BusinessPrivateFields>>>;
+export async function withAllPrivateFields<T extends { id: string }>(
+  table: "businesses" | "listings",
+  rows: T[]
+): Promise<Array<T & Partial<BusinessPrivateFields>>> {
+  if (!rows.length) return [];
+  const ids = rows.map((row) => row.id);
+  if (table === "listings") {
+    const addresses = await loadListingAddresses(ids);
+    return rows.map((row) => ({ ...row, location_address: addresses.get(row.id) ?? null }));
+  }
+  const byId = await queryBusinessPrivate(ids);
+  const empty: BusinessPrivateFields = {
+    phone: null,
+    whatsapp: null,
+    email: null,
+    location_address: null,
+    map_directions: null,
+  };
+  return rows.map((row) => ({ ...row, ...(byId.get(row.id) ?? empty) }));
 }
 
 /** Whether a business has chosen to show its street address and map pin. */

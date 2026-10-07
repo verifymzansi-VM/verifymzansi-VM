@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { isVisibleByExpiry } from "@/lib/posting/visibility";
+import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -24,9 +25,6 @@ type Target = {
   expires_at: string | null;
   created_at: string | null;
   contact_methods: string[] | null;
-  phone?: string | null;
-  whatsapp?: string | null;
-  email?: string | null;
 };
 
 const TABLES = { listing: "listings", business: "businesses", promotion: "promotions" } as const;
@@ -71,7 +69,7 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const columns =
       targetType === "business"
-        ? "id, owner_id, status, expires_at, created_at, contact_methods:category_details->contact_methods, phone, whatsapp, email"
+        ? "id, owner_id, status, expires_at, created_at, contact_methods:category_details->contact_methods"
         : "id, owner_id, status, expires_at, created_at, contact_methods";
     const { data, error } = await admin
       .from(TABLES[targetType])
@@ -100,9 +98,11 @@ export async function POST(request: NextRequest) {
       .eq("user_id", target.owner_id)
       .maybeSingle();
     if (targetType === "business") {
-      phone = target.phone ?? null;
-      whatsapp = target.whatsapp ?? null;
-      email = allows("email") ? (target.email ?? null) : null;
+      // Contact details live in the server-only business_private table.
+      const [business] = await withAllPrivateFields("businesses", [{ id: target.id }]);
+      phone = business.phone ?? null;
+      whatsapp = business.whatsapp ?? null;
+      email = allows("email") ? (business.email ?? null) : null;
     } else {
       // Listings and events use the account holder's verified number.
       const accountPhone = (owner?.phone as string | null) ?? null;

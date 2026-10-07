@@ -45,6 +45,12 @@ function seed(listing: Record<string, unknown> = {}) {
         expires_at: future,
         created_at: future,
         contact_methods: null,
+      },
+    ],
+    // Business contact details live only in the server-only private table.
+    business_private: [
+      {
+        business_id: BUSINESS,
         phone: "+27821111111",
         whatsapp: "+27822222222",
         email: "shop@example.co.za",
