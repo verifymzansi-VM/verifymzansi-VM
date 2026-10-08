@@ -243,7 +243,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps ${{ matrix.project == 'firefox' && 'firefox' || 'chromium' }}
+      - run: npx playwright install --with-deps ${{ matrix.project == 'firefox' && 'chromium firefox' || 'chromium' }}
         timeout-minutes: 10
       - run: pnpm exec playwright test --project ${{ matrix.project }}
       - name: Upload browser test report
