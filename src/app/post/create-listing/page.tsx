@@ -7,7 +7,7 @@ import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Camera, Check, Eye, FileText, Inbox, Mail, MessageCircle, Phone, Tag } from "lucide-react";
+import { Camera, Check, Eye, FileText, Inbox, MessageCircle, Phone, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,7 +55,12 @@ import {
   uploadListingVideoFiles,
 } from "@/app/post/_lib/listing-media-upload";
 import { prewarmVideosForFastUpload } from "@/app/post/_lib/video-fast-upload";
-import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import {
+  DEFAULT_LISTING_CONTACT_METHODS,
+  coerceListingAttributes,
+  validateListingAttributes,
+  withListingEnquiry,
+} from "@/lib/forms/listing-form";
 import { CATEGORIES } from "@/lib/constants/categories";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
@@ -84,11 +89,11 @@ const FIELD_SELECT_CLASS =
 const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
+/** Private enquiry is always on (see withListingEnquiry); its tile is shown locked. */
 const CONTACT_OPTIONS = [
   { id: "call", label: "Phone call", icon: Phone },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { id: "form", label: "Contact form", icon: Mail },
-  { id: "in_app", label: "In-app chat", icon: Inbox },
+  { id: "in_app", label: "Private enquiry", icon: Inbox },
 ] as const;
 
 const FIELD_IDS: Record<string, string> = {
@@ -244,7 +249,7 @@ export default function CreateListingPage() {
   const [city, setCity] = useState("");
   const [town, setTown] = useState("");
   const [address, setAddress] = useState("");
-  const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
+  const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
   const [logoFile, setLogoFile] = useState<File[]>([]);
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File[]>([]);
@@ -423,8 +428,8 @@ export default function CreateListingPage() {
         setAddress(restoredData.address ?? "");
         setContactMethods(
           Array.isArray(restoredData.contactMethods) && restoredData.contactMethods.length > 0
-            ? restoredData.contactMethods
-            : ["call"]
+            ? withListingEnquiry(restoredData.contactMethods)
+            : DEFAULT_LISTING_CONTACT_METHODS
         );
         setLastSavedAt(restored.savedAt ?? null);
         toast({
@@ -590,6 +595,7 @@ export default function CreateListingPage() {
   }
 
   function toggleContact(id: string) {
+    if (id === "in_app") return;
     setContactMethods((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
     clearErrors("contactMethods");
   }
@@ -864,7 +870,7 @@ export default function CreateListingPage() {
     setCity(profile?.location_city ?? "");
     setTown("");
     setAddress("");
-    setContactMethods(["call"]);
+    setContactMethods(DEFAULT_LISTING_CONTACT_METHODS);
     setLogoFile([]);
     setPhotoFiles([]);
     setVideoFile([]);
@@ -1294,7 +1300,7 @@ export default function CreateListingPage() {
 
                     <PostFormSection
                       title="How buyers reach you *"
-                      description="Pick at least one."
+                      description="Buyers can always send you a private enquiry. Add a call or WhatsApp too."
                     >
                       <div
                         id="listing-contact-methods"
@@ -1303,10 +1309,11 @@ export default function CreateListingPage() {
                         aria-label="Contact methods"
                         className="rounded-xl focus:outline-none"
                       >
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <div className="grid grid-cols-3 gap-2">
                           {CONTACT_OPTIONS.map((option) => {
                             const Icon = option.icon;
                             const isSelected = contactMethods.includes(option.id);
+                            const locked = option.id === "in_app";
 
                             return (
                               <label
@@ -1324,6 +1331,7 @@ export default function CreateListingPage() {
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
+                                  disabled={locked}
                                   onChange={() => toggleContact(option.id)}
                                   className="sr-only"
                                 />

@@ -225,8 +225,8 @@ export function presentListingSlide(
       whatsapp: null,
       revealable,
       showPhoneButton: true,
-      showMessageButton:
-        listing.contact_methods == null || methods.some((m) => ["form", "in_app"].includes(m)),
+      // Private enquiries are always on for Market listings.
+      showMessageButton: true,
       cta: null,
     },
     engagement,

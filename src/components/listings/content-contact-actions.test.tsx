@@ -20,28 +20,23 @@ describe("seller contact actions", () => {
         listingId="abc"
         listingTitle="Garden cottage"
         ownerWhatsapp="082 123 4567"
-        contactMethods={["whatsapp"]}
       />
     );
     const link = screen.getByRole("link", { name: "WhatsApp 082 123 4567" });
     expect(link.getAttribute("href")).toContain("https://wa.me/27821234567?");
     expect(decodeURIComponent(link.getAttribute("href")!)).toContain("Garden cottage");
-    expect(screen.queryByRole("button", { name: "Send an enquiry" })).toBeNull();
     expect(screen.queryByText("Show Contact")).toBeNull();
   });
-  it("says no contact details were added when there is no way to reach the poster", () => {
-    render(<ListingContactActions listingId="abc" contactMethods={["call"]} />);
-    expect(screen.getByText("No contact details added.")).toBeInTheDocument();
-  });
-  it("hides the empty-contact note when an enquiry form is available", () => {
-    render(<ListingContactActions listingId="abc" contactMethods={["form"]} />);
+  it("always offers a private enquiry on Market listings, so the empty-contact note never shows", () => {
+    render(<ListingContactActions listingId="abc" />);
+    expect(screen.getByRole("button", { name: "Send an enquiry" })).toBeInTheDocument();
     expect(screen.queryByText("No contact details added.")).toBeNull();
   });
   it("sends reply details and shows saved status only after persistence", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ success: true })));
-    render(<ListingContactActions listingId="abc" contactMethods={["form"]} />);
+    render(<ListingContactActions listingId="abc" />);
     fireEvent.click(screen.getByRole("button", { name: "Send an enquiry" }));
     fireEvent.change(screen.getByLabelText("Your name"), { target: { value: "Buyer Name" } });
     fireEvent.change(screen.getByLabelText("Reply email"), {

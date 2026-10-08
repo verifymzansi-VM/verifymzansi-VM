@@ -141,7 +141,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Market listings always take private enquiries; other posts follow the owner's choice.
     if (
+      parsedBody.data.targetType !== "listing" &&
       normalizedTargetRecord.contact_methods &&
       !normalizedTargetRecord.contact_methods.some(
         (method) => method === "form" || method === "in_app"

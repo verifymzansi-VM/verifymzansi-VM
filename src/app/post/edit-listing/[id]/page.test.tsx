@@ -235,7 +235,7 @@ describe("EditListingPage", () => {
     expect(payload.price_zar).toBe(1500);
     expect(payload.negotiable).toBe(true);
     expect(payload.town).toBe("Sandton");
-    expect(payload.contactMethods).toEqual(["call", "whatsapp"]);
+    expect(payload.contactMethods).toEqual(["call", "whatsapp", "in_app"]);
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/existing-logo.jpg");
     expect(payload.attributes).toMatchObject({ brand: "Apple", storage_gb: 256 });
   });

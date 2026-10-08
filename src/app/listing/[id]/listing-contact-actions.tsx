@@ -10,7 +10,6 @@ import { listingContactConfig } from "@/components/listings/contact-action-confi
 interface ListingContactActionsProps {
   listingId: string;
   listingTitle?: string;
-  contactMethods?: string[] | null;
   /** Owner's phone from contact_methods if available */
   ownerPhone?: string | null;
   /** Owner's whatsapp from contact_methods if available */
@@ -26,7 +25,6 @@ interface ListingContactActionsProps {
 export function ListingContactActions({
   listingId,
   listingTitle,
-  contactMethods,
   ownerPhone,
   ownerWhatsapp,
   sellerPhone,
@@ -40,10 +38,8 @@ export function ListingContactActions({
       phone={contactPhone}
       whatsapp={contactWhatsapp}
       showPhoneButton={true}
-      showMessageButton={
-        contactMethods == null ||
-        contactMethods.some((method) => ["form", "in_app"].includes(method))
-      }
+      // Private enquiries are always on for Market listings.
+      showMessageButton={true}
       messageIcon={MessageSquare}
       revealable={revealable}
       config={listingContactConfig(listingId, listingTitle)}

@@ -5,7 +5,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Loader2, X, Phone, MessageCircle, Mail, Check } from "lucide-react";
+import { Loader2, X, Phone, MessageCircle, Inbox, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PostLabel as Label } from "@/components/post/post-label";
@@ -31,7 +31,12 @@ import type { ListingCategory, ListingCondition } from "@/types/enums";
 import { mapListingCategory } from "@/lib/utils/enum-compat";
 import { normalizeMediaUrl, normalizeMediaUrls } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
-import { coerceListingAttributes, validateListingAttributes } from "@/lib/forms/listing-form";
+import {
+  DEFAULT_LISTING_CONTACT_METHODS,
+  coerceListingAttributes,
+  validateListingAttributes,
+  withListingEnquiry,
+} from "@/lib/forms/listing-form";
 import {
   normalizeCreatePostError,
   normalizeCreatePostRuntimeError,
@@ -68,7 +73,7 @@ export default function EditListingPage() {
   const [town, setTown] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [negotiable, setNegotiable] = useState(false);
-  const [contactMethods, setContactMethods] = useState<string[]>(["call"]);
+  const [contactMethods, setContactMethods] = useState<string[]>(DEFAULT_LISTING_CONTACT_METHODS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submissionInFlightRef = useRef(false);
@@ -199,8 +204,8 @@ export default function EditListingPage() {
         setNegotiable(data.price_negotiable ?? false);
         setContactMethods(
           Array.isArray(data.contact_methods) && data.contact_methods.length > 0
-            ? (data.contact_methods as string[])
-            : ["call"]
+            ? withListingEnquiry(data.contact_methods as string[])
+            : DEFAULT_LISTING_CONTACT_METHODS
         );
         setExistingLogo(((data as Record<string, unknown>).logo_url as string | null) ?? null);
         setExistingVideoThumbnail(
@@ -313,13 +318,15 @@ export default function EditListingPage() {
     });
   }
 
+  /** Private enquiry is always on (see withListingEnquiry); its tile is shown locked. */
   const CONTACT_OPTIONS = [
-    { id: "call", label: "Phone Call", icon: Phone },
+    { id: "call", label: "Phone call", icon: Phone },
     { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-    { id: "form", label: "Contact Form", icon: Mail },
+    { id: "in_app", label: "Private enquiry", icon: Inbox },
   ] as const;
 
   function toggleContact(id: string) {
+    if (id === "in_app") return;
     setContactMethods((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
     clearErrors("contactMethods");
   }
@@ -874,11 +881,7 @@ export default function EditListingPage() {
 
                 {/* ── Contact Methods ──────────────────────── */}
                 <PostFormSection title="How buyers reach you *">
-                  <div
-                    role="group"
-                    aria-label="Contact methods"
-                    className="grid grid-cols-2 gap-2 sm:grid-cols-4"
-                  >
+                  <div role="group" aria-label="Contact methods" className="grid grid-cols-3 gap-2">
                     {CONTACT_OPTIONS.map((opt) => {
                       const Icon = opt.icon;
                       const isSelected = contactMethods.includes(opt.id);
@@ -887,6 +890,7 @@ export default function EditListingPage() {
                           key={opt.id}
                           type="button"
                           aria-pressed={isSelected}
+                          disabled={opt.id === "in_app"}
                           onClick={() => toggleContact(opt.id)}
                           className={cn(
                             "flex min-h-[4.5rem] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

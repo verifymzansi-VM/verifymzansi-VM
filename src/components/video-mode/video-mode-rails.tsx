@@ -163,7 +163,7 @@ export function CircleButton({
   );
 }
 
-/* ─────────────────────────── Right: like, views, enquire ─────────────────────────── */
+/* ─────────────────────────── Right: views, like, enquire ─────────────────────────── */
 
 export function ActionRail({ slide, views }: { slide: FeedSlide; views: number }) {
   return (
@@ -173,17 +173,7 @@ export function ActionRail({ slide, views }: { slide: FeedSlide; views: number }
       data-vm-control
       className="vm-actions flex flex-col items-center gap-2.5"
     >
-      <ContentLikeButton
-        key={slide.key}
-        variant="rail"
-        className="vm-like"
-        targetId={slide.id}
-        targetType={slide.targetType}
-        initialLikeCount={slide.engagement.likes}
-        initialLiked={slide.engagement.viewerHasLiked}
-      />
-
-      {/* Same circle and count as Like, but not a button: views only count. */}
+      {/* First, in the same circle as Like; not a button: views only count. */}
       <div className="flex min-w-11 flex-col items-center gap-1 p-0.5">
         <span className={VM_CIRCLE} aria-hidden="true">
           <Eye className={VM_GLYPH} />
@@ -193,6 +183,16 @@ export function ActionRail({ slide, views }: { slide: FeedSlide; views: number }
         </span>
         <span className="sr-only">{views === 1 ? "1 view" : `${views} views`}</span>
       </div>
+
+      <ContentLikeButton
+        key={slide.key}
+        variant="rail"
+        className="vm-like"
+        targetId={slide.id}
+        targetType={slide.targetType}
+        initialLikeCount={slide.engagement.likes}
+        initialLiked={slide.engagement.viewerHasLiked}
+      />
 
       {slide.contact.showMessageButton ? (
         <ContentEnquiryAction

@@ -13,8 +13,8 @@ const CIRCLE =
 
 /**
  * Beside the stage: only what is not shown anywhere else. Contact and the
- * owner live in the contact card; the rail keeps like, share, the owner's map
- * link (only when they added one) and views.
+ * owner live in the contact card; the rail keeps views, like, enquire, share and
+ * the owner's map link (only when they added one).
  */
 export function ImmersiveActionRail({
   slide,
@@ -35,6 +35,24 @@ export function ImmersiveActionRail({
       role="group"
       aria-label="Post actions"
     >
+      {/* First, in the same circle as the others; not a button: views only count. */}
+      <div className="viewer-rail-action flex flex-col items-center gap-1.5">
+        <span className={CIRCLE} aria-hidden="true">
+          <Eye className="h-5 w-5" />
+        </span>
+        <span
+          className="text-xs font-semibold tabular-nums text-[color:var(--viewer-muted)]"
+          aria-hidden="true"
+        >
+          {formatCompactCount(views)}
+        </span>
+        <span className="viewer-action-label" aria-hidden="true">
+          Views
+        </span>
+        <span className="sr-only">
+          {views} {views === 1 ? "view" : "views"}
+        </span>
+      </div>
       <ContentLikeButton
         key={slide.key}
         variant="rail"
@@ -101,27 +119,6 @@ export function ImmersiveActionRail({
         </a>
       ) : null}
 
-      {/* Same circle and count layout as Like, but not a button: views only count. */}
-      <div className="viewer-rail-action flex flex-col items-center gap-1.5">
-        <span
-          className={`${CIRCLE} bg-transparent text-[color:var(--viewer-muted)]`}
-          aria-hidden="true"
-        >
-          <Eye className="h-5 w-5" />
-        </span>
-        <span
-          className="text-xs font-semibold tabular-nums text-[color:var(--viewer-muted)]"
-          aria-hidden="true"
-        >
-          {formatCompactCount(views)}
-        </span>
-        <span className="viewer-action-label" aria-hidden="true">
-          Views
-        </span>
-        <span className="sr-only">
-          {views} {views === 1 ? "view" : "views"}
-        </span>
-      </div>
       <span
         className={
           shareError

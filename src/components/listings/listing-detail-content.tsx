@@ -462,7 +462,6 @@ export function ListingDetailContent({
                   <ListingContactActions
                     listingId={listing.id}
                     listingTitle={listing.title}
-                    contactMethods={listing.contact_methods}
                     sellerPhone={
                       listing.contact_methods?.includes("call") ? (seller?.phone ?? null) : null
                     }

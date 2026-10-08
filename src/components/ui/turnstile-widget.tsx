@@ -39,7 +39,8 @@ interface TurnstileWidgetProps {
   /** Widget theme */
   theme?: "light" | "dark" | "auto";
   /** Widget size */
-  size?: "normal" | "compact";
+  /** "flexible" fills the container width (min 300px) at the short 65px height. */
+  size?: "normal" | "compact" | "flexible";
   /** Additional CSS class */
   className?: string;
   /** Changes when the caller wants to explicitly retry the widget */

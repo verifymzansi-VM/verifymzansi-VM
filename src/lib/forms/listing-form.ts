@@ -123,3 +123,10 @@ export function validateListingAttributes(
 
   return errors;
 }
+
+/** Private inbox enquiries are always on for Market listings, whatever else the seller picks. */
+export const DEFAULT_LISTING_CONTACT_METHODS = ["call", "in_app"];
+
+export function withListingEnquiry(methods: string[]): string[] {
+  return methods.includes("in_app") ? methods : [...methods, "in_app"];
+}

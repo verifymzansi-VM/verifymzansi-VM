@@ -177,45 +177,53 @@ export function ContentEnquiryAction({
               </DialogClose>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="buyer-name">Your name</Label>
-                <Input
-                  id="buyer-name"
-                  autoComplete="name"
-                  maxLength={80}
-                  value={buyerName}
-                  onChange={(e) => setBuyerName(e.target.value)}
-                />
-                <Label htmlFor="buyer-email">Reply email</Label>
-                <Input
-                  id="buyer-email"
-                  type="email"
-                  autoComplete="email"
-                  maxLength={254}
-                  value={buyerEmail}
-                  onChange={(e) => setBuyerEmail(e.target.value)}
-                />
-                <Label htmlFor="buyer-phone">WhatsApp number (optional)</Label>
-                <Input
-                  id="buyer-phone"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder="082 123 4567"
-                  maxLength={20}
-                  value={buyerPhone}
-                  onChange={(e) => setBuyerPhone(e.target.value)}
-                />
+                <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="buyer-name">Your name</Label>
+                    <Input
+                      id="buyer-name"
+                      autoComplete="name"
+                      maxLength={80}
+                      value={buyerName}
+                      onChange={(e) => setBuyerName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="buyer-email">Reply email</Label>
+                    <Input
+                      id="buyer-email"
+                      type="email"
+                      autoComplete="email"
+                      maxLength={254}
+                      value={buyerEmail}
+                      onChange={(e) => setBuyerEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="buyer-phone">WhatsApp number (optional)</Label>
+                  <Input
+                    id="buyer-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="082 123 4567"
+                    maxLength={20}
+                    value={buyerPhone}
+                    onChange={(e) => setBuyerPhone(e.target.value)}
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   These details are shared with the recipient so they can reply.
                 </p>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="contact-message">Your message</Label>
                 <Textarea
                   id="contact-message"
                   placeholder={config.messagePlaceholder}
-                  rows={4}
+                  rows={3}
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   maxLength={1000}
@@ -231,7 +239,7 @@ export function ContentEnquiryAction({
                   setMessageTurnstile("");
                   setMessageError(error);
                 }}
-                size="compact"
+                size="flexible"
               />
 
               {messageError && (
