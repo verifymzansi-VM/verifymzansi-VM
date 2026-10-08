@@ -507,7 +507,7 @@ export function PromotionsExplorer() {
   const tabBaseClasses =
     "inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
   const allTabActiveClasses =
-    "border-primary/40 bg-primary/10 text-primary dark:border-primary/60 dark:bg-primary/20";
+    "border-primary/40 bg-primary/10 text-brand-green-800 dark:border-primary/60 dark:bg-primary/20 dark:text-brand-green-200";
   const tourismTabActiveClasses =
     "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-200";
   const inactiveTabClasses = "border-transparent text-muted-foreground hover:bg-muted/60";

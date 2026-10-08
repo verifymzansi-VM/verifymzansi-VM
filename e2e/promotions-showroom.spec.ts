@@ -38,9 +38,12 @@ test.describe("Promotions showroom", () => {
     const tablist = page.getByRole("tablist", { name: "Tourism & Events sections" });
     await expect(tablist).toBeVisible();
 
-    const tourismTab = tablist.getByRole("tab", { name: "Tourism" });
-    const eventsTab = tablist.getByRole("tab", { name: "Events" });
-    await expect(tourismTab).toHaveAttribute("aria-selected", "true");
+    // "All" (stays, places and events together) is the default tab.
+    const allTab = tablist.getByRole("tab", { name: "All", exact: true });
+    const tourismTab = tablist.getByRole("tab", { name: "Tourism", exact: true });
+    const eventsTab = tablist.getByRole("tab", { name: "Events", exact: true });
+    await expect(allTab).toHaveAttribute("aria-selected", "true");
+    await expect(tourismTab).toHaveAttribute("aria-selected", "false");
     await expect(eventsTab).toHaveAttribute("aria-selected", "false");
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {

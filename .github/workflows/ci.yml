@@ -217,6 +217,8 @@ jobs:
 
   e2e-full-matrix:
     runs-on: ubuntu-latest
+    # A stalled browser install once held this job for 4h+ (run 37674601509).
+    timeout-minutes: 45
     needs:
       [e2e-smoke, launch-flows-bundle, db-rls, payment-kyc-regressions, audit-tooling-platforms]
     strategy:
@@ -241,7 +243,8 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps
+      - run: npx playwright install --with-deps ${{ matrix.project == 'firefox' && 'firefox' || 'chromium' }}
+        timeout-minutes: 10
       - run: pnpm exec playwright test --project ${{ matrix.project }}
       - name: Upload browser test report
         if: always()
