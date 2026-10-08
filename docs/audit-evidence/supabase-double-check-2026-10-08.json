@@ -1,0 +1,243 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-08",
+  "assessment": "WARN",
+  "runId": "2026-10-08T18-51-05-869Z-469a1553",
+  "sourceCommit": "29ef0483fca09ca88b043a74a364d60a94df5867",
+  "changesNotYetCommitted": true,
+  "requiredFailures": [],
+  "checks": [
+    {
+      "id": "format",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "lint",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "types",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "tooling",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "openapi",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "dead-code",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "imports",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "duplication",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "secrets",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "dependencies",
+      "status": "WARN",
+      "required": true,
+      "reason": "pnpm security:audit:all: WARN; inspect tmp\\safety-gate\\2026-10-08T18-51-05-869Z-469a1553\\dependencies.log",
+      "warnings": [
+        "WARN: Registry still lists braces 3.0.3; reviewed upstream depth-guard backport is installed and verified. Raw advisory retained in evidence."
+      ]
+    },
+    {
+      "id": "licenses",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-static",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "contracts",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "canaries",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "unit",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-trials",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-commercial",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-payments",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-media",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-visits",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-staff-roles",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-decisions",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-queue-claims",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-operation-jobs",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-dsar",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-dashboard",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-admin-lists",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "db-kyc",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "coverage",
+      "status": "PASS",
+      "required": true,
+      "warnings": []
+    },
+    {
+      "id": "preflight",
+      "status": "WARN",
+      "required": true,
+      "reason": "pnpm preflight: WARN; inspect tmp\\safety-gate\\2026-10-08T18-51-05-869Z-469a1553\\preflight.log",
+      "warnings": [
+        "  ! R2                  Endpoint reachability is only enforced in production mode.",
+        "  ! Ozow                Non-production mode allows OZOW_ENV=production scope=payments",
+        "  ! Resend              Live Resend API verification is skipped outside production mode.",
+        "  ! Turnstile           Live Turnstile verification is skipped outside production mode."
+      ]
+    },
+    {
+      "id": "codeql",
+      "status": "UNAVAILABLE",
+      "required": false,
+      "reason": "Local CodeQL unavailable; CI requires ENABLE_CODEQL and code-scanning access",
+      "warnings": []
+    }
+  ],
+  "unit": {
+    "files": 570,
+    "tests": 5220
+  },
+  "focused": {
+    "files": 2,
+    "tests": 33,
+    "allTenPostStatuses": true,
+    "columnOnlyPrivateTableGrants": true,
+    "futureServiceRoleAccess": true
+  },
+  "coverage": {
+    "statements": 77.39,
+    "branches": 67.54,
+    "functions": 84.2,
+    "lines": 79.18,
+    "mainPushThresholdsPassed": true
+  },
+  "migration": {
+    "version": "20261008182329",
+    "appliedSqlMatchesLocal": true,
+    "reapplied": false
+  },
+  "securityAdvisor": {
+    "actionable": 0,
+    "reviewedControls": 19,
+    "planBlocked": 1,
+    "attestationErrors": []
+  },
+  "limitations": [
+    "Native breached-password protection retained as plan-blocked by user choice to stay Free",
+    "PostgreSQL upgrade and backup unresolved; no maintenance outage initiated",
+    "Supabase-owned defaults cannot be changed by the project postgres role",
+    "CodeQL unavailable locally and disabled in repository workflow",
+    "Full isolated PostgreSQL/PostgREST tests require Linux CI; Docker unavailable locally"
+  ]
+}

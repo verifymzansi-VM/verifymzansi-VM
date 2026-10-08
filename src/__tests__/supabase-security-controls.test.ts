@@ -57,7 +57,7 @@ describe("exact Supabase security control reviews", () => {
     const attestation = inspectSecurityControls(controls, review);
     expect(attestation.errors).toEqual([]);
     expect(attestation.functions.size).toBe(16);
-    expect(attestation.tables.size).toBe(4);
+    expect(attestation.tables.size).toBe(6);
     const classified = classifySecurityLint(functionLint, "free", controls, review);
     expect(classified.state).toBe("reviewed-control");
     expect(classified.lint).toBe(functionLint);
@@ -187,6 +187,37 @@ describe("exact Supabase security control reviews", () => {
       expect(
         second.rows[0].controls.functions.filter((fn) => fn.name === "staff_role_of")
       ).toHaveLength(2);
+    } finally {
+      await db.close();
+    }
+  });
+  it("detects column-only access on both private post tables", async () => {
+    const db = new PGlite();
+    try {
+      await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated;
+        REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+        CREATE TABLE public.business_private(id integer, secret text);
+        CREATE TABLE public.listing_private(id integer, secret text);
+        ALTER TABLE public.business_private ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.listing_private ENABLE ROW LEVEL SECURITY;`);
+      const initial = (await db.query<{ controls: SecurityControls }>(SECURITY_CONTROL_QUERY))
+        .rows[0].controls;
+      expect(initial.tables).toHaveLength(2);
+      expect(initial.tables.every((table) => !table.anonAccess && !table.authenticatedAccess)).toBe(
+        true
+      );
+      await db.exec(`GRANT SELECT(secret) ON public.business_private TO authenticated;
+        GRANT SELECT(secret) ON public.listing_private TO anon;`);
+      const changed = (await db.query<{ controls: SecurityControls }>(SECURITY_CONTROL_QUERY))
+        .rows[0].controls;
+      expect(changed.tables.find((table) => table.name === "business_private")).toMatchObject({
+        anonAccess: false,
+        authenticatedAccess: true,
+      });
+      expect(changed.tables.find((table) => table.name === "listing_private")).toMatchObject({
+        anonAccess: true,
+        authenticatedAccess: false,
+      });
     } finally {
       await db.close();
     }

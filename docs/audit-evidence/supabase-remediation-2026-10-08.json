@@ -1,0 +1,99 @@
+{
+  "reviewedAt": "2026-10-08",
+  "project": "tnygdgormnofpgjknlhr",
+  "migration": {
+    "version": "20261008182329",
+    "name": "fix_supabase_security_review",
+    "applied": true
+  },
+  "controls": [
+    {
+      "controls": {
+        "mfa_flag": {
+          "mode": "on",
+          "enabled": true
+        },
+        "mfa_audit_recorded": true,
+        "engaged_counter_guard": true,
+        "browser_whole_table_grants": 0
+      }
+    }
+  ],
+  "mfa": {
+    "aal1": [
+      {
+        "staff_aal1_denied": true
+      }
+    ],
+    "aal2": [
+      {
+        "staff_aal2_allowed": true
+      }
+    ]
+  },
+  "defaults": [
+    {
+      "schema": "global",
+      "owner": "postgres",
+      "kind": "f",
+      "grants": "{postgres=X/postgres}"
+    },
+    {
+      "schema": "public",
+      "owner": "postgres",
+      "kind": "S",
+      "grants": "{postgres=rwU/postgres,service_role=rwU/postgres}"
+    },
+    {
+      "schema": "public",
+      "owner": "postgres",
+      "kind": "f",
+      "grants": "{postgres=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "schema": "public",
+      "owner": "postgres",
+      "kind": "r",
+      "grants": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}"
+    },
+    {
+      "schema": "public",
+      "owner": "supabase_admin",
+      "kind": "S",
+      "grants": "{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}"
+    },
+    {
+      "schema": "public",
+      "owner": "supabase_admin",
+      "kind": "f",
+      "grants": "{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}"
+    },
+    {
+      "schema": "public",
+      "owner": "supabase_admin",
+      "kind": "r",
+      "grants": "{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}"
+    }
+  ],
+  "verification": {
+    "focusedTestsPassed": 107,
+    "postEditRemediationAndAttestationTestsPassed": 32,
+    "typecheck": "PASS",
+    "eslint": "PASS",
+    "formatting": "PASS",
+    "schema": "PASS",
+    "fullIsolatedPostgresPostgrest": "INCOMPLETE: Docker unavailable",
+    "strictAdvisor": {
+      "assessment": "FAIL",
+      "actionable": 0,
+      "planBlocked": 1,
+      "reviewedControls": 19,
+      "attestationErrors": []
+    }
+  },
+  "remaining": {
+    "nativePasswordProtection": "User requested staying Free; native enable attempt returned HTTP 402 requiring Pro. Existing app registration/change/reset breach checks passed focused tests.",
+    "postgresUpgrade": "Eligible for 17.11 GA; API estimates one hour downtime. Awaiting maintenance-window approval and verified backup. No upgrade initiated; bounded pg_dump attempt did not complete.",
+    "hostedRoleDefaults": "supabase_admin-owned defaults remain platform-controlled; postgres cannot alter that role's defaults. Application creator postgres defaults are hardened."
+  }
+}

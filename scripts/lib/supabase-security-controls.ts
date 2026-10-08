@@ -34,7 +34,7 @@ SELECT jsonb_build_object(
     'authenticatedAccess',has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
       OR has_any_column_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,REFERENCES')) ORDER BY c.relname)
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner
-    WHERE n.nspname='public' AND c.relname IN ('content_shares','content_views','media_storage_usage','organisation_admin_invites'))
+    WHERE n.nspname='public' AND c.relname IN ('business_private','listing_private','content_shares','content_views','media_storage_usage','organisation_admin_invites'))
 ) AS controls;
 `;
 

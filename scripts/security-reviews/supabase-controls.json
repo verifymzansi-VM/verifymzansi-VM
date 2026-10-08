@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "reviewedAt": "2026-10-04",
-  "rationale": "Reviewed intentional controls, not vulnerability baselines. Browser roles cannot bypass RLS or create public-schema objects. Four service-only tables expose neither table nor column privileges. Public organisation functions return explicit published/eligible projections and bounded directories; staff and organisation helpers scope to auth.uid(); trial eligibility scopes to the authenticated user. All 16 public helper dependencies match the examined migrations, and private role/identity/settings helpers retain service-only grants. Any metadata/body/dependency drift loses attestation. Native password protection remains separately blocking on Free.",
+  "reviewedAt": "2026-10-08",
+  "rationale": "Examined public RPC bodies and complete helper dependencies on 8 October 2026. Organisation administration now rechecks verification and account standing on every call. Six service-only tables have RLS, no policies and no browser table/column privileges. Caller role/organisation/trial helpers are self-scoped; public organisation projections remain bounded and filtered. Attestation requires exact bodies, metadata and grants; native breached-password protection remains independently blocking on Free.",
   "functions": [
     {
       "args": "p_user_id uuid",
@@ -160,8 +160,8 @@
       "publicExecute": false,
       "securityDefiner": true,
       "authenticatedExecute": false,
-      "sourceHash": "W6qLtjRLglaQjptURiyQ7cPvXusnJhKp2FkqEoBvHyc",
-      "migration": "20260925090200_organisations.sql"
+      "sourceHash": "y3BNujHLy3V892qZZDEj_F_cARkLIqdpqE697XaAVvM",
+      "migration": "20261006093026_org_admin_requires_verified.sql"
     },
     {
       "args": "p_org uuid, p_search text, p_category text, p_city text, p_programme uuid, p_sponsored boolean, p_limit integer, p_offset integer, p_province text, p_type text, p_subcategory text",
@@ -264,6 +264,15 @@
     {
       "rls": true,
       "kind": "r",
+      "name": "business_private",
+      "owner": "postgres",
+      "anonAccess": false,
+      "policyCount": 0,
+      "authenticatedAccess": false
+    },
+    {
+      "rls": true,
+      "kind": "r",
       "name": "content_shares",
       "owner": "postgres",
       "anonAccess": false,
@@ -274,6 +283,15 @@
       "rls": true,
       "kind": "r",
       "name": "content_views",
+      "owner": "postgres",
+      "anonAccess": false,
+      "policyCount": 0,
+      "authenticatedAccess": false
+    },
+    {
+      "rls": true,
+      "kind": "r",
+      "name": "listing_private",
       "owner": "postgres",
       "anonAccess": false,
       "policyCount": 0,
