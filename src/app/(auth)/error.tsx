@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 
 export default function AuthError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[AuthError]", error.digest ?? error.message);
@@ -41,7 +41,7 @@ export default function AuthError({
           variant="trust-verified"
           size="lg"
           className="h-11 w-full gap-2 text-[15px]"
-          onClick={() => reset()}
+          onClick={() => retry()}
         >
           <RefreshCw className="h-4 w-4" aria-hidden="true" />
           Try again

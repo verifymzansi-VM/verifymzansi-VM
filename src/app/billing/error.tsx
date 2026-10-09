@@ -7,10 +7,10 @@ import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export default function BillingError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[BillingError]", error.digest ?? error.message);
@@ -48,7 +48,7 @@ export default function BillingError({
           <Button
             variant="trust-verified"
             className="h-11 rounded-full px-6"
-            onClick={() => reset()}
+            onClick={() => retry()}
           >
             Try again
           </Button>

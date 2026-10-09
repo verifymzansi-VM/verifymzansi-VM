@@ -1,5 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { isReservedDisplayName, profileUpdateSchema } from "@/lib/validations/profile";
+import {
+  isAvatarStorageUrl,
+  isReservedDisplayName,
+  profileUpdateSchema,
+} from "@/lib/validations/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
@@ -71,11 +75,7 @@ export async function POST(request: NextRequest) {
     // The schema limits avatars to our avatars bucket; the file must also be
     // in the caller's own folder, not another member's picture.
     const requestedAvatar = parsedBody.data.avatarUrl;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-    if (
-      requestedAvatar &&
-      !requestedAvatar.startsWith(`${supabaseUrl}/storage/v1/object/public/avatars/${user.id}/`)
-    ) {
+    if (requestedAvatar && !isAvatarStorageUrl(requestedAvatar, user.id)) {
       return NextResponse.json({ error: "Invalid avatar URL" }, { status: 400 });
     }
 
@@ -169,9 +169,10 @@ export async function POST(request: NextRequest) {
     // Locked fields are silently excluded so a user saving only their bio
     // is never blocked by locks set on other fields.  The DB trigger
     // provides defence-in-depth against direct bypass attempts.
-    const updatePayload: Record<string, unknown> = {
-      bio: parsedBody.data.bio || null,
-    };
+    const updatePayload: Record<string, unknown> = {};
+    if (parsedBody.data.bio !== undefined) {
+      updatePayload.bio = parsedBody.data.bio || null;
+    }
 
     // display_name: writable only before legal name is locked from verified ID
     if (!policyProfile?.legal_name_locked_at) {
@@ -187,8 +188,12 @@ export async function POST(request: NextRequest) {
 
     // location: writable only before location is verified
     if (!policyProfile?.location_verified_at) {
-      updatePayload.location_province = parsedBody.data.province || null;
-      updatePayload.location_city = parsedBody.data.city || null;
+      if (parsedBody.data.province !== undefined) {
+        updatePayload.location_province = parsedBody.data.province || null;
+      }
+      if (parsedBody.data.city !== undefined) {
+        updatePayload.location_city = parsedBody.data.city || null;
+      }
     }
 
     const nextLocationProvince =

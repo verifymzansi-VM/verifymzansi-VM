@@ -62,7 +62,8 @@ export function getDefaultDisplayName(user: {
 
 /**
  * Look up the user's account profile; if none exists, auto-create one via
- * upsert so the user isn't blocked by a missing row.
+ * insert so the user isn't blocked by a missing row. A creation race is re-read;
+ * existing verification and account standing must never be reset by recovery.
  *
  * Returns `{ id: string }` on success, or `null` if the auto-create fails.
  */
@@ -72,68 +73,83 @@ export async function ensureAccountProfile(
   user: MinimalUser
 ): Promise<{ id: string; display_name: string } | null> {
   const resolvedDisplayName = getDefaultDisplayName(user);
-  const { data: existing } = await admin
-    .from(ACCOUNT_PROFILE_TABLE)
-    .select("id, display_name")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  for (let readAttempt = 0; readAttempt < 2; readAttempt += 1) {
+    const { data: existing, error: lookupError } = await admin
+      .from(ACCOUNT_PROFILE_TABLE)
+      .select("id, display_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (existing) {
-    const existingDisplayName = normalizeDisplayNameValue(existing.display_name);
-    const shouldRepairPlaceholder =
-      existingDisplayName === "New Member" && resolvedDisplayName !== "New Member";
-
-    if (existingDisplayName && !shouldRepairPlaceholder) {
-      return {
-        id: existing.id,
-        display_name: existingDisplayName,
-      };
+    if (lookupError) {
+      log.error("Failed to read account profile before recovery", {
+        userId: user.id,
+        error: lookupError.message,
+        code: lookupError.code,
+      });
+      return null;
     }
 
-    const { data: repaired, error: repairError } = await admin
+    if (existing) {
+      const existingDisplayName = normalizeDisplayNameValue(existing.display_name);
+      const shouldRepairPlaceholder =
+        existingDisplayName === "New Member" && resolvedDisplayName !== "New Member";
+
+      if (existingDisplayName && !shouldRepairPlaceholder) {
+        return {
+          id: existing.id,
+          display_name: existingDisplayName,
+        };
+      }
+
+      const { data: repaired, error: repairError } = await admin
+        .from(ACCOUNT_PROFILE_TABLE)
+        .update({ display_name: resolvedDisplayName })
+        .eq("id", existing.id)
+        .eq("user_id", user.id)
+        .select("id, display_name")
+        .single();
+
+      if (repairError || !repaired) {
+        log.error("Failed to repair account profile display name", {
+          error: repairError?.message,
+          userId: user.id,
+        });
+        return null;
+      }
+
+      log.info("Repaired missing account profile display name", { userId: user.id });
+      return repaired as { id: string; display_name: string };
+    }
+
+    if (readAttempt > 0) {
+      log.error("Concurrent account profile creation could not be resolved", { userId: user.id });
+      return null;
+    }
+    const { data: created, error: createError } = await admin
       .from(ACCOUNT_PROFILE_TABLE)
-      .update({ display_name: resolvedDisplayName })
-      .eq("id", existing.id)
-      .eq("user_id", user.id)
+      .insert({
+        user_id: user.id,
+        display_name: resolvedDisplayName,
+        account_verification_status: "incomplete",
+        account_status: "active",
+      })
       .select("id, display_name")
       .single();
 
-    if (repairError || !repaired) {
-      log.error("Failed to repair account profile display name", {
-        error: repairError?.message,
+    if (createError?.code === "23505") continue;
+
+    if (createError || !created) {
+      log.error("Failed to auto-create account profile", {
+        error: createError?.message,
         userId: user.id,
       });
       return null;
     }
 
-    log.info("Repaired missing account profile display name", { userId: user.id });
-    return repaired as { id: string; display_name: string };
+    log.info("Auto-created missing account profile", { userId: user.id });
+    return created as { id: string; display_name: string };
   }
-
-  const { data: created, error: createError } = await admin
-    .from(ACCOUNT_PROFILE_TABLE)
-    .upsert(
-      {
-        user_id: user.id,
-        display_name: resolvedDisplayName,
-        account_verification_status: "incomplete",
-        account_status: "active",
-      },
-      { onConflict: "user_id" }
-    )
-    .select("id, display_name")
-    .single();
-
-  if (createError || !created) {
-    log.error("Failed to auto-create account profile", {
-      error: createError?.message,
-      userId: user.id,
-    });
-    return null;
-  }
-
-  log.info("Auto-created missing account profile", { userId: user.id });
-  return created as { id: string; display_name: string };
+  return null;
 }
 
 export function resolveAccountDisplayName(options: {

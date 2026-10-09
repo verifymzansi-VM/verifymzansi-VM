@@ -1,0 +1,586 @@
+{
+  "schemaVersion": 1,
+  "followup_review": {
+    "applied": true,
+    "migration_version": "20261008235202",
+    "findings_fixed": [
+      "Post-view totals inherited a missing upper time bound. Added created_at <= the transaction timestamp and independent assertions for future rows and SAST boundaries.",
+      "Dashboard classified repeated paths per visit. Classify each distinct eligible-period path once before aggregating visits.",
+      "Traffic domain gate only replayed older migrations. It now loads current traffic functions and both query-optimization migrations."
+    ],
+    "checks": {
+      "focused_test_files": 5,
+      "focused_tests": 28,
+      "passed": true,
+      "traffic_domain_gate": "PASS (12,400 visitors)",
+      "typecheck": "PASS",
+      "eslint": "PASS",
+      "migration_invariants": "PASS",
+      "live_postgrest": {
+        "service_role_traffic_rpc": "PASS",
+        "service_role_counts_rpc": "PASS (5 types, duplicate/null IDs)",
+        "anonymous_rpc_denial": "PASS (2 RPCs)",
+        "writes": 0
+      },
+      "deployed_dashboard_body_matches_file": true,
+      "live_totals_unchanged": true,
+      "live_future_view_rows": 0,
+      "acl": [
+        {
+          "anon": false,
+          "owner": "postgres",
+          "function": "get_content_view_counts",
+          "search_path": ["search_path=pg_catalog, public"],
+          "service_role": true,
+          "authenticated": false,
+          "security_definer": true
+        },
+        {
+          "anon": false,
+          "owner": "postgres",
+          "function": "get_site_visit_stats",
+          "search_path": ["search_path=pg_catalog, public"],
+          "service_role": true,
+          "authenticated": false,
+          "security_definer": true
+        }
+      ],
+      "index_valid": true,
+      "prepared_counts": "1,000 existing IDs from a 20,000-row fixture under forced custom/generic plans"
+    },
+    "dashboard_samples": [
+      {
+        "variant": "current",
+        "planning_ms": 2.084,
+        "execution_ms": 30.379,
+        "shared_hit_blocks": 209,
+        "temp_written_blocks": 0
+      },
+      {
+        "variant": "candidate",
+        "planning_ms": 2.242,
+        "execution_ms": 9.754,
+        "shared_hit_blocks": 209,
+        "temp_written_blocks": 0
+      },
+      {
+        "variant": "current",
+        "planning_ms": 2.32,
+        "execution_ms": 34.165,
+        "shared_hit_blocks": 209,
+        "temp_written_blocks": 0
+      },
+      {
+        "variant": "candidate",
+        "planning_ms": 2.499,
+        "execution_ms": 10.536,
+        "shared_hit_blocks": 209,
+        "temp_written_blocks": 0
+      }
+    ],
+    "performance_scope": "Query-body samples include planning and execution separately; these do not establish end-to-end application latency. Initial 89% buffer-access reduction remains a single 101-ID mixed hit/miss benchmark.",
+    "remaining_advisors": {
+      "performance": [
+        {
+          "name": "unused_index",
+          "count": 57,
+          "level": "INFO",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index"
+        }
+      ],
+      "security": [
+        {
+          "name": "rls_enabled_no_policy",
+          "count": 6,
+          "level": "INFO",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+        },
+        {
+          "name": "anon_security_definer_function_executable",
+          "count": 6,
+          "level": "WARN",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable"
+        },
+        {
+          "name": "authenticated_security_definer_function_executable",
+          "count": 7,
+          "level": "WARN",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+        },
+        {
+          "name": "auth_leaked_password_protection",
+          "count": 1,
+          "level": "WARN",
+          "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+        }
+      ]
+    }
+  },
+  "project": "tnygdgormnofpgjknlhr",
+  "client_date": "2026-10-09",
+  "migration_version": "20261008234338",
+  "applied": true,
+  "changes": [
+    "Group daily traffic before joining the 14-day series",
+    "Batch primary-key lookups for content counts",
+    "Partial covering index on analytics_events(surface, created_at DESC) INCLUDE(content_id) WHERE event_type='showroom_appearance'",
+    "ANALYZE analytics_events after the migration"
+  ],
+  "validation": {
+    "unit_and_database_regressions": {
+      "files": 4,
+      "tests": 20,
+      "passed": true
+    },
+    "deployed_counts_equivalence": [
+      {
+        "type": "listing",
+        "equivalent": true
+      },
+      {
+        "type": "business",
+        "equivalent": true
+      },
+      {
+        "type": "promotion",
+        "equivalent": true
+      },
+      {
+        "type": "unknown",
+        "equivalent": true
+      },
+      {
+        "type": null,
+        "equivalent": true
+      }
+    ],
+    "typecheck": "passed",
+    "eslint": "passed",
+    "live_dashboard_and_acls": {
+      "dashboard_equivalent": true,
+      "acl": [
+        {
+          "function": "get_content_view_counts",
+          "search_path": ["search_path=pg_catalog, public"],
+          "anon_execute": false,
+          "service_execute": true,
+          "authenticated_execute": false
+        },
+        {
+          "function": "get_site_visit_stats",
+          "search_path": ["search_path=pg_catalog, public"],
+          "anon_execute": false,
+          "service_execute": true,
+          "authenticated_execute": false
+        }
+      ],
+      "new_index_bytes": 155648
+    },
+    "live_counts_equivalence": [
+      {
+        "type": "listing",
+        "equivalent": true
+      },
+      {
+        "type": "business",
+        "equivalent": true
+      },
+      {
+        "type": "promotion",
+        "equivalent": true
+      },
+      {
+        "type": "unknown",
+        "equivalent": true
+      },
+      {
+        "type": null,
+        "equivalent": true
+      }
+    ]
+  },
+  "benchmarks": {
+    "note": "Single read-only EXPLAIN ANALYZE samples on live data. Timing varies with cache, load and function planning; these are not production latency guarantees. Counts benchmark includes real IDs plus 90 missing IDs.",
+    "count_batch_size": 101,
+    "counts_original": {
+      "execution_ms": 0.939,
+      "planning_ms": 2.877,
+      "shared_hit_blocks": 112,
+      "shared_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "scans": [
+        {
+          "node": "Index Scan",
+          "relation": "businesses",
+          "index": "businesses_pkey",
+          "loops": 101,
+          "rows": 0
+        }
+      ]
+    },
+    "counts_rewrite": {
+      "execution_ms": 0.353,
+      "planning_ms": 31.818,
+      "shared_hit_blocks": 12,
+      "shared_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "scans": [
+        {
+          "node": "CTE Scan",
+          "relation": "requested",
+          "loops": 1,
+          "rows": 101
+        },
+        {
+          "node": "Bitmap Heap Scan",
+          "relation": "businesses",
+          "loops": 1,
+          "rows": 11
+        }
+      ]
+    },
+    "dashboard_original_body": {
+      "execution_ms": 40.085,
+      "planning_ms": 1.91,
+      "shared_hit_blocks": 206,
+      "shared_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "scans": [
+        {
+          "node": "Bitmap Heap Scan",
+          "relation": "staff_roles",
+          "loops": 1,
+          "rows": 10
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "Index Scan",
+          "relation": "site_visits",
+          "index": "site_visits_created_at_idx",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "staff",
+          "loops": 1,
+          "rows": 10
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "Index Scan",
+          "relation": "content_views",
+          "index": "content_views_created_idx",
+          "loops": 1,
+          "rows": 188
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "views",
+          "loops": 1,
+          "rows": 188
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 14,
+          "rows": 54
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 14,
+          "rows": 54
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "views",
+          "loops": 14,
+          "rows": 13
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        }
+      ]
+    },
+    "dashboard_rewritten_body": {
+      "execution_ms": 30.438,
+      "planning_ms": 2.082,
+      "shared_hit_blocks": 209,
+      "shared_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "scans": [
+        {
+          "node": "Bitmap Heap Scan",
+          "relation": "staff_roles",
+          "loops": 1,
+          "rows": 10
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "Index Scan",
+          "relation": "site_visits",
+          "index": "site_visits_created_at_idx",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "staff",
+          "loops": 1,
+          "rows": 10
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "Index Scan",
+          "relation": "content_views",
+          "index": "content_views_created_idx",
+          "loops": 1,
+          "rows": 188
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "views",
+          "loops": 1,
+          "rows": 188
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "view_totals",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "views",
+          "loops": 1,
+          "rows": 188
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "bounds",
+          "loops": 1,
+          "rows": 1
+        },
+        {
+          "node": "CTE Scan",
+          "relation": "visits",
+          "loops": 1,
+          "rows": 1030
+        }
+      ]
+    },
+    "showroom_before": {
+      "execution_ms": 21.105,
+      "planning_ms": 0.724,
+      "shared_hit_blocks": 92,
+      "shared_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "scans": [
+        {
+          "node": "Index Scan",
+          "relation": "analytics_events",
+          "index": "idx_analytics_events_type_surface_created",
+          "loops": 1,
+          "rows": 346
+        }
+      ]
+    },
+    "showroom_after_analyze": {
+      "execution_ms": 1.165,
+      "planning_ms": 3.475,
+      "shared_hit_blocks": 87,
+      "shared_read_blocks": 0,
+      "temp_written_blocks": 0,
+      "scans": [
+        {
+          "node": "Index Only Scan",
+          "relation": "analytics_events",
+          "index": "idx_analytics_showroom_surface_created_cover",
+          "loops": 1,
+          "rows": 346,
+          "heap_fetches": 304
+        }
+      ]
+    }
+  },
+  "advisors": {
+    "performance": [
+      {
+        "name": "unused_index",
+        "level": "INFO",
+        "count": 58,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index"
+      }
+    ],
+    "security": [
+      {
+        "name": "rls_enabled_no_policy",
+        "level": "INFO",
+        "count": 6,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+      },
+      {
+        "name": "anon_security_definer_function_executable",
+        "level": "WARN",
+        "count": 6,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable"
+      },
+      {
+        "name": "authenticated_security_definer_function_executable",
+        "level": "WARN",
+        "count": 7,
+        "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable"
+      },
+      {
+        "name": "auth_leaked_password_protection",
+        "level": "WARN",
+        "count": 1,
+        "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection"
+      }
+    ],
+    "note": "Unused indexes retained: zero scans alone do not justify dropping foreign-key support or retention indexes. Advisor may lag cumulative scan statistics for the new index. Existing security notices remain; optimized RPCs deny anon/authenticated."
+  },
+  "references": [
+    "https://supabase.com/docs/guides/observability/inspect",
+    "https://supabase.com/docs/guides/database/postgres/indexes",
+    "https://supabase.com/docs/guides/database/extensions/hypopg"
+  ]
+}

@@ -172,4 +172,37 @@ describe("fetchWithRetry", () => {
     await expect(promise).rejects.toThrow("The operation was aborted");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("honours cancellation carried by a Request input", async () => {
+    const controller = new AbortController();
+    const input = new Request("https://example.test/upload", { signal: controller.signal });
+    vi.mocked(fetch).mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+            once: true,
+          });
+        })
+    );
+    const promise = fetchWithRetry(input, undefined, 2, 1000).catch((error: unknown) => error);
+    controller.abort(new Error("cancelled"));
+    await vi.runAllTimersAsync();
+    expect(await promise).toEqual(new Error("cancelled"));
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels retry backoff promptly without another upload attempt", async () => {
+    const controller = new AbortController();
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    const promise = fetchWithRetry("/api/media/upload", { signal: controller.signal }).catch(
+      (error: unknown) => error
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort(new Error("cancelled"));
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.runAllTimersAsync();
+    expect(await promise).toEqual(new Error("cancelled"));
+    expect(vi.getTimerCount()).toBe(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

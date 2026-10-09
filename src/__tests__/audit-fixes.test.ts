@@ -136,41 +136,27 @@ describe("OTP verifyOtp — timing-safe comparison", () => {
 
     const storedHash = `${salt}:${hashHex}`;
 
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "otp_challenges") {
-        return {
-          select: () => ({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockReturnValue({
-                  gte: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: () =>
-                          Promise.resolve({
-                            data: {
-                              id: "challenge-1",
-                              otp_hash: storedHash,
-                              attempt_count: 0,
-                              locked_until: null,
-                              expires_at: new Date(Date.now() + 300000).toISOString(),
-                            },
-                            error: null,
-                          }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      return { from: vi.fn() };
-    });
+    mockAdminFrom.mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          id: "challenge-1",
+          otp_hash: storedHash,
+          attempt_count: 0,
+          locked_until: null,
+          expires_at: new Date(Date.now() + 300000).toISOString(),
+          verified_at: null,
+        },
+        error: null,
+      }),
+    }));
 
     mockAdminRpc.mockResolvedValue({
-      data: [{ new_locked_until: null }],
+      data: [{ new_attempt_count: 1, new_locked_until: null }],
       error: null,
     });
 
@@ -243,38 +229,24 @@ describe("OTP verifyOtp — timing-safe comparison", () => {
 
     const storedHash = `${salt}:${hashHex}`;
 
-    mockAdminFrom.mockImplementation((table: string) => {
-      if (table === "otp_challenges") {
-        return {
-          select: () => ({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockReturnValue({
-                  gte: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: () =>
-                          Promise.resolve({
-                            data: {
-                              id: "challenge-1",
-                              otp_hash: storedHash,
-                              attempt_count: 0,
-                              locked_until: null,
-                              expires_at: new Date(Date.now() + 300000).toISOString(),
-                            },
-                            error: null,
-                          }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      return { from: vi.fn() };
-    });
+    mockAdminFrom.mockImplementation(() => ({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      gte: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          id: "challenge-1",
+          otp_hash: storedHash,
+          attempt_count: 0,
+          locked_until: null,
+          expires_at: new Date(Date.now() + 300000).toISOString(),
+          verified_at: null,
+        },
+        error: null,
+      }),
+    }));
 
     // RPC fails
     mockAdminRpc.mockResolvedValue({

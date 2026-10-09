@@ -9,10 +9,10 @@ import { PRIVACY_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export default function DsarError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[DsarError]", error.digest ?? error.message);
@@ -41,7 +41,7 @@ export default function DsarError({
             .
           </p>
           <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
-            <Button variant="trust-verified" className="h-11" onClick={() => reset()}>
+            <Button variant="trust-verified" className="h-11" onClick={() => retry()}>
               Try again
             </Button>
             <Button

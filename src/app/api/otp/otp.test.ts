@@ -132,15 +132,7 @@ function createSendAdminQuery(
 
 type MockDbError = { code?: string; message: string } | null;
 
-/**
- * Admin client for the verify route. Models:
- * - the active-challenge lookup,
- * - the increment_otp_attempt RPC that reserves an attempt before comparing,
- * - the atomic claim (update → eq → is → select → maybeSingle),
- * - the sibling-challenge invalidation (update → eq → eq → is → neq),
- * - ensureAccountProfile + the single admin profile update scoped by id and user_id,
- * - verification_steps / verification_sessions upserts and the otp_logs sync.
- */
+/** The route reserves a guess, compares PBKDF2, then invokes one transactional RPC. */
 function buildVerifyAdmin(options: {
   storedHash: string;
   attemptCount?: number | null;
@@ -151,66 +143,64 @@ function buildVerifyAdmin(options: {
   profileUpdateError?: MockDbError;
   stepsError?: MockDbError;
   sessionError?: MockDbError;
+  phoneChanged?: boolean;
+  verifiedAt?: string;
+  finalizationData?: unknown;
+  finalizationError?: MockDbError;
+  lookupError?: MockDbError;
 }) {
-  const challengeRow = {
-    id: "challenge-1",
-    otp_hash: options.storedHash,
-    attempt_count: 0,
-    locked_until: null,
-    expires_at: new Date(Date.now() + 60_000).toISOString(),
-  };
-
-  const rpc = vi.fn().mockResolvedValue(
-    options.rpcError
-      ? { data: null, error: options.rpcError }
-      : {
-          data: [
-            {
-              new_attempt_count: options.attemptCount === undefined ? 1 : options.attemptCount,
-              new_locked_until: null,
-            },
-          ],
-          error: null,
-        }
-  );
-
-  const claimMaybeSingle = vi.fn().mockResolvedValue({
-    data: options.claimed === false ? null : { id: "challenge-1" },
-    error: null,
+  const rpc = vi.fn(async (name: string) => {
+    if (name === "increment_otp_attempt")
+      return options.rpcError
+        ? { data: null, error: options.rpcError }
+        : {
+            data: [
+              {
+                new_attempt_count: options.attemptCount === undefined ? 1 : options.attemptCount,
+                new_locked_until: null,
+              },
+            ],
+            error: null,
+          };
+    if (name !== "finalize_otp_phone_verification") throw new Error("Unexpected RPC");
+    const error =
+      options.finalizationError ??
+      options.profileUpdateError ??
+      options.stepsError ??
+      options.sessionError ??
+      null;
+    return {
+      data: error
+        ? null
+        : options.finalizationData === undefined
+          ? {
+              outcome:
+                options.claimed === false
+                  ? "invalid_challenge"
+                  : options.verifiedAt
+                    ? "already_verified"
+                    : "verified",
+              phone_changed: options.phoneChanged ?? false,
+            }
+          : options.finalizationData,
+      error,
+    };
   });
-  const claimSelect = vi.fn().mockReturnValue({ maybeSingle: claimMaybeSingle });
-  const siblingNeq = vi.fn().mockResolvedValue({ error: null });
-  const challengeUpdate = vi.fn().mockImplementation(() => {
-    const chain: Record<string, unknown> = {};
-    chain.eq = vi.fn().mockReturnValue(chain);
-    chain.is = vi.fn().mockReturnValue({ select: claimSelect, neq: siblingNeq });
-    return chain;
-  });
-
-  const existingProfile =
-    options.existingProfile === undefined
-      ? { id: "profile-1", display_name: "Member" }
-      : options.existingProfile;
-  const profileUpsertSingle = vi.fn().mockResolvedValue({
+  const challengeUpdate = vi.fn();
+  const profileUpdate = vi.fn();
+  const verificationStepUpsert = vi.fn();
+  const sessionUpsert = vi.fn();
+  const profileIdEq = vi.fn();
+  const profileUserEq = vi.fn();
+  const profileInsertSingle = vi.fn().mockResolvedValue({
     data: { id: options.createdProfileId ?? "profile-created", display_name: "New Member" },
     error: null,
   });
-  const profileUpsert = vi.fn().mockReturnValue({
-    select: vi.fn().mockReturnValue({ single: profileUpsertSingle }),
-  });
-  const profileUserEq = vi.fn().mockResolvedValue({ error: options.profileUpdateError ?? null });
-  const profileIdEq = vi.fn().mockReturnValue({ eq: profileUserEq });
-  const profileUpdate = vi.fn().mockReturnValue({ eq: profileIdEq });
-
-  const verificationStepUpsert = vi.fn().mockResolvedValue({ error: options.stepsError ?? null });
-  const sessionUpsert = vi.fn().mockResolvedValue({ error: options.sessionError ?? null });
-
-  const otpLogVerifyIs = vi.fn().mockResolvedValue({ error: null });
-  const otpLogVerifyHashEq = vi.fn().mockReturnValue({ is: otpLogVerifyIs });
-  const otpLogVerifyPhoneEq = vi.fn().mockReturnValue({ eq: otpLogVerifyHashEq });
-
+  const profileInsert = vi
+    .fn()
+    .mockReturnValue({ select: vi.fn().mockReturnValue({ single: profileInsertSingle }) });
   const from = vi.fn((table: string) => {
-    if (table === "otp_challenges") {
+    if (table === "otp_challenges")
       return {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -218,57 +208,52 @@ function buildVerifyAdmin(options: {
         gte: vi.fn().mockReturnThis(),
         order: vi.fn().mockReturnThis(),
         limit: vi.fn().mockReturnThis(),
-        maybeSingle: vi.fn().mockResolvedValue({ data: challengeRow, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "challenge-1",
+            otp_hash: options.storedHash,
+            attempt_count: 0,
+            locked_until: null,
+            expires_at: new Date(Date.now() + 60_000).toISOString(),
+            verified_at: options.verifiedAt ?? null,
+          },
+          error: options.lookupError ?? null,
+        }),
         update: challengeUpdate,
       };
-    }
-
-    if (table === ACCOUNT_PROFILE_WRITE_TABLE) {
+    if (table === ACCOUNT_PROFILE_WRITE_TABLE)
       return {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: existingProfile, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data:
+                options.existingProfile === undefined
+                  ? { id: "profile-1", display_name: "Member" }
+                  : options.existingProfile,
+              error: null,
+            }),
           }),
         }),
-        upsert: profileUpsert,
+        insert: profileInsert,
         update: profileUpdate,
       };
-    }
-
-    if (table === "verification_steps") {
-      return { upsert: verificationStepUpsert };
-    }
-
-    if (table === "verification_sessions") {
-      return { upsert: sessionUpsert };
-    }
-
-    if (table === "otp_logs") {
-      return { update: vi.fn().mockReturnValue({ eq: otpLogVerifyPhoneEq }) };
-    }
-
+    if (table === "verification_steps") return { upsert: verificationStepUpsert };
+    if (table === "verification_sessions") return { upsert: sessionUpsert };
     return {};
   });
-
   const admin = { from, rpc };
   vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
   return {
     admin,
     rpc,
     challengeUpdate,
-    claimMaybeSingle,
-    siblingNeq,
-    profileUpsert,
-    profileUpsertSingle,
+    profileInsert,
+    profileInsertSingle,
     profileUpdate,
     profileIdEq,
     profileUserEq,
     verificationStepUpsert,
     sessionUpsert,
-    otpLogVerifyPhoneEq,
-    otpLogVerifyHashEq,
-    otpLogVerifyIs,
   };
 }
 
@@ -679,6 +664,20 @@ describe("OTP Routes", () => {
       expect(createAdminClient).not.toHaveBeenCalled();
     });
 
+    it("reports challenge lookup outages as retryable without consuming a guess", async () => {
+      const mocks = buildVerifyAdmin({
+        storedHash: await hashOtpForTest("123456"),
+        lookupError: { message: "internal database failure" },
+      });
+      const response = await verifyOtp(
+        createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+      );
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain("internal database failure");
+      expect(mocks.rpc).not.toHaveBeenCalled();
+      expect(smsService.sendSms).not.toHaveBeenCalled();
+    });
+
     it("returns 400 when the challenge was consumed by a concurrent verify request", async () => {
       const storedHash = await hashOtpForTest("123456");
       const mocks = buildVerifyAdmin({ storedHash, claimed: false });
@@ -690,76 +689,36 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(400);
       expect(data.error).toBe("Invalid or expired OTP");
-      expect(mocks.claimMaybeSingle).toHaveBeenCalled();
+      expect(mocks.rpc).toHaveBeenCalledWith("finalize_otp_phone_verification", expect.anything());
       expect(mocks.profileUpdate).not.toHaveBeenCalled();
       expect(smsService.sendSms).not.toHaveBeenCalled();
     });
 
-    it("returns 400 when the fallback claim path cannot confirm verified_at was stamped", async () => {
-      const storedHash = await hashOtpForTest("123456");
-
-      // Track eq filters so the claim re-read can honour the CAS filter
-      // (verified_at = nowIso). A zero-row update means no row matches, so the
-      // re-read must return null rather than the unclaimed row.
-      const eqFilters: Array<[string, unknown]> = [];
-      const mockAdminClient = {
-        rpc: vi.fn().mockResolvedValue({
-          data: [{ new_attempt_count: 1, new_locked_until: null }],
-          error: null,
-        }),
-        from: vi.fn((table: string) => {
-          if (table === "otp_challenges") {
-            return {
-              select: vi.fn().mockReturnThis(),
-              eq: vi.fn().mockImplementation((col: string, val: unknown) => {
-                eqFilters.push([col, val]);
-                return mockAdminClient.from("otp_challenges");
-              }),
-              is: vi.fn().mockReturnThis(),
-              gte: vi.fn().mockReturnThis(),
-              order: vi.fn().mockReturnThis(),
-              limit: vi.fn().mockReturnThis(),
-              maybeSingle: vi.fn().mockImplementation(() => {
-                // If the query filters on verified_at (the CAS claim re-read),
-                // the zero-row update means no row matches → return null.
-                const filtersOnVerifiedAt = eqFilters.some(([col]) => col === "verified_at");
-                if (filtersOnVerifiedAt) {
-                  return Promise.resolve({ data: null, error: null });
-                }
-                return Promise.resolve({
-                  data: {
-                    id: "challenge-1",
-                    otp_hash: storedHash,
-                    attempt_count: 0,
-                    locked_until: null,
-                    expires_at: new Date(Date.now() + 60_000).toISOString(),
-                    verified_at: null,
-                  },
-                  error: null,
-                });
-              }),
-              // Claim builder without .select() — forces the fallback path.
-              update: vi.fn().mockImplementation(() => {
-                const chain: Record<string, unknown> = {};
-                chain.eq = vi.fn().mockReturnValue(chain);
-                chain.is = vi.fn().mockResolvedValue({ error: null });
-                return chain;
-              }),
-            };
-          }
-
-          return {};
-        }),
-      };
-      vi.mocked(createAdminClient).mockReturnValue(mockAdminClient as never);
-
+    it.each([null, {}, { outcome: "unexpected" }])(
+      "fails closed on malformed finalization result %j",
+      async (data) => {
+        const mocks = buildVerifyAdmin({
+          storedHash: await hashOtpForTest("123456"),
+          finalizationData: data,
+        });
+        const res = await verifyOtp(
+          createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
+        );
+        expect(res.status).toBe(503);
+        expect(mocks.profileUpdate).not.toHaveBeenCalled();
+        expect(smsService.sendSms).not.toHaveBeenCalled();
+      }
+    );
+    it("retries a committed verification without sending duplicate notices", async () => {
+      const mocks = buildVerifyAdmin({
+        storedHash: await hashOtpForTest("123456"),
+        verifiedAt: new Date().toISOString(),
+      });
       const res = await verifyOtp(
         createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
       );
-      const data = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(data.error).toBe("Invalid or expired OTP");
+      expect(res.status).toBe(200);
+      expect(mocks.rpc).not.toHaveBeenCalledWith("increment_otp_attempt", expect.anything());
       expect(smsService.sendSms).not.toHaveBeenCalled();
     });
 
@@ -891,7 +850,10 @@ describe("OTP Routes", () => {
         );
 
         expect(res.status).toBe(200);
-        expect(mocks.profileUpdate).toHaveBeenCalledTimes(1);
+        expect(mocks.rpc).toHaveBeenCalledWith(
+          "finalize_otp_phone_verification",
+          expect.anything()
+        );
       });
 
       it("emails the account owner when a verified phone is replaced", async () => {
@@ -911,7 +873,11 @@ describe("OTP Routes", () => {
             }),
           }),
         }));
-        buildVerifyAdmin({ storedHash: await hashOtpForTest("123456"), attemptCount: 1 });
+        buildVerifyAdmin({
+          storedHash: await hashOtpForTest("123456"),
+          attemptCount: 1,
+          phoneChanged: true,
+        });
 
         const res = await verifyOtp(
           createMockRequest("/api/otp/verify", { phone: "+27821234567", otp: "123456" })
@@ -987,27 +953,15 @@ describe("OTP Routes", () => {
         max_attempts: 5,
         lockout_duration: "15 minutes",
       });
-      expect(mocks.profileIdEq).toHaveBeenCalledWith("id", "profile-1");
-      expect(mocks.profileUserEq).toHaveBeenCalledWith("user_id", "user-1");
-      expect(mocks.verificationStepUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: "user-1",
-          step_type: "phone",
-          status: "approved",
-        }),
-        { onConflict: "user_id,step_type" }
-      );
-      expect(mocks.sessionUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: "user-1",
-          phone_verified_at: expect.any(String),
-        }),
-        { onConflict: "user_id" }
-      );
-      expect(mocks.otpLogVerifyPhoneEq).toHaveBeenCalledWith("phone", "+27821234567");
-      expect(mocks.otpLogVerifyHashEq).toHaveBeenCalledWith("otp_hash", storedHash);
-      expect(mocks.otpLogVerifyIs).toHaveBeenCalledWith("verified_at", null);
-      expect(mocks.siblingNeq).toHaveBeenCalledWith("id", "challenge-1");
+      expect(mocks.rpc).toHaveBeenCalledWith("finalize_otp_phone_verification", {
+        p_user_id: "user-1",
+        p_challenge_id: "challenge-1",
+        p_phone: "+27821234567",
+        p_expected_hash: storedHash,
+      });
+      expect(mocks.profileUpdate).not.toHaveBeenCalled();
+      expect(mocks.verificationStepUpsert).not.toHaveBeenCalled();
+      expect(mocks.sessionUpsert).not.toHaveBeenCalled();
       expect(smsService.sendSms).toHaveBeenCalledWith(
         expect.objectContaining({
           to: "+27821234567",
@@ -1045,16 +999,17 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(200);
       expect(data).toMatchObject({ success: true, verified: true });
-      expect(mocks.profileUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({ user_id: "user-1" }),
-        { onConflict: "user_id" }
+      expect(mocks.profileInsert).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: "user-1" })
       );
-      expect(mocks.profileUpsertSingle).toHaveBeenCalledTimes(1);
-      expect(mocks.profileIdEq).toHaveBeenCalledWith("id", "profile-created-by-admin");
-      expect(mocks.profileUserEq).toHaveBeenCalledWith("user_id", "user-1");
+      expect(mocks.profileInsertSingle).toHaveBeenCalledTimes(1);
+      expect(mocks.rpc).toHaveBeenCalledWith(
+        "finalize_otp_phone_verification",
+        expect.objectContaining({ p_user_id: "user-1" })
+      );
     });
 
-    it("promotes the verified phone with a single admin-client update scoped to the profile and user", async () => {
+    it("finalizes the verified phone atomically with the authenticated user binding", async () => {
       const storedHash = await hashOtpForTest("123456");
       const mocks = buildVerifyAdmin({ storedHash });
 
@@ -1065,16 +1020,8 @@ describe("OTP Routes", () => {
 
       expect(res.status).toBe(200);
       expect(data).toMatchObject({ success: true, verified: true });
-      expect(mocks.profileUpdate).toHaveBeenCalledTimes(1);
-      expect(mocks.profileUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          phone: "+27821234567",
-          pending_phone: null,
-          contact_last_phone_change_at: expect.any(String),
-        })
-      );
-      expect(mocks.profileIdEq).toHaveBeenCalledWith("id", "profile-1");
-      expect(mocks.profileUserEq).toHaveBeenCalledWith("user_id", "user-1");
+      expect(mocks.rpc).toHaveBeenCalledWith("finalize_otp_phone_verification", expect.anything());
+      expect(mocks.profileUpdate).not.toHaveBeenCalled();
       // The user-scoped client never writes the profile.
       for (const [table] of mockUserClient.from.mock.calls) {
         expect(table).toBe(ACCOUNT_PROFILE_WRITE_TABLE);
@@ -1146,8 +1093,8 @@ describe("OTP Routes", () => {
       );
       const data = await res.json();
 
-      expect(res.status).toBe(500);
-      expect(data.error).toBe("Failed to record phone verification. Please try again.");
+      expect(res.status).toBe(503);
+      expect(data.error).toBe("Verification temporarily unavailable. Please try again.");
     });
 
     it("returns error when verification_sessions upsert fails", async () => {
@@ -1159,8 +1106,8 @@ describe("OTP Routes", () => {
       );
       const data = await res.json();
 
-      expect(res.status).toBe(500);
-      expect(data.error).toBe("Failed to record phone verification. Please try again.");
+      expect(res.status).toBe(503);
+      expect(data.error).toBe("Verification temporarily unavailable. Please try again.");
     });
   });
 });

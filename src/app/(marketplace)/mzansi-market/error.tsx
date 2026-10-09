@@ -7,10 +7,10 @@ import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
 
 export default function MzansiMarketError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[MzansiMarketError]", error.digest ?? error.message);
@@ -25,7 +25,7 @@ export default function MzansiMarketError({
         description="It's usually temporary. Please try again."
         actions={
           <>
-            <Button variant="trust-verified" onClick={() => reset()}>
+            <Button variant="trust-verified" onClick={() => retry()}>
               Try again
             </Button>
           </>

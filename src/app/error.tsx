@@ -61,10 +61,10 @@ async function clearDeploymentCaches() {
 
 export default function GlobalError({
   error,
-  reset,
+  retry: retryRoute,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   const [debugVisible] = useState(() => {
     try {
@@ -106,7 +106,7 @@ export default function GlobalError({
       return;
     }
 
-    reset();
+    retryRoute();
   };
 
   return (

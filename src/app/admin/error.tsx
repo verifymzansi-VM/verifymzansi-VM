@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
  */
 export default function AdminError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[AdminError]", error.digest ?? error.message);
@@ -37,7 +37,7 @@ export default function AdminError({
         {error.digest && <p className="text-xs text-muted-foreground">Reference: {error.digest}</p>}
       </div>
       <div className="flex flex-wrap justify-center gap-3">
-        <Button onClick={() => reset()} className="h-11">
+        <Button onClick={() => retry()} className="h-11">
           Try again
         </Button>
         <Button variant="outline" asChild className="h-11">

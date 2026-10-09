@@ -1,4 +1,5 @@
 import "server-only";
+import { finalizePlaywrightOtp } from "./playwright-otp-finalization";
 
 import crypto from "node:crypto";
 import { fulfillPlaywrightPayment } from "./playwright-payment-fulfillment";
@@ -859,6 +860,7 @@ export function createPlaywrightStubSupabaseClient(
           error: null,
         };
       }
+      if (fn === "finalize_otp_phone_verification") return finalizePlaywrightOtp(params);
       if (fn === "reserve_intro_trial") {
         // E2E personas are always verified members, so the identity gate from
         // intro_trial_identity() is treated as satisfied. Mirror the claim

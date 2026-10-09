@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { supabaseServiceHeaders } from "./supabase-headers";
+import { withVariantKeys } from "../src/lib/media/variant-keys";
 
 interface R2Bucket {
   delete(key: string | string[]): Promise<void>;
@@ -590,7 +591,13 @@ const worker: ExportedHandler<Env> = {
         if (orphans.length > 0) {
           console.warn(`Found ${orphans.length} orphaned media upload(s) to clean up.`);
 
-          const publicKeys = orphans.filter((o) => isPublicBucket(o.bucket)).map((o) => o.r2_key);
+          const publicKeys = [
+            ...new Set(
+              orphans
+                .filter((o) => isPublicBucket(o.bucket))
+                .flatMap((o) => withVariantKeys(o.r2_key))
+            ),
+          ];
           const privateKeys = orphans.filter((o) => isPrivateBucket(o.bucket)).map((o) => o.r2_key);
 
           // Track which bucket deletes succeeded — tracking rows may only be

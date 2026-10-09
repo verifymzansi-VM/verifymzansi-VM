@@ -89,16 +89,18 @@ function mockSessionSelectChain(resolvedValue: { data: unknown; error: unknown }
 function mockStepsTable({
   phoneStep = null,
   allSteps = [],
+  stepsError = null,
 }: {
   phoneStep?: unknown;
   allSteps?: unknown[];
+  stepsError?: unknown;
 }) {
   return {
     select: vi.fn().mockImplementation((cols: string) => {
       if (cols.includes("step_type") && cols.includes("phone_verified_at")) {
         return {
           eq: vi.fn().mockReturnValue({
-            in: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
+            in: vi.fn().mockResolvedValue({ data: allSteps, error: stepsError }),
           }),
         };
       }
@@ -108,7 +110,7 @@ function mockStepsTable({
           eq: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
               in: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: phoneStep, error: null }),
+                maybeSingle: vi.fn().mockResolvedValue({ data: phoneStep, error: stepsError }),
               }),
             }),
           }),
@@ -116,7 +118,7 @@ function mockStepsTable({
       }
       // All steps query
       return {
-        eq: vi.fn().mockResolvedValue({ data: allSteps, error: null }),
+        eq: vi.fn().mockResolvedValue({ data: allSteps, error: stepsError }),
       };
     }),
   };
@@ -151,6 +153,38 @@ describe("POST /api/verification/session/start", () => {
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockGetClientIp.mockReturnValue("127.0.0.1");
   });
+
+  it.each(["missing", "expired", "active"])(
+    "keeps %s session state intact when verification steps cannot be read",
+    async (state) => {
+      mockAuth({ id: "user-1" });
+      const update = vi.fn();
+      const upsert = vi.fn();
+      const session =
+        state === "missing"
+          ? null
+          : {
+              id: "session-1",
+              finalized_at: null,
+              created_at: new Date(
+                Date.now() - (state === "expired" ? 48 : 1) * 60 * 60 * 1000
+              ).toISOString(),
+              id_artifact_id: "reviewed-id",
+              selfie_artifact_id: "reviewed-selfie",
+              phone_verified_at: "2026-10-08T00:00:00Z",
+            };
+      mockFrom.mockImplementation((table: string) =>
+        table === "verification_sessions"
+          ? { ...mockSessionSelectChain({ data: session, error: null }), update, upsert }
+          : mockStepsTable({ stepsError: { message: "database unavailable" } })
+      );
+      const response = await POST(createMockRequest());
+      expect(response.status).toBe(503);
+      expect(update).not.toHaveBeenCalled();
+      expect(upsert).not.toHaveBeenCalled();
+      expect(await response.text()).not.toContain("database unavailable");
+    }
+  );
 
   it("rejects cross-site session-start requests", async () => {
     const response = await POST(createMockRequest("https://evil.example"));

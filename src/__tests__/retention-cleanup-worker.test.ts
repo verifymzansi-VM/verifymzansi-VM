@@ -11,6 +11,45 @@ describe("retention cleanup worker", () => {
     vi.restoreAllMocks();
   });
 
+  it.each([false, true])(
+    "deletes orphan image variants and retains tracking on storage failure %s",
+    async (fails) => {
+      const publicDelete = fails
+        ? vi.fn().mockRejectedValue(new Error("R2 unavailable"))
+        : vi.fn().mockResolvedValue(undefined);
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("media_uploads?confirmed_at=is.null"))
+          return Response.json([
+            { id: "orphan-image", bucket: "public", r2_key: "media/listing/user-1/photo.jpg" },
+            { id: "orphan-video", bucket: "public", r2_key: "media/listing/user-1/video.mp4" },
+          ]);
+        if (url.includes("/auth/v1/admin/users?")) return Response.json({ users: [] });
+        return Response.json([]);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const env = {
+        R2_PUBLIC: { delete: publicDelete },
+        R2_PRIVATE: { delete: vi.fn() },
+        SUPABASE_URL: "https://test.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+      } as unknown as Parameters<NonNullable<typeof worker.scheduled>>[1];
+
+      await worker.scheduled!({} as never, env, ctx);
+      expect(publicDelete).toHaveBeenCalledWith([
+        "media/listing/user-1/photo.jpg",
+        "media/listing/user-1/photo.w400.webp",
+        "media/listing/user-1/photo.w800.webp",
+        "media/listing/user-1/photo.w1600.webp",
+        "media/listing/user-1/video.mp4",
+      ]);
+      const removedTracking = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes("media_uploads?id=in.")
+      );
+      expect(removedTracking).toHaveLength(fails ? 0 : 1);
+    }
+  );
+
   it("skips legal-hold KYC records while deleting actionable queue items", async () => {
     const privateDelete = vi.fn().mockResolvedValue(undefined);
     const publicDelete = vi.fn().mockResolvedValue(undefined);

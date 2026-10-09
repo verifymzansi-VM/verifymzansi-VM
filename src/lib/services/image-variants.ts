@@ -13,8 +13,8 @@
  * variant generation is skipped and the original is served.
  */
 
-/** Variant widths (pixels on the long edge) generated at upload time. */
-export const VARIANT_WIDTHS = [400, 800, 1600] as const;
+import { VARIANT_WIDTHS, variantKeyFor } from "../media/variant-keys";
+export { VARIANT_WIDTHS, variantKeyFor } from "../media/variant-keys";
 
 /** WebP quality per variant width. */
 const VARIANT_QUALITY: Record<number, number> = {
@@ -30,16 +30,6 @@ export interface GeneratedVariant {
   key: string;
   /** Resized image bytes (WebP). */
   buffer: Buffer;
-}
-
-/**
- * Derive the R2 key for a variant of a given original key.
- * `media/listing/u/123-abc.jpg` + width 400 → `media/listing/u/123-abc.w400.webp`
- */
-export function variantKeyFor(originalKey: string, width: number): string {
-  const dot = originalKey.lastIndexOf(".");
-  const stem = dot > 0 ? originalKey.slice(0, dot) : originalKey;
-  return `${stem}.w${width}.webp`;
 }
 
 /**

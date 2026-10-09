@@ -81,10 +81,14 @@ export async function POST(_request: NextRequest) {
           .in("status", ["approved", "pending"]);
 
         if (submittedStepsErr) {
-          log.warn("Failed to fetch submitted steps during session reset (non-fatal)", {
+          log.error("Failed to fetch submitted steps during session reset", {
             userId: user.id,
             error: submittedStepsErr.message,
           });
+          return NextResponse.json(
+            { error: "Unable to load verification progress. Please try again." },
+            { status: 503 }
+          );
         }
 
         const submittedTypes = new Set((submittedSteps || []).map((s) => s.step_type));
@@ -146,10 +150,14 @@ export async function POST(_request: NextRequest) {
         .maybeSingle();
 
       if (phoneStepErr) {
-        log.warn("Failed to fetch phone step (non-fatal)", {
+        log.error("Failed to fetch phone step", {
           userId: user.id,
           error: phoneStepErr.message,
         });
+        return NextResponse.json(
+          { error: "Unable to load verification progress. Please try again." },
+          { status: 503 }
+        );
       }
 
       // Use upsert to handle edge case where a finalized row already exists.
@@ -198,10 +206,14 @@ export async function POST(_request: NextRequest) {
       .eq("user_id", user.id);
 
     if (stepsErr) {
-      log.warn("Failed to fetch verification steps (non-fatal)", {
+      log.error("Failed to fetch verification steps", {
         userId: user.id,
         error: stepsErr.message,
       });
+      return NextResponse.json(
+        { error: "Unable to load verification progress. Please try again." },
+        { status: 503 }
+      );
     }
 
     const completedSteps: string[] = [];

@@ -118,9 +118,9 @@ async function main() {
       return result.output.trim();
     };
     const grants = await sql(
-      `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('confirm_ozow_payment','claim_ozow_reconciliation','apply_kyc_provider_webhook') AND has_function_privilege('service_role',p.oid,'EXECUTE') AND NOT has_function_privilege('anon',p.oid,'EXECUTE') AND NOT has_function_privilege('authenticated',p.oid,'EXECUTE');`
+      `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ('confirm_ozow_payment','claim_ozow_reconciliation','apply_kyc_provider_webhook','finalize_otp_phone_verification') AND has_function_privilege('service_role',p.oid,'EXECUTE') AND NOT has_function_privilege('anon',p.oid,'EXECUTE') AND NOT has_function_privilege('authenticated',p.oid,'EXECUTE');`
     );
-    if (grants !== "3") throw new Error(`Final RPC grants invalid: ${grants}`);
+    if (grants !== "4") throw new Error(`Final RPC grants invalid: ${grants}`);
     const payment = randomUUID(),
       artifact = randomUUID(),
       resultId = randomUUID(),

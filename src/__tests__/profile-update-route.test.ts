@@ -229,6 +229,55 @@ describe("POST /api/profile/update", () => {
     expect(userScopedUpdate).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [{ displayName: "Nomsa" }, { display_name: "Nomsa" }, false],
+    [
+      { displayName: "Nomsa", city: "Pretoria" },
+      { display_name: "Nomsa", location_city: "Pretoria" },
+      true,
+    ],
+    [
+      { displayName: "Nomsa", bio: "", province: "", city: "" },
+      { display_name: "Nomsa", bio: null, location_province: null, location_city: null },
+      true,
+    ],
+  ])("updates only supplied optional fields: %j", async (body, expected, hasHistory) => {
+    const { update, auditInsert } = mockAdminClient({ data: { user_id: "user-1" }, error: null });
+    const profile = {
+      display_name: "Nomsa",
+      bio: "Trusted seller",
+      location_province: "Gauteng",
+      location_city: "Johannesburg",
+      legal_name_locked_at: null,
+      location_verified_at: null,
+    };
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: profile, error: null }),
+      }),
+    });
+
+    expect((await POST(createRequest(body))).status).toBe(200);
+    expect(update).toHaveBeenCalledWith(expected);
+    if (hasHistory) {
+      expect(auditInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          new_value: {
+            province: "province" in body ? null : "Gauteng",
+            city: "city" in body ? body.city || null : "Johannesburg",
+          },
+        })
+      );
+    } else {
+      expect(auditInsert).not.toHaveBeenCalled();
+    }
+  });
+
   it("does not update or log location changes after location verification", async () => {
     const { update, auditInsert } = mockAdminClient({
       data: {
@@ -527,6 +576,22 @@ describe("POST /api/profile/update", () => {
       expect(res.status).toBe(200);
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ avatar_url: avatarUrl }));
       expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+    });
+
+    it.each([
+      "user-1/../user-2/avatar.jpg",
+      "user-1/%2e%2e/user-2/avatar.jpg",
+      "user-1/%2E%2E%2Fuser-2/avatar.jpg",
+      "user-1/%252e%252e%252fuser-2/avatar.jpg",
+      "user-1/..\\user-2/avatar.jpg",
+    ])("rejects avatar paths that escape the owner folder: %s", async (path) => {
+      mockUserClientWithoutProfile();
+      const { update } = mockAdminClient({ data: { user_id: "user-1" }, error: null });
+      expect(
+        (await POST(createRequest({ displayName: "Nomsa", avatarUrl: `${AVATARS_BASE}/${path}` })))
+          .status
+      ).toBe(400);
+      expect(update).not.toHaveBeenCalled();
     });
   });
 });

@@ -36,27 +36,31 @@ export const profileUpdateSchema = z.object({
     .string()
     .url("Invalid avatar URL")
     .max(500)
-    .refine(isOwnAvatarStorageUrl, "Upload your avatar through the profile page")
+    .refine((url) => isAvatarStorageUrl(url), "Upload your avatar through the profile page")
     .optional()
     .or(z.literal("")),
 });
 
 /** Avatars are only ever served from this project's Supabase avatars bucket. */
-function isOwnAvatarStorageUrl(url: string): boolean {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  return Boolean(supabaseUrl) && url.startsWith(`${supabaseUrl}/storage/v1/object/public/avatars/`);
+export function isAvatarStorageUrl(value: string, userId?: string): boolean {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) return false;
+  try {
+    const url = new URL(value);
+    const base = new URL(supabaseUrl);
+    const prefix = `${base.pathname.replace(/\/$/, "")}/storage/v1/object/public/avatars/${userId ? `${userId}/` : ""}`;
+    // URL parsing resolves dot segments and backslashes before ownership is
+    // checked. Uploaded avatar keys are plain text; reject encoded paths so a
+    // downstream decoder cannot change the folder after this check.
+    return (
+      url.origin === base.origin &&
+      !url.username &&
+      !url.password &&
+      !url.pathname.includes("%") &&
+      url.pathname.startsWith(prefix) &&
+      url.pathname.length > prefix.length
+    );
+  } catch {
+    return false;
+  }
 }
-
-/** Inferred type for profile update payloads. */
-type _ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
-
-/**
- * Zod schema for settings page display name update.
- * Validates only the display name field.
- */
-const _settingsDisplayNameSchema = z.object({
-  displayName: displayNameSchema(),
-});
-
-/** Inferred type for settings display name update. */
-type _SettingsDisplayNameInput = z.infer<typeof _settingsDisplayNameSchema>;

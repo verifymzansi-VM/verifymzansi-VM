@@ -1,0 +1,29 @@
+{
+  "test": "Focused isolated reproduction with 3 unmodified deployed guard bodies; minimal table fixtures and auth helpers. Other production triggers and full Supabase HTTP/auth stack are not executed.",
+  "results": [
+    {
+      "table": "listings",
+      "draftEngagedCounterWritable": true,
+      "hiddenEngagedCounterWritable": true,
+      "otherOwnerDenied": true,
+      "viewCountBlocked": true,
+      "liveContentChangeBlocked": true
+    },
+    {
+      "table": "businesses",
+      "draftEngagedCounterWritable": true,
+      "hiddenEngagedCounterWritable": true,
+      "otherOwnerDenied": true,
+      "viewCountBlocked": true,
+      "liveContentChangeBlocked": true
+    },
+    {
+      "table": "promotions",
+      "draftEngagedCounterWritable": true,
+      "hiddenEngagedCounterWritable": true,
+      "otherOwnerDenied": true,
+      "viewCountBlocked": true,
+      "liveContentChangeBlocked": true
+    }
+  ]
+}

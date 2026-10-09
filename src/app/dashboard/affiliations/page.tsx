@@ -9,6 +9,9 @@ import {
   type MemberAffiliation,
 } from "@/components/organisations/affiliation-request-panel";
 import { SHARED_WITH_ORGANISATION } from "@/lib/organisations/affiliations";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("AffiliationsPage");
 
 export const metadata = { title: "Organisation affiliations" };
 export const dynamic = "force-dynamic";
@@ -52,6 +55,14 @@ export default async function AffiliationsPage({
       ? supabase.from("organisations").select("slug, name").eq("slug", orgSlug).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
+  const loadError = businesses.error ?? applications.error ?? adminOf.error;
+  if (loadError) {
+    log.error("Failed to load affiliation dashboard", {
+      userId: user.id,
+      error: loadError.message,
+    });
+    throw new Error("Affiliations are temporarily unavailable");
+  }
   const businessIds = (businesses.data ?? []).map((b) => b.id);
   const affiliations = businessIds.length
     ? await db
@@ -61,7 +72,14 @@ export default async function AffiliationsPage({
         )
         .in("business_id", businessIds)
         .eq("status", "active")
-    : { data: [] };
+    : { data: [], error: null };
+  if (affiliations.error) {
+    log.error("Failed to load confirmed affiliations", {
+      userId: user.id,
+      error: affiliations.error.message,
+    });
+    throw new Error("Affiliations are temporarily unavailable");
+  }
 
   const administered = (adminOf.data ?? [])
     .map(

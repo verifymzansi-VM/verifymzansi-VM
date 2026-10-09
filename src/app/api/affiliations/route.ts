@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
@@ -42,34 +42,55 @@ async function currentUser() {
 
 /** GET /api/affiliations — the member's own applications and affiliations. */
 export async function GET() {
-  const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const db = createAdminClient();
-  const { data: businesses } = await db.from("businesses").select("id").eq("owner_id", user.id);
-  const ids = (businesses ?? []).map((b) => b.id);
-  const [applications, affiliations] = await Promise.all([
-    db
-      .from("organisation_applications")
-      .select(
-        "id, organisation_id, business_id, status, info_request, decision_note, created_at, organisations(name, slug)"
-      )
-      .eq("applicant_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(100),
-    ids.length
-      ? db
-          .from("organisation_affiliations")
-          .select(
-            "id, organisation_id, business_id, status, confirmed_at, organisations(name, slug, affiliation_wording)"
-          )
-          .in("business_id", ids)
-          .eq("status", "active")
-      : Promise.resolve({ data: [] }),
-  ]);
-  return NextResponse.json({
-    applications: applications.data ?? [],
-    affiliations: affiliations.data ?? [],
-  });
+  try {
+    const user = await currentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const db = createAdminClient();
+    const { data: businesses, error: businessError } = await db
+      .from("businesses")
+      .select("id")
+      .eq("owner_id", user.id);
+    if (businessError)
+      throw new Error(`Business ownership lookup failed: ${businessError.message}`);
+    const ids = (businesses ?? []).map((b) => b.id);
+    const [applications, affiliations] = await Promise.all([
+      db
+        .from("organisation_applications")
+        .select(
+          "id, organisation_id, business_id, status, info_request, decision_note, created_at, organisations(name, slug)"
+        )
+        .eq("applicant_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      ids.length
+        ? db
+            .from("organisation_affiliations")
+            .select(
+              "id, organisation_id, business_id, status, confirmed_at, organisations(name, slug, affiliation_wording)"
+            )
+            .in("business_id", ids)
+            .eq("status", "active")
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    const queryError = applications.error ?? affiliations.error;
+    if (queryError) throw new Error(`Affiliation lookup failed: ${queryError.message}`);
+    return NextResponse.json(
+      {
+        applications: applications.data ?? [],
+        affiliations: affiliations.data ?? [],
+      },
+      { headers: { "Cache-Control": "private, no-store" } }
+    );
+  } catch (error) {
+    logApiError(log, "Failed to load member affiliations", error);
+    return NextResponse.json(
+      { error: "Affiliations are temporarily unavailable. Please try again." },
+      {
+        status: 503,
+        headers: { "Cache-Control": "private, no-store" },
+      }
+    );
+  }
 }
 
 /** POST /api/affiliations — request affiliation (with consent), respond, withdraw. */

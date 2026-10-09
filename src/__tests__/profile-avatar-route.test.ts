@@ -8,6 +8,7 @@ const {
   mockStripExifFromJpeg,
   mockStripMetadataFromPng,
   mockStripMetadataFromWebp,
+  mockWarn,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
   mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
   mockStripMetadataFromWebp: vi.fn((buf: Uint8Array) => buf),
+  mockWarn: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
@@ -39,7 +41,7 @@ vi.mock("@/lib/utils/exif-strip", () => ({
   stripMetadataFromWebp: mockStripMetadataFromWebp,
 }));
 vi.mock("@/lib/utils/logger", () => ({
-  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), warn: mockWarn, error: vi.fn() }),
 }));
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
 
@@ -141,64 +143,74 @@ describe("POST /api/profile/avatar", () => {
     expect(res.headers.get("Retry-After")).toBe("30");
   });
 
-  it("uploads and persists the avatar URL", async () => {
-    const upload = vi.fn().mockResolvedValue({ error: null });
-    const remove = vi.fn().mockResolvedValue({ data: [], error: null });
-    const getPublicUrl = vi.fn().mockReturnValue({
-      data: { publicUrl: "https://cdn.example.com/avatar.png" },
-    });
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
-    const update = vi.fn().mockReturnValue({ eq: updateEq });
-    const userScopedFrom = vi.fn();
-    const adminFrom = vi.fn().mockReturnValue({ update });
+  it.each([null, { message: "storage unavailable" }])(
+    "uploads and persists the avatar URL with cleanup error %j",
+    async (cleanupError) => {
+      const upload = vi.fn().mockResolvedValue({ error: null });
+      const remove = vi.fn().mockResolvedValue({ data: [], error: cleanupError });
+      const getPublicUrl = vi.fn().mockReturnValue({
+        data: { publicUrl: "https://cdn.example.com/avatar.png" },
+      });
+      const updateEq = vi.fn().mockResolvedValue({ error: null });
+      const update = vi.fn().mockReturnValue({ eq: updateEq });
+      const userScopedFrom = vi.fn();
+      const adminFrom = vi.fn().mockReturnValue({ update });
 
-    mockCreateClient.mockResolvedValue({
-      from: userScopedFrom,
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
-      },
-    });
-    // The avatar_url profile write goes through the admin client.
-    mockCreateAdminClient.mockReturnValue({
-      from: adminFrom,
-      storage: {
-        from: vi.fn().mockReturnValue({
-          upload,
-          remove,
-          getPublicUrl,
-        }),
-      },
-    });
+      mockCreateClient.mockResolvedValue({
+        from: userScopedFrom,
+        auth: {
+          getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+        },
+      });
+      // The avatar_url profile write goes through the admin client.
+      mockCreateAdminClient.mockReturnValue({
+        from: adminFrom,
+        storage: {
+          from: vi.fn().mockReturnValue({
+            upload,
+            remove,
+            getPublicUrl,
+          }),
+        },
+      });
 
-    const formData = new FormData();
-    formData.set("file", new File(["hello"], "avatar.png", { type: "image/png" }));
+      const formData = new FormData();
+      formData.set("file", new File(["hello"], "avatar.png", { type: "image/png" }));
 
-    const res = await POST(createRequest(formData));
+      const res = await POST(createRequest(formData));
 
-    expect(res.status).toBe(200);
-    expect(mockCheckRateLimit).toHaveBeenNthCalledWith(2, {
-      key: "user-1",
-      action: "profile:avatar",
-    });
-    expect(upload).toHaveBeenCalled();
-    // PNG metadata must be stripped before upload
-    expect(mockStripMetadataFromPng).toHaveBeenCalled();
-    // Stale variants with other extensions are cleaned up best-effort
-    expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.webp"]);
-    // The persisted URL carries a cache-busting version param
-    expect(update).toHaveBeenCalledWith({
-      avatar_url: expect.stringMatching(/^https:\/\/cdn\.example\.com\/avatar\.png\?v=\d+$/),
-    });
-    expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(adminFrom).toHaveBeenCalledWith("account_profiles");
-    expect(userScopedFrom).not.toHaveBeenCalled();
-    await expect(res.json()).resolves.toMatchObject({
-      success: true,
-      avatarUrl: expect.stringContaining("?v="),
-    });
-  });
+      expect(res.status).toBe(200);
+      expect(mockCheckRateLimit).toHaveBeenNthCalledWith(2, {
+        key: "user-1",
+        action: "profile:avatar",
+      });
+      expect(upload).toHaveBeenCalled();
+      // PNG metadata must be stripped before upload
+      expect(mockStripMetadataFromPng).toHaveBeenCalled();
+      // Stale variants with other extensions are cleaned up best-effort
+      expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.webp"]);
+      expect(updateEq.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
+      if (cleanupError)
+        expect(mockWarn).toHaveBeenCalledWith(
+          "Failed to remove stale avatar variants",
+          expect.objectContaining({ error: cleanupError.message })
+        );
+      // The persisted URL carries a cache-busting version param
+      expect(update).toHaveBeenCalledWith({
+        avatar_url: expect.stringMatching(/^https:\/\/cdn\.example\.com\/avatar\.png\?v=\d+$/),
+      });
+      expect(updateEq).toHaveBeenCalledWith("user_id", "user-1");
+      expect(adminFrom).toHaveBeenCalledWith("account_profiles");
+      expect(userScopedFrom).not.toHaveBeenCalled();
+      await expect(res.json()).resolves.toMatchObject({
+        success: true,
+        avatarUrl: expect.stringContaining("?v="),
+      });
+    }
+  );
 
   it("returns 500 when the admin avatar_url write fails", async () => {
+    const remove = vi.fn().mockResolvedValue({ data: [], error: null });
     const update = vi.fn().mockReturnValue({
       eq: vi.fn().mockResolvedValue({ error: { message: "db down" } }),
     });
@@ -213,7 +225,7 @@ describe("POST /api/profile/avatar", () => {
       storage: {
         from: vi.fn().mockReturnValue({
           upload: vi.fn().mockResolvedValue({ error: null }),
-          remove: vi.fn().mockResolvedValue({ data: [], error: null }),
+          remove,
           getPublicUrl: vi.fn().mockReturnValue({
             data: { publicUrl: "https://cdn.example.com/avatar.png" },
           }),
@@ -229,6 +241,7 @@ describe("POST /api/profile/avatar", () => {
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ error: "Failed to save avatar" });
     expect(update).toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
   });
 
   it("strips EXIF from JPEG avatars and removes stale png/webp variants", async () => {

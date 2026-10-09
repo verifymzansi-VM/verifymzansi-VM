@@ -205,7 +205,7 @@ describe("GET /auth/callback", () => {
   });
 
   it("creates an account profile for new OAuth users with account-first verification fields", async () => {
-    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
+    const mockInsert = vi.fn().mockResolvedValue({ error: null });
 
     mockExchangeCodeForSession.mockResolvedValue({
       error: null,
@@ -251,7 +251,7 @@ describe("GET /auth/callback", () => {
               }),
             }),
           })),
-          upsert: mockUpsert.mockReturnValue({
+          insert: mockInsert.mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
                 data: { id: "new-profile-id" },
@@ -274,14 +274,13 @@ describe("GET /auth/callback", () => {
     expect(response.headers.get("location")).toBe(
       "https://verifymzansi.com/dashboard/complete-profile"
     );
-    expect(mockUpsert).toHaveBeenCalledWith(
+    expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: "oauth-user-1",
         display_name: "OAuth User",
         account_verification_status: "incomplete",
         account_status: "active",
-      }),
-      { onConflict: "user_id" }
+      })
     );
     expect(mockUserScopedUpsert).not.toHaveBeenCalled();
   });

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import reviewJson from "../../scripts/security-reviews/supabase-controls.json";
@@ -164,9 +164,16 @@ describe("exact Supabase security control reviews", () => {
     expect(classifySecurityLint(lint, "free", fixture(), review).state).toBe("plan-blocked");
     expect(classifySecurityLint(lint, "pro", fixture(), review).state).toBe("actionable");
   });
-  it("discovers dependencies and effective column grants through PostgreSQL catalog functions", async () => {
-    const db = new PGlite();
-    try {
+  describe("PostgreSQL catalog integration", () => {
+    let db: PGlite;
+    beforeEach(async () => {
+      db = new PGlite();
+      await db.waitReady;
+    });
+    afterEach(async () => {
+      await db.close();
+    });
+    it("discovers dependencies and effective column grants through PostgreSQL catalog functions", async () => {
       await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         CREATE TABLE public.content_views(id integer, secret text); ALTER TABLE public.content_views ENABLE ROW LEVEL SECURITY;
         CREATE FUNCTION public.staff_role_of(p_user uuid) RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public AS $$ SELECT NULL::text $$;
@@ -187,13 +194,8 @@ describe("exact Supabase security control reviews", () => {
       expect(
         second.rows[0].controls.functions.filter((fn) => fn.name === "staff_role_of")
       ).toHaveLength(2);
-    } finally {
-      await db.close();
-    }
-  });
-  it("detects column-only access on both private post tables", async () => {
-    const db = new PGlite();
-    try {
+    });
+    it("detects column-only access on both private post tables", async () => {
       await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated;
         REVOKE CREATE ON SCHEMA public FROM PUBLIC;
         CREATE TABLE public.business_private(id integer, secret text);
@@ -218,8 +220,6 @@ describe("exact Supabase security control reviews", () => {
         anonAccess: true,
         authenticatedAccess: false,
       });
-    } finally {
-      await db.close();
-    }
+    });
   });
 });

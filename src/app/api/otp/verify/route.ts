@@ -9,11 +9,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
-import {
-  ACCOUNT_PHONE_IN_USE_ERROR,
-  buildAccountPhoneFields,
-  normalizeSaPhone,
-} from "@/lib/utils/phone";
+import { ACCOUNT_PHONE_IN_USE_ERROR, normalizeSaPhone } from "@/lib/utils/phone";
 import { sendSms } from "@/lib/services/sms";
 import { sendPhoneChangeNotification } from "@/lib/services/email";
 import { createNotification } from "@/lib/notifications";
@@ -21,11 +17,11 @@ import { buildVerificationEmailConfirmationRequiredPayload } from "@/lib/constan
 
 const log = createLogger("OTPVerify");
 const MAX_VERIFY_ATTEMPTS = 5;
-const _LOCKOUT_MS = 15 * 60 * 1000;
 const OTP_PBKDF2_ITERATIONS = 100000;
 const NO_CACHE_HEADERS = { "Cache-Control": "private, no-store" } as const;
 
 // Re-exported from shared module
+import { phoneReverificationRequired } from "@/lib/account/identity-policy";
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 
 /** Convert a hex string to Uint8Array */
@@ -83,100 +79,69 @@ async function verifyOtp(otp: string, storedHash: string): Promise<boolean> {
 async function finalizePhoneVerification(
   adminSupabase: ReturnType<typeof createAdminClient>,
   user: { id: string; email?: string | null; user_metadata?: unknown },
-  accountPhoneFields: ReturnType<typeof buildAccountPhoneFields>,
-  nowIso: string,
-  otpLogLookup: { phone: string; otpHash: string }
-): Promise<{ success: true } | { success: false; error: string; status: number }> {
-  const ensuredProfile = await ensureAccountProfile(adminSupabase, user);
-  if (!ensuredProfile) {
+  phone: string,
+  challenge: { id: string; otp_hash: string }
+): Promise<
+  | { success: true; alreadyVerified: boolean; phoneChanged: boolean }
+  | { success: false; error: string; status: number; code?: string; retryAfter?: number }
+> {
+  if (!(await ensureAccountProfile(adminSupabase, user))) {
     return {
       success: false,
-      error: "Failed to prepare your account profile for phone verification.",
-      status: 500,
+      error: "Unable to prepare your account. Please try again.",
+      status: 503,
     };
   }
-
-  // Profile rows are written server-side only; scope the write to this user.
-  const profileId = ensuredProfile.id;
-  const { error: profileUpdateError } = await adminSupabase
-    .from(ACCOUNT_PROFILE_WRITE_TABLE)
-    // Promote pending_phone to canonical phone, clear staging, and stamp cooldown.
-    .update({ ...accountPhoneFields, pending_phone: null, contact_last_phone_change_at: nowIso })
-    .eq("id", profileId)
-    .eq("user_id", user.id);
-
-  if (profileUpdateError) {
-    if (profileUpdateError.code === "23505") {
-      return { success: false, error: ACCOUNT_PHONE_IN_USE_ERROR, status: 409 };
-    }
-
-    log.error("Failed to save phone on account profile", {
-      error: profileUpdateError.message,
-      code: profileUpdateError.code,
-      userId: user.id,
-    });
+  // The service-only RPC owns the claim and every durable verification write.
+  // Never fall back to separate HTTP writes if its migration is unavailable.
+  const { data, error } = await adminSupabase.rpc("finalize_otp_phone_verification", {
+    p_user_id: user.id,
+    p_challenge_id: challenge.id,
+    p_expected_hash: challenge.otp_hash,
+    p_phone: phone,
+  });
+  if (error) {
+    log.error("Atomic phone verification failed", { userId: user.id, databaseCode: error.code });
     return {
       success: false,
-      error: "Failed to save the verified phone number on your account.",
-      status: 500,
+      error:
+        error.code === "23505"
+          ? ACCOUNT_PHONE_IN_USE_ERROR
+          : "Verification temporarily unavailable. Please try again.",
+      status: error.code === "23505" ? 409 : 503,
     };
   }
-
-  const { error: stepsError } = await adminSupabase.from("verification_steps").upsert(
-    {
-      user_id: user.id,
-      step_type: "phone",
-      status: "approved",
-      phone_verified_at: nowIso,
-    },
-    { onConflict: "user_id,step_type" }
-  );
-
-  if (stepsError) {
-    log.error("Failed to update verification steps", { error: stepsError.message });
+  if (data?.outcome === "verified" || data?.outcome === "already_verified") {
+    return {
+      success: true,
+      alreadyVerified: data.outcome === "already_verified",
+      phoneChanged: data.phone_changed === true,
+    };
+  }
+  if (data?.outcome === "invalid_challenge")
+    return { success: false, error: "Invalid or expired OTP", status: 400 };
+  if (data?.outcome === "account_restricted")
+    return { success: false, error: "Your account cannot complete verification.", status: 403 };
+  if (data?.outcome === "phone_reverification_required") {
+    const policy = phoneReverificationRequired();
+    return { success: false, error: policy.message, code: policy.code, status: 403 };
+  }
+  if (data?.outcome === "phone_cooldown")
     return {
       success: false,
-      error: "Failed to record phone verification. Please try again.",
-      status: 500,
+      error: "Please wait before changing your phone number again.",
+      code: "PHONE_COOLDOWN",
+      status: 429,
+      retryAfter:
+        Number.isFinite(data.retry_after) && data.retry_after > 0
+          ? Math.ceil(data.retry_after)
+          : 60,
     };
-  }
-
-  // Session signal columns are service-role only (owner UPDATE policy on
-  // verification_sessions was dropped); write phone_verified_at via admin.
-  const { error: sessionError } = await adminSupabase.from("verification_sessions").upsert(
-    {
-      user_id: user.id,
-      phone_verified_at: nowIso,
-    },
-    { onConflict: "user_id" }
-  );
-
-  if (sessionError) {
-    log.error("Failed to update verification session phone state", {
-      error: sessionError.message,
-    });
-    return {
-      success: false,
-      error: "Failed to record phone verification. Please try again.",
-      status: 500,
-    };
-  }
-
-  const { error: otpLogError } = await adminSupabase
-    .from("otp_logs")
-    .update({ verified: true, verified_at: nowIso })
-    .eq("phone", otpLogLookup.phone)
-    .eq("otp_hash", otpLogLookup.otpHash)
-    .is("verified_at", null);
-
-  if (otpLogError) {
-    log.warn("Failed to sync OTP audit log verification state", {
-      error: otpLogError.message,
-      userId: user.id,
-    });
-  }
-
-  return { success: true };
+  return {
+    success: false,
+    error: "Verification temporarily unavailable. Please try again.",
+    status: 503,
+  };
 }
 
 async function announcePhoneChange(userId: string, email: string | null, phone: string) {
@@ -191,105 +156,6 @@ async function announcePhoneChange(userId: string, email: string | null, phone: 
     }),
     email ? sendPhoneChangeNotification(email, last3) : Promise.resolve(),
   ]);
-}
-
-async function claimOtpChallenge(
-  adminSupabase: ReturnType<typeof createAdminClient>,
-  challengeId: string,
-  nowIso: string
-): Promise<boolean> {
-  const builder = adminSupabase
-    .from("otp_challenges")
-    .update({ verified_at: nowIso })
-    .eq("id", challengeId)
-    .is("verified_at", null);
-
-  // PostgREST exposes .select() on update builders at runtime even though
-  // TypeScript's `.is()` return type omits it.  Use it when available to
-  // atomically verify the claimed row; fall back to a plain update otherwise.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const selectFn = (builder as any).select;
-  if (typeof selectFn === "function") {
-    const { data, error } = await selectFn.call(builder, "id").maybeSingle();
-    if (error) {
-      log.warn("Failed to atomically claim OTP challenge", {
-        challengeId,
-        error: error.message,
-      });
-      return false;
-    }
-    return Boolean(data?.id);
-  }
-
-  // Fallback: if .select() is unavailable, run the plain update and then
-  // re-read with the SAME CAS filter (verified_at stamped by THIS request) to
-  // confirm this request — not a concurrent one — claimed the row. Re-reading by
-  // id alone would let two concurrent claims both observe verified_at set and
-  // both report success (TOCTOU).
-  const { error } = await builder;
-  if (error) {
-    log.warn("Failed to claim OTP challenge", { challengeId, error: error.message });
-    return false;
-  }
-
-  const { data: claimedRow, error: claimReadError } = await adminSupabase
-    .from("otp_challenges")
-    .select("id, verified_at")
-    .eq("id", challengeId)
-    .eq("verified_at", nowIso)
-    .maybeSingle();
-
-  if (claimReadError) {
-    log.warn("Failed to confirm OTP challenge claim", {
-      challengeId,
-      error: claimReadError.message,
-    });
-    return false;
-  }
-
-  return Boolean(claimedRow?.id);
-}
-
-async function markSiblingChallengesVerified(
-  adminSupabase: ReturnType<typeof createAdminClient>,
-  userId: string,
-  phone: string,
-  challengeId: string,
-  nowIso: string
-): Promise<void> {
-  const builder = adminSupabase
-    .from("otp_challenges")
-    .update({ verified_at: nowIso })
-    .eq("user_id", userId)
-    .eq("phone", phone)
-    .is("verified_at", null);
-
-  // PostgREST exposes .neq() at runtime; use it when available to exclude
-  // the already-claimed challenge, otherwise fall back to the plain update.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const neqFn = (builder as any).neq;
-  if (typeof neqFn === "function") {
-    const { error } = await neqFn.call(builder, "id", challengeId);
-    if (error) {
-      log.warn("Failed to mark sibling OTP challenges verified", {
-        userId,
-        challengeId,
-        error: error.message,
-      });
-    }
-    return;
-  }
-
-  // Fallback: update without the .neq() filter — the already-claimed
-  // challenge already has verified_at set so IS NULL excludes it.
-  const { error } = await builder;
-  if (error) {
-    log.warn("Failed to mark sibling OTP challenges verified (fallback)", {
-      userId,
-      challengeId,
-      error: error.message,
-    });
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -330,7 +196,6 @@ export async function POST(request: NextRequest) {
 
     const { otp } = parsedBody.data;
     const phone = normalizeSaPhone(parsedBody.data.phone);
-    const accountPhoneFields = buildAccountPhoneFields(phone);
     const supabase = await createClient();
     const {
       data: { user },
@@ -389,20 +254,30 @@ export async function POST(request: NextRequest) {
     // Only challenge rows owned by this user+phone are eligible.
     const { data: challenge, error } = await adminSupabase
       .from("otp_challenges")
-      .select("id, otp_hash, attempt_count, locked_until, expires_at")
+      .select("id, otp_hash, attempt_count, locked_until, expires_at, verified_at")
       .eq("user_id", user.id)
       .eq("phone", phone)
-      .is("verified_at", null)
       .gte("expires_at", nowIso)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (error || !challenge) {
+    if (error) {
+      log.error("OTP challenge lookup failed", { userId: user.id, databaseCode: error.code });
+      return NextResponse.json(
+        { error: "Verification temporarily unavailable. Please try again." },
+        { status: 503, headers: NO_CACHE_HEADERS }
+      );
+    }
+    if (!challenge) {
       return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
     }
 
-    if (challenge.locked_until && new Date(challenge.locked_until) > now) {
+    if (
+      !challenge.verified_at &&
+      challenge.locked_until &&
+      new Date(challenge.locked_until) > now
+    ) {
       return NextResponse.json(
         { error: "Too many attempts. Please wait 15 minutes." },
         { status: 429 }
@@ -412,35 +287,40 @@ export async function POST(request: NextRequest) {
     // Reserve this attempt atomically BEFORE comparing. Counting only failed
     // attempts let parallel guesses all be compared before the counter locked
     // the challenge; now each comparison consumes one of MAX attempts.
-    const { data: rpcResult, error: rpcError } = await adminSupabase.rpc("increment_otp_attempt", {
-      challenge_id: challenge.id,
-      max_attempts: MAX_VERIFY_ATTEMPTS,
-      lockout_duration: "15 minutes",
-    });
-
-    if (rpcError) {
-      log.error("Failed to reserve OTP attempt", {
-        challengeId: challenge.id,
-        error: rpcError.message,
-      });
-      return NextResponse.json(
-        { error: "Verification temporarily unavailable. Please try again." },
-        { status: 503 }
+    let attemptNumber = 0;
+    if (!challenge.verified_at) {
+      const { data: rpcResult, error: rpcError } = await adminSupabase.rpc(
+        "increment_otp_attempt",
+        {
+          challenge_id: challenge.id,
+          max_attempts: MAX_VERIFY_ATTEMPTS,
+          lockout_duration: "15 minutes",
+        }
       );
-    }
 
-    const attemptNumber = rpcResult?.[0]?.new_attempt_count;
-    if (attemptNumber == null) {
-      // Claimed by a concurrent request.
-      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
-    }
-    if (attemptNumber > MAX_VERIFY_ATTEMPTS) {
-      return NextResponse.json(
-        { error: "Too many attempts. Please wait 15 minutes." },
-        { status: 429 }
-      );
-    }
+      if (rpcError) {
+        log.error("Failed to reserve OTP attempt", {
+          challengeId: challenge.id,
+          error: rpcError.message,
+        });
+        return NextResponse.json(
+          { error: "Verification temporarily unavailable. Please try again." },
+          { status: 503 }
+        );
+      }
 
+      attemptNumber = rpcResult?.[0]?.new_attempt_count;
+      if (attemptNumber == null) {
+        // Claimed by a concurrent request.
+        return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
+      }
+      if (attemptNumber > MAX_VERIFY_ATTEMPTS) {
+        return NextResponse.json(
+          { error: "Too many attempts. Please wait 15 minutes." },
+          { status: 429 }
+        );
+      }
+    }
     if (!(await verifyOtp(otp, challenge.otp_hash))) {
       const locked = attemptNumber >= MAX_VERIFY_ATTEMPTS;
       return NextResponse.json(
@@ -451,33 +331,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Atomically claim the challenge to prevent concurrent duplicate verification.
-    const claimed = await claimOtpChallenge(adminSupabase, challenge.id, nowIso);
-    if (!claimed) {
-      return NextResponse.json({ error: "Invalid or expired OTP" }, { status: 400 });
-    }
-
     const verificationResult = await finalizePhoneVerification(
       adminSupabase,
       user,
-      accountPhoneFields,
-      nowIso,
-      { phone, otpHash: challenge.otp_hash }
+      phone,
+      challenge
     );
     if (!verificationResult.success) {
       return NextResponse.json(
-        { error: verificationResult.error },
-        { status: verificationResult.status }
+        {
+          error: verificationResult.error,
+          ...(verificationResult.code ? { code: verificationResult.code } : {}),
+        },
+        {
+          status: verificationResult.status,
+          headers: {
+            ...NO_CACHE_HEADERS,
+            ...(verificationResult.retryAfter
+              ? { "Retry-After": String(verificationResult.retryAfter) }
+              : {}),
+          },
+        }
       );
     }
-
-    // Best-effort: invalidate sibling pending challenges after successful verification.
-    await markSiblingChallengesVerified(adminSupabase, user.id, phone, challenge.id, nowIso);
+    if (verificationResult.alreadyVerified) {
+      return NextResponse.json({ success: true, verified: true }, { headers: NO_CACHE_HEADERS });
+    }
 
     // The verified phone is what buyers reach; replacing one is announced to
     // the account email (the SMS below only reaches the new number).
-    const previousPhone = profileGuard?.phone ? normalizeSaPhone(profileGuard.phone) : null;
-    if (previousPhone && previousPhone !== phone) {
+    if (verificationResult.phoneChanged) {
       scheduleBackgroundTask(
         announcePhoneChange(user.id, user.email ?? null, phone),
         "phone change security notice"

@@ -1,25 +1,8 @@
 import { createLogger } from "@/lib/utils/logger";
 import { extractMediaStorageKey, isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
-import { VARIANT_WIDTHS, variantKeyFor } from "@/lib/services/image-variants";
+import { withVariantKeys } from "@/lib/media/variant-keys";
 
 const log = createLogger("MediaCleanup");
-
-/** Raster image extensions that may have derived responsive variants. */
-const VARIANT_SOURCE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "avif", "gif"]);
-
-/**
- * Expand a storage key to include its pre-generated responsive variant keys.
- * Variants (`<stem>.w<W>.webp`) are derived objects that share the original's
- * lifecycle — when the original is deleted, its variants must be deleted too
- * or they leak as orphans in R2. Non-image keys (videos) return unchanged.
- */
-function withVariantKeys(key: string): string[] {
-  const ext = key.split(".").pop()?.toLowerCase() ?? "";
-  if (!VARIANT_SOURCE_EXTS.has(ext)) return [key];
-  // Already a variant key — don't expand further.
-  if (/\.w\d+\.webp$/.test(key)) return [key];
-  return [key, ...VARIANT_WIDTHS.map((w) => variantKeyFor(key, w))];
-}
 
 type InsertableCleanupRow = {
   bucket: string;

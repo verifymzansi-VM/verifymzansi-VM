@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 
 export default function VerificationError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[VerificationError]", error.digest ?? error.message);
@@ -35,7 +35,7 @@ export default function VerificationError({
           <p className="mt-3 text-xs text-muted-foreground">Error reference: {error.digest}</p>
         )}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Button variant="trust-verified" size="lg" onClick={() => reset()}>
+          <Button variant="trust-verified" size="lg" onClick={() => retry()}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Try again
           </Button>

@@ -6,8 +6,23 @@ const DEFAULT_MAX_RETRIES = 2;
 const BASE_DELAY_MS = 600;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function createTimeoutSignal(ms: number): { signal: AbortSignal; cancel: () => void } {
@@ -101,10 +116,12 @@ export async function fetchWithRetry(
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<Response> {
   let lastError: unknown;
+  const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (callerSignal?.aborted) throw callerSignal.reason;
     const timeout = createTimeoutSignal(timeoutMs);
-    const combinedSignal = combineSignals(init?.signal, timeout.signal);
+    const combinedSignal = combineSignals(callerSignal, timeout.signal);
 
     try {
       return await fetch(input, { ...init, signal: combinedSignal.signal });
@@ -113,18 +130,18 @@ export async function fetchWithRetry(
       if (combinedSignal.wasCallerAbort() || !isRetryable(err) || attempt === maxRetries) {
         break;
       }
-      const backoff = BASE_DELAY_MS * Math.pow(2, attempt);
-      log.warn("Network error during fetch, retrying", {
-        message: err instanceof Error ? err.message : String(err),
-        attempt: attempt + 1,
-        maxRetries,
-        nextDelayMs: backoff,
-      });
-      await delay(backoff);
     } finally {
       combinedSignal.cleanup();
       timeout.cancel();
     }
+    const backoff = BASE_DELAY_MS * Math.pow(2, attempt);
+    log.warn("Network error during fetch, retrying", {
+      message: lastError instanceof Error ? lastError.message : String(lastError),
+      attempt: attempt + 1,
+      maxRetries,
+      nextDelayMs: backoff,
+    });
+    await delay(backoff, callerSignal);
   }
 
   throw lastError;

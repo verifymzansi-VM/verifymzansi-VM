@@ -28,11 +28,13 @@ function buildAdminClient(options: {
   calls: {
     update: ReturnType<typeof vi.fn>;
     upsert: ReturnType<typeof vi.fn>;
+    insert: ReturnType<typeof vi.fn>;
   };
 } {
   let mode: "lookup" | "update" | "upsert" = "lookup";
   const update = vi.fn();
   const upsert = vi.fn();
+  const insert = vi.fn();
 
   const builder = {
     select: vi.fn((_fields: string) => {
@@ -68,6 +70,10 @@ function buildAdminClient(options: {
       mode = "upsert";
       return builder;
     }),
+    insert: insert.mockImplementation(() => {
+      mode = "upsert";
+      return builder;
+    }),
   };
 
   const admin = {
@@ -79,11 +85,93 @@ function buildAdminClient(options: {
     calls: {
       update,
       upsert,
+      insert,
     },
   };
 }
 
 describe("ensure-profile", () => {
+  function recoveryClient(lookups: Array<{ data: unknown; error: unknown }>) {
+    const maybeSingle = vi.fn();
+    for (const result of lookups) maybeSingle.mockResolvedValueOnce(result);
+    const insert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "23505", message: "duplicate profile" },
+        }),
+      }),
+    });
+    const upsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: { id: "existing", display_name: "Replacement" },
+          error: null,
+        }),
+      }),
+    });
+    const update = vi.fn();
+    const admin = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }),
+        insert,
+        upsert,
+        update,
+      }),
+    };
+    return { admin, insert, upsert, update, maybeSingle };
+  }
+
+  it("never resets an existing account after a failed profile lookup", async () => {
+    const { admin, insert, upsert, update } = recoveryClient([
+      { data: null, error: { message: "read unavailable" } },
+    ]);
+    expect(await ensureAccountProfile(admin, { id: "user-1" })).toBeNull();
+    expect(insert).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("re-reads a concurrent creation without replacing its account defaults", async () => {
+    const existing = {
+      id: "profile-1",
+      display_name: "Verified Name",
+      account_status: "suspended",
+      account_verification_status: "verified",
+    };
+    const { admin, insert, upsert, update } = recoveryClient([
+      { data: null, error: null },
+      { data: existing, error: null },
+    ]);
+    expect(
+      await ensureAccountProfile(admin, {
+        id: "user-1",
+        user_metadata: { display_name: "Replacement" },
+      })
+    ).toEqual({ id: "profile-1", display_name: "Verified Name" });
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(existing).toMatchObject({
+      account_status: "suspended",
+      account_verification_status: "verified",
+    });
+  });
+
+  it.each([
+    { data: null, error: { message: "retry read unavailable" } },
+    { data: null, error: null },
+  ])("stops a creation race safely when re-reading fails: %j", async (result) => {
+    const { admin, insert, upsert, maybeSingle } = recoveryClient([
+      { data: null, error: null },
+      result,
+    ]);
+    expect(await ensureAccountProfile(admin, { id: "user-1" })).toBeNull();
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(maybeSingle).toHaveBeenCalledTimes(2);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
   it("derives default display name from metadata before email", () => {
     expect(
       getDefaultDisplayName({
@@ -193,7 +281,8 @@ describe("ensure-profile", () => {
     });
 
     expect(result).toEqual({ id: "profile-2", display_name: "Nomsa" });
-    expect(calls.upsert).toHaveBeenCalled();
+    expect(calls.insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "user-2" }));
+    expect(calls.upsert).not.toHaveBeenCalled();
   });
 
   it("returns null when repair fails", async () => {

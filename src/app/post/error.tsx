@@ -8,10 +8,10 @@ import Link from "next/link";
 
 export default function PostError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[PostError]", error.digest ?? error.message);
@@ -49,7 +49,7 @@ export default function PostError({
           <Button
             variant="trust-verified"
             className="h-11 rounded-full px-6"
-            onClick={() => reset()}
+            onClick={() => retry()}
           >
             Try again
           </Button>

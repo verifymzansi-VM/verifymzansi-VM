@@ -24,6 +24,9 @@ export default defineConfig({
     // Avoid exhausting memory when the runner sees many logical CPUs.
     maxWorkers: Math.min(4, availableParallelism()),
     testTimeout: 10000,
+    // V8 instrumentation makes cold WASM database setup slower than assertions.
+    // Keep coverage setup bounded without changing the assertion deadline.
+    hookTimeout: coverageCoreLane ? 30_000 : 10_000,
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     exclude: coverageCoreLane
       ? [...configDefaults.exclude, ...coverageSensitiveTests]

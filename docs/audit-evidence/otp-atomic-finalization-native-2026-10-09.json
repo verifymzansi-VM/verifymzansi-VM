@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-10-09T06:52:12.853Z",
+  "assessment": "PASS",
+  "postgresVersion": "17.11 (Ubuntu 17.11-1.pgdg24.04+2)",
+  "transport": "private Unix socket",
+  "syntheticOnly": true,
+  "checks": [
+    {
+      "name": "independent_session_race",
+      "status": "PASS",
+      "sessionPids": [432, 433],
+      "outcomes": ["already_verified", "verified"]
+    },
+    {
+      "name": "rollback_on_verification_sessions_failure_and_retry",
+      "status": "PASS"
+    },
+    {
+      "name": "rollback_on_otp_logs_failure_and_retry",
+      "status": "PASS"
+    },
+    {
+      "name": "anon_execute_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "authenticated_execute_denied",
+      "status": "PASS"
+    },
+    {
+      "name": "staging_rechecked_after_waiting_for_independent_profile_lock",
+      "status": "PASS"
+    }
+  ],
+  "limitations": [
+    "Minimal isolated schema; not full Supabase migrations, GoTrue or PostgREST verification."
+  ]
+}

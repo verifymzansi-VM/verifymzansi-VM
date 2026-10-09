@@ -27,10 +27,10 @@ function reportError(error: Error): void {
  */
 export default function GlobalError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     reportError(error);
@@ -62,7 +62,7 @@ export default function GlobalError({
             <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
                 type="button"
-                onClick={reset}
+                onClick={retry}
                 className="inline-flex h-11 items-center justify-center rounded-full bg-brand-green-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 Try again

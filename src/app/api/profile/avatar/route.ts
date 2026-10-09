@@ -148,20 +148,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to upload avatar" }, { status: 500 });
     }
 
-    // Best-effort cleanup of avatars previously uploaded with a different
-    // extension (e.g. old PNG when the new one is JPEG) so they don't linger.
-    const stalePaths = ["jpg", "png", "webp"]
-      .filter((candidate) => candidate !== ext)
-      .map((candidate) => `${user.id}/avatar.${candidate}`);
-    try {
-      await storage.from(BUCKET).remove(stalePaths);
-    } catch (cleanupErr) {
-      log.warn("Failed to remove stale avatar variants", {
-        userId: user.id,
-        error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown error",
-      });
-    }
-
     // Get the public URL. The storage path is stable across re-uploads, so
     // append a version param to bust CDN/browser caches of the old avatar.
     const {
@@ -178,6 +164,22 @@ export async function POST(request: NextRequest) {
     if (updateError) {
       log.error("Avatar URL save failed", { userId: user.id, error: updateError.message });
       return NextResponse.json({ error: "Failed to save avatar" }, { status: 500 });
+    }
+
+    // Remove old formats only after saving the new URL. A failed profile
+    // write must leave the previous avatar available. Supabase returns most
+    // storage failures as error values rather than throwing them.
+    const stalePaths = ["jpg", "png", "webp"]
+      .filter((candidate) => candidate !== ext)
+      .map((candidate) => `${user.id}/avatar.${candidate}`);
+    try {
+      const { error: cleanupError } = await storage.from(BUCKET).remove(stalePaths);
+      if (cleanupError) throw new Error(cleanupError.message);
+    } catch (cleanupErr) {
+      log.warn("Failed to remove stale avatar variants", {
+        userId: user.id,
+        error: cleanupErr instanceof Error ? cleanupErr.message : "Unknown error",
+      });
     }
 
     return NextResponse.json({ success: true, avatarUrl: versionedUrl });

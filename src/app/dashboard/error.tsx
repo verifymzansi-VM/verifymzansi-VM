@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
  */
 export default function DashboardError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error("[DashboardError]", error.digest ?? error.message);
@@ -35,7 +35,7 @@ export default function DashboardError({
         </p>
       </div>
       <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-        <Button onClick={() => reset()} variant="trust-verified" className="h-11 rounded-full px-5">
+        <Button onClick={() => retry()} variant="trust-verified" className="h-11 rounded-full px-5">
           Try again
         </Button>
         <Button

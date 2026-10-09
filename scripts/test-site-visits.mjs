@@ -8,6 +8,49 @@ try {
   for (const name of ["20260920120000_site_visits.sql", "20260920130000_site_visit_accuracy.sql"]) {
     await db.exec(fs.readFileSync(`supabase/migrations/${name}`, "utf8"));
   }
+  // Exercise the deployed dashboard and recording contract in this domain gate.
+  await db.exec(`
+    CREATE TABLE public.staff_roles(user_id UUID PRIMARY KEY, status TEXT, role TEXT DEFAULT 'admin');
+    CREATE TABLE public.account_profiles(user_id UUID PRIMARY KEY, account_status TEXT);
+    CREATE TABLE public.content_views(
+      source TEXT NOT NULL CHECK (source IN ('video','page')),
+      engaged BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE public.analytics_events(content_id UUID, event_type TEXT, surface TEXT, created_at TIMESTAMPTZ);
+    CREATE TABLE public.listings(id UUID PRIMARY KEY, view_count BIGINT);
+    CREATE TABLE public.businesses(LIKE public.listings INCLUDING ALL);
+    CREATE TABLE public.promotions(LIKE public.listings INCLUDING ALL);
+  `);
+  const trafficSql = fs.readFileSync(
+    "supabase/migrations/20261002135904_fair_showroom_rotation.sql",
+    "utf8"
+  );
+  const staffSql = fs.readFileSync(
+    "supabase/migrations/20260927110000_staff_roles_authority.sql",
+    "utf8"
+  );
+  const staffLookup = staffSql.match(
+    /CREATE OR REPLACE FUNCTION public\.staff_role_of\([\s\S]*?\bAS\s+(\$[\w]*\$)[\s\S]*?\1;/i
+  );
+  assert.ok(staffLookup, "Missing deployed staff role lookup");
+  await db.exec(staffLookup[0]);
+  for (const name of ["site_visit_area", "record_site_visit"]) {
+    const match = trafficSql.match(
+      new RegExp(
+        `CREATE OR REPLACE FUNCTION public\\.${name}\\([\\s\\S]*?\\bAS\\s+(\\$[\\w]*\\$)[\\s\\S]*?\\1;`,
+        "i"
+      )
+    );
+    assert.ok(match, `Missing current traffic function ${name}`);
+    await db.exec(match[0]);
+  }
+  for (const name of [
+    "20261008234338_optimize_traffic_queries_and_showroom_index.sql",
+    "20261008235202_reduce_traffic_classification_and_bound_views.sql",
+  ]) {
+    await db.exec("BEGIN;" + fs.readFileSync(`supabase/migrations/${name}`, "utf8") + "COMMIT;");
+  }
   const stats = async () =>
     (await db.query("SELECT public.get_site_visit_stats() AS stats")).rows[0].stats;
   const record = async (path, viewer = "anon:test") =>
