@@ -1,0 +1,72 @@
+{
+  "recordedAt": "2026-10-10T06:55:31.179Z",
+  "branch": "main",
+  "securitySourceCommit": "880758e3cbb9db81e751dc2ef28773c580907236",
+  "newBranchesCreated": false,
+  "productionDeployment": false,
+  "productionMigrations": false,
+  "browser": {
+    "status": "PASS",
+    "freshProductionModeBuild": true,
+    "stats": {
+      "startTime": "2026-10-10T06:44:50.943Z",
+      "duration": 485275.84099999996,
+      "expected": 24,
+      "skipped": 2,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "skips": [
+      {
+        "title": "@smoke mobile footer and marketplace tabs stay clear of the bottom tab bar",
+        "project": "chromium",
+        "coveredElsewhere": true
+      },
+      {
+        "title": "@smoke marketplace mobile pages avoid bootstrap errors and overlapping chrome",
+        "project": "chromium",
+        "coveredElsewhere": true
+      }
+    ],
+    "kycRequiredDesktopMobileJourneys": "PASS",
+    "scope": "Synthetic local HTTP/browser workflows, not hosted provider/RLS proof"
+  },
+  "docker": {
+    "status": "PASS",
+    "networkIsolated": true,
+    "statuses": {
+      "/": 200,
+      "/api/health": 200,
+      "/api/admin/verification/evidence": 401
+    },
+    "testContainerRemoved": true
+  },
+  "sourceSecretScan": "PASS",
+  "freshBuildSecretScan": {
+    "status": "PASS",
+    "scope": "Current publishable source plus fresh credential-free production-mode browser build artifacts",
+    "durationMs": 4327
+  },
+  "checks": {
+    "format": "PASS",
+    "types": "PASS",
+    "contracts": "PASS",
+    "databaseInvariants": "PASS",
+    "securityCanaries": "PASS",
+    "composeConfiguration": "PASS",
+    "manualDeploymentGuard": "PASS",
+    "priorApplicationUnitTests": {
+      "passed": 5323,
+      "failed": 0
+    },
+    "priorApplicationCoverageTests": {
+      "passed": 5245,
+      "failed": 0
+    }
+  },
+  "limitations": [
+    "Pre-existing root development-cache directory aliases still prevent a complete strict scan of that old running cache. Publishable source and the fresh build scan passed.",
+    "Existing root-connected dev container was not restarted; the separate reviewed image was tested without network or live credentials.",
+    "Production readiness remains NO-GO as documented; source publication does not authorize migration/deployment."
+  ]
+}

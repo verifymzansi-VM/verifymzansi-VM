@@ -1,13 +1,8 @@
 name: Deploy
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    branches: [main]
-    types: [completed]
-  push:
-    tags:
-      - "v*"
+  # Production rollout is manual while prelaunch migrations, recovery and
+  # hosted security verification remain review gates. Main pushes run CI only.
   workflow_dispatch:
     inputs:
       environment:
@@ -28,13 +23,8 @@ jobs:
     permissions:
       contents: read
       actions: read
-    # Automatic deployment must come from successful CI on this repository's main push.
-    if: >-
-      ${{ github.event_name != 'workflow_run' ||
-          (github.event.workflow_run.conclusion == 'success' &&
-           github.event.workflow_run.event == 'push' &&
-           github.event.workflow_run.head_branch == 'main' &&
-           github.event.workflow_run.head_repository.full_name == github.repository) }}
+    # An explicit dispatch still requires successful CI for the exact commit.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     env:
       NODE_ENV: production
       WRANGLER_SEND_ERROR_REPORTS: "false"

@@ -1,0 +1,256 @@
+{
+  "baseline": "OWASP ASVS5.0.0 cumulative L1+L2",
+  "assessed": "2026-10-09–10",
+  "findings": [
+    {
+      "id": "VM-01",
+      "severity": "High",
+      "title": "Staff MFA exceptions can bypass privileged authentication",
+      "status": "Confirmed in baseline source; conditional live exposure",
+      "impact": "A staff password/session can authorize sensitive reads and decisions without a second factor when the flag is off or enrollment grace applies. Future AMR timestamps also passed recent-factor checks.",
+      "affected": [
+        "src/lib/auth/staff-mfa.ts",
+        "src/lib/auth/staff-mfa-guard.ts",
+        "src/lib/auth/require-staff.ts",
+        "public.current_staff_role()"
+      ],
+      "evidence": "Baseline accepts not_enforced and seven-day unenrolled grace. Deployed helper contains equivalent exceptions. Live staff_mfa_enforced is currently on: this is not evidence of a present flag-off bypass or compromise.",
+      "prerequisites": "A valid staff account/session plus an allowed exception; future signed AMR claims require provider/operator influence and were not attacker-minted.",
+      "protections": "Database-backed current staff roles, account status and MFA when enforced already exist.",
+      "fix": "Local guards require verified recent MFA without production exceptions, including development processes targeting the known live database; reviewed database migration requires AAL2. Enrollment remains reachable with an active session.",
+      "verify": "Locally exercise AAL1/off/grace/future/stale denial and valid AAL2/fresh success. Before rollout prove enrollment/recovery and both API/PostgREST behavior in isolated staging.",
+      "asvs": ["6.3.3", "6.3.4", "6.8.4", "7.5.3 (stronger L3)"],
+      "resolution": "Implemented locally; database migration and deployment not applied."
+    },
+    {
+      "id": "VM-02",
+      "severity": "High",
+      "title": "Privileged access does not bind signed JWTs to a live session",
+      "status": "Confirmed baseline authorization gap; hosted replay unverified",
+      "impact": "A still-valid staff JWT can retain privileged database authority after its session is removed, until token expiry.",
+      "affected": [
+        "public.current_staff_role()",
+        "src/lib/auth/require-staff.ts",
+        "src/lib/auth/staff-mfa-guard.ts",
+        "supabase/migrations/20261009205230_require_staff_mfa_without_exceptions.sql"
+      ],
+      "evidence": "Baseline role helper checks AAL/role but not auth.sessions. Local database and guard tests reproduce/deny missing, cross-user and expired sessions. Supabase documents JWT persistence after logout.",
+      "prerequisites": "Possession of a valid signed staff token, current staff role and sufficient MFA; its original session has been revoked/expired.",
+      "protections": "JWT verification, current database role/account status and AAL requirements still limit access.",
+      "fix": "Service-only staff_session_is_active checks verified sub/session_id, ownership and not_after; app errors fail closed. Database current_staff_role requires matching active session. Synthetic tokens now remain invalid after logout/re-login.",
+      "verify": "Local deleted/expired/cross-user session and fixture replay tests. Stage real logout, admin revocation, factor changes and direct PostgREST; separately test ordinary-user JWT/RLS revocation.",
+      "asvs": ["7.4.1", "7.4.2", "8.3.1"],
+      "resolution": "Staff-specific implementation local only. General owner-session revocation is unverified and not claimed fixed."
+    },
+    {
+      "id": "VM-03",
+      "severity": "High",
+      "title": "Evidence streaming proceeds after failed or missing case authorization",
+      "status": "Confirmed baseline source defect; targeted local regression tests",
+      "impact": "A staff caller knowing an artifact ID can decrypt evidence outside a successfully resolved active, linked case. Historical fallback broadens the set of accessible documents.",
+      "affected": [
+        "src/app/api/admin/verification/evidence/route.ts GET/POST",
+        "src/app/api/admin/verification/evidence/metadata/route.ts",
+        "src/lib/services/kyc-evidence-access.ts",
+        "src/app/api/admin/verification/_lib/evidence-route-auth.ts"
+      ],
+      "evidence": "Baseline streaming warns on inactive/unlinked/error cases then continues. Metadata falls back to recent artifacts, and helper includes historical IDs. No real document was retrieved.",
+      "prerequisites": "An authenticated authorized staff role and known artifact ID; not an anonymous or ordinary-user bypass.",
+      "protections": "Existing staff role checks, private encrypted storage, access audit before decryption and no-store responses. All staff case access is intentional policy, not a newly invented role defect.",
+      "fix": "Require active case and committed current links; fail closed on lookup/audit/limiter errors; reject expired or malformed deadlines; require fresh MFA and shared evidence limits (20/minute, 200/hour). Session publication failure now returns 503 and preserves earlier evidence until new publication succeeds.",
+      "verify": "Positive current-linked evidence and upload workflows, negative closed/unlinked/expired/unauthorized/outage GET/POST/metadata tests. Stage legacy-link repair, legal-hold retrieval and concurrent upload/reviewer/cleanup behavior.",
+      "asvs": ["8.2.2", "8.3.1", "14.2.4", "7.5.3 (stronger L3)"],
+      "resolution": "Implemented locally. Historical access needs a deliberate authorized recovery process."
+    },
+    {
+      "id": "VM-04",
+      "severity": "High",
+      "title": "No isolated hosted test environment; local development accesses production data",
+      "status": "Confirmed configuration and user confirmation",
+      "impact": "Ordinary development or intrusive security fixtures can alter live identity/payment data or use weaker development controls. Broad local credential/container exposure increases the impact.",
+      "affected": [
+        "wrangler.toml staging bindings",
+        "docker-compose.yml",
+        "Dockerfile",
+        "running verifymzansi-app-1",
+        "src/lib/utils/local-dev.ts"
+      ],
+      "evidence": "Staging Worker returns 404, Supabase has no development branches, and user has no staging. Staging config shares production DB/R2/limiter. Read-only Docker inspection shows development mode, live Supabase/buckets, service/encryption credential presence, root user, full source bind and port3000 published on all interfaces. No bypass flags currently enabled.",
+      "prerequisites": "Developer/test tool or someone reaching that dev server; exploitation of its privileges was not attempted.",
+      "protections": "Production Worker has production markers and no test bypass bindings; local test runners use separate synthetic ephemeral resources.",
+      "fix": "Local security-environment guard preserves strict staff controls and disables local fallback for the known live backend. Provision separate Supabase, buckets, limiter/KV/DO and merchant test credentials; scope dev credentials and bind loopback. Existing Docker/user files were preserved.",
+      "verify": "Final production-data environment unit tests pass. Externally verify resource IDs and network/credential scope before enabling hosted authenticated tests.",
+      "asvs": ["13.2.2", "14.2.4", "15.2.5 (stronger L3)"],
+      "resolution": "Partial local guard fixed; configuration isolation remains a launch gate. Existing container was not modified/stopped."
+    },
+    {
+      "id": "VM-05",
+      "severity": "High",
+      "title": "Linked incomplete KYC has no finite inactivity deadline",
+      "status": "Confirmed live function and source",
+      "impact": "Pending or partially approved identity documents can remain indefinitely, increasing breach exposure and frustrating predictable deletion.",
+      "affected": [
+        "public.run_kyc_retention()",
+        "supabase/migrations/20260929150000_launch_access_hardening.sql",
+        "src/lib/services/verification-decision.ts",
+        "supabase/migrations/20261009225604_expire_inactive_incomplete_kyc.sql"
+      ],
+      "evidence": "Live function deletes unlinked pending uploads after 90 days, rejected after 30 days and approved evidence after purge_after. Linked incomplete submissions are excluded; partial approval lacks the full-verification purge schedule.",
+      "prerequisites": "A linked incomplete account with old evidence and no full-verification deadline.",
+      "protections": "Legal holds, approved purge schedule, cleanup queue and worker exist; cron execution was successful, which does not prove byte deletion.",
+      "fix": "User approved90 days inactivity. Review-only migration integrates expiry into existing daily function, denies evidence immediately, clears links and submitted identity fields, requires resubmission and queues R2 removal. Preserves verified accounts, profile/decision holds, recent submissions/reviews, active claims and unexpired proposals; retains audit/hash metadata.",
+      "verify": "Native synthetic fixture checks pending/partial expiry, nine case variants, protected cases, grants, field clearing, queue uniqueness and idempotency via daily function. Hosted concurrent decision/upload, cleanup completion, metadata lifetime and backup tombstones require external validation.",
+      "asvs": ["14.1.2", "14.2.4", "14.2.7 (stronger L3)"],
+      "resolution": "Migration/test implementation prepared; never applied to production. Object and backup deletion unverified."
+    },
+    {
+      "id": "VM-06",
+      "severity": "High readiness gap",
+      "title": "Current recoverable backup and restoration evidence unavailable",
+      "status": "Unverified readiness control, not proof that backups are absent",
+      "impact": "Database/Auth/R2/key loss or a bad migration may be unrecoverable; restored backups may resurrect deleted personal information.",
+      "affected": [
+        "scripts/backup-supabase.ts",
+        "docs/encryption-recovery.md",
+        "Supabase backup inventory",
+        "R2/key recovery and retention journals"
+      ],
+      "evidence": "Management backup API returned HTTP 401. No current consistent backup/restore inventory or drill obtained. Repository REST export explicitly is supplemental, not transaction-consistent/restorable schema/Auth/R2 backup.",
+      "prerequisites": "Incident, deletion, failed migration or provider failure requiring restoration.",
+      "protections": "Recovery documentation, encryption and cleanup journals exist; current recovery effectiveness not demonstrated.",
+      "fix": "Operator must identify consistent DB/Auth backups, independently recover R2 and versioned keys, define RPO/RTO and isolated restoration/deletion-tombstone procedure.",
+      "verify": "Restore authorized synthetic backups into isolation; prove account Auth, documents, key decryption, payment reconciliation and reapplication of deletions. Record backup ID/time/access and measured recovery.",
+      "asvs": ["11.1.1", "14.1.2", "14.2.4"],
+      "resolution": "External verification required before production migration or launch."
+    },
+    {
+      "id": "VM-07",
+      "severity": "High potential / pending provider attestation",
+      "title": "Hosted PostgreSQL security patch status unresolved",
+      "status": "Suspected, not confirmed exploitable vulnerability",
+      "impact": "Unpatched database-engine defects can affect confidentiality, integrity or availability depending on access and installed features.",
+      "affected": ["Supabase project tnygdgormnofpgjknlhr PostgreSQL17.6.1.063"],
+      "evidence": "Connected provider reports17.6.1.063; current upstream17 security page includes fixes through 17.11. Supabase backports and reachable exploit conditions were not verified.",
+      "prerequisites": "Applicable unpatched flaw and a reachable exploit path; neither is established from version alone.",
+      "protections": "Managed service, browser roles without superuser/BYPASSRLS and selected RPC grants restrict access. Version suffix may include provider backports.",
+      "fix": "Obtain provider patch/backport attestation or prepare a supported upgrade after verified backups, extension checks and isolated tests.",
+      "verify": "Provider CVE mapping/attestation and controlled post-upgrade verification. No engine exploit tests on production.",
+      "asvs": ["15.2.1"],
+      "resolution": "External attestation required; no upgrade authorized/performed."
+    },
+    {
+      "id": "VM-08",
+      "severity": "Medium",
+      "title": "Upload scanner is a custom heuristic rather than full antivirus",
+      "status": "Confirmed source capability gap",
+      "impact": "Malformed or malicious identity documents may evade pattern checks and reach staff/browser/parser workflows.",
+      "affected": [
+        "src/lib/utils/malware-scan.ts",
+        "src/lib/utils/file-validation.ts",
+        "src/app/api/verification/upload/route.ts"
+      ],
+      "evidence": "Header/byte/PDF active-name and Flate object-stream inspection found; no full AV/CDR engine or quarantine service found.",
+      "prerequisites": "Authenticated upload of a file escaping bounded custom checks; no malicious production file submitted.",
+      "protections": "Size/extension/magic/dimension limits, metadata removal, private AES-GCM storage, restrictive rendering/no-store and active-PDF checks.",
+      "fix": "Design a real isolated AV/CDR/quarantine stage with privacy-reviewed processor/retention and fail-closed verdicts before reviewer access.",
+      "verify": "Bounded harmless AV fixtures and malformed/polyglot tests in staging, scanner outage/timeouts, clean-file positive flows and worker parser isolation.",
+      "asvs": ["5.4.3", "5.2.2", "5.4.2"],
+      "resolution": "Infrastructure/processor decision remains; no new vendor introduced."
+    },
+    {
+      "id": "VM-09",
+      "severity": "Medium",
+      "title": "Production invocation logs do not redact authentication query strings",
+      "status": "Confirmed logging configuration; actual disclosure untested",
+      "impact": "Logged callback URLs can retain temporary authorization codes/token hashes, broadening credential access and privacy risk.",
+      "affected": [
+        "wrangler.toml observability",
+        "active Cloudflare Worker observability.redact_query_string=false",
+        "src/app/(auth)/auth/callback/route.ts"
+      ],
+      "evidence": "Live logging persist enabled with query redaction false; callback accepts code/token_hash URL parameters. Personal/auth log entries were not read.",
+      "prerequisites": "Authentication callback invocation captured by logging plus access to logs; token validity/reuse depends on provider.",
+      "protections": "Application redaction and short-lived/single-use callback tokens reduce some exposure; neither proves provider log scrubbing.",
+      "fix": "Branch prepares redact_query_string=true at top-level and production. Separately review Sentry/errors/replay, filenames, provider bodies and log access/retention.",
+      "verify": "In staging submit synthetic marker callback and inspect authorized logs for absence of query/token/body identifiers, then verify live config read-only after approved change.",
+      "asvs": ["14.2.1", "16.2.5"],
+      "resolution": "Prepared only; no logging configuration deployed."
+    },
+    {
+      "id": "VM-10",
+      "severity": "Medium",
+      "title": "Public media accepts TLS1.0 and TLS1.1",
+      "status": "Confirmed low-impact live negotiation",
+      "impact": "Public media transport permits obsolete protocol protection. This does not demonstrate private KYC exposure.",
+      "affected": [
+        "media.verifymzansi.com R2 custom domain minimum TLS1.0",
+        "media-staging.verifymzansi.com attached to public bucket"
+      ],
+      "evidence": "Certificate-validated TLS1.0 and1.1 handshakes succeeded on public media; main site rejects both and supports1.2. Staging media minimum reported in configuration, not separately handshake-tested.",
+      "prerequisites": "Client/attacker conditions allowing obsolete TLS negotiation.",
+      "protections": "HTTPS, current main-site TLS policy, public-content-only bucket. Private bucket managed endpoint disabled and no custom domains.",
+      "fix": "Review raise media minimum to1.2 and isolate staging media bucket/domain.",
+      "verify": "Repeat bounded handshake tests:1.0/1.1 rejected,1.2/1.3 legitimate delivery succeeds.",
+      "asvs": ["12.1.1"],
+      "resolution": "Cloud configuration review only."
+    },
+    {
+      "id": "VM-11",
+      "severity": "Medium",
+      "title": "Provider-wide breached-password protection unresolved",
+      "status": "Confirmed native setting disabled; bypass exposure unverified",
+      "impact": "Direct provider signup/reset/update paths could accept known compromised passwords if application HIBP controls are bypassed.",
+      "affected": [
+        "Supabase Auth leaked-password setting",
+        "src/lib/security/pwned-passwords.ts",
+        "src/app/api/auth"
+      ],
+      "evidence": "Connected advisor reports native leaked-password protection disabled. Application registration/reset/change pathways perform fail-closed HIBP prefix lookup. Management Auth settings/hook API401 prevents full alternate-path verification.",
+      "prerequisites": "An accessible alternate provider pathway without equivalent checks; not confirmed by testing.",
+      "protections": "Application HIBP checks, password8–128 length and recovery/current-password proofs.",
+      "fix": "Verify all provider paths/hooks and enforce an equivalent breached-password check globally. Supabase documents plan-dependent availability; no plan/subscription assumption or change.",
+      "verify": "Test documented synthetic breached/clean passwords against every allowed signup/recovery/update path in isolated provider staging and prove consistent denial.",
+      "asvs": ["6.2.12", "6.3.4"],
+      "resolution": "Provider access and architectural decision needed."
+    },
+    {
+      "id": "VM-12",
+      "severity": "Medium",
+      "title": "Release protections and monitoring report green without required execution",
+      "status": "Confirmed connected GitHub configuration/run evidence",
+      "impact": "Sensitive changes may merge without review/check enforcement, and missed outages/security signals may go unnoticed.",
+      "affected": [
+        "GitHub Protect main ruleset",
+        ".github/workflows/synthetic-monitoring.yml",
+        "CodeQL workflow / Analyze step",
+        "production environment protection"
+      ],
+      "evidence": "Active main rules only deletion/nonfastforward; no required checks/review and no deployment environments returned. CodeQL Analyze skipped, coverage-unavailable job succeeded. Scheduled production-smoke/worker-health meaningful steps skipped due missingPRODUCTION_APP_URL. GitHub MFA field null is unknown, not off.",
+      "prerequisites": "An authorized writer/deployer or an actual outage; credential compromise not tested.",
+      "protections": "Relevant CI and deployment jobs do execute, and source-level tests exist. App alert/audit hooks exist.",
+      "fix": "Review require actual security/build tests and independent review; configure protected release/IAM and supported CodeQL. Replace/authorize production POST probes before enabling smoke, use bounded read-only uptime and verify alerts.",
+      "verify": "Demonstrate blocked bad merge/release in test branch, actual CodeQL analysis receipt, executed monitor steps, synthetic alert delivery and named responder acknowledgement.",
+      "asvs": ["15.1.1", "15.2.1", "16.1.1", "16.3.1"],
+      "resolution": "External configuration/rehearsal required; no settings or workflow deployment changed."
+    },
+    {
+      "id": "VM-13",
+      "severity": "Low",
+      "title": "Password composition rules conflict with current ASVS",
+      "status": "Confirmed source; local correction tested",
+      "impact": "Unnecessary uppercase/lowercase/digit rules discourage usable passphrases without replacing breach detection.",
+      "affected": [
+        "src/lib/validations/shared.ts",
+        "src/components/auth/password-requirements.tsx",
+        "src/app/dashboard/profile/page.tsx"
+      ],
+      "evidence": "Baseline requires character classes; ASVS6.2.5 prohibits these composition rules.",
+      "prerequisites": "Normal password registration/change; not an account compromise proof.",
+      "protections": "8–128 length and application breached-password checks remain.",
+      "fix": "Remove class restrictions and align both password UIs while retaining length, HIBP and recovery checks.",
+      "verify": "Accept long passphrases without artificial classes; retain too-short/too-long/breached password rejection and normal reset/change flow tests.",
+      "asvs": ["6.2.5", "6.2.12"],
+      "resolution": "Implemented and tested locally; provider policy still unverified."
+    }
+  ]
+}

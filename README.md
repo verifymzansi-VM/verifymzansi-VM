@@ -72,6 +72,27 @@ Open `http://localhost:3000`.
 For Playwright, keep that local dev server separate. `pnpm test:e2e` starts its
 own deterministic app instance on a dedicated port.
 
+### Docker development
+
+Docker Compose runs the app from the checked-out project directory with hot
+reload and loads its runtime settings from `.env.local`. Set
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY` there to the Supabase project you want this app to
+use, then start the app from the repository root:
+
+```bash
+docker compose up --build
+```
+
+Open `http://localhost:3000`. The app container uses the configured Supabase
+project directly; the Compose setup does not create a standalone PostgreSQL
+database because that would not provide Supabase Auth or its HTTP API. Stop the
+app with `docker compose down`.
+
+Production deployment is currently manual through the Deploy workflow. Pushing
+`main` runs CI only. Review the security assessment and apply the required
+database changes in isolated staging before approving a production rollout.
+
 ## Environment Modes
 
 ### Local dev

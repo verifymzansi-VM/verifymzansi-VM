@@ -169,3 +169,5 @@ output/
 !docs/encryption-recovery.md
 !docs/audit-evidence/
 !docs/audit-evidence/production-readiness-review-2026-10-09.md
+!docs/audit-evidence/prelaunch-security-2026-10-10/
+!docs/audit-evidence/prelaunch-security-2026-10-10/*

@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-10T06:32:22.757Z",
+  "baseline": "da5787db24fe9ad36c5968d04c7519ae6b7b3079",
+  "commit": "880758e3cbb9db81e751dc2ef28773c580907236",
+  "branch": "codex/prelaunch-security-fixes",
+  "worktree": ".",
+  "productionMutations": false,
+  "unit": {
+    "command": "pnpm exec vitest run --reporter=json --outputFile=tmp/security-final-unit.json",
+    "status": "PASS",
+    "files": 579,
+    "tests": 5323,
+    "passed": 5323,
+    "failed": 0,
+    "skipped": 0
+  },
+  "coverage": {
+    "command": "pnpm test:coverage:core --reporter=json --outputFile=tmp/security-final-coverage.json",
+    "status": "PASS",
+    "files": 574,
+    "tests": 5245,
+    "passed": 5245,
+    "failed": 0,
+    "metrics": {
+      "statements": {
+        "covered": 15134,
+        "total": 19488,
+        "percent": 77.65
+      },
+      "branches": {
+        "covered": 11478,
+        "total": 16869,
+        "percent": 68.04
+      },
+      "functions": {
+        "covered": 2280,
+        "total": 2700,
+        "percent": 84.44
+      },
+      "lines": {
+        "covered": 14235,
+        "total": 17912,
+        "percent": 79.47
+      }
+    },
+    "exclusions": "Six coverage-sensitive UI files and configured generated/runtime/fixture exclusions; these tests are included in the full unit lane."
+  },
+  "native": {
+    "schemaVersion": 1,
+    "workdir": ".\\tmp\\isolated-db\\database-UyMhcI",
+    "project": "vm_audit_8ec1ef80",
+    "assessment": "PASS",
+    "results": [
+      {
+        "name": "start",
+        "status": "PASS",
+        "evidence": ".\\tmp\\isolated-db\\vm_audit_8ec1ef80-start.log"
+      },
+      {
+        "name": "migrations",
+        "status": "PASS",
+        "evidence": ".\\tmp\\isolated-db\\vm_audit_8ec1ef80-migrations.log"
+      },
+      {
+        "name": "status",
+        "status": "PASS",
+        "evidence": ".\\tmp\\isolated-db\\vm_audit_8ec1ef80-status.log"
+      },
+      {
+        "name": "PostgREST RLS",
+        "status": "PASS"
+      },
+      {
+        "name": "Final grants and independent-session races",
+        "status": "PASS"
+      },
+      {
+        "name": "Versioned KYC overrides and independent-session proposal/approval races",
+        "status": "PASS"
+      },
+      {
+        "name": "Inactive KYC 90-day policy, protections and idempotency",
+        "status": "PASS"
+      },
+      {
+        "name": "stop",
+        "status": "PASS",
+        "evidence": ".\\tmp\\isolated-db\\vm_audit_8ec1ef80-stop.log"
+      }
+    ],
+    "migrationStateVerified": true,
+    "limitations": [
+      "Payment fulfillment/cancellation race is separately tested in PGlite; expand real PostgreSQL race fixtures"
+    ]
+  },
+  "browser": {
+    "schemaVersion": 1,
+    "checkout": ".\\tmp\\isolated-browser\\checkout-Z8M9pN",
+    "commit": "da5787db24fe9ad36c5968d04c7519ae6b7b3079",
+    "snapshot": "working tree without ignored secrets",
+    "next": "16.3.8",
+    "results": [
+      {
+        "command": "install",
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 143485,
+        "evidence": ".\\tmp\\isolated-browser\\checkout-Z8M9pN-install.log"
+      },
+      {
+        "command": "browser",
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 526933,
+        "evidence": ".\\tmp\\isolated-browser\\checkout-Z8M9pN-browser.log"
+      },
+      {
+        "command": "generated route manifest",
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 0,
+        "evidence": ".\\tmp\\isolated-browser\\checkout-Z8M9pN\\.next\\server\\app-paths-manifest.json"
+      },
+      {
+        "command": "bundle",
+        "status": "PASS",
+        "exitCode": 0,
+        "durationMs": 1067,
+        "evidence": ".\\tmp\\isolated-browser\\checkout-Z8M9pN-bundle.log"
+      }
+    ],
+    "quarantine": ["webkit", "mobile-safari"],
+    "providerVerification": false,
+    "limitations": [
+      "KYC browser tests cover synthetic ID/selfie submission, evidence authorization, claims, resubmission, final approval/retention and independent high-risk governance UI. Auth/database/storage models do not attest real PostgreSQL RLS/transactions or genuine provider behavior."
+    ]
+  },
+  "static": {
+    "scope": "Final application source examined; no behavior edits after complete unit/native/coverage results. SQL newlines normalized only before commit.",
+    "passed": [
+      "format (corrected final run)",
+      "lint",
+      "types",
+      "contracts",
+      "imports",
+      "deadcode",
+      "duplication (no baseline weakening)",
+      "strict isolated-source secrets",
+      "db-static",
+      "security canaries"
+    ],
+    "dependencies": "WARN: exact hash/provenance-verified installed braces3.0.3 depth-guard backport; raw registry advisory retained."
+  },
+  "failuresAndLimits": [
+    "Original deep scan failed before start: Unsupported untracked file type: NUL; no canonical plugin scan completed.",
+    "Original secret scan failed for two unclassified NUL hex matches and nonregular Next cache entries; no exposed live credential confirmed.",
+    "Audit-wrapper unit lane timed out at600seconds; earlier wrapper format failed on trailing blank line, then corrected format passed. Do not present the wrapper as a complete pass. Final direct5323-test suite and5245-test coverage suite passed.",
+    "Intermediate native retention fixtures required corrections for profile trigger, restricted replication parameter and pending-artifact uniqueness. Final fixture uses ordinary inserts, all real triggers, actual daily retention function and passed.",
+    "Browser receipt checkout-Z8M9pN precedes final pure-helper consolidation/environment selector and retention migration. Positive flows passed at that snapshot; full final hosted/Worker/browser acceptance is unverified.",
+    "Cloudflare native runtime-binding fixture, actual provider Auth/revocation, complete two-user/two-organisation matrix, real Ozow delivery and recovery/alert exercises remain unverified."
+  ],
+  "patchSha256Base64url": "Rj-JVovv3kVR3oIqPyZZIo4IcnEWMuwuGHzs1BS5ikw"
+}
