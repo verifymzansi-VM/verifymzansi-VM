@@ -1,3 +1,7 @@
+import {
+  decodePlaywrightPersona as decodePlaywrightPersonaFromCookie,
+  PLAYWRIGHT_SESSION_PREFIX,
+} from "./playwright-token";
 import { createBrowserClient } from "@supabase/ssr";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
 import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
@@ -26,32 +30,6 @@ function createPlaceholderClient() {
       detectSessionInUrl: false,
     },
   }) as SupabaseClient;
-}
-
-const PLAYWRIGHT_SESSION_PREFIX = "persona:";
-
-function decodePlaywrightPersonaFromCookie(token: string | null): string | null {
-  if (!token) {
-    return null;
-  }
-
-  let normalizedToken: string;
-  try {
-    normalizedToken = decodeURIComponent(token);
-  } catch {
-    // Malformed percent-encoding — treat as no persona.
-    return null;
-  }
-
-  if (!normalizedToken.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
-    return null;
-  }
-
-  try {
-    return decodeURIComponent(normalizedToken.slice(PLAYWRIGHT_SESSION_PREFIX.length));
-  } catch {
-    return null;
-  }
 }
 
 function getBrowserCookie(name: string): string | null {

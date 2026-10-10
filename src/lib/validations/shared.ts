@@ -58,15 +58,12 @@ export const emailSchema = z
 
 /**
  * Zod schema for a strong password.
- * Requires 8–128 chars with at least one lowercase, one uppercase, and one digit.
+ * Accepts 8–128 characters without composition rules; server routes check breached passwords.
  */
 export const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")
-  .max(128, "Password is too long")
-  .regex(/[a-z]/, "Must contain a lowercase letter")
-  .regex(/[A-Z]/, "Must contain an uppercase letter")
-  .regex(/[0-9]/, "Must contain a number");
+  .max(128, "Password is too long");
 
 // ── OTP ─────────────────────────────────────────────────────
 

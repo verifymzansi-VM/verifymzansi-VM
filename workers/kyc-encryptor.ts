@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "./timing-safe-equal";
+
 /**
  * @deprecated — This worker is NO LONGER TRIGGERED by the application.
  *
@@ -96,16 +98,6 @@ function hexToBytes(hex: string): Uint8Array {
  * Constant-time shared-secret comparison. workerd has no node:crypto
  * `timingSafeEqual`, so use a length-normalized XOR loop instead.
  */
-function timingSafeEqual(a: string, b: string): boolean {
-  const maxLength = Math.max(a.length, b.length);
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < maxLength; i += 1) {
-    const aCode = i < a.length ? a.charCodeAt(i) : 0;
-    const bCode = i < b.length ? b.charCodeAt(i) : 0;
-    diff |= aCode ^ bCode;
-  }
-  return diff === 0;
-}
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {

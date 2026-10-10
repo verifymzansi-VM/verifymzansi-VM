@@ -1,3 +1,4 @@
+import { isProductionDataEnvironment } from "@/lib/config/security-environment";
 import type { NextRequest } from "next/server";
 
 function isLocalHost(hostname: string | null | undefined): boolean {
@@ -7,7 +8,7 @@ function isLocalHost(hostname: string | null | undefined): boolean {
 export function isStrictLocalDevelopmentRequest(
   request: Pick<NextRequest, "nextUrl" | "headers">
 ): boolean {
-  if (process.env.NODE_ENV !== "development") {
+  if (process.env.NODE_ENV !== "development" || isProductionDataEnvironment()) {
     return false;
   }
 

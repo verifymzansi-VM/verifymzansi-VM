@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
@@ -304,6 +304,11 @@ async function main() {
       throw new Error("Versioned KYC proposal grants are not service-only");
     results.push({
       name: "Versioned KYC overrides and independent-session proposal/approval races",
+      status: "PASS",
+    });
+    await sql(await readFile("scripts/inactive-kyc-retention.sql", "utf8"));
+    results.push({
+      name: "Inactive KYC 90-day policy, protections and idempotency",
       status: "PASS",
     });
     passed = true;

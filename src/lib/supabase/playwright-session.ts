@@ -1,7 +1,7 @@
+import { decodePlaywrightPersona as decodeSessionPersona } from "./playwright-token";
 import "server-only";
 
 export const PLAYWRIGHT_SESSION_COOKIE = "vmz_pw_session";
-const PLAYWRIGHT_SESSION_PREFIX = "persona:";
 
 /** Synthetic KYC reviewer only; callers must already enforce isolated E2E mode. */
 export function getPlaywrightPersonaRole(
@@ -21,30 +21,6 @@ type StubUser = {
   user_metadata: Record<string, unknown>;
   identities: Array<{ id: string }>;
 };
-
-function decodeSessionPersona(token: string | null | undefined): string | null {
-  if (!token) {
-    return null;
-  }
-
-  let normalizedToken: string;
-  try {
-    normalizedToken = decodeURIComponent(token);
-  } catch {
-    // Malformed percent-encoding — treat as no persona.
-    return null;
-  }
-
-  if (!normalizedToken.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
-    return null;
-  }
-
-  try {
-    return decodeURIComponent(normalizedToken.slice(PLAYWRIGHT_SESSION_PREFIX.length));
-  } catch {
-    return null;
-  }
-}
 
 function deterministicId(seed: string): string {
   let hash = 2166136261;

@@ -137,9 +137,7 @@ export default function ProfilePage() {
 
   const passwordRequirements = [
     { label: "8+ characters", met: newPassword.length >= 8 },
-    { label: "Lowercase", met: /[a-z]/.test(newPassword) },
-    { label: "Uppercase", met: /[A-Z]/.test(newPassword) },
-    { label: "Number", met: /[0-9]/.test(newPassword) },
+    { label: "Up to 128 characters", met: newPassword.length <= 128 },
   ];
 
   // Read tab from URL hash on mount

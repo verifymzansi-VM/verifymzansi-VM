@@ -1,3 +1,4 @@
+import { isProductionDataEnvironment } from "@/lib/config/security-environment";
 import type { AMREntry, SupabaseClient } from "@supabase/supabase-js";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 
@@ -75,11 +76,14 @@ export async function evaluateStaffMfa(
   mfaRequiredAfter: Date,
   now: Date = new Date()
 ): Promise<StaffMfaState> {
-  if (!(await isFeatureEnabled(STAFF_MFA_FLAG)) && (await mfaSwitchedOff())) {
+  // Deployed environments must verify a second factor before privileged access.
+  // Enrolment remains available through requireStaff({ allowPendingMfa: true }).
+  const strictMfa = isProductionDataEnvironment();
+  if (!strictMfa && !(await isFeatureEnabled(STAFF_MFA_FLAG)) && (await mfaSwitchedOff())) {
     return { status: "not_enforced" };
   }
 
-  const inGrace = now.getTime() < mfaRequiredAfter.getTime();
+  const inGrace = !strictMfa && now.getTime() < mfaRequiredAfter.getTime();
   const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (error || !data) {
     return inGrace
@@ -107,7 +111,7 @@ export async function evaluateStaffMfa(
  * window. The grace period does not apply to these actions.
  */
 export function hasRecentSecondFactor(state: StaffMfaState, now: Date = new Date()): boolean {
-  if (state.status === "not_enforced") return true;
   if (state.status !== "verified" || !state.lastVerifiedAt) return false;
-  return now.getTime() - state.lastVerifiedAt.getTime() <= STEP_UP_WINDOW_MS;
+  const ageMs = now.getTime() - state.lastVerifiedAt.getTime();
+  return Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= STEP_UP_WINDOW_MS;
 }

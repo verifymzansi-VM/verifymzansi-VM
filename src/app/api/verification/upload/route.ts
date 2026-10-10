@@ -891,6 +891,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Update verification_sessions ──────────────────────────
+    const sessionPatch: Record<string, unknown> = {};
+    if (docType === "id_document") {
+      sessionPatch.id_artifact_id = artifact.id;
+    } else if (docType === "selfie") {
+      sessionPatch.selfie_artifact_id = artifact.id;
+    }
+
+    const { error: sessionUpsertError } = await admin
+      .from("verification_sessions")
+      .upsert(buildVerificationSessionResumePatch(user.id, sessionPatch), {
+        onConflict: "user_id",
+      });
+
+    if (sessionUpsertError) {
+      log.error("Failed to publish verification evidence to the session", {
+        requestId,
+        userId: user.id,
+        artifactId: artifact.id,
+      });
+      // Do not report success for evidence that reviewers cannot access. Preserve
+      // prior artifacts and require resubmission only for this exact submission.
+      const { error: compensationError } = await admin
+        .from("verification_steps")
+        .update({ status: "needs_resubmission" })
+        .eq("user_id", user.id)
+        .eq("step_type", stepType)
+        .eq("submitted_at", stepData.submitted_at)
+        .neq("status", "approved");
+      if (compensationError)
+        log.error("Could not mark failed evidence publication for resubmission", { requestId });
+      await cleanupPersistedKycUpload({
+        admin,
+        artifactId: artifact.id,
+        bucket: process.env.R2_PRIVATE_BUCKET || "verifymzansi-private",
+        key: uploadResult.key,
+        requestId,
+        reason: "session_publication_failed",
+        uploadedToR2,
+      });
+      return jsonError(
+        {
+          error: "Evidence could not be saved for review. Please retry the upload.",
+          code: "session_publication_failed",
+        },
+        { status: 503 }
+      );
+    }
+
     // Supersede earlier reviewable artifacts only once the new upload is fully
     // recorded; doing it earlier left the prior evidence marked rejected
     // whenever a later step failed and rolled the new artifact back.
@@ -907,29 +956,6 @@ export async function POST(request: NextRequest) {
         error: supersedeError.message,
         userId: user.id,
         stepType,
-      });
-    }
-
-    // ── Update verification_sessions ──────────────────────────
-    const sessionPatch: Record<string, unknown> = {};
-    if (docType === "id_document") {
-      sessionPatch.id_artifact_id = artifact.id;
-    } else if (docType === "selfie") {
-      sessionPatch.selfie_artifact_id = artifact.id;
-    }
-
-    const { error: sessionUpsertError } = await admin
-      .from("verification_sessions")
-      .upsert(buildVerificationSessionResumePatch(user.id, sessionPatch), {
-        onConflict: "user_id",
-      });
-
-    if (sessionUpsertError) {
-      log.error("Failed to update verification session — artifact saved, session out of sync", {
-        requestId,
-        error: sessionUpsertError.message,
-        userId: user.id,
-        artifactId: artifact.id,
       });
     }
 

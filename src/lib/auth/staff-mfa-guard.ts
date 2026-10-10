@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasActiveStaffSession } from "@/lib/auth/staff-session";
 import { readStaffAccessFromDb } from "@/lib/auth/admin-access";
 import { evaluateStaffMfa, hasRecentSecondFactor, STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
 
@@ -18,7 +19,7 @@ export async function checkStaffApiMfa(
   { stepUp = false }: { stepUp?: boolean } = {}
 ): Promise<NextResponse | null> {
   const access = await readStaffAccessFromDb(userId);
-  if (!access) {
+  if (!access || !(await hasActiveStaffSession(supabase, userId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

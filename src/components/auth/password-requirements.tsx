@@ -7,16 +7,10 @@ import { cn } from "@/lib/utils";
  * Mirrors `passwordSchema` in `@/lib/validations/shared` so people see each
  * rule tick over as they type instead of discovering them on submit.
  */
-export function getPasswordRequirements(
-  password: string,
-  lowercaseLabel = "Lowercase letter",
-  uppercaseLabel = "Uppercase letter"
-) {
+export function getPasswordRequirements(password: string) {
   return [
     { label: "8+ characters", met: password.length >= 8 },
-    { label: lowercaseLabel, met: /[a-z]/.test(password) },
-    { label: uppercaseLabel, met: /[A-Z]/.test(password) },
-    { label: "Number", met: /[0-9]/.test(password) },
+    { label: "Up to 128 characters", met: password.length <= 128 },
   ];
 }
 

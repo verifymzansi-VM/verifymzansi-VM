@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "./timing-safe-equal";
+
 /**
  * Cloudflare Worker – OTP Rate Limiter
  *
@@ -74,6 +76,14 @@ function buildTieredCounterKey(baseKey: string, ttl: number): string {
  * the `checkRateLimit({ action: ... })` call sites under `src/`.
  */
 const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
+  "admin:evidence:view": [
+    { limit: 20, ttl: 60 },
+    { limit: 200, ttl: 3600 },
+  ],
+  "admin:evidence:metadata": [
+    { limit: 20, ttl: 60 },
+    { limit: 200, ttl: 3600 },
+  ],
   // ── Auth ─────────────────────────────────────────────
   "auth:lockout": [{ limit: 5, ttl: 3600 }], // 5 failed logins per email per hour
   "auth:login": [
@@ -396,16 +406,6 @@ function normalizePhone(phone: string): string {
  * Constant-time shared-secret comparison. workerd has no node:crypto
  * `timingSafeEqual`, so use a length-normalized XOR loop instead.
  */
-function timingSafeEqual(a: string, b: string): boolean {
-  const maxLength = Math.max(a.length, b.length);
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < maxLength; i += 1) {
-    const aCode = i < a.length ? a.charCodeAt(i) : 0;
-    const bCode = i < b.length ? b.charCodeAt(i) : 0;
-    diff |= aCode ^ bCode;
-  }
-  return diff === 0;
-}
 
 /** Parse a KV counter, treating missing or corrupted (NaN) values as 0. */
 function parseKvCounter(value: string | null): number {

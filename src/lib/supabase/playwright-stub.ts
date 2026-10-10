@@ -12,6 +12,8 @@ import {
   listPlaywrightUsers,
   listPlaywrightTableRows,
   resolvePlaywrightSession,
+  playwrightSessionId,
+  revokePlaywrightSession,
   writePlaywrightTableRows,
 } from "@/lib/supabase/playwright-fixture-store";
 import { isPlaywrightSupabaseStubMode as _isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
@@ -615,6 +617,17 @@ export function createPlaywrightStubSupabaseClient(
           };
         },
       },
+      async getClaims() {
+        const token = options.sessionToken ?? cookieStore?.get(PLAYWRIGHT_SESSION_COOKIE) ?? null;
+        const user = resolveStubUser(cookieStore, options.sessionToken);
+        return {
+          data:
+            user && token
+              ? { claims: { sub: user.id, session_id: playwrightSessionId(token) } }
+              : null,
+          error: null,
+        };
+      },
       async getUser() {
         return { data: { user: resolveStubUser(cookieStore, options.sessionToken) }, error: null };
       },
@@ -692,6 +705,8 @@ export function createPlaywrightStubSupabaseClient(
         return { data: { user: resolveStubUser(cookieStore, options.sessionToken) }, error: null };
       },
       async signOut() {
+        const token = options.sessionToken ?? cookieStore?.get(PLAYWRIGHT_SESSION_COOKIE);
+        if (token) revokePlaywrightSession(token);
         cookieStore?.remove(PLAYWRIGHT_SESSION_COOKIE);
         emitAuthState("SIGNED_OUT", null);
         return { error: null };
@@ -751,6 +766,14 @@ export function createPlaywrightStubSupabaseClient(
     async rpc(fn: string, params?: Record<string, unknown>) {
       const decision = handlePlaywrightKycDecisionRpc(fn, params);
       if (decision !== undefined) return { data: decision, error: null };
+      if (fn === "staff_session_is_active") {
+        return {
+          data: listPlaywrightTableRows("auth_sessions").some(
+            (row) => row.id === params?.p_session && row.user_id === params?.p_user
+          ),
+          error: null,
+        };
+      }
       if (fn === "staff_access_of") {
         const role = listPlaywrightTableRows("staff_roles").find(
           (row) => row.user_id === params?.p_user && row.status === "active"

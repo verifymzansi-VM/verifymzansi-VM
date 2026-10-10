@@ -38,6 +38,7 @@ vi.mock("@/lib/services/kyc-evidence-access", () => ({
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: () => ({ limited: false }),
+  checkSensitiveActionRateLimit: async () => ({ limited: false }),
   checkRateLimit: () => Promise.resolve({ limited: false }),
   getClientIp: () => "127.0.0.1",
 }));

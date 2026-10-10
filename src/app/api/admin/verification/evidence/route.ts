@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
     // Fetch artifact record
     const { data: artifact, error: artifactErr } = await adminClient
       .from("kyc_artifacts")
-      .select("id, user_id, r2_key, content_type, artifact_kind, step_type, status")
+      .select("id, user_id, r2_key, content_type, artifact_kind, step_type, status, purge_after")
       .eq("id", artifactId)
       .single();
 
@@ -86,6 +86,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Artifact not found", code: "not_found" }, { status: 404 });
     }
     targetUserId = artifact.user_id;
+    if (artifact.purge_after) {
+      const expiresAt = Date.parse(artifact.purge_after);
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        responseStatus = 410;
+        return NextResponse.json(
+          { error: "Evidence access has expired", code: "expired_artifact" },
+          { status: 410 }
+        );
+      }
+    }
 
     const REVIEWABLE_STATES = [
       "pending",
@@ -102,10 +112,7 @@ export async function GET(request: NextRequest) {
       .in("status", REVIEWABLE_STATES);
 
     if (stepCountErr || !activeStepCount || activeStepCount === 0) {
-      // The queue and evidence records can briefly be out of sync (or the
-      // count query can fail independently). Staff authorization has already
-      // been verified, so retain this as an audit signal rather than hiding
-      // an existing document from the reviewer.
+      // A staff role does not authorize access to a closed or unreadable case.
       log.warn("Evidence accessed without an active review step", {
         actorId: user.id,
         targetUserId: artifact.user_id,
@@ -113,19 +120,32 @@ export async function GET(request: NextRequest) {
         stepCountErr: stepCountErr?.message,
         activeStepCount,
       });
+      responseStatus = stepCountErr ? 503 : 403;
+      return NextResponse.json(
+        {
+          error: stepCountErr
+            ? "Evidence authorization is unavailable"
+            : "No active verification case for this user",
+          code: stepCountErr ? "authorization_unavailable" : "no_active_case",
+        },
+        { status: responseStatus }
+      );
     }
 
     const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, artifact.user_id);
 
     if (!allowedArtifactIds.includes(artifact.id)) {
-      // Artifacts retain their user ownership even when a session reference
-      // becomes stale. Allow verified staff to review it, while recording the
-      // linkage issue for operational follow-up.
+      // Only the session links and current candidates exposed by metadata may be viewed.
       log.warn("Evidence accessed outside the linked session list", {
         actorId: user.id,
         targetUserId: artifact.user_id,
         artifactId,
       });
+      responseStatus = 403;
+      return NextResponse.json(
+        { error: "Artifact is not linked to this verification session", code: "unlinked_artifact" },
+        { status: 403 }
+      );
     }
     dbMs = Date.now() - dbStartedAt;
 

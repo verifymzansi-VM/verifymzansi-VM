@@ -45,6 +45,7 @@ vi.mock("@/lib/auth/admin-access", () => ({
 
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: vi.fn(() => ({ limited: false })),
+  checkSensitiveActionRateLimit: vi.fn(async () => ({ limited: false })),
 }));
 
 vi.mock("@/lib/services/kyc-evidence-access", () => ({
@@ -613,8 +614,7 @@ describe("Evidence Metadata API", () => {
       expect(res.status).toBe(200);
 
       const body = await res.json();
-      expect(body.artifacts).toHaveLength(1);
-      expect(body.artifacts[0].id).toBe("art-1");
+      expect(body.artifacts).toEqual([]);
     });
   });
 });

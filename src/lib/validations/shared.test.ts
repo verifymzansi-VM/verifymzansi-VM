@@ -118,16 +118,16 @@ describe("passwordSchema", () => {
     expect(passwordSchema.safeParse("Ab1").success).toBe(false);
   });
 
-  it("rejects passwords missing uppercase", () => {
-    expect(passwordSchema.safeParse("alllower1").success).toBe(false);
+  it("accepts passwords without uppercase", () => {
+    expect(passwordSchema.safeParse("alllower1").success).toBe(true);
   });
 
-  it("rejects passwords missing lowercase", () => {
-    expect(passwordSchema.safeParse("ALLUPPER1").success).toBe(false);
+  it("accepts passwords without lowercase", () => {
+    expect(passwordSchema.safeParse("ALLUPPER1").success).toBe(true);
   });
 
-  it("rejects passwords missing a digit", () => {
-    expect(passwordSchema.safeParse("NoDigitsHere").success).toBe(false);
+  it("accepts passwords without a digit", () => {
+    expect(passwordSchema.safeParse("NoDigitsHere").success).toBe(true);
   });
 
   it("rejects passwords exceeding max length", () => {

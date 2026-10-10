@@ -1683,6 +1683,47 @@ describe("POST /api/verification/upload", () => {
     expect(artifactUpdatePayloads).not.toContainEqual({ status: "rejected" });
   });
 
+  it("does not report upload success when committed evidence publication fails", async () => {
+    mockAuth({ id: "user-1", email: "test@example.com" });
+    setupDefaultAdminMocks();
+    const base = mockFrom.getMockImplementation()!;
+    const compensate = vi.fn().mockReturnThis();
+    const chain = { eq: compensate, neq: vi.fn().mockResolvedValue({ error: null }) };
+    compensate.mockImplementation(() => chain);
+    const deleteEq = vi.fn().mockResolvedValue({ error: null });
+    const artifactUpdates: unknown[] = [];
+    mockFrom.mockImplementation((table) => {
+      const builder = base(table);
+      if (table === "verification_sessions")
+        return { ...builder, upsert: vi.fn().mockResolvedValue({ error: { message: "offline" } }) };
+      if (table === "verification_steps")
+        return {
+          ...builder,
+          update: (payload: Record<string, unknown>) =>
+            payload.status === "needs_resubmission" ? chain : builder.update(payload),
+        };
+      if (table === "kyc_artifacts")
+        return {
+          ...builder,
+          delete: () => ({ eq: deleteEq }),
+          update: (payload: Record<string, unknown>) => {
+            artifactUpdates.push(payload);
+            return builder.update(payload);
+          },
+        };
+      return builder;
+    });
+    const response = await POST(
+      createFormDataRequest({ file: createTestFile(), docType: "id_document" })
+    );
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ code: "session_publication_failed" });
+    expect(compensate).toHaveBeenCalledWith("submitted_at", expect.any(String));
+    expect(deleteEq).toHaveBeenCalledWith("id", "artifact-1");
+    expect(mockDeleteFromR2).toHaveBeenCalled();
+    expect(artifactUpdates).not.toContainEqual({ status: "rejected" });
+  });
+
   it("rejects retired proof-of-address uploads before storage or database changes", async () => {
     mockAuth({ id: "user-1" });
     const response = await POST(

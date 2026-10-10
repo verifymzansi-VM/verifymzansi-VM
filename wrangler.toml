@@ -163,6 +163,7 @@ id = "247144b6d9b1406093351378a57c62fa"
 # investigated after the fact; without this only a live `wrangler tail` works.
 [observability]
 enabled = true
+redact_query_string = true
 
 [env.production]
 name = "verifymzansi"
@@ -171,6 +172,7 @@ preview_urls = false
 
 [env.production.observability]
 enabled = true
+redact_query_string = true
 
 [env.production.limits]
 cpu_ms = 30000

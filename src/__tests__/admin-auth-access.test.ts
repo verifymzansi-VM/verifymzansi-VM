@@ -74,6 +74,7 @@ vi.mock("@/lib/utils/mutation-origin", () => ({
 }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: vi.fn(() => ({ limited: false })),
+  checkSensitiveActionRateLimit: vi.fn(async () => ({ limited: false })),
 }));
 
 import { GET as getEvidence } from "@/app/api/admin/verification/evidence/route";

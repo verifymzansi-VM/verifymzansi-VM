@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { hasActiveStaffSession } from "@/lib/auth/staff-session";
 import { createClient } from "@/lib/supabase/server";
 import type { Capability } from "@/lib/auth/roles";
 import { readStaffAccessFromDb, roleHasCapability } from "@/lib/auth/admin-access";
@@ -24,7 +25,8 @@ const getStaffSession = cache(async (): Promise<StaffSession> => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user || user.is_anonymous) return { status: "anonymous" };
+  if (!user || user.is_anonymous || !(await hasActiveStaffSession(supabase, user.id)))
+    return { status: "anonymous" };
 
   const access = await readStaffAccessFromDb(user.id);
   if (!access) return { status: "not_staff", user };

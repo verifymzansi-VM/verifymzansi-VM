@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/auth/staff-session", () => ({ hasActiveStaffSession: vi.fn(async () => true) }));
 import type * as AdminAccess from "./admin-access";
 import type * as StaffMfa from "./staff-mfa";
 

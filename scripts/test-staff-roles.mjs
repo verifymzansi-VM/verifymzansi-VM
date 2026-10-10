@@ -645,3 +645,96 @@ assert.equal(
   "service role can still authorize MFA enrolment"
 );
 console.log("Staff RLS MFA checks passed.");
+
+// Final proposed state: no flag/grace exception; signed-out sessions lose RLS authority.
+await db.exec(
+  "CREATE TABLE auth.sessions(id uuid PRIMARY KEY, user_id uuid NOT NULL, not_after timestamptz);"
+);
+const activeSession = uuid();
+await db.query("INSERT INTO auth.sessions(id,user_id) VALUES ($1,$2)", [activeSession, admin]);
+await db.exec(read("20261009205230_require_staff_mfa_without_exceptions.sql"));
+await as(admin, "admin", async () => {
+  await db.query("SELECT set_config('test.jwt',$1,false)", [
+    JSON.stringify({ aal: "aal1", session_id: activeSession }),
+  ]);
+  assert.equal(
+    await scalar("SELECT public.current_staff_role()"),
+    null,
+    "off flag and future grace cannot grant AAL1 staff access"
+  );
+  await db.query("SELECT set_config('test.jwt',$1,false)", [
+    JSON.stringify({ aal: "aal2", session_id: activeSession }),
+  ]);
+  assert.equal(
+    await scalar("SELECT public.current_staff_role()"),
+    "admin",
+    "active AAL2 session works"
+  );
+  assert(
+    (await scalar("SELECT count(*)::int FROM reports")) > 0,
+    "legitimate RLS staff read remains"
+  );
+  await assert.rejects(
+    db.query("SELECT public.staff_session_is_active($1,$2)", [admin, activeSession]),
+    /permission denied/
+  );
+});
+await as(member, "admin", async () => {
+  await db.query("SELECT set_config('test.jwt',$1,false)", [
+    JSON.stringify({ aal: "aal2", session_id: activeSession }),
+  ]);
+  assert.equal(
+    await scalar("SELECT public.current_staff_role()"),
+    null,
+    "cross-user session cannot confer staff access"
+  );
+});
+assert.equal(
+  await scalar("SELECT public.staff_session_is_active($1,$2)", [admin, activeSession]),
+  true
+);
+await db.query("UPDATE auth.sessions SET not_after=now()-interval '1 second' WHERE id=$1", [
+  activeSession,
+]);
+assert.equal(
+  await scalar("SELECT public.staff_session_is_active($1,$2)", [admin, activeSession]),
+  false,
+  "expired session rejected before background cleanup"
+);
+await as(admin, "admin", async () => {
+  await db.query("SELECT set_config('test.jwt',$1,false)", [
+    JSON.stringify({ aal: "aal2", session_id: activeSession }),
+  ]);
+  assert.equal(
+    await scalar("SELECT public.current_staff_role()"),
+    null,
+    "expired session cannot retain staff RLS authority"
+  );
+});
+await db.query("UPDATE auth.sessions SET not_after=NULL WHERE id=$1", [activeSession]);
+await db.query("DELETE FROM auth.sessions WHERE id=$1", [activeSession]);
+await as(admin, "admin", async () => {
+  await db.query("SELECT set_config('test.jwt',$1,false)", [
+    JSON.stringify({ aal: "aal2", session_id: activeSession }),
+  ]);
+  assert.equal(
+    await scalar("SELECT public.current_staff_role()"),
+    null,
+    "revoked AAL2 session rejected"
+  );
+  assert.equal(
+    await scalar("SELECT count(*)::int FROM reports"),
+    0,
+    "revocation removes RLS staff read"
+  );
+});
+assert.equal(
+  await scalar("SELECT public.staff_session_is_active($1,$2)", [admin, activeSession]),
+  false
+);
+assert.equal(
+  await scalar("SELECT public.staff_role_of($1)", [admin]),
+  "admin",
+  "MFA enrolment lookup preserved"
+);
+console.log("Strict MFA and session revocation checks passed.");

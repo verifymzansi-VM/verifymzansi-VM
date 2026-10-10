@@ -60,21 +60,7 @@ function playwrightUserId(persona: string): string {
 }
 
 function encodeSessionPersona(persona: string): string {
-  return `${PLAYWRIGHT_SESSION_PREFIX}${encodeURIComponent(persona)}`;
-}
-
-function decodeSessionPersona(token: string | null | undefined): string | null {
-  const normalizedToken = token ? decodeURIComponent(token) : null;
-
-  if (!normalizedToken?.startsWith(PLAYWRIGHT_SESSION_PREFIX)) {
-    return null;
-  }
-
-  try {
-    return decodeURIComponent(normalizedToken.slice(PLAYWRIGHT_SESSION_PREFIX.length));
-  } catch {
-    return null;
-  }
+  return `${PLAYWRIGHT_SESSION_PREFIX}${encodeURIComponent(persona)}:${crypto.randomUUID()}`;
 }
 
 function nowIso() {
@@ -274,16 +260,28 @@ export function createPlaywrightSession(persona: string): { token: string; user:
   const user = ensurePlaywrightVerifiedMember(persona);
   const token = encodeSessionPersona(persona);
   store.sessions.set(token, user.id);
+  const sessionId = playwrightSessionId(token);
+  const sessions = listPlaywrightTableRows("auth_sessions").filter((row) => row.id !== sessionId);
+  writePlaywrightTableRows("auth_sessions", [...sessions, { id: sessionId, user_id: user.id }]);
   return { token, user };
+}
+
+/** Synthetic analogue of auth.sessions; no remote Auth/database calls. */
+export function playwrightSessionId(token: string): string {
+  const hash = crypto.createHash("sha256").update(token).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
+export function revokePlaywrightSession(token: string): void {
+  const id = playwrightSessionId(token);
+  writePlaywrightTableRows(
+    "auth_sessions",
+    listPlaywrightTableRows("auth_sessions").filter((row) => row.id !== id)
+  );
 }
 
 export function resolvePlaywrightSession(token: string | null | undefined): StubUser | null {
   if (!token) return null;
-
-  const persona = decodeSessionPersona(token);
-  if (persona) {
-    return cloneValue(ensurePlaywrightVerifiedMember(persona));
-  }
 
   const store = getPlaywrightFixtureStore();
   const userId = store.sessions.get(token);

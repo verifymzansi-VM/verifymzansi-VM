@@ -40,7 +40,7 @@ vi.mock("@/lib/auth/admin-access", () => ({
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: (...args: unknown[]) => mockCheckLocalRateLimit(...args),
+  checkSensitiveActionRateLimit: (...args: unknown[]) => mockCheckLocalRateLimit(...args),
 }));
 
 vi.mock("@/lib/utils/mutation-origin", () => ({

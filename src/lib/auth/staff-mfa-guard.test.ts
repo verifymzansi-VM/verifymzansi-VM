@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/auth/staff-session", () => ({ hasActiveStaffSession: vi.fn(async () => true) }));
 import type * as StaffMfa from "./staff-mfa";
 
 // src/test/setup.ts replaces this module globally; test the real one here.
@@ -54,6 +55,13 @@ describe("checkStaffApiMfa", () => {
     evaluateStaffMfa.mockResolvedValue({ status: "grace", graceEndsAt: new Date() });
     const res = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
     await expect(res?.json()).resolves.toMatchObject({ code: "step_up_required" });
+  });
+
+  it("rejects a disabled MFA policy for sensitive actions", async () => {
+    evaluateStaffMfa.mockResolvedValue({ status: "not_enforced" });
+    const response = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
+    expect(response?.status).toBe(403);
+    await expect(response?.json()).resolves.toMatchObject({ code: "step_up_required" });
   });
 
   it("allows sensitive actions right after verifying", async () => {

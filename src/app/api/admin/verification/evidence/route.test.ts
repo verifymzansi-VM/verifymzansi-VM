@@ -35,7 +35,7 @@ vi.mock("@/lib/auth/admin-access", () => ({
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
-  checkLocalRateLimit: (...args: unknown[]) => mockCheckLocalRateLimit(...args),
+  checkSensitiveActionRateLimit: (...args: unknown[]) => mockCheckLocalRateLimit(...args),
 }));
 
 vi.mock("@/lib/services/storage", () => ({
@@ -100,11 +100,11 @@ function createPostRequest(body: unknown): NextRequest {
   } as unknown as NextRequest;
 }
 
-function createVerificationStepsBuilder(count = 1) {
+function createVerificationStepsBuilder(count = 1, error: { message: string } | null = null) {
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    in: vi.fn().mockResolvedValue({ count, error: null }),
+    in: vi.fn().mockResolvedValue({ count, error }),
   };
 }
 
@@ -133,7 +133,11 @@ function makeArtifact(overrides: Record<string, unknown> = {}) {
  */
 function mockAdminClientForArtifact(
   artifact: Record<string, unknown>,
-  opts: { activeStepCount?: number; accessLogInsert?: ReturnType<typeof vi.fn> } = {}
+  opts: {
+    activeStepCount?: number;
+    stepError?: { message: string };
+    accessLogInsert?: ReturnType<typeof vi.fn>;
+  } = {}
 ) {
   let artifactLookups = 0;
   const from = vi.fn((table: string) => {
@@ -166,7 +170,7 @@ function mockAdminClientForArtifact(
     }
 
     if (table === "verification_steps") {
-      return createVerificationStepsBuilder(opts.activeStepCount ?? 1);
+      return createVerificationStepsBuilder(opts.activeStepCount ?? 1, opts.stepError ?? null);
     }
 
     if (table === "kyc_evidence_access_logs") {
@@ -229,7 +233,7 @@ describe("/api/admin/verification/evidence", () => {
   });
 
   it.each(["id_doc", "selfie"])(
-    "streams %s evidence for an authorized admin when the active-case lookup is stale",
+    "rejects %s evidence after the active case is closed",
     async (stepType) => {
       mockAdminClientForArtifact(
         makeArtifact({ r2_key: `kyc/${stepType}/user-1/file.bin`, step_type: stepType }),
@@ -239,25 +243,54 @@ describe("/api/admin/verification/evidence", () => {
 
       const response = await GET(createGetRequest(EVIDENCE_URL));
 
-      expect(response.status).toBe(200);
-      expect(response.headers.get("Content-Type")).toBe("image/jpeg");
-      expect(response.headers.get("Content-Disposition")).toBe("inline");
-      expect(Buffer.from(await response.arrayBuffer()).equals(JPEG_BYTES)).toBe(true);
-      expect(mockDownloadKycDocument).toHaveBeenCalledWith(`kyc/${stepType}/user-1/file.bin`);
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({ code: "no_active_case" });
+      expect(mockDownloadKycDocument).not.toHaveBeenCalled();
     }
   );
 
-  it("streams evidence for an authorized admin when session linkage is stale", async () => {
+  it("rejects evidence outside the session links and current candidates", async () => {
     mockGetLinkedEvidenceArtifactIds.mockResolvedValue(["artifact-99"]);
     mockAdminClientForArtifact(makeArtifact());
     mockDownloadResult(JPEG_BYTES);
 
     const response = await GET(createGetRequest(EVIDENCE_URL));
 
-    expect(response.status).toBe(200);
-    expect(mockDownloadKycDocument).toHaveBeenCalledWith("kyc/id_document/user-1/file.bin");
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "unlinked_artifact" });
+    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
   });
 
+  it.each(["2000-01-01T00:00:00Z", "invalid-date"])(
+    "rejects expired or malformed evidence expiry %s",
+    async (purge_after) => {
+      mockAdminClientForArtifact(makeArtifact({ purge_after }));
+      const response = await GET(createGetRequest(EVIDENCE_URL));
+      expect(response.status).toBe(410);
+      expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+    }
+  );
+  it("fails closed when active-case authorization cannot be read", async () => {
+    mockAdminClientForArtifact(makeArtifact(), { stepError: { message: "database offline" } });
+    const response = await GET(createGetRequest(EVIDENCE_URL));
+    expect(response.status).toBe(503);
+    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+  });
+  it("rejects closed evidence through POST too", async () => {
+    mockAdminClientForArtifact(makeArtifact(), { activeStepCount: 0 });
+    const response = await POST(
+      createPostRequest({ artifactId: "123e4567-e89b-42d3-a456-426614174000" })
+    );
+    expect(response.status).toBe(403);
+    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+  });
+  it("rejects shared-limiter failure before querying or decrypting documents", async () => {
+    mockCheckLocalRateLimit.mockResolvedValue({ limited: true, degraded: true });
+    const response = await GET(createGetRequest(EVIDENCE_URL));
+    expect(response.status).toBe(503);
+    expect(mockCreateAdminClient).not.toHaveBeenCalled();
+    expect(mockDownloadKycDocument).not.toHaveBeenCalled();
+  });
   it("returns missing_file without substituting another same-step artifact when the requested file is missing", async () => {
     const { artifactLookupCount } = mockAdminClientForArtifact(
       makeArtifact({ r2_key: "kyc/id_document/user-1/missing.bin" })

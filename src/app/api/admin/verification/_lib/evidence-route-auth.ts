@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyStaffActorRoleFromDb } from "@/lib/auth/admin-access";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
+import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import type { AppLogger } from "@/lib/utils/logger";
 import type { StaffRole } from "@/types/enums";
 import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
@@ -47,20 +47,28 @@ export async function authorizeEvidenceRequest({
     };
   }
 
-  const mfaBlock = await checkStaffApiMfa(supabase, user.id);
+  const mfaBlock = await checkStaffApiMfa(supabase, user.id, { stepUp: true });
   if (mfaBlock) {
     return { success: false, response: mfaBlock, status: 403 };
   }
 
-  const rateLimit = checkLocalRateLimit(user.id, rateLimitAction);
+  const rateLimit = await checkSensitiveActionRateLimit(user.id, rateLimitAction);
   if (rateLimit.limited) {
     return {
       success: false,
       response: NextResponse.json(
-        { error: "Too many requests", code: "rate_limited" },
-        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) } }
+        {
+          error: rateLimit.degraded
+            ? "Evidence access protection is unavailable"
+            : "Too many requests",
+          code: rateLimit.degraded ? "protection_unavailable" : "rate_limited",
+        },
+        {
+          status: rateLimit.degraded ? 503 : 429,
+          headers: { "Retry-After": String(rateLimit.retryAfter ?? 60) },
+        }
       ),
-      status: 429,
+      status: rateLimit.degraded ? 503 : 429,
     };
   }
 

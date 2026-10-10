@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { isFeatureEnabled, flagRow } = vi.hoisted(() => ({
   isFeatureEnabled: vi.fn(),
@@ -101,6 +101,38 @@ describe("evaluateStaffMfa", () => {
   });
 });
 
+describe("production staff MFA", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("does not grant development grace or flag bypass against the live backend", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://tnygdgormnofpgjknlhr.supabase.co");
+    isFeatureEnabled.mockResolvedValue(false);
+    flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
+    await expect(evaluateStaffMfa(aal("aal1", "aal1"), IN_GRACE, NOW)).resolves.toMatchObject({
+      status: "required",
+    });
+  });
+  it.each(["NODE_ENV", "ENVIRONMENT"])(
+    "cannot disable MFA using the feature flag or grace with %s=production",
+    async (key) => {
+      vi.stubEnv(key, "production");
+      isFeatureEnabled.mockResolvedValue(false);
+      flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
+      await expect(evaluateStaffMfa(aal("aal1", "aal1"), IN_GRACE, NOW)).resolves.toEqual({
+        status: "required",
+        hasFactor: false,
+      });
+      await expect(
+        evaluateStaffMfa(
+          aal("aal2", "aal2", [{ method: "totp", timestamp: seconds(minutesAgo(1)) }]),
+          IN_GRACE,
+          NOW
+        )
+      ).resolves.toMatchObject({ status: "verified" });
+    }
+  );
+});
+
 describe("hasRecentSecondFactor", () => {
   it("accepts a factor verified within 15 minutes", () => {
     expect(hasRecentSecondFactor({ status: "verified", lastVerifiedAt: minutesAgo(14) }, NOW)).toBe(
@@ -117,7 +149,18 @@ describe("hasRecentSecondFactor", () => {
     expect(hasRecentSecondFactor({ status: "required", hasFactor: true }, NOW)).toBe(false);
   });
 
-  it("does not block when enforcement is switched off", () => {
-    expect(hasRecentSecondFactor({ status: "not_enforced" }, NOW)).toBe(true);
+  it("requires a verified factor even when enforcement is switched off", () => {
+    expect(hasRecentSecondFactor({ status: "not_enforced" }, NOW)).toBe(false);
+  });
+  it.each([new Date(NOW.getTime() + 1000), new Date(NaN)])(
+    "rejects future or invalid timestamps: %s",
+    (lastVerifiedAt) => {
+      expect(hasRecentSecondFactor({ status: "verified", lastVerifiedAt }, NOW)).toBe(false);
+    }
+  );
+  it("accepts the exact step-up deadline", () => {
+    expect(hasRecentSecondFactor({ status: "verified", lastVerifiedAt: minutesAgo(15) }, NOW)).toBe(
+      true
+    );
   });
 });

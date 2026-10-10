@@ -200,22 +200,8 @@ export async function GET(request: NextRequest) {
     }
 
     const linkedArtifactLookupStartedAt = Date.now();
-    let allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
+    const allowedArtifactIds = await getLinkedEvidenceArtifactIds(adminClient, targetUserId);
 
-    if (allowedArtifactIds.length === 0) {
-      // Additional resilience fallback for legacy/drifted sessions:
-      // use latest artifacts for this user when linked IDs are unavailable.
-      const { data: fallbackArtifacts } = await adminClient
-        .from("kyc_artifacts")
-        .select("id")
-        .eq("user_id", targetUserId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      allowedArtifactIds = (fallbackArtifacts || [])
-        .map((artifact) => String(artifact.id))
-        .filter(Boolean);
-    }
     linkedArtifactLookupMs = Date.now() - linkedArtifactLookupStartedAt;
 
     if (allowedArtifactIds.length === 0) {

@@ -1,159 +1,77 @@
 import { describe, expect, it, vi } from "vitest";
 import { getLinkedEvidenceArtifactIds } from "./kyc-evidence-access";
-
-function createQueryBuilder(result: unknown) {
-  return {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: result, error: null }),
-  };
-}
-
-describe("getLinkedEvidenceArtifactIds", () => {
-  it("starts independent artifact lookups concurrently while preserving evidence order", async () => {
-    const resolvers: Array<(value: unknown) => void> = [];
-    const adminClient = {
-      from: vi.fn((table: string) => {
-        const query = createQueryBuilder(null);
-        if (table === "verification_sessions") {
-          query.maybeSingle.mockResolvedValue({
-            data: { location_submitted_at: "2026-10-04T00:00:00Z" },
-            error: null,
-          });
-        } else {
-          query.maybeSingle.mockImplementation(
-            () =>
-              new Promise((resolve) => {
-                resolvers.push(resolve);
-              })
-          );
-        }
-        return query;
-      }),
-    };
-    const pending = getLinkedEvidenceArtifactIds(adminClient as never, "user-1");
-    await vi.waitFor(() => expect(resolvers).toHaveLength(3));
-    // Complete in reverse order to verify output doesn't depend on network timing.
-    resolvers[2]({ data: { id: "location" }, error: null });
-    resolvers[1]({ data: { id: "selfie" }, error: null });
-    resolvers[0]({ data: { id: "id" }, error: null });
-    await expect(pending).resolves.toEqual(["id", "selfie", "location"]);
+const query = (data: unknown, error: unknown = null) => ({
+  select: vi.fn().mockReturnThis(),
+  eq: vi.fn().mockReturnThis(),
+  order: vi.fn().mockReturnThis(),
+  limit: vi.fn().mockReturnThis(),
+  maybeSingle: vi.fn().mockResolvedValue({ data, error }),
+});
+describe("committed evidence links", () => {
+  it("uses committed ID/selfie references without adding upload-history candidates", async () => {
+    const from = vi.fn(() =>
+      query({
+        id_artifact_id: "id-linked",
+        selfie_artifact_id: "selfie-linked",
+        location_submitted_at: null,
+      })
+    );
+    expect(await getLinkedEvidenceArtifactIds({ from } as never, "user-1")).toEqual([
+      "id-linked",
+      "selfie-linked",
+    ]);
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(from).toHaveBeenCalledWith("verification_sessions");
   });
-  it("returns linked session artifacts when present", async () => {
-    const sessionBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id_artifact_id: "id-linked",
-          selfie_artifact_id: "selfie-linked",
-          location_submitted_at: null,
-        },
-        error: null,
-      }),
-    };
-
-    const adminClient = {
-      from: vi.fn((table: string) => {
-        if (table === "verification_sessions") {
-          return sessionBuilder;
-        }
-
-        if (table === "kyc_artifacts") {
-          return createQueryBuilder(null);
-        }
-
-        throw new Error(`Unexpected table lookup: ${table}`);
-      }),
-    };
-
-    const result = await getLinkedEvidenceArtifactIds(adminClient as never, "user-1");
-
-    expect(result).toEqual(["id-linked", "selfie-linked"]);
+  it.each([null, { id_artifact_id: null, selfie_artifact_id: null, location_submitted_at: null }])(
+    "does not substitute old files for missing/revoked links %s",
+    async (session) => {
+      const from = vi.fn(() => query(session));
+      expect(await getLinkedEvidenceArtifactIds({ from } as never, "user-1")).toEqual([]);
+      expect(from).toHaveBeenCalledTimes(1);
+    }
+  );
+  it("fails closed when the authoritative session cannot be read", async () => {
+    await expect(
+      getLinkedEvidenceArtifactIds(
+        { from: () => query(null, { message: "offline" }) } as never,
+        "user-1"
+      )
+    ).rejects.toThrow("Evidence session lookup failed");
   });
-
-  it("falls back to latest id and selfie artifacts when session links are missing", async () => {
-    const sessionBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id_artifact_id: null,
-          selfie_artifact_id: null,
-          location_submitted_at: null,
-        },
-        error: null,
-      }),
-    };
-    const idArtifactBuilder = createQueryBuilder({ id: "id-fallback" });
-    const selfieArtifactBuilder = createQueryBuilder({ id: "selfie-fallback" });
-
-    const adminClient = {
-      from: vi.fn((table: string) => {
-        if (table === "verification_sessions") {
-          return sessionBuilder;
-        }
-
-        if (table === "kyc_artifacts") {
-          if (
-            adminClient.from.mock.calls.filter(([name]) => name === "kyc_artifacts").length === 1
-          ) {
-            return idArtifactBuilder;
-          }
-          return selfieArtifactBuilder;
-        }
-
-        throw new Error(`Unexpected table lookup: ${table}`);
-      }),
-    };
-
-    const result = await getLinkedEvidenceArtifactIds(adminClient as never, "user-1");
-
-    expect(result).toEqual(["id-fallback", "selfie-fallback"]);
-    expect(idArtifactBuilder.eq).toHaveBeenCalledWith("step_type", "id_doc");
-    expect(selfieArtifactBuilder.eq).toHaveBeenCalledWith("step_type", "selfie");
+  it("keeps the existing committed proof-of-address representation scoped to its owner and kind", async () => {
+    const artifact = query({ id: "proof" });
+    const from = vi.fn((table) =>
+      table === "verification_sessions"
+        ? query({ id_artifact_id: "id", location_submitted_at: "2026-10-01" })
+        : artifact
+    );
+    expect(await getLinkedEvidenceArtifactIds({ from } as never, "user-1")).toEqual([
+      "id",
+      "proof",
+    ]);
+    expect(artifact.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(artifact.eq).toHaveBeenCalledWith("step_type", "location");
+    expect(artifact.eq).toHaveBeenCalledWith("artifact_kind", "proof_of_address");
   });
-
-  it("keeps linked artifacts and adds latest fallback candidates without duplicates", async () => {
-    const sessionBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id_artifact_id: "id-linked",
-          selfie_artifact_id: "selfie-linked",
-          location_submitted_at: "2026-03-27T09:00:00Z",
-        },
-        error: null,
-      }),
-    };
-    const idArtifactBuilder = createQueryBuilder({ id: "id-fallback" });
-    const selfieArtifactBuilder = createQueryBuilder({ id: "selfie-linked" });
-    const locationArtifactBuilder = createQueryBuilder({ id: "location-fallback" });
-    const builders = [idArtifactBuilder, selfieArtifactBuilder, locationArtifactBuilder];
-    let builderIndex = 0;
-
-    const adminClient = {
-      from: vi.fn((table: string) => {
-        if (table === "verification_sessions") {
-          return sessionBuilder;
-        }
-
-        if (table === "kyc_artifacts") {
-          const builder = builders[builderIndex];
-          builderIndex += 1;
-          return builder;
-        }
-
-        throw new Error(`Unexpected table lookup: ${table}`);
-      }),
-    };
-
-    const result = await getLinkedEvidenceArtifactIds(adminClient as never, "user-1");
-
-    expect(result).toEqual(["id-linked", "id-fallback", "selfie-linked", "location-fallback"]);
-    expect(locationArtifactBuilder.eq).toHaveBeenCalledWith("artifact_kind", "proof_of_address");
+  it("rejects an unreadable location lookup rather than treating it as missing", async () => {
+    const from = vi.fn((table) =>
+      table === "verification_sessions"
+        ? query({ location_submitted_at: "2026-10-01" })
+        : query(null, { message: "offline" })
+    );
+    await expect(getLinkedEvidenceArtifactIds({ from } as never, "user-1")).rejects.toThrow(
+      "Evidence linkage lookup failed"
+    );
+  });
+  it("deduplicates references retained across review resubmission", async () => {
+    expect(
+      await getLinkedEvidenceArtifactIds(
+        {
+          from: () => query({ id_artifact_id: "retained", selfie_artifact_id: "retained" }),
+        } as never,
+        "user-1"
+      )
+    ).toEqual(["retained"]);
   });
 });

@@ -57,16 +57,16 @@ pnpm bootstrap:operator -- \
 
 ## Two-step verification
 
-- Staff must add an authenticator app at `/staff/two-step`. They have 7 days to
-  do this after their role is granted. A banner on every admin page shows the
-  deadline.
-- After the deadline, admin pages and APIs redirect to the two-step page until
-  the staff member has added the app and entered a code.
+- In deployed environments, staff must enrol and verify an authenticator at
+  `/staff/two-step` before accessing admin pages, APIs or database staff
+  records. Enrolment itself remains available before MFA is complete.
+  Development grace periods do not grant production access. Signed-out sessions
+  cannot grant staff access.
 - Role changes, high-risk KYC overrides and DSAR exports need a code entered in
   the last 15 minutes, even during the 7 days.
-- Enforcement is controlled by the `staff_mfa_enforced` feature flag, which is
-  on by default. Turn it off only to handle an incident, and turn it back on
-  afterwards.
+- The feature flag cannot disable deployed MFA or sensitive step-up. Recovery
+  uses the separately authenticated operator procedure below. Evidence access,
+  role changes, high-risk overrides and DSAR exports require a recent factor.
 
 ### Lost authenticator
 
