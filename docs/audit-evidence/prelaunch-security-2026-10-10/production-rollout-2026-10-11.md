@@ -12,7 +12,8 @@ and payments. No live credentials were rotated and no subscription was changed.
 - Production Supabase project tnygdgormnofpgjknlhr: migrations
   20261009205230_require_staff_mfa_without_exceptions and
   20261009225604_expire_inactive_incomplete_kyc applied. All 230 repository
-  migrations match the remote ledger; no pending or unmatched entries.
+  migration versions exist in the remote ledger; no pending or extra versions.
+  Two historical names/statements differ (see limitations below).
 - Deployed privileged role checks require AAL2 and a matching active Auth
   session. The inactive incomplete KYC helper uses the approved 90-day limit,
   preserves holds and active governance work, and is service-only.
@@ -51,6 +52,13 @@ GitHub deployment run supplies the exact published commit receipt.
 - Current local PostgreSQL password still fails authentication after the owner
   updated local keys. Management token access and migration parity work. Do not
   reset or rotate the production password without separate authorization.
+- Historical migration versions 20260303000000 and 20260411000000 have remote
+  names/statements for evidence-desk enablement and an event-type index rather
+  than the repository's promotions-table creation and logo-column addition.
+  Those remote operations also have correctly named later ledger entries. The
+  promotions table, text logo column and event-type index exist. Version parity
+  alone does not prove identical historical migration execution. Preserve the
+  ledger; independently reconcile its provenance before certifying history.
 - Restore verified database records, not provider Auth sign-in, R2 object bytes,
   external encryption/signing keys, or complete service recovery. Provider
   backup API lists no available backups and PITR is disabled.
