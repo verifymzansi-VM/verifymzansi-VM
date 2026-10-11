@@ -169,9 +169,10 @@ const nextConfig = {
     return [
       {
         // Media handlers choose caching from the outcome: immutable objects,
-        // short-lived variant fallbacks, and no-store errors. Framework headers
+        // short-lived variant fallbacks, and no-store errors. Public anonymous
+        // share previews likewise own their success/error cache policy. Framework headers
         // take precedence over handler headers, so exclude that route here.
-        source: "/api/:path((?!media/serve/).*)",
+        source: "/api/:path((?!(?:media/serve/|share-preview/)).*)",
         headers: [
           {
             key: "Cache-Control",

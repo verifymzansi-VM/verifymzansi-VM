@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { extname } from "node:path";
+import { lstat, realpath, stat } from "node:fs/promises";
+import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { SECRET_SCAN_RULES, shouldIgnoreSecretFinding } from "../../src/lib/security/secret-scan";
 const BINARY = new Set([
   ".png",
@@ -23,8 +23,26 @@ const BINARY = new Set([
 ]);
 const WINDOW = 64 * 1024;
 /** Fixed-size windows scan even one-line bundles without unbounded line buffering. */
-export async function scanFile(file: string): Promise<{ findings: string[]; skipped: boolean }> {
+export async function scanFile(
+  file: string
+): Promise<{ findings: string[]; skipped: boolean; skipReason?: "dependency-link" }> {
   const info = await stat(file); // Read/stat failures are explicit failures, not ignored files.
+  const repositoryPath = relative(process.cwd(), resolve(file)).replace(/\\/g, "/");
+  if (
+    info.isDirectory() &&
+    /^\.next\/(?:dev\/)?node_modules\//.test(repositoryPath) &&
+    (await lstat(file)).isSymbolicLink()
+  ) {
+    // Next emits directory links to already-audited installed dependencies.
+    // Only that exact generated location and a contained dependency target are
+    // excluded; source links, broken links and external targets still fail.
+    const dependencyRoot = await realpath(resolve("node_modules"));
+    const target = await realpath(file);
+    const child = relative(dependencyRoot, target);
+    if (child && child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child)) {
+      return { findings: [], skipped: true, skipReason: "dependency-link" };
+    }
+  }
   if (!info.isFile()) throw new Error(`Not a regular file: ${file}`);
   if (BINARY.has(extname(file).toLowerCase())) return { findings: [], skipped: true };
   if (info.size === 0) return { findings: [], skipped: false };

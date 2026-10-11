@@ -10,6 +10,7 @@ establish production readiness.
 - [Local validation receipts](validation-results.json)
 - [Production change review plan](production-review-plan.md)
 - [Independent professional review brief](independent-review-brief.md)
+- [Authorized production rollout and remaining controls](production-rollout-2026-10-11.md)
 
 The assessment records the inspected baseline and security patch commit
 880758e3. Source links display current files; use the recorded baseline commit

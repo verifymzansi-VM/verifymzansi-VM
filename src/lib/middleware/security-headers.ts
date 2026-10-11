@@ -115,11 +115,21 @@ export const DEFAULT_PERMISSIONS_POLICY =
 // -- Header application -----------------------------------------------------
 
 function isCacheableAssetRequest(pathname: string): boolean {
-  return pathname.startsWith("/api/media/serve/") || pathname.startsWith("/images/");
+  return (
+    pathname.startsWith("/api/media/serve/") ||
+    pathname.startsWith("/api/share-preview/") ||
+    pathname.startsWith("/images/")
+  );
 }
 
-function shouldSkipCsrfBootstrap(pathname: string): boolean {
-  return pathname === "/api/csrf" || isCacheableAssetRequest(pathname);
+function shouldSkipCsrfBootstrap(request: NextRequest): boolean {
+  // Layout bootstrap is only for document reads. API/mutation requests must
+  // retain the client's token, including missing and incorrect proof.
+  return (
+    request.nextUrl.pathname.startsWith("/api/") ||
+    isCacheableAssetRequest(request.nextUrl.pathname) ||
+    !["GET", "HEAD"].includes(request.method)
+  );
 }
 
 function getAssetCacheControl(pathname: string): string | null {
@@ -211,7 +221,7 @@ export function withSecurityHeaders(
     proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
     proxyResponse.headers.set("X-Frame-Options", "DENY");
     proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    if (shouldPreventApiCaching(pathname)) {
+    if (pathname.startsWith("/api/")) {
       applyNoStoreCacheControl(proxyResponse);
     }
     return proxyResponse;
@@ -228,7 +238,7 @@ export function withSecurityHeaders(
   // Cacheable asset routes should not receive a CSRF bootstrap cookie from middleware.
   // A Set-Cookie on media/image responses forces browsers and CDNs to treat them as
   // private, overriding the cache policy chosen by the asset handler.
-  if (shouldSkipCsrfBootstrap(pathname)) {
+  if (shouldSkipCsrfBootstrap(request)) {
     if (shouldClearPlaywrightSession) {
       clearPlaywrightSessionCookie(proxyResponse);
     }
@@ -301,7 +311,10 @@ export function withSecurityHeaders(
     if (
       normalizedHeaderName === "content-security-policy" ||
       normalizedHeaderName === "x-nonce" ||
-      normalizedHeaderName === "set-cookie"
+      normalizedHeaderName === "set-cookie" ||
+      normalizedHeaderName === "x-middleware-set-cookie" ||
+      normalizedHeaderName === "x-middleware-override-headers" ||
+      normalizedHeaderName.startsWith("x-middleware-request-")
     ) {
       continue;
     }

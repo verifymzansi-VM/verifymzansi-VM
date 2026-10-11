@@ -4,14 +4,19 @@ import type { AddressInfo } from "node:net";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ row: vi.fn(), eq: vi.fn(), from: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ from: mocks.from }) }));
+const mocks = vi.hoisted(() => ({ row: vi.fn(), eq: vi.fn(), from: vi.fn(), rate: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createPublicClient: () => ({ from: mocks.from }) }));
+vi.mock("@/lib/utils/rate-limit", () => ({
+  checkRateLimit: mocks.rate,
+  getClientRateLimitKey: () => "203.0.113.1",
+}));
 import { GET } from "./route";
 const id = "00000000-0000-4000-8000-000000000001";
 const request = new Request("http://localhost/api/share-preview/listing/" + id);
 describe("public social image", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.rate.mockResolvedValue({ limited: false });
     const query = {
       select: () => query,
       eq: (...args: unknown[]) => {
@@ -35,6 +40,7 @@ describe("public social image", () => {
     });
     const response = await GET(request, { params: Promise.resolve({ type: "listing", id }) });
     expect(response.headers.get("Content-Type")).toBe("image/png");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=300, s-maxage=300");
     expect(mocks.eq).toHaveBeenCalledWith("status", "live");
     const bytes = Buffer.from(await response.arrayBuffer());
     expect(bytes.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
@@ -87,5 +93,25 @@ describe("public social image", () => {
       (await GET(request, { params: Promise.resolve({ type: "listing", id: "bad" }) })).status
     ).toBe(404);
     expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.rate).not.toHaveBeenCalled();
   });
+  it.each([
+    { degraded: false, status: 429 },
+    { degraded: true, status: 503 },
+  ])(
+    "blocks render work with status $status when quota is unavailable",
+    async ({ degraded, status }) => {
+      mocks.rate.mockResolvedValue({ limited: true, degraded, retryAfter: 42 });
+      const response = await GET(request, { params: Promise.resolve({ type: "listing", id }) });
+      expect(response.status).toBe(status);
+      expect(response.headers.get("Retry-After")).toBe("42");
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
+      expect(mocks.from).not.toHaveBeenCalled();
+      expect(mocks.rate).toHaveBeenCalledWith({
+        key: "203.0.113.1",
+        action: "share-preview:render",
+        degradedMode: "block",
+      });
+    }
+  );
 });

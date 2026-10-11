@@ -1,7 +1,8 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "include": ["src/typecheck-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": [
+    "next-env.d.ts",
     "docs/audit-evidence/*.canvas.tsx",
     ".next",
     "node_modules",

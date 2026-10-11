@@ -25,6 +25,7 @@ async function main() {
   let scanned = 0;
   let skipped = 0;
   let compilerCaches = 0;
+  let dependencyLinks = 0;
   for (const file of files) {
     if (/^\.next\/(?:dev\/)?cache\//.test(file.replace(/\\/g, "/"))) {
       compilerCaches++;
@@ -33,14 +34,15 @@ async function main() {
     try {
       const result = await scanFile(file);
       findings.push(...result.findings);
-      if (result.skipped) skipped++;
+      if (result.skipReason === "dependency-link") dependencyLinks++;
+      else if (result.skipped) skipped++;
       else scanned++;
     } catch (error) {
       failures.push(`${file}: ${String(error)}`);
     }
   }
   process.stdout.write(
-    `Secret scan: ${scanned} text files, ${skipped} binary exclusions, ${compilerCaches} compiler-cache exclusions, ${failures.length} read failures.\n`
+    `Secret scan: ${scanned} text files, ${skipped} binary exclusions, ${compilerCaches} compiler-cache exclusions, ${dependencyLinks} generated dependency-link exclusions, ${failures.length} read failures.\n`
   );
   if (findings.length || failures.length) throw new Error([...findings, ...failures].join("\n"));
   process.stdout.write("Secret scan passed.\n");

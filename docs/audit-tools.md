@@ -83,6 +83,15 @@ Networkless dependency checks exit 2 even with the legacy opt-out enabled.
 Secret scans stream text files, enumerate NUL-delimited Git filenames and fail
 on unreadable paths. Binary exclusions and inline fixture exceptions remain
 limited evidence rather than proof of no secrets anywhere on disk.
+Next-generated directory links under `.next/node_modules` or
+`.next/dev/node_modules` are separately counted exclusions only when their
+resolved target stays inside this checkout's installed `node_modules`. Regular
+generated files remain scanned; broken links and unexpected targets fail.
+
+The source-only typecheck uses `src/typecheck-env.d.ts` for stable framework
+types and excludes generated `next-env.d.ts`, which imports mutable development
+route declarations even when `.next` is excluded. The isolated production build
+still verifies the actual generated route types.
 
 ## Verification boundaries
 

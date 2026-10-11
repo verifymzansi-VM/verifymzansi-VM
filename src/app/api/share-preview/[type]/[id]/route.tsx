@@ -1,9 +1,10 @@
 import { ImageResponse } from "next/og";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/server";
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { formatZARShort } from "@/lib/utils/format";
 import { uuidSchema } from "@/lib/validations/shared";
+import { checkRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
 
 const SOURCES = {
   listing: {
@@ -27,14 +28,25 @@ const SOURCES = {
 } as const;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ type: string; id: string }> }
 ) {
   const { type, id } = await params;
   if (!Object.hasOwn(SOURCES, type) || !uuidSchema.safeParse(id).success)
-    return new Response("Not found", { status: 404 });
+    return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  const limit = await checkRateLimit({
+    key: getClientRateLimitKey(request),
+    action: "share-preview:render",
+    degradedMode: "block",
+  });
+  if (limit.limited) {
+    return new Response(limit.degraded ? "Preview temporarily unavailable" : "Too many requests", {
+      status: limit.degraded ? 503 : 429,
+      headers: { "Retry-After": String(limit.retryAfter ?? 60), "Cache-Control": "no-store" },
+    });
+  }
   const source = SOURCES[type as keyof typeof SOURCES];
-  const client = await createClient();
+  const client = createPublicClient();
   const { data, error } = await applyVisibleExpiryFilter(
     client.from(source.table).select(source.columns).eq("id", id).eq("status", "live")
   ).maybeSingle();

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
@@ -9,6 +9,20 @@ import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-con
 import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 
 const logger = createLogger("Supabase");
+
+/** Anonymous public reads: never inherit auth cookies into a shared cache. */
+export function createPublicClient(): SupabaseClient {
+  if (isPlaywrightSupabaseStubMode()) {
+    return createPlaywrightStubSupabaseClient() as unknown as SupabaseClient;
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error("Missing public Supabase credentials");
+  return createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: createTimeoutFetch() },
+  });
+}
 
 /**
  * Create a Supabase client for use in Server Components and Route Handlers.
