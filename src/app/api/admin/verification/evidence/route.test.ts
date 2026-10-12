@@ -78,7 +78,7 @@ const HTML_BYTES = Buffer.from("<html><script>alert(1)</script></html>", "latin1
 
 const EVIDENCE_URL =
   "http://localhost:3000/api/admin/verification/evidence?artifactId=123e4567-e89b-42d3-a456-426614174000";
-const EVIDENCE_CSP = "default-src 'none'; img-src 'self'; sandbox";
+const EVIDENCE_CSP = "default-src 'none'; base-uri 'none'; img-src 'self'; sandbox";
 
 // ── Helpers ──────────────────────────────────────────────────
 

@@ -36,7 +36,7 @@ export async function GET(
     const { data: file, error } = await admin
       .from("business_verification_files")
       .select(
-        "id, case_id, r2_key, quarantined, extracted_text, purged_at, business_verifications!inner(owner_id, business_id)"
+        "id, case_id, r2_key, quarantined, extracted_text, purged_at, purge_after, business_verifications!inner(owner_id, business_id)"
       )
       .eq("id", fileId.data)
       .maybeSingle();
@@ -60,6 +60,18 @@ export async function GET(
         { error: "This file was deleted under our retention policy.", code: "purged" },
         { status: 410 }
       );
+    }
+
+    // Expiry revokes access immediately, even while physical cleanup is delayed.
+    // Apply the same guard to quarantined text and decrypted object bytes.
+    if (file.purge_after !== null && file.purge_after !== undefined) {
+      const expiresAt = Date.parse(file.purge_after);
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+        return NextResponse.json(
+          { error: "Evidence access has expired", code: "expired_artifact" },
+          { status: 410, headers: { "Cache-Control": NO_STORE } }
+        );
+      }
     }
 
     const ip =
@@ -106,7 +118,7 @@ export async function GET(
         "Cache-Control": NO_STORE,
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
-        "Content-Security-Policy": "default-src 'none'; img-src 'self'; sandbox",
+        "Content-Security-Policy": "default-src 'none'; base-uri 'none'; img-src 'self'; sandbox",
       },
     });
   } catch (error) {

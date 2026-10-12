@@ -88,7 +88,7 @@ describe("buildCsp", () => {
   it("includes default-src, base-uri, frame-ancestors, and object-src", () => {
     const csp = buildCsp(null);
     expect(csp).toContain("default-src 'self'");
-    expect(csp).toContain("base-uri 'self'");
+    expect(csp).toContain("base-uri 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("object-src 'none'");
   });

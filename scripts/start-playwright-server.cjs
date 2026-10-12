@@ -90,6 +90,10 @@ function createDeterministicEnv() {
     ENABLE_MOCK_OZOW: "true",
     VERIFYMZANSI_RUNTIME_MODE: "e2e",
     VERIFYMZANSI_VALIDATION_MODE: "e2e",
+    ENVIRONMENT: "test",
+    // Synthetic browser runs must use local counters, never a live limiter.
+    OTP_RATE_LIMITER_URL: undefined,
+    RATE_LIMITER_API_KEY: undefined,
     NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "1",
     NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE: "stub",
     NEXT_PUBLIC_SUPABASE_URL: "https://playwright.supabase.stub",
@@ -214,4 +218,5 @@ function main() {
   });
 }
 
-main();
+module.exports = { createDeterministicEnv };
+if (require.main === module) main();

@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCheckRateLimit, mockIsPwnedPassword } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-  mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
-}));
+const { mockCreateClient, mockCheckRateLimit, mockIsPwnedPassword, mockNotify } = vi.hoisted(
+  () => ({
+    mockCreateClient: vi.fn(),
+    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+    mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
+    mockNotify: vi.fn().mockResolvedValue(true),
+  })
+);
+
+vi.mock("@/lib/services/email", () => ({ sendPasswordChangeNotification: mockNotify }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -44,6 +49,7 @@ describe("POST /api/auth/change-password", () => {
     vi.clearAllMocks();
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockIsPwnedPassword.mockResolvedValue(false);
+    mockNotify.mockResolvedValue(true);
   });
 
   it("rejects cross-site requests", async () => {
@@ -179,6 +185,7 @@ describe("POST /api/auth/change-password", () => {
     });
     expect(updateUser).toHaveBeenCalledWith({ password: "NewPassword123" });
     expect(signOut).toHaveBeenCalledWith({ scope: "others" });
+    expect(mockNotify).toHaveBeenCalledWith("user@example.com");
   });
 
   it("rejects known-breached new passwords before updating the user", async () => {

@@ -72,7 +72,7 @@ export function buildCsp(
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",
-    "base-uri 'self'",
+    "base-uri 'none'",
     "frame-ancestors 'none'",
     "object-src 'none'",
     scriptSrc,

@@ -568,8 +568,8 @@ describe("POST /api/admin/verification/decide", () => {
     const response = await POST(createMockRequest({ stepId: STEP_UUID, decision: "approved" }));
     expect(response.status).toBe(200);
 
-    // Should schedule purge and log purge event
-    expect(mockLogAuditEvent).toHaveBeenCalledWith(
+    // Database migration tests verify atomic purge scheduling and its audit.
+    expect(mockLogAuditEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({
         action: "kyc_purge_scheduled",
       })

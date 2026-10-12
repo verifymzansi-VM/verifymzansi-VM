@@ -1,6 +1,18 @@
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 
+// Remove inherited live provider authority before application modules load.
+// Absence (rather than an empty string) preserves optional-config validation;
+// provider-specific tests explicitly supply their own synthetic credentials.
+for (const key of [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "OTP_RATE_LIMITER_URL",
+  "RATE_LIMITER_API_KEY",
+  "RESEND_API_KEY",
+]) {
+  delete process.env[key];
+}
+
 // Mock out `server-only` so server modules can be imported in jsdom tests
 vi.mock("server-only", () => ({}));
 

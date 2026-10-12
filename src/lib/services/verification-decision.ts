@@ -326,40 +326,7 @@ export async function applyVerificationDecision({
         return { ok: false, status: 500, error: "Failed to propagate verification status" };
       }
 
-      // Set purge_after = NOW + 30 days on all KYC artifacts for this user
-      const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-      const { error: purgeErr } = await admin
-        .from("kyc_artifacts")
-        .update({ purge_after: purgeAfter })
-        .eq("user_id", step.user_id)
-        .is("purge_after", null);
-
-      if (purgeErr) {
-        log.error("Failed to schedule KYC artifact purge", {
-          userId: step.user_id,
-          error: purgeErr.message,
-        });
-      } else {
-        try {
-          await logAuditEvent({
-            actorId: reviewerId,
-            actorRole: reviewerRole,
-            action: "kyc_purge_scheduled",
-            targetType: "account_profile",
-            targetId: step.user_id,
-            metadata: {
-              purge_after: purgeAfter,
-              step_count: approvedSteps.length,
-              owner_user_id: step.user_id,
-            },
-          });
-        } catch (auditErr) {
-          log.error("Audit log failed (non-fatal)", {
-            error: auditErr instanceof Error ? auditErr.message : "Unknown",
-          });
-        }
-      }
+      // The account-profile trigger schedules retention atomically with approval.
     } else {
       const nextVerificationStatus = summarizeVerification(
         "incomplete",

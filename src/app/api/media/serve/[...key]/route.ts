@@ -324,7 +324,10 @@ async function serveViaR2Binding(
       ETag: obj.etag,
       "X-Content-Type-Options": "nosniff",
       ...(isSvg
-        ? { "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" }
+        ? {
+            "Content-Security-Policy":
+              "default-src 'none'; base-uri 'none'; style-src 'unsafe-inline'",
+          }
         : {}),
     },
   });
@@ -532,7 +535,10 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
         "X-Content-Type-Options": "nosniff",
         // Block SVG from executing scripts when served from same-origin
         ...(isSvg
-          ? { "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" }
+          ? {
+              "Content-Security-Policy":
+                "default-src 'none'; base-uri 'none'; style-src 'unsafe-inline'",
+            }
           : {}),
       },
     });

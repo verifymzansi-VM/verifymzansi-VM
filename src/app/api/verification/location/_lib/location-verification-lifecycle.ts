@@ -325,18 +325,7 @@ export async function persistLocationVerificationLifecycle({
       profilePatch.legal_name_locked_at = new Date().toISOString();
     }
 
-    const purgeAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { error: purgeErr } = await adminClient
-      .from("kyc_artifacts")
-      .update({ purge_after: purgeAfter })
-      .eq("user_id", userId)
-      .is("purge_after", null);
-    if (purgeErr) {
-      logger.error("Failed to schedule KYC artifact purge (non-fatal)", {
-        error: purgeErr.message,
-        userId,
-      });
-    }
+    // The profile write below also schedules retention in the same transaction.
   }
 
   const { error: profileUpdateErr } = await adminClient

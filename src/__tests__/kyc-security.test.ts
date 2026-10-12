@@ -255,7 +255,7 @@ describe("KYC Security", () => {
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toBe("image/png");
       expect(res.headers.get("Content-Security-Policy")).toBe(
-        "default-src 'none'; img-src 'self'; sandbox"
+        "default-src 'none'; base-uri 'none'; img-src 'self'; sandbox"
       );
     });
   });

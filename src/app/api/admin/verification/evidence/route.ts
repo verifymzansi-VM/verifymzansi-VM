@@ -280,7 +280,7 @@ export async function GET(request: NextRequest) {
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
-      "Content-Security-Policy": "default-src 'none'; img-src 'self'; sandbox",
+      "Content-Security-Policy": "default-src 'none'; base-uri 'none'; img-src 'self'; sandbox",
     };
 
     return new NextResponse(new Uint8Array(decryptedBuffer), {

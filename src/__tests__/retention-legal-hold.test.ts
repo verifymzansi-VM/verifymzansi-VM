@@ -138,7 +138,7 @@ describe("Retention & Legal Hold", () => {
   });
 
   describe("Purge scheduling on full verification", () => {
-    it("sets purge_after on artifacts when all steps approved", async () => {
+    it("delegates purge scheduling to the approval transaction", async () => {
       mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
       const artifactUpdateMock = vi
@@ -258,19 +258,15 @@ describe("Retention & Legal Hold", () => {
 
       // Verify purge_after was set on artifacts
       // First update call is artifact sync ({status}), second call is purge scheduling ({purge_after})
-      expect(artifactUpdateMock).toHaveBeenCalledTimes(2);
-      const updateArg = artifactUpdateMock.mock.calls[1][0];
-      expect(updateArg).toHaveProperty("purge_after");
-
-      // purge_after should be approximately 30 days in the future
-      const purgeDate = new Date(updateArg.purge_after);
-      const now = new Date();
-      const daysUntilPurge = (purgeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-      expect(daysUntilPurge).toBeGreaterThanOrEqual(29);
-      expect(daysUntilPurge).toBeLessThanOrEqual(31);
+      // Native PostgreSQL verifies deadline, rollback, holds and audit guarantees.
+      // The HTTP layer must not perform a separate non-atomic scheduling write.
+      expect(artifactUpdateMock).toHaveBeenCalledTimes(1);
+      expect(artifactUpdateMock).not.toHaveBeenCalledWith(
+        expect.objectContaining({ purge_after: expect.anything() })
+      );
     });
 
-    it("logs purge_scheduled audit event", async () => {
+    it("does not duplicate the transaction-owned purge audit event", async () => {
       mockAuth({ id: ADMIN_UUID, app_metadata: { role: "admin" } });
 
       // Hoist kyc_artifacts mock so it tracks lookup, sync, and purge across multiple from() invocations
@@ -394,7 +390,7 @@ describe("Retention & Legal Hold", () => {
       const purgeAuditCall = mockLogAuditEvent.mock.calls.find(
         (call: unknown[]) => (call[0] as Record<string, string>).action === "kyc_purge_scheduled"
       );
-      expect(purgeAuditCall).toBeDefined();
+      expect(purgeAuditCall).toBeUndefined();
     });
   });
 

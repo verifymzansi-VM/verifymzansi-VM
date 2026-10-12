@@ -19,6 +19,13 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
+    // Unit tests must never inherit the workstation's production database.
+    // Tests of production detection explicitly stub their target/settings.
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-public-anon",
+      ENVIRONMENT: "test",
+    },
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     // Avoid exhausting memory when the runner sees many logical CPUs.

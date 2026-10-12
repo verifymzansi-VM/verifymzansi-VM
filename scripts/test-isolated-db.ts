@@ -1,3 +1,4 @@
+import { verifyIndependentUsers } from "./lib/independent-users";
 import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -309,6 +310,77 @@ async function main() {
     await sql(await readFile("scripts/inactive-kyc-retention.sql", "utf8"));
     results.push({
       name: "Inactive KYC 90-day policy, protections and idempotency",
+      status: "PASS",
+    });
+    await sql(await readFile("scripts/verified-kyc-retention.sql", "utf8"));
+    results.push({
+      name: "Atomic verified KYC retention, rollback, holds and idempotency",
+      status: "PASS",
+    });
+    // Two sessions approve different final steps at once. Without the account-row
+    // lock each trigger sees the other step as pending and neither schedules.
+    const racer = randomUUID();
+    await sql(
+      `INSERT INTO auth.users(id,email) VALUES('${racer}','${racer}@example.invalid');
+       INSERT INTO public.account_profiles(user_id,display_name) VALUES('${racer}','Synthetic race') ON CONFLICT(user_id) DO NOTHING;
+       INSERT INTO public.kyc_artifacts(user_id,step_type,r2_key,content_type,file_size_bytes,status)
+         VALUES('${racer}','id_doc','synthetic-race/${racer}','image/jpeg',1,'pending');
+       INSERT INTO public.verification_steps(user_id,step_type,status,reviewed_at) VALUES
+         ('${racer}','phone','approved',now()),('${racer}','location','approved',now()),
+         ('${racer}','id_doc','pending',NULL),('${racer}','selfie','pending',NULL);`
+    );
+    const session = (statement: string) =>
+      execute(
+        "docker",
+        [
+          "exec",
+          `supabase_db_${project}`,
+          "psql",
+          "-U",
+          "postgres",
+          "-d",
+          "postgres",
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-At",
+          "-c",
+          statement,
+        ],
+        30_000
+      );
+    const [first, second] = await Promise.all([
+      session(
+        `BEGIN; UPDATE public.verification_steps SET status='approved',reviewed_at=now()
+           WHERE user_id='${racer}' AND step_type='id_doc'; SELECT pg_sleep(3); COMMIT;`
+      ),
+      session(
+        `SELECT pg_sleep(1); BEGIN; UPDATE public.verification_steps SET status='approved',reviewed_at=now()
+           WHERE user_id='${racer}' AND step_type='selfie'; COMMIT;`
+      ),
+    ]);
+    if (first.status !== "PASS" || second.status !== "PASS")
+      throw new Error(`Concurrent approvals failed: ${first.output} ${second.output}`);
+    const raced = await sql(
+      `SELECT (SELECT count(*) FROM public.kyc_artifacts WHERE user_id='${racer}' AND purge_after IS NULL)
+        ||':'||(SELECT count(*) FROM public.audit_logs WHERE target_id='${racer}' AND action='kyc_purge_scheduled');`
+    );
+    if (raced !== "0:1") throw new Error(`Concurrent final steps missed scheduling: ${raced}`);
+    results.push({
+      name: "Concurrent different-step final approvals schedule retention exactly once",
+      status: "PASS",
+    });
+    // Avatars go through the scanning route; browsers must not write the bucket.
+    const avatarWrites = await sql(
+      `SELECT count(*) FROM pg_policies WHERE schemaname='storage' AND tablename='objects'
+         AND cmd IN ('INSERT','UPDATE','ALL') AND ('authenticated'=ANY(roles) OR 'anon'=ANY(roles) OR 'public'=ANY(roles))
+         AND coalesce(with_check,qual) LIKE '%avatars%';`
+    );
+    if (avatarWrites !== "0")
+      throw new Error(`Browser avatar write policies remain: ${avatarWrites}`);
+    results.push({ name: "Avatar bucket accepts server-scanned writes only", status: "PASS" });
+    await verifyIndependentUsers(status.API_URL, status.ANON_KEY, status.SERVICE_ROLE_KEY);
+    results.push({
+      name: "Two real synthetic Auth accounts: owner isolation, private metadata and ordinary-user staff denial",
       status: "PASS",
     });
     passed = true;

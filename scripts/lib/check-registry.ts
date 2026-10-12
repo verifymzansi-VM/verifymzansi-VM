@@ -313,7 +313,8 @@ export const CHECKS: Check[] = [
   }),
   check("codeql", [], "GitHub security-extended analysis", local, {
     advisory: true,
-    unavailable: "Local CodeQL unavailable; CI requires ENABLE_CODEQL and code-scanning access",
+    unavailable:
+      "Local CodeQL unavailable; CI runs the CodeQL workflow on every push and pull request",
   }),
   check("ozow-delivery", [], "genuine signed Ozow notification", ["release", "payments"], {
     unavailable: "Genuine delivery not verified by fixtures or secret-name checks",

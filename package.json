@@ -93,6 +93,7 @@
     "preflight:prod:edge": "pnpm preflight:prod && pnpm cloudflare:secrets:check && pnpm cloudflare:posture:strict",
     "cloudflare:secrets:check": "node scripts/cloudflare-worker-secrets-check.mjs",
     "cloudflare:secrets:check:staging": "node scripts/cloudflare-worker-secrets-check.mjs --env=staging",
+    "cloudflare:staging:isolation": "node scripts/check-staging-isolation.mjs",
     "cloudflare:posture": "node scripts/cloudflare-posture-check.mjs",
     "cloudflare:posture:strict": "node scripts/cloudflare-posture-check.mjs --strict",
     "cloudflare:posture:strict:zone": "node scripts/cloudflare-posture-check.mjs --strict \"--strict-checks=Health endpoint,HSTS,DNSSEC DS record,www hostname behavior\"",

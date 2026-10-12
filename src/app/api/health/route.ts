@@ -106,7 +106,7 @@ function healthHeaders() {
     "Referrer-Policy": "strict-origin-when-cross-origin",
     // JSON-only endpoint — a restrictive CSP is safe and prevents the response
     // from being loaded as a document/resource in a browsing context.
-    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
   };
   if (process.env.NODE_ENV === "production") {
     headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload";
