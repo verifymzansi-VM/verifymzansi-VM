@@ -207,6 +207,7 @@
     "postcss": "^8.5.28",
     "prettier": "^3.9.9",
     "remotion": "^4.0.529",
+    "smol-toml": "1.9.0",
     "spdx-expression-parse": "4.0.0",
     "supabase": "2.118.0",
     "tailwindcss": "3.4.19",

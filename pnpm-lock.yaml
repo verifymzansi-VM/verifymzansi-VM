@@ -277,6 +277,9 @@ importers:
       remotion:
         specifier: ^4.0.529
         version: 4.0.529(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      smol-toml:
+        specifier: 1.9.0
+        version: 1.9.0
       spdx-expression-parse:
         specifier: 4.0.0
         version: 4.0.0

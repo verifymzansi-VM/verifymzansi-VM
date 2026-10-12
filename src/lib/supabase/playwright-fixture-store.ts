@@ -310,6 +310,46 @@ export function writePlaywrightTableRows(table: string, rows: StoreTableRow[]): 
       : { ...row }
   );
   store.tables.set(table, normalizedRows);
+  if (table === "account_profiles" || table === "verification_steps") {
+    scheduleVerifiedKycRetention(store);
+  }
+}
+
+const KYC_STEP_TYPES = ["phone", "id_doc", "selfie", "location"];
+
+// Mirrors the schedule_verified_kyc_retention database trigger: completing
+// verification sets a 30-day deadline on artifacts that do not yet have one.
+function scheduleVerifiedKycRetention(store: PlaywrightFixtureStore): void {
+  const steps = ensureTable(store, "verification_steps");
+  const completed = new Set(
+    ensureTable(store, "account_profiles")
+      .filter((profile) => profile.account_verification_status === "verified")
+      .map((profile) => profile.user_id)
+  );
+  for (const userId of new Set(steps.map((step) => step.user_id))) {
+    const approved = steps.filter(
+      (step) =>
+        step.user_id === userId &&
+        step.status === "approved" &&
+        KYC_STEP_TYPES.includes(step.step_type as string)
+    );
+    const reviewed = approved.filter(
+      (step) => (step.step_type === "id_doc" || step.step_type === "selfie") && step.reviewed_at
+    );
+    if (
+      new Set(approved.map((step) => step.step_type)).size === 4 &&
+      new Set(reviewed.map((step) => step.step_type)).size === 2
+    ) {
+      completed.add(userId);
+    }
+  }
+  if (completed.size === 0) return;
+  const deadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  for (const artifact of ensureTable(store, "kyc_artifacts")) {
+    if (completed.has(artifact.user_id) && !artifact.purge_after && !artifact.purged_at) {
+      artifact.purge_after = deadline;
+    }
+  }
 }
 
 export function createPlaywrightTableRow(
