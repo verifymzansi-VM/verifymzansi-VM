@@ -79,13 +79,13 @@ export async function evaluateStaffMfa(
   // Deployed environments must verify a second factor before privileged access.
   // Enrolment remains available through requireStaff({ allowPendingMfa: true }).
   const strictMfa = isProductionDataEnvironment();
-  if (!strictMfa && !(await isFeatureEnabled(STAFF_MFA_FLAG)) && (await mfaSwitchedOff())) {
-    return { status: "not_enforced" };
-  }
+  const enforcementOff =
+    !strictMfa && !(await isFeatureEnabled(STAFF_MFA_FLAG)) && (await mfaSwitchedOff());
 
   const inGrace = !strictMfa && now.getTime() < mfaRequiredAfter.getTime();
   const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (error || !data) {
+    if (enforcementOff) return { status: "not_enforced" };
     return inGrace
       ? { status: "grace", graceEndsAt: mfaRequiredAfter }
       : { status: "required", hasFactor: false };
@@ -97,6 +97,9 @@ export async function evaluateStaffMfa(
       lastVerifiedAt: lastSecondFactorAt(data.currentAuthenticationMethods),
     };
   }
+  // Disabling routine enforcement must not hide a verified factor from the
+  // sensitive-action guard, or make fresh verification impossible to satisfy.
+  if (enforcementOff) return { status: "not_enforced" };
   if (data.nextLevel === "aal2") {
     return { status: "required", hasFactor: true };
   }

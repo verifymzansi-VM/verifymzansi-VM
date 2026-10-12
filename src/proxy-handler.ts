@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { withSecurityHeaders } from "@/lib/middleware/security-headers";
+import { applySecurityHeaders, withSecurityHeaders } from "@/lib/middleware/security-headers";
 import { handlePlaywrightStubRouting } from "@/lib/middleware/playwright-stub";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import {
@@ -413,9 +413,22 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
 
     fallback.headers.set("Cache-Control", "no-store");
 
-    fallback.headers.set("X-Content-Type-Options", "nosniff");
-    fallback.headers.set("X-Frame-Options", "DENY");
-    fallback.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    if (fallback.status >= 400) {
+      applySecurityHeaders(
+        fallback,
+        "default-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+      );
+    } else {
+      // A public pass-through still needs the normal forwarded nonce policy.
+      // If header construction is what failed, degrade to the basic headers.
+      try {
+        return withSecurityHeaders(request, fallback);
+      } catch {
+        fallback.headers.set("X-Content-Type-Options", "nosniff");
+        fallback.headers.set("X-Frame-Options", "DENY");
+        fallback.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+      }
+    }
 
     return fallback;
   }

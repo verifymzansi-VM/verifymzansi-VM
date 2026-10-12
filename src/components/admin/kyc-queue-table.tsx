@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
+
 import { useState, useCallback } from "react";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -133,7 +135,7 @@ export function KycQueueTable({
       setViewingStepId(step.id);
 
       try {
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+        const metaRes = await fetchStaffEvidence(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ stepId: step.id, userId: step.user_id }),

@@ -218,9 +218,12 @@ export function withSecurityHeaders(
       clearPlaywrightSessionCookie(proxyResponse);
     }
 
-    proxyResponse.headers.set("X-Content-Type-Options", "nosniff");
-    proxyResponse.headers.set("X-Frame-Options", "DENY");
-    proxyResponse.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    // These responses do not render application HTML. Preserve their body,
+    // cookies and Location, while enforcing policy on first contact too.
+    applySecurityHeaders(
+      proxyResponse,
+      "default-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    );
     if (pathname.startsWith("/api/")) {
       applyNoStoreCacheControl(proxyResponse);
     }

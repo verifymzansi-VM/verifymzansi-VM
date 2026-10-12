@@ -1,4 +1,5 @@
 "use client";
+import { handleStaffEvidenceResponse } from "@/lib/auth/staff-evidence-fetch";
 
 import {
   useState,
@@ -186,16 +187,18 @@ export function KycPreviewLightbox({
         }
 
         const fetchEvidenceById = async (targetArtifactId: string) => {
-          const res = await fetchWithRetry(
-            "/api/admin/verification/evidence",
-            {
-              method: "POST",
-              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ artifactId: targetArtifactId }),
-              signal: controller.signal,
-            },
-            EVIDENCE_FETCH_RETRIES,
-            EVIDENCE_FETCH_TIMEOUT_MS
+          const res = await handleStaffEvidenceResponse(
+            await fetchWithRetry(
+              "/api/admin/verification/evidence",
+              {
+                method: "POST",
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ artifactId: targetArtifactId }),
+                signal: controller.signal,
+              },
+              EVIDENCE_FETCH_RETRIES,
+              EVIDENCE_FETCH_TIMEOUT_MS
+            )
           );
 
           if (res.ok) {
@@ -218,16 +221,18 @@ export function KycPreviewLightbox({
         let evidenceResult = await fetchEvidenceById(artifact.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaRes = await fetchWithRetry(
-            "/api/admin/verification/evidence/metadata",
-            {
-              method: "POST",
-              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ userId: step.user_id }),
-              signal: controller.signal,
-            },
-            EVIDENCE_FETCH_RETRIES,
-            EVIDENCE_FETCH_TIMEOUT_MS
+          const retryMetaRes = await handleStaffEvidenceResponse(
+            await fetchWithRetry(
+              "/api/admin/verification/evidence/metadata",
+              {
+                method: "POST",
+                headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                body: JSON.stringify({ userId: step.user_id }),
+                signal: controller.signal,
+              },
+              EVIDENCE_FETCH_RETRIES,
+              EVIDENCE_FETCH_TIMEOUT_MS
+            )
           );
 
           if (retryMetaRes.ok) {

@@ -17,6 +17,7 @@
  */
 
 import type * as SentryNextjs from "@sentry/nextjs";
+import { sanitizeTelemetry, telemetryUrl } from "@/lib/security/telemetry-privacy";
 
 type SentryModule = typeof SentryNextjs;
 
@@ -56,28 +57,15 @@ function initialiseSentry(Sentry: SentryModule): void {
       // Performance monitoring — sample 10% of transactions in production
       tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
 
-      // Session replay — capture 1% baseline, 100% on error
-      replaysSessionSampleRate: 0.01,
-      replaysOnErrorSampleRate: 1.0,
-
-      integrations: (() => {
-        try {
-          return [Sentry.replayIntegration()];
-        } catch {
-          return [];
-        }
-      })(),
-
-      // Scrub PII from breadcrumbs
-      beforeBreadcrumb(breadcrumb) {
-        if (breadcrumb.category === "xhr" || breadcrumb.category === "fetch") {
-          const url = breadcrumb.data?.url as string | undefined;
-          if (url && (url.includes("/api/otp") || url.includes("/api/auth"))) {
-            breadcrumb.data = { ...breadcrumb.data, url: url.split("?")[0] };
-          }
-        }
-        return breadcrumb;
-      },
+      // Replay has a separate envelope/DOM boundary and is disabled until its
+      // identity-document capture paths have been independently verified.
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 0,
+      sendDefaultPii: false,
+      dataCollection: { urlQueryParams: false, httpHeaders: false, httpBodies: [] },
+      beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
+      beforeSend: (event) => sanitizeTelemetry(event),
+      beforeSendTransaction: (event) => sanitizeTelemetry(event),
     });
     initialised = true;
   } catch {
@@ -175,11 +163,12 @@ if (typeof window !== "undefined" && sentryDsn) {
 export function onRouterTransitionStart(
   ...args: Parameters<SentryModule["captureRouterTransitionStart"]>
 ): void {
+  const safeArgs: typeof args = [telemetryUrl(args[0]), ...args.slice(1)] as typeof args;
   if (sentryModule) {
-    sentryModule.captureRouterTransitionStart(...args);
+    sentryModule.captureRouterTransitionStart(...safeArgs);
     return;
   }
   void ensureSentryLoaded().then((mod) => {
-    mod?.captureRouterTransitionStart(...args);
+    mod?.captureRouterTransitionStart(...safeArgs);
   });
 }

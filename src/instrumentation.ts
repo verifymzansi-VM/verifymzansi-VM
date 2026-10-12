@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { sanitizeTelemetry } from "@/lib/security/telemetry-privacy";
 
 let hasLoggedBootstrapValidationFailure = false;
 
@@ -69,6 +70,11 @@ export async function register() {
       enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
       release: `verifymzansi@${process.env.npm_package_version || "1.0.0"}`,
       tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+      sendDefaultPii: false,
+      dataCollection: { urlQueryParams: false, httpHeaders: false, httpBodies: [] },
+      beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
+      beforeSend: (event) => sanitizeTelemetry(event),
+      beforeSendTransaction: (event) => sanitizeTelemetry(event),
     });
   }
 
@@ -78,6 +84,11 @@ export async function register() {
       enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
       release: `verifymzansi@${process.env.npm_package_version || "1.0.0"}`,
       tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+      sendDefaultPii: false,
+      dataCollection: { urlQueryParams: false, httpHeaders: false, httpBodies: [] },
+      beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
+      beforeSend: (event) => sanitizeTelemetry(event),
+      beforeSendTransaction: (event) => sanitizeTelemetry(event),
     });
   }
 

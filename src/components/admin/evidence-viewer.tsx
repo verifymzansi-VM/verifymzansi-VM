@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
+
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Eye, FileText, ImageIcon, AlertTriangle } from "lucide-react";
@@ -30,7 +32,7 @@ async function fetchEvidenceBlob(artifactId: string): Promise<Blob> {
   if (!(await ensureCsrfTokenReady())) {
     throw new Error("Security check failed. Please refresh the page and try again.");
   }
-  const res = await fetch("/api/admin/verification/evidence", {
+  const res = await fetchStaffEvidence("/api/admin/verification/evidence", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ artifactId }),

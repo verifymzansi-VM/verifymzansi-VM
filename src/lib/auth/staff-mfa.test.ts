@@ -55,6 +55,18 @@ describe("evaluateStaffMfa", () => {
       hasFactor: false,
     });
   });
+  it("keeps a freshly verified factor available when routine enforcement is off", async () => {
+    isFeatureEnabled.mockResolvedValue(false);
+    flagRow.mockResolvedValue({ data: { enabled: false, mode: "off" }, error: null });
+    const verifiedAt = minutesAgo(1);
+    const state = await evaluateStaffMfa(
+      aal("aal2", "aal2", [{ method: "totp", timestamp: seconds(verifiedAt) }]),
+      GRACE_OVER,
+      NOW
+    );
+    expect(state.status).toBe("verified");
+    expect(hasRecentSecondFactor(state, NOW)).toBe(true);
+  });
 
   it("records when the second factor was last verified", async () => {
     const verifiedAt = minutesAgo(5);

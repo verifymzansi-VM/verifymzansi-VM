@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
+
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import Image from "next/image";
 import {
@@ -179,7 +181,7 @@ export function KycComparisonViewer({
       setViewMode("compare");
 
       try {
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+        const metaRes = await fetchStaffEvidence(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ userId }),
@@ -252,7 +254,7 @@ export function KycComparisonViewer({
                 };
               }
 
-              let evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+              let evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
                 method: "POST",
                 headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({ artifactId: artifact.id }),
@@ -262,11 +264,14 @@ export function KycComparisonViewer({
                 const firstErrorData = await evidenceRes.json().catch(() => null);
 
                 if (firstErrorData?.code === "not_found") {
-                  const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
-                    method: "POST",
-                    headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                    body: JSON.stringify({ userId }),
-                  });
+                  const retryMetaRes = await fetchStaffEvidence(
+                    `/api/admin/verification/evidence/metadata`,
+                    {
+                      method: "POST",
+                      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+                      body: JSON.stringify({ userId }),
+                    }
+                  );
 
                   if (retryMetaRes.ok) {
                     const retryMeta = await retryMetaRes.json();
@@ -293,7 +298,7 @@ export function KycComparisonViewer({
                         };
                       }
 
-                      evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+                      evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
                         method: "POST",
                         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                         body: JSON.stringify({ artifactId: replacement.id }),

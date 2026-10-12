@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, ImageIcon, FileText, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -91,7 +93,7 @@ export function KycInlinePreview({
       setBlobUrl(null);
 
       async function fetchEvidenceByArtifactId(targetArtifactId: string) {
-        const evidenceRes = await fetch(`/api/admin/verification/evidence`, {
+        const evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
           method: "POST",
           signal: controller.signal,
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -118,7 +120,7 @@ export function KycInlinePreview({
 
       try {
         // 1. Resolve the latest uploaded photo through the authorized metadata endpoint.
-        const metaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
+        const metaRes = await fetchStaffEvidence(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
           signal: controller.signal,
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
@@ -165,12 +167,15 @@ export function KycInlinePreview({
         let evidenceResult = await fetchEvidenceByArtifactId(match.id);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaRes = await fetch(`/api/admin/verification/evidence/metadata`, {
-            method: "POST",
-            signal: controller.signal,
-            headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-            body: JSON.stringify({ userId }),
-          });
+          const retryMetaRes = await fetchStaffEvidence(
+            `/api/admin/verification/evidence/metadata`,
+            {
+              method: "POST",
+              signal: controller.signal,
+              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ userId }),
+            }
+          );
 
           if (retryMetaRes.ok) {
             const retryMeta = await retryMetaRes.json();

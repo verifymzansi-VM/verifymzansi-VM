@@ -68,6 +68,12 @@ describe("checkStaffApiMfa", () => {
     evaluateStaffMfa.mockResolvedValue({ status: "verified", lastVerifiedAt: recently() });
     await expect(checkStaffApiMfa(supabase, "user-1", { stepUp: true })).resolves.toBeNull();
   });
+  it("does not let the routine MFA kill switch bypass a sensitive action", async () => {
+    evaluateStaffMfa.mockResolvedValue({ status: "not_enforced" });
+    const response = await checkStaffApiMfa(supabase, "user-1", { stepUp: true });
+    expect(response?.status).toBe(403);
+    await expect(response?.json()).resolves.toMatchObject({ code: "step_up_required" });
+  });
   it.each([null, new Date(Date.now() - 16 * 60_000)])(
     "requires re-verification when the second factor is missing or stale: %s",
     async (lastVerifiedAt) => {

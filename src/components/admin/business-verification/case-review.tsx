@@ -1,4 +1,5 @@
 "use client";
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -142,7 +143,7 @@ function FileViewer({ file }: { file: Detail["files"][number] }) {
 
   async function open() {
     setState({ loading: true });
-    const res = await fetch(`/api/admin/business-verification/files/${file.id}`, {
+    const res = await fetchStaffEvidence(`/api/admin/business-verification/files/${file.id}`, {
       cache: "no-store",
     });
     if (!res.ok) {

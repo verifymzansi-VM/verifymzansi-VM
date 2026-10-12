@@ -1,5 +1,7 @@
 "use client";
 
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
+
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -90,7 +92,7 @@ export function EvidenceDeskClient({
 
       setLoading(true);
       try {
-        const res = await fetch(`/api/admin/verification/evidence/metadata`, {
+        const res = await fetchStaffEvidence(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({

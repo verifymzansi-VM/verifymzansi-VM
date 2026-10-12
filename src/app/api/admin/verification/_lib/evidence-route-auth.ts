@@ -47,6 +47,7 @@ export async function authorizeEvidenceRequest({
     };
   }
 
+  // Raw identity evidence requires fresh MFA, including during enrolment grace.
   const mfaBlock = await checkStaffApiMfa(supabase, user.id, { stepUp: true });
   if (mfaBlock) {
     return { success: false, response: mfaBlock, status: 403 };

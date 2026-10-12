@@ -165,7 +165,7 @@ describe("proxy security headers", () => {
     const res = await middleware(createMockRequest("/dashboard"));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get("Content-Security-Policy")).toBeNull();
+    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
   });
@@ -264,6 +264,7 @@ describe("proxy — authenticated routing", () => {
   });
 
   it("fails closed when an unexpected account gate error interrupts a protected page", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     mockGetUser.mockResolvedValueOnce({
       data: { user: { id: "user-1", is_anonymous: false, app_metadata: {} } },
     });
@@ -277,6 +278,8 @@ describe("proxy — authenticated routing", () => {
     expect(res.status).toBe(503);
     expect(res.headers.get("x-middleware-next")).toBeNull();
     expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=31536000");
+    expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
   });
 
   it("redirects unauthenticated users from /dashboard to /login", async () => {

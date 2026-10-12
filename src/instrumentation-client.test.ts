@@ -75,12 +75,12 @@ describe("instrumentation-client", () => {
     await settleAsyncWork();
 
     expect(sentryMock.init).toHaveBeenCalledTimes(1);
-    expect(sentryMock.replayIntegration).toHaveBeenCalled();
+    expect(sentryMock.replayIntegration).not.toHaveBeenCalled();
     expect(sentryMock.init).toHaveBeenCalledWith(
       expect.objectContaining({
         dsn: "https://key@example.ingest.sentry.io/1",
-        replaysSessionSampleRate: 0.01,
-        replaysOnErrorSampleRate: 1.0,
+        replaysSessionSampleRate: 0,
+        replaysOnErrorSampleRate: 0,
       })
     );
   });
@@ -106,6 +106,27 @@ describe("instrumentation-client", () => {
 
     expect(sentryMock.init).not.toHaveBeenCalled();
     expect(sentryMock.captureRouterTransitionStart).not.toHaveBeenCalled();
+  });
+  it("redacts router telemetry without changing the application's destination", async () => {
+    const mod = await import("./instrumentation-client");
+    const href = "/auth/callback?token_hash=SYNTHETIC_SECRET#SYNTHETIC_SECRET";
+    mod.onRouterTransitionStart(href, "push");
+    await vi.dynamicImportSettled();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sentryMock.captureRouterTransitionStart).toHaveBeenCalledWith("/auth/callback", "push");
+    expect(href).toContain("SYNTHETIC_SECRET");
+    const options = sentryMock.init.mock.calls[0][0];
+    const event = { request: { url: href }, breadcrumbs: [{ data: { from: href, to: href } }] };
+    expect(JSON.stringify(options.beforeSend(event))).not.toContain("SYNTHETIC_SECRET");
+    expect(JSON.stringify(options.beforeSendTransaction(event))).not.toContain("SYNTHETIC_SECRET");
+    expect(JSON.stringify(options.beforeBreadcrumb({ data: { url: href } }))).not.toContain(
+      "SYNTHETIC_SECRET"
+    );
+    expect(options.dataCollection).toEqual({
+      urlQueryParams: false,
+      httpHeaders: false,
+      httpBodies: [],
+    });
   });
 
   it("keeps buffering and does not flush when Sentry init itself fails", async () => {
