@@ -64,21 +64,9 @@ function assertNoDevBypassesInProduction(): string[] {
 }
 
 export async function register() {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    Sentry.init({
-      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-      enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
-      release: `verifymzansi@${process.env.npm_package_version || "1.0.0"}`,
-      tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-      sendDefaultPii: false,
-      dataCollection: { urlQueryParams: false, httpHeaders: false, httpBodies: [] },
-      beforeBreadcrumb: (breadcrumb) => sanitizeTelemetry(breadcrumb),
-      beforeSend: (event) => sanitizeTelemetry(event),
-      beforeSendTransaction: (event) => sanitizeTelemetry(event),
-    });
-  }
-
-  if (process.env.NEXT_RUNTIME === "edge") {
+  // Node and edge runtimes share one Sentry configuration, including the
+  // telemetry privacy boundary.
+  if (process.env.NEXT_RUNTIME === "nodejs" || process.env.NEXT_RUNTIME === "edge") {
     Sentry.init({
       dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
       enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
