@@ -32,6 +32,12 @@ updates:
       # getsentry/sentry-javascript#22794). Stay on 10.75.0 until a fixed v10/v11.
       - dependency-name: "@sentry/nextjs"
         versions: [">= 10.76.0, < 11.0.0"]
+      # 8.71.1 reports 1,373 false no-unused-vars errors in .js/.mjs/.cjs
+      # (typescript-eslint/typescript-eslint#12980); fixed in 8.71.2.
+      - dependency-name: "typescript-eslint"
+        versions: ["8.71.1"]
+      - dependency-name: "@typescript-eslint/*"
+        versions: ["8.71.1"]
     # Group minor and patch updates to reduce PR noise
     groups:
       production-deps:
