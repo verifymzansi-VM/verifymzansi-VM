@@ -67,9 +67,7 @@ docs/*
 !README.md
 !CONTRIBUTING.md
 !CHANGELOG.md
-!HARDENING-PLAN.md
 !LAUNCH-CHECKLIST.md
-!LAUNCH-HARDENING-PLAN.md
 !docs/ARCHITECTURE.md
 !docs/POSTING-GUIDE.md
 !docs/showroom-artwork.md
@@ -81,9 +79,6 @@ docs/*
 !docs/domain-email-gmail-setup.md
 !.github/**/*.md
 !docs/RUNBOOK.md
-!docs/production-readiness-review-2026-09-30.md
-!docs/production-readiness-follow-up-2026-09-30.md
-!docs/production-readiness-audit-2026-10-01.md
 !docs/branch-protection.md
 !docs/DESIGN-SYSTEM.md
 !docs/mobile-app-agent-build-brief.md
@@ -99,7 +94,6 @@ docs/*
 !docs/admin-access-inventory.md
 !docs/runbooks/
 !docs/runbooks/admin-provisioning.md
-!docs/runbooks/production-audit-rollout-2026-10-01.md
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/
@@ -161,13 +155,21 @@ output/
 !.agents/skills/payment-auditor/SKILL.md
 !.agents/skills/kyc-auditor/SKILL.md
 !docs/audit-tools.md
-!docs/audit-findings-2026-10-03.md
 !docs/ozow-integration-guide.md
-!docs/ozow-integration-review-2026-10-03.md
 !docs/ozow-payment-repair-rollout.md
 !docs/kyc-audit-guide.md
 !docs/encryption-recovery.md
-!docs/audit-evidence/
-!docs/audit-evidence/production-readiness-review-2026-10-09.md
-!docs/audit-evidence/prelaunch-security-2026-10-10/
-!docs/audit-evidence/prelaunch-security-2026-10-10/*
+
+# Security findings, audit evidence and hardening plans list open weaknesses.
+# The repository is public, so they stay outside it (see the private archive).
+docs/audit-evidence/
+docs/*audit*.md
+docs/*readiness*.md
+docs/*security*.md
+docs/*-review-*.md
+*HARDENING-PLAN*.md
+/AUDIT-REPORT-*.md
+/GAP-ANALYSIS-*.md
+# How-to guides for the audit tools (no findings) stay published.
+!docs/audit-tools.md
+!docs/kyc-audit-guide.md

@@ -89,14 +89,13 @@ qualifying view per viewer/content/30 minutes, with owner/staff exclusions and
 network caps. Engaged video views are a separate measure. /api/analytics/visit
 is site-visit analytics, not the content-view service.
 
-The 1 October readiness report records recovery, isolated-staging and
-migration-rollout prerequisites. Recheck them against current evidence; neither
-assume they remain unresolved nor claim they are fixed. Read
-docs/production-readiness-audit-2026-10-01.md and
-docs/runbooks/production-audit-rollout-2026-10-01.md. At drafting time an
-unrelated untracked migration, 20261002130200_retire_legacy_view_counting.sql,
-was present and depended on the newer views implementation; preserve it and
-reconcile migration order with its owner before applying anything remotely.
+Readiness and security findings are kept in the owner's private report, outside
+this public repository. Ask for the current one and recheck it against current
+evidence; neither assume an item remains unresolved nor claim it is fixed. At
+drafting time an unrelated untracked migration,
+20261002130200_retire_legacy_view_counting.sql, was present and depended on the
+newer views implementation; preserve it and reconcile migration order with its
+owner before applying anything remotely.
 
 Start by recording Git status, active branch, package versions, current
 routes/schema, rate-limit actions, auth/provider configuration names, existing

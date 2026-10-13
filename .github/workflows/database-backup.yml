@@ -1,0 +1,123 @@
+name: Database Backup
+
+# Nightly encrypted backup of the production Supabase database (the Free plan
+# keeps no restorable backups). Each run dumps roles, schema and data with the
+# Supabase CLI, checks the dump, encrypts it to the public key in
+# .github/backup/ and uploads it to the private R2 bucket
+# `verifymzansi-backups`, which deletes copies after 35 days.
+#
+# Only the owner's offline private key can decrypt a backup. This repository
+# is public, so this job never prints, caches or uploads unencrypted data as
+# an artifact. Restore steps: docs/RUNBOOK.md, "Database backups".
+
+on:
+  schedule:
+    # 23:30 UTC = 01:30 in South Africa.
+    - cron: "30 23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_PROJECT_REF: tnygdgormnofpgjknlhr
+      SUPABASE_POOLER_HOST: aws-1-ap-south-1.pooler.supabase.com
+      BACKUP_BUCKET: verifymzansi-backups
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the database connection string
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_BACKUP_DB_PASSWORD }}
+        run: |
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "::error::Add the SUPABASE_BACKUP_DB_PASSWORD repository secret (Supabase > Project Settings > Database password)."
+            exit 1
+          fi
+          encoded=$(DB_PASSWORD="$DB_PASSWORD" python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["DB_PASSWORD"], safe=""))')
+          echo "::add-mask::$encoded"
+          # Session mode (port 5432) supports pg_dump; the transaction pooler does not.
+          echo "DB_URL=postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded}@${SUPABASE_POOLER_HOST}:5432/postgres" >> "$GITHUB_ENV"
+
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.118.0
+
+      - name: Dump roles, schema and data
+        run: |
+          mkdir -p "$RUNNER_TEMP/backup"
+          cd "$RUNNER_TEMP/backup"
+          supabase db dump --db-url "$DB_URL" -f roles.sql --role-only
+          supabase db dump --db-url "$DB_URL" -f schema.sql
+          supabase db dump --db-url "$DB_URL" -f data.sql --use-copy --data-only
+
+      - name: Check the dump is complete
+        run: |
+          cd "$RUNNER_TEMP/backup"
+          for file in roles.sql schema.sql data.sql; do
+            if [ ! -s "$file" ]; then
+              echo "::error::$file is empty"
+              exit 1
+            fi
+          done
+          # A usable backup must contain accounts and core public tables.
+          for table in 'auth"?\."?users' 'public"?\."?account_profiles' 'public"?\."?businesses' 'public"?\."?listings'; do
+            if ! grep -Eq "^COPY \"?${table}\"? " data.sql; then
+              echo "::error::data.sql has no data section for ${table}"
+              exit 1
+            fi
+          done
+          grep -Eq 'CREATE TABLE (IF NOT EXISTS )?"?public"?\."?account_profiles"?' schema.sql \
+            || { echo "::error::schema.sql is missing public.account_profiles"; exit 1; }
+          {
+            echo "project: ${SUPABASE_PROJECT_REF}"
+            echo "created_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "supabase_cli: $(supabase --version)"
+            echo "commit: ${GITHUB_SHA}"
+            sha256sum roles.sql schema.sql data.sql
+          } > MANIFEST.txt
+          ls -l roles.sql schema.sql data.sql | awk '{print $5, $9}'
+
+      - name: Encrypt the backup
+        run: |
+          cd "$RUNNER_TEMP/backup"
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          name="verifymzansi-db-${stamp}.tar.gz.gpg"
+          tar -czf - MANIFEST.txt roles.sql schema.sql data.sql \
+            | gpg --batch --quiet --trust-model always \
+                --recipient-file "$GITHUB_WORKSPACE/.github/backup/database-backup-public-key.asc" \
+                --output "$name" --encrypt
+          shred -u roles.sql schema.sql data.sql
+          echo "BACKUP_FILE=$RUNNER_TEMP/backup/$name" >> "$GITHUB_ENV"
+          echo "BACKUP_KEY=database/$(date -u +%Y/%m/%d)/$name" >> "$GITHUB_ENV"
+
+      - name: Upload to the private R2 bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp "$BACKUP_FILE" "s3://${BACKUP_BUCKET}/${BACKUP_KEY}" \
+            --endpoint-url "$endpoint" --only-show-errors
+          local_size=$(stat -c %s "$BACKUP_FILE")
+          remote_size=$(aws s3api head-object --bucket "$BACKUP_BUCKET" --key "$BACKUP_KEY" \
+            --endpoint-url "$endpoint" --query ContentLength --output text)
+          if [ "$local_size" != "$remote_size" ]; then
+            echo "::error::Uploaded size ${remote_size} does not match local size ${local_size}"
+            exit 1
+          fi
+          echo "Stored ${BACKUP_KEY} (${local_size} bytes, encrypted)"

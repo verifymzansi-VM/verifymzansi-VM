@@ -33,8 +33,8 @@ export const mediaBucket = new cloudflare.R2Bucket("verifymzansi-media", {
 // wrangler.toml / NEXT_PUBLIC_APP_URL, including:
 //   - https://verifymzansi.com
 //   - https://www.verifymzansi.com
-//   - https://staging.verifymzansi.com
-// If these origins drift out of sync, presigned browser PUT uploads can fail
+// Staging was removed on 2026-10-13: it must not upload into the production
+// bucket. Add it back only once staging has its own bucket. If these origins drift out of sync, presigned browser PUT uploads can fail
 // on the media/review step even while server-side photo uploads continue to work.
 
 // ── R2 Bucket — KYC evidence (private, encrypted at rest) ─

@@ -215,22 +215,12 @@ Preserve the working website and its commercial model.
 | F20 | The website has a manifest, a service worker and an `/offline` page.                                                                                                                                                                                                                                                                                                                                                                               | `src/app/manifest.ts`, `public/sw.js`                                    | Check real install behaviour on phones. Never claim offline payment or offline KYC.                                                                                     |
 | F21 | Auth callback: `src/app/(auth)/auth/callback/route.ts`. Recovery pages are in `src/app/(auth)/{forgot-password,reset-password}`.                                                                                                                                                                                                                                                                                                                   |                                                                          | Don't send these paths to the app. Browser password recovery must keep working.                                                                                         |
 
-### 3.3 Open launch blockers [from `docs/production-readiness-audit-2026-10-01.md`]
+### 3.3 Open launch blockers
 
-Recheck each against current evidence. Don't assume they're still open, and
-don't claim they're fixed.
-
-1. **Recovery not proven.** No managed backups and no point-in-time recovery
-   (free plan). Needs a rehearsed restore of the database, R2 objects and
-   encryption keys.
-2. **No isolated staging.** Staging currently shares production services.
-3. **Branch protection.** The ruleset "Protect main" only blocks deletion and
-   force-push. The owner decides.
-
-**Public marketing launch is blocked until 1 and 2 are closed with evidence.**
-
-The quota and job-fencing migrations listed there were applied on 2026-10-01.
-Confirm with `list_migrations`.
+Security and readiness findings are kept outside this public repository. Ask the
+owner for the current private security report before release work, and recheck
+each item against current evidence. Don't assume an item is still open, and
+don't claim it's fixed.
 
 ---
 
@@ -857,7 +847,8 @@ mobile_enquiry_idempotency(user_id uuid not null, idempotency_key uuid not null,
   - All push categories start **off**.
 - **Outbox and digest state:**
   - Reuse `operation_jobs` and `queue_claims`, with their lease fencing (see
-    `docs/runbooks/production-audit-rollout-2026-10-01.md`), wherever possible.
+    migration `20261001130000_operation_job_attempt_fencing`), wherever
+    possible.
   - Only if they can't fit, add
     `push_outbox(id, user_id, category, payload jsonb, dedupe_key unique, status, attempts, next_attempt_at, expo_ticket_ids, receipt_checked_at, created_at)`.
 - **Account deletion and DSAR:**
@@ -1378,7 +1369,7 @@ time.
 
 ### 14.4 Rollout and rollback
 
-- Follow `docs/runbooks/production-audit-rollout-2026-10-01.md`.
+- Follow `docs/RUNBOOK.md` and the owner's private release checklist.
 - **Order:**
   1. Additive migrations.
   2. Backend deploy (owner approves the push to `main`).

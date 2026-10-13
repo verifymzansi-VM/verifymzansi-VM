@@ -16,6 +16,7 @@
 - [DSAR Processing](#dsar-processing-popia)
 - [Audit Logs](#audit-logs)
 - [Deployment & Rollback](#deployment--rollback)
+- [Database Backups](#database-backups)
 - [Sentry Bug Finding](#sentry-bug-finding)
 - [KYC Provider Management](#kyc-provider-management)
 - [Incident Response](#incident-response)
@@ -584,6 +585,54 @@ curl https://verifymzansi-payment-cleanup.verifymzansi.workers.dev/
 - [ ] `pnpm run build:cloudflare` passes in a supported environment
 - [ ] Post-deploy verify `/api/health`, `/`, `/login`, and a previously failing
       route before declaring the release healthy
+
+---
+
+## Database Backups
+
+`.github/workflows/database-backup.yml` runs every night at 01:30 SAST, and can
+be started by hand from the Actions tab. It dumps roles, schema and data with
+the Supabase CLI, checks the dump, encrypts it to
+`.github/backup/database-backup-public-key.asc` and stores it in the private R2
+bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
+after 35 days.
+
+- **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
+  Supabase > Project Settings > Database). Reset it there if a run reports an
+  authentication failure, then update the secret.
+- **Decryption key:** only the owner holds the private key, offline (key
+  fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
+  can be restored. Never commit it or store it in GitHub, Cloudflare or
+  Supabase.
+- **Failure alerts:** GitHub emails the owner when a scheduled run fails. GitHub
+  pauses schedules in public repositories after 60 days without commits;
+  re-enable the workflow if that happens.
+
+### Restoring
+
+1. Download the newest `.tar.gz.gpg` from the R2 bucket (Cloudflare dashboard >
+   R2 > `verifymzansi-backups`).
+2. Import the private key once, then decrypt and unpack:
+
+   ```bash
+   gpg --import verifymzansi-database-backup-PRIVATE-key.asc
+   gpg --output backup.tar.gz --decrypt verifymzansi-db-<timestamp>.tar.gz.gpg
+   tar -xzf backup.tar.gz
+   sha256sum -c MANIFEST.txt --ignore-missing
+   ```
+
+3. Restore into an empty Supabase project, never on top of live data:
+
+   ```bash
+   psql --single-transaction --variable ON_ERROR_STOP=1 \
+     --file roles.sql --file schema.sql \
+     --command 'SET session_replication_role = replica' \
+     --file data.sql --dbname "$TARGET_DB_URL"
+   ```
+
+4. Point the app at the restored project only after checking accounts, posts and
+   payments. Uploaded media and ID documents live in R2 and are not part of this
+   backup.
 
 ---
 
