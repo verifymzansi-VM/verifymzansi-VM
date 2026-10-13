@@ -21,6 +21,12 @@ updates:
       # (scripts/check-jscpd-budget.ts) would need rebuilding. Stay on 4.x.
       - dependency-name: "jscpd"
         update-types: ["version-update:semver-major"]
+      # Licence-gated: scripts/check-licenses.ts pins the reviewed versions.
+      # Remotion's custom licence needs an owner re-review per version, and
+      # @ffmpeg/core must match the self-hosted GPL files in public/vendor.
+      - dependency-name: "remotion"
+      - dependency-name: "@remotion/*"
+      - dependency-name: "@ffmpeg/core"
     # Group minor and patch updates to reduce PR noise
     groups:
       production-deps:
