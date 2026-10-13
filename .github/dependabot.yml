@@ -30,6 +30,18 @@ updates:
           - "minor"
           - "patch"
 
+  # AI agent tooling under .agents/ is never built or deployed with the site.
+  # `ignore` also applies to security updates, so this stops pull requests
+  # for those manifests while the website entry above stays fully covered.
+  - package-ecosystem: "npm"
+    directories:
+      - "/.agents/**"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+
   # GitHub Actions versions
   - package-ecosystem: "github-actions"
     directory: "/"
