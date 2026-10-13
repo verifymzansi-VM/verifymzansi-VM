@@ -7,6 +7,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    # .npmrc refuses versions younger than 7 days (minimum-release-age), so
+    # proposing fresher releases fails every update. Wait 8 days for margin.
+    cooldown:
+      default-days: 8
     reviewers:
       - "verifymzansi-a11y"
     labels:
