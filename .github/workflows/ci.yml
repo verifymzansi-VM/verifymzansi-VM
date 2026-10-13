@@ -25,7 +25,7 @@ jobs:
         run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,db-static,secrets,licenses,dependencies
       - name: Preserve audit evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: static-audit
           path: tmp/safety-gate/**
@@ -58,7 +58,7 @@ jobs:
         run: pnpm safety:ci-review -- --checks=duplication
       - name: Upload jscpd report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: jscpd-budget-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/jscpd/**
@@ -150,7 +150,7 @@ jobs:
         run: pnpm safety:ci-review -- --checks=isolated-db
       - name: Preserve database evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: isolated-database-audit
           path: |
@@ -205,7 +205,7 @@ jobs:
         run: pnpm safety:release -- --checks=browser
       - name: Upload isolated browser diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: isolated-browser-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -248,7 +248,7 @@ jobs:
       - run: pnpm exec playwright test --project ${{ matrix.project }}
       - name: Upload browser test report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-full-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -324,7 +324,7 @@ jobs:
             grafana/k6:latest run --summary-export /workspace/tmp/k6/summary.json scripts/load-test.js
       - name: Upload k6 summary
         if: always() && steps.check-url.outputs.skip != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: k6-advisory-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/k6/**
@@ -378,7 +378,7 @@ jobs:
         run: pnpm run quality:lighthouse
       - name: Upload Lighthouse reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lighthouse-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/lighthouse/**
@@ -402,7 +402,7 @@ jobs:
         run: pnpm run safety:ci-review -- --dry-run
       - name: Upload safety gate artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: safety-gate-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/safety-gate/**
@@ -420,7 +420,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm safety:ci-review -- --checks=payment-unit,kyc-unit,db-payments,db-kyc
       - if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: payment-kyc-audit
           path: tmp/safety-gate/**
