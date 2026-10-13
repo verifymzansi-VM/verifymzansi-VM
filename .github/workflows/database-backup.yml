@@ -40,6 +40,8 @@ jobs:
         env:
           DB_PASSWORD: ${{ secrets.SUPABASE_BACKUP_DB_PASSWORD }}
         run: |
+          # Pasting into the GitHub secret form can add a trailing newline.
+          DB_PASSWORD=$(printf '%s' "$DB_PASSWORD" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
           if [ -z "$DB_PASSWORD" ]; then
             echo "::error::Add the SUPABASE_BACKUP_DB_PASSWORD repository secret (Supabase > Project Settings > Database password)."
             exit 1
