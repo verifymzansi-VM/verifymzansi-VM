@@ -27,6 +27,11 @@ updates:
       - dependency-name: "remotion"
       - dependency-name: "@remotion/*"
       - dependency-name: "@ffmpeg/core"
+      # 10.76 bundles a WebAssembly build-time plugin into the server runtime;
+      # Cloudflare Workers refuse it and every request returns 500 (2026-10-13,
+      # getsentry/sentry-javascript#22794). Stay on 10.75.0 until a fixed v10/v11.
+      - dependency-name: "@sentry/nextjs"
+        versions: [">= 10.76.0, < 11.0.0"]
     # Group minor and patch updates to reduce PR noise
     groups:
       production-deps:
