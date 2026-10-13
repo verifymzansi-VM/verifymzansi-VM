@@ -30,8 +30,10 @@ updates:
       # 10.76 bundles a WebAssembly build-time plugin into the server runtime;
       # Cloudflare Workers refuse it and every request returns 500 (2026-10-13,
       # getsentry/sentry-javascript#22794). Stay on 10.75.0 until a fixed v10/v11.
+      # CI does not run workerd, so every Sentry bump needs a manual local
+      # workerd check before it can ship; never propose one automatically.
       - dependency-name: "@sentry/nextjs"
-        versions: [">= 10.76.0, < 11.0.0"]
+        versions: [">= 10.75.1"]
       # 8.71.1 reports 1,373 false no-unused-vars errors in .js/.mjs/.cjs
       # (typescript-eslint/typescript-eslint#12980); fixed in 8.71.2.
       - dependency-name: "typescript-eslint"
