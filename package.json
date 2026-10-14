@@ -204,7 +204,7 @@
     "openapi-typescript": "^7.13.0",
     "playwright": "^1.63.0",
     "png-to-ico": "^3.0.2",
-    "postcss": "^8.5.28",
+    "postcss": "^8.5.29",
     "prettier": "^3.9.9",
     "remotion": "^4.0.529",
     "smol-toml": "1.9.0",
