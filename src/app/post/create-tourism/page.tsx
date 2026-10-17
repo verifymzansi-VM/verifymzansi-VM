@@ -75,6 +75,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { usePostDraftAutosave } from "@/hooks/use-post-draft-autosave";
 import { validateTourismStep } from "@/lib/forms/tourism-form";
+import { BUSINESS_TEXT_LIMITS } from "@/lib/validations/business-limits";
 import type { TourismListingType } from "@/types/tourism-details";
 import {
   OperatingHoursInput,
@@ -366,6 +367,8 @@ function CreateTourismContent() {
   );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const maxTitleLength = listingType === "event" ? 120 : BUSINESS_TEXT_LIMITS.name;
+  const maxDescriptionLength = listingType === "event" ? 5000 : BUSINESS_TEXT_LIMITS.description;
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [locationTown, setLocationTown] = useState("");
@@ -1922,13 +1925,19 @@ function CreateTourismContent() {
                         <Label htmlFor="title">
                           {listingType === "event" ? "Event name" : "Business Name"} *
                         </Label>
-                        <span className="text-xs text-muted-foreground">{title.length}/120</span>
+                        <span className="text-xs text-muted-foreground" aria-hidden="true">
+                          {title.length}/{maxTitleLength}
+                        </span>
                       </div>
+                      <p id="title-length" className="sr-only">
+                        {title.length} of {maxTitleLength} characters
+                      </p>
                       <Input
                         id="title"
                         value={title}
+                        maxLength={maxTitleLength}
                         onChange={(e) => {
-                          setTitle(e.target.value.slice(0, 120));
+                          setTitle(e.target.value.slice(0, maxTitleLength));
                           clearErrors("title");
                         }}
                         placeholder={
@@ -1937,9 +1946,12 @@ function CreateTourismContent() {
                             : "e.g. Kruger Sunset Lodge"
                         }
                         aria-invalid={!!fieldErrors.title}
+                        aria-describedby={`title-length${fieldErrors.title ? " title-error" : ""}`}
                       />
                       {fieldErrors.title && (
-                        <p className="inline-form-error">{fieldErrors.title}</p>
+                        <p id="title-error" className="inline-form-error">
+                          {fieldErrors.title}
+                        </p>
                       )}
                     </div>
 
@@ -1947,15 +1959,19 @@ function CreateTourismContent() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="description">Description *</Label>
-                        <span className="text-xs text-muted-foreground">
-                          {description.length}/5000
+                        <span className="text-xs text-muted-foreground" aria-hidden="true">
+                          {description.length}/{maxDescriptionLength}
                         </span>
                       </div>
+                      <p id="description-length" className="sr-only">
+                        {description.length} of {maxDescriptionLength} characters
+                      </p>
                       <Textarea
                         id="description"
                         value={description}
+                        maxLength={maxDescriptionLength}
                         onChange={(e) => {
-                          setDescription(e.target.value.slice(0, 5000));
+                          setDescription(e.target.value.slice(0, maxDescriptionLength));
                           clearErrors("description");
                         }}
                         rows={5}
@@ -1965,9 +1981,12 @@ function CreateTourismContent() {
                             : "Describe your accommodation, services, what makes it special..."
                         }
                         aria-invalid={!!fieldErrors.description}
+                        aria-describedby={`description-length${fieldErrors.description ? " description-error" : ""}`}
                       />
                       {fieldErrors.description && (
-                        <p className="inline-form-error">{fieldErrors.description}</p>
+                        <p id="description-error" className="inline-form-error">
+                          {fieldErrors.description}
+                        </p>
                       )}
                     </div>
 

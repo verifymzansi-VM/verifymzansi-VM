@@ -5,7 +5,9 @@ import type { MarketplaceArea } from "@/types/enums";
 
 export type { ContentEditRequest, ContentEditTargetType } from "@/types/database";
 
-export const MAX_APPROVED_CONTENT_EDITS = 2;
+import { CURRENT_MAX_APPROVED_CONTENT_EDITS } from "@/lib/posting/current-edit-policy";
+
+export const MAX_APPROVED_CONTENT_EDITS = CURRENT_MAX_APPROVED_CONTENT_EDITS;
 
 type QueryableClient = {
   from: (table: string) => unknown;

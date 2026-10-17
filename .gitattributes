@@ -1,1 +1,17 @@
 patches/*.patch text eol=lf
+
+# Keep hash-checked foundation sources reproducible across Windows and CI.
+/database/foundation/** text eol=lf
+/docs/backend-foundation/prototypes/** text eol=lf
+/docs/backend-foundation/tools/** text eol=lf
+/docs/backend-foundation/schema-map.json text eol=lf
+/docs/backend-foundation/post-field-proposals.json text eol=lf
+/docs/backend-foundation/evidence/*-inventory.json text eol=lf
+/src/lib/foundation/** text eol=lf
+/src/lib/domains/** text eol=lf
+/scripts/*foundation* text eol=lf
+/scripts/lib/*foundation* text eol=lf
+/src/lib/supabase/fetch-with-timeout.ts text eol=lf
+/src/lib/utils/sa-id-validation.ts text eol=lf
+/src/lib/constants/verification.ts text eol=lf
+/src/types/enums.ts text eol=lf

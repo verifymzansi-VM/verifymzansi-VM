@@ -1,8 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CreateTourismPage from "./page";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
+import { checkUploadServiceReachable } from "@/lib/utils/upload-preflight";
+
+const { restoreDraftMock } = vi.hoisted(() => ({ restoreDraftMock: vi.fn() }));
 
 const { mediaFilesByLabel, lastPromotionCardProps } = vi.hoisted(() => ({
   mediaFilesByLabel: new Map<string, File[]>(),
@@ -33,7 +36,7 @@ vi.mock("@/hooks/use-auth", () => ({
 vi.mock("@/hooks/use-post-draft-autosave", () => ({
   usePostDraftAutosave: () => ({
     save: vi.fn(),
-    restore: vi.fn().mockReturnValue(null),
+    restore: restoreDraftMock,
     discard: vi.fn(),
   }),
 }));
@@ -282,6 +285,7 @@ function acceptPostingTerms() {
 describe("CreateTourismPage type switch behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    restoreDraftMock.mockReturnValue(null);
     mediaFilesByLabel.clear();
     lastPromotionCardProps.current = null;
     searchParamGetMock.mockReturnValue(null);
@@ -302,6 +306,78 @@ describe("CreateTourismPage type switch behavior", () => {
     expect(screen.queryByRole("button", { name: /^Event$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Tourism Business$/ })).not.toBeInTheDocument();
   });
+
+  it.each([
+    ["tourism_business", "Business Name (Required)", 100, 3000],
+    ["event", "Event name (Required)", 120, 5000],
+  ])(
+    "shows and enforces the %s text limits",
+    async (type, nameLabel, nameLimit, descriptionLimit) => {
+      searchParamGetMock.mockImplementation((key: string) => (key === "type" ? type : null));
+      await act(async () => {
+        render(<CreateTourismPage />);
+      });
+      const name = screen.getByLabelText(nameLabel);
+      const description = screen.getByLabelText("Description (Required)");
+
+      expect(name).toHaveAttribute("maxlength", String(nameLimit));
+      expect(description).toHaveAttribute("maxlength", String(descriptionLimit));
+      expect(name).toHaveAccessibleDescription(`0 of ${nameLimit} characters`);
+      expect(description).toHaveAccessibleDescription(`0 of ${descriptionLimit} characters`);
+
+      await act(async () => {
+        fireEvent.change(name, { target: { value: "t".repeat(nameLimit + 1) } });
+        fireEvent.change(description, { target: { value: "d".repeat(descriptionLimit + 1) } });
+      });
+
+      expect(name).toHaveValue("t".repeat(nameLimit));
+      expect(description).toHaveValue("d".repeat(descriptionLimit));
+      expect(screen.getByText(`${nameLimit}/${nameLimit}`)).toBeInTheDocument();
+      expect(screen.getByText(`${descriptionLimit}/${descriptionLimit}`)).toBeInTheDocument();
+      expect(name).toHaveAccessibleDescription(`${nameLimit} of ${nameLimit} characters`);
+      expect(description).toHaveAccessibleDescription(
+        `${descriptionLimit} of ${descriptionLimit} characters`
+      );
+    }
+  );
+
+  it.each([
+    [101, 3000, "Title cannot exceed 100 characters."],
+    [100, 3001, "Description cannot exceed 3 000 characters."],
+  ])(
+    "blocks a restored tourism draft with title=%i description=%i before uploading",
+    async (titleLength, descriptionLength, message) => {
+      restoreDraftMock.mockReturnValue({
+        step: 3,
+        data: {
+          listingType: "tourism_business",
+          title: "t".repeat(titleLength),
+          description: "d".repeat(descriptionLength),
+          subcategory: "hotel_resort",
+          province: "Gauteng",
+          city: "Johannesburg",
+          locationAddress: "24 Vilakazi Street",
+          locationTown: "Orlando West",
+          contactMethods: ["form"],
+        },
+      });
+      render(<CreateTourismPage />);
+      await screen.findByRole("button", { name: /Submit for review/i });
+      fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+      acceptPostingTerms();
+      fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+      await waitFor(() => expect(screen.getAllByText(message).length).toBeGreaterThan(0));
+      const invalidField = screen.getByLabelText(
+        titleLength > 100 ? "Business Name (Required)" : "Description (Required)"
+      );
+      expect(invalidField).toHaveAttribute("aria-invalid", "true");
+      expect(invalidField).toHaveAccessibleDescription(expect.stringContaining(message));
+      expect(checkUploadServiceReachable).not.toHaveBeenCalled();
+      expect(fetchWithRetry).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
+    }
+  );
 
   it("honors the canonical event creation query param on first render", () => {
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));

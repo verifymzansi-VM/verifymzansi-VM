@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ComponentProps } from "react";
 import { trackSponsorClick, type SponsorSurface } from "@/lib/analytics/commercial-events";
 
-/** A link to a programme partner that records the click for its activity report. */
+/** A link to a Business Sponsor that records the click for its activity report. */
 export function SponsorLink({
   organisationId,
   surface,

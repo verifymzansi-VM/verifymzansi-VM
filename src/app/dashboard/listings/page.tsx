@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelativeTime, formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
+import { isAddonOffered } from "@/lib/billing/addon-availability";
 import { BoostButton } from "@/components/listings/boost-button";
 import { FeaturedButton } from "@/components/listings/featured-button";
 import { UrgentButton } from "@/components/listings/urgent-button";
@@ -942,42 +943,46 @@ function ListingList({
                     aria-label="Promote this post"
                     className="ml-auto flex items-center gap-0.5 rounded-full border border-border/70 bg-background/60 p-0.5"
                   >
-                    <BoostButton
-                      listingId={listing.id}
-                      isBoosted={
-                        listing.boost_until ? new Date(listing.boost_until) > new Date() : false
-                      }
-                      canBoost={
-                        isLive && checkCanBoost(planTiers[listing.area], listing.area).allowed
-                      }
-                      itemTypeLabel={dashboardActionLabel(listing.source)}
-                      boostApiPath={
-                        listing.source === "business"
-                          ? `/api/businesses/${listing.id}/boost`
-                          : listing.source === "promotion"
-                            ? `/api/promotions/${listing.id}/boost`
-                            : undefined
-                      }
-                    />
-                    <FeaturedButton
-                      listingId={listing.id}
-                      isFeatured={
-                        listing.featured_until
-                          ? new Date(listing.featured_until) > new Date()
-                          : false
-                      }
-                      canFeature={
-                        isLive && checkCanFeatured(planTiers[listing.area], listing.area).allowed
-                      }
-                      itemTypeLabel={dashboardActionLabel(listing.source)}
-                      featuredApiPath={
-                        listing.source === "business"
-                          ? `/api/businesses/${listing.id}/featured`
-                          : listing.source === "promotion"
-                            ? `/api/promotions/${listing.id}/featured`
-                            : undefined
-                      }
-                    />
+                    {isAddonOffered("boost", listing.source, listing.promotion_type) && (
+                      <BoostButton
+                        listingId={listing.id}
+                        isBoosted={
+                          listing.boost_until ? new Date(listing.boost_until) > new Date() : false
+                        }
+                        canBoost={
+                          isLive && checkCanBoost(planTiers[listing.area], listing.area).allowed
+                        }
+                        itemTypeLabel={dashboardActionLabel(listing.source)}
+                        boostApiPath={
+                          listing.source === "business"
+                            ? `/api/businesses/${listing.id}/boost`
+                            : listing.source === "promotion"
+                              ? `/api/promotions/${listing.id}/boost`
+                              : undefined
+                        }
+                      />
+                    )}
+                    {isAddonOffered("featured", listing.source, listing.promotion_type) && (
+                      <FeaturedButton
+                        listingId={listing.id}
+                        isFeatured={
+                          listing.featured_until
+                            ? new Date(listing.featured_until) > new Date()
+                            : false
+                        }
+                        canFeature={
+                          isLive && checkCanFeatured(planTiers[listing.area], listing.area).allowed
+                        }
+                        itemTypeLabel={dashboardActionLabel(listing.source)}
+                        featuredApiPath={
+                          listing.source === "business"
+                            ? `/api/businesses/${listing.id}/featured`
+                            : listing.source === "promotion"
+                              ? `/api/promotions/${listing.id}/featured`
+                              : undefined
+                        }
+                      />
+                    )}
                     <UrgentButton
                       listingId={listing.id}
                       isUrgent={

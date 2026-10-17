@@ -228,7 +228,7 @@ function ProfileFields({ org }: { org?: AdminOrganisation }) {
             Accepting affiliation requests
           </label>
           <fieldset className="space-y-2 rounded-lg border p-3 text-sm sm:col-span-2">
-            <legend className="px-1 font-medium">Programme partner placement</legend>
+            <legend className="px-1 font-medium">Business Sponsor placement</legend>
             <p className="text-xs text-muted-foreground">
               Shown only while the programme is public, active, has recorded logo permission and has
               the minimum number of live businesses (Commercial settings).
@@ -240,7 +240,7 @@ function ProfileFields({ org }: { org?: AdminOrganisation }) {
                 defaultChecked={org.show_on_strip}
                 className="h-4 w-4"
               />
-              Show on the Programme partners strip (Mzansi Business)
+              Show on the Business Sponsors strip (Mzansi Business)
             </label>
             <label className="flex items-center gap-2">
               <input

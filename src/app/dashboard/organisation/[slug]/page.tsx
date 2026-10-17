@@ -159,7 +159,7 @@ export default async function OrganisationDashboardPage({
           <p className="mt-1 text-muted-foreground">
             Nothing renews automatically. Confirmed affiliations stay on business profiles;
             sponsored visibility has ended. Review the performance report, then ask for a 90- or
-            180-day programme proposal.
+            180-day sponsor proposal.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link

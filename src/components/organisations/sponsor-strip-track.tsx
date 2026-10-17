@@ -56,7 +56,7 @@ function Chips({
 }
 
 /**
- * The moving row of programme partners. It scrolls the container (not a CSS
+ * The moving row of Business Sponsors. It scrolls the container (not a CSS
  * transform) so phones can drag it natively; it pauses on hover, keyboard
  * focus and touch, and sits still under reduced motion or with few sponsors.
  */

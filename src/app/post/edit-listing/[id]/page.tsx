@@ -14,6 +14,8 @@ import { PostEditActionBar, PostFormSection } from "@/components/post/post-form-
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
+import { PackageRulesNote } from "@/components/posting/package-rules-note";
+import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { loadOwnListing } from "./load-own-listing";
@@ -518,7 +520,7 @@ export default function EditListingPage() {
       if (!res.ok) {
         if (res.status === 409) {
           if (data?.code === "edit_limit_reached") {
-            setFormError("This listing has already used its two approved edit chances.");
+            setFormError(editLimitReachedMessage("listing"));
             return;
           }
           if (data?.code === "pending_edit_exists") {
@@ -616,6 +618,7 @@ export default function EditListingPage() {
                 { label: "Edit" },
               ]}
             />
+            <PackageRulesNote kind="listing" />
 
             <form noValidate onSubmit={handleSubmit} className="space-y-4">
               <div className="surface-card space-y-6 p-4 sm:p-6">

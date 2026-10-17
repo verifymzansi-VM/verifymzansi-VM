@@ -98,8 +98,8 @@ export async function POST(request: NextRequest) {
     if (targetType === "business") {
       // Contact details live in the server-only business_private table.
       const [business] = await withAllPrivateFields("businesses", [{ id: target.id }]);
-      phone = business.phone ?? null;
-      whatsapp = business.whatsapp ?? null;
+      phone = allows("call") ? (business.phone ?? null) : null;
+      whatsapp = allows("whatsapp") ? (business.whatsapp ?? null) : null;
       email = allows("email") ? (business.email ?? null) : null;
     } else {
       // Listings and events use the account holder's verified number.

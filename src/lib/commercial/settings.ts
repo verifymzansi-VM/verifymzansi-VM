@@ -67,7 +67,7 @@ export const COMMERCIAL_SETTING_SCHEMAS = {
     })
     .strict(),
   showroom: z.object({ programmeMinItems: int(1, 48), programmeMaxCards: int(1, 48) }).strict(),
-  /** Programme partners strip and home section (Document 08 §4). */
+  /** Business Sponsors strip and home section (Document 08 §4). */
   sponsors: z.object({ stripMinLive: int(1, 100) }).strict(),
   /** Consent-based trial extension offers (Document 08 §6). */
   extensions: z
@@ -134,7 +134,7 @@ export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
   media: "Media limits",
   events: "Free event fair use",
   showroom: "Programme showroom",
-  sponsors: "Programme partners strip and home section",
+  sponsors: "Business Sponsors strip and home section",
   extensions: "Trial extension offers",
   features: "Feature toggles",
 };

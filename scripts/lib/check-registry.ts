@@ -100,7 +100,7 @@ export const CHECKS: Check[] = [
   check(
     "contracts",
     ["test:contract"],
-    "Ozow full/thin official event fixtures, shared KYC schema, SMS/email"
+    "clean foundation API artifact drift; Ozow full/thin official event fixtures, shared KYC schema, SMS/email"
   ),
   check("canaries", ["test:security-canaries"], "security assertions; no mutation score"),
   check(
@@ -138,12 +138,20 @@ export const CHECKS: Check[] = [
     "dashboard:db",
     "admin-lists:db",
     "kyc:db",
+    "business-counts:db",
+    "business-evidence:db",
   ].map((lane) =>
     check(
       `db-${lane.replace(/:db$/, "")}`,
       [`test:${lane}`],
-      "isolated PGlite assertions; limited migration/concurrency model",
-      lane === "payments:db" ? [...full, "payments"] : lane === "kyc:db" ? [...full, "kyc"] : full
+      lane.startsWith("business-")
+        ? "supplementary isolated PGlite assertions; limited schema/role model; hosted PostgreSQL/PostgREST proof remains separate"
+        : "isolated PGlite assertions; limited migration/concurrency model",
+      lane === "payments:db"
+        ? [...full, "payments"]
+        : lane === "kyc:db" || lane === "business-evidence:db"
+          ? [...full, "kyc"]
+          : full
     )
   ),
   check(
@@ -443,6 +451,8 @@ for (const item of CHECKS) {
       "src/lib/validations/kyc-webhook.test.ts",
       "src/app/api/webhooks/kyc/provider/route.test.ts",
     ],
+    "db-business-counts": ["scripts/test-business-category-counts.mjs"],
+    "db-business-evidence": ["scripts/test-business-verification-file-privacy.mjs"],
     coverage: ["vitest.config.ts", "scripts/run-vitest.ts coverage-core"],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],

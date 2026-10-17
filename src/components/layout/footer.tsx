@@ -14,7 +14,7 @@ const footerSections = [
       { href: "/mzansi-market", label: "Mzansi Market" },
       { href: "/mzansi-business", label: "Mzansi Business" },
       { href: "/tourism-events", label: "Tourism & Events" },
-      { href: "/sponsors", label: "Programme partners" },
+      { href: "/sponsors", label: "Business Sponsors" },
       { href: "/pricing", label: "Pricing" },
       { href: "/advertise", label: "Advertise" },
     ],

@@ -18,7 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Programme partners",
+  title: "Business Sponsors",
   description:
     "Organisations that support local businesses on VerifyMzansi. Browse the businesses in each programme.",
   alternates: { canonical: "/sponsors" },
@@ -34,10 +34,10 @@ export default async function SponsorsPage() {
       <Header />
       <main id="main-content" className="flex-1 scroll-mt-24">
         <InfoHero
-          title="Programme partners"
+          title="Business Sponsors"
           accent="backing local business."
           description="Chambers, municipalities, enterprise-development programmes and companies that support local businesses on VerifyMzansi."
-          breadcrumbs={[{ label: "Programme partners" }]}
+          breadcrumbs={[{ label: "Business Sponsors" }]}
           actions={
             <>
               <Button asChild variant="trust-verified" size="lg" className="h-12 rounded-full">
@@ -49,7 +49,7 @@ export default async function SponsorsPage() {
                 size="lg"
                 className={cn("h-12 rounded-full", brandOutlineButtonClassName)}
               >
-                <Link href="/advertise#programmes">Become a programme partner</Link>
+                <Link href="/advertise#programmes">Become a Business Sponsor</Link>
               </Button>
             </>
           }
@@ -57,10 +57,10 @@ export default async function SponsorsPage() {
 
         <section aria-labelledby="sponsors-what" className="container-page py-10 sm:py-12">
           <h2 id="sponsors-what" className="section-title">
-            What a programme partner is
+            What a Business Sponsor is
           </h2>
           <p className="section-lede max-w-3xl">
-            A programme partner funds or runs a programme that helps local businesses get online.
+            A Business Sponsor funds or runs a programme that helps local businesses get online.
             Businesses join only with their consent and show &ldquo;Supported by&rdquo; the partner.
             That label means programme membership. It is not a verification, safety or quality
             endorsement: VerifyMzansi reviews every poster&rsquo;s identity separately.
@@ -69,7 +69,7 @@ export default async function SponsorsPage() {
           {sponsors.length === 0 ? (
             <div className="mt-8 rounded-2xl border border-dashed p-8 text-center">
               <p className="font-display text-lg font-semibold">
-                Our first programme partners are joining
+                Our first Business Sponsors are joining
               </p>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
                 Founding programmes open in the City of uMhlathuze. Their businesses appear here as
@@ -147,7 +147,7 @@ export default async function SponsorsPage() {
               </p>
             </div>
             <Button asChild variant="ink" className="h-11 shrink-0 rounded-full px-5">
-              <Link href="/advertise#programmes">Become a programme partner</Link>
+              <Link href="/advertise#programmes">Become a Business Sponsor</Link>
             </Button>
           </div>
         </section>

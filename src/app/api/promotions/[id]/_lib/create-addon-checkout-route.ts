@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAddonOffered, type AddonKind } from "@/lib/billing/addon-availability";
 
 import {
   applyOwnerFilter,
@@ -100,7 +101,10 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
         supabase
           .from("promotions")
           .select(
-            withOwnerColumn(`id, title, status, owner_id, ${config.activeUntilField}`, ownerColumn)
+            withOwnerColumn(
+              `id, title, status, owner_id, promotion_type, ${config.activeUntilField}`,
+              ownerColumn
+            )
           )
           .eq("id", params.id),
         ownerColumn,
@@ -110,6 +114,12 @@ export function createPromotionAddonCheckoutRoute(config: PromotionAddonRouteCon
       return rawPromotion as PromotionCheckoutRow | null;
     },
     getNotFoundMessage: "Tourism & Events post not found",
+    isOffered: (promotion) =>
+      isAddonOffered(
+        config.paymentType.split("_")[0] as AddonKind,
+        "promotion",
+        promotion.promotion_type
+      ),
     verifyOwnership: (promotion, userId) => {
       if (!config.requireOwnerMatch || readOwnerId(promotion) === userId) {
         return null;

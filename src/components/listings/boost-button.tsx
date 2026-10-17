@@ -1,6 +1,6 @@
 "use client";
 
-import { Zap } from "lucide-react";
+import { Rocket } from "lucide-react";
 import { AddonCheckoutButton } from "@/components/listings/addon-checkout-button";
 
 interface BoostButtonProps {
@@ -31,7 +31,7 @@ export function BoostButton({
       errorFallbackDescription="Failed to create boost checkout"
       hoverClassName="hover:text-brand-blue"
       activeIconClassName="text-brand-blue fill-brand-blue"
-      Icon={Zap}
+      Icon={Rocket}
     />
   );
 }

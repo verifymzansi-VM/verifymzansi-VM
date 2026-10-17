@@ -209,16 +209,15 @@ describe("Billing not configured", () => {
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
   });
 
-  it("featured fails safely when Ozow credentials are missing", async () => {
+  it("featured and boost are refused for listings before any payment", async () => {
     setupHappyPath("featured_until");
     setupEnvWithoutOzow();
 
     const req = createRequest();
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
-
-    expect([500, 503]).toContain(res.status);
-    const body = await res.json();
-    expect(body.error).toMatch(/billing|checkout/i);
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: "addon_unavailable" });
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 
   it("urgent fails safely when Ozow credentials are missing", async () => {
@@ -227,18 +226,6 @@ describe("Billing not configured", () => {
 
     const req = createRequest();
     const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
-
-    expect([500, 503]).toContain(res.status);
-    const body = await res.json();
-    expect(body.error).toMatch(/billing|checkout/i);
-  });
-
-  it("boost fails safely when Ozow credentials are missing", async () => {
-    setupHappyPath("boost_until");
-    setupEnvWithoutOzow();
-
-    const req = createRequest();
-    const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
 
     expect([500, 503]).toContain(res.status);
     const body = await res.json();
@@ -255,7 +242,7 @@ describe("Payment insert failure path", () => {
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
   });
 
-  it("featured returns 500 when payment creation fails with DB error", async () => {
+  it("urgent returns 500 when payment creation fails with DB error", async () => {
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     mockListingRow({
       id: UUID,
@@ -263,7 +250,7 @@ describe("Payment insert failure path", () => {
       status: "live",
       area: "MZANSI_MARKET",
       owner_id: USER_ID,
-      featured_until: null,
+      urgent_until: null,
     });
     setupEnvWithOzow();
     mockAdmin({
@@ -274,11 +261,11 @@ describe("Payment insert failure path", () => {
     mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Failed to create payment"));
 
     const req = createRequest();
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
+    const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.error).toBe("Failed to create featured checkout");
+    expect(body.error).toBe("Failed to create urgent checkout");
   });
 });
 
@@ -289,34 +276,6 @@ describe("Audit log failure resilience", () => {
     vi.clearAllMocks();
     resetOwnerColumnCacheForTesting();
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
-  });
-
-  it("featured checkout succeeds even when audit log throws (audit is non-fatal)", async () => {
-    setupHappyPath("featured_until");
-    setupEnvWithOzow();
-    mockLogAuditEvent.mockRejectedValueOnce(new Error("Audit service down"));
-
-    const req = createRequest();
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
-
-    // Audit failure is caught internally — checkout still succeeds
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBeDefined();
-  });
-
-  it("boost checkout succeeds even when audit log throws", async () => {
-    setupHappyPath("boost_until");
-    setupEnvWithOzow();
-    mockLogAuditEvent.mockRejectedValueOnce(new Error("Audit service down"));
-
-    const req = createRequest();
-    const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
   });
 
   it("urgent checkout succeeds even when audit log throws", async () => {
@@ -342,7 +301,7 @@ describe("Already-active guard edge cases", () => {
     mockCheckLocalRateLimit.mockReturnValue({ limited: false });
   });
 
-  it("featured allows re-purchase when featured_until is in the past", async () => {
+  it("urgent allows re-purchase when urgent_until is in the past", async () => {
     const pastDate = new Date(Date.now() - 86_400_000).toISOString();
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     mockListingRow({
@@ -351,7 +310,7 @@ describe("Already-active guard edge cases", () => {
       status: "live",
       area: "MZANSI_MARKET",
       owner_id: USER_ID,
-      featured_until: pastDate,
+      urgent_until: pastDate,
     });
     setupEnvWithOzow();
     mockAdmin({
@@ -364,7 +323,7 @@ describe("Already-active guard edge cases", () => {
     });
 
     const req = createRequest();
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
+    const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -372,7 +331,7 @@ describe("Already-active guard edge cases", () => {
     expect(body.checkoutUrl).toBeDefined();
   });
 
-  it("featured blocks re-purchase when featured_until is 1 second in the future", async () => {
+  it("urgent blocks re-purchase when urgent_until is 1 second in the future", async () => {
     const nearFutureDate = new Date(Date.now() + 1000).toISOString();
     mockAuth({ id: USER_ID, email: "seller@test.com" });
     mockListingRow({
@@ -381,7 +340,7 @@ describe("Already-active guard edge cases", () => {
       status: "live",
       area: "MZANSI_MARKET",
       owner_id: USER_ID,
-      featured_until: nearFutureDate,
+      urgent_until: nearFutureDate,
     });
     setupEnvWithOzow();
     mockAdmin({
@@ -391,10 +350,10 @@ describe("Already-active guard edge cases", () => {
     });
 
     const req = createRequest();
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
+    const res = await UrgentPOST(req, { params: Promise.resolve({ id: UUID }) });
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toBe("This listing is already featured");
+    expect(body.error).toBe("This listing is already marked urgent");
   });
 });

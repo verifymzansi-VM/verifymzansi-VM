@@ -17,6 +17,8 @@ import {
   writePlaywrightTableRows,
 } from "@/lib/supabase/playwright-fixture-store";
 import { isPlaywrightSupabaseStubMode as _isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
+import { isVisibleByExpiry } from "@/lib/posting/visibility";
+import { isPlaceholderMarketplaceContent } from "@/lib/utils/placeholder-content";
 
 type QueryResult<TData> = {
   data: TData;
@@ -967,8 +969,23 @@ export function createPlaywrightStubSupabaseClient(
       }
 
       if (fn === "get_business_category_counts") {
+        const now = new Date();
         const liveBusinesses = listPlaywrightTableRows("businesses").filter(
-          (row) => row.status === "live" && typeof row.category === "string"
+          (row) =>
+            row.status === "live" &&
+            ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"].includes(String(row.area)) &&
+            typeof row.category === "string" &&
+            typeof row.created_at === "string" &&
+            isVisibleByExpiry(
+              typeof row.expires_at === "string" ? row.expires_at : null,
+              now,
+              row.created_at
+            ) &&
+            !isPlaceholderMarketplaceContent(
+              typeof row.business_name === "string" ? row.business_name : null,
+              typeof row.description === "string" ? row.description : null
+            ) &&
+            !(params?.p_hide_fixtures === true && /^pw-[A-Za-z0-9-]+$/.test(String(row.owner_id)))
         );
         const counts = new Map<string, number>();
 

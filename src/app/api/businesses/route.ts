@@ -525,57 +525,33 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Category counts mode — for auto-hiding empty categories
+    // Global category availability for auto-hide, independent of browse filters.
+    // Only aggregates leave the database; do not fall back to capped row scans.
     if (query.categories_only) {
-      const admin = createAdminClient();
-      const { data: counts, error } = await admin.rpc("get_business_category_counts");
-
-      if (error) {
-        // Fallback: manual query, paged so categories beyond the first page
-        // are not silently undercounted.
-        const businesses: Array<{
-          category: string;
-          business_name: string | null;
-          description: string | null;
-        }> = [];
-        const batchSize = 1000;
-        const maxRows = 10_000;
-
-        for (let from = 0; from < maxRows; from += batchSize) {
-          const { data: batch } = await applyVisibleExpiryFilter(
-            admin
-              .from("businesses")
-              .select("category, business_name, description, created_at")
-              .eq("status", "live")
-              .in("area", ["MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
-          ).range(from, from + batchSize - 1);
-
-          if (!batch || batch.length === 0) {
-            break;
-          }
-
-          businesses.push(...batch);
-
-          if (batch.length < batchSize) {
-            break;
-          }
+      try {
+        const admin = createAdminClient();
+        const { data: counts, error } = await admin.rpc("get_business_category_counts", {
+          p_hide_fixtures: hideFixtures,
+        });
+        if (error || !Array.isArray(counts)) {
+          log.error("Failed to fetch business category counts", { code: error?.code });
+          return NextResponse.json(
+            { error: "Business category counts temporarily unavailable" },
+            { status: 503 }
+          );
         }
-
         const categoryCounts: Record<string, number> = {};
-        for (const b of businesses) {
-          if (isPlaceholderMarketplaceContent(b.business_name, b.description)) {
-            continue;
-          }
-          categoryCounts[b.category] = (categoryCounts[b.category] || 0) + 1;
+        for (const row of counts) {
+          categoryCounts[row.category] = Number(row.count);
         }
         return NextResponse.json({ categoryCounts });
+      } catch {
+        log.error("Business category counts request failed");
+        return NextResponse.json(
+          { error: "Business category counts temporarily unavailable" },
+          { status: 503 }
+        );
       }
-
-      const categoryCounts: Record<string, number> = {};
-      for (const row of counts ?? []) {
-        categoryCounts[row.category] = row.count;
-      }
-      return NextResponse.json({ categoryCounts });
     }
 
     // "mine" mode — fetch current user's businesses (requires auth)

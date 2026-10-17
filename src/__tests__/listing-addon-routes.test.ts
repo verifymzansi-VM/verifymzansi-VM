@@ -153,258 +153,281 @@ function setupHappyPath(addonField: "featured_until" | "boost_until" | "urgent_u
 
 // ── Tests ─────────────────────────────────────────────────────
 
+// Boost and Featured are sold for events only (lib/billing/addon-availability);
+// the shared checkout checks run through Urgent, which every post can buy.
 describe.each([
   { name: "featured", handler: () => featuredPOST, addonField: "featured_until" as const },
   { name: "boost", handler: () => boostPOST, addonField: "boost_until" as const },
-  { name: "urgent", handler: () => urgentPOST, addonField: "urgent_until" as const },
-])("POST /api/listings/[id]/$name", ({ name, handler, addonField }) => {
+])("POST /api/listings/[id]/$name is not offered", ({ handler, addonField }) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.unstubAllEnvs();
-    vi.mocked(env).mockImplementation((key: string) => {
-      const envMap: Record<string, string> = {
-        NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
-        OZOW_ENV: "staging",
-      };
-      return envMap[key] ?? "";
-    });
+    vi.mocked(env).mockImplementation((key: string) =>
+      key === "NEXT_PUBLIC_APP_URL" ? "https://verifymzansi.com" : ""
+    );
   });
 
-  it("returns 400 for malformed listing ID", async () => {
+  it("refuses a live, entitled listing before any payment work", async () => {
     setupHappyPath(addonField);
-    const res = await handler()(makeRequest(), makeParams("not-a-uuid"));
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toBe("Invalid listing ID");
-  });
-
-  it("returns 401 for unauthenticated requests", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } });
+    mockCanFeatured.mockReturnValue({ allowed: true });
+    mockCanBoost.mockReturnValue({ allowed: true });
     const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body.error).toBe("Unauthorized");
-  });
-
-  it("fails safely when the billing app URL is invalid", async () => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.mocked(env).mockReturnValue("https://evil.example");
-    setupHappyPath(addonField);
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    const body = await res.json();
-
-    expect(res.status).toBe(503);
-    expect(body.error).toBe("Billing is not yet configured. Please try again later.");
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ code: "addon_unavailable" });
     expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
-
-  it("returns 404 when account profile is not found", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
-
-    const sellerProfileBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-    };
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") return sellerProfileBuilder;
-      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
-    });
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(404);
-    const body = await res.json();
-    expect(body.error).toBe("Account profile not found");
-  });
-
-  it("returns 403 when user does not own the listing", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
-
-    const sellerProfileBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-    };
-    const listingBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id: VALID_UUID,
-          title: "Other Listing",
-          status: "live",
-          area: "MZANSI_MARKET",
-          owner_id: "different-user-id",
-          [addonField]: null,
-        },
-      }),
-    };
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") return sellerProfileBuilder;
-      if (table === "listings") return listingBuilder;
-      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
-    });
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toContain("do not own this listing");
-  });
-
-  it("returns 400 when listing is not live", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
-
-    const sellerProfileBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-    };
-    const listingBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id: VALID_UUID,
-          title: "Draft Listing",
-          status: "draft",
-          area: "MZANSI_MARKET",
-          owner_id: USER_ID,
-          [addonField]: null,
-        },
-      }),
-    };
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") return sellerProfileBuilder;
-      if (table === "listings") return listingBuilder;
-      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
-    });
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/only live listings/i);
-  });
-
-  it("returns 400 when addon is already active", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
-
-    // Set expiry to the future
-    const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    const sellerProfileBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-    };
-    const listingBuilder = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: {
-          id: VALID_UUID,
-          title: "Active Listing",
-          status: "live",
-          area: "MZANSI_MARKET",
-          owner_id: USER_ID,
-          [addonField]: futureDate,
-        },
-      }),
-    };
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") return sellerProfileBuilder;
-      if (table === "listings") return listingBuilder;
-      return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
-    });
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toMatch(/already/i);
-  });
-
-  it("returns 403 when entitlement check fails", async () => {
-    setupHappyPath(addonField);
-
-    const canMock =
-      name === "featured" ? mockCanFeatured : name === "boost" ? mockCanBoost : mockCanUrgent;
-
-    canMock.mockReturnValue({ allowed: false, reason: "Upgrade required" });
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toBe("Upgrade required");
-  });
-
-  it("returns 409 when the payments unique index catches a racing duplicate checkout", async () => {
-    setupHappyPath(addonField);
-    mockCanFeatured.mockReturnValue({ allowed: true });
-    mockCanBoost.mockReturnValue({ allowed: true });
-    mockCanUrgent.mockReturnValue({ allowed: true });
-    mockCreateHostedCheckout.mockRejectedValueOnce(
-      new Error("A checkout for this area is already in progress")
-    );
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    const expectedMessages: Record<string, string> = {
-      featured: "A featured payment is already in progress for this listing",
-      boost: "A boost payment is already in progress for this listing",
-      urgent: "An urgent payment is already in progress for this listing",
-    };
-    expect(body.error).toBe(expectedMessages[name]);
-  });
-
-  it("happy path: returns checkout URL and payment ID", async () => {
-    setupHappyPath(addonField);
-    mockCanFeatured.mockReturnValue({ allowed: true });
-    mockCanBoost.mockReturnValue({ allowed: true });
-    mockCanUrgent.mockReturnValue({ allowed: true });
-
-    const res = await handler()(makeRequest(), makeParams(VALID_UUID));
-    expect(res.status).toBe(200);
-    const body = await res.json();
-
-    expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
-    expect(body.paymentId).toBe("pay-001");
-  });
-
-  it("passes amount cents to the hosted checkout helper", async () => {
-    setupHappyPath(addonField);
-    mockCanFeatured.mockReturnValue({ allowed: true });
-    mockCanBoost.mockReturnValue({ allowed: true });
-    mockCanUrgent.mockReturnValue({ allowed: true });
-
-    await handler()(makeRequest(), makeParams(VALID_UUID));
-
-    expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);
-    const passedParams = mockCreateHostedCheckout.mock.calls[0][0];
-    const expectedAmounts: Record<string, number> = {
-      featured: 25, // 2500 / 100
-      boost: 15, // 1500 / 100
-      urgent: 10, // 1000 / 100
-    };
-    expect(passedParams.amountCents).toBe(expectedAmounts[name] * 100);
-  });
-
-  it("includes uppercase area in audit log (matches DB enum)", async () => {
-    setupHappyPath(addonField);
-    mockCanFeatured.mockReturnValue({ allowed: true });
-    mockCanBoost.mockReturnValue({ allowed: true });
-    mockCanUrgent.mockReturnValue({ allowed: true });
-
-    await handler()(makeRequest(), makeParams(VALID_UUID));
-
-    expect(mockLogAuditEvent).toHaveBeenCalledTimes(1);
-    const auditEntry = mockLogAuditEvent.mock.calls[0][0];
-
-    // area must match the DB marketplace_area enum (uppercase)
-    expect(auditEntry.area).toBe("MZANSI_MARKET");
-    expect(auditEntry.actorId).toBe(USER_ID);
-    expect(auditEntry.targetId).toBe(VALID_UUID);
-  });
 });
+
+describe.each([{ name: "urgent", handler: () => urgentPOST, addonField: "urgent_until" as const }])(
+  "POST /api/listings/[id]/$name",
+  ({ name, handler, addonField }) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.unstubAllEnvs();
+      vi.mocked(env).mockImplementation((key: string) => {
+        const envMap: Record<string, string> = {
+          NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
+          OZOW_ENV: "staging",
+        };
+        return envMap[key] ?? "";
+      });
+    });
+
+    it("returns 400 for malformed listing ID", async () => {
+      setupHappyPath(addonField);
+      const res = await handler()(makeRequest(), makeParams("not-a-uuid"));
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Invalid listing ID");
+    });
+
+    it("returns 401 for unauthenticated requests", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null } });
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.error).toBe("Unauthorized");
+    });
+
+    it("fails safely when the billing app URL is invalid", async () => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.mocked(env).mockReturnValue("https://evil.example");
+      setupHappyPath(addonField);
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      const body = await res.json();
+
+      expect(res.status).toBe(503);
+      expect(body.error).toBe("Billing is not yet configured. Please try again later.");
+      expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when account profile is not found", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+
+      const sellerProfileBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      };
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "account_profiles") return sellerProfileBuilder;
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+      });
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.error).toBe("Account profile not found");
+    });
+
+    it("returns 403 when user does not own the listing", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+
+      const sellerProfileBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
+      };
+      const listingBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: VALID_UUID,
+            title: "Other Listing",
+            status: "live",
+            area: "MZANSI_MARKET",
+            owner_id: "different-user-id",
+            [addonField]: null,
+          },
+        }),
+      };
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "account_profiles") return sellerProfileBuilder;
+        if (table === "listings") return listingBuilder;
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+      });
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.error).toContain("do not own this listing");
+    });
+
+    it("returns 400 when listing is not live", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+
+      const sellerProfileBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
+      };
+      const listingBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: VALID_UUID,
+            title: "Draft Listing",
+            status: "draft",
+            area: "MZANSI_MARKET",
+            owner_id: USER_ID,
+            [addonField]: null,
+          },
+        }),
+      };
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "account_profiles") return sellerProfileBuilder;
+        if (table === "listings") return listingBuilder;
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+      });
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toMatch(/only live listings/i);
+    });
+
+    it("returns 400 when addon is already active", async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID, email: "a@b.com" } } });
+
+      // Set expiry to the future
+      const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      const sellerProfileBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
+      };
+      const listingBuilder = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: VALID_UUID,
+            title: "Active Listing",
+            status: "live",
+            area: "MZANSI_MARKET",
+            owner_id: USER_ID,
+            [addonField]: futureDate,
+          },
+        }),
+      };
+      mockFrom.mockImplementation((table: string) => {
+        if (table === "account_profiles") return sellerProfileBuilder;
+        if (table === "listings") return listingBuilder;
+        return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis() };
+      });
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toMatch(/already/i);
+    });
+
+    it("returns 403 when entitlement check fails", async () => {
+      setupHappyPath(addonField);
+
+      const canMock =
+        name === "featured" ? mockCanFeatured : name === "boost" ? mockCanBoost : mockCanUrgent;
+
+      canMock.mockReturnValue({ allowed: false, reason: "Upgrade required" });
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.error).toBe("Upgrade required");
+    });
+
+    it("returns 409 when the payments unique index catches a racing duplicate checkout", async () => {
+      setupHappyPath(addonField);
+      mockCanFeatured.mockReturnValue({ allowed: true });
+      mockCanBoost.mockReturnValue({ allowed: true });
+      mockCanUrgent.mockReturnValue({ allowed: true });
+      mockCreateHostedCheckout.mockRejectedValueOnce(
+        new Error("A checkout for this area is already in progress")
+      );
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      const expectedMessages: Record<string, string> = {
+        featured: "A featured payment is already in progress for this listing",
+        boost: "A boost payment is already in progress for this listing",
+        urgent: "An urgent payment is already in progress for this listing",
+      };
+      expect(body.error).toBe(expectedMessages[name]);
+    });
+
+    it("happy path: returns checkout URL and payment ID", async () => {
+      setupHappyPath(addonField);
+      mockCanFeatured.mockReturnValue({ allowed: true });
+      mockCanBoost.mockReturnValue({ allowed: true });
+      mockCanUrgent.mockReturnValue({ allowed: true });
+
+      const res = await handler()(makeRequest(), makeParams(VALID_UUID));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+
+      expect(body.success).toBe(true);
+      expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
+      expect(body.paymentId).toBe("pay-001");
+    });
+
+    it("passes amount cents to the hosted checkout helper", async () => {
+      setupHappyPath(addonField);
+      mockCanFeatured.mockReturnValue({ allowed: true });
+      mockCanBoost.mockReturnValue({ allowed: true });
+      mockCanUrgent.mockReturnValue({ allowed: true });
+
+      await handler()(makeRequest(), makeParams(VALID_UUID));
+
+      expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);
+      const passedParams = mockCreateHostedCheckout.mock.calls[0][0];
+      const expectedAmounts: Record<string, number> = {
+        featured: 25, // 2500 / 100
+        boost: 15, // 1500 / 100
+        urgent: 10, // 1000 / 100
+      };
+      expect(passedParams.amountCents).toBe(expectedAmounts[name] * 100);
+    });
+
+    it("includes uppercase area in audit log (matches DB enum)", async () => {
+      setupHappyPath(addonField);
+      mockCanFeatured.mockReturnValue({ allowed: true });
+      mockCanBoost.mockReturnValue({ allowed: true });
+      mockCanUrgent.mockReturnValue({ allowed: true });
+
+      await handler()(makeRequest(), makeParams(VALID_UUID));
+
+      expect(mockLogAuditEvent).toHaveBeenCalledTimes(1);
+      const auditEntry = mockLogAuditEvent.mock.calls[0][0];
+
+      // area must match the DB marketplace_area enum (uppercase)
+      expect(auditEntry.area).toBe("MZANSI_MARKET");
+      expect(auditEntry.actorId).toBe(USER_ID);
+      expect(auditEntry.targetId).toBe(VALID_UUID);
+    });
+  }
+);

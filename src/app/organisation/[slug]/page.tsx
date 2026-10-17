@@ -229,7 +229,7 @@ export default async function OrganisationPage({
           <div className="container-page grid gap-6 pb-10 pt-6 sm:pt-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:pb-12">
             <div className="min-w-0">
               <Breadcrumbs
-                items={[{ label: "Programme partners", href: "/sponsors" }, { label: org.name }]}
+                items={[{ label: "Business Sponsors", href: "/sponsors" }, { label: org.name }]}
                 tone="inverse"
               />
               <div className="mt-5 flex items-start gap-4">
@@ -241,7 +241,7 @@ export default async function OrganisationPage({
                 />
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-gold-300">
-                    {isProgramme ? "Programme partner" : "Business network"} ·{" "}
+                    {isProgramme ? "Business Sponsor" : "Business network"} ·{" "}
                     {organisationTypeLabel(org.organisation_type)}
                   </p>
                   <h1

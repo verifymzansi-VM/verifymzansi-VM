@@ -1,0 +1,1569 @@
+{
+  "schemaVersion": 1,
+  "scope": "All source post-table columns grouped into explicit target proposals; not reviewed dispositions",
+  "sourceMapHash": "kgyOE-3Ualiz4T8ZldJIvrJdEzVzhEVvVTJyo-QNzq4",
+  "total": 156,
+  "unclassified": [],
+  "records": [
+    {
+      "source": "public.businesses.id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.area",
+      "sourceType": "marketplace_area",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.area",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.business_type",
+      "sourceType": "business_type",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.business_name",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.title",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.slug",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "aliases",
+      "target": "private.post_aliases.slug + URL scope",
+      "action": "Define uniqueness by canonical URL scope; preserve approved redirects, not assumed global business uniqueness",
+      "visibility": "public approved alias",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.description",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.description",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.category",
+      "sourceType": "business_category",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.category_id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.logo_url",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cover_photo",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cover_video",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.video_thumbnail",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.location_province",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.location_city",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.store_number",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.map_directions",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.phone",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.whatsapp",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.email",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.website",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.social_links",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.services_offered",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.service_areas",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.operating_hours",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.payment_methods_accepted",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.delivery_options",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.status",
+      "sourceType": "listing_status",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.status",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "principal-scoped owner/staff DTO; public safe projection separately reviewed",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.status_reason",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.entitlement_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.boost_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.featured_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.search_vector",
+      "sourceType": "tsvector",
+      "status": "proposal; full field contract pending",
+      "group": "search",
+      "target": "private.post_search_documents",
+      "action": "Maintained joined projection; visibility/filter/cursor consistency; not a join in a generated column",
+      "visibility": "internal index; public approved result DTO only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.published_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.created_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.created_at",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.updated_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.content_updated_at",
+      "action": "New content-only edit clock; legacy mixed counter/moderation timestamps are not converted",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.gallery_photos",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.business_details",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.owner_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.owner_id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "principal-scoped owner/staff DTO; public safe projection separately reviewed",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.layout_template",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.location_town",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.location_address",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.subcategory",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.activity_id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.category_details",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "business-detail",
+      "target": "private.business_details / private.post_contacts",
+      "action": "Canonical customer access, structured hours/services and versioned category data; split contact/private nested fields; no whole JSON copy",
+      "visibility": "approved business facts; private fields split before projection",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.building_name",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.suite_or_unit",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.media_width",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.media_height",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.focal_x",
+      "sourceType": "real",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.focal_y",
+      "sourceType": "real",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.blurhash",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.urgent_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.approved_edit_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.view_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.expires_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.edited_since_review",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.engaged_view_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cipc_verified_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cipc_expires_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cipc_registration_number",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cipc_registered_name",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.cipc_registered_office",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.show_full_registered_office",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.seen_verified_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.seen_expires_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.seen_method",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.seen_city",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.owner_verified_role",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.businesses.owner_position_title",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "trust",
+      "target": "private.business_badges / private.business_verifications",
+      "action": "Staff-approved expiring badge projection; evidence/registration details separately private",
+      "visibility": "minimal approved badges only; no client trust claims",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.area",
+      "sourceType": "marketplace_area",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.area",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.category",
+      "sourceType": "listing_category",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.category_id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.title",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.title",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.description",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.description",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.photos",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.videos",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.price_cents",
+      "sourceType": "bigint",
+      "status": "proposal; full field contract pending",
+      "group": "listing-detail",
+      "target": "private.listing_details",
+      "action": "Explicit price modes/negotiation/category applicability/versioned attrs and viewer eligibility; native filters pending",
+      "visibility": "public permitted listing facts; eligibility controls not arbitrary client authority",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.price_negotiable",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "listing-detail",
+      "target": "private.listing_details",
+      "action": "Explicit price modes/negotiation/category applicability/versioned attrs and viewer eligibility; native filters pending",
+      "visibility": "public permitted listing facts; eligibility controls not arbitrary client authority",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.location_province",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.location_city",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.location_suburb",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.contact_methods",
+      "sourceType": "contact_method[]",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.buyer_verification_required",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "listing-detail",
+      "target": "private.listing_details",
+      "action": "Explicit price modes/negotiation/category applicability/versioned attrs and viewer eligibility; native filters pending",
+      "visibility": "public permitted listing facts; eligibility controls not arbitrary client authority",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.attributes",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "listing-detail",
+      "target": "private.listing_details",
+      "action": "Explicit price modes/negotiation/category applicability/versioned attrs and viewer eligibility; native filters pending",
+      "visibility": "public permitted listing facts; eligibility controls not arbitrary client authority",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.status",
+      "sourceType": "listing_status",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.status",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "principal-scoped owner/staff DTO; public safe projection separately reviewed",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.status_reason",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.entitlement_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.boost_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.featured",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.urgent",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.search_vector",
+      "sourceType": "tsvector",
+      "status": "proposal; full field contract pending",
+      "group": "search",
+      "target": "private.post_search_documents",
+      "action": "Maintained joined projection; visibility/filter/cursor consistency; not a join in a generated column",
+      "visibility": "internal index; public approved result DTO only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.published_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.expires_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.created_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.created_at",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.updated_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.content_updated_at",
+      "action": "New content-only edit clock; legacy mixed counter/moderation timestamps are not converted",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.featured_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.urgent_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.video_thumbnail",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.condition",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "listing-detail",
+      "target": "private.listing_details",
+      "action": "Explicit price modes/negotiation/category applicability/versioned attrs and viewer eligibility; native filters pending",
+      "visibility": "public permitted listing facts; eligibility controls not arbitrary client authority",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.owner_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.owner_id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "principal-scoped owner/staff DTO; public safe projection separately reviewed",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.logo_url",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.location_address",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.media_width",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.media_height",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.focal_x",
+      "sourceType": "real",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.focal_y",
+      "sourceType": "real",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.blurhash",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.approved_edit_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.view_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.edited_since_review",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.listings.engaged_view_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.title",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.title",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.description",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.description",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.promotion_type",
+      "sourceType": "promotion_type",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.category",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.photos",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.videos",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.video_thumbnail",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.price_cents",
+      "sourceType": "bigint",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.price_negotiable",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.location_province",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.location_city",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.contact_methods",
+      "sourceType": "text[]",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.start_date",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.end_date",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.status",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.status",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "principal-scoped owner/staff DTO; public safe projection separately reviewed",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.status_reason",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.boost_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.featured_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.view_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.click_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.entitlement_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.published_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.created_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.created_at",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.updated_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.content_updated_at",
+      "action": "New content-only edit clock; legacy mixed counter/moderation timestamps are not converted",
+      "visibility": "approved public identity/content; draft private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.business_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.category_key",
+      "sourceType": "business_category",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.owner_id",
+      "sourceType": "uuid",
+      "status": "proposal; full field contract pending",
+      "group": "core",
+      "target": "private.posts.owner_id",
+      "action": "Canonical explicit identity/content/workflow field; kind/area/category integrity and owner derivation",
+      "visibility": "principal-scoped owner/staff DTO; public safe projection separately reviewed",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.social_distribution_authorized",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "event-consent",
+      "target": "private.event_social_authorizations",
+      "action": "Versioned distribution/monetization consent and revocation; no implicit consent from publication",
+      "visibility": "owner consent summary; operational records private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.social_distribution_authorized_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "event-consent",
+      "target": "private.event_social_authorizations",
+      "action": "Versioned distribution/monetization consent and revocation; no implicit consent from publication",
+      "visibility": "owner consent summary; operational records private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.social_distribution_revoked_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "event-consent",
+      "target": "private.event_social_authorizations",
+      "action": "Versioned distribution/monetization consent and revocation; no implicit consent from publication",
+      "visibility": "owner consent summary; operational records private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.social_authorization_version",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "event-consent",
+      "target": "private.event_social_authorizations",
+      "action": "Versioned distribution/monetization consent and revocation; no implicit consent from publication",
+      "visibility": "owner consent summary; operational records private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.social_monetization_acknowledged",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "event-consent",
+      "target": "private.event_social_authorizations",
+      "action": "Versioned distribution/monetization consent and revocation; no implicit consent from publication",
+      "visibility": "owner consent summary; operational records private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.location_town",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "locality",
+      "target": "private.post_locality",
+      "action": "Canonical locality IDs and labels; do not infer verified account location",
+      "visibility": "coarse public locality",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.location_address",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "contacts",
+      "target": "private.post_contacts",
+      "action": "Retire public compatibility copies; explicit channels/address purpose and visibility choices",
+      "visibility": "private; approved reveal/venue projections only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.media_width",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.media_height",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.focal_x",
+      "sourceType": "real",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.focal_y",
+      "sourceType": "real",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.blurhash",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.event_details",
+      "sourceType": "jsonb",
+      "status": "proposal; full field contract pending",
+      "group": "event-detail",
+      "target": "private.event_details / private.categories",
+      "action": "Active event taxonomy/window/admission/host; legacy non-event alternatives require explicit disposition; price is admission, not paid posting",
+      "visibility": "approved visitor facts; private host/funding context separated",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.urgent_until",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.logo_url",
+      "sourceType": "text",
+      "status": "proposal; full field contract pending",
+      "group": "media",
+      "target": "private.post_media / private.media_assets",
+      "action": "Owned validated asset refs with purpose/order; verified metadata; no arbitrary URLs or duplicate cover/gallery quota",
+      "visibility": "approved public media and display metadata",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.approved_edit_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.expires_at",
+      "sourceType": "timestamp with time zone",
+      "status": "proposal; full field contract pending",
+      "group": "publication",
+      "target": "private.post_publication / private.post_activations",
+      "action": "Canonical funding/source windows and DB-owned placement; retire legacy mirror linkage",
+      "visibility": "display-safe active status/placement; funding internals private",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.edited_since_review",
+      "sourceType": "boolean",
+      "status": "proposal; full field contract pending",
+      "group": "moderation",
+      "target": "private.post_moderation / private.post_edit_requests",
+      "action": "Derived review state/counter and versioned edit snapshots; no owner-authored approvals",
+      "visibility": "owner-safe status summary; detailed notes staff only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    },
+    {
+      "source": "public.promotions.engaged_view_count",
+      "sourceType": "integer",
+      "status": "proposal; full field contract pending",
+      "group": "statistics",
+      "target": "private.post_stats",
+      "action": "Separate content edit time from deduplicated/bounded analytics writes",
+      "visibility": "approved aggregates only",
+      "acceptance": "Input/display/filter/edit/retention/API tests and independent field review required in BF-03"
+    }
+  ]
+}

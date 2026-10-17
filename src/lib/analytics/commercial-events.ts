@@ -125,7 +125,7 @@ export function trackContactAction(
 }
 
 /**
- * A click on a programme partner (strip chip, home tile or /sponsors card).
+ * A click on a Business Sponsor (strip chip, home tile or /sponsors card).
  * Recorded against the organisation so its activity report can show the
  * traffic VerifyMzansi sent; views and clicks only, never enquiries.
  */

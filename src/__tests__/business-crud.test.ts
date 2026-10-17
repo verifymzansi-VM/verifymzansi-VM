@@ -8,12 +8,14 @@ const {
   mockLogAuditEvent,
   mockCheckRateLimit,
   mockCheckLocalRateLimit,
+  mockShouldHidePlaywrightFixtures,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockCreateAdminClient: vi.fn(),
   mockLogAuditEvent: vi.fn().mockResolvedValue(undefined),
   mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
   mockCheckLocalRateLimit: vi.fn().mockReturnValue({ limited: false }),
+  mockShouldHidePlaywrightFixtures: vi.fn().mockReturnValue(false),
 }));
 
 const { mockEnforceCsrfToken } = vi.hoisted(() => ({
@@ -36,6 +38,10 @@ const {
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
+vi.mock("@/lib/supabase/playwright-visual-fixtures", () => ({
+  PLAYWRIGHT_HIDE_FIXTURES_COOKIE: "vmz_e2e_hide_fixtures",
+  shouldHidePlaywrightFixtures: mockShouldHidePlaywrightFixtures,
+}));
 vi.mock("@/lib/services/audit", () => ({ logAuditEvent: mockLogAuditEvent }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
@@ -2019,65 +2025,86 @@ describe("GET /api/businesses", () => {
     expect(orSpy).not.toHaveBeenCalledWith(expect.stringContaining("business_name.ilike"));
   });
 
-  it("paginates the categories_only fallback beyond the first page", async () => {
-    const firstBatch = Array.from({ length: 1000 }, () => ({
-      category: "food_dining",
-      business_name: "Real Shop",
-      description: "A real business",
-    }));
-    const secondBatch = [
-      {
-        category: "automotive_transport",
-        business_name: "Auto One",
-        description: "A real business",
-      },
-      {
-        category: "automotive_transport",
-        business_name: "Auto Two",
-        description: "A real business",
-      },
-    ];
-    const rangeSpy = vi
-      .fn()
-      .mockResolvedValueOnce({ data: firstBatch, error: null })
-      .mockResolvedValueOnce({ data: secondBatch, error: null });
-
-    mockCreateAdminClient.mockReturnValue({
-      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: "rpc unavailable" } }),
-      from: vi.fn((table: string) => {
-        if (table === "businesses") {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            in: vi.fn().mockReturnThis(),
-            or: vi.fn().mockReturnThis(),
-            range: rangeSpy,
-          };
-        }
-
-        return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-        };
-      }),
+  it("returns global aggregate counts above the old row cap without reading records", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        { category: "food_dining", count: "12001" },
+        { category: "automotive_transport", count: 2 },
+      ],
+      error: null,
     });
-
+    const from = vi.fn();
+    mockCreateAdminClient.mockReturnValue({ rpc, from });
     const request = {
-      nextUrl: new URL("http://localhost:3000/api/businesses?categories_only=true"),
+      nextUrl: new URL(
+        "http://localhost:3000/api/businesses?categories_only=true&province=Gauteng&category=food_dining"
+      ),
     } as NextRequest;
-
     const response = await GET(request);
-
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(response.json()).resolves.toEqual({
       categoryCounts: {
-        food_dining: 1000,
+        food_dining: 12001,
         automotive_transport: 2,
       },
     });
-    expect(rangeSpy).toHaveBeenCalledTimes(2);
-    expect(rangeSpy).toHaveBeenNthCalledWith(1, 0, 999);
-    expect(rangeSpy).toHaveBeenNthCalledWith(2, 1000, 1999);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_business_category_counts", {
+      p_hide_fixtures: false,
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { data: null, error: { code: "PGRST202", message: "private schema details" } },
+    { data: [{ category: "food_dining", count: 9 }], error: { code: "57014" } },
+    { data: null, error: null },
+  ])("returns 503 when category aggregation is unavailable: %j", async (result) => {
+    const from = vi.fn();
+    mockCreateAdminClient.mockReturnValue({ rpc: vi.fn().mockResolvedValue(result), from });
+    const response = await GET({
+      nextUrl: new URL("http://localhost:3000/api/businesses?categories_only=true"),
+    } as NextRequest);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "Business category counts temporarily unavailable",
+    });
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when the category RPC throws", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockRejectedValue(new Error("network failure with private details")),
+    });
+    const response = await GET({
+      nextUrl: new URL("http://localhost:3000/api/businesses?categories_only=true"),
+    } as NextRequest);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "Business category counts temporarily unavailable",
+    });
+  });
+
+  it("returns an empty count object only after a successful empty aggregate", async () => {
+    mockCreateAdminClient.mockReturnValue({
+      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+    });
+    const response = await GET({
+      nextUrl: new URL("http://localhost:3000/api/businesses?categories_only=true"),
+    } as NextRequest);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ categoryCounts: {} });
+  });
+
+  it("passes the resolved fixture-hiding flag to the category RPC", async () => {
+    mockShouldHidePlaywrightFixtures.mockReturnValueOnce(true);
+    const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+    mockCreateAdminClient.mockReturnValue({ rpc });
+    const response = await GET({
+      nextUrl: new URL("http://localhost:3000/api/businesses?categories_only=true"),
+    } as NextRequest);
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("get_business_category_counts", {
+      p_hide_fixtures: true,
+    });
   });
 });

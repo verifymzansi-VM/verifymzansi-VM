@@ -1,0 +1,1 @@
+export const CURRENT_MAX_APPROVED_CONTENT_EDITS = 2;

@@ -1,0 +1,59 @@
+# Disposable BF-04 local stack. Never link this workspace to a hosted project.
+project_id = "backend-foundation-impl"
+
+[api]
+enabled = true
+port = 55441
+schemas = ["api"]
+extra_search_path = ["extensions"]
+max_rows = 100
+auto_expose_new_tables = false
+
+[db]
+port = 55442
+shadow_port = 55440
+major_version = 17
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+[db.pooler]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:55440"
+additional_redirect_urls = []
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true

@@ -207,84 +207,13 @@ describe("POST /api/listings/[id]/featured", () => {
     expect((await res.json()).error).toBe("Listing not found");
   });
 
-  it("returns 400 when listing is not live", async () => {
-    mockAuth({ id: USER_ID });
-    mockListingRow({
-      id: UUID,
-      title: "X",
-      status: "draft",
-      area: "MZANSI_MARKET",
-      owner_id: USER_ID,
-      featured_until: null,
-    });
-    mockAdmin({
-      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
-    });
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Only live listings can be featured");
-  });
-
-  it("returns 400 when already featured", async () => {
-    mockAuth({ id: USER_ID });
-    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
-    mockListingRow({
-      id: UUID,
-      title: "X",
-      status: "live",
-      area: "MZANSI_MARKET",
-      owner_id: USER_ID,
-      featured_until: futureDate,
-    });
-    mockAdmin({
-      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
-    });
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("This listing is already featured");
-  });
-
-  it("returns 403 when entitlement denied", async () => {
-    const { canFeatured } = await import("@/lib/services/entitlements");
-    vi.mocked(canFeatured).mockReturnValueOnce({ allowed: false, reason: "Upgrade required" });
+  it("refuses featured for a live listing: sold for events only", async () => {
     setupHappyPath("featured_until");
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
     const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("Upgrade required");
-  });
-
-  it("returns 500 when payment insert fails", async () => {
-    mockAuth({ id: USER_ID, email: "seller@test.com" });
-    mockListingRow({
-      id: UUID,
-      title: "Test",
-      status: "live",
-      area: "MZANSI_MARKET",
-      owner_id: USER_ID,
-      featured_until: null,
-    });
-    mockAdmin({
-      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
-    });
-    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("Failed to create featured checkout");
-  });
-
-  it("happy path returns checkout URL", async () => {
-    setupHappyPath("featured_until");
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/featured`);
-    const res = await FeaturedPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
-    expect(body.paymentId).toBe("payment-1");
+    await expect(res.json()).resolves.toMatchObject({ code: "addon_unavailable" });
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 });
 
@@ -465,83 +394,12 @@ describe("POST /api/listings/[id]/boost", () => {
     expect((await res.json()).error).toBe("Listing not found");
   });
 
-  it("returns 400 when listing is not live", async () => {
-    mockAuth({ id: USER_ID });
-    mockListingRow({
-      id: UUID,
-      title: "X",
-      status: "draft",
-      area: "MZANSI_MARKET",
-      owner_id: USER_ID,
-      boost_until: null,
-    });
-    mockAdmin({
-      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
-    });
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
-    const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Only live listings can be boosted");
-  });
-
-  it("returns 400 when already boosted", async () => {
-    mockAuth({ id: USER_ID });
-    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
-    mockListingRow({
-      id: UUID,
-      title: "X",
-      status: "live",
-      area: "MZANSI_MARKET",
-      owner_id: USER_ID,
-      boost_until: futureDate,
-    });
-    mockAdmin({
-      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
-    });
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
-    const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("This listing is already boosted");
-  });
-
-  it("returns 403 when entitlement denied", async () => {
-    const { canBoost } = await import("@/lib/services/entitlements");
-    vi.mocked(canBoost).mockReturnValueOnce({ allowed: false, reason: "Upgrade required" });
+  it("refuses boost for a live listing: sold for events only", async () => {
     setupHappyPath("boost_until");
     const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
     const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("Upgrade required");
-  });
-
-  it("returns 500 when payment insert fails", async () => {
-    mockAuth({ id: USER_ID, email: "seller@test.com" });
-    mockListingRow({
-      id: UUID,
-      title: "Test",
-      status: "live",
-      area: "MZANSI_MARKET",
-      owner_id: USER_ID,
-      boost_until: null,
-    });
-    mockAdmin({
-      account_profiles: { maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }) },
-    });
-    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
-    const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("Failed to create boost checkout");
-  });
-
-  it("happy path returns checkout URL", async () => {
-    setupHappyPath("boost_until");
-    const req = createRequest(`http://localhost:3000/api/listings/${UUID}/boost`);
-    const res = await BoostPOST(req, { params: Promise.resolve({ id: UUID }) });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
-    expect(body.paymentId).toBe("payment-1");
+    await expect(res.json()).resolves.toMatchObject({ code: "addon_unavailable" });
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 });

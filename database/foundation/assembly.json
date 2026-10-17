@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "status": "DRAFT assembly only; not replayed or deployable",
+  "releaseReady": false,
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-16T18-01-12.835Z/results.json",
+  "evidenceHash": "PTlIERZALKfT9Ujp6AY9SIiZ7xWdnqYbxFG_2J0QwXY",
+  "sourceHashes": {
+    "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
+    "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
+    "docs/backend-foundation/prototypes/post-integrity.sql": "Oo2jEtE3KndJhnPAAWn7WLLcDuyi2injTWOvH8HEiBs",
+    "docs/backend-foundation/prototypes/core-listing-terms.sql": "nlYHShdrVWk5-5rtj9z0WnG07wNhqYR_r_5v-Sh0fac",
+    "docs/backend-foundation/prototypes/taxonomy-reference.sql": "sQVB6BvTVBh-CcUTxu4i2fESk4DggwDxF7CVSHSpToE",
+    "docs/backend-foundation/prototypes/taxonomy-reference-seed.sql": "P5o1FJfkS7FrVyKreFB9XvkRXBjDxvS2rZ3_zNnsUmo",
+    "docs/backend-foundation/prototypes/post-search.sql": "WHZjq1qdouNlGamaumNotoxlmKrztjtmKLiTG2q0IrA",
+    "docs/backend-foundation/prototypes/entitlements.sql": "vJCZabXsB6KoBtneRyyigiaCzj3VKgjDE1cN_MEBjrw",
+    "docs/backend-foundation/prototypes/listing-attributes.sql": "YHzTiY9y4wh43RRrhQTSxld_KXBgohTRCDTj1qgt3p8",
+    "docs/backend-foundation/prototypes/trust-governance.sql": "rozNXyhl9F9HUo5m7K2H4JOrGBW3kYIdvx3XZs_d4aE",
+    "docs/backend-foundation/prototypes/publication.sql": "uU-b091vw6yBLw9_q2_Ct7q6NiaW0OgxMZaZeLB48sY",
+    "docs/backend-foundation/prototypes/moderation-queues.sql": "hT8W3DWPf-X2MfvLWk3pNDjiz0oNLopmUe6KJr9s8bk",
+    "docs/backend-foundation/prototypes/operations-costs.sql": "BGOaeXFfHlxPBRSvzitdZaNAYGMw1hkxurrIS_8bGgw",
+    "docs/backend-foundation/prototypes/identity-verification.sql": "T7M96vU37UW41QsK7FAtWIiQLBI9K22e0WqpjYEO7c0",
+    "docs/backend-foundation/prototypes/fixture-core-drivers.sql": "yGqWJ_UjjYGOFA0KfnZdqGVyGw6Xmu2x9iEwpxEXoFg",
+    "docs/backend-foundation/prototypes/public-price-negotiable.sql": "3YPno5OmBkj-Nue5qI1xU-BLBsc1vzGGaz81NrGJbgg",
+    "docs/backend-foundation/prototypes/owner-listing-editor.sql": "BWsNg3O_BZQwv8nPHa9gNZJA29LFZpKac7_rmxsm4ag"
+  },
+  "candidateHash": "pFys8wC7D528JXWrQIZENen5A25UgZclrPVjOh3OwmY",
+  "catalogueSeedIdentities": {
+    "schemaVersion": 1,
+    "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",
+    "plans": {
+      "market_30d@1": "00420f8c-0ac1-4828-83c5-d547d862fc8f",
+      "market_90d@1": "94e38eb4-0b53-46a0-b4c4-26ff01c8a7e5",
+      "market_180d@1": "c253bdb4-a6df-4b50-9581-c1181b1089f9",
+      "business_30d@1": "e85d90ef-6f4c-412d-9f42-3c3e095dd23f",
+      "business_90d@1": "476179da-2247-4585-97c0-cffbcb06eec0",
+      "business_180d@1": "043d20ce-a7e1-420d-9770-848b781e76a6",
+      "tourism_30d@1": "8171ae1a-80d5-44e5-afe4-6345d600b9a7",
+      "tourism_90d@1": "838db9d2-9dff-41a8-99a3-c6d2673dc06f",
+      "tourism_180d@1": "9ad6cea5-e50d-4ef0-844c-8e2c25c82007",
+      "multi_10_90d@1": "0ff0318d-255b-4a97-989f-a2c77c68f7b5",
+      "multi_10_180d@1": "b5a2624d-fc54-4a6d-b2c3-d952b130d40a",
+      "multi_25_90d@1": "0a728e91-8646-4c32-9a22-ae93f80c05b5",
+      "multi_25_180d@1": "62ae9cea-a942-4713-b9c8-00d9f6e84cc9",
+      "multi_50_90d@1": "bcea355c-5d2c-435f-bd1c-afd7061fb90e",
+      "multi_50_180d@1": "043a5448-0c8f-4cf3-9c3b-972c76d7643f",
+      "multi_100_90d@1": "74ba6bde-0fc8-45d2-93c9-49c38b43f81a",
+      "multi_100_180d@1": "bb63a08d-7238-4f14-be72-2f81fd333937"
+    },
+    "addons": {
+      "boost@1": "7a8e430b-5d1f-4f3c-a207-b87bad2302cc",
+      "featured@1": "b55276f4-a110-4b9d-acbe-aebe0fc52125",
+      "urgent@1": "8b1d0c70-8885-4800-b945-41ba3d8d2af4"
+    }
+  },
+  "catalogueSeedIdentitiesHash": "as4g-QYYagtdMoogKzVc3asHo7oJzhGr8Ip5lVYNDjo",
+  "functions": 214,
+  "matchingNativeFunctionBodies": 213,
+  "derivedFunctionChanges": {
+    "internal.validate_listing_attributes": "Remove test-only fixture_market bypass; requires separate baseline replay and strict-category proof"
+  },
+  "removedTestFunctions": [
+    "internal.rename_transport_resource",
+    "api.rename_transport_resource",
+    "internal.enqueue_transport_reconciliation",
+    "api.enqueue_transport_reconciliation",
+    "api.grant_intro_trial",
+    "api.record_identity_ban"
+  ],
+  "removedTestTables": [
+    "private.transport_resources",
+    "private.transport_jobs"
+  ],
+  "removedTestSeedRows": 4,
+  "cliGeneratedMigration": "supabase/migrations/20261015140403_unreleased_foundation.sql",
+  "deploymentGuardHash": "aJYRldO2E8njQkXou2hde30QgCZBPfRQfkVJPemxh4c",
+  "baselineReplay": "INCOMPLETE; requires a separate empty native Auth/PostgREST workspace",
+  "requiredGates": [
+    "Remaining G1 field/verification/retention contracts and independent review",
+    "BF-09 native empty replay and full reference/config/seed review",
+    "Independent fixed catalogue identity and full reference/config seed acceptance",
+    "BF-10 adapters/types/API manifest",
+    "BF-11/12/28 authority and hosted configuration",
+    "Performance, recovery, provider and rollout acceptance"
+  ],
+  "targetProject": null,
+  "productionMutations": []
+}

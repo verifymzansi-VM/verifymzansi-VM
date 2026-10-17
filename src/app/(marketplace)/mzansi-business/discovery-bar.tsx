@@ -160,7 +160,7 @@ export function BusinessDiscoveryBar() {
         )}
         {organisations.length > 0 || filters.organisation ? (
           <div className="space-y-1.5">
-            <Label htmlFor="business-organisation">Programme partner</Label>
+            <Label htmlFor="business-organisation">Business Sponsor</Label>
             <select
               id="business-organisation"
               className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:h-10 sm:text-sm"
@@ -325,7 +325,7 @@ export function BusinessDiscoveryBar() {
               <button
                 type="button"
                 className="-my-1 -mr-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-background/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Remove programme partner filter"
+                aria-label="Remove Business Sponsor filter"
                 disabled={!isInteractive}
                 onClick={() => setFilter("organisation", undefined)}
               >

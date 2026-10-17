@@ -16,6 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
+import { PackageRulesNote } from "@/components/posting/package-rules-note";
+import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import { UploadProgressPanel, type UploadSlotStatus } from "@/components/ui/upload-progress-panel";
@@ -534,7 +536,7 @@ export default function EditPromotionPage() {
 
       if (!res.ok) {
         if (data?.code === "edit_limit_reached") {
-          setError("This tourism and events post has already used its two approved edit chances.");
+          setError(editLimitReachedMessage("event"));
         } else if (data?.code === "pending_edit_exists") {
           setError(
             "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
@@ -619,6 +621,7 @@ export default function EditPromotionPage() {
               { label: "Edit" },
             ]}
           />
+          <PackageRulesNote kind="event" />
 
           {error && (
             <div

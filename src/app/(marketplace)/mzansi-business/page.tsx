@@ -93,7 +93,7 @@ export default async function MzansiBusinessPage() {
           background={mzansiBusinessShowroomBackground}
         />
 
-        {/* Programme partners: a separate band after the showroom, never inside it. */}
+        {/* Business Sponsors: a separate band after the showroom, never inside it. */}
         <Suspense fallback={null}>
           <SponsorStrip />
         </Suspense>
