@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowRight,
   BadgeCheck,
   BarChart3,
@@ -15,7 +16,6 @@ import {
   Mic,
   Rocket,
   ShoppingBag,
-  Sparkles,
   Star,
   Timer,
   TreePalm,
@@ -23,7 +23,6 @@ import {
   Users,
   Video,
   X,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { Footer } from "@/components/layout/footer";
@@ -52,7 +51,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Advertise",
   description:
-    "Why advertise on VerifyMzansi, and which package fits: individual posts, multi-listing for dealers and agencies, and programme partnerships that support local businesses.",
+    "Why advertise on VerifyMzansi, and which package fits: individual posts, multi-listing for dealers and agencies, and Business Sponsor packages that support local businesses.",
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
@@ -88,30 +87,26 @@ const AREAS = [
   },
 ] as const;
 
+// Boost and Featured only change the order of the events page; everywhere else
+// lists rotate fairly, so they are sold for events only (lib/billing/addon-availability).
 const EXTRAS = [
+  {
+    icon: AlertTriangle,
+    name: "Urgent",
+    price: `${formatPlanPrice(ADDON_PRICES.urgent)} for ${URGENT_DURATION_DAYS} days`,
+    body: "An Urgent label on the post wherever it appears. Not a safety endorsement.",
+  },
   {
     icon: Rocket,
     name: "Boost",
     price: `${formatPlanPrice(ADDON_PRICES.boost)} for ${BOOST_DURATION_DAYS} days`,
-    body: "Promoted placement in its section, clearly labelled.",
+    body: "Events only: listed first on the events page.",
   },
   {
     icon: Star,
     name: "Featured",
     price: `${formatPlanPrice(ADDON_PRICES.featured)} for ${FEATURED_DURATION_DAYS} days`,
-    body: "Featured label and placement. Not a stronger verification.",
-  },
-  {
-    icon: Zap,
-    name: "Urgent",
-    price: `${formatPlanPrice(ADDON_PRICES.urgent)} for ${URGENT_DURATION_DAYS} days`,
-    body: "A time-sensitive label. Not a safety endorsement.",
-  },
-  {
-    icon: Sparkles,
-    name: "Homepage spotlight",
-    price: "With Boost or Featured",
-    body: "Rotation on the homepage. No exclusive spot or guaranteed views.",
+    body: "Events only: listed next on the events page, with a Featured label.",
   },
 ] as const;
 
@@ -209,7 +204,8 @@ const PACKAGES: readonly PackageDetail[] = [
       "Photos and a short video on your post",
       "Calls and WhatsApp straight to you, with no commission",
       "Your first post free for 7 days once your ID is reviewed, then 30, 90 or 180 days",
-      "Reuse the slot when something sells or you take a post down",
+      "Your package sets the posting limits and how long a post stays active",
+      "Up to 2 approved edits per live post",
     ],
     notIncluded: "Not included: guaranteed views, enquiries or sales.",
     pricesHref: "/pricing#plans",
@@ -235,20 +231,22 @@ const PACKAGES: readonly PackageDetail[] = [
       "90 or 180 day terms with a fixed end date",
       `${ENTERPRISE_ADMINS_INCLUDED} named administrators to manage posts`,
       "Every poster and post still identity-reviewed and moderated",
-      "Swap stock in and out as items sell",
-      `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS} slots: a written quote`,
+      "Change stock within your plan's live-post and activation limits",
+      "Up to 2 approved edits per live post",
+      "Bought online and paid once; a written quote is available for procurement",
+      `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live posts: a written quote`,
     ],
     notIncluded: "Not included: guaranteed views, enquiries or sales.",
     pricesHref: "/pricing#multi-listing-prices",
     pricesLabel: "See multi-listing prices",
-    cta: { href: PROPOSAL_HREF, label: "Request a proposal" },
+    cta: { href: "/pricing/multi-listing", label: "Choose a multi-listing plan" },
   },
   {
     id: "programmes",
     icon: Landmark,
-    name: "Programme partner",
+    name: "Business Sponsor",
     eyebrow: "For organisations",
-    title: "Become a programme partner",
+    title: "Become a Business Sponsor",
     lede: "For chambers, municipalities, enterprise-development programmes and companies that support local businesses and need to show where the support went.",
     who: "Chambers, municipalities, development programmes and companies that support local businesses.",
     audience: [
@@ -260,7 +258,7 @@ const PACKAGES: readonly PackageDetail[] = [
     includes: [
       "A branded programme showcase, searchable by category and area",
       "A “Supported by” label on each business, used only with written brand permission",
-      "A place in the Programme partners strip and home page section",
+      "A place in the Business Sponsors strip and home page section",
       `Up to ${SPONSOR_PROGRAMME_ADMINS} named administrators who approve which businesses join`,
       "An activity summary every 30 days and a term-end report",
       "One remote onboarding session and one review meeting per 30 days",
@@ -268,8 +266,8 @@ const PACKAGES: readonly PackageDetail[] = [
     notIncluded:
       "Not included: site visits, on-site verification, professional filming, travel or any promise of views, enquiries, sales or B-BBEE recognition.",
     pricesHref: "/pricing#programme-prices",
-    pricesLabel: "See programme fees",
-    cta: { href: PROPOSAL_HREF, label: "Request a programme proposal" },
+    pricesLabel: "See sponsor fees",
+    cta: { href: PROPOSAL_HREF, label: "Request a sponsor proposal" },
   },
 ];
 
@@ -470,7 +468,7 @@ export default async function AdvertisePage() {
       footnote: `${ENTERPRISE_ADMINS_INCLUDED} named administrators included.`,
     },
     programmes: {
-      caption: "Programme fee (total for the term)",
+      caption: "Sponsor fee (total for the term)",
       columns: ["Businesses", "90 days", "180 days"],
       rows: [
         ...SPONSOR_PROGRAMME_PRICES.map((row) => ({
@@ -780,7 +778,7 @@ export default async function AdvertisePage() {
               Optional, clearly labelled and still moderated. No guaranteed number of views.
             </p>
             <Reveal>
-              <ul className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <ul className="mt-7 grid gap-4 sm:grid-cols-3">
                 {EXTRAS.map(({ icon: Icon, name, price, body }) => (
                   <SpotlightCard
                     as="li"
@@ -924,7 +922,7 @@ export default async function AdvertisePage() {
               >
                 <Link href={PROPOSAL_HREF}>
                   <Users aria-hidden="true" className="mr-1.5 h-4 w-4" />
-                  Talk to us about a programme
+                  Talk to us about sponsoring
                 </Link>
               </Button>
             </div>

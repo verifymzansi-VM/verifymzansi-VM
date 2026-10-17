@@ -1,4 +1,8 @@
 import { getTrialAddonBlock } from "@/lib/billing/trial-addon-access";
+import {
+  ADDON_UNAVAILABLE_CODE,
+  ADDON_UNAVAILABLE_MESSAGE,
+} from "@/lib/billing/addon-availability";
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 
@@ -82,6 +86,8 @@ type CoreConfig<
   findEntity: (context: RouteContext<Params>) => Promise<Entity | null>;
   getNotFoundMessage: string;
   verifyOwnership: (entity: Entity, userId: string) => NextResponse | null;
+  /** Whether this add-on is on sale for this post (src/lib/billing/addon-availability.ts). */
+  isOffered: (entity: Entity) => boolean;
   resolveArea: (entity: Entity) => MarketplaceArea;
   entitlementCheck: (tier: PlanTier, area: MarketplaceArea) => AllowedResult;
   buildPendingPaymentMatch: (entityId: string) => PendingPaymentMatch;
@@ -188,6 +194,13 @@ export function createAddonCheckoutRouteCore<
       const ownershipError = config.verifyOwnership(entity, user.id);
       if (ownershipError) {
         return ownershipError;
+      }
+
+      if (!config.isOffered(entity)) {
+        return NextResponse.json(
+          { error: ADDON_UNAVAILABLE_MESSAGE, code: ADDON_UNAVAILABLE_CODE },
+          { status: 403 }
+        );
       }
 
       if (entity.status !== "live") {

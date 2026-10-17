@@ -1,6 +1,7 @@
 import { customerAccessSchema } from "@/lib/forms/customer-access";
 import { z } from "zod";
 import { isTrustedPlatformMediaUrl } from "@/lib/utils/media-url";
+import { BUSINESS_TEXT_LIMITS } from "./business-limits";
 import {
   externalUrlOrEmptySchema,
   externalUrlSchema,
@@ -155,7 +156,7 @@ export const businessSchema = z
       .trim()
       .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
       .min(2, "Business name must be at least 2 characters")
-      .max(100, "Business name cannot exceed 100 characters"),
+      .max(BUSINESS_TEXT_LIMITS.name, "Business name cannot exceed 100 characters"),
     slug: z
       .string()
       .min(3, "Slug must be at least 3 characters")
@@ -168,7 +169,7 @@ export const businessSchema = z
       .string()
       .trim()
       .refine((value) => !hasSpoofingChars(value), NO_HIDDEN_CHARS_MESSAGE)
-      .max(3000, "Description cannot exceed 3000 characters")
+      .max(BUSINESS_TEXT_LIMITS.description, "Description cannot exceed 3000 characters")
       .optional()
       .default(""),
 

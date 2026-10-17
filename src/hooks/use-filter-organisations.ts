@@ -8,7 +8,7 @@ export interface FilterOrganisation {
 }
 
 /**
- * Listed organisations for the "Programme partner" business filter, loaded on
+ * Listed organisations for the "Business Sponsor" business filter, loaded on
  * demand. Shared by the desktop sidebar and the mobile filter drawer so both
  * offer the same list.
  */

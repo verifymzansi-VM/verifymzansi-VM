@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "task": "BF-04",
+  "status": "candidate; supplementary PGlite proof only",
+  "exposedSchemas": ["api"],
+  "unexposedSchemas": ["private", "internal"],
+  "sql": "prototypes/transport.sql",
+  "fixtureOnly": true,
+  "productionMigration": false,
+  "contracts": [
+    {
+      "rpc": "api.rename_transport_resource(uuid,integer,text)",
+      "caller": "authenticated non-anonymous member with live session",
+      "actorDerivation": "auth.uid() from verified JWT request context; no actor argument",
+      "resourceScope": "JWT owner and expected revision",
+      "writableFields": ["title"],
+      "responseFields": ["id", "title", "revision"],
+      "transactionOwner": "internal.rename_transport_resource",
+      "bounds": "trimmed title 2..100; positive revision; immutable owner/id/private note",
+      "auditClass": "synthetic owner fixture only; no evidence/staff/billing contract",
+      "cacheClass": "no-store",
+      "jobEffects": [],
+      "test": "scripts/test-foundation-transport.mjs"
+    },
+    {
+      "rpc": "api.enqueue_transport_reconciliation(uuid)",
+      "caller": "service_role only",
+      "actorDerivation": "machine JWT role; no member impersonation or actor parameter",
+      "resourceScope": "one fixed-kind synthetic job UUID",
+      "writableFields": ["id"],
+      "responseFields": ["boolean acknowledgement"],
+      "transactionOwner": "internal.enqueue_transport_reconciliation",
+      "bounds": "non-null UUID; fixed reconcile kind; primary key deduplicates retries",
+      "auditClass": "synthetic machine fixture only",
+      "cacheClass": "no-store",
+      "jobEffects": ["insert synthetic reconcile record once"],
+      "test": "scripts/test-foundation-transport.mjs"
+    }
+  ],
+  "nativeHttpAcceptance": [
+    "Actual PostgREST is configured to expose api only; wrong profile private/internal must reject for all principals including service",
+    "Authenticated A succeeds on A; B, anonymous Auth and missing/expired/revoked session deny; real signed JWTs and real auth.sessions",
+    "anon/service cannot call member command even with forged actor-like JSON properties; unexpected parameters reject",
+    "Authenticated cannot call service command; service call succeeds; machine command cannot authorize member action",
+    "Invoker wrapper fails when helper execute or internal usage is revoked; restored exact grants make it succeed",
+    "Direct private table/column reads and writes deny even if schema is accidentally exposed; PUBLIC/default/overload grants examined",
+    "Member response excludes private_note and owner_id; stale revision/invalid title fail without mutation",
+    "Native two-session revision and revocation races are examined; synthetic PGlite sequential checks do not prove them",
+    "Generate exact custom-schema Supabase client types and test profile/RPC schema-cache behaviour",
+    "Run advisors on isolated instance and independently review owners/default grants before promoting a target baseline"
+  ],
+  "remainingGates": [
+    "BF-03",
+    "BF-04 native HTTP",
+    "BF-12 full database/RPC matrix",
+    "BF-28 integrated route/UI matrix"
+  ],
+  "rollback": "Close in-memory PGlite fixture; remove candidate files if rejected. No hosted DDL or source migration history changes."
+}

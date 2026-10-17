@@ -18,3 +18,11 @@ playwright-report/
 
 # Supabase
 supabase/.temp/
+
+# Machine-generated hash-checked foundation manifests and source snapshots.
+database/foundation/*.json
+database/foundation/openapi/
+docs/backend-foundation/evidence/
+docs/backend-foundation/schema-map.json
+docs/backend-foundation/post-field-proposals.json
+src/lib/domains/taxonomy/reference.json

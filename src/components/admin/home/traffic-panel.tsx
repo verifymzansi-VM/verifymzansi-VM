@@ -37,7 +37,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/trust-safety": "Trust & Safety",
   "/safety": "Safety Centre",
   "/search": "Search",
-  "/sponsors": "Programme partners",
+  "/sponsors": "Business Sponsors",
   "/help/showroom": "How the showroom works",
   "/contact": "Contact",
   "/verify-buyer": "Verify a buyer",

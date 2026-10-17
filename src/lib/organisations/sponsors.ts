@@ -6,7 +6,7 @@ import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("Sponsors");
 
 /**
- * A programme partner as returned by `public_sponsor_directory()`. That one
+ * A Business Sponsor as returned by `public_sponsor_directory()`. That one
  * database function decides eligibility for the strip, the home section and
  * /sponsors, so the surfaces never disagree. `logo_url` is null unless written
  * logo permission is on record.

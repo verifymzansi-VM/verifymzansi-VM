@@ -106,11 +106,16 @@ describe("Active-area pricing parity", () => {
     expect(screen.queryByTestId("retail-offer-year")).not.toBeInTheDocument();
     expect(screen.queryByText(/12 months|R450/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /request a proposal/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /request a sponsor proposal/i })).toHaveAttribute(
       "href",
       "/contact?topic=organisation_proposal"
     );
-    expect(screen.queryByText(/R650|R30 /)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Choose a multi-listing plan" })).toHaveAttribute(
+      "href",
+      "#multi-listing-prices"
+    );
+    // Retired legacy prices; "R30 per post per 30 days" on a multi-listing plan is current.
+    expect(screen.queryByText(/R650|R30 (?!per post)/)).not.toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
     const planLinks = screen.getAllByRole("link", {
       name: /Choose .*(30 Days|90 Days|180 Days)/i,

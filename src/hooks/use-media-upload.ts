@@ -217,15 +217,41 @@ function checkQualityWarnings(
   }
 }
 
-/** Types eligible for client-side WebP conversion (JPEG excluded — savings minimal for photos). */
+/**
+ * Best-effort client resize target. Small or undecodable images can pass through
+ * unchanged; the upload route does not enforce a canonical stored dimension.
+ */
+export const MAX_IMAGE_DIMENSION = 2560;
+
+/** Types re-encoded client-side: PNG/BMP always, JPEG/WebP only when too large. */
 const WEBP_CONVERTIBLE = new Set(["image/png", "image/bmp"]);
+const RESIZABLE = new Set(["image/png", "image/bmp", "image/jpeg", "image/webp"]);
+const SMALL_PHOTO_BYTES = 256 * 1024;
+
+/** Scale (width, height) so the longest side is at most `max`, keeping the ratio. */
+export function fitWithin(width: number, height: number, max = MAX_IMAGE_DIMENSION) {
+  const longest = Math.max(width, height);
+  if (longest <= max) return { width, height, scaled: false };
+  const scale = max / longest;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+    scaled: true,
+  };
+}
 
 /**
- * Convert a PNG/BMP image to WebP client-side via canvas.
- * Returns the original file unchanged if conversion fails or produces a larger result.
+ * Best-effort client preparation: resize decoded photos toward 2560 px on the
+ * longest side and re-encode as WebP. Small JPEG/WebP files, unsupported types
+ * and decode failures may pass through; this is not a stored-image size guarantee. PNG/BMP are always converted; JPEG/WebP are only
+ * re-encoded when they need shrinking. Returns the original file if decoding
+ * fails or the result would be larger without having been resized.
  */
-function convertToWebP(file: File): Promise<File> {
-  if (!WEBP_CONVERTIBLE.has(file.type)) return Promise.resolve(file);
+function prepareImageForUpload(file: File): Promise<File> {
+  if (!RESIZABLE.has(file.type)) return Promise.resolve(file);
+  // Skip decoding small JPEG/WebP files to save client work; dimensions remain unchecked.
+  if (!WEBP_CONVERTIBLE.has(file.type) && file.size < SMALL_PHOTO_BYTES)
+    return Promise.resolve(file);
 
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -242,20 +268,25 @@ function convertToWebP(file: File): Promise<File> {
 
     img.addEventListener("load", () => {
       try {
+        const target = fitWithin(img.naturalWidth, img.naturalHeight);
+        if (!target.scaled && !WEBP_CONVERTIBLE.has(file.type)) {
+          finish(file);
+          return;
+        }
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        canvas.width = target.width;
+        canvas.height = target.height;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
           finish(file);
           return;
         }
 
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, target.width, target.height);
         canvas.toBlob(
           (blob) => {
-            if (!blob || blob.size >= file.size) {
-              // Conversion produced a larger file — keep original
+            if (!blob || (!target.scaled && blob.size >= file.size)) {
+              // Conversion without resizing produced a larger file — keep original
               finish(file);
               return;
             }
@@ -573,7 +604,7 @@ export function useMediaUpload(options: UploadOptions = {}) {
 
         // ── Image: proxy through server (small files) ─────────
         // Convert PNG/BMP to WebP client-side for bandwidth savings
-        const uploadFile = await convertToWebP(file);
+        const uploadFile = await prepareImageForUpload(file);
 
         const formData = new FormData();
         formData.append("files", uploadFile);

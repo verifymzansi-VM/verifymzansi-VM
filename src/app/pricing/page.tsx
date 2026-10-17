@@ -1,4 +1,5 @@
 import { CalendarDays, LockKeyhole, ReceiptText, ShieldCheck } from "lucide-react";
+import { CURRENT_EDIT_RULE } from "@/lib/posting/package-rules";
 
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { BillingFaq } from "@/components/billing/billing-faq";
@@ -113,6 +114,15 @@ export default async function PricingPage() {
           <Reveal>
             <RetailPricing offers={catalog.retail} trialDays={settings?.trials} />
           </Reveal>
+        </section>
+
+        <section aria-labelledby="package-rules-title" className="container-page pb-10 sm:pb-14">
+          <div className="mx-auto max-w-3xl rounded-3xl border border-border p-5 sm:p-6">
+            <h2 id="package-rules-title" className="font-display text-lg font-bold">
+              How your package works
+            </h2>
+            <p className="mt-3 text-sm text-muted-foreground">{CURRENT_EDIT_RULE}</p>
+          </div>
         </section>
 
         <section aria-label="Paying safely" className="container-page pb-10 sm:pb-14">

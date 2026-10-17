@@ -229,7 +229,7 @@ export function RetailPricing({
               <ul className="mt-5 flex-1 space-y-2.5 border-t border-border/60 pt-5">
                 <FeatureItem>{AREA_UNIT[area]}</FeatureItem>
                 <FeatureItem>10 photos and 1 video</FeatureItem>
-                <FeatureItem>Boost &amp; Featured add-ons</FeatureItem>
+                <FeatureItem>Urgent label add-on</FeatureItem>
                 {savings > 0 ? (
                   <FeatureItem strong>Save {formatPlanPrice(savings)} vs. 30-day plans</FeatureItem>
                 ) : null}

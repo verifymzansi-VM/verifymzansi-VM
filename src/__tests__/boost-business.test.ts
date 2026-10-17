@@ -206,120 +206,12 @@ describe("POST /api/businesses/[id]/boost", () => {
     expect((await res.json()).error).toBe("Business not found");
   });
 
-  it("uses the business area for entitlement and checkout", async () => {
-    const { getActivePlanTierForArea } = await import("@/lib/services/plan-tier");
-    const { canBoost } = await import("@/lib/services/entitlements");
-
-    mockAuth({ id: USER_ID });
-    mockBusinessRow({
-      id: VALID_UUID,
-      business_name: "Tourism Business",
-      status: "live",
-      area: "PROMOTIONS_EVENTS",
-      owner_id: USER_ID,
-      boost_until: null,
-    });
-    mockAdmin({
-      account_profiles: {
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-    });
-
-    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
-    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-
-    expect(res.status).toBe(200);
-    expect((await res.json()).paymentId).toBe("payment-1");
-    expect(vi.mocked(getActivePlanTierForArea)).toHaveBeenCalledWith(USER_ID, "PROMOTIONS_EVENTS");
-    expect(vi.mocked(canBoost)).toHaveBeenCalledWith("growth", "PROMOTIONS_EVENTS");
-    expect(mockCreateHostedCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({ area: "PROMOTIONS_EVENTS" })
-    );
-  });
-
-  it("returns 400 when business is not live", async () => {
-    mockAuth({ id: USER_ID });
-    mockBusinessRow({
-      id: VALID_UUID,
-      business_name: "Draft Business",
-      status: "draft",
-      area: "MZANSI_BUSINESS",
-      owner_id: USER_ID,
-      boost_until: null,
-    });
-    mockAdmin({
-      account_profiles: {
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-    });
-    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
-    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/only live/i);
-  });
-
-  it("returns 400 when business is already boosted", async () => {
-    mockAuth({ id: USER_ID });
-    const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    mockBusinessRow({
-      id: VALID_UUID,
-      business_name: "Boosted Business",
-      status: "live",
-      area: "MZANSI_BUSINESS",
-      owner_id: USER_ID,
-      boost_until: futureDate,
-    });
-    mockAdmin({
-      account_profiles: {
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-    });
-    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
-    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/already/i);
-  });
-
-  it("returns 403 when entitlement denied", async () => {
-    const { canBoost } = await import("@/lib/services/entitlements");
-    vi.mocked(canBoost).mockReturnValueOnce({ allowed: false, reason: "Upgrade required" });
+  it("refuses boost for a live business: sold for events only", async () => {
     setupHappyPath();
     const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
     const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("Upgrade required");
-  });
-
-  it("returns 500 when payment creation fails", async () => {
-    mockAuth({ id: USER_ID, email: "seller@test.com" });
-    mockBusinessRow({
-      id: VALID_UUID,
-      business_name: "Test Business",
-      status: "live",
-      area: "MZANSI_BUSINESS",
-      owner_id: USER_ID,
-      boost_until: null,
-    });
-    mockAdmin({
-      account_profiles: {
-        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "sp-1" } }),
-      },
-    });
-    mockCreateHostedCheckout.mockRejectedValueOnce(new Error("Checkout provider unavailable"));
-    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
-    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-    expect(res.status).toBe(500);
-    expect((await res.json()).error).toMatch(/boost checkout/i);
-  });
-
-  it("happy path returns checkout URL", async () => {
-    setupHappyPath();
-    const req = createRequest(`http://localhost:3000/api/businesses/${VALID_UUID}/boost`);
-    const res = await POST(req, { params: Promise.resolve({ id: VALID_UUID }) });
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.success).toBe(true);
-    expect(body.checkoutUrl).toBe("https://pay.ozow.test/checkout");
-    expect(body.paymentId).toBe("payment-1");
+    await expect(res.json()).resolves.toMatchObject({ code: "addon_unavailable" });
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 });

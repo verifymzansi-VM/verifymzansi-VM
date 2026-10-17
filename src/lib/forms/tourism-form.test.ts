@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateTourismStep } from "@/lib/forms/tourism-form";
+import { businessSchema } from "@/lib/validations/business-unified";
 
 describe("validateTourismStep event compatibility", () => {
   it("accepts valid event basics without introducing validation errors", () => {
@@ -169,6 +170,56 @@ describe("validateTourismStep tours and experiences", () => {
     expect(errors.joinMethods).toBeDefined();
     expect(errors.locationAddress).toBeUndefined();
   });
+
+  it.each([
+    [100, 3000, true],
+    [101, 3000, false],
+    [100, 3001, false],
+  ])(
+    "matches the business API at title=%i and description=%i",
+    (titleLength, descriptionLength, valid) => {
+      const title = "t".repeat(titleLength);
+      const description = "d".repeat(descriptionLength);
+      const errors = validateTourismStep(0, tour({ title, description }));
+
+      expect(Object.keys(errors).length === 0).toBe(valid);
+      expect(errors.title === undefined).toBe(
+        businessSchema.shape.business_name.safeParse(title).success
+      );
+      expect(errors.description === undefined).toBe(
+        businessSchema.shape.description.safeParse(description).success
+      );
+    }
+  );
+
+  it("uses the API's trimmed lengths for business text", () => {
+    expect(
+      validateTourismStep(
+        0,
+        tour({ title: ` ${"t".repeat(100)} `, description: ` ${"d".repeat(3000)} ` })
+      )
+    ).toEqual({});
+  });
+
+  it.each([
+    [120, 5000, true],
+    [121, 5000, false],
+    [120, 5001, false],
+  ])(
+    "keeps separate event bounds at title=%i and description=%i",
+    (titleLength, descriptionLength, valid) => {
+      const errors = validateTourismStep(
+        0,
+        tour({
+          listingType: "event",
+          eventType: "festival_concert",
+          title: "t".repeat(titleLength),
+          description: "d".repeat(descriptionLength),
+        })
+      );
+      expect(Object.keys(errors).length === 0).toBe(valid);
+    }
+  );
 
   it("requires the details for each selected join method only", () => {
     expect(

@@ -889,7 +889,7 @@ export async function sendOrganisationAdminInviteEmail(params: {
     tone: "info",
     eyebrow: "Programme administrator",
     title: `Manage ${params.organisationName} on VerifyMzansi`,
-    intro: "VerifyMzansi has invited you to administer a programme partner account.",
+    intro: "VerifyMzansi has invited you to administer a Business Sponsor account.",
     bodyHtml: `
       ${paragraph("Hi,")}
       ${paragraph(`As an administrator of ${params.organisationName} you can approve which businesses join the programme, manage supported places and download activity reports. You will not see identity documents, selfies or private messages.`)}

@@ -310,10 +310,10 @@ export function BusinessFilterDrawer() {
           {/* Organisation / programme (optional; never changes ranking) */}
           {organisations.length > 0 ? (
             <div className="space-y-1.5">
-              <Label htmlFor="drawer-business-organisation">Programme partner</Label>
+              <Label htmlFor="drawer-business-organisation">Business Sponsor</Label>
               <select
                 id="drawer-business-organisation"
-                aria-label="Programme partner"
+                aria-label="Business Sponsor"
                 className={selectClassName}
                 value={filters.organisation || ""}
                 onChange={(event) => setFilter("organisation", event.target.value || undefined)}

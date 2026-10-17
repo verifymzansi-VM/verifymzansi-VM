@@ -73,7 +73,7 @@ const MANUAL_TEXT = [
       "• People who work with us: contracts, payroll and statutory records, where applicable",
       "• Members: account details, verification records (phone confirmation, ID and selfie review decisions), posts, media, enquiries, plans bought, reports, moderation and appeal records",
       "• Businesses: business profiles, CIPC registered and Seen by VerifyMzansi verification cases, decisions and correspondence",
-      "• Suppliers and partners: contracts, programme partner agreements and correspondence",
+      "• Suppliers and partners: contracts, Business Sponsor agreements and correspondence",
       "• Technology and security: system, audit and access logs, and incident records",
     ],
   },

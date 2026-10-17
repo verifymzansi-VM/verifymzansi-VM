@@ -148,6 +148,7 @@ describe("POST /api/promotions/[id]/featured", () => {
           id: "00000000-0000-0000-0000-000000000001",
           title: "Local Tour",
           status: "live",
+          promotion_type: "event",
           featured_until: null,
           owner_id: "user-1",
         },
@@ -232,5 +233,27 @@ describe("POST /api/promotions/[id]/featured", () => {
     expect(mockGetActivePlanTierForArea).toHaveBeenCalledWith("user-1", "PROMOTIONS_EVENTS");
     expect(mockCanFeatured).toHaveBeenCalled();
     expect(mockCreateHostedCheckout).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses featured for a promotion that is not an event, before any payment", async () => {
+    mockApplyOwnerFilter.mockReturnValue({
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: {
+          id: "00000000-0000-0000-0000-000000000001",
+          title: "Weekend deal",
+          status: "live",
+          promotion_type: "deal",
+          featured_until: null,
+          owner_id: "user-1",
+        },
+      }),
+    });
+    const response = await POST(createRequest("https://verifymzansi.com", true), {
+      params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000001" }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "addon_unavailable" });
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 });

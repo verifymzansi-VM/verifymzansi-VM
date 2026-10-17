@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAddonOffered, type AddonKind } from "@/lib/billing/addon-availability";
 
 import {
   ACCOUNT_PROFILE_WRITE_TABLE,
@@ -92,6 +93,7 @@ export function createBusinessAddonCheckoutRoute(config: BusinessAddonRouteConfi
       return rawBusiness as BusinessCheckoutRow | null;
     },
     getNotFoundMessage: "Business not found",
+    isOffered: () => isAddonOffered(config.paymentType.split("_")[0] as AddonKind, "business"),
     verifyOwnership: (business, userId) => {
       if (readOwnerId(business) === userId) return null;
       return NextResponse.json(

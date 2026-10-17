@@ -380,6 +380,42 @@ test("watermark generation preserves sizes, transparent containment and named va
     images.get("youtube-watermark-shield-150.png")
   );
 });
+test("business SQL regressions remain mandatory in blocking, review and release gates", async () => {
+  const { scripts } = JSON.parse(await readFile("package.json", "utf8"));
+  const ci = await readFile(".github/workflows/ci.yml", "utf8");
+  const partitions = [...ci.matchAll(/pnpm safety:ci-review -- --checks=([^\s]+)/g)].map((match) =>
+    match[1].split(",")
+  );
+  const lanes = [
+    ["db-business-counts", "test:business-counts:db", "scripts/test-business-category-counts.mjs"],
+    [
+      "db-business-evidence",
+      "test:business-evidence:db",
+      "scripts/test-business-verification-file-privacy.mjs",
+    ],
+  ];
+  for (const [id, command, runner] of lanes) {
+    assert.equal(scripts[command], `node ${runner}`);
+    assert(scripts["test:blocking"].split(" && ").includes(`pnpm ${command}`));
+    assert.equal(
+      partitions.filter((partition) => partition.includes(id)).length,
+      1,
+      `${id} runs once in CI`
+    );
+    for (const mode of ["review", "ci-review", "release"] as const) {
+      const lane = selectChecks(mode).find((item) => item.id === id);
+      assert(lane, `${id} is required in ${mode}`);
+      assert.deepEqual(lane.args, [command]);
+      assert(!lane.optional && !lane.advisory);
+      assert.equal(lane.category, "repo_runtime");
+      assert.match(lane.scope, /supplementary.*PGlite/);
+      assert(lane.tests.includes(runner));
+    }
+  }
+  assert(selectChecks("kyc").some((item) => item.id === "db-business-evidence"));
+  assert(!selectChecks("kyc").some((item) => item.id === "db-business-counts"));
+});
+
 test("strict flags, unique registry and mandatory domain/release lanes", () => {
   for (const arg of [
     "--typo",

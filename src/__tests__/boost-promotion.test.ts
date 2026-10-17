@@ -137,6 +137,7 @@ function setupHappyPath() {
     id: VALID_UUID,
     title: "Test Promotion",
     status: "live",
+    promotion_type: "event",
     owner_id: USER_ID,
     boost_until: null,
   });
@@ -270,6 +271,7 @@ describe("POST /api/promotions/[id]/boost", () => {
                   id: VALID_UUID,
                   title: "Legacy Promo",
                   status: "live",
+                  promotion_type: "event",
                   seller_id: USER_ID,
                   boost_until: null,
                 },
@@ -327,6 +329,7 @@ describe("POST /api/promotions/[id]/boost", () => {
       id: VALID_UUID,
       title: "Draft Promo",
       status: "draft",
+      promotion_type: "event",
       owner_id: USER_ID,
       boost_until: null,
     });
@@ -349,6 +352,7 @@ describe("POST /api/promotions/[id]/boost", () => {
       id: VALID_UUID,
       title: "Boosted Promo",
       status: "live",
+      promotion_type: "event",
       owner_id: USER_ID,
       boost_until: futureDate,
     });
@@ -370,6 +374,7 @@ describe("POST /api/promotions/[id]/boost", () => {
       id: VALID_UUID,
       title: "Test Promo",
       status: "live",
+      promotion_type: "event",
       owner_id: USER_ID,
       boost_until: null,
     });

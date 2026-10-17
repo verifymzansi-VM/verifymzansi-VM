@@ -4,6 +4,7 @@ import { hasCapability } from "@/lib/auth/roles";
 
 import { useState, useEffect, type ReactNode } from "react";
 import Link from "next/link";
+import { MultiListingNudge } from "@/components/billing/multi-listing-nudge";
 import { usePathname } from "next/navigation";
 import { AlertTriangle, Loader2, Sparkles, Check, X, Crown, Camera, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -147,7 +148,7 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
   return [
     { text: "1 active posting slot, reusable when an item sells", enabled: true },
     { text: `${f.maxPhotos} photos and ${f.maxVideos ?? 1} video per post`, enabled: true },
-    { text: "Optional Boost and Featured add-ons", enabled: f.boostAllowed },
+    { text: "Optional Urgent label add-on", enabled: f.boostAllowed },
     { text: "No automatic renewal", enabled: true },
   ];
 }
@@ -597,6 +598,8 @@ export function PlanGate({
 
         <InlinePlanGrid plans={areaPlans} onSubscribe={handleSubscribe} subscribing={subscribing} />
 
+        <MultiListingNudge />
+
         <p className="text-center text-xs text-muted-foreground">
           One reusable posting slot per plan, with no automatic renewal.{" "}
           <Link
@@ -638,8 +641,8 @@ export function PlanGate({
                       ? "Free post"
                       : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "current")}
                   </Badge>{" "}
-                  plan. Mark a sold item, deactivate a post from your dashboard, or add another slot
-                  below.
+                  plan. Mark a sold item, deactivate a post from your dashboard, add another slot
+                  below, or move to multi-listing to keep more posts live at once.
                 </p>
               </div>
             </div>
@@ -647,6 +650,8 @@ export function PlanGate({
         </Card>
 
         {onChooseFreeEvent ? <FreeEventOption onChoose={onChooseFreeEvent} /> : null}
+
+        <MultiListingNudge emphasis="strong" />
 
         {upgradePlans.length > 0 && (
           <InlinePlanGrid
@@ -880,6 +885,8 @@ function PlanPickerWithTrial({
         </h3>
         <InlinePlanGrid plans={areaPlans} onSubscribe={onSubscribe} subscribing={subscribing} />
       </div>
+
+      <MultiListingNudge />
 
       <p className="text-center text-xs text-muted-foreground">
         Paid once, no automatic renewal.{" "}

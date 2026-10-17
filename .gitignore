@@ -94,6 +94,22 @@ docs/*
 !docs/admin-access-inventory.md
 !docs/runbooks/
 !docs/runbooks/admin-provisioning.md
+# Publish implementation and inert source inventories; keep detailed audits private.
+!docs/backend-foundation/
+docs/backend-foundation/*
+!docs/backend-foundation/README.md
+!docs/backend-foundation/owner-listing-editor-contract.md
+!docs/backend-foundation/prototypes/
+!docs/backend-foundation/prototypes/**
+!docs/backend-foundation/tools/
+!docs/backend-foundation/tools/**
+!docs/backend-foundation/schema-map.json
+!docs/backend-foundation/post-field-proposals.json
+!docs/backend-foundation/evidence/
+docs/backend-foundation/evidence/*
+!docs/backend-foundation/evidence/page-inventory.json
+!docs/backend-foundation/evidence/route-inventory.json
+!docs/backend-foundation/evidence/source-inventory.json
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/

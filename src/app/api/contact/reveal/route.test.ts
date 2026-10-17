@@ -25,7 +25,7 @@ const LISTING = "11111111-1111-4111-8111-111111111111";
 const BUSINESS = "22222222-2222-4222-8222-222222222222";
 const future = new Date(Date.now() + 86_400_000).toISOString();
 
-function seed(listing: Record<string, unknown> = {}) {
+function seed(listing: Record<string, unknown> = {}, business: Record<string, unknown> = {}) {
   state.db = createFakeDb({
     listings: [
       {
@@ -46,6 +46,7 @@ function seed(listing: Record<string, unknown> = {}) {
         expires_at: future,
         created_at: future,
         contact_methods: null,
+        ...business,
       },
     ],
     // Business contact details live only in the server-only private table.
@@ -108,6 +109,38 @@ describe("POST /api/contact/reveal", () => {
       whatsapp: "+27822222222",
       email: "shop@example.co.za",
     });
+  });
+
+  it.each([
+    ["form", { phone: null, whatsapp: null, email: null }],
+    ["call", { phone: "+27821111111", whatsapp: null, email: null }],
+    ["whatsapp", { phone: null, whatsapp: "+27822222222", email: null }],
+    ["email", { phone: null, whatsapp: null, email: "shop@example.co.za" }],
+  ])(
+    "only reveals the selected business method %s despite stale private contacts",
+    async (method, expected) => {
+      // The target query aliases category_details->contact_methods to contact_methods.
+      seed({}, { contact_methods: [method] });
+      state.user = null;
+
+      const res = await reveal("business", BUSINESS);
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual(expected);
+      expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    }
+  );
+
+  it.each([
+    { status: "pending_moderation" },
+    { expires_at: new Date(Date.now() - 86_400_000).toISOString() },
+  ])("never reveals private business contacts for unavailable posts: %o", async (business) => {
+    seed({}, business);
+    const res = await reveal("business", BUSINESS);
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "This post isn't available." });
+    expect(state.db!.tables.contact_events).toEqual([]);
   });
 
   it("never reveals for posts that aren't live", async () => {

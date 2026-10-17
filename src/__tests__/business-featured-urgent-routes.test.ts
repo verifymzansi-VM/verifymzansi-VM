@@ -179,46 +179,16 @@ describe("business addon routes", () => {
     });
   });
 
-  it("creates featured checkout for an eligible live business", async () => {
+  it("refuses featured for a live business: sold for events only", async () => {
     const response = await postBusinessFeatured(
       makeRequest(`/api/businesses/${BUSINESS_ID}/featured`),
       {
         params: Promise.resolve({ id: BUSINESS_ID }),
       }
     );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      success: true,
-      checkoutUrl: "https://checkout.example/session",
-      paymentId: "pay-1",
-    });
-    expect(mockCreateHostedCheckout).toHaveBeenCalledWith(
-      expect.objectContaining({
-        providerData: expect.objectContaining({ type: "featured_business" }),
-      })
-    );
-  });
-
-  it("returns 400 when a business is already featured", async () => {
-    setBusinessRow({
-      id: BUSINESS_ID,
-      business_name: "Mzansi Test Biz",
-      status: "live",
-      area: "MZANSI_BUSINESS",
-      owner_id: USER_ID,
-      featured_until: new Date(Date.now() + 60_000).toISOString(),
-    });
-
-    const response = await postBusinessFeatured(
-      makeRequest(`/api/businesses/${BUSINESS_ID}/featured`),
-      {
-        params: Promise.resolve({ id: BUSINESS_ID }),
-      }
-    );
-
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "This business is already featured" });
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "addon_unavailable" });
+    expect(mockCreateHostedCheckout).not.toHaveBeenCalled();
   });
 
   it("returns 429 when featured route is rate limited", async () => {

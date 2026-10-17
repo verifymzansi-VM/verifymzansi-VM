@@ -2,7 +2,7 @@ import { getPublicSponsors } from "@/lib/organisations/sponsors";
 import { SponsorStripTrack } from "./sponsor-strip-track";
 
 /**
- * "Programme partners" band. It sits after the showroom in the page file and
+ * "Business Sponsors" band. It sits after the showroom in the page file and
  * never inside it, so the showroom's size and cards are unchanged. With no
  * eligible sponsor it renders nothing at all.
  */
@@ -21,7 +21,7 @@ export async function SponsorStrip() {
           className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-gold-300"
         >
           <span className="sm:hidden">Partners</span>
-          <span className="hidden sm:inline">Programme partners</span>
+          <span className="hidden sm:inline">Business Sponsors</span>
         </h2>
         <SponsorStripTrack
           sponsors={sponsors.map(({ id, slug, name, logo_url }) => ({ id, slug, name, logo_url }))}

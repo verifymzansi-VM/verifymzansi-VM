@@ -8,7 +8,7 @@ import { getPublicSponsors } from "@/lib/organisations/sponsors";
 const MAX_TILES = 8;
 
 /**
- * "Backed by local organisations": a static row of programme partner logos.
+ * "Backed by local organisations": a static row of Business Sponsor logos.
  * No motion here (the Mzansi Business strip already moves). Not rendered
  * without an eligible sponsor.
  */
@@ -21,7 +21,7 @@ export async function HomeSponsorsSection() {
       <div className="container-page py-12 sm:py-14">
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
-            Programme partners
+            Business Sponsors
           </p>
           <h2 id="home-sponsors-title" className="section-title mt-2">
             Backed by local organisations
@@ -54,7 +54,7 @@ export async function HomeSponsorsSection() {
             <Link href="/sponsors">See supported businesses</Link>
           </Button>
           <Button asChild variant="outline" className="h-11 rounded-full px-5">
-            <Link href="/advertise#programmes">Become a programme partner</Link>
+            <Link href="/advertise#programmes">Become a Business Sponsor</Link>
           </Button>
         </div>
         <AnalyticsImpressions

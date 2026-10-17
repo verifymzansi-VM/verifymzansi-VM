@@ -15,7 +15,7 @@ interface QuickLinksProps {
   planLabel?: string;
 }
 
-/** Secondary shortcuts beside the overview (posting and boosting live in the page header). */
+/** Secondary shortcuts beside the overview (new post and my posts live in the page header). */
 export function QuickLinks({ planLabel }: QuickLinksProps) {
   const links: QuickLink[] = [
     {

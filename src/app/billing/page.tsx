@@ -3,6 +3,7 @@ import { BillingFaq } from "@/components/billing/billing-faq";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
+import { MultiListingNudge } from "@/components/billing/multi-listing-nudge";
 import { getCommercialSettings } from "@/lib/commercial/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { RetailPricing } from "@/components/billing/retail-pricing";
@@ -49,6 +50,7 @@ export default async function BillingPage() {
           <TrialPolicy trials={trials} variant="banner" />
 
           <RetailPricing offers={catalog.retail} trialDays={trials} />
+          <MultiListingNudge className="mt-6" />
 
           <BillingFaq
             trials={trials}

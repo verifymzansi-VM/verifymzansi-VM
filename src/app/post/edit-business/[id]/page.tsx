@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { PageHeader } from "@/components/layout/page-header";
+import { PackageRulesNote } from "@/components/posting/package-rules-note";
+import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { MediaUpload } from "@/components/ui/media-upload";
 import { OnlinePresenceFields } from "@/components/post/online-presence-fields";
 import {
@@ -679,7 +681,7 @@ export default function EditBusinessPage() {
             : {}
         );
         if (data?.code === "edit_limit_reached") {
-          setError("This business profile has already used its two approved edit chances.");
+          setError(editLimitReachedMessage("business"));
         } else if (data?.code === "pending_edit_exists") {
           setError(
             "Your latest changes were not submitted. An earlier edit is still awaiting admin review. Please wait for that review before submitting again."
@@ -767,6 +769,7 @@ export default function EditBusinessPage() {
               { label: "Edit" },
             ]}
           />
+          <PackageRulesNote kind="business" />
 
           {error && (
             <div

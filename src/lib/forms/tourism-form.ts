@@ -5,6 +5,7 @@ import type {
 import { TOURISM_SUBCATEGORY_FIELD_GROUPS } from "@/lib/constants/categories";
 import { eventTimeToIso } from "./event-time";
 import { isValidUserEnteredUrl } from "@/lib/utils/external-url";
+import { BUSINESS_TEXT_LIMITS } from "@/lib/validations/business-limits";
 
 /* ── Regex ───────────────────────────────────────────────── */
 
@@ -60,16 +61,23 @@ export interface TourismFormValues extends TourismCategorySpecificFormFields {
 /* ── Step 0: Type & Basics ───────────────────────────────── */
 
 function validateStep0(v: TourismFormValues, errors: Record<string, string>) {
+  const isBusiness = v.listingType === "tourism_business";
+  const maxTitleLength = isBusiness ? BUSINESS_TEXT_LIMITS.name : 120;
+  const maxDescriptionLength = isBusiness ? BUSINESS_TEXT_LIMITS.description : 5000;
+  // The business API trims these fields before checking their bounds.
+  const title = isBusiness ? v.title.trim() : v.title;
+  const description = isBusiness ? v.description.trim() : v.description;
+
   if (v.title.trim().length < 5) {
     errors.title = "Title must be at least 5 characters.";
-  } else if (v.title.length > 120) {
-    errors.title = "Title cannot exceed 120 characters.";
+  } else if (title.length > maxTitleLength) {
+    errors.title = `Title cannot exceed ${maxTitleLength} characters.`;
   }
 
   if (v.description.trim().length < 20) {
     errors.description = "Description must be at least 20 characters.";
-  } else if (v.description.length > 5000) {
-    errors.description = "Description cannot exceed 5 000 characters.";
+  } else if (description.length > maxDescriptionLength) {
+    errors.description = `Description cannot exceed ${isBusiness ? "3 000" : "5 000"} characters.`;
   }
 
   if (v.listingType === "tourism_business" && !v.subcategory) {

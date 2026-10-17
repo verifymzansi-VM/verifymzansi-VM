@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAddonOffered, type AddonKind } from "@/lib/billing/addon-availability";
 
 import {
   applyOwnerFilter,
@@ -94,6 +95,7 @@ export function createListingAddonCheckoutRoute(config: ListingAddonRouteConfig)
       return rawListing as ListingCheckoutRow | null;
     },
     getNotFoundMessage: "Listing not found",
+    isOffered: () => isAddonOffered(config.paymentType.split("_")[0] as AddonKind, "listing"),
     verifyOwnership: (listing, userId) => {
       if (readOwnerId(listing) === userId) return null;
       return NextResponse.json(

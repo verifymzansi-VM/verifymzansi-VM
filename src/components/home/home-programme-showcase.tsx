@@ -90,7 +90,7 @@ export async function HomeProgrammeShowcase({
               <div>
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <Landmark aria-hidden="true" className="h-3.5 w-3.5" />
-                  Programme spotlight
+                  Sponsor spotlight
                 </p>
                 <h2 id={`programme-${showcase.id}`} className="font-display text-xl font-semibold">
                   {showcase.title}

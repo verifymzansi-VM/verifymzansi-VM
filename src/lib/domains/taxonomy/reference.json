@@ -1,0 +1,4749 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "key": "property",
+      "label": "Property (For Sale & To Rent)",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "vehicles",
+      "label": "Vehicles (Cars, Bakkies & Commercial)",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "auto_parts",
+      "label": "Vehicle Parts & Accessories",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "electronics",
+      "label": "Electronics & Tech",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "home_lifestyle",
+      "label": "Furniture & Home",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "jobs_services",
+      "label": "Jobs",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "farming_agriculture",
+      "label": "Farming & Agriculture",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "baby_kids",
+      "label": "Baby & Kids",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "clothing_accessories",
+      "label": "Clothing & Accessories",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "sports_hobbies",
+      "label": "Sports, Hobbies & Leisure",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "other_items",
+      "label": "Other Items",
+      "kind": "listing",
+      "area": "market",
+      "activityRequired": false
+    },
+    {
+      "key": "automotive_services",
+      "label": "Automotive Sales & Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "beauty_personal",
+      "label": "Beauty & Personal Care",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "trade_maintenance",
+      "label": "Building & Trade Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "cleaning_garden",
+      "label": "Cleaning & Garden Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "fashion_accessories",
+      "label": "Clothing & Accessories",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "community_personal",
+      "label": "Community & Personal Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "education_training",
+      "label": "Education & Childcare",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "electronics_tech",
+      "label": "Electronics & Technology",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "events_entertainment",
+      "label": "Events & Entertainment Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "fitness_wellness",
+      "label": "Fitness & Wellness",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "home_living",
+      "label": "Furniture & Homeware",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "groceries_essentials",
+      "label": "Groceries & Food Shops",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "health_medical",
+      "label": "Health & Medical",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "pets_animals",
+      "label": "Pets & Animal Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "professional_services",
+      "label": "Professional & Business Services",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "food_dining",
+      "label": "Restaurants & Catering",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "transport_storage",
+      "label": "Transport, Delivery & Storage",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "general_other",
+      "label": "Other Businesses",
+      "kind": "business",
+      "area": "business",
+      "activityRequired": false
+    },
+    {
+      "key": "tourism_hospitality",
+      "label": "Tourism & Hospitality",
+      "kind": "business",
+      "area": "tourism_events",
+      "activityRequired": true
+    },
+    {
+      "key": "events",
+      "label": "Events",
+      "kind": "event",
+      "area": "tourism_events",
+      "activityRequired": true
+    }
+  ],
+  "activities": [
+    {
+      "category": "automotive_services",
+      "key": "car_dealer_new",
+      "label": "Car Dealer (New)"
+    },
+    {
+      "category": "automotive_services",
+      "key": "car_dealer_used",
+      "label": "Car Dealer (Used / Pre-Owned)"
+    },
+    {
+      "category": "automotive_services",
+      "key": "mechanic_workshop",
+      "label": "Mechanic / Workshop"
+    },
+    {
+      "category": "automotive_services",
+      "key": "panel_beater",
+      "label": "Panel Beater / Body Shop"
+    },
+    {
+      "category": "automotive_services",
+      "key": "auto_electrician",
+      "label": "Auto Electrician"
+    },
+    {
+      "category": "automotive_services",
+      "key": "tyre_shop",
+      "label": "Tyre Shop"
+    },
+    {
+      "category": "automotive_services",
+      "key": "car_wash",
+      "label": "Car Wash"
+    },
+    {
+      "category": "automotive_services",
+      "key": "car_audio_accessories",
+      "label": "Car Audio / Accessories"
+    },
+    {
+      "category": "automotive_services",
+      "key": "towing_service",
+      "label": "Towing Service"
+    },
+    {
+      "category": "beauty_personal",
+      "key": "hair_salon_barber",
+      "label": "Hair Salon / Barbershop"
+    },
+    {
+      "category": "beauty_personal",
+      "key": "beauty_nail_salon",
+      "label": "Beauty & Nail Salon"
+    },
+    {
+      "category": "beauty_personal",
+      "key": "braiding_extensions",
+      "label": "Braiding / Hair Extensions"
+    },
+    {
+      "category": "beauty_personal",
+      "key": "makeup_artist",
+      "label": "Makeup Artist"
+    },
+    {
+      "category": "beauty_personal",
+      "key": "lashes_brows",
+      "label": "Lashes & Brows"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "plumber",
+      "label": "Plumber"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "electrician",
+      "label": "Electrician"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "builder_contractor",
+      "label": "Builder / Contractor"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "painter",
+      "label": "Painter"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "locksmith",
+      "label": "Locksmith"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "handyman",
+      "label": "Handyman / General Repairs"
+    },
+    {
+      "category": "trade_maintenance",
+      "key": "hvac_aircon",
+      "label": "HVAC / Air Conditioning"
+    },
+    {
+      "category": "cleaning_garden",
+      "key": "cleaning_service",
+      "label": "Cleaning Service"
+    },
+    {
+      "category": "cleaning_garden",
+      "key": "pest_control",
+      "label": "Pest Control"
+    },
+    {
+      "category": "cleaning_garden",
+      "key": "landscaping",
+      "label": "Landscaping / Garden Service"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "clothing_store",
+      "label": "Clothing Store"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "shoe_store",
+      "label": "Shoe Store"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "jewelry_watches",
+      "label": "Jewelry & Watches"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "bags_luggage",
+      "label": "Bags & Luggage"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "tailoring_alterations",
+      "label": "Tailoring & Alterations"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "thrift_vintage",
+      "label": "Thrift / Vintage"
+    },
+    {
+      "category": "fashion_accessories",
+      "key": "general_accessories",
+      "label": "General Accessories"
+    },
+    {
+      "category": "community_personal",
+      "key": "religious_org",
+      "label": "Religious Organisation"
+    },
+    {
+      "category": "community_personal",
+      "key": "ngo_npo",
+      "label": "NGO / NPO"
+    },
+    {
+      "category": "community_personal",
+      "key": "funeral_services",
+      "label": "Funeral Services"
+    },
+    {
+      "category": "community_personal",
+      "key": "home_based_care",
+      "label": "Home-Based Care"
+    },
+    {
+      "category": "education_training",
+      "key": "school",
+      "label": "School (Primary / Secondary)"
+    },
+    {
+      "category": "education_training",
+      "key": "creche_daycare",
+      "label": "Crèche / Day Care"
+    },
+    {
+      "category": "education_training",
+      "key": "tutoring",
+      "label": "Tutoring"
+    },
+    {
+      "category": "education_training",
+      "key": "driving_school",
+      "label": "Driving School"
+    },
+    {
+      "category": "education_training",
+      "key": "skills_training",
+      "label": "Short Courses / Skills Training"
+    },
+    {
+      "category": "education_training",
+      "key": "college_university",
+      "label": "College / University"
+    },
+    {
+      "category": "education_training",
+      "key": "music_art_school",
+      "label": "Music / Art School"
+    },
+    {
+      "category": "electronics_tech",
+      "key": "mobile_phone_shop",
+      "label": "Mobile Phone Shop"
+    },
+    {
+      "category": "electronics_tech",
+      "key": "computer_it",
+      "label": "Computer & IT Store"
+    },
+    {
+      "category": "electronics_tech",
+      "key": "gaming",
+      "label": "Gaming"
+    },
+    {
+      "category": "electronics_tech",
+      "key": "appliance_repair",
+      "label": "Appliance Repair"
+    },
+    {
+      "category": "electronics_tech",
+      "key": "audio_visual",
+      "label": "Audio & Visual"
+    },
+    {
+      "category": "electronics_tech",
+      "key": "general_electronics",
+      "label": "General Electronics"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "event_planner",
+      "label": "Event Planner / Coordinator"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "dj_live_music",
+      "label": "DJ / Live Music"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "photographer_videographer",
+      "label": "Photographer / Videographer"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "venue_hire",
+      "label": "Venue Hire"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "decor_hiring",
+      "label": "Décor & Hiring"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "kids_entertainment",
+      "label": "Kids Entertainment"
+    },
+    {
+      "category": "events_entertainment",
+      "key": "party_supplies",
+      "label": "Party Supplies"
+    },
+    {
+      "category": "fitness_wellness",
+      "key": "spa_wellness",
+      "label": "Spa & Wellness"
+    },
+    {
+      "category": "fitness_wellness",
+      "key": "gym_fitness",
+      "label": "Gym / Fitness Studio"
+    },
+    {
+      "category": "fitness_wellness",
+      "key": "personal_trainer",
+      "label": "Personal Trainer"
+    },
+    {
+      "category": "fitness_wellness",
+      "key": "yoga_pilates",
+      "label": "Yoga / Pilates Studio"
+    },
+    {
+      "category": "fitness_wellness",
+      "key": "massage_therapist",
+      "label": "Massage Therapist"
+    },
+    {
+      "category": "home_living",
+      "key": "furniture_store",
+      "label": "Furniture Store"
+    },
+    {
+      "category": "home_living",
+      "key": "interior_decor",
+      "label": "Interior Decor"
+    },
+    {
+      "category": "home_living",
+      "key": "hardware_diy",
+      "label": "Hardware / DIY"
+    },
+    {
+      "category": "home_living",
+      "key": "garden_outdoor",
+      "label": "Garden & Outdoor"
+    },
+    {
+      "category": "home_living",
+      "key": "appliance_store",
+      "label": "Appliance Store"
+    },
+    {
+      "category": "home_living",
+      "key": "linen_homeware",
+      "label": "Linen & Homeware"
+    },
+    {
+      "category": "groceries_essentials",
+      "key": "supermarket",
+      "label": "Supermarket"
+    },
+    {
+      "category": "groceries_essentials",
+      "key": "spaza_convenience",
+      "label": "Spaza / Convenience Shop"
+    },
+    {
+      "category": "groceries_essentials",
+      "key": "butchery",
+      "label": "Butchery"
+    },
+    {
+      "category": "groceries_essentials",
+      "key": "fruit_veg",
+      "label": "Fruit & Veg"
+    },
+    {
+      "category": "groceries_essentials",
+      "key": "specialty_organic",
+      "label": "Specialty / Organic"
+    },
+    {
+      "category": "groceries_essentials",
+      "key": "liquor_store",
+      "label": "Liquor Store"
+    },
+    {
+      "category": "health_medical",
+      "key": "doctor_medical",
+      "label": "Doctor / Medical Practice"
+    },
+    {
+      "category": "health_medical",
+      "key": "dentist",
+      "label": "Dentist"
+    },
+    {
+      "category": "health_medical",
+      "key": "optometrist",
+      "label": "Optometrist"
+    },
+    {
+      "category": "health_medical",
+      "key": "pharmacy",
+      "label": "Pharmacy / Chemist"
+    },
+    {
+      "category": "health_medical",
+      "key": "physio_chiro",
+      "label": "Physiotherapy / Chiropractic"
+    },
+    {
+      "category": "health_medical",
+      "key": "traditional_healer",
+      "label": "Traditional Healer"
+    },
+    {
+      "category": "health_medical",
+      "key": "mental_health",
+      "label": "Mental Health / Counselling"
+    },
+    {
+      "category": "pets_animals",
+      "key": "pet_services",
+      "label": "Pet Services"
+    },
+    {
+      "category": "pets_animals",
+      "key": "vet_clinic",
+      "label": "Veterinary Clinic"
+    },
+    {
+      "category": "pets_animals",
+      "key": "pet_grooming",
+      "label": "Pet Grooming"
+    },
+    {
+      "category": "pets_animals",
+      "key": "pet_shop",
+      "label": "Pet Shop"
+    },
+    {
+      "category": "pets_animals",
+      "key": "pet_boarding",
+      "label": "Boarding / Kennels"
+    },
+    {
+      "category": "professional_services",
+      "key": "attorney_legal",
+      "label": "Attorney / Legal"
+    },
+    {
+      "category": "professional_services",
+      "key": "accounting_bookkeeping",
+      "label": "Accounting / Bookkeeping"
+    },
+    {
+      "category": "professional_services",
+      "key": "marketing_advertising",
+      "label": "Marketing / Advertising"
+    },
+    {
+      "category": "professional_services",
+      "key": "it_software",
+      "label": "IT / Software"
+    },
+    {
+      "category": "professional_services",
+      "key": "hr_recruitment",
+      "label": "HR / Recruitment"
+    },
+    {
+      "category": "professional_services",
+      "key": "real_estate",
+      "label": "Real Estate Agent"
+    },
+    {
+      "category": "professional_services",
+      "key": "insurance_broker",
+      "label": "Insurance Broker"
+    },
+    {
+      "category": "professional_services",
+      "key": "financial_advisor",
+      "label": "Financial Advisor"
+    },
+    {
+      "category": "professional_services",
+      "key": "consulting_general",
+      "label": "Consulting (General)"
+    },
+    {
+      "category": "professional_services",
+      "key": "notary",
+      "label": "Notary / Commissioner of Oaths"
+    },
+    {
+      "category": "professional_services",
+      "key": "printing_signage",
+      "label": "Printing / Signage"
+    },
+    {
+      "category": "food_dining",
+      "key": "restaurant",
+      "label": "Restaurant"
+    },
+    {
+      "category": "food_dining",
+      "key": "cafe_coffee",
+      "label": "Café / Coffee Shop"
+    },
+    {
+      "category": "food_dining",
+      "key": "fast_food_takeaway",
+      "label": "Fast Food / Takeaway"
+    },
+    {
+      "category": "food_dining",
+      "key": "bakery_patisserie",
+      "label": "Bakery & Patisserie"
+    },
+    {
+      "category": "food_dining",
+      "key": "catering",
+      "label": "Catering"
+    },
+    {
+      "category": "food_dining",
+      "key": "food_truck",
+      "label": "Food Truck"
+    },
+    {
+      "category": "food_dining",
+      "key": "shisanyama_braai",
+      "label": "Shisanyama / Braai"
+    },
+    {
+      "category": "food_dining",
+      "key": "bar_lounge",
+      "label": "Bar / Lounge"
+    },
+    {
+      "category": "transport_storage",
+      "key": "courier_logistics",
+      "label": "Courier / Logistics"
+    },
+    {
+      "category": "transport_storage",
+      "key": "shuttle_transport",
+      "label": "Shuttle / Transport Service"
+    },
+    {
+      "category": "transport_storage",
+      "key": "storage_warehousing",
+      "label": "Storage / Warehousing"
+    },
+    {
+      "category": "transport_storage",
+      "key": "removals_moving",
+      "label": "Removals / Moving"
+    },
+    {
+      "category": "general_other",
+      "key": "general_retail",
+      "label": "General Retail"
+    },
+    {
+      "category": "general_other",
+      "key": "other",
+      "label": "Other"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "hotel_resort",
+      "label": "Hotel / Resort",
+      "fieldGroup": "A"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "guest_house_bnb",
+      "label": "Guest House / B&B",
+      "fieldGroup": "A"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "lodge_game_lodge",
+      "label": "Lodge / Game Lodge",
+      "fieldGroup": "A"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "backpackers_hostel",
+      "label": "Backpackers / Hostel",
+      "fieldGroup": "A"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "self_catering",
+      "label": "Self-Catering / Vacation Rental",
+      "fieldGroup": "A"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "tour_operator",
+      "label": "Tour Operator",
+      "fieldGroup": "C"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "travel_agency",
+      "label": "Travel Agency",
+      "fieldGroup": "D"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "safari_wildlife",
+      "label": "Safari & Wildlife Experience",
+      "fieldGroup": "C"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "adventure_activities",
+      "label": "Adventure Activities",
+      "fieldGroup": "C"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "cultural_heritage",
+      "label": "Cultural & Heritage Site",
+      "fieldGroup": "E"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "car_rental_tourism",
+      "label": "Car Rental (Tourism)",
+      "fieldGroup": "F"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "campground_caravan",
+      "label": "Campground / Caravan Park",
+      "fieldGroup": "A"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "spa_wellness_retreat",
+      "label": "Spa & Wellness Retreat",
+      "fieldGroup": "B"
+    },
+    {
+      "category": "tourism_hospitality",
+      "key": "tourist_attraction",
+      "label": "Tourist Attraction / Theme Park",
+      "fieldGroup": "E"
+    },
+    {
+      "category": "events",
+      "key": "festival_concert",
+      "label": "Festival / Concert"
+    },
+    {
+      "category": "events",
+      "key": "conference_seminar",
+      "label": "Conference / Seminar"
+    },
+    {
+      "category": "events",
+      "key": "market_expo",
+      "label": "Market / Expo / Fair"
+    },
+    {
+      "category": "events",
+      "key": "sports_event",
+      "label": "Sports Event"
+    },
+    {
+      "category": "events",
+      "key": "cultural_heritage",
+      "label": "Cultural Event / Heritage Day"
+    },
+    {
+      "category": "events",
+      "key": "food_wine",
+      "label": "Food & Wine Event"
+    },
+    {
+      "category": "events",
+      "key": "outdoor_adventure",
+      "label": "Outdoor / Adventure"
+    },
+    {
+      "category": "events",
+      "key": "workshop_masterclass",
+      "label": "Workshop / Masterclass"
+    },
+    {
+      "category": "events",
+      "key": "charity_fundraiser",
+      "label": "Charity / Fundraiser"
+    },
+    {
+      "category": "events",
+      "key": "community_gathering",
+      "label": "Community Gathering"
+    },
+    {
+      "category": "events",
+      "key": "comedy_theatre",
+      "label": "Comedy / Theatre / Show"
+    },
+    {
+      "category": "events",
+      "key": "kids_family",
+      "label": "Kids / Family Event"
+    },
+    {
+      "category": "events",
+      "key": "nightlife_party",
+      "label": "Nightlife / Party"
+    }
+  ],
+  "provinces": [
+    {
+      "id": "gp",
+      "label": "Gauteng",
+      "code": "GP"
+    },
+    {
+      "id": "wc",
+      "label": "Western Cape",
+      "code": "WC"
+    },
+    {
+      "id": "kzn",
+      "label": "KwaZulu-Natal",
+      "code": "KZN"
+    },
+    {
+      "id": "ec",
+      "label": "Eastern Cape",
+      "code": "EC"
+    },
+    {
+      "id": "fs",
+      "label": "Free State",
+      "code": "FS"
+    },
+    {
+      "id": "mp",
+      "label": "Mpumalanga",
+      "code": "MP"
+    },
+    {
+      "id": "lp",
+      "label": "Limpopo",
+      "code": "LP"
+    },
+    {
+      "id": "nw",
+      "label": "North West",
+      "code": "NW"
+    },
+    {
+      "id": "nc",
+      "label": "Northern Cape",
+      "code": "NC"
+    }
+  ],
+  "cities": [
+    {
+      "id": "gp_johannesburg",
+      "province": "gp",
+      "label": "Johannesburg",
+      "aliases": ["Johannesburg"]
+    },
+    {
+      "id": "gp_pretoria",
+      "province": "gp",
+      "label": "Pretoria",
+      "aliases": ["Pretoria"]
+    },
+    {
+      "id": "gp_centurion",
+      "province": "gp",
+      "label": "Centurion",
+      "aliases": ["Centurion"]
+    },
+    {
+      "id": "gp_sandton",
+      "province": "gp",
+      "label": "Sandton",
+      "aliases": ["Sandton"]
+    },
+    {
+      "id": "gp_soweto",
+      "province": "gp",
+      "label": "Soweto",
+      "aliases": ["Soweto"]
+    },
+    {
+      "id": "gp_midrand",
+      "province": "gp",
+      "label": "Midrand",
+      "aliases": ["Midrand"]
+    },
+    {
+      "id": "gp_randburg",
+      "province": "gp",
+      "label": "Randburg",
+      "aliases": ["Randburg"]
+    },
+    {
+      "id": "gp_roodepoort",
+      "province": "gp",
+      "label": "Roodepoort",
+      "aliases": ["Roodepoort"]
+    },
+    {
+      "id": "gp_boksburg",
+      "province": "gp",
+      "label": "Boksburg",
+      "aliases": ["Boksburg"]
+    },
+    {
+      "id": "gp_benoni",
+      "province": "gp",
+      "label": "Benoni",
+      "aliases": ["Benoni"]
+    },
+    {
+      "id": "gp_kempton_park",
+      "province": "gp",
+      "label": "Kempton Park",
+      "aliases": ["Kempton Park"]
+    },
+    {
+      "id": "gp_germiston",
+      "province": "gp",
+      "label": "Germiston",
+      "aliases": ["Germiston"]
+    },
+    {
+      "id": "gp_springs",
+      "province": "gp",
+      "label": "Springs",
+      "aliases": ["Springs"]
+    },
+    {
+      "id": "gp_alberton",
+      "province": "gp",
+      "label": "Alberton",
+      "aliases": ["Alberton"]
+    },
+    {
+      "id": "gp_krugersdorp",
+      "province": "gp",
+      "label": "Krugersdorp",
+      "aliases": ["Krugersdorp"]
+    },
+    {
+      "id": "gp_vereeniging",
+      "province": "gp",
+      "label": "Vereeniging",
+      "aliases": ["Vereeniging"]
+    },
+    {
+      "id": "gp_vanderbijlpark",
+      "province": "gp",
+      "label": "Vanderbijlpark",
+      "aliases": ["Vanderbijlpark"]
+    },
+    {
+      "id": "wc_cape_town",
+      "province": "wc",
+      "label": "Cape Town",
+      "aliases": ["Cape Town"]
+    },
+    {
+      "id": "wc_stellenbosch",
+      "province": "wc",
+      "label": "Stellenbosch",
+      "aliases": ["Stellenbosch"]
+    },
+    {
+      "id": "wc_paarl",
+      "province": "wc",
+      "label": "Paarl",
+      "aliases": ["Paarl"]
+    },
+    {
+      "id": "wc_george",
+      "province": "wc",
+      "label": "George",
+      "aliases": ["George"]
+    },
+    {
+      "id": "wc_knysna",
+      "province": "wc",
+      "label": "Knysna",
+      "aliases": ["Knysna"]
+    },
+    {
+      "id": "wc_mossel_bay",
+      "province": "wc",
+      "label": "Mossel Bay",
+      "aliases": ["Mossel Bay"]
+    },
+    {
+      "id": "wc_worcester",
+      "province": "wc",
+      "label": "Worcester",
+      "aliases": ["Worcester"]
+    },
+    {
+      "id": "wc_hermanus",
+      "province": "wc",
+      "label": "Hermanus",
+      "aliases": ["Hermanus"]
+    },
+    {
+      "id": "wc_franschhoek",
+      "province": "wc",
+      "label": "Franschhoek",
+      "aliases": ["Franschhoek"]
+    },
+    {
+      "id": "wc_somerset_west",
+      "province": "wc",
+      "label": "Somerset West",
+      "aliases": ["Somerset West"]
+    },
+    {
+      "id": "wc_bellville",
+      "province": "wc",
+      "label": "Bellville",
+      "aliases": ["Bellville"]
+    },
+    {
+      "id": "wc_durbanville",
+      "province": "wc",
+      "label": "Durbanville",
+      "aliases": ["Durbanville"]
+    },
+    {
+      "id": "wc_malmesbury",
+      "province": "wc",
+      "label": "Malmesbury",
+      "aliases": ["Malmesbury"]
+    },
+    {
+      "id": "kzn_durban",
+      "province": "kzn",
+      "label": "Durban",
+      "aliases": ["Durban"]
+    },
+    {
+      "id": "kzn_pietermaritzburg",
+      "province": "kzn",
+      "label": "Pietermaritzburg",
+      "aliases": ["Pietermaritzburg"]
+    },
+    {
+      "id": "kzn_richards_bay",
+      "province": "kzn",
+      "label": "Richards Bay",
+      "aliases": ["Richards Bay"]
+    },
+    {
+      "id": "kzn_empangeni",
+      "province": "kzn",
+      "label": "Empangeni",
+      "aliases": ["Empangeni"]
+    },
+    {
+      "id": "kzn_newcastle",
+      "province": "kzn",
+      "label": "Newcastle",
+      "aliases": ["Newcastle"]
+    },
+    {
+      "id": "kzn_umhlanga",
+      "province": "kzn",
+      "label": "Umhlanga",
+      "aliases": ["Umhlanga"]
+    },
+    {
+      "id": "kzn_ballito",
+      "province": "kzn",
+      "label": "Ballito",
+      "aliases": ["Ballito"]
+    },
+    {
+      "id": "kzn_pinetown",
+      "province": "kzn",
+      "label": "Pinetown",
+      "aliases": ["Pinetown"]
+    },
+    {
+      "id": "kzn_chatsworth",
+      "province": "kzn",
+      "label": "Chatsworth",
+      "aliases": ["Chatsworth"]
+    },
+    {
+      "id": "kzn_ladysmith",
+      "province": "kzn",
+      "label": "Ladysmith",
+      "aliases": ["Ladysmith"]
+    },
+    {
+      "id": "kzn_port_shepstone",
+      "province": "kzn",
+      "label": "Port Shepstone",
+      "aliases": ["Port Shepstone"]
+    },
+    {
+      "id": "kzn_margate",
+      "province": "kzn",
+      "label": "Margate",
+      "aliases": ["Margate"]
+    },
+    {
+      "id": "kzn_scottburgh",
+      "province": "kzn",
+      "label": "Scottburgh",
+      "aliases": ["Scottburgh"]
+    },
+    {
+      "id": "ec_port_elizabeth_gqeberha",
+      "province": "ec",
+      "label": "Port Elizabeth (Gqeberha)",
+      "aliases": ["Port Elizabeth (Gqeberha)", "Port Elizabeth", "Gqeberha"]
+    },
+    {
+      "id": "ec_east_london",
+      "province": "ec",
+      "label": "East London",
+      "aliases": ["East London"]
+    },
+    {
+      "id": "ec_mthatha",
+      "province": "ec",
+      "label": "Mthatha",
+      "aliases": ["Mthatha"]
+    },
+    {
+      "id": "ec_bhisho",
+      "province": "ec",
+      "label": "Bhisho",
+      "aliases": ["Bhisho"]
+    },
+    {
+      "id": "ec_grahamstown_makhanda",
+      "province": "ec",
+      "label": "Grahamstown (Makhanda)",
+      "aliases": ["Grahamstown (Makhanda)", "Grahamstown", "Makhanda"]
+    },
+    {
+      "id": "ec_queenstown",
+      "province": "ec",
+      "label": "Queenstown",
+      "aliases": ["Queenstown"]
+    },
+    {
+      "id": "ec_king_williams_town",
+      "province": "ec",
+      "label": "King Williams Town",
+      "aliases": ["King Williams Town"]
+    },
+    {
+      "id": "ec_cradock",
+      "province": "ec",
+      "label": "Cradock",
+      "aliases": ["Cradock"]
+    },
+    {
+      "id": "ec_uitenhage",
+      "province": "ec",
+      "label": "Uitenhage",
+      "aliases": ["Uitenhage"]
+    },
+    {
+      "id": "fs_bloemfontein",
+      "province": "fs",
+      "label": "Bloemfontein",
+      "aliases": ["Bloemfontein"]
+    },
+    {
+      "id": "fs_welkom",
+      "province": "fs",
+      "label": "Welkom",
+      "aliases": ["Welkom"]
+    },
+    {
+      "id": "fs_kroonstad",
+      "province": "fs",
+      "label": "Kroonstad",
+      "aliases": ["Kroonstad"]
+    },
+    {
+      "id": "fs_bethlehem",
+      "province": "fs",
+      "label": "Bethlehem",
+      "aliases": ["Bethlehem"]
+    },
+    {
+      "id": "fs_sasolburg",
+      "province": "fs",
+      "label": "Sasolburg",
+      "aliases": ["Sasolburg"]
+    },
+    {
+      "id": "fs_parys",
+      "province": "fs",
+      "label": "Parys",
+      "aliases": ["Parys"]
+    },
+    {
+      "id": "fs_virginia",
+      "province": "fs",
+      "label": "Virginia",
+      "aliases": ["Virginia"]
+    },
+    {
+      "id": "fs_phuthaditjhaba",
+      "province": "fs",
+      "label": "Phuthaditjhaba",
+      "aliases": ["Phuthaditjhaba"]
+    },
+    {
+      "id": "mp_mbombela_nelspruit",
+      "province": "mp",
+      "label": "Mbombela (Nelspruit)",
+      "aliases": ["Mbombela (Nelspruit)", "Mbombela", "Nelspruit"]
+    },
+    {
+      "id": "mp_witbank_emalahleni",
+      "province": "mp",
+      "label": "Witbank (Emalahleni)",
+      "aliases": ["Witbank (Emalahleni)", "Witbank", "Emalahleni"]
+    },
+    {
+      "id": "mp_secunda",
+      "province": "mp",
+      "label": "Secunda",
+      "aliases": ["Secunda"]
+    },
+    {
+      "id": "mp_middelburg",
+      "province": "mp",
+      "label": "Middelburg",
+      "aliases": ["Middelburg"]
+    },
+    {
+      "id": "mp_white_river",
+      "province": "mp",
+      "label": "White River",
+      "aliases": ["White River"]
+    },
+    {
+      "id": "mp_barberton",
+      "province": "mp",
+      "label": "Barberton",
+      "aliases": ["Barberton"]
+    },
+    {
+      "id": "mp_standerton",
+      "province": "mp",
+      "label": "Standerton",
+      "aliases": ["Standerton"]
+    },
+    {
+      "id": "mp_ermelo",
+      "province": "mp",
+      "label": "Ermelo",
+      "aliases": ["Ermelo"]
+    },
+    {
+      "id": "lp_polokwane",
+      "province": "lp",
+      "label": "Polokwane",
+      "aliases": ["Polokwane"]
+    },
+    {
+      "id": "lp_tzaneen",
+      "province": "lp",
+      "label": "Tzaneen",
+      "aliases": ["Tzaneen"]
+    },
+    {
+      "id": "lp_mokopane",
+      "province": "lp",
+      "label": "Mokopane",
+      "aliases": ["Mokopane"]
+    },
+    {
+      "id": "lp_musina",
+      "province": "lp",
+      "label": "Musina",
+      "aliases": ["Musina"]
+    },
+    {
+      "id": "lp_louis_trichardt",
+      "province": "lp",
+      "label": "Louis Trichardt",
+      "aliases": ["Louis Trichardt"]
+    },
+    {
+      "id": "lp_thohoyandou",
+      "province": "lp",
+      "label": "Thohoyandou",
+      "aliases": ["Thohoyandou"]
+    },
+    {
+      "id": "lp_phalaborwa",
+      "province": "lp",
+      "label": "Phalaborwa",
+      "aliases": ["Phalaborwa"]
+    },
+    {
+      "id": "lp_lephalale",
+      "province": "lp",
+      "label": "Lephalale",
+      "aliases": ["Lephalale"]
+    },
+    {
+      "id": "nw_rustenburg",
+      "province": "nw",
+      "label": "Rustenburg",
+      "aliases": ["Rustenburg"]
+    },
+    {
+      "id": "nw_mahikeng",
+      "province": "nw",
+      "label": "Mahikeng",
+      "aliases": ["Mahikeng"]
+    },
+    {
+      "id": "nw_potchefstroom_tlokwe",
+      "province": "nw",
+      "label": "Potchefstroom (Tlokwe)",
+      "aliases": ["Potchefstroom (Tlokwe)", "Potchefstroom", "Tlokwe"]
+    },
+    {
+      "id": "nw_klerksdorp",
+      "province": "nw",
+      "label": "Klerksdorp",
+      "aliases": ["Klerksdorp"]
+    },
+    {
+      "id": "nw_brits",
+      "province": "nw",
+      "label": "Brits",
+      "aliases": ["Brits"]
+    },
+    {
+      "id": "nw_sun_city",
+      "province": "nw",
+      "label": "Sun City",
+      "aliases": ["Sun City"]
+    },
+    {
+      "id": "nw_hartbeespoort",
+      "province": "nw",
+      "label": "Hartbeespoort",
+      "aliases": ["Hartbeespoort"]
+    },
+    {
+      "id": "nw_lichtenburg",
+      "province": "nw",
+      "label": "Lichtenburg",
+      "aliases": ["Lichtenburg"]
+    },
+    {
+      "id": "nc_kimberley",
+      "province": "nc",
+      "label": "Kimberley",
+      "aliases": ["Kimberley"]
+    },
+    {
+      "id": "nc_upington",
+      "province": "nc",
+      "label": "Upington",
+      "aliases": ["Upington"]
+    },
+    {
+      "id": "nc_springbok",
+      "province": "nc",
+      "label": "Springbok",
+      "aliases": ["Springbok"]
+    },
+    {
+      "id": "nc_de_aar",
+      "province": "nc",
+      "label": "De Aar",
+      "aliases": ["De Aar"]
+    },
+    {
+      "id": "nc_kuruman",
+      "province": "nc",
+      "label": "Kuruman",
+      "aliases": ["Kuruman"]
+    },
+    {
+      "id": "nc_kathu",
+      "province": "nc",
+      "label": "Kathu",
+      "aliases": ["Kathu"]
+    }
+  ],
+  "listingFields": [
+    {
+      "category": "property",
+      "key": "property_type",
+      "sourceKey": "property_type",
+      "label": "Property Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["house", "apartment", "land", "commercial", "room"]
+      },
+      "options": [
+        {
+          "value": "house",
+          "label": "House"
+        },
+        {
+          "value": "apartment",
+          "label": "Apartment / Flat"
+        },
+        {
+          "value": "land",
+          "label": "Land / Plot"
+        },
+        {
+          "value": "commercial",
+          "label": "Commercial"
+        },
+        {
+          "value": "room",
+          "label": "Room"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "listing_intent",
+      "sourceKey": "listing_intent",
+      "label": "For sale or to rent?",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["sale", "rent"]
+      },
+      "options": [
+        {
+          "value": "sale",
+          "label": "For Sale"
+        },
+        {
+          "value": "rent",
+          "label": "To Rent"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "bedrooms",
+      "sourceKey": "bedrooms",
+      "label": "Bedrooms",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 20
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "bathrooms",
+      "sourceKey": "bathrooms",
+      "label": "Bathrooms",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 10
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "parking_spots",
+      "sourceKey": "parking_spots",
+      "label": "Parking Spaces",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 10
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "floor_size_sqm",
+      "sourceKey": "floor_size_sqm",
+      "label": "Floor Size",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100000
+      },
+      "unit": "m²",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "erf_size_sqm",
+      "sourceKey": "erf_size_sqm",
+      "label": "Erf / Stand Size",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 1000000
+      },
+      "unit": "m²",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "furnished",
+      "sourceKey": "furnished",
+      "label": "Furnished",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "pets_allowed",
+      "sourceKey": "pets_allowed",
+      "label": "Pets Allowed",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "levy_cents",
+      "sourceKey": "levy_zar",
+      "label": "Levy / Body Corporate",
+      "renderer": "money",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100000000000
+      },
+      "unit": "ZAR_cents",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "rates_taxes_cents",
+      "sourceKey": "rates_taxes_zar",
+      "label": "Rates & Taxes",
+      "renderer": "money",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100000000000
+      },
+      "unit": "ZAR_cents",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "property_subtype",
+      "sourceKey": "property_subtype",
+      "label": "Property Sub-type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": [
+          "townhouse",
+          "cluster",
+          "simplex",
+          "duplex",
+          "freestanding",
+          "sectional_title",
+          "estate"
+        ]
+      },
+      "options": [
+        {
+          "value": "townhouse",
+          "label": "Townhouse"
+        },
+        {
+          "value": "cluster",
+          "label": "Cluster"
+        },
+        {
+          "value": "simplex",
+          "label": "Simplex"
+        },
+        {
+          "value": "duplex",
+          "label": "Duplex"
+        },
+        {
+          "value": "freestanding",
+          "label": "Freestanding"
+        },
+        {
+          "value": "sectional_title",
+          "label": "Sectional Title"
+        },
+        {
+          "value": "estate",
+          "label": "Estate"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "security_features",
+      "sourceKey": "security_features",
+      "label": "Security Features",
+      "renderer": "checklist",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 80,
+          "enum": [
+            "security_estate",
+            "electric_fence",
+            "alarm",
+            "armed_response",
+            "security_guards",
+            "cctv",
+            "burglar_bars",
+            "security_gate"
+          ]
+        }
+      },
+      "options": [
+        {
+          "value": "security_estate",
+          "label": "Security Estate"
+        },
+        {
+          "value": "electric_fence",
+          "label": "Electric Fence"
+        },
+        {
+          "value": "alarm",
+          "label": "Alarm"
+        },
+        {
+          "value": "armed_response",
+          "label": "Armed Response"
+        },
+        {
+          "value": "security_guards",
+          "label": "Security Guards"
+        },
+        {
+          "value": "cctv",
+          "label": "CCTV"
+        },
+        {
+          "value": "burglar_bars",
+          "label": "Burglar Bars"
+        },
+        {
+          "value": "security_gate",
+          "label": "Security Gate"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "pool",
+      "sourceKey": "pool",
+      "label": "Swimming Pool",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "garden",
+      "sourceKey": "garden",
+      "label": "Garden",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["none", "small", "medium", "large", "communal"]
+      },
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "small",
+          "label": "Small"
+        },
+        {
+          "value": "medium",
+          "label": "Medium"
+        },
+        {
+          "value": "large",
+          "label": "Large"
+        },
+        {
+          "value": "communal",
+          "label": "Communal"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "domestic_quarters",
+      "sourceKey": "domestic_quarters",
+      "label": "Domestic Quarters / Flatlet",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "garage",
+      "sourceKey": "garage",
+      "label": "Garages",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 20
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "carport",
+      "sourceKey": "carport",
+      "label": "Carports",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 20
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "energy_features",
+      "sourceKey": "energy_features",
+      "label": "Energy Features",
+      "renderer": "checklist",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 80,
+          "enum": [
+            "solar_panels",
+            "inverter",
+            "generator",
+            "gas",
+            "prepaid_electricity",
+            "solar_geyser"
+          ]
+        }
+      },
+      "options": [
+        {
+          "value": "solar_panels",
+          "label": "Solar Panels"
+        },
+        {
+          "value": "inverter",
+          "label": "Inverter"
+        },
+        {
+          "value": "generator",
+          "label": "Generator"
+        },
+        {
+          "value": "gas",
+          "label": "Gas"
+        },
+        {
+          "value": "prepaid_electricity",
+          "label": "Prepaid Electricity"
+        },
+        {
+          "value": "solar_geyser",
+          "label": "Solar Geyser"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "water_source",
+      "sourceKey": "water_source",
+      "label": "Water Source",
+      "renderer": "checklist",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 80,
+          "enum": ["municipal", "borehole", "jojo_tank", "rainwater_harvesting"]
+        }
+      },
+      "options": [
+        {
+          "value": "municipal",
+          "label": "Municipal"
+        },
+        {
+          "value": "borehole",
+          "label": "Borehole"
+        },
+        {
+          "value": "jojo_tank",
+          "label": "JoJo Tank"
+        },
+        {
+          "value": "rainwater_harvesting",
+          "label": "Rainwater Harvesting"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "fibre",
+      "sourceKey": "fibre",
+      "label": "Fibre Internet",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["not_available", "fibre_ready", "fibre_installed"]
+      },
+      "options": [
+        {
+          "value": "not_available",
+          "label": "Not Available"
+        },
+        {
+          "value": "fibre_ready",
+          "label": "Fibre Ready"
+        },
+        {
+          "value": "fibre_installed",
+          "label": "Fibre Installed"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "available_from",
+      "sourceKey": "available_from",
+      "label": "Available From",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 30,
+        "format": "date"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "make",
+      "sourceKey": "make",
+      "label": "Make",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "options": [
+        "Toyota",
+        "Volkswagen",
+        "Suzuki",
+        "Ford",
+        "Hyundai",
+        "Isuzu",
+        "Nissan",
+        "BMW",
+        "Mercedes-Benz",
+        "Audi",
+        "Kia",
+        "Renault",
+        "Honda",
+        "Mazda",
+        "Chery",
+        "GWM",
+        "Haval",
+        "Tank",
+        "Omoda",
+        "Jaecoo",
+        "Mahindra",
+        "Peugeot",
+        "Volvo",
+        "Jeep",
+        "Land Rover",
+        "TATA",
+        "Mitsubishi",
+        "Subaru",
+        "Opel",
+        "Fiat",
+        "Porsche",
+        "Mini",
+        "Lexus",
+        "JAC",
+        "BAIC",
+        "Other"
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "model",
+      "sourceKey": "model",
+      "label": "Model",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "options": [],
+      "dependsOn": "make",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "year",
+      "sourceKey": "year",
+      "label": "Year",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": true,
+      "validation": {
+        "type": "integer",
+        "minimum": 1950
+      },
+      "dynamicMaximum": "south_african_year_plus_one",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "mileage_km",
+      "sourceKey": "mileage_km",
+      "label": "Mileage",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": true,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 999999
+      },
+      "unit": "km",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "transmission",
+      "sourceKey": "transmission",
+      "label": "Transmission",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["manual", "automatic"]
+      },
+      "options": [
+        {
+          "value": "manual",
+          "label": "Manual"
+        },
+        {
+          "value": "automatic",
+          "label": "Automatic"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "fuel_type",
+      "sourceKey": "fuel_type",
+      "label": "Fuel Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["petrol", "diesel", "electric", "hybrid"]
+      },
+      "options": [
+        {
+          "value": "petrol",
+          "label": "Petrol"
+        },
+        {
+          "value": "diesel",
+          "label": "Diesel"
+        },
+        {
+          "value": "electric",
+          "label": "Electric"
+        },
+        {
+          "value": "hybrid",
+          "label": "Hybrid"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "body_type",
+      "sourceKey": "body_type",
+      "label": "Body Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["hatchback", "sedan", "suv", "bakkie", "van", "coupe", "other"]
+      },
+      "options": [
+        {
+          "value": "hatchback",
+          "label": "Hatchback"
+        },
+        {
+          "value": "sedan",
+          "label": "Sedan"
+        },
+        {
+          "value": "suv",
+          "label": "SUV"
+        },
+        {
+          "value": "bakkie",
+          "label": "Bakkie"
+        },
+        {
+          "value": "van",
+          "label": "Van"
+        },
+        {
+          "value": "coupe",
+          "label": "Coupe"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "colour",
+      "sourceKey": "colour",
+      "label": "Colour",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 30
+      },
+      "options": [
+        {
+          "value": "White",
+          "label": "White"
+        },
+        {
+          "value": "Black",
+          "label": "Black"
+        },
+        {
+          "value": "Silver",
+          "label": "Silver"
+        },
+        {
+          "value": "Grey",
+          "label": "Grey"
+        },
+        {
+          "value": "Blue",
+          "label": "Blue"
+        },
+        {
+          "value": "Red",
+          "label": "Red"
+        },
+        {
+          "value": "Brown",
+          "label": "Brown"
+        },
+        {
+          "value": "Gold",
+          "label": "Gold"
+        },
+        {
+          "value": "Green",
+          "label": "Green"
+        },
+        {
+          "value": "Orange",
+          "label": "Orange"
+        },
+        {
+          "value": "Yellow",
+          "label": "Yellow"
+        },
+        {
+          "value": "Maroon",
+          "label": "Maroon"
+        },
+        {
+          "value": "Beige",
+          "label": "Beige"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "variant",
+      "sourceKey": "variant",
+      "label": "Variant / Trim",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "engine_capacity_cc",
+      "sourceKey": "engine_capacity_cc",
+      "label": "Engine Size",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 50,
+        "maximum": 10000
+      },
+      "unit": "cc",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "drive_type",
+      "sourceKey": "drive_type",
+      "label": "Drive Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["2wd", "4wd", "awd"]
+      },
+      "options": [
+        {
+          "value": "2wd",
+          "label": "2WD"
+        },
+        {
+          "value": "4wd",
+          "label": "4WD"
+        },
+        {
+          "value": "awd",
+          "label": "AWD"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "number_of_doors",
+      "sourceKey": "number_of_doors",
+      "label": "Doors",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["2", "3", "4", "5"]
+      },
+      "options": [
+        {
+          "value": "2",
+          "label": "2"
+        },
+        {
+          "value": "3",
+          "label": "3"
+        },
+        {
+          "value": "4",
+          "label": "4"
+        },
+        {
+          "value": "5",
+          "label": "5"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "service_history",
+      "sourceKey": "service_history",
+      "label": "Service History",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["full", "partial", "none"]
+      },
+      "options": [
+        {
+          "value": "full",
+          "label": "Full Service History"
+        },
+        {
+          "value": "partial",
+          "label": "Partial Service History"
+        },
+        {
+          "value": "none",
+          "label": "No Service History"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "number_of_owners",
+      "sourceKey": "number_of_owners",
+      "label": "Previous Owners",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 20
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "accident_free",
+      "sourceKey": "accident_free",
+      "label": "Accident Free",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "registration_province",
+      "sourceKey": "registration_province",
+      "label": "Registration Province",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 30
+      },
+      "options": [
+        {
+          "value": "EC",
+          "label": "Eastern Cape"
+        },
+        {
+          "value": "FS",
+          "label": "Free State"
+        },
+        {
+          "value": "GP",
+          "label": "Gauteng"
+        },
+        {
+          "value": "KZN",
+          "label": "KwaZulu-Natal"
+        },
+        {
+          "value": "LP",
+          "label": "Limpopo"
+        },
+        {
+          "value": "MP",
+          "label": "Mpumalanga"
+        },
+        {
+          "value": "NC",
+          "label": "Northern Cape"
+        },
+        {
+          "value": "NW",
+          "label": "North West"
+        },
+        {
+          "value": "WC",
+          "label": "Western Cape"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "extras",
+      "sourceKey": "extras",
+      "label": "Vehicle Extras",
+      "renderer": "checklist",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 80,
+          "enum": [
+            "sunroof",
+            "leather_seats",
+            "towbar",
+            "canopy",
+            "roll_bar",
+            "nudge_bar",
+            "bull_bar",
+            "roof_rack",
+            "diff_lock",
+            "cruise_control",
+            "bluetooth",
+            "reverse_camera",
+            "parking_sensors",
+            "heated_seats",
+            "electric_windows",
+            "air_conditioning",
+            "sat_nav"
+          ]
+        }
+      },
+      "options": [
+        {
+          "value": "sunroof",
+          "label": "Sunroof"
+        },
+        {
+          "value": "leather_seats",
+          "label": "Leather Seats"
+        },
+        {
+          "value": "towbar",
+          "label": "Towbar"
+        },
+        {
+          "value": "canopy",
+          "label": "Canopy"
+        },
+        {
+          "value": "roll_bar",
+          "label": "Roll Bar"
+        },
+        {
+          "value": "nudge_bar",
+          "label": "Nudge Bar"
+        },
+        {
+          "value": "bull_bar",
+          "label": "Bull Bar"
+        },
+        {
+          "value": "roof_rack",
+          "label": "Roof Rack"
+        },
+        {
+          "value": "diff_lock",
+          "label": "Diff Lock"
+        },
+        {
+          "value": "cruise_control",
+          "label": "Cruise Control"
+        },
+        {
+          "value": "bluetooth",
+          "label": "Bluetooth"
+        },
+        {
+          "value": "reverse_camera",
+          "label": "Reverse Camera"
+        },
+        {
+          "value": "parking_sensors",
+          "label": "Parking Sensors"
+        },
+        {
+          "value": "heated_seats",
+          "label": "Heated Seats"
+        },
+        {
+          "value": "electric_windows",
+          "label": "Electric Windows"
+        },
+        {
+          "value": "air_conditioning",
+          "label": "Air Conditioning"
+        },
+        {
+          "value": "sat_nav",
+          "label": "Sat Nav / GPS"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "finance_available",
+      "sourceKey": "finance_available",
+      "label": "Finance Available",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "trade_in_accepted",
+      "sourceKey": "trade_in_accepted",
+      "label": "Trade-In Accepted",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "part_type",
+      "sourceKey": "part_type",
+      "label": "Part Type",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      },
+      "options": [
+        "engine",
+        "body",
+        "electrical",
+        "suspension",
+        "brakes",
+        "wheels",
+        "interior",
+        "audio",
+        "tools",
+        "other"
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "compatible_make",
+      "sourceKey": "compatible_make",
+      "label": "Compatible Make(s)",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "compatible_model",
+      "sourceKey": "compatible_model",
+      "label": "Compatible Model(s)",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "oem_or_aftermarket",
+      "sourceKey": "oem_or_aftermarket",
+      "label": "OEM or Aftermarket",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["oem", "aftermarket"]
+      },
+      "options": [
+        {
+          "value": "oem",
+          "label": "OEM"
+        },
+        {
+          "value": "aftermarket",
+          "label": "Aftermarket"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "part_condition",
+      "sourceKey": "part_condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "used", "refurbished"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "used",
+          "label": "Used"
+        },
+        {
+          "value": "refurbished",
+          "label": "Refurbished"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "warranty_included",
+      "sourceKey": "warranty_included",
+      "label": "Warranty Included",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "fitment_included",
+      "sourceKey": "fitment_included",
+      "label": "Fitment / Installation Included",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "compatible_year_range",
+      "sourceKey": "compatible_year_range",
+      "label": "Compatible Year Range",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 30
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "device_type",
+      "sourceKey": "device_type",
+      "label": "Device Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": [
+          "Smartphone",
+          "Tablet / iPad",
+          "Laptop",
+          "Desktop PC",
+          "Gaming Console",
+          "Video Games",
+          "Monitors & TVs",
+          "PC Components",
+          "Smartwatch / Wearable",
+          "Audio & Headphones",
+          "Cameras & Drones",
+          "Accessories"
+        ]
+      },
+      "options": [
+        "Smartphone",
+        "Tablet / iPad",
+        "Laptop",
+        "Desktop PC",
+        "Gaming Console",
+        "Video Games",
+        "Monitors & TVs",
+        "PC Components",
+        "Smartwatch / Wearable",
+        "Audio & Headphones",
+        "Cameras & Drones",
+        "Accessories"
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "brand",
+      "sourceKey": "brand",
+      "label": "Brand",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "model_name",
+      "sourceKey": "model_name",
+      "label": "Model",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "storage_gb",
+      "sourceKey": "storage_gb",
+      "label": "Storage Capacity",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000000000
+      },
+      "unit": "GB",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "screen_size_inches",
+      "sourceKey": "screen_size_inches",
+      "label": "Screen Size",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "unit": "in",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "warranty_months",
+      "sourceKey": "warranty_months",
+      "label": "Warranty",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000
+      },
+      "unit": "months",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "network_lock",
+      "sourceKey": "network_lock",
+      "label": "Network Lock",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["unlocked", "vodacom", "mtn", "cell_c", "telkom", "rain"]
+      },
+      "options": [
+        {
+          "value": "unlocked",
+          "label": "Unlocked"
+        },
+        {
+          "value": "vodacom",
+          "label": "Vodacom"
+        },
+        {
+          "value": "mtn",
+          "label": "MTN"
+        },
+        {
+          "value": "cell_c",
+          "label": "Cell C"
+        },
+        {
+          "value": "telkom",
+          "label": "Telkom"
+        },
+        {
+          "value": "rain",
+          "label": "Rain"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "battery_health_pct",
+      "sourceKey": "battery_health_pct",
+      "label": "Battery Health",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "unit": "%",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "ram_gb",
+      "sourceKey": "ram_gb",
+      "label": "RAM",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 256
+      },
+      "unit": "GB",
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "original_accessories",
+      "sourceKey": "original_accessories",
+      "label": "Original Accessories Included",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "activation_lock_clear",
+      "sourceKey": "activation_lock_clear",
+      "label": "Activation Lock Cleared",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "sub_category",
+      "sourceKey": "sub_category",
+      "label": "Item type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["furniture", "appliances", "garden", "decor", "tools_equipment"]
+      },
+      "options": [
+        {
+          "value": "furniture",
+          "label": "Furniture & Decor"
+        },
+        {
+          "value": "appliances",
+          "label": "Home Appliances"
+        },
+        {
+          "value": "garden",
+          "label": "Garden & Outdoor"
+        },
+        {
+          "value": "decor",
+          "label": "Decor"
+        },
+        {
+          "value": "tools_equipment",
+          "label": "Tools & Equipment"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "material",
+      "sourceKey": "material",
+      "label": "Material",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 50
+      },
+      "options": [
+        {
+          "value": "Wood",
+          "label": "Wood"
+        },
+        {
+          "value": "Leather",
+          "label": "Leather"
+        },
+        {
+          "value": "Fabric",
+          "label": "Fabric"
+        },
+        {
+          "value": "Metal",
+          "label": "Metal"
+        },
+        {
+          "value": "Glass",
+          "label": "Glass"
+        },
+        {
+          "value": "Plastic",
+          "label": "Plastic"
+        },
+        {
+          "value": "Cotton",
+          "label": "Cotton"
+        },
+        {
+          "value": "Ceramic",
+          "label": "Ceramic"
+        },
+        {
+          "value": "Stone",
+          "label": "Stone"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "brand",
+      "sourceKey": "brand",
+      "label": "Brand",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "dimensions",
+      "sourceKey": "dimensions",
+      "label": "Dimensions",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 60
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "delivery_available",
+      "sourceKey": "delivery_available",
+      "label": "Delivery Available",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "power_rating",
+      "sourceKey": "power_rating",
+      "label": "Power Rating",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 30
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "job_type",
+      "sourceKey": "job_type",
+      "label": "Job type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": [
+          "full_time",
+          "part_time",
+          "contract",
+          "freelance",
+          "internship",
+          "learnership",
+          "volunteer"
+        ]
+      },
+      "options": [
+        {
+          "value": "full_time",
+          "label": "Full Time"
+        },
+        {
+          "value": "part_time",
+          "label": "Part Time"
+        },
+        {
+          "value": "contract",
+          "label": "Contract"
+        },
+        {
+          "value": "freelance",
+          "label": "Freelance"
+        },
+        {
+          "value": "internship",
+          "label": "Internship"
+        },
+        {
+          "value": "learnership",
+          "label": "Learnership"
+        },
+        {
+          "value": "volunteer",
+          "label": "Volunteer"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "location_type",
+      "sourceKey": "location_type",
+      "label": "Location Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": ["remote", "hybrid", "on_site"]
+      },
+      "options": [
+        {
+          "value": "remote",
+          "label": "Remote"
+        },
+        {
+          "value": "hybrid",
+          "label": "Hybrid"
+        },
+        {
+          "value": "on_site",
+          "label": "On-Site"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "industry",
+      "sourceKey": "industry",
+      "label": "Industry",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "options": [
+        {
+          "value": "mining",
+          "label": "Mining"
+        },
+        {
+          "value": "construction",
+          "label": "Construction"
+        },
+        {
+          "value": "retail",
+          "label": "Retail"
+        },
+        {
+          "value": "hospitality",
+          "label": "Hospitality"
+        },
+        {
+          "value": "IT",
+          "label": "IT & Tech"
+        },
+        {
+          "value": "finance",
+          "label": "Finance"
+        },
+        {
+          "value": "healthcare",
+          "label": "Healthcare"
+        },
+        {
+          "value": "education",
+          "label": "Education"
+        },
+        {
+          "value": "agriculture",
+          "label": "Agriculture"
+        },
+        {
+          "value": "manufacturing",
+          "label": "Manufacturing"
+        },
+        {
+          "value": "logistics",
+          "label": "Logistics & Transport"
+        },
+        {
+          "value": "government",
+          "label": "Government"
+        },
+        {
+          "value": "legal",
+          "label": "Legal"
+        },
+        {
+          "value": "media",
+          "label": "Media & Marketing"
+        },
+        {
+          "value": "security",
+          "label": "Security"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "experience_level",
+      "sourceKey": "experience_level",
+      "label": "Experience Level",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["entry_level", "junior", "mid_level", "senior", "executive"]
+      },
+      "options": [
+        {
+          "value": "entry_level",
+          "label": "Entry Level"
+        },
+        {
+          "value": "junior",
+          "label": "Junior"
+        },
+        {
+          "value": "mid_level",
+          "label": "Mid Level"
+        },
+        {
+          "value": "senior",
+          "label": "Senior"
+        },
+        {
+          "value": "executive",
+          "label": "Executive"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "qualification_required",
+      "sourceKey": "qualification_required",
+      "label": "Qualification Required",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["none", "matric", "certificate", "diploma", "degree", "postgraduate"]
+      },
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "matric",
+          "label": "Matric"
+        },
+        {
+          "value": "certificate",
+          "label": "Certificate"
+        },
+        {
+          "value": "diploma",
+          "label": "Diploma"
+        },
+        {
+          "value": "degree",
+          "label": "Degree"
+        },
+        {
+          "value": "postgraduate",
+          "label": "Postgraduate"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "salary_period",
+      "sourceKey": "salary_period",
+      "label": "Salary Period",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["per_hour", "per_day", "per_month", "per_year"]
+      },
+      "options": [
+        {
+          "value": "per_hour",
+          "label": "Per Hour"
+        },
+        {
+          "value": "per_day",
+          "label": "Per Day"
+        },
+        {
+          "value": "per_month",
+          "label": "Per Month"
+        },
+        {
+          "value": "per_year",
+          "label": "Per Year"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "company_name",
+      "sourceKey": "company_name",
+      "label": "Company Name",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 120
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "benefits",
+      "sourceKey": "benefits",
+      "label": "Benefits",
+      "renderer": "checklist",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "maxItems": 30,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 80,
+          "enum": [
+            "medical_aid",
+            "provident_fund",
+            "pension",
+            "thirteenth_cheque",
+            "annual_bonus",
+            "travel_allowance",
+            "housing_allowance",
+            "cell_phone_allowance"
+          ]
+        }
+      },
+      "options": [
+        {
+          "value": "medical_aid",
+          "label": "Medical Aid"
+        },
+        {
+          "value": "provident_fund",
+          "label": "Provident Fund"
+        },
+        {
+          "value": "pension",
+          "label": "Pension"
+        },
+        {
+          "value": "thirteenth_cheque",
+          "label": "13th Cheque"
+        },
+        {
+          "value": "annual_bonus",
+          "label": "Annual Bonus"
+        },
+        {
+          "value": "travel_allowance",
+          "label": "Travel Allowance"
+        },
+        {
+          "value": "housing_allowance",
+          "label": "Housing Allowance"
+        },
+        {
+          "value": "cell_phone_allowance",
+          "label": "Cell Phone Allowance"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "ee_preference",
+      "sourceKey": "ee_preference",
+      "label": "Employment Equity",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["not_applicable", "aa_candidates_preferred", "open_to_all"]
+      },
+      "options": [
+        {
+          "value": "not_applicable",
+          "label": "Not Applicable"
+        },
+        {
+          "value": "aa_candidates_preferred",
+          "label": "AA Candidates Preferred"
+        },
+        {
+          "value": "open_to_all",
+          "label": "Open to All"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "jobs_services",
+      "key": "application_deadline",
+      "sourceKey": "application_deadline",
+      "label": "Application Deadline",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 30,
+        "format": "date"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "farm_category",
+      "sourceKey": "farm_category",
+      "label": "Farm Category",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": [
+          "livestock",
+          "crops_seeds",
+          "equipment_machinery",
+          "farm_land",
+          "feeds_supplements",
+          "farming_services",
+          "other"
+        ]
+      },
+      "options": [
+        {
+          "value": "livestock",
+          "label": "Livestock"
+        },
+        {
+          "value": "crops_seeds",
+          "label": "Crops & Seeds"
+        },
+        {
+          "value": "equipment_machinery",
+          "label": "Equipment & Machinery"
+        },
+        {
+          "value": "farm_land",
+          "label": "Farm Land"
+        },
+        {
+          "value": "feeds_supplements",
+          "label": "Feeds & Supplements"
+        },
+        {
+          "value": "farming_services",
+          "label": "Farming Services"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "livestock_type",
+      "sourceKey": "livestock_type",
+      "label": "Livestock Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["cattle", "sheep", "goats", "poultry", "pigs", "horses", "game", "other"]
+      },
+      "options": [
+        {
+          "value": "cattle",
+          "label": "Cattle"
+        },
+        {
+          "value": "sheep",
+          "label": "Sheep"
+        },
+        {
+          "value": "goats",
+          "label": "Goats"
+        },
+        {
+          "value": "poultry",
+          "label": "Poultry"
+        },
+        {
+          "value": "pigs",
+          "label": "Pigs"
+        },
+        {
+          "value": "horses",
+          "label": "Horses"
+        },
+        {
+          "value": "game",
+          "label": "Game"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ],
+      "dependsOn": "farm_category",
+      "dependsOnValues": ["livestock"],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "breed",
+      "sourceKey": "breed",
+      "label": "Breed",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "dependsOn": "farm_category",
+      "dependsOnValues": ["livestock"],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "age_months",
+      "sourceKey": "age_months",
+      "label": "Age",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000
+      },
+      "unit": "months",
+      "dependsOn": "farm_category",
+      "dependsOnValues": ["livestock"],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "quantity",
+      "sourceKey": "quantity",
+      "label": "Quantity Available",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000000000
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "equipment_condition",
+      "sourceKey": "equipment_condition",
+      "label": "Equipment Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "used", "refurbished"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "used",
+          "label": "Used"
+        },
+        {
+          "value": "refurbished",
+          "label": "Refurbished"
+        }
+      ],
+      "dependsOn": "farm_category",
+      "dependsOnValues": ["equipment_machinery"],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "hectares",
+      "sourceKey": "hectares",
+      "label": "Farm Size",
+      "renderer": "number",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000000000
+      },
+      "unit": "ha",
+      "dependsOn": "farm_category",
+      "dependsOnValues": ["farm_land"],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "irrigation",
+      "sourceKey": "irrigation",
+      "label": "Irrigation",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["none", "drip", "sprinkler", "pivot", "flood"]
+      },
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "drip",
+          "label": "Drip"
+        },
+        {
+          "value": "sprinkler",
+          "label": "Sprinkler"
+        },
+        {
+          "value": "pivot",
+          "label": "Pivot"
+        },
+        {
+          "value": "flood",
+          "label": "Flood"
+        }
+      ],
+      "dependsOn": "farm_category",
+      "dependsOnValues": ["farm_land", "crops_seeds"],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "delivery_available",
+      "sourceKey": "delivery_available",
+      "label": "Delivery Available",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "baby_kids",
+      "key": "item_type",
+      "sourceKey": "item_type",
+      "label": "Item Type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": true,
+      "validation": {
+        "type": "string",
+        "enum": [
+          "clothing",
+          "toys",
+          "prams_strollers",
+          "car_seats",
+          "feeding",
+          "nursery_furniture",
+          "maternity",
+          "school_supplies",
+          "other"
+        ]
+      },
+      "options": [
+        {
+          "value": "clothing",
+          "label": "Clothing"
+        },
+        {
+          "value": "toys",
+          "label": "Toys"
+        },
+        {
+          "value": "prams_strollers",
+          "label": "Prams & Strollers"
+        },
+        {
+          "value": "car_seats",
+          "label": "Car Seats"
+        },
+        {
+          "value": "feeding",
+          "label": "Feeding"
+        },
+        {
+          "value": "nursery_furniture",
+          "label": "Nursery Furniture"
+        },
+        {
+          "value": "maternity",
+          "label": "Maternity"
+        },
+        {
+          "value": "school_supplies",
+          "label": "School Supplies"
+        },
+        {
+          "value": "other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "baby_kids",
+      "key": "age_group",
+      "sourceKey": "age_group",
+      "label": "Age Group",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": [
+          "newborn_0_3m",
+          "infant_3_12m",
+          "toddler_1_3y",
+          "preschool_3_6y",
+          "school_age_6_12y",
+          "teen_12_plus"
+        ]
+      },
+      "options": [
+        {
+          "value": "newborn_0_3m",
+          "label": "Newborn (0-3 months)"
+        },
+        {
+          "value": "infant_3_12m",
+          "label": "Infant (3-12 months)"
+        },
+        {
+          "value": "toddler_1_3y",
+          "label": "Toddler (1-3 years)"
+        },
+        {
+          "value": "preschool_3_6y",
+          "label": "Preschool (3-6 years)"
+        },
+        {
+          "value": "school_age_6_12y",
+          "label": "School Age (6-12 years)"
+        },
+        {
+          "value": "teen_12_plus",
+          "label": "Teen (12+)"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "baby_kids",
+      "key": "gender",
+      "sourceKey": "gender",
+      "label": "Gender",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["unisex", "boys", "girls"]
+      },
+      "options": [
+        {
+          "value": "unisex",
+          "label": "Unisex"
+        },
+        {
+          "value": "boys",
+          "label": "Boys"
+        },
+        {
+          "value": "girls",
+          "label": "Girls"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "baby_kids",
+      "key": "brand",
+      "sourceKey": "brand",
+      "label": "Brand",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "baby_kids",
+      "key": "safety_certified",
+      "sourceKey": "safety_certified",
+      "label": "Safety Certified (SABS)",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "clothing_accessories",
+      "key": "material",
+      "sourceKey": "material",
+      "label": "Material",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 50
+      },
+      "options": [
+        {
+          "value": "Wood",
+          "label": "Wood"
+        },
+        {
+          "value": "Leather",
+          "label": "Leather"
+        },
+        {
+          "value": "Fabric",
+          "label": "Fabric"
+        },
+        {
+          "value": "Metal",
+          "label": "Metal"
+        },
+        {
+          "value": "Glass",
+          "label": "Glass"
+        },
+        {
+          "value": "Plastic",
+          "label": "Plastic"
+        },
+        {
+          "value": "Cotton",
+          "label": "Cotton"
+        },
+        {
+          "value": "Ceramic",
+          "label": "Ceramic"
+        },
+        {
+          "value": "Stone",
+          "label": "Stone"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "clothing_accessories",
+      "key": "brand",
+      "sourceKey": "brand",
+      "label": "Brand",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "clothing_accessories",
+      "key": "dimensions",
+      "sourceKey": "dimensions",
+      "label": "Dimensions",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 60
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "clothing_accessories",
+      "key": "delivery_available",
+      "sourceKey": "delivery_available",
+      "label": "Delivery Available",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "sports_hobbies",
+      "key": "sub_category",
+      "sourceKey": "sub_category",
+      "label": "Item type",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["sports_outdoor", "musical_instruments", "books_stationery"]
+      },
+      "options": [
+        {
+          "value": "sports_outdoor",
+          "label": "Sports & Outdoor"
+        },
+        {
+          "value": "musical_instruments",
+          "label": "Musical Instruments"
+        },
+        {
+          "value": "books_stationery",
+          "label": "Books & Stationery"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "sports_hobbies",
+      "key": "material",
+      "sourceKey": "material",
+      "label": "Material",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 50
+      },
+      "options": [
+        {
+          "value": "Wood",
+          "label": "Wood"
+        },
+        {
+          "value": "Leather",
+          "label": "Leather"
+        },
+        {
+          "value": "Fabric",
+          "label": "Fabric"
+        },
+        {
+          "value": "Metal",
+          "label": "Metal"
+        },
+        {
+          "value": "Glass",
+          "label": "Glass"
+        },
+        {
+          "value": "Plastic",
+          "label": "Plastic"
+        },
+        {
+          "value": "Cotton",
+          "label": "Cotton"
+        },
+        {
+          "value": "Ceramic",
+          "label": "Ceramic"
+        },
+        {
+          "value": "Stone",
+          "label": "Stone"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "sports_hobbies",
+      "key": "brand",
+      "sourceKey": "brand",
+      "label": "Brand",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "sports_hobbies",
+      "key": "dimensions",
+      "sourceKey": "dimensions",
+      "label": "Dimensions",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 60
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "sports_hobbies",
+      "key": "delivery_available",
+      "sourceKey": "delivery_available",
+      "label": "Delivery Available",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "other_items",
+      "key": "material",
+      "sourceKey": "material",
+      "label": "Material",
+      "renderer": "combobox",
+      "optionAuthority": "suggestions",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 50
+      },
+      "options": [
+        {
+          "value": "Wood",
+          "label": "Wood"
+        },
+        {
+          "value": "Leather",
+          "label": "Leather"
+        },
+        {
+          "value": "Fabric",
+          "label": "Fabric"
+        },
+        {
+          "value": "Metal",
+          "label": "Metal"
+        },
+        {
+          "value": "Glass",
+          "label": "Glass"
+        },
+        {
+          "value": "Plastic",
+          "label": "Plastic"
+        },
+        {
+          "value": "Cotton",
+          "label": "Cotton"
+        },
+        {
+          "value": "Ceramic",
+          "label": "Ceramic"
+        },
+        {
+          "value": "Stone",
+          "label": "Stone"
+        },
+        {
+          "value": "Other",
+          "label": "Other"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "other_items",
+      "key": "brand",
+      "sourceKey": "brand",
+      "label": "Brand",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 80
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "other_items",
+      "key": "dimensions",
+      "sourceKey": "dimensions",
+      "label": "Dimensions",
+      "renderer": "text",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "maxLength": 60
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "other_items",
+      "key": "delivery_available",
+      "sourceKey": "delivery_available",
+      "label": "Delivery Available",
+      "renderer": "boolean",
+      "optionAuthority": "none",
+      "required": false,
+      "validation": {
+        "type": "boolean"
+      },
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "property",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "vehicles",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "auto_parts",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "electronics",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "home_lifestyle",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "farming_agriculture",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "baby_kids",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "clothing_accessories",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "sports_hobbies",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    },
+    {
+      "category": "other_items",
+      "key": "condition",
+      "sourceKey": "condition",
+      "label": "Condition",
+      "renderer": "select",
+      "optionAuthority": "closed",
+      "required": false,
+      "validation": {
+        "type": "string",
+        "enum": ["new", "like_new", "good", "fair", "for_parts"]
+      },
+      "options": [
+        {
+          "value": "new",
+          "label": "New"
+        },
+        {
+          "value": "like_new",
+          "label": "Like new"
+        },
+        {
+          "value": "good",
+          "label": "Good"
+        },
+        {
+          "value": "fair",
+          "label": "Fair"
+        },
+        {
+          "value": "for_parts",
+          "label": "For parts"
+        }
+      ],
+      "visibility": "public_owner_assertion",
+      "retentionClass": "post_content"
+    }
+  ]
+}

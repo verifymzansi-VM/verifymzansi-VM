@@ -14,7 +14,7 @@ import {
   BrandSurface,
   brandOutlineButtonClassName,
 } from "@/components/brand";
-import { Plus, Zap } from "lucide-react";
+import { LayoutList, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerifiedTick } from "@/components/trust/verified-tick";
 import {
@@ -463,8 +463,8 @@ export default async function DashboardPage() {
             className={cn("h-11 gap-1.5 rounded-full px-5", brandOutlineButtonClassName)}
           >
             <Link href="/dashboard/listings">
-              <Zap aria-hidden="true" className="h-4 w-4 text-brand-gold-300" />
-              Boost a post
+              <LayoutList aria-hidden="true" className="h-4 w-4 text-brand-gold-300" />
+              My posts
             </Link>
           </Button>
         </div>
