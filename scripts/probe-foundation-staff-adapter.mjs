@@ -295,6 +295,9 @@ try {
     [
       "scripts/probe-foundation-staff-adapter.mjs",
       "scripts/lib/foundation-negotiable-native.mjs",
+      "scripts/lib/foundation-activity-native.mjs",
+      "docs/backend-foundation/prototypes/core-activity-create.sql",
+      "src/lib/foundation/post-draft.ts",
       "scripts/lib/foundation-owner-editor-native.mjs",
       "docs/backend-foundation/prototypes/owner-listing-editor.sql",
       "src/lib/foundation/owner-listing-editor.ts",

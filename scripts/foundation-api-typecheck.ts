@@ -17,6 +17,16 @@ export function checkFoundationRoleTypes(
 ) {
   void publicApi.rpc("billing_catalogue");
   void member.rpc("open_verification_case");
+  const core = { p_kind: "listing", p_area: "market", p_category_key: "electronics", p_detail: {} };
+  void member.rpc("create_core_draft", core);
+  void member.rpc("create_core_draft", { ...core, p_activity_key: "guided_tour" });
+  // The generated optional text argument uses omission; the builder normalizes null.
+  // @ts-expect-error supplied activity keys must be text
+  void member.rpc("create_core_draft", { ...core, p_activity_key: 123 });
+  // @ts-expect-error anonymous callers cannot create drafts
+  void publicApi.rpc("create_core_draft", core);
+  // @ts-expect-error service credentials do not grant owner creation
+  void service.rpc("create_core_draft", core);
   void member.rpc("get_owner_listing_editor", { p_post_id: "opaque-post" });
   // @ts-expect-error owner editor reads require an authenticated user
   void publicApi.rpc("get_owner_listing_editor", { p_post_id: "opaque-post" });

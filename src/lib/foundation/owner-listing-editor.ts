@@ -131,7 +131,8 @@ export async function createFoundationListingDraft(
       result.kind !== "listing" ||
       result.area !== "market" ||
       result.category_key !== parsed.data.category ||
-      result.revision !== 1
+      result.revision !== 1 ||
+      result.activity_key !== undefined
     )
       throw new Error();
     return result;

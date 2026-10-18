@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-16T18-01-12.835Z/results.json",
-  "evidenceHash": "PTlIERZALKfT9Ujp6AY9SIiZ7xWdnqYbxFG_2J0QwXY",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-17T23-59-26.598Z/results.json",
+  "evidenceHash": "tUhLRvHRha6vsmGmY9TD8MQLyCwKjrCHshvwvOmKm4Y",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -21,9 +21,10 @@
     "docs/backend-foundation/prototypes/identity-verification.sql": "T7M96vU37UW41QsK7FAtWIiQLBI9K22e0WqpjYEO7c0",
     "docs/backend-foundation/prototypes/fixture-core-drivers.sql": "yGqWJ_UjjYGOFA0KfnZdqGVyGw6Xmu2x9iEwpxEXoFg",
     "docs/backend-foundation/prototypes/public-price-negotiable.sql": "3YPno5OmBkj-Nue5qI1xU-BLBsc1vzGGaz81NrGJbgg",
-    "docs/backend-foundation/prototypes/owner-listing-editor.sql": "BWsNg3O_BZQwv8nPHa9gNZJA29LFZpKac7_rmxsm4ag"
+    "docs/backend-foundation/prototypes/owner-listing-editor.sql": "BWsNg3O_BZQwv8nPHa9gNZJA29LFZpKac7_rmxsm4ag",
+    "docs/backend-foundation/prototypes/core-activity-create.sql": "G3m7bS0SDPLUqLPv1UrFZVGVS1QpvbQaP4ZEye4lfiE"
   },
-  "candidateHash": "pFys8wC7D528JXWrQIZENen5A25UgZclrPVjOh3OwmY",
+  "candidateHash": "GA5yKx9tkDFb-Gxhj2prMUqypvtrT58OGqV56UAROsI",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",

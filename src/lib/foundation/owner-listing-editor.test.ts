@@ -155,6 +155,7 @@ it("rejects mismatched creation acknowledgements without repeating a possibly co
     { ...ack(), category_key: "vehicles" },
     { ...ack(), revision: 2 },
     { ...ack(), owner_id: id },
+    { ...ack(), activity_key: "unexpected" },
     { ...ack(), kind: "business" },
   ]) {
     const fetcher = vi.fn<typeof fetch>(async () => response(value));

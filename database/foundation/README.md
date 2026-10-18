@@ -26,6 +26,10 @@ Local reproduction creates its own ignored evidence:
 5. Run node scripts/check-foundation-api-contracts.mjs and maintained review
    gates.
 
+If replay changes generated types captured by the native run, repeat steps 2–4
+with the refreshed inputs. The final native source hashes and clean replay must
+match the same working bytes; an earlier passing record remains historical.
+
 The empty-baseline rehearsal copies Auth definitions without data and checks
 SQL, role surfaces and actual SDK transport with synthetic JWT roles. Separate
 native proof exercises real local Auth and gateway behavior. Neither establishes

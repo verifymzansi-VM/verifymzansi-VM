@@ -38,6 +38,8 @@ export const FIXTURE_MIGRATIONS = {
     "docs/backend-foundation/prototypes/public-price-negotiable.sql",
   "20261016143838_owner_listing_editor.sql":
     "docs/backend-foundation/prototypes/owner-listing-editor.sql",
+  "20261017233333_core_activity_create.sql":
+    "docs/backend-foundation/prototypes/core-activity-create.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

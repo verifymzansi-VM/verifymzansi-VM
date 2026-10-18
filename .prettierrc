@@ -15,6 +15,24 @@
         "printWidth": 80,
         "proseWrap": "always"
       }
+    },
+    {
+      "files": [
+        "database/foundation/**",
+        "docs/backend-foundation/prototypes/**",
+        "docs/backend-foundation/tools/**",
+        "src/lib/foundation/**",
+        "src/lib/domains/**",
+        "scripts/*foundation*",
+        "scripts/lib/*foundation*",
+        "src/lib/supabase/fetch-with-timeout.ts",
+        "src/lib/utils/sa-id-validation.ts",
+        "src/lib/constants/verification.ts",
+        "src/types/enums.ts"
+      ],
+      "options": {
+        "endOfLine": "lf"
+      }
     }
   ]
 }

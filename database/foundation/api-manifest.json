@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "pFys8wC7D528JXWrQIZENen5A25UgZclrPVjOh3OwmY",
+  "candidateHash": "GA5yKx9tkDFb-Gxhj2prMUqypvtrT58OGqV56UAROsI",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.119.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "090RVTPka7DE1Dj6pU3MbD0lCdpR7m1AJmDogIi5oxs",
+  "generatedTypesHash": "td7pbt3kU94iURsBH454UBPCUhfvDI4SFNr4xjatty0",
   "roleTypesHash": "1eFBgMSNsx_BwwmnBOr9NndRNks0XhnLAkyh1shvJmY",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
@@ -486,8 +486,8 @@
     },
     {
       "name": "create_core_draft",
-      "signature": "p_kind text, p_area text, p_category_key text, p_detail jsonb",
-      "argumentsWithDefaults": "p_kind text, p_area text, p_category_key text, p_detail jsonb",
+      "signature": "p_kind text, p_area text, p_category_key text, p_detail jsonb, p_activity_key text",
+      "argumentsWithDefaults": "p_kind text, p_area text, p_category_key text, p_detail jsonb, p_activity_key text DEFAULT NULL::text",
       "returns": "jsonb",
       "volatility": "v",
       "securityDefiner": false,
@@ -515,6 +515,11 @@
           "name": "p_detail",
           "sqlType": "jsonb",
           "optional": false
+        },
+        {
+          "name": "p_activity_key",
+          "sqlType": "text",
+          "optional": true
         }
       ],
       "execute": {

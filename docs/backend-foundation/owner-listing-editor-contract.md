@@ -58,9 +58,15 @@ form/page, media byte/provider, consent/contact, and general workflow acceptance
 remain separate. No current source page is switched to the new backend by this
 contract.
 
-Known next dependency: canonical activity-required event/business creation
-cannot currently use create_core_draft because it has no activity argument and
-the immediate activity guard rejects its null insert. The negative-kind editor
-test uses a valid activity-optional business. That test does not resolve the
-creation gap; fix and prove the creation contract before integrating those
-forms.
+Activity-aware identity creation uses one optional final p_activity_key
+argument. Existing four-argument calls retain their six-field acknowledgement.
+Activity is validated against the database category catalogue and inserted with
+the parent row; required categories cannot be created without it. The activity
+guard, owner/session checks and draft quota remain in force. Replacement of the
+old signature and grants is atomic.
+
+createFoundationPostDraft validates the single returned kind, area, category,
+activity and initial revision. readFoundationPostDraft restores only owner draft
+identity, with an exact requested UUID and current authority check. Neither is a
+complete event/business editor. General form/content, media and submission
+integration still require their own acceptance before any source page changes.

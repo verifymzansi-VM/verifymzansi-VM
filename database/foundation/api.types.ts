@@ -40,7 +40,13 @@ export type Database = {
         Returns: Json;
       };
       create_core_draft: {
-        Args: { p_area: string; p_category_key: string; p_detail: Json; p_kind: string };
+        Args: {
+          p_activity_key?: string;
+          p_area: string;
+          p_category_key: string;
+          p_detail: Json;
+          p_kind: string;
+        };
         Returns: Json;
       };
       create_post_edit: { Args: { p_expected_revision: number; p_post_id: string }; Returns: Json };

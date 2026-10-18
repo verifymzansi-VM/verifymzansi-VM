@@ -8,21 +8,25 @@ const categoryKey = z
   .min(1)
   .max(80)
   .regex(/^[a-z0-9_]+$/);
+const activityKey = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
 export const postIdentityContextSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("listing"),
     area: z.literal("market"),
     category_key: categoryKey,
+    activity_key: activityKey.nullable().optional(),
   }),
   z.strictObject({
     kind: z.literal("business"),
     area: z.enum(["business", "tourism_events"]),
     category_key: categoryKey,
+    activity_key: activityKey.nullable().optional(),
   }),
   z.strictObject({
     kind: z.literal("event"),
     area: z.literal("tourism_events"),
     category_key: categoryKey,
+    activity_key: activityKey.nullable().optional(),
   }),
 ]);
 
@@ -75,6 +79,9 @@ export function buildCoreDraftCommand(input: unknown) {
     p_area: command.context.area,
     p_category_key: command.context.category_key,
     p_detail: detail,
+    ...(command.context.activity_key == null
+      ? {}
+      : { p_activity_key: command.context.activity_key }),
   };
 }
 
@@ -86,6 +93,7 @@ export function readCoreDraft(input: unknown) {
       kind: postKindSchema,
       area: postAreaSchema,
       category_key: categoryKey,
+      activity_key: activityKey.optional(),
       status: z.literal("draft"),
       revision: z.number().int().positive(),
     })
@@ -94,6 +102,7 @@ export function readCoreDraft(input: unknown) {
     kind: draft.kind,
     area: draft.area,
     category_key: draft.category_key,
+    activity_key: draft.activity_key,
   });
   return draft;
 }

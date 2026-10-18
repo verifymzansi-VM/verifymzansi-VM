@@ -6,6 +6,7 @@ import { searchFoundationPosts } from "../../src/lib/foundation/post-search.ts";
 import { readFoundationPublicPost } from "../../src/lib/foundation/public-post.ts";
 import { readFoundationReferenceCatalogue } from "../../src/lib/foundation/reference-catalogue.ts";
 
+import { testCoreActivityCreation } from "./foundation-activity-native.mjs";
 import { testOwnerListingEditor } from "./foundation-owner-editor-native.mjs";
 
 // Synthetic metadata only. Real public HTTP, owner commands and independent
@@ -231,4 +232,5 @@ export async function testPublicNegotiable({
     controlledSql,
     awaitQueuedRpc,
   });
+  await testCoreActivityCreation({ createUser, reviewer, connection, rpc, sql, record, stage });
 }
