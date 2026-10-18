@@ -30,7 +30,7 @@ export const postIdentityContextSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const instant = z.iso
+export const postEventInstantSchema = z.iso
   .datetime({ offset: true })
   .regex(
     /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/,
@@ -43,8 +43,8 @@ const instant = z.iso
   .transform((value) => new Date(value).toISOString());
 const eventDetail = z
   .strictObject({
-    starts_at: instant,
-    ends_at: instant,
+    starts_at: postEventInstantSchema,
+    ends_at: postEventInstantSchema,
     timezone: z
       .string()
       .max(80)

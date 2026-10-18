@@ -42,6 +42,8 @@ export const FIXTURE_MIGRATIONS = {
     "docs/backend-foundation/prototypes/core-activity-create.sql",
   "20261018045731_owner_business_event_editor.sql":
     "docs/backend-foundation/prototypes/owner-business-event-editor.sql",
+  "20261018054629_business_event_context.sql":
+    "docs/backend-foundation/prototypes/business-event-context.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

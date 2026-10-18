@@ -29,6 +29,19 @@ export function checkFoundationRoleTypes(
   void service.rpc("create_core_draft", core);
   void member.rpc("get_owner_listing_editor", { p_post_id: "opaque-post" });
   void member.rpc("get_owner_business_event_editor", { p_post_id: "opaque-post" });
+  const context = {
+    p_post_id: "opaque-post",
+    p_expected_revision: 1,
+    p_patch: { activity_key: null },
+  };
+  void member.rpc("save_business_event_context", context);
+  // @ts-expect-error anonymous callers cannot mutate owner context
+  void publicApi.rpc("save_business_event_context", context);
+  // @ts-expect-error service credentials do not grant owner context writes
+  void service.rpc("save_business_event_context", context);
+  // @ts-expect-error the revision argument must be numeric
+  void member.rpc("save_business_event_context", { ...context, p_expected_revision: "1" });
+
   // @ts-expect-error business/event metadata requires an authenticated owner
   void publicApi.rpc("get_owner_business_event_editor", { p_post_id: "opaque-post" });
   // @ts-expect-error service credentials do not grant owner metadata inspection

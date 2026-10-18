@@ -1,3 +1,4 @@
+import { testBusinessEventContext } from "./foundation-context-native.mjs";
 import { testOwnerBusinessEventEditor } from "./foundation-business-event-editor-native.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, createHash } from "node:crypto";
@@ -235,6 +236,17 @@ export async function testPublicNegotiable({
   });
   await testCoreActivityCreation({ createUser, reviewer, connection, rpc, sql, record, stage });
   await testOwnerBusinessEventEditor({
+    createUser,
+    reviewer,
+    connection,
+    rpc,
+    sql,
+    record,
+    stage,
+    controlledSql,
+    awaitQueuedRpc,
+  });
+  await testBusinessEventContext({
     createUser,
     reviewer,
     connection,

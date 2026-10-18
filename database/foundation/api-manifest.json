@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "Mfjj3tNo61VLPrW_PzARA-MNN_KBIQw-hZ35fDYAxnY",
+  "candidateHash": "mq_VABXyqb-BvSU2a2W-uHcGRBXiVwr6b4yFj0b-jmU",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.119.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "lrJLdGDNx96y5flXACFrR-5-BeQA_eEFjqjrABcBVFo",
-  "roleTypesHash": "7DauMRz0rc25J6Qq71KwhmyEE20PGeLb1O21oUysFI8",
+  "generatedTypesHash": "ddqe2xmo7LBtzWMKCbTM3-FgmhJMUbjx0Fjlxxsf82s",
+  "roleTypesHash": "K30Fdk2LZ9wqQHJdRrGEXTWtZKfpISDaHhu2BbWx3Yg",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -1669,6 +1669,40 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "save_business_event_context",
+      "signature": "p_post_id uuid, p_expected_revision integer, p_patch jsonb",
+      "argumentsWithDefaults": "p_post_id uuid, p_expected_revision integer, p_patch jsonb",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_patch",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {

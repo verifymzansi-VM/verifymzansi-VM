@@ -93,8 +93,42 @@ rejects duplicate slots/references and object-key fields. The SQL child query
 selects at most101 references; DTOs reject more than100 rather than silently
 restoring a partial editor.
 
-This is core metadata restore. Full legacy business/event fields, event-window
-mutation, contact/consent, media byte resolution and complete form/submission
-workflows remain separate acceptance work. Stored live/pending fixtures in the
-read tests demonstrate snapshot isolation, with actual owner edit commands; they
-do not establish a complete submit/moderate workflow.
+This operation restores core metadata. Full legacy business/event fields,
+contact/consent, media byte resolution and complete form/submission workflows
+remain separate acceptance work. Stored live/pending fixtures in the read tests
+demonstrate snapshot isolation. Context mutation and core event publication are
+exercised separately by the context workflow fixture described below.
+
+## Business/event context updates
+
+save_business_event_context accepts a post UUID, exact expected revision and a
+nonempty sparse patch containing activity_key and/or event_window. Omitted
+fields stay unchanged. Explicit null clears activity only where the stored
+category permits it. An event window is always a complete starts_at, ends_at and
+timezone object. The database derives ownership, actual kind/category and
+editable state, locks the original before its copy, and checks live authority
+again after all waits.
+
+The client normalizes explicit instants to UTC milliseconds and preserves
+timezone aliases; the database's timezone catalogue is authoritative. Windows
+are finite, within UTC years1–9999, ordered and at most90 days. Drafts can
+retain past windows. Unknown fields and partial/null windows are rejected. A
+successful mutation increments the whole-post revision once, including a
+combined patch. The acknowledgement binds the requested UUID and exact next
+revision; PT409 requires reload and uncertain writes are never replayed
+automatically.
+
+The migration enables this operation and its event approval correction in one
+atomic statement. Approval preserves publication time, identity, paid windows
+and financial records. An approved event's visibility ends at its reviewed end;
+both the captured original deadlines and proposed end must still be current
+after media and projection waits. Owner eligibility is also checked again.
+Paused originals remain paused, and normal free-event edits retain their
+existing two-approval allowance. Complete form/public schedule integration and
+the remaining rollout gates are separate acceptance work.
+
+For bounded local reproduction, the staff adapter probe accepts
+--negotiable-races to exercise real local Auth and controlled lock waits. The
+full native fixture additionally keeps the large browse dataset. These fixtures
+use synthetic media metadata and local payment settlement; physical scanning,
+provider delivery and complete website workflows require separate verification.

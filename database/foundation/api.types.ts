@@ -181,6 +181,10 @@ export type Database = {
         Returns: Json;
       };
       run_post_lifecycle: { Args: { p_limit: number }; Returns: Json };
+      save_business_event_context: {
+        Args: { p_expected_revision: number; p_patch: Json; p_post_id: string };
+        Returns: Json;
+      };
       save_core_listing_terms: {
         Args: { p_expected_revision: number; p_id: string; p_terms: Json };
         Returns: Json;

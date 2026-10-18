@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHmac, randomBytes, randomUUID, createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
@@ -16,12 +16,18 @@ import { readStaffIdentityHistory } from "../src/lib/foundation/staff-identity.t
 
 // Bounded real Auth/SQL/SDK denial proof. No accepted-identity or physical bytes
 // are fabricated. The only private history read has an empty subject history.
-const negotiable = process.argv.length === 3 && process.argv[2] === "--negotiable";
+const races = process.argv.length === 3 && process.argv[2] === "--negotiable-races";
+const negotiable = races || (process.argv.length === 3 && process.argv[2] === "--negotiable");
 assert.ok(process.argv.length === 2 || negotiable);
 const { env, dockerArgs, workdir, cliPath } = nativeIsolation();
 const release = acquireFixtureOperation(workdir, "test");
 const recordedAt = new Date().toISOString();
-const result = { recordedAt, status: "INCOMPLETE", productionMutations: [] };
+const result = {
+  recordedAt,
+  status: "INCOMPLETE",
+  controlledRaces: races,
+  productionMutations: [],
+};
 let admin,
   stage = "preflight",
   sql;
@@ -162,8 +168,102 @@ try {
   result.denials = ["revoked complete role tuple", "expired actual Auth session"];
   result.noAuditOnDeniedCalls = true;
   if (negotiable) {
+    const controlledSql = (statement) => {
+      const child = spawn(
+        "docker",
+        [
+          ...dockerArgs,
+          "exec",
+          "-i",
+          "supabase_db_backend-foundation-impl",
+          "psql",
+          "-U",
+          "postgres",
+          "-d",
+          "postgres",
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-At",
+        ],
+        { env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
+      );
+      let resolveBarrier,
+        rejectBarrier,
+        captured = "";
+      const barrier = new Promise((resolve, reject) => {
+        resolveBarrier = resolve;
+        rejectBarrier = reject;
+      });
+      child.stdout.on("data", (chunk) => {
+        captured += chunk.toString();
+        if (captured.includes("EVIDENCE_LOCK_HELD")) resolveBarrier();
+      });
+      child.stderr.resume();
+      const done = new Promise((resolve) => {
+        child.on("exit", (code) => {
+          if (!captured.includes("EVIDENCE_LOCK_HELD"))
+            rejectBarrier(new Error("Local evidence barrier missing"));
+          resolve(code);
+        });
+        child.on("error", () => {
+          rejectBarrier(new Error("Local evidence process failed"));
+          resolve(-1);
+        });
+      });
+      const timeout = setTimeout(
+        () => rejectBarrier(new Error("Local evidence barrier timeout")),
+        10000
+      );
+      child.stdin.end(statement);
+      return { barrier, done, close: () => clearTimeout(timeout) };
+    };
+    const awaitQueuedRpc = async (name) => {
+      if (
+        ![
+          "approve_decision",
+          "withdraw_decision",
+          "moderate_post",
+          "discard_post_edit",
+          "set_post_state",
+          "reassign_queue_claim",
+          "claim_queue_items",
+          "claim_queue_item",
+          "resolve_report",
+          "create_post_edit",
+          "delete_post",
+          "grant_intro_trial",
+          "close_account_evidence",
+          "acknowledge_cost_alarm",
+          "start_checkout",
+          "apply_provider_event",
+          "reverse_payment",
+          "activate_post",
+          "review_identity_submission",
+          "begin_evidence_upload",
+          "get_owner_listing_editor",
+          "get_owner_business_event_editor",
+          "save_business_event_context",
+        ].includes(name)
+      )
+        throw new Error("Unknown synthetic RPC barrier");
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline) {
+        // Count only; never expose query text or request/JWT settings.
+        if (
+          Number(
+            sql(
+              `select count(*) from pg_stat_activity where datname='postgres' and wait_event_type='Lock' and query like '%${name}%';`
+            )
+          ) > 0
+        )
+          return;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      throw new Error("Synthetic first RPC did not queue on its lock");
+    };
     const checks = [];
     await testPublicNegotiable({
+      ...(races ? { controlledSql, awaitQueuedRpc } : {}),
       rpc: async (name, body, callerToken, service = false) => {
         const response = await fetch(`${status.API_URL}/rest/v1/rpc/${name}`, {
           method: "POST",
@@ -175,7 +275,8 @@ try {
           },
           body: JSON.stringify(body),
           redirect: "error",
-          signal: AbortSignal.timeout(5000),
+          // Isolated seven-second race locks use the full native harness timeout.
+          signal: AbortSignal.timeout(races ? 10000 : 5000),
         });
         return { status: response.status, data: await response.json() };
       },
@@ -302,6 +403,10 @@ try {
       "docs/backend-foundation/prototypes/owner-business-event-editor.sql",
       "src/lib/foundation/owner-business-event-editor.ts",
       "src/lib/foundation/owner-editor-media.ts",
+      "scripts/lib/foundation-context-native.mjs",
+      "scripts/lib/foundation-event-edit-native.mjs",
+      "docs/backend-foundation/prototypes/business-event-context.sql",
+      "src/lib/foundation/business-event-context.ts",
       "scripts/lib/foundation-owner-editor-native.mjs",
       "docs/backend-foundation/prototypes/owner-listing-editor.sql",
       "src/lib/foundation/owner-listing-editor.ts",
@@ -348,10 +453,14 @@ try {
         alter table private.queue_claim_events enable trigger queue_claim_events_append_only;
         delete from private.outbox_events where owner_id in(${ids});
         delete from private.queue_claims where post_id in(select id from private.posts where owner_id in(${ids}));
+        delete from private.provider_events where payment_id in(select id from private.payments where owner_id in(${ids}));
+        delete from private.invoices where payment_id in(select id from private.payments where owner_id in(${ids}));
+        delete from private.post_addon_windows where payment_id in(select id from private.payments where owner_id in(${ids}));
         delete from private.post_activations where owner_id in(${ids});
         delete from private.posts where owner_id in(${ids});
         delete from private.media_objects where owner_id in(${ids});
         delete from private.entitlements where owner_id in(${ids});
+        delete from private.payments where owner_id in(${ids});
         delete from private.evidence_cases where subject_id in(${ids});
         delete from private.staff_roles where user_id in(${ids}); commit;`);
       for (const id of users) assert.equal((await admin.auth.admin.deleteUser(id)).error, null);

@@ -901,6 +901,54 @@
         ]
       }
     },
+    "/rpc/save_business_event_context": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_patch": {
+                  "format": "jsonb"
+                },
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_id",
+                "p_expected_revision",
+                "p_patch"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) save_business_event_context"
+        ]
+      }
+    },
     "/rpc/review_identity_submission": {
       "post": {
         "parameters": [

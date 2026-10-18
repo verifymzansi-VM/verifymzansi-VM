@@ -49,6 +49,7 @@ export type FoundationAuthenticatedDatabase = {
       | "renew_queue_claim"
       | "resolve_report"
       | "review_identity_submission"
+      | "save_business_event_context"
       | "save_core_listing_terms"
       | "save_listing_attributes"
       | "save_listing_price_draft"
