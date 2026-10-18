@@ -30,6 +30,7 @@ export type FoundationAuthenticatedDatabase = {
       | "get_core_draft"
       | "get_core_listing_draft"
       | "get_listing_attributes"
+      | "get_owner_business_event_editor"
       | "get_owner_listing_editor"
       | "get_public_post"
       | "moderate_post"

@@ -34,6 +34,10 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "scripts/lib/foundation-activity-native.mjs",
       "docs/backend-foundation/prototypes/core-activity-create.sql",
       "src/lib/foundation/post-draft.ts",
+      "scripts/lib/foundation-business-event-editor-native.mjs",
+      "docs/backend-foundation/prototypes/owner-business-event-editor.sql",
+      "src/lib/foundation/owner-business-event-editor.ts",
+      "src/lib/foundation/owner-editor-media.ts",
       "scripts/lib/foundation-owner-editor-native.mjs",
       "docs/backend-foundation/prototypes/owner-listing-editor.sql",
       "src/lib/foundation/owner-listing-editor.ts",
@@ -206,6 +210,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
         "review_identity_submission",
         "begin_evidence_upload",
         "get_owner_listing_editor",
+        "get_owner_business_event_editor",
       ].includes(name)
     )
       throw new Error("Unknown synthetic RPC barrier");

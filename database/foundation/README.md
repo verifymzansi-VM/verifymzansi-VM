@@ -1,8 +1,8 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 214 functions and 72 API commands. It
-preserves the reviewed domain transactions while excluding six test-only API
-commands and synthetic category compatibility. Browser roles have no base-table
+This separate target baseline contains 216 functions and 73 API commands. It
+preserves the reviewed domain transactions while excluding six test-only
+functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
 
 The single CLI-created migration deliberately raises an exception. The candidate

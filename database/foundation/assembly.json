@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-17T23-59-26.598Z/results.json",
-  "evidenceHash": "tUhLRvHRha6vsmGmY9TD8MQLyCwKjrCHshvwvOmKm4Y",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-18T05-16-53.477Z/results.json",
+  "evidenceHash": "zg2JujaHFFT_m6jqhFn9sto9qrKLBzEZFKxdmJ_MVEY",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -22,9 +22,10 @@
     "docs/backend-foundation/prototypes/fixture-core-drivers.sql": "yGqWJ_UjjYGOFA0KfnZdqGVyGw6Xmu2x9iEwpxEXoFg",
     "docs/backend-foundation/prototypes/public-price-negotiable.sql": "3YPno5OmBkj-Nue5qI1xU-BLBsc1vzGGaz81NrGJbgg",
     "docs/backend-foundation/prototypes/owner-listing-editor.sql": "BWsNg3O_BZQwv8nPHa9gNZJA29LFZpKac7_rmxsm4ag",
-    "docs/backend-foundation/prototypes/core-activity-create.sql": "G3m7bS0SDPLUqLPv1UrFZVGVS1QpvbQaP4ZEye4lfiE"
+    "docs/backend-foundation/prototypes/core-activity-create.sql": "G3m7bS0SDPLUqLPv1UrFZVGVS1QpvbQaP4ZEye4lfiE",
+    "docs/backend-foundation/prototypes/owner-business-event-editor.sql": "pc8Re_Y4s5JbDm_M1qvXFgz8jjO_nVAFu2rt79P0wgo"
   },
-  "candidateHash": "GA5yKx9tkDFb-Gxhj2prMUqypvtrT58OGqV56UAROsI",
+  "candidateHash": "Mfjj3tNo61VLPrW_PzARA-MNN_KBIQw-hZ35fDYAxnY",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",
@@ -54,8 +55,8 @@
     }
   },
   "catalogueSeedIdentitiesHash": "as4g-QYYagtdMoogKzVc3asHo7oJzhGr8Ip5lVYNDjo",
-  "functions": 214,
-  "matchingNativeFunctionBodies": 213,
+  "functions": 216,
+  "matchingNativeFunctionBodies": 215,
   "derivedFunctionChanges": {
     "internal.validate_listing_attributes": "Remove test-only fixture_market bypass; requires separate baseline replay and strict-category proof"
   },

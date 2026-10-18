@@ -1,3 +1,4 @@
+import { foundationOwnerMediaSchema as media, hasValidOwnerMediaSlots } from "./owner-editor-media";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { listingPriceCategorySchema } from "../domains/listings/price-terms";
@@ -7,26 +8,6 @@ import { readCoreDraft } from "../domains/posts/identity";
 
 const uuid = z.uuid().transform((value) => value.toLowerCase());
 const key = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
-const dimension = z.number().int().min(1).max(20000).nullable();
-const media = z
-  .strictObject({
-    object_id: z.uuid(),
-    kind: z.enum(["image", "video"]),
-    state: z.enum(["intent", "ready", "rejected", "cleanup_required", "deleted"]),
-    purpose: z.enum(["cover", "gallery", "logo", "video"]),
-    position: z.number().int().min(0).max(49),
-    width: dimension,
-    height: dimension,
-    focal_x: z.number().min(0).max(1).nullable(),
-    focal_y: z.number().min(0).max(1).nullable(),
-  })
-  .refine((item) => (item.purpose === "video") === (item.kind === "video"))
-  .refine(
-    (item) =>
-      item.state !== "ready" ||
-      item.kind !== "image" ||
-      (item.width !== null && item.height !== null)
-  );
 const editor = z
   .strictObject({
     id: z.uuid(),
@@ -66,15 +47,7 @@ const editor = z
     (value) =>
       value.edit_of === null || ["draft", "pending_moderation", "rejected"].includes(value.status)
   )
-  .refine((value) => {
-    const items = value.media;
-    return (
-      new Set(items.map((item) => `${item.purpose}/${item.position}`)).size === items.length &&
-      new Set(items.map((item) => `${item.purpose}/${item.object_id}`)).size === items.length &&
-      items.filter((item) => item.purpose === "cover").length <= 1 &&
-      items.filter((item) => item.purpose === "logo").length <= 1
-    );
-  });
+  .refine((value) => hasValidOwnerMediaSlots(value.media));
 const request = z.strictObject({ id: uuid });
 
 /** Atomic owner restore only. Status is not permission to edit and metadata

@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "GA5yKx9tkDFb-Gxhj2prMUqypvtrT58OGqV56UAROsI",
+  "candidateHash": "Mfjj3tNo61VLPrW_PzARA-MNN_KBIQw-hZ35fDYAxnY",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.119.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "td7pbt3kU94iURsBH454UBPCUhfvDI4SFNr4xjatty0",
-  "roleTypesHash": "1eFBgMSNsx_BwwmnBOr9NndRNks0XhnLAkyh1shvJmY",
+  "generatedTypesHash": "lrJLdGDNx96y5flXACFrR-5-BeQA_eEFjqjrABcBVFo",
+  "roleTypesHash": "7DauMRz0rc25J6Qq71KwhmyEE20PGeLb1O21oUysFI8",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -782,6 +782,30 @@
     },
     {
       "name": "get_listing_attributes",
+      "signature": "p_post_id uuid",
+      "argumentsWithDefaults": "p_post_id uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_owner_business_event_editor",
       "signature": "p_post_id uuid",
       "argumentsWithDefaults": "p_post_id uuid",
       "returns": "jsonb",

@@ -28,6 +28,13 @@ export function checkFoundationRoleTypes(
   // @ts-expect-error service credentials do not grant owner creation
   void service.rpc("create_core_draft", core);
   void member.rpc("get_owner_listing_editor", { p_post_id: "opaque-post" });
+  void member.rpc("get_owner_business_event_editor", { p_post_id: "opaque-post" });
+  // @ts-expect-error business/event metadata requires an authenticated owner
+  void publicApi.rpc("get_owner_business_event_editor", { p_post_id: "opaque-post" });
+  // @ts-expect-error service credentials do not grant owner metadata inspection
+  void service.rpc("get_owner_business_event_editor", { p_post_id: "opaque-post" });
+  // @ts-expect-error owner metadata reads require a UUID string argument
+  void member.rpc("get_owner_business_event_editor", { p_post_id: 123 });
   // @ts-expect-error owner editor reads require an authenticated user
   void publicApi.rpc("get_owner_listing_editor", { p_post_id: "opaque-post" });
   // @ts-expect-error service credentials do not grant owner inspection commands

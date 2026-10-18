@@ -77,6 +77,7 @@ export type Database = {
       get_core_draft: { Args: { p_id: string }; Returns: Json };
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
+      get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_listing_editor: { Args: { p_post_id: string }; Returns: Json };
       get_public_post: { Args: { p_id: string }; Returns: Json };
       grant_verified_intro_trial: { Args: { p_days: number; p_owner: string }; Returns: Json };

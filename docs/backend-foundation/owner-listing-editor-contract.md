@@ -1,4 +1,4 @@
-# Owner listing editor contract
+# Owner listing and business/event metadata contracts
 
 Status: local implementation; current verification is recorded in the active
 continuation. This contract does not approve target deployment or real intake.
@@ -70,3 +70,31 @@ activity and initial revision. readFoundationPostDraft restores only owner draft
 identity, with an exact requested UUID and current authority check. Neither is a
 complete event/business editor. General form/content, media and submission
 integration still require their own acceptance before any source page changes.
+
+## Business and event metadata restore
+
+api.get_owner_business_event_editor(p_post_id uuid) returns a single owner-bound
+snapshot for a canonical business or event, or normal null for a foreign,
+missing or wrong-kind resource. The fixed-search-path internal definer checks
+the current owner/session before and after its one SELECT, including null
+results. The invoker wrapper and helper grant execution only to authenticated
+users.
+
+The closed DTO contains kind/area/category/activity, lifecycle status, exact
+revision/edit-copy identity, nullable core content, linked owned media metadata
+and an event window for events. Business windows are null. Event instants are
+explicit UTC with millisecond precision; stored timezone aliases are preserved.
+Past/archived events remain inspectable. Database category/activity membership
+and required-activity rules remain authoritative.
+
+Business text is bounded at100/3000 UTF16 units; event text at120/5000. Media
+validation shares the listing contract, permits reuse across purposes and
+rejects duplicate slots/references and object-key fields. The SQL child query
+selects at most101 references; DTOs reject more than100 rather than silently
+restoring a partial editor.
+
+This is core metadata restore. Full legacy business/event fields, event-window
+mutation, contact/consent, media byte resolution and complete form/submission
+workflows remain separate acceptance work. Stored live/pending fixtures in the
+read tests demonstrate snapshot isolation, with actual owner edit commands; they
+do not establish a complete submit/moderate workflow.
