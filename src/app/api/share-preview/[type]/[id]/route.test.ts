@@ -1,6 +1,4 @@
 /** @vitest-environment node */
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -55,14 +53,15 @@ describe("public social image", () => {
   });
   it("renders the owner's PNG poster in the share card", async () => {
     const originalOrigin = process.env.NEXT_PUBLIC_APP_URL;
-    let requested = false;
-    const server = createServer((_request, response) => {
-      requested = true;
-      response.writeHead(200, { "Content-Type": "image/png" });
-      response.end(readFileSync("public/images/brand-shield-small.png"));
+    const poster = readFileSync("public/images/brand-shield-small.png");
+    process.env.NEXT_PUBLIC_APP_URL = "https://share-preview.test";
+    // Keep the real PNG renderer, with exactly one permitted synthetic image
+    // request. No socket or external network service is needed by this test.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (input !== "https://share-preview.test/images/poster.png")
+        throw new Error("Unexpected share-preview image request");
+      return new Response(new Uint8Array(poster), { headers: { "Content-Type": "image/png" } });
     });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    process.env.NEXT_PUBLIC_APP_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
       mocks.row.mockResolvedValue({
         data: {
@@ -75,14 +74,14 @@ describe("public social image", () => {
       });
       const response = await GET(request, { params: Promise.resolve({ type: "listing", id }) });
       const bytes = Buffer.from(await response.arrayBuffer());
-      expect(requested).toBe(true);
+      expect(fetchSpy).toHaveBeenCalledWith("https://share-preview.test/images/poster.png");
+      expect(bytes.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
       expect(bytes.length).toBeGreaterThan(25000);
       writeFileSync("output/desktop-profiles/share-card-with-media.png", bytes);
     } finally {
+      fetchSpy.mockRestore();
       if (originalOrigin === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
       else process.env.NEXT_PUBLIC_APP_URL = originalOrigin;
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   }, 30000);
   it("rejects invalid kinds and ids before touching data", async () => {
