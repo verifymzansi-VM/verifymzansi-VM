@@ -40,6 +40,13 @@ updates:
         versions: ["8.71.1"]
       - dependency-name: "@typescript-eslint/*"
         versions: ["8.71.1"]
+      # These must match `next` (16.3.8, a production dep). eslint-config-next
+      # 16.4 adds stricter react-hooks rules with 5 findings to fix. Bump all
+      # three together as one tested Next 16.4 upgrade, then drop this ignore.
+      - dependency-name: "@next/env"
+        versions: [">= 16.4.0"]
+      - dependency-name: "eslint-config-next"
+        versions: [">= 16.4.0"]
     # Group minor and patch updates to reduce PR noise
     groups:
       production-deps:
