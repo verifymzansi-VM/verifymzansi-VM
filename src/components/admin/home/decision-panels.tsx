@@ -15,7 +15,7 @@ function ClearLists({ lists }: { lists: { label: string; href: string }[] }) {
   if (lists.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed bg-card/60 px-3 py-2.5 sm:px-4">
-      <span className="mr-1 inline-flex items-center gap-1.5 text-sm font-medium text-brand-green-700 dark:text-brand-green-300">
+      <span className="mr-1 inline-flex items-center gap-1.5 text-sm font-medium text-brand-green-700 dark:text-brand-gold-300">
         <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
         Clear
       </span>

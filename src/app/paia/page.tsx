@@ -134,7 +134,7 @@ export default function PaiaManualPage() {
             Regulator&apos;s website, and send it to{" "}
             <a
               href={`mailto:${trustConfig.informationOfficerEmail}`}
-              className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200"
+              className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
             >
               {trustConfig.informationOfficerEmail}
             </a>
@@ -159,7 +159,7 @@ export default function PaiaManualPage() {
               <li key={step.title} className="flex gap-3.5">
                 <span
                   aria-hidden="true"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-sm font-bold text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-sm font-bold text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-gold-300"
                 >
                   {index + 1}
                 </span>

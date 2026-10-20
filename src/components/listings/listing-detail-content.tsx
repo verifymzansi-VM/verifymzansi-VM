@@ -493,7 +493,7 @@ export function ListingDetailContent({
           <Card className="surface-card elev-sm">
             <CardContent className="space-y-3 p-5">
               <div className="flex items-center gap-3">
-                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-green-300">
+                <span className="icon-tile bg-brand-green/10 text-brand-green dark:text-brand-gold-300">
                   <ShieldCheck className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <h3 className="font-display text-base font-semibold">Stay safe when you meet</h3>

@@ -78,7 +78,7 @@ function Figure({
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-300/10 dark:text-brand-green-300"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-300/10 dark:text-brand-gold-300"
           aria-hidden="true"
         >
           <Icon className="h-4 w-4" />

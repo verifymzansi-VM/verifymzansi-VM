@@ -41,7 +41,7 @@ type NodeVisual = "done" | "current" | "review" | "attention" | "todo";
 const NODE_CIRCLE: Record<NodeVisual, string> = {
   done: "border-brand-green-600 bg-brand-green-600 text-white dark:border-brand-green-500 dark:bg-brand-green-500 dark:text-brand-green-950",
   current:
-    "border-brand-green-600 bg-card text-brand-green-700 ring-4 ring-brand-green-600/15 dark:border-brand-green-400 dark:text-brand-green-300 dark:ring-brand-green-400/20",
+    "border-brand-green-600 bg-card text-brand-green-700 ring-4 ring-brand-green-600/15 dark:border-brand-green-400 dark:text-brand-gold-300 dark:ring-brand-green-400/20",
   review:
     "border-brand-gold-400 bg-brand-gold-50 text-brand-gold-800 dark:border-brand-gold-400/70 dark:bg-brand-gold-400/10 dark:text-brand-gold-200",
   attention:
@@ -50,8 +50,8 @@ const NODE_CIRCLE: Record<NodeVisual, string> = {
 };
 
 const NODE_CAPTION: Record<NodeVisual, string> = {
-  done: "text-brand-green-700 dark:text-brand-green-300",
-  current: "text-brand-green-700 dark:text-brand-green-300",
+  done: "text-brand-green-700 dark:text-brand-gold-300",
+  current: "text-brand-green-700 dark:text-brand-gold-300",
   review: "text-brand-gold-800 dark:text-brand-gold-200",
   attention: "text-brand-red-700 dark:text-brand-red-300",
   todo: "text-muted-foreground",

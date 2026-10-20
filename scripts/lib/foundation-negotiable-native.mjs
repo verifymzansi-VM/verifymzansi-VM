@@ -1,3 +1,6 @@
+import { testPostContactPreferences } from "./foundation-post-contacts-native.mjs";
+import { testStaffEventDuplicateFlags } from "./foundation-staff-event-flags-native.mjs";
+import { testEventDuplicateAdmission } from "./foundation-event-duplicates-native.mjs";
 import { testBusinessEventContext } from "./foundation-context-native.mjs";
 import { testOwnerBusinessEventEditor } from "./foundation-business-event-editor-native.mjs";
 import assert from "node:assert/strict";
@@ -18,7 +21,9 @@ export async function testPublicNegotiable({
   sql,
   sqlFails,
   createUser,
+  deleteTrackedUser,
   createReviewer,
+  verificationFixture,
   staff,
   connection,
   stage,
@@ -29,6 +34,7 @@ export async function testPublicNegotiable({
   stage("negotiable independent owner/reviewer");
   const owner = await createUser("negotiable-owner"),
     reviewer = await createReviewer();
+  await verificationFixture.ready(owner);
   const prefix = `nego${randomBytes(5).toString("hex")}`;
   sql(
     `insert into private.entitlements(owner_id,source,area,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at) values('${owner.id}','staff_grant','market','${staff.admin.id}',10,10,1,clock_timestamp()-interval '1 hour',clock_timestamp()+interval '7 days');`
@@ -89,7 +95,7 @@ export async function testPublicNegotiable({
       p_kind: "listing",
       p_area: "market",
       p_category_key: fixture.category,
-      p_detail: {},
+      p_detail: { contact_channels: ["form"] },
     });
     fixture.id = post.id;
     let changed = await call("save_core_listing_terms", {
@@ -150,7 +156,9 @@ export async function testPublicNegotiable({
     const row = all.items.find((item) => item.id === fixture.id);
     assert.ok(row);
     assert.equal(row.price_negotiable, fixture.negotiable);
-    assert.equal((await detail(fixture.id)).price_negotiable, fixture.negotiable);
+    const publicDetail = await detail(fixture.id);
+    assert.equal(publicDetail.price_negotiable, fixture.negotiable);
+    assert.equal(publicDetail.event_window, null);
     assert.equal(Object.hasOwn(row, "owner_id"), false);
     assert.equal(Object.hasOwn(row, "phone"), false);
   }
@@ -247,11 +255,51 @@ export async function testPublicNegotiable({
     awaitQueuedRpc,
   });
   await testBusinessEventContext({
+    verificationFixture,
     createUser,
     reviewer,
     connection,
     rpc,
     sql,
+    record,
+    stage,
+    controlledSql,
+    awaitQueuedRpc,
+  });
+  await testEventDuplicateAdmission({
+    verificationFixture,
+    createUser,
+    reviewer,
+    connection,
+    rpc,
+    sql,
+    record,
+    stage,
+    controlledSql,
+    awaitQueuedRpc,
+  });
+  await testPostContactPreferences({
+    verificationFixture,
+    createUser,
+    createReviewer: async () => reviewer,
+    fixtureAdminId: staff.admin.id,
+    connection,
+    rpc,
+    sql,
+    record,
+    stage,
+    controlledSql,
+    awaitQueuedRpc,
+  });
+  await testStaffEventDuplicateFlags({
+    verificationFixture,
+    createUser,
+    deleteTrackedUser,
+    fixtureAdminId: staff.admin.id,
+    connection,
+    rpc,
+    sql,
+    sqlFails,
     record,
     stage,
     controlledSql,

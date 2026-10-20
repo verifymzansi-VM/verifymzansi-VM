@@ -118,6 +118,117 @@ describe("decideBusinessVerification", () => {
     expect(fake.tables.business_verification_files[0].purge_after).toBeTruthy();
   });
 
+  it("fills the profile address from the office when the owner asked", async () => {
+    const office = { ...adminCopy().registeredOffice, streetLines: ["12 MAIN ROAD"] };
+    const { decide, biz } = setup({
+      admin_copy: adminCopy({ registeredOffice: office }),
+      apply_office_to_profile: true,
+    });
+    biz().category_details = {
+      customer_access: { version: 2, methods: ["visit"], publishAddress: true },
+    };
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    expect(biz()).toMatchObject({
+      location_province: "KwaZulu-Natal",
+      location_city: "Empangeni",
+      location_town: "KwaDlangezwa",
+      location_address: "12 MAIN ROAD",
+    });
+  });
+
+  it("keeps an unpublished street address unpublished", async () => {
+    const office = { ...adminCopy().registeredOffice, streetLines: ["12 MAIN ROAD"] };
+    const { decide, biz } = setup(
+      { admin_copy: adminCopy({ registeredOffice: office }), apply_office_to_profile: true },
+      {
+        businesses: [
+          {
+            id: "biz-1",
+            owner_id: OWNER,
+            business_name: "Example Kitchen",
+            cipc_verified_at: null,
+            category_details: {
+              customer_access: { version: 2, methods: ["delivery"], publishAddress: false },
+            },
+          },
+        ],
+      }
+    );
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    expect(biz()).toMatchObject({ location_city: "Empangeni" });
+    expect(biz()).not.toHaveProperty("location_address");
+  });
+
+  it("applies the profile form's limits to the office it copies", async () => {
+    const office = {
+      ...adminCopy().registeredOffice,
+      suburb: `Kwa${String.fromCodePoint(0x202e)}Dlangezwa`,
+      streetLines: ["X".repeat(400)],
+    };
+    const { decide, biz } = setup({
+      admin_copy: adminCopy({ registeredOffice: office }),
+      apply_office_to_profile: true,
+    });
+    biz().category_details = {
+      customer_access: { version: 2, methods: ["visit"], publishAddress: true },
+    };
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    expect(biz().location_town).toBeNull();
+    expect(biz().location_address).toHaveLength(300);
+  });
+
+  it("does not infer permission to copy an office street for a legacy profile", async () => {
+    const { decide, biz } = setup({
+      admin_copy: adminCopy({
+        registeredOffice: {
+          ...adminCopy().registeredOffice,
+          streetLines: ["12 PRIVATE ROAD"],
+        },
+      }),
+      apply_office_to_profile: true,
+    });
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    expect(biz()).toMatchObject({ location_city: "Empangeni" });
+    expect(biz()).not.toHaveProperty("location_address");
+  });
+  it("rechecks street permission on the write after an owner opts out", async () => {
+    const ctx = setup({
+      admin_copy: adminCopy({
+        registeredOffice: {
+          ...adminCopy().registeredOffice,
+          streetLines: ["12 PRIVATE ROAD"],
+        },
+      }),
+      apply_office_to_profile: true,
+    });
+    ctx.biz().category_details = {
+      customer_access: { version: 2, methods: ["visit"], publishAddress: true },
+    };
+    const from = ctx.fake.client.from;
+    vi.spyOn(ctx.fake.client, "from").mockImplementation((table) => {
+      const query = from(table);
+      if (table === "businesses") {
+        const update = query.update;
+        query.update = (value) => {
+          if ("location_city" in value)
+            ctx.biz().category_details = {
+              customer_access: { version: 2, methods: ["visit"], publishAddress: false },
+            };
+          return update(value);
+        };
+      }
+      return query;
+    });
+    expect(await ctx.decide({})).toEqual({ ok: true, status: "approved" });
+    expect(ctx.biz()).not.toHaveProperty("location_address");
+    expect(ctx.biz()).not.toHaveProperty("location_city");
+  });
+  it("leaves the profile address alone unless the owner asked", async () => {
+    const { decide, biz } = setup({ admin_copy: adminCopy() });
+    expect(await decide({})).toEqual({ ok: true, status: "approved" });
+    expect(biz()).not.toHaveProperty("location_city");
+  });
+
   it("refuses when the owner's ID is not on the CIPC copy", async () => {
     const { decide } = setup({
       admin_copy: adminCopy({

@@ -143,7 +143,8 @@ describe("proxy security headers", () => {
     const csp = res.headers.get("Content-Security-Policy");
 
     expect(csp).toContain("script-src 'self' 'unsafe-inline'");
-    expect(csp).not.toContain("'unsafe-eval'");
+    // React's dev overlay needs eval(); the production test below forbids it.
+    expect(csp).toContain("'unsafe-eval'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
     expect(res.headers.get("x-nonce")).toBeNull();
   });
@@ -156,6 +157,7 @@ describe("proxy security headers", () => {
     const nonce = res.headers.get("x-nonce");
 
     expect(nonce).toBeTruthy();
+    expect(csp).not.toContain("'unsafe-eval'");
     expect(csp).toContain("script-src 'self' 'nonce-");
     expect(csp).toContain("style-src 'self' 'nonce-");
     expect(csp).toContain("style-src-attr 'unsafe-inline'");

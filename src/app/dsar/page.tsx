@@ -14,6 +14,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import { NumberedSteps } from "@/components/ui/numbered-steps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -250,7 +251,7 @@ export default function DsarPage() {
                             <Icon
                               className={`mt-0.5 h-4 w-4 shrink-0 ${
                                 selected
-                                  ? "text-brand-green-700 dark:text-brand-green-300"
+                                  ? "text-brand-green-700 dark:text-brand-gold-300"
                                   : "text-muted-foreground"
                               }`}
                               aria-hidden="true"
@@ -424,31 +425,14 @@ export default function DsarPage() {
                 <h2 id="dsar-next-title" className="font-body text-base font-semibold">
                   What happens next
                 </h2>
-                <ol className="mt-4 space-y-4">
-                  {NEXT_STEPS.map((step, index) => (
-                    <li key={step.title} className="flex gap-3.5">
-                      <span
-                        aria-hidden="true"
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-xs font-bold text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300"
-                      >
-                        {index + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{step.title}</p>
-                        <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
-                          {step.body}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
+                <NumberedSteps steps={NEXT_STEPS} />
               </div>
               <div className="surface-card p-5 text-sm leading-6 text-muted-foreground sm:p-6">
                 <p className="font-semibold text-foreground">Prefer email?</p>
                 <p className="mt-0.5">
                   <a
                     href={`mailto:${PRIVACY_CONTACT_EMAIL}`}
-                    className="break-all font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-green-300"
+                    className="break-all font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-gold-300"
                   >
                     {PRIVACY_CONTACT_EMAIL}
                   </a>

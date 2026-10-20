@@ -208,7 +208,7 @@ export default function VerificationHelpPage() {
                     <step.icon className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-green-300">
+                    <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-gold-300">
                       Step {index + 1}
                     </p>
                     <h3 className="font-body text-base font-semibold text-foreground">
@@ -287,7 +287,7 @@ export default function VerificationHelpPage() {
                       {entry.tips.map((tip) => (
                         <li key={tip} className="flex gap-2.5 text-sm leading-6 text-foreground/85">
                           <CheckCircle2
-                            className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                            className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
                             aria-hidden="true"
                           />
                           {tip}
@@ -313,7 +313,7 @@ export default function VerificationHelpPage() {
                 Email{" "}
                 <a
                   href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
-                  className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-green-300"
+                  className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-gold-300"
                 >
                   {SUPPORT_CONTACT_EMAIL}
                 </a>{" "}

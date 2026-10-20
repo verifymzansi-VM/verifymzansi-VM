@@ -1,3 +1,4 @@
+import { captureFoundationFinancialState } from "./foundation-financial-snapshot.mjs";
 import assert from "node:assert/strict";
 import { randomBytes, createHash } from "node:crypto";
 import { createFoundationPublicApi } from "../../src/lib/foundation/public-api.ts";
@@ -31,31 +32,7 @@ export async function testEventContextApprovals({
     ends_at: new Date(Date.now() + 7200000).toISOString(),
     timezone: "US/Eastern",
   });
-  const financialTables = [
-    "payments",
-    "invoices",
-    "post_activations",
-    "post_addon_windows",
-    "entitlements",
-  ];
-  const finances = () => {
-    const rows = financialTables
-      .map(
-        (table) =>
-          `'${table}',(select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]') from private.${table} t)`
-      )
-      .join(",");
-    const counts = financialTables
-      .map((table) => `'${table}',(select count(*) from private.${table})`)
-      .join(",");
-    // Hash every complete ordered row inside PostgreSQL. The full browse fixture
-    // has >10,000 activations; returning its JSON exceeds the process output cap.
-    return sql(`select jsonb_build_object(
-      'sha256',encode(sha256(convert_to(snapshot::text,'UTF8')),'hex'),
-      'bytes',octet_length(snapshot::text),
-      'rows',jsonb_build_object(${counts}))
-      from (select jsonb_build_object(${rows}) as snapshot) snapshots;`);
-  };
+  const finances = () => captureFoundationFinancialState(sql);
   let financialBefore = finances();
   stage("event media upload setup");
   const image = await call("begin_media_upload", { p_kind: "image", p_bytes: 128 });
@@ -119,7 +96,7 @@ export async function testEventContextApprovals({
       p_area: "tourism_events",
       p_category_key: "events",
       p_activity_key: eventKeys[0],
-      p_detail: w,
+      p_detail: { ...w, contact_channels: ["form"] },
     });
     const content = await saveFoundationPostContent(api, {
       id: post.id,
@@ -147,6 +124,7 @@ export async function testEventContextApprovals({
     assert.equal(editor.status, "live");
     assert.ok(visible);
     assert.equal(Date.parse(visible.visible_until), Date.parse(w.ends_at));
+    assert.deepEqual(visible.event_window, w);
     return { id: post.id, window: w, editor, visible };
   };
   const archive = async (id) => {
@@ -273,6 +251,7 @@ export async function testEventContextApprovals({
   let current = await read(main.id),
     visible = await detail(main.id);
   assert.deepEqual(current.event_window, extended);
+  assert.deepEqual(visible.event_window, extended);
   assert.equal(current.activity_key, eventKeys[1]);
   assert.equal(current.revision, approved.post_revision);
   assert.equal(visible.published_at, published);
@@ -290,6 +269,7 @@ export async function testEventContextApprovals({
   current = await read(main.id);
   visible = await detail(main.id);
   assert.deepEqual(current.event_window, shortened);
+  assert.deepEqual(visible.event_window, shortened);
   assert.equal(visible.published_at, published);
   assert.equal(Date.parse(visible.visible_until), Date.parse(shortened.ends_at));
   synchronized(main.id);

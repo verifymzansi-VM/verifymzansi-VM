@@ -30,6 +30,78 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 type Detail = NonNullable<CaseDetail>;
 
+type DirectorMatch = Detail["parsed"]["directors"][number];
+
+const CHIP = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
+const CHIP_OK =
+  "bg-brand-green-50 text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-gold-100";
+const CHIP_WARN =
+  "bg-brand-gold-50 text-brand-gold-900 dark:bg-brand-gold-400/10 dark:text-brand-gold-100";
+const CHIP_PLAIN = "bg-muted text-muted-foreground";
+
+/** Each director on a document against the owner's reviewed ID and name. */
+function DirectorMatches({ title, directors }: { title: string; directors: DirectorMatch[] }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      {directors.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No directors read.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {directors.map((d) => (
+            <li
+              key={d.name}
+              className={cn(
+                "rounded-lg border p-2 text-sm",
+                d.isOwner ? "border-brand-green-600/40" : "border-border"
+              )}
+            >
+              <p className="font-medium">
+                {d.name}
+                {d.role ? (
+                  <span className="font-normal text-muted-foreground"> · {d.role}</span>
+                ) : null}
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {d.isOwner ? (
+                  <span className={cn(CHIP, CHIP_OK)}>
+                    <Check aria-hidden="true" className="h-3 w-3" /> Same ID
+                  </span>
+                ) : (
+                  <span className={cn(CHIP, CHIP_PLAIN)}>
+                    {d.hasSaId ? (
+                      <>
+                        <X aria-hidden="true" className="h-3 w-3" /> Other ID
+                      </>
+                    ) : (
+                      "No SA ID"
+                    )}
+                  </span>
+                )}
+                {d.nameMatch === "match" && (
+                  <span className={cn(CHIP, CHIP_OK)}>
+                    <Check aria-hidden="true" className="h-3 w-3" /> Name
+                  </span>
+                )}
+                {d.nameMatch === "partial" && (
+                  <span className={cn(CHIP, CHIP_WARN)}>
+                    <CircleAlert aria-hidden="true" className="h-3 w-3" /> Name partly
+                  </span>
+                )}
+                {d.nameMatch === "differs" && (
+                  <span className={cn(CHIP, d.isOwner ? CHIP_WARN : CHIP_PLAIN)}>
+                    <X aria-hidden="true" className="h-3 w-3" /> Other name
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const REASONS: Array<{ code: string; label: string; note: string }> = [
   {
     code: "not_in_business",
@@ -91,7 +163,7 @@ const SEVERITY = {
   },
   ok: {
     icon: Check,
-    cls: "border-brand-green-300 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-500/40 dark:bg-brand-green-500/10 dark:text-brand-green-100",
+    cls: "border-brand-green-300 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-500/40 dark:bg-brand-green-500/10 dark:text-brand-gold-100",
     label: "OK",
   },
 } as const;
@@ -289,7 +361,7 @@ function Compare({ detail }: { detail: Detail }) {
             "mt-3 flex items-center gap-2 rounded-xl p-3 text-sm font-medium",
             copy.differences.length
               ? "bg-brand-red-50 text-brand-red-900 dark:bg-brand-red-500/10 dark:text-brand-red-100"
-              : "bg-brand-green-50 text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-green-100"
+              : "bg-brand-green-50 text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-gold-100"
           )}
         >
           {copy.differences.length ? (
@@ -870,7 +942,7 @@ export function CaseReview({
   const open = detail.status === "pending" || detail.status === "info_requested";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr,22rem]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),22rem]">
       <div className="space-y-4">
         <div
           className={cn(
@@ -975,10 +1047,12 @@ export function CaseReview({
       </div>
 
       <div className="space-y-4">
-        <Section title="Owner">
+        <Section title="Identity match">
           <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">Username</dt>
+            <dd>{detail.owner.displayName ?? "—"}</dd>
             <dt className="text-muted-foreground">Name on ID</dt>
-            <dd>{detail.owner.legalName ?? detail.owner.displayName ?? "—"}</dd>
+            <dd>{detail.owner.legalName ?? "—"}</dd>
             <dt className="text-muted-foreground">ID reviewed</dt>
             <dd>{detail.owner.idReviewed ? "Yes" : "No"}</dd>
             <dt className="text-muted-foreground">Route</dt>
@@ -989,23 +1063,14 @@ export function CaseReview({
                   ? "Linked profile"
                   : "Director"}
             </dd>
-            <dt className="text-muted-foreground">Directors read</dt>
-            <dd>
-              {detail.parsed.directors.length === 0
-                ? "—"
-                : detail.parsed.directors.map((d) => (
-                    <span key={d.name} className="block">
-                      {d.name}
-                      {d.role ? ` · ${d.role}` : ""}
-                      {d.isOwner ? " · matches owner's ID" : ""}
-                      {!d.hasSaId ? " · no SA ID" : ""}
-                    </span>
-                  ))}
-            </dd>
           </dl>
+          <DirectorMatches title="Owner's upload" directors={detail.parsed.directors} />
+          {detail.adminCopy && (
+            <DirectorMatches title="Your CIPC copy" directors={detail.adminCopy.directors} />
+          )}
           <p className="text-xs text-muted-foreground">
-            ID numbers are never stored; matching uses a one-way hash of the owner&apos;s reviewed
-            ID.
+            ID numbers are never stored or shown; &ldquo;Same ID&rdquo; compares a one-way hash of
+            the owner&apos;s reviewed ID with each director&apos;s.
           </p>
         </Section>
 

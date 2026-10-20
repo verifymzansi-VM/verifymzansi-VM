@@ -112,7 +112,7 @@ export function EnterprisePricing({
                 </Button>
                 <Link
                   href={href}
-                  className="inline-flex min-h-11 items-center justify-center gap-1.5 text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
                 >
                   Full details of {name}
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />

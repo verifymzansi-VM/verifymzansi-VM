@@ -203,9 +203,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "verification:manual-location": [{ limit: 10, ttl: 60 }],
   // Business verification (CIPC / Seen stickers). Submissions are keyed per
   // account + business: five a day is ample for honest retries.
+  // The preview says whether a file looks like an original CIPC download; a
+  // daily cap stops it being used to tune a forged file by trial and error.
   "business-verification:preview": [
     { limit: 10, ttl: 60 },
     { limit: 40, ttl: 3600 },
+    { limit: 60, ttl: 86400 },
   ],
   // One budget per sticker, so failed CIPC attempts never block booking a check.
   "business-verification:cipc": [{ limit: 5, ttl: 86400 }],

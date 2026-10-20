@@ -8,6 +8,7 @@ import {
   screenUpload,
   storeCaseFile,
 } from "@/lib/business-verification/service";
+import { officeToLocation } from "@/lib/cipc/address";
 import { normaliseRegistrationNumber } from "@/lib/cipc/parse";
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -40,8 +41,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!upload) return NextResponse.json({ error: "Choose a file to upload." }, { status: 400 });
     const enteredNumber = formText(form, "registrationNumber", 30);
     const route = formText(form, "route") === "representative" ? "representative" : "director";
+    // The owner's choice to use the registered office as the business address;
+    // applied only when staff approve.
+    const useOfficeAsAddress = formText(form, "useOfficeAsAddress") === "1";
 
-    const file = await readCipcFile(upload);
+    const file = await readCipcFile(upload, { pdfOnly: true });
     if (isIntakeError(file)) {
       return NextResponse.json({ error: file.error, code: file.code }, { status: file.status });
     }
@@ -87,6 +91,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         director_id_hmacs: file.directorIdHmacs,
         findings,
         registered_office: file.office,
+        apply_office_to_profile:
+          useOfficeAsAddress && Boolean(file.office && officeToLocation(file.office)),
       })
       .select("id")
       .single();

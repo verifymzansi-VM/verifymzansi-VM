@@ -156,7 +156,7 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
             className={cn(
               "h-[18px] w-[18px]",
               isActive
-                ? "text-brand-green-700 dark:text-brand-green-300"
+                ? "text-brand-green-700 dark:text-brand-gold-300"
                 : "text-muted-foreground group-hover:text-foreground"
             )}
           />
@@ -195,7 +195,7 @@ export function DashboardSidebar({ badges = {}, onSignOut }: DashboardSidebarPro
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <BrandShield
                 aria-hidden="true"
-                className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+                className="h-4 w-4 text-brand-green-700 dark:text-brand-gold-300"
               />
               {badges.pendingReview ? "Verification in review" : "Finish verification"}
             </p>

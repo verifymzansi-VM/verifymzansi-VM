@@ -253,7 +253,7 @@ function InlinePlanGrid({
                     {feat.enabled ? (
                       <Check
                         aria-hidden="true"
-                        className="h-4 w-4 flex-shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                        className="h-4 w-4 flex-shrink-0 text-brand-green-700 dark:text-brand-gold-300"
                       />
                     ) : (
                       <X
@@ -479,7 +479,7 @@ export function PlanGate({
         <div className="text-center space-y-3">
           <Loader2
             aria-hidden="true"
-            className="mx-auto h-8 w-8 animate-spin text-brand-green-600 dark:text-brand-green-400"
+            className="mx-auto h-8 w-8 animate-spin text-brand-green-600 dark:text-brand-gold-300"
           />
           <p role="status" className="text-sm text-muted-foreground">
             Checking your plan…
@@ -604,7 +604,7 @@ export function PlanGate({
           One reusable posting slot per plan, with no automatic renewal.{" "}
           <Link
             href="/billing"
-            className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-green-300"
+            className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-gold-300"
           >
             View full plan details
           </Link>
@@ -697,7 +697,7 @@ export function PlanGate({
             {planInfo.maxPhotos} photos
           </span>
           {planInfo.videoAllowed && (
-            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-green-300">
+            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-gold-300">
               <Video className="h-3.5 w-3.5" aria-hidden="true" />
               Video
             </span>
@@ -777,7 +777,7 @@ function PlanPickerWithTrial({
               <Camera className="h-3.5 w-3.5" />
               {planInfo.maxPhotos} photos
             </span>
-            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-green-300">
+            <span className="flex items-center gap-1 text-brand-green-700 dark:text-brand-gold-300">
               <Video className="h-3.5 w-3.5" aria-hidden="true" />1 video
             </span>
             <span>{usageText}</span>
@@ -892,7 +892,7 @@ function PlanPickerWithTrial({
         Paid once, no automatic renewal.{" "}
         <Link
           href="/billing"
-          className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-green-300"
+          className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-gold-300"
         >
           View full plan details
         </Link>

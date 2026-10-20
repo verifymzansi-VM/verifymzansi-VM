@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 import { createLogger } from "@/lib/utils/logger";
+import { SERVICE_WORKER_VERSION } from "@/lib/service-worker-version";
 
 const log = createLogger("ServiceWorker");
-const SERVICE_WORKER_VERSION = "20260922-http-cache-images";
 const DEV_SW_CLEANUP_SESSION_KEY = "vm-dev-sw-cleanup-v1";
 
 type CleanupDeps = {

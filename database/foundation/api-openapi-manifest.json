@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "candidateHash": "mq_VABXyqb-BvSU2a2W-uHcGRBXiVwr6b4yFj0b-jmU",
-  "apiManifestHash": "Y8zME1FUoggWi1cakR-fCC6hIc1wE6Yrs7oaojYll1Q",
+  "candidateHash": "s4Zu9Qrt76Ys6jZyEOtPBPMcaFT47H4SDsul9tBnKC8",
+  "apiManifestHash": "IzkXBJMwjSd4G2D30ICsga89BmaiqR45Y8XVArCFVbk",
   "releaseReady": false,
   "source": "Fresh local PostgREST role-sensitive OpenAPI, synthetic JWT roles; generated operations unchanged",
   "normalisation": "Only host/basePath/schemes replaced with foundation.invalid/rest/v1/https; no target URL or credentials",
@@ -16,10 +16,10 @@
     },
     {
       "role": "authenticated",
-      "rpcCount": 53,
-      "rawLocalResponseHash": "khyNSR5hPb_WL5XLNSU6yhW67jqY5hvUk8jGJ4PxACs",
+      "rpcCount": 58,
+      "rawLocalResponseHash": "o1Pi8VQvJExRZvDDRnzqDhvYx0J_lrnGIsroGLLKoyw",
       "path": "database/foundation/openapi/authenticated.json",
-      "hash": "vVrliKo3s4y3WnFHxzuPM42_qXgu18-rd2e7yX8qMXI"
+      "hash": "4em7fR7nZduYD23awYLznT5UzyZAKtGDwtJ7FOIIJYE"
     },
     {
       "role": "service_role",

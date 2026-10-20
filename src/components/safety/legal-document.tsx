@@ -32,7 +32,7 @@ function TocLinks({ sections }: { sections: LegalSection[] }) {
             href={`#${section.id}`}
             className="flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <span className="w-5 shrink-0 text-xs font-semibold tabular-nums text-brand-green-700 dark:text-brand-green-300">
+            <span className="w-5 shrink-0 text-xs font-semibold tabular-nums text-brand-green-700 dark:text-brand-gold-300">
               {index + 1}.
             </span>
             <span className="leading-5">{section.navLabel ?? section.title}</span>
@@ -111,7 +111,7 @@ export function LegalDocument({
                   >
                     <span
                       aria-hidden="true"
-                      className="text-sm font-semibold tabular-nums text-brand-green-700 dark:text-brand-green-300"
+                      className="text-sm font-semibold tabular-nums text-brand-green-700 dark:text-brand-gold-300"
                     >
                       {index + 1}.
                     </span>

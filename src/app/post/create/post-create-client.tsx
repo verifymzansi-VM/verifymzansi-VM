@@ -366,7 +366,7 @@ export function PostCreateClient({
                   <li key={item} className="flex gap-2">
                     <Check
                       aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-gold-300"
                     />
                     {item}
                   </li>

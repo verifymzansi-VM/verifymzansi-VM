@@ -7,14 +7,18 @@ import {
   Building2,
   Eye,
   Check,
+  ChevronDown,
   Clock,
   FileUp,
   IdCard,
   Link2,
   Loader2,
   Send,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 
+import { CipcDocumentGuide } from "@/components/business-verification/cipc-document-guide";
 import { SeenRequest } from "@/components/business-verification/seen-request";
 import { BusinessStickers } from "@/components/trust/business-stickers";
 import { Button } from "@/components/ui/button";
@@ -75,6 +79,10 @@ type Preview = {
   directors: Array<{ name: string; role: string | null }>;
   registeredOffice: string | null;
   ownerListedAs: string | null;
+  /** Null when we couldn't read the file at all. */
+  looksOriginal: boolean | null;
+  officeUsable: boolean;
+  profileHasAddress: boolean;
 };
 
 /** Shown when the automatic read failed; the owner types the number. */
@@ -87,7 +95,20 @@ const UNREAD_PREVIEW: Preview = {
   directors: [],
   registeredOffice: null,
   ownerListedAs: null,
+  looksOriginal: null,
+  officeUsable: false,
+  profileHasAddress: true,
 };
+
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+/** Checked before upload so the owner hears at once, not after a round trip. */
+function uploadProblem(file: File): string | null {
+  const pdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  if (!pdf) return "Upload the PDF you got from CIPC. Photos and scans can't be checked.";
+  if (file.size > MAX_UPLOAD_BYTES) return "Files can be up to 5 MB.";
+  return null;
+}
 
 const REASONS: Record<string, string> = {
   not_in_business: "CIPC doesn't show the company as In Business.",
@@ -149,7 +170,7 @@ function StepShell({
     done: {
       label: "Done",
       icon: Check,
-      cls: "bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-500/15 dark:text-brand-green-200",
+      cls: "bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-500/15 dark:text-brand-gold-200",
     },
     review: {
       label: "In review",
@@ -171,7 +192,7 @@ function StepShell({
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <Icon
               aria-hidden="true"
-              className="h-5 w-5 text-brand-green-700 dark:text-brand-green-300"
+              className="h-5 w-5 text-brand-green-700 dark:text-brand-gold-300"
             />
             {title}
           </h2>
@@ -262,8 +283,19 @@ function Thread({
             <Input
               id={`reply-file-${caseItem.id}`}
               type="file"
-              accept="application/pdf,image/jpeg,image/png,image/webp"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              accept={
+                caseItem.kind === "cipc"
+                  ? "application/pdf,.pdf"
+                  : "application/pdf,image/jpeg,image/png,image/webp"
+              }
+              onChange={(e) => {
+                const selected = e.target.files?.[0] ?? null;
+                const problem =
+                  selected && caseItem.kind === "cipc" ? uploadProblem(selected) : null;
+                setError(problem);
+                setFile(problem ? null : selected);
+                if (problem) e.currentTarget.value = "";
+              }}
             />
             <Button
               onClick={send}
@@ -322,7 +354,7 @@ function RepresentativeSteps({
 
   if (rep?.emailVerified) {
     return (
-      <p className="flex items-start gap-2 rounded-lg bg-brand-green-50 p-2 text-sm text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-green-100">
+      <p className="flex items-start gap-2 rounded-lg bg-brand-green-50 p-2 text-sm text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-gold-100">
         <Check aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
         Work email {rep.email} confirmed. Our team will phone your company on a number we find
         ourselves to confirm you can represent it.
@@ -404,13 +436,20 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
   const [preview, setPreview] = useState<Preview | null>(null);
   const [number, setNumber] = useState("");
   const [representative, setRepresentative] = useState(false);
+  const [useOffice, setUseOffice] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<"reading" | "sending" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function read(selected: File) {
-    setFile(selected);
     setPreview(null);
     setError(null);
+    const problem = uploadProblem(selected);
+    if (problem) {
+      setFile(null);
+      return setError(problem);
+    }
+    setFile(selected);
     setBusy("reading");
     const form = new FormData();
     form.set("file", selected);
@@ -432,7 +471,25 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
     setPreview(data.preview);
     setNumber(data.preview.registrationNumber ?? "");
     setRepresentative(data.preview.readable && !data.preview.ownerListedAs);
+    setUseOffice(data.preview.officeUsable && !data.preview.profileHasAddress);
   }
+
+  // Drag a PDF onto the upload area; tapping it opens the file picker.
+  const dropHandlers = {
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      const dropped = e.dataTransfer.files?.[0];
+      if (dropped && busy === null) void read(dropped);
+    },
+  };
 
   async function submit() {
     if (!file) return;
@@ -442,6 +499,7 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
     form.set("file", file);
     if (number.trim()) form.set("registrationNumber", number.trim());
     form.set("route", representative ? "representative" : "director");
+    if (preview?.officeUsable && useOffice) form.set("useOfficeAsAddress", "1");
     const res = await fetch(`/api/businesses/${businessId}/verification/cipc`, {
       method: "POST",
       headers: withCsrfHeaders(),
@@ -454,30 +512,68 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="cipc-file">Upload a CIPC document for your company</Label>
-        <p className="text-sm text-muted-foreground">
-          A free disclosure, Disclosure Certificate or Registration Certificate (CoR14.3). The PDF
-          you downloaded from CIPC works best.{" "}
-          <Link
-            href="/help/business-verification#documents"
-            className="font-medium underline underline-offset-2"
-          >
-            Which document?
-          </Link>
-        </p>
-        <Input
-          id="cipc-file"
-          type="file"
-          accept="application/pdf,image/jpeg,image/png,image/webp"
-          onChange={(e) => {
-            const selected = e.target.files?.[0];
-            // Clear so choosing the same file again (to retry) fires again.
-            e.currentTarget.value = "";
-            if (selected) void read(selected);
-          }}
-        />
-        {file && <p className="text-xs text-muted-foreground">Selected: {file.name}</p>}
+      <details className="group rounded-xl border border-border">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          Which document do we need?
+          <ChevronDown
+            aria-hidden="true"
+            className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="space-y-3 border-t border-border p-3">
+          <CipcDocumentGuide />
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>
+              Download your Registration Certificate (CoR14.3) or a disclosure from BizPortal or
+              CIPC eServices.{" "}
+              <Link
+                href="/help/business-verification#documents"
+                className="font-medium text-foreground underline underline-offset-2"
+              >
+                How
+              </Link>
+            </li>
+            <li>
+              Upload that PDF as it is. Don&apos;t open and save it in another app, print it, scan
+              it or photograph it.
+            </li>
+          </ol>
+        </div>
+      </details>
+
+      <div {...dropHandlers}>
+        <label
+          htmlFor="cipc-file"
+          className={cn(
+            "flex min-h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed p-4 text-center text-sm transition-colors focus-within:ring-2 focus-within:ring-ring",
+            dragging
+              ? "border-brand-green-600 bg-brand-green-50 dark:bg-brand-green-500/10"
+              : "border-border hover:bg-muted/40"
+          )}
+        >
+          <FileUp aria-hidden="true" className="h-6 w-6 text-muted-foreground" />
+          <span className="max-w-full truncate font-medium">
+            {file ? file.name : "Upload your CIPC PDF"}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {file
+              ? "Tap to choose a different file"
+              : "Drop it here or tap to choose · PDF up to 5 MB"}
+          </span>
+          <input
+            id="cipc-file"
+            type="file"
+            accept="application/pdf,.pdf"
+            className="sr-only"
+            disabled={busy !== null}
+            onChange={(e) => {
+              const selected = e.target.files?.[0];
+              // Clear so choosing the same file again (to retry) fires again.
+              e.currentTarget.value = "";
+              if (selected) void read(selected);
+            }}
+          />
+        </label>
       </div>
 
       {busy === "reading" && (
@@ -523,11 +619,34 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
                   </>
                 )}
               </dl>
+              {preview.looksOriginal !== null && (
+                <p
+                  className={cn(
+                    "flex items-start gap-2 rounded-lg p-2",
+                    preview.looksOriginal
+                      ? "bg-brand-green-50 text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-gold-100"
+                      : "bg-brand-gold-50 text-brand-gold-900 dark:bg-brand-gold-400/10 dark:text-brand-gold-100"
+                  )}
+                >
+                  {preview.looksOriginal ? (
+                    <>
+                      <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /> Looks
+                      like an original CIPC download.
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /> This
+                      file seems to have been changed after CIPC issued it. For a faster review,
+                      upload a fresh copy from CIPC. You can still send this one.
+                    </>
+                  )}
+                </p>
+              )}
               <p
                 className={cn(
                   "flex items-start gap-2 rounded-lg p-2",
                   preview.ownerListedAs
-                    ? "bg-brand-green-50 text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-green-100"
+                    ? "bg-brand-green-50 text-brand-green-900 dark:bg-brand-green-500/10 dark:text-brand-gold-100"
                     : "bg-brand-gold-50 text-brand-gold-900 dark:bg-brand-gold-400/10 dark:text-brand-gold-100"
                 )}
               >
@@ -564,6 +683,24 @@ function CipcUpload({ businessId, onSubmitted }: { businessId: string; onSubmitt
               onChange={(e) => setNumber(e.target.value)}
             />
           </div>
+
+          {preview.officeUsable && (
+            <label className="flex min-h-11 cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={useOffice}
+                onChange={(e) => setUseOffice(e.target.checked)}
+                className="mt-1 h-4 w-4 accent-brand-green-700"
+              />
+              <span>
+                Use the registered office as my business address.{" "}
+                <span className="text-muted-foreground">
+                  We fill it in once we approve. Leave this off if it&apos;s your accountant&apos;s
+                  address.
+                </span>
+              </span>
+            </label>
+          )}
 
           <label className="flex min-h-11 cursor-pointer items-start gap-2.5">
             <input

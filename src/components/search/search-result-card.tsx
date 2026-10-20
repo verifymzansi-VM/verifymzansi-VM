@@ -24,7 +24,7 @@ export interface SearchResultCardData {
 }
 
 const EYEBROW_TONE: Record<SearchArea["tone"], string> = {
-  market: "text-brand-green-700 dark:text-brand-green-300",
+  market: "text-brand-green-700 dark:text-brand-gold-300",
   business: "text-brand-blue-700 dark:text-brand-blue-300",
   tourism: "text-teal-700 dark:text-teal-300",
 };

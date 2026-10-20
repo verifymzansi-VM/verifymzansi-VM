@@ -96,7 +96,7 @@ export function ListingGridHeader() {
           {filters.query && (
             <Badge
               variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-gold-200"
             >
               {filters.query}
               <button
@@ -112,7 +112,7 @@ export function ListingGridHeader() {
           {filters.category && (
             <Badge
               variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-gold-200"
             >
               {[...CATEGORIES, ...BUSINESS_CATEGORIES].find((c) => c.value === filters.category)
                 ?.label ||
@@ -130,7 +130,7 @@ export function ListingGridHeader() {
           {filters.province && (
             <Badge
               variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-gold-200"
             >
               {filters.province}
               {filters.city && ` › ${filters.city}`}
@@ -147,7 +147,7 @@ export function ListingGridHeader() {
           {filters.condition && (
             <Badge
               variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-gold-200"
             >
               {getListingConditionLabel(filters.condition)}
               <button
@@ -163,7 +163,7 @@ export function ListingGridHeader() {
           {(filters.priceMin || filters.priceMax) && (
             <Badge
               variant="secondary"
-              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+              className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-gold-200"
             >
               {formatPriceRangeLabel(filters.priceMin || undefined, filters.priceMax || undefined)}
               <button
@@ -187,7 +187,7 @@ export function ListingGridHeader() {
               <Badge
                 key={name}
                 variant="secondary"
-                className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-green-200"
+                className="gap-1 rounded-full border border-brand-green/25 bg-brand-green/5 px-2.5 py-1 text-xs font-medium text-brand-green-800 dark:bg-brand-green/10 dark:text-brand-gold-200"
               >
                 {describeAttributeFilter(filters.category, name, val)}
                 <button

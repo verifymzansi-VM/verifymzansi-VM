@@ -30,6 +30,8 @@ const config: Config = {
       lg: "1024px",
       xl: "1280px",
       "2xl": "1440px",
+      // Short laptop screens and zoomed browsers: tighten single-screen pages so nothing is cut.
+      short: { raw: "(max-height: 820px)" },
     },
 
     extend: {

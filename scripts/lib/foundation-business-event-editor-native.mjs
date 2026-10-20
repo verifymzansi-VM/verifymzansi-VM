@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { captureOwnerRestrictions } from "./foundation-native-owner-restrictions.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { createFoundationAuthenticatedApi } from "../../src/lib/foundation/authenticated-api.ts";
 import { createTimeoutFetch } from "../../src/lib/supabase/fetch-with-timeout.ts";
@@ -179,17 +180,9 @@ export async function testOwnerBusinessEventEditor({
           .status
       )
     );
-  const claims = JSON.parse(Buffer.from(owner.token.split(".")[1], "base64url"));
-  assert.equal(claims.sub, owner.id);
-  assert.match(claims.session_id, /^[a-f0-9-]{36}$/);
-  const prior = sql(
-    `select case when not_after is null then 'null' else quote_literal(not_after::text)||'::timestamptz' end from auth.sessions where id='${claims.session_id}' and user_id='${owner.id}';`
-  );
-  assert.ok(prior);
+  const restrictions = captureOwnerRestrictions(sql, owner);
   try {
-    sql(
-      `update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${claims.session_id}' and user_id='${owner.id}';`
-    );
+    restrictions.expireSession();
     for (const id of [business.id, randomUUID()]) {
       const before = http.length;
       await assert.rejects(
@@ -200,18 +193,10 @@ export async function testOwnerBusinessEventEditor({
       assert.deepEqual(http[before], { status: 403, code: "42501" });
     }
   } finally {
-    sql(
-      `update auth.sessions set not_after=${prior} where id='${claims.session_id}' and user_id='${owner.id}';`
-    );
+    restrictions.restoreSession();
   }
-  const banned = sql(
-    `select case when banned_until is null then 'null' else quote_literal(banned_until::text)||'::timestamptz' end from auth.users where id='${owner.id}';`
-  );
-  assert.ok(banned);
   try {
-    sql(
-      `update auth.users set banned_until=clock_timestamp()+interval '1 hour' where id='${owner.id}';`
-    );
+    restrictions.banAccount();
     const before = http.length;
     await assert.rejects(
       () => read(business.id),
@@ -220,7 +205,7 @@ export async function testOwnerBusinessEventEditor({
     assert.equal(http.length, before + 1);
     assert.deepEqual(http[before], { status: 403, code: "42501" });
   } finally {
-    sql(`update auth.users set banned_until=${banned} where id='${owner.id}';`);
+    restrictions.restoreAccount();
   }
   record("native-owner-business-event-authority-and-resource-denials");
 
@@ -239,9 +224,7 @@ export async function testOwnerBusinessEventEditor({
         () => ({ denied: true })
       );
       await awaitQueuedRpc("get_owner_business_event_editor");
-      sql(
-        `update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${claims.session_id}' and user_id='${owner.id}';`
-      );
+      restrictions.expireSession();
       assert.equal(await lock.done, 0);
       assert.deepEqual(await reading, { denied: true });
       assert.equal(http.length, before + 1);
@@ -250,9 +233,7 @@ export async function testOwnerBusinessEventEditor({
       lock.close();
       await lock.done;
       if (reading) await reading;
-      sql(
-        `update auth.sessions set not_after=${prior} where id='${claims.session_id}' and user_id='${owner.id}';`
-      );
+      restrictions.restoreSession();
     }
     assert.equal((await read(event.id)).status, "archived");
     record("native-owner-business-event-expiry-during-blocked-read");

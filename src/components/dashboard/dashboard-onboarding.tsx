@@ -112,7 +112,7 @@ export function DashboardOnboarding({
                     className={cn(
                       "flex items-center gap-2 text-sm font-semibold",
                       step.completed
-                        ? "text-brand-green-700 dark:text-brand-green-300"
+                        ? "text-brand-green-700 dark:text-brand-gold-300"
                         : "text-foreground"
                     )}
                   >

@@ -75,11 +75,23 @@ export type Database = {
         Args: { p_challenge: string; p_expected_hash: string; p_owner: string };
         Returns: Json;
       };
+      flag_duplicate_events: {
+        Args: {
+          p_expected_revision_a: number;
+          p_expected_revision_b: number;
+          p_post_a: string;
+          p_post_b: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       get_core_draft: { Args: { p_id: string }; Returns: Json };
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
       get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_listing_editor: { Args: { p_post_id: string }; Returns: Json };
+      get_owner_post_contacts: { Args: { p_post_id: string }; Returns: Json };
+      get_owner_verification_readiness: { Args: Record<PropertyKey, never>; Returns: Json };
       get_public_post: { Args: { p_id: string }; Returns: Json };
       grant_intro_trial: {
         Args: { p_days: number; p_identity_hmac: string; p_owner: string };
@@ -106,6 +118,7 @@ export type Database = {
       my_queue_claims: { Args: Record<PropertyKey, never>; Returns: Json };
       open_verification_case: { Args: Record<PropertyKey, never>; Returns: Json };
       place_legal_hold: { Args: { p_reason: string; p_subject_id: string }; Returns: Json };
+      preview_duplicate_events: { Args: { p_post_a: string; p_post_b: string }; Returns: Json };
       propose_decision: {
         Args: { p_action: string; p_case_id: string; p_expected_version: number; p_payload: Json };
         Returns: Json;
@@ -215,6 +228,10 @@ export type Database = {
         Returns: Json;
       };
       search_posts: { Args: { p_request: Json }; Returns: Json };
+      set_post_contacts: {
+        Args: { p_channels: Json; p_expected_revision: number; p_post_id: string };
+        Returns: Json;
+      };
       set_post_media: {
         Args: { p_expected_revision: number; p_items: Json; p_post_id: string };
         Returns: Json;

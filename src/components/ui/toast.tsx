@@ -32,7 +32,7 @@ const toastVariants = cva(
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
         success:
-          "border-brand-green-300 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-700 dark:bg-brand-green-950 dark:text-brand-green-200",
+          "border-brand-green-300 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-700 dark:bg-brand-green-950 dark:text-brand-gold-200",
       },
     },
     defaultVariants: {

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { registeredOfficeSummary } from "@/lib/cipc/address";
+import { officeToLocation, registeredOfficeSummary } from "@/lib/cipc/address";
 import { normaliseRegistrationNumber } from "@/lib/cipc/parse";
-import { screenCipcSubmission, type Finding } from "@/lib/cipc/screen";
+import { looksOriginal, screenCipcSubmission, type Finding } from "@/lib/cipc/screen";
 import { createNotification } from "@/lib/notifications";
 import { deleteFromR2, uploadKycDocument } from "@/lib/services/storage";
 import { createLogger } from "@/lib/utils/logger";
@@ -112,6 +112,24 @@ export async function ownerIdHmac(admin: Admin, userId: string): Promise<string 
   return (data?.id_number_hmac as string | null) ?? null;
 }
 
+/** Name on the owner's reviewed ID (locked once verified). */
+async function ownerLegalName(
+  admin: Admin,
+  userId: string
+): Promise<{ first: string | null; last: string | null } | null> {
+  const { data, error } = await admin
+    .from("account_profiles")
+    .select("legal_first_name, legal_last_name")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.legal_last_name) return null;
+  return {
+    first: (data.legal_first_name as string | null) ?? null,
+    last: data.legal_last_name as string,
+  };
+}
+
 export type StickerHolder = { ownerId: string; businessId: string; businessName: string };
 
 /** Other owners who already hold the CIPC sticker for this company number. */
@@ -170,8 +188,9 @@ export async function screenUpload(
     normaliseRegistrationNumber(input.enteredNumber ?? "") ??
     file.parsed?.registrationNumber ??
     null;
-  const [ownerHmac, conflictHolders, reused] = await Promise.all([
+  const [ownerHmac, legalName, conflictHolders, reused] = await Promise.all([
     ownerIdHmac(admin, input.userId),
+    ownerLegalName(admin, input.userId),
     holdersForOtherOwners(admin, input.userId, registrationNumber),
     sameFileOnOtherBusiness(admin, file.sha256, input.businessId),
   ]);
@@ -189,6 +208,8 @@ export async function screenUpload(
     profileName: input.businessName,
     office: file.office,
     today: input.today ?? new Date(),
+    ownerLegalName: legalName,
+    directors: file.stored?.directors ?? [],
   });
   return { findings, registrationNumber, ownerHmac, conflictHolders };
 }
@@ -206,7 +227,21 @@ export function ownerPreview(file: CipcFile, ownerHmac: string | null) {
     directors: stored?.directors.map((d) => ({ name: d.name, role: d.role })) ?? [],
     registeredOffice: file.office ? registeredOfficeSummary(file.office) : null,
     ownerListedAs: matched?.role ?? null,
+    looksOriginal: looksOriginal(file.structure, stored?.docType ?? null),
+    /** The registered office can fill the profile's location fields. */
+    officeUsable: Boolean(file.office && officeToLocation(file.office)),
   };
+}
+
+/** Whether the owner already gave the business a street address. */
+export async function profileHasStreetAddress(admin: Admin, businessId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("business_private")
+    .select("location_address")
+    .eq("business_id", businessId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return Boolean((data?.location_address as string | null)?.trim());
 }
 
 /**

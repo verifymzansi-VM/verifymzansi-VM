@@ -47,12 +47,12 @@ export function UploadProgressPanel({ slots, visible }: UploadProgressPanelProps
             <div className="relative flex h-5 w-5 items-center justify-center">
               {isActive ? (
                 <Loader2
-                  className="h-4 w-4 animate-spin text-brand-green-700 motion-reduce:animate-none dark:text-brand-green-300"
+                  className="h-4 w-4 animate-spin text-brand-green-700 motion-reduce:animate-none dark:text-brand-gold-300"
                   aria-hidden="true"
                 />
               ) : isDone ? (
                 <CheckCircle2
-                  className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+                  className="h-4 w-4 text-brand-green-700 dark:text-brand-gold-300"
                   aria-hidden="true"
                 />
               ) : (

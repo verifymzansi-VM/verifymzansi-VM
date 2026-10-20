@@ -18,7 +18,7 @@ export function shouldUseStrictNonceCsp(): boolean {
 /** Build a nonce-based Content-Security-Policy string. */
 export function buildCsp(
   nonce: string | null,
-  options?: { allowDevWebSocket?: boolean; enforceHttps?: boolean }
+  options?: { allowDevWebSocket?: boolean; allowDevEval?: boolean; enforceHttps?: boolean }
 ): string {
   const supabaseOrigin = env("NEXT_PUBLIC_SUPABASE_URL") ?? "";
   const cdnOrigin = env("R2_PUBLIC_URL") ?? "";
@@ -66,9 +66,12 @@ export function buildCsp(
   // explicit URL allowlists gives strong XSS protection while remaining
   // compatible with Cloudflare's infrastructure.
   // Never allow open package CDNs (unpkg, jsdelivr): anyone can publish there.
+  // React's development build uses eval() to rebuild server call stacks for the
+  // dev overlay; production React never calls eval, so this is `next dev` only.
+  const devEval = options?.allowDevEval ? " 'unsafe-eval'" : "";
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com`
-    : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com";
+    ? `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval'${devEval} https://challenges.cloudflare.com https://static.cloudflareinsights.com`
+    : `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${devEval} https://challenges.cloudflare.com https://static.cloudflareinsights.com`;
   const styleSrc = nonce ? `style-src 'self' 'nonce-${nonce}'` : "style-src 'self' 'unsafe-inline'";
   const directives = [
     "default-src 'self'",
@@ -235,6 +238,7 @@ export function withSecurityHeaders(
     request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
   const csp = buildCsp(nonce, {
     allowDevWebSocket: process.env.NODE_ENV !== "production",
+    allowDevEval: process.env.NODE_ENV === "development",
     enforceHttps: isSecureRequest,
   });
 

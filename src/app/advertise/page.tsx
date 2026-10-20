@@ -345,7 +345,7 @@ function PackageSection({
           <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
             <Icon aria-hidden="true" className="h-5 w-5" />
           </span>
-          <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+          <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
             {eyebrow}
           </p>
           <h2 id={`${id}-title`} className="section-title mt-2">
@@ -358,7 +358,7 @@ function PackageSection({
               <li key={text} className="flex gap-2">
                 <Check
                   aria-hidden="true"
-                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-gold-300"
                 />
                 {text}
               </li>
@@ -549,7 +549,7 @@ export default async function AdvertisePage() {
         >
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] lg:gap-16">
             <Reveal>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
                 Video-first
               </p>
               <h2 id="advertise-video-title" className="section-title mt-2">
@@ -594,7 +594,7 @@ export default async function AdvertisePage() {
         {/* 2 ── Why post here ───────────────────────────────── */}
         <section aria-labelledby="advertise-why-title" className="container-page py-12 sm:py-16">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
               Why post here
             </p>
             <h2 id="advertise-why-title" className="section-title mt-2">
@@ -707,7 +707,7 @@ export default async function AdvertisePage() {
                     <div className="mt-4 flex flex-wrap gap-x-4">
                       <Link
                         href={href}
-                        className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+                        className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
                       >
                         Post here
                       </Link>
@@ -738,7 +738,7 @@ export default async function AdvertisePage() {
                   <li key={text} className="flex gap-2">
                     <Check
                       aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-green-400"
+                      className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-600 dark:text-brand-gold-300"
                     />
                     {text}
                   </li>
@@ -792,7 +792,7 @@ export default async function AdvertisePage() {
                       <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
                         {name}
                       </h3>
-                      <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-green-300">
+                      <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
                         {price}
                       </p>
                       <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>

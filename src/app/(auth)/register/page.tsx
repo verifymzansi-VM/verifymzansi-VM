@@ -223,17 +223,28 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="space-y-6">
+    // data-auth-wide lets the auth shell widen the card so paired fields fit one screen.
+    <div className="space-y-6 short:space-y-3.5" data-auth-wide>
       <AuthPageHeader
         title="Create your account"
-        description="Free to join. Verify your ID only when you post."
+        description={
+          <>
+            Free to join. Verify your ID only when you post. Have an account?{" "}
+            <Link
+              href="/login"
+              className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
+            >
+              Sign in
+            </Link>
+          </>
+        }
       />
 
       <GoogleOAuthButton mode="register" />
 
       <AuthDivider>or</AuthDivider>
 
-      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-5 short:space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor="firstName" className="text-sm font-semibold text-foreground">
@@ -271,65 +282,69 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <AuthEmailField
-          inputProps={register("email")}
-          errorMessage={errors.email?.message}
-          disabled={!isInteractive}
-        />
-
-        <div className="space-y-2">
-          <Label htmlFor="phone" className="text-sm font-semibold text-foreground">
-            SA mobile number
-          </Label>
-          <Input
-            id="phone"
-            type="tel"
-            inputMode="tel"
-            placeholder="071 234 5678"
-            autoComplete="tel"
+        <div className="grid gap-5 short:gap-3 sm:grid-cols-2 sm:gap-3">
+          <AuthEmailField
+            inputProps={register("email")}
+            errorMessage={errors.email?.message}
             disabled={!isInteractive}
-            aria-invalid={!!errors.phone}
-            aria-describedby={errors.phone ? "phone-hint phone-error" : "phone-hint"}
-            className={authInputClassName}
-            {...register("phone")}
           />
-          <AuthFieldHint id="phone-hint">
-            We&apos;ll send a one-time code here when you verify.
-          </AuthFieldHint>
-          <AuthFieldError id="phone-error" message={errors.phone?.message} />
+
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-sm font-semibold text-foreground">
+              SA mobile number
+            </Label>
+            <Input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              placeholder="071 234 5678"
+              autoComplete="tel"
+              disabled={!isInteractive}
+              aria-invalid={!!errors.phone}
+              aria-describedby={errors.phone ? "phone-hint phone-error" : "phone-hint"}
+              className={authInputClassName}
+              {...register("phone")}
+            />
+            <AuthFieldHint id="phone-hint">
+              We&apos;ll text you a one-time code to verify.
+            </AuthFieldHint>
+            <AuthFieldError id="phone-error" message={errors.phone?.message} />
+          </div>
         </div>
 
-        <AuthPasswordField
-          id="password"
-          label="Password"
-          placeholder="Create a strong password"
-          inputProps={register("password")}
-          errorMessage={errors.password?.message}
-          shown={showPassword}
-          onToggleShown={() => setShowPassword(!showPassword)}
-          describedBy="password-requirements"
-          disabled={!isInteractive}
-        >
-          <PasswordRequirements id="password-requirements" requirements={requirements} />
-        </AuthPasswordField>
+        <div className="grid gap-5 short:gap-3 sm:grid-cols-2 sm:gap-3">
+          <AuthPasswordField
+            id="password"
+            label="Password"
+            placeholder="Create a strong password"
+            inputProps={register("password")}
+            errorMessage={errors.password?.message}
+            shown={showPassword}
+            onToggleShown={() => setShowPassword(!showPassword)}
+            describedBy="password-requirements"
+            disabled={!isInteractive}
+          >
+            <PasswordRequirements id="password-requirements" requirements={requirements} />
+          </AuthPasswordField>
 
-        <AuthPasswordField
-          id="confirmPassword"
-          label="Confirm password"
-          placeholder="Type your password again"
-          inputProps={register("confirmPassword")}
-          errorMessage={errors.confirmPassword?.message}
-          shown={showConfirmPassword}
-          onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
-          disabled={!isInteractive}
-          toggleLabel={{
-            show: "Show password confirmation",
-            hide: "Hide password confirmation",
-          }}
-        />
+          <AuthPasswordField
+            id="confirmPassword"
+            label="Confirm password"
+            placeholder="Type your password again"
+            inputProps={register("confirmPassword")}
+            errorMessage={errors.confirmPassword?.message}
+            shown={showConfirmPassword}
+            onToggleShown={() => setShowConfirmPassword(!showConfirmPassword)}
+            disabled={!isInteractive}
+            toggleLabel={{
+              show: "Show password confirmation",
+              hide: "Hide password confirmation",
+            }}
+          />
+        </div>
 
         <div className="space-y-2">
-          <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5">
+          <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5 short:py-2.5">
             <input
               type="checkbox"
               id="acceptTerms"
@@ -348,7 +363,7 @@ export default function RegisterPage() {
                 href="/terms"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-green-300"
+                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
               >
                 Terms of Service
               </Link>{" "}
@@ -357,7 +372,7 @@ export default function RegisterPage() {
                 href="/privacy"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-green-300"
+                className="font-medium text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
               >
                 Privacy Policy
               </Link>
@@ -393,16 +408,6 @@ export default function RegisterPage() {
           Create account
         </Button>
       </form>
-
-      <p className="text-center text-[15px] text-muted-foreground">
-        Have an account?{" "}
-        <Link
-          href="/login"
-          className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200"
-        >
-          Sign in
-        </Link>
-      </p>
 
       <AuthReassurance />
     </div>

@@ -44,6 +44,16 @@ export const FIXTURE_MIGRATIONS = {
     "docs/backend-foundation/prototypes/owner-business-event-editor.sql",
   "20261018054629_business_event_context.sql":
     "docs/backend-foundation/prototypes/business-event-context.sql",
+  "20261018114134_public_event_window.sql":
+    "docs/backend-foundation/prototypes/public-event-window.sql",
+  "20261018130855_event_duplicate_admission.sql":
+    "docs/backend-foundation/prototypes/event-duplicate-admission.sql",
+  "20261018170804_staff_event_duplicate_flags.sql":
+    "docs/backend-foundation/prototypes/staff-event-duplicate-flags.sql",
+  "20261018215443_post_contact_preferences.sql":
+    "docs/backend-foundation/prototypes/post-contact-preferences.sql",
+  "20261019133858_publication_verification_readiness.sql":
+    "docs/backend-foundation/prototypes/publication-verification-readiness.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

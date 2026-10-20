@@ -18,7 +18,7 @@ export default function PostError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background">
         <div className="container-page flex h-16 items-center">
           <Link

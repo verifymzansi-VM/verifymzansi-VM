@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "mq_VABXyqb-BvSU2a2W-uHcGRBXiVwr6b4yFj0b-jmU",
+  "candidateHash": "s4Zu9Qrt76Ys6jZyEOtPBPMcaFT47H4SDsul9tBnKC8",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.119.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "ddqe2xmo7LBtzWMKCbTM3-FgmhJMUbjx0Fjlxxsf82s",
-  "roleTypesHash": "K30Fdk2LZ9wqQHJdRrGEXTWtZKfpISDaHhu2BbWx3Yg",
+  "generatedTypesHash": "j8y3CmEFB4pNJ0_LIkrvOeGoKxZiHBZx8m8gunvcv-g",
+  "roleTypesHash": "9gyQoVYsKBL1toFxJxWrEcb42ZRjOpEqgWAL271g6lA",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -733,6 +733,50 @@
       }
     },
     {
+      "name": "flag_duplicate_events",
+      "signature": "p_post_a uuid, p_expected_revision_a integer, p_post_b uuid, p_expected_revision_b integer, p_reason text",
+      "argumentsWithDefaults": "p_post_a uuid, p_expected_revision_a integer, p_post_b uuid, p_expected_revision_b integer, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_a",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision_a",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_post_b",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision_b",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "get_core_draft",
       "signature": "p_id uuid",
       "argumentsWithDefaults": "p_id uuid",
@@ -846,6 +890,48 @@
           "optional": false
         }
       ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_owner_post_contacts",
+      "signature": "p_post_id uuid",
+      "argumentsWithDefaults": "p_post_id uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_owner_verification_readiness",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
       "execute": {
         "anon": false,
         "authenticated": true,
@@ -1081,6 +1167,35 @@
         {
           "name": "p_reason",
           "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "preview_duplicate_events",
+      "signature": "p_post_a uuid, p_post_b uuid",
+      "argumentsWithDefaults": "p_post_a uuid, p_post_b uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_a",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_post_b",
+          "sqlType": "uuid",
           "optional": false
         }
       ],
@@ -1861,6 +1976,40 @@
       ],
       "execute": {
         "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "set_post_contacts",
+      "signature": "p_post_id uuid, p_expected_revision integer, p_channels jsonb",
+      "argumentsWithDefaults": "p_post_id uuid, p_expected_revision integer, p_channels jsonb",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_channels",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
         "authenticated": true,
         "service_role": false
       }

@@ -36,7 +36,7 @@ export function BannedPageContent() {
             This account was banned after a moderation review found a serious breach of our{" "}
             <Link
               href="/terms"
-              className="font-semibold text-foreground underline underline-offset-4 hover:text-brand-green-700 dark:hover:text-brand-green-300"
+              className="font-semibold text-foreground underline underline-offset-4 hover:text-brand-green-700 dark:hover:text-brand-gold-200"
             >
               Terms of Service
             </Link>

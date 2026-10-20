@@ -2,8 +2,17 @@ import Image from "next/image";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BRAND_SHIELD_LARGE_SRC } from "./brand-mark";
+import { WaterSurface } from "./water-surface";
 
-type EmblemSize = "md" | "lg";
+/** "fit" sizes the emblem from the viewport height so a full-screen panel never scrolls. */
+type EmblemSize = "md" | "lg" | "fit";
+
+/** One length, --emblem, sizes every layer; the layout lives in .emblem-* in globals.css. */
+const EMBLEM_SIZE = {
+  lg: "[--emblem:17rem] xl:[--emblem:20rem]",
+  md: "[--emblem:14rem]",
+  fit: "[--emblem:clamp(8rem,36vh,20rem)]",
+} as const;
 
 /**
  * The checks behind a post, in the brand-banner wording. "Reviewed", not
@@ -48,9 +57,11 @@ export function VerificationChips({ className }: { className?: string }) {
 }
 
 /**
- * Shield centrepiece for BrandSurface: gold rings, the shield and, unless
- * `chips` is false, the checks a poster passes. Decorative; the surrounding
- * copy carries the meaning.
+ * Shield centrepiece for BrandSurface, seen from above: the gold shield drops
+ * flat onto still water, the splash rings out across the whole green surface
+ * and the shield bobs there, sending a ripple each time it settles. Unless
+ * `chips` is false, the checks a poster passes sit around it. Decorative; the
+ * surrounding copy carries the meaning.
  */
 export function VerificationEmblem({
   size = "lg",
@@ -61,50 +72,30 @@ export function VerificationEmblem({
   chips?: boolean;
   className?: string;
 }) {
-  const lg = size === "lg";
+  const lg = size !== "md";
   return (
     <div
       aria-hidden="true"
+      data-emblem
       className={cn(
         "relative",
+        EMBLEM_SIZE[size],
         chips
           ? lg
             ? "h-[18rem] w-[26rem] xl:h-[21rem] xl:w-[30rem]"
             : "h-[15rem] w-[23rem]"
-          : lg
-            ? "h-[17rem] w-[17rem] xl:h-[20rem] xl:w-[20rem]"
-            : "h-[14rem] w-[14rem]",
+          : "h-[var(--emblem)] w-[var(--emblem)]",
         className
       )}
     >
-      <div
-        className={cn(
-          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-gold-400/20 blur-3xl",
-          lg ? "h-56 w-56 xl:h-64 xl:w-64" : "h-44 w-44"
-        )}
-      />
-      <div
-        className={cn(
-          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-brand-gold-300/35",
-          lg ? "h-[17rem] w-[17rem] xl:h-[20rem] xl:w-[20rem]" : "h-[14rem] w-[14rem]"
-        )}
-      />
-      <div
-        className={cn(
-          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-brand-gold-300/50 bg-brand-green-900/40",
-          lg ? "h-48 w-48 xl:h-56 xl:w-56" : "h-40 w-40"
-        )}
-      />
+      <WaterSurface />
       <Image
         src={BRAND_SHIELD_LARGE_SRC}
         alt=""
         width={176}
         height={176}
         unoptimized
-        className={cn(
-          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 object-contain drop-shadow-[0_18px_40px_rgba(0,0,0,0.45)]",
-          lg ? "h-36 w-36 xl:h-44 xl:w-44" : "h-28 w-28"
-        )}
+        className="emblem-shield"
       />
 
       {chips && (

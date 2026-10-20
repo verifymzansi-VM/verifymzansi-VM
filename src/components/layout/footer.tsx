@@ -17,6 +17,7 @@ const footerSections = [
       { href: "/sponsors", label: "Business Sponsors" },
       { href: "/pricing", label: "Pricing" },
       { href: "/advertise", label: "Advertise" },
+      { href: "/install", label: "Get the app" },
     ],
   },
   {

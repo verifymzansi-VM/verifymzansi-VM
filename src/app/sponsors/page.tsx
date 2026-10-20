@@ -116,7 +116,7 @@ export default async function SponsorsPage() {
                           <Badge variant="secondary">Founding pilot</Badge>
                         ) : null}
                       </span>
-                      <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-green-700 dark:text-brand-green-300">
+                      <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
                         View businesses
                         <ArrowRight aria-hidden="true" className="h-4 w-4" />
                       </span>

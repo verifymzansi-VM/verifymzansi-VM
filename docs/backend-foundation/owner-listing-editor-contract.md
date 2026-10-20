@@ -124,11 +124,52 @@ and financial records. An approved event's visibility ends at its reviewed end;
 both the captured original deadlines and proposed end must still be current
 after media and projection waits. Owner eligibility is also checked again.
 Paused originals remain paused, and normal free-event edits retain their
-existing two-approval allowance. Complete form/public schedule integration and
-the remaining rollout gates are separate acceptance work.
+existing two-approval allowance. Complete forms, website integration and
+remaining rollout gates are separate acceptance work.
 
 For bounded local reproduction, the staff adapter probe accepts
 --negotiable-races to exercise real local Auth and controlled lock waits. The
 full native fixture additionally keeps the large browse dataset. These fixtures
 use synthetic media metadata and local payment settlement; physical scanning,
 provider delivery and complete website workflows require separate verification.
+
+## Approved public event schedule
+
+get_public_post includes event_window with starts_at, ends_at and timezone for
+approved public events. Instants are UTC with exact millisecond precision; the
+stored timezone label and aliases are preserved. Listings and businesses have an
+explicit null window. The shared stored-window validator enforces finite UTC
+years1–9999, positive duration up to90days and a closed field set.
+
+Schedule data comes from the eligible original post. Pending/rejected copies
+remain private and cannot replace the public schedule before approval. Existing
+visibility, pricing, media and permission rules are unchanged. This adds the
+backend detail contract; complete website forms and schedule rendering remain
+separate work.
+
+## Event admission and duplicate protection
+
+Free events are limited per account to five pending/live originals and ten
+retained originals submitted within the rolling 30-day window. Deleting an
+original restores a place; edits and corrections retain the same logical
+identity. Resubmission uses the original row's latest submitted_at; no
+deleted-event usage ledger is kept.
+
+Submission and approval serialize event admission for the owner after the
+existing post/media locks. A different pending/live logical event with the same
+normalized complete title, description, category, activity, province,
+city/locality and exact UTC start/end is rejected with PT409 and constant detail
+duplicate_event. Pending edit proposals reserve their proposed tuple only while
+their live parent has both future visibility and event-end deadlines. Current
+owner or staff authority is checked after waiting and before returning a
+duplicate error. Rejected calls leave post, claim, audit and financial records
+unchanged. Uncertain writes never retry.
+
+Text normalization uses NFC, database-locale lowercase and collapsed ECMAScript
+whitespace. This is not full Unicode case folding. Media and timezone aliases do
+not distinguish events. Listed-city and manually typed locality remain distinct
+when their stored city IDs differ, even if display labels match. Different
+accounts and meaningfully different core data remain allowed. This conservative
+comparison is not proof that two posts represent the same real-world event.
+Administrator suspicion flags and claimed human review remain separate work; the
+guard creates no flags and applies no sanctions automatically.

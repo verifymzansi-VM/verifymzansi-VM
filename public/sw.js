@@ -10,10 +10,10 @@
  *  - API calls: Network-only (no caching of dynamic data)
  */
 
-const CACHE_NAME = "verifymzansi-v8-brand-shield-cache";
+const CACHE_NAME = "verifymzansi-v9-single-manifest-cache";
 const OFFLINE_URL = "/offline";
 
-const PRECACHE_URLS = ["/offline", "/manifest.json", "/icons/icon-192.png?v=20260924"];
+const PRECACHE_URLS = ["/offline", "/manifest.webmanifest", "/icons/icon-192.png?v=20260924"];
 
 const DEFAULT_NOTIFICATION_ICON = "/icons/icon-192.png?v=20260924";
 const DEFAULT_NOTIFICATION_TAG = "verifymzansi-notification";

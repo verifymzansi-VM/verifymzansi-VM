@@ -128,7 +128,7 @@ export function AuthNotice({
 }
 
 const ICON_TILE_TONES = {
-  green: "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300",
+  green: "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-gold-300",
   gold: "bg-brand-gold/15 text-brand-gold-800 dark:text-brand-gold-300",
   red: "bg-brand-red/10 text-brand-red-700 dark:bg-brand-red/15 dark:text-brand-red-300",
 } as const;
@@ -173,7 +173,7 @@ export function AuthReassurance() {
           className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground"
         >
           <Icon
-            className="h-3.5 w-3.5 text-brand-green-700 dark:text-brand-green-300"
+            className="h-3.5 w-3.5 text-brand-green-700 dark:text-brand-gold-300"
             aria-hidden="true"
           />
           {text}

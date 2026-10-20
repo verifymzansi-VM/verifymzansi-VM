@@ -1,4 +1,13 @@
-import { Building2, ShoppingBag, TreePalm, type LucideIcon } from "lucide-react";
+import {
+  Building2,
+  ClipboardCheck,
+  Headset,
+  ShieldCheck,
+  ShoppingBag,
+  TreePalm,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import {
   BUSINESS_CATEGORY_LABELS,
   CATEGORY_LABELS,
@@ -198,6 +207,11 @@ const PAGES = [
   },
   { href: "/verify-buyer", title: "Verify a buyer", description: "Check buyer verification." },
   {
+    href: "/install",
+    title: "Get the app",
+    description: "Install VerifyMzansi on your phone without an app store.",
+  },
+  {
     href: "/help/verification",
     title: "Verification help",
     description: "Help with identity verification and documents.",
@@ -290,8 +304,8 @@ export const AREA_SHORTCUTS: Record<
 };
 
 export const HELP_SHORTCUTS = [
-  { label: "How verification works", href: "/help/verification" },
-  { label: "Scam alerts", href: "/safety/scam-alerts" },
-  { label: "Meeting safety checklist", href: "/safety/meeting-checklist" },
-  { label: "Contact support", href: "/contact" },
+  { label: "How verification works", href: "/help/verification", icon: ShieldCheck },
+  { label: "Scam alerts", href: "/safety/scam-alerts", icon: TriangleAlert },
+  { label: "Meeting safety checklist", href: "/safety/meeting-checklist", icon: ClipboardCheck },
+  { label: "Contact support", href: "/contact", icon: Headset },
 ] as const;

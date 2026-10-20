@@ -15,6 +15,7 @@ import {
   Moon,
   Search,
   LifeBuoy,
+  Smartphone,
   Tag,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -344,7 +345,7 @@ function HeaderInner({
               <Button
                 asChild
                 variant="outline"
-                className="rounded-full border-brand-green/40 hover:border-brand-green hover:bg-brand-green/5 hover:text-brand-green-800 dark:hover:text-brand-green-200"
+                className="rounded-full border-brand-green/40 hover:border-brand-green hover:bg-brand-green/5 hover:text-brand-green-800 dark:hover:text-brand-gold-100"
                 size="sm"
               >
                 <a href={LOGIN_HREF}>Sign in</a>
@@ -529,6 +530,16 @@ function HeaderInner({
             >
               <Tag className="h-4 w-4" />
               Pricing
+            </Link>
+            {/* Hidden inside the installed app, where it has nothing left to offer. */}
+            <Link
+              href="/install"
+              prefetch={false}
+              className="flex min-h-11 items-center gap-2 text-sm font-medium [@media(display-mode:standalone)]:hidden"
+              onClick={() => setMobileOpen(false)}
+            >
+              <Smartphone className="h-4 w-4" />
+              Get the app
             </Link>
           </div>
         </div>

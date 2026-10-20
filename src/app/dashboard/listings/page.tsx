@@ -893,7 +893,7 @@ function ListingList({
                         <StatusBadges item={listing} />
                       </div>
                     </div>
-                    <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-green-300">
+                    <p className="mt-0.5 text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
                       {getDisplayPrice(listing)}
                     </p>
                     <ItemMeta item={listing} />

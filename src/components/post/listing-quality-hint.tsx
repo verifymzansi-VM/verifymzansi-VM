@@ -16,7 +16,7 @@ export function ListingQualityHint(input: QualityInput) {
       panel:
         "border-brand-green-200 bg-brand-green-50/70 dark:border-brand-green-800/70 dark:bg-brand-green-950/30",
       bar: "bg-brand-green-600 dark:bg-brand-green-400",
-      icon: "text-brand-green-700 dark:text-brand-green-300",
+      icon: "text-brand-green-700 dark:text-brand-gold-300",
       label: "Looking good",
     },
     fair: {

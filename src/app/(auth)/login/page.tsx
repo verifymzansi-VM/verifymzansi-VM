@@ -457,7 +457,7 @@ export default function LoginPage() {
           labelAction={
             <Link
               href="/forgot-password"
-              className="-my-2 inline-flex min-h-9 items-center rounded-md text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+              className="-my-2 inline-flex min-h-9 items-center rounded-md text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
             >
               Forgot password?
             </Link>
@@ -498,7 +498,7 @@ export default function LoginPage() {
         New here?{" "}
         <Link
           href="/register"
-          className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200"
+          className="font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
         >
           Create an account
         </Link>

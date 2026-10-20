@@ -62,28 +62,33 @@
     --shadow-md: 0 2px 4px -1px rgb(16 23 20 / 0.04), 0 8px 20px -4px rgb(16 23 20 / 0.09);
     --shadow-lg: 0 4px 10px -2px rgb(16 23 20 / 0.05), 0 18px 40px -8px rgb(16 23 20 / 0.12);
     --shadow-xl: 0 8px 16px -4px rgb(16 23 20 / 0.06), 0 28px 60px -12px rgb(16 23 20 / 0.18);
+
+    /* Page ground pattern: deep emerald ink, like charcoal lines on a limewashed wall */
+    --pattern-ink: 160 60% 18%;
+    --pattern-strength: 0.075;
   }
 
   /* ── Dark Theme ──────────────────────────────────────────── */
+  /* Dark mode wears the profile viewer's deep Mzansi green, not near-black. */
   .dark {
-    --background: 156 20% 5%;
-    --foreground: 60 10% 94%;
+    --background: 167 86% 8%;
+    --foreground: 80 14% 96%;
 
-    --card: 156 14% 8%;
-    --card-foreground: 60 10% 94%;
+    --card: 169 80% 12%;
+    --card-foreground: 80 14% 96%;
 
-    --popover: 156 14% 9%;
-    --popover-foreground: 60 10% 94%;
+    --popover: 169 72% 13%;
+    --popover-foreground: 80 14% 96%;
 
     --primary: 160 67% 40%;
     /* Dark text on the brighter dark-mode green keeps AA contrast (white is ~3:1). */
     --primary-foreground: 153 18% 8%;
 
-    --secondary: 156 10% 13%;
+    --secondary: 167 53% 18%;
     --secondary-foreground: 60 8% 88%;
 
-    --muted: 156 9% 12%;
-    --muted-foreground: 150 6% 64%;
+    --muted: 168 62% 15%;
+    --muted-foreground: 160 15% 76%;
 
     --accent: 37 95% 55%;
     --accent-foreground: 153 18% 8%;
@@ -91,8 +96,8 @@
     --destructive: 8 70% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 156 9% 16%;
-    --input: 156 8% 21%;
+    --border: 163 21% 27%;
+    --input: 163 21% 30%;
     --ring: 160 67% 40%;
 
     --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
@@ -100,6 +105,10 @@
     --shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 8px 20px -4px rgb(0 0 0 / 0.4);
     --shadow-lg: 0 4px 10px -2px rgb(0 0 0 / 0.35), 0 18px 40px -8px rgb(0 0 0 / 0.5);
     --shadow-xl: 0 8px 16px -4px rgb(0 0 0 / 0.4), 0 28px 60px -12px rgb(0 0 0 / 0.6);
+
+    /* Same as the profile viewer: white lines on the deep Mzansi green */
+    --pattern-ink: 0 0% 100%;
+    --pattern-strength: 0.07;
   }
 
   /* ── Base Styles ─────────────────────────────────────────── */
@@ -130,11 +139,47 @@
     scroll-behavior: auto;
   }
 
+  /* The page colour lives on <html> so the pattern layer can sit between it and the content. */
+  html {
+    @apply bg-background;
+  }
+
   body {
-    @apply bg-background text-foreground font-body;
+    @apply text-foreground font-body;
     max-width: 100%;
     overflow-x: hidden;
     overflow-x: clip;
+  }
+
+  /* The Mzansi ground: an Ndebele-inspired lattice behind every page.
+     A diamond chain with a bead at each heart, then a fringe row of
+     chevrons and ticks, like a band of beadwork. It is drawn as a mask so
+     the ink follows the theme tokens, fixed so it reads as the wall the
+     content hangs on, and quieter down the middle where people read.
+     Opaque cards and panels sit on top of it untouched. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: hsl(var(--pattern-ink));
+    opacity: var(--pattern-strength);
+    -webkit-mask-image:
+      url("/images/patterns/mzansi-ground.svg"),
+      linear-gradient(to right, #000, rgb(0 0 0 / 0.55) 28%, rgb(0 0 0 / 0.55) 72%, #000);
+    -webkit-mask-size:
+      56px 56px,
+      100% 100%;
+    -webkit-mask-composite: source-in;
+    mask-image:
+      url("/images/patterns/mzansi-ground.svg"),
+      linear-gradient(to right, #000, rgb(0 0 0 / 0.55) 28%, rgb(0 0 0 / 0.55) 72%, #000);
+    mask-size:
+      56px 56px,
+      100% 100%;
+    mask-repeat: repeat, no-repeat;
+    mask-composite: intersect;
   }
 
   @media (min-width: 1024px) {
@@ -374,16 +419,14 @@
     background:
       radial-gradient(ellipse at 12% 0%, rgba(11, 122, 85, 0.1) 0%, transparent 55%),
       radial-gradient(ellipse at 88% 10%, rgba(249, 168, 38, 0.1) 0%, transparent 50%),
-      radial-gradient(ellipse at 60% 100%, rgba(52, 80, 216, 0.06) 0%, transparent 55%),
-      hsl(var(--background));
+      radial-gradient(ellipse at 60% 100%, rgba(52, 80, 216, 0.06) 0%, transparent 55%);
   }
 
   .dark .bg-hero-mesh {
     background:
       radial-gradient(ellipse at 12% 0%, rgba(34, 176, 127, 0.14) 0%, transparent 55%),
       radial-gradient(ellipse at 88% 10%, rgba(249, 168, 38, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse at 60% 100%, rgba(52, 80, 216, 0.08) 0%, transparent 55%),
-      hsl(var(--background));
+      radial-gradient(ellipse at 60% 100%, rgba(52, 80, 216, 0.08) 0%, transparent 55%);
   }
 
   /* ── Grain Overlay ───────────────────────────────────────── */
@@ -804,6 +847,13 @@
     background-size: 56px 56px;
   }
 
+  /* On the deep-green dark ground, green accent text disappears into the page:
+     primary-coloured text turns brand gold instead (fills stay green). */
+  .dark .text-primary,
+  .dark .hover\:text-primary:hover {
+    color: theme("colors.brand-gold.300");
+  }
+
   /* Small pill chip for meta info, filters and highlights */
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1 text-xs font-medium text-muted-foreground;
@@ -921,7 +971,8 @@
   [role="complementary"],
   button,
   .fixed,
-  .sticky {
+  .sticky,
+  body::before {
     display: none !important;
   }
 
@@ -1435,6 +1486,140 @@
   width: 64px;
   height: calc(var(--frame-height) - 32px);
 }
+/* ── Verification emblem: the shield lands on water ─────────────
+   Seen from above. --emblem (set by the component) sizes the shield. The
+   water is a canvas (water-surface.tsx) stretched over the whole green
+   surface behind the copy. The shield drops flat toward the water: it starts
+   close to the viewer, large and soft-shadowed, shrinks onto the surface and
+   settles with a small bounce; the splash rings out from there. Then it bobs,
+   rising a touch and settling back, each settle sending a new ripple. */
+.water-surface {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+
+[data-emblem] > .emblem-shield {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+.emblem-shield {
+  width: calc(var(--emblem) * 0.58);
+  height: calc(var(--emblem) * 0.58);
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 0.45));
+  /* Before water-surface.tsx is ready the shield stays hidden; if the scripts
+     are slow, it fades in already resting on the water after 3 s. */
+  animation: emblem-fade-in 0.8s ease-out 3s both;
+}
+
+/* Ready in time: the full drop, then the float. */
+[data-emblem][data-water-ready] > .emblem-shield {
+  animation:
+    emblem-drop 2.6s linear both,
+    emblem-float 7s ease-in-out 3.2s infinite;
+}
+
+/* Once it rests on the water the shield can be pressed: it dips into the water
+   (water-surface.tsx sends the ring) and springs back on release. */
+[data-emblem][data-water-ready] > .emblem-shield[data-pressable] {
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: scale 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+[data-emblem][data-water-ready] > .emblem-shield[data-pressed] {
+  scale: 0.93;
+  transition-duration: 0.12s;
+  transition-timing-function: ease-out;
+}
+
+/* Ready too late for the drop: it is already fading in at rest, so it keeps
+   that fade (same name in the same slot, so it is not restarted) and floats. */
+[data-emblem][data-water-ready="late"] > .emblem-shield {
+  animation:
+    emblem-fade-in 0.8s ease-out 3s both,
+    emblem-float 7s ease-in-out 3.8s infinite;
+}
+
+/* The shield glides down and slows as it nears the water, touches it softly
+   (a slight give as the water takes its weight), lifts a touch and settles.
+   Each keyframe sets the easing into the next one. The shadow tightens as the
+   shield nears the surface. */
+@keyframes emblem-drop {
+  0% {
+    transform: scale(1.7);
+    filter: drop-shadow(0 50px 44px rgb(0 0 0 / 0.14));
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.25, 0.55, 0.35, 1);
+  }
+  20% {
+    opacity: 1;
+  }
+  55% {
+    transform: scale(0.975);
+    filter: drop-shadow(0 6px 12px rgb(0 0 0 / 0.5));
+    animation-timing-function: cubic-bezier(0.4, 0, 0.4, 1);
+  }
+  72% {
+    transform: scale(1.012);
+    filter: drop-shadow(0 11px 19px rgb(0 0 0 / 0.43));
+    animation-timing-function: cubic-bezier(0.4, 0, 0.4, 1);
+  }
+  84% {
+    transform: scale(0.995);
+    filter: drop-shadow(0 9px 17px rgb(0 0 0 / 0.46));
+    animation-timing-function: ease-in-out;
+  }
+  100% {
+    transform: none;
+    filter: drop-shadow(0 10px 18px rgb(0 0 0 / 0.45));
+    opacity: 1;
+  }
+}
+
+/* Starts settled on the water; each new cycle sends a ripple (water-surface.tsx listens). */
+@keyframes emblem-float {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 10px 18px rgb(0 0 0 / 0.45));
+  }
+  50% {
+    transform: scale(1.03);
+    filter: drop-shadow(0 15px 24px rgb(0 0 0 / 0.38));
+  }
+}
+
+@keyframes emblem-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-emblem] > .emblem-shield,
+  [data-emblem][data-water-ready] > .emblem-shield,
+  [data-emblem][data-water-ready] > .emblem-shield[data-pressable] {
+    animation: none;
+    pointer-events: none;
+    transition: none;
+  }
+}
+
+html[data-playwright="1"] [data-emblem] > .emblem-shield,
+html[data-playwright="1"] [data-emblem][data-water-ready] > .emblem-shield,
+html[data-playwright="1"] [data-emblem][data-water-ready="late"] > .emblem-shield {
+  animation: none;
+}
+
 .viewer-pattern {
   opacity: 0.07;
 }

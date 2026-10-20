@@ -131,7 +131,7 @@ export default async function AdminBusinessVerificationPage({
                   <div className="flex flex-wrap items-center gap-3 p-4">
                     <Icon
                       aria-hidden="true"
-                      className="h-5 w-5 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                      className="h-5 w-5 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
                     />
                     <div className="min-w-0 flex-1">
                       <Link

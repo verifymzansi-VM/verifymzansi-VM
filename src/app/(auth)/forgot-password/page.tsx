@@ -257,7 +257,7 @@ export default function ForgotPasswordPage() {
       <p className="text-center">
         <Link
           href="/login"
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[15px] font-semibold text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[15px] font-semibold text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Back to sign in

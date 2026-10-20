@@ -3,7 +3,7 @@ import { ArrowRight, Building2 } from "lucide-react";
 import { ENTERPRISE_QUOTE_ABOVE_SLOTS } from "@/lib/constants/pricing";
 import { cn } from "@/lib/utils";
 
-export const MULTI_LISTING_HREF = "/pricing/multi-listing";
+const MULTI_LISTING_HREF = "/pricing/multi-listing";
 
 /**
  * Offers multi-listing where people choose how to pay for a post: the posting

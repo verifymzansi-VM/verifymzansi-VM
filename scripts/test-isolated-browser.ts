@@ -18,7 +18,14 @@ async function main() {
   git(["worktree", "add", "--detach", checkout, "HEAD"]);
   // Copy the authorized working snapshot without copying ignored credentials.
   await copyWorkingTreeSnapshot(root, checkout, git);
-  const [pnpm, installArgs] = pnpmInvocation(["install", "--frozen-lockfile", "--prefer-offline"]);
+  // The production build below still needs Playwright, TypeScript and the
+  // contract generator. Do not let inherited production settings omit them.
+  const [pnpm, installArgs] = pnpmInvocation([
+    "install",
+    "--frozen-lockfile",
+    "--prefer-offline",
+    "--prod=false",
+  ]);
   const env: NodeJS.ProcessEnv = {
     ...Object.fromEntries(
       Object.entries(process.env).filter(

@@ -1,6 +1,17 @@
+import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
+import {
+  createPostingVerifier,
+  createTrustedPostingFixture,
+} from "./lib/foundation-trusted-posting-fixture.mjs";
+import { preparePublicationReadinessDraft } from "./lib/foundation-publication-readiness-draft.mjs";
+import { testPublicationVerificationReadiness } from "./lib/foundation-publication-readiness-native.mjs";
+import { testTrustedPostingFixture } from "./lib/foundation-trusted-posting-probe.mjs";
+import { testPostContactPreferences } from "./lib/foundation-post-contacts-native.mjs";
+import { testStaffEventDuplicateFlags } from "./lib/foundation-staff-event-flags-native.mjs";
+import { nativeTotp } from "./lib/foundation-native-totp.mjs";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { createHmac, randomBytes, randomUUID, createHash } from "node:crypto";
+import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { nativeIsolation } from "./lib/foundation-native-isolation.mjs";
@@ -16,7 +27,19 @@ import { readStaffIdentityHistory } from "../src/lib/foundation/staff-identity.t
 
 // Bounded real Auth/SQL/SDK denial proof. No accepted-identity or physical bytes
 // are fabricated. The only private history read has an empty subject history.
-const races = process.argv.length === 3 && process.argv[2] === "--negotiable-races";
+const staffFlags = process.argv.length === 3 && process.argv[2] === "--staff-event-flags-races";
+const contacts = process.argv.length === 3 && process.argv[2] === "--post-contacts-races";
+const trustedFixture = process.argv.length === 3 && process.argv[2] === "--trusted-posting-fixture";
+const draftMode =
+  process.argv.length === 3 && process.argv[2] === "--publication-verification-draft";
+const publicationReadiness =
+  draftMode || (process.argv.length === 3 && process.argv[2] === "--publication-verification");
+const races =
+  publicationReadiness ||
+  trustedFixture ||
+  contacts ||
+  staffFlags ||
+  (process.argv.length === 3 && process.argv[2] === "--negotiable-races");
 const negotiable = races || (process.argv.length === 3 && process.argv[2] === "--negotiable");
 assert.ok(process.argv.length === 2 || negotiable);
 const { env, dockerArgs, workdir, cliPath } = nativeIsolation();
@@ -28,6 +51,7 @@ const result = {
   controlledRaces: races,
   productionMutations: [],
 };
+let draftRehearsal;
 let admin,
   stage = "preflight",
   sql;
@@ -63,6 +87,34 @@ try {
       { env, input: query, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
     ).trim();
   assert.equal(sql("select count(*) from auth.users;"), "0");
+  if (draftMode) {
+    stage = "temporary local draft rehearsal install";
+    draftRehearsal = preparePublicationReadinessDraft(sql);
+    result.draftRehearsal = {
+      sourceHash: draftRehearsal.sourceHash,
+      beforeHash: draftRehearsal.beforeHash,
+      recoveryPath: draftRehearsal.recoveryPath,
+    };
+    draftRehearsal.install();
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const response = await fetch(
+        status.API_URL + "/rest/v1/rpc/get_owner_verification_readiness",
+        {
+          method: "POST",
+          headers: {
+            apikey: status.PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+            "Content-Profile": "api",
+          },
+          body: "{}",
+          signal: AbortSignal.timeout(5000),
+        }
+      );
+      if (response.status === 401) break;
+      if (attempt === 29) throw Error("Temporary readiness schema cache unavailable");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
   const options = {
     db: { schema: "api" },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -87,16 +139,7 @@ try {
   assert.equal(enrolled.error, null);
   const challenge = await reviewer.auth.mfa.challenge({ factorId: enrolled.data.id });
   assert.equal(challenge.error, null);
-  let bits = "";
-  for (const ch of enrolled.data.totp.secret.replace(/=+$/, "").toUpperCase())
-    bits += "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".indexOf(ch).toString(2).padStart(5, "0");
-  const bytes = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
-  const mac = createHmac("sha1", Buffer.from(bytes)).update(counter).digest(),
-    offset = mac[mac.length - 1] & 15;
-  const code = String((mac.readUInt32BE(offset) & 0x7fffffff) % 1000000).padStart(6, "0");
+  const code = nativeTotp(enrolled.data.totp.secret);
   assert.equal(
     (
       await reviewer.auth.mfa.verify({
@@ -168,7 +211,7 @@ try {
   result.denials = ["revoked complete role tuple", "expired actual Auth session"];
   result.noAuditOnDeniedCalls = true;
   if (negotiable) {
-    const controlledSql = (statement) => {
+    const controlledSql = (statement, options) => {
       const child = spawn(
         "docker",
         [
@@ -187,37 +230,10 @@ try {
         ],
         { env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
       );
-      let resolveBarrier,
-        rejectBarrier,
-        captured = "";
-      const barrier = new Promise((resolve, reject) => {
-        resolveBarrier = resolve;
-        rejectBarrier = reject;
-      });
-      child.stdout.on("data", (chunk) => {
-        captured += chunk.toString();
-        if (captured.includes("EVIDENCE_LOCK_HELD")) resolveBarrier();
-      });
-      child.stderr.resume();
-      const done = new Promise((resolve) => {
-        child.on("exit", (code) => {
-          if (!captured.includes("EVIDENCE_LOCK_HELD"))
-            rejectBarrier(new Error("Local evidence barrier missing"));
-          resolve(code);
-        });
-        child.on("error", () => {
-          rejectBarrier(new Error("Local evidence process failed"));
-          resolve(-1);
-        });
-      });
-      const timeout = setTimeout(
-        () => rejectBarrier(new Error("Local evidence barrier timeout")),
-        10000
-      );
-      child.stdin.end(statement);
-      return { barrier, done, close: () => clearTimeout(timeout) };
+      return controlNativeSqlChild(child, statement, options);
     };
-    const awaitQueuedRpc = async (name) => {
+    const awaitQueuedRpc = async (name, minimumWaiters = 1) => {
+      if (![1, 2].includes(minimumWaiters)) throw new Error("Invalid synthetic waiter count");
       if (
         ![
           "approve_decision",
@@ -243,6 +259,14 @@ try {
           "get_owner_listing_editor",
           "get_owner_business_event_editor",
           "save_business_event_context",
+          "submit_post",
+          "flag_duplicate_events",
+          "preview_duplicate_events",
+          "staff_review_report",
+          "set_post_contacts",
+          "get_owner_post_contacts",
+          "resolve_report",
+          "delete_post",
         ].includes(name)
       )
         throw new Error("Unknown synthetic RPC barrier");
@@ -254,7 +278,7 @@ try {
             sql(
               `select count(*) from pg_stat_activity where datname='postgres' and wait_event_type='Lock' and query like '%${name}%';`
             )
-          ) > 0
+          ) >= minimumWaiters
         )
           return;
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -262,7 +286,18 @@ try {
       throw new Error("Synthetic first RPC did not queue on its lock");
     };
     const checks = [];
-    await testPublicNegotiable({
+    if (publicationReadiness) result.publicationReadinessChecks = checks;
+    const runSelected = publicationReadiness
+      ? testPublicationVerificationReadiness
+      : trustedFixture
+        ? testTrustedPostingFixture
+        : contacts
+          ? testPostContactPreferences
+          : staffFlags
+            ? testStaffEventDuplicateFlags
+            : testPublicNegotiable;
+    const fixtureArgs = {
+      fixtureAdminId: users[2],
       ...(races ? { controlledSql, awaitQueuedRpc } : {}),
       rpc: async (name, body, callerToken, service = false) => {
         const response = await fetch(`${status.API_URL}/rest/v1/rpc/${name}`, {
@@ -304,6 +339,12 @@ try {
         assert.equal(login.error, null);
         return { id, member, token: login.data.session.access_token };
       },
+      deleteTrackedUser: async (id) => {
+        const index = users.indexOf(id);
+        assert.ok(index >= 0);
+        assert.equal((await admin.auth.admin.deleteUser(id)).error, null);
+        users.splice(index, 1);
+      },
       createReviewer: async () => ({ id: users[0], member: reviewer, token }),
       staff: { admin: { id: users[2] } },
       connection: {
@@ -315,7 +356,21 @@ try {
         stage = value;
       },
       record: (id) => checks.push({ id, status: "PASS" }),
-    });
+    };
+    if (!publicationReadiness && !trustedFixture) {
+      const verifier = await createPostingVerifier({
+        createUser: fixtureArgs.createUser,
+        sql,
+        fixtureAdminId: users[2],
+      });
+      fixtureArgs.verificationFixture = createTrustedPostingFixture({
+        rpc: fixtureArgs.rpc,
+        sql,
+        reviewer: verifier,
+      });
+    }
+    await runSelected(fixtureArgs);
+
     stage = "owner listing actual caller price form roundtrip";
     const member = createClient(status.API_URL, status.PUBLISHABLE_KEY, options);
     const login = await member.auth.signInWithPassword(credentials[1]);
@@ -389,12 +444,27 @@ try {
     assert.deepEqual(await readFoundationListingDraft(ownerApi, { id }), draft);
     result.ownerListingAdapter =
       "PASS explicit unset/request/free/amount terms, exact revision, foreign owner, stale revision and expired live session; no retry";
-    result.negotiableChecks = checks;
-    result.status = "PASS targeted real Auth/denials and public negotiable publication/edit proof";
+    if (publicationReadiness) result.publicationReadinessChecks = checks;
+    else if (trustedFixture) result.trustedPostingFixtureChecks = checks;
+    else if (contacts) result.contactChecks = checks;
+    else if (staffFlags) result.staffFlagChecks = checks;
+    else result.negotiableChecks = checks;
+    result.status = publicationReadiness
+      ? draftMode
+        ? "PASS temporary committed draft real HTTP verification guard rehearsal; registered25/fullnative acceptance pending"
+        : "PASS registered local verification publication guard; fullnative/clean acceptance pending"
+      : trustedFixture
+        ? "PASS genuine positive canonical verification fixture extraction"
+        : contacts
+          ? "PASS targeted real Auth/contact preferences/edit isolation/races proof"
+          : staffFlags
+            ? "PASS targeted real Auth and staff event flag/review proof"
+            : "PASS targeted real Auth/denials and public negotiable publication/edit proof";
   }
   result.provenance = Object.fromEntries(
     [
       "scripts/probe-foundation-staff-adapter.mjs",
+      "scripts/lib/foundation-native-sql-barrier.mjs",
       "scripts/lib/foundation-negotiable-native.mjs",
       "scripts/lib/foundation-activity-native.mjs",
       "docs/backend-foundation/prototypes/core-activity-create.sql",
@@ -406,8 +476,34 @@ try {
       "scripts/lib/foundation-context-native.mjs",
       "scripts/lib/foundation-event-edit-native.mjs",
       "docs/backend-foundation/prototypes/business-event-context.sql",
+      "docs/backend-foundation/prototypes/public-event-window.sql",
+      "src/lib/foundation/event-window-dto.ts",
+      "scripts/lib/foundation-financial-snapshot.mjs",
+      "scripts/lib/foundation-event-duplicates-native.mjs",
+      "docs/backend-foundation/prototypes/event-duplicate-admission.sql",
+      "src/lib/foundation/post-submission.ts",
+      "scripts/lib/foundation-native-totp.mjs",
+      "scripts/lib/foundation-staff-event-flags-native.mjs",
+      "scripts/lib/foundation-post-contacts-native.mjs",
+      "scripts/lib/foundation-publication-readiness-draft.mjs",
+      "src/lib/foundation/verification-readiness.ts",
+      "database/foundation/api.types.ts",
+      "database/foundation/api-role-types.ts",
+      "docs/backend-foundation/prototypes/publication-verification-readiness.sql",
+      "scripts/lib/foundation-publication-readiness-native.mjs",
+      ...(draftMode
+        ? ["docs/backend-foundation/drafts/publication-verification-readiness.sql"]
+        : []),
+      "scripts/lib/foundation-trusted-posting-fixture.mjs",
+      "scripts/lib/foundation-trusted-posting-probe.mjs",
+      "docs/backend-foundation/prototypes/post-contact-preferences.sql",
+      "src/lib/foundation/post-contacts.ts",
+      "src/lib/domains/posts/contact-channels.ts",
+      "docs/backend-foundation/prototypes/staff-event-duplicate-flags.sql",
+      "src/lib/foundation/staff-event-duplicate-flags.ts",
       "src/lib/foundation/business-event-context.ts",
       "scripts/lib/foundation-owner-editor-native.mjs",
+      "scripts/lib/foundation-native-owner-restrictions.mjs",
       "docs/backend-foundation/prototypes/owner-listing-editor.sql",
       "src/lib/foundation/owner-listing-editor.ts",
       "src/lib/foundation/post-content.ts",
@@ -435,7 +531,30 @@ try {
 } catch (error) {
   result.status = "FAIL";
   result.stage = stage;
-  result.sqlState = String(error.stderr ?? "").match(/SQLSTATE\s+([A-Z0-9]{5})/)?.[1] ?? null;
+  result.failureType = /^(?:AssertionError|Error|TypeError|TimeoutError|AbortError)$/.test(
+    error.name
+  )
+    ? error.name
+    : "OtherError";
+  result.failureLocation =
+    String(error.stack ?? "").match(/scripts[/\\]([A-Za-z0-9_./\\-]+:\d+:\d+)/)?.[1] ?? null;
+  const safe = (value) =>
+    value === null ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    (typeof value === "string" && value.length <= 100)
+      ? value
+      : Array.isArray(value) && value.length <= 4
+        ? value.map(safe)
+        : null;
+  if (error.code === "ERR_ASSERTION")
+    result.assertion = {
+      operator: error.operator,
+      actual: safe(error.actual),
+      expected: safe(error.expected),
+    };
+  result.sqlState =
+    String(error.stderr ?? "").match(/(?:SQLSTATE\s+|ERROR:\s+)([A-Z0-9]{5})/)?.[1] ?? null;
   process.exitCode = 1;
 } finally {
   try {
@@ -457,11 +576,19 @@ try {
         delete from private.invoices where payment_id in(select id from private.payments where owner_id in(${ids}));
         delete from private.post_addon_windows where payment_id in(select id from private.payments where owner_id in(${ids}));
         delete from private.post_activations where owner_id in(${ids});
+        delete from private.reports where subject_account_id in(${ids}) or reporter_id in(${ids}) or resolved_by in(${ids}) or duplicate_owner_b in(${ids}) or duplicate_created_by in(${ids});
         delete from private.posts where owner_id in(${ids});
         delete from private.media_objects where owner_id in(${ids});
         delete from private.entitlements where owner_id in(${ids});
         delete from private.payments where owner_id in(${ids});
+        delete from private.accepted_identity_facts where owner_id in(${ids});
+        delete from private.verification_current_submissions where case_id in(select id from private.evidence_cases where subject_id in(${ids}));
+        delete from private.verification_identity_submissions where owner_id in(${ids});
+        delete from private.verification_localities where owner_id in(${ids});
+        delete from private.evidence_artifacts where owner_id in(${ids});
         delete from private.evidence_cases where subject_id in(${ids});
+        delete from private.verification_phone_proofs where owner_id in(${ids});
+        delete from private.verification_phone_challenges where owner_id in(${ids});
         delete from private.staff_roles where user_id in(${ids}); commit;`);
       for (const id of users) assert.equal((await admin.auth.admin.deleteUser(id)).error, null);
     }
@@ -469,6 +596,18 @@ try {
   } catch {
     result.cleanup = "INCOMPLETE";
     result.status = "INCOMPLETE";
+    process.exitCode = 1;
+  }
+  try {
+    if (draftRehearsal) {
+      draftRehearsal.restore();
+      result.draftRehearsal.afterHash = draftRehearsal.afterHash();
+      result.draftRehearsal.restoration = "PASS exact accepted24 bodies/OIDs/ACL/config";
+      assert.equal(sql("select count(*) from auth.users;"), "0");
+    }
+  } catch {
+    result.status = "INCOMPLETE";
+    result.draftRestoration = "INCOMPLETE inspect durable recovery recipe before fixture reuse";
     process.exitCode = 1;
   }
   release();

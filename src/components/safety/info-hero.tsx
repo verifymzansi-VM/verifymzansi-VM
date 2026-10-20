@@ -116,7 +116,7 @@ export function SectionHeading({ id, title, lede, kicker, className }: SectionHe
   return (
     <div className={cn("max-w-3xl", className)}>
       {kicker && (
-        <p className="text-sm font-semibold text-brand-green-700 dark:text-brand-green-300">
+        <p className="text-sm font-semibold text-brand-green-700 dark:text-brand-gold-300">
           {kicker}
         </p>
       )}

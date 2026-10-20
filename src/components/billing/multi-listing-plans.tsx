@@ -7,7 +7,7 @@ import {
 } from "@/lib/constants/pricing";
 import type { EnterpriseCatalogPlan } from "@/lib/commercial/plans";
 
-export const MULTI_LISTING_QUOTE_HREF = "/contact?topic=organisation_proposal";
+const MULTI_LISTING_QUOTE_HREF = "/contact?topic=organisation_proposal";
 
 const TERMS = [
   { days: 90, label: "90 days" },

@@ -1,15 +1,16 @@
 import { z } from "zod";
+import { postContactSelectionSchema } from "./contact-channels";
 
 // Contract candidate for the target; source table names never determine entity kind.
 export const postKindSchema = z.enum(["listing", "business", "event"]);
-export const postAreaSchema = z.enum(["market", "business", "tourism_events"]);
+const postAreaSchema = z.enum(["market", "business", "tourism_events"]);
 const categoryKey = z
   .string()
   .min(1)
   .max(80)
   .regex(/^[a-z0-9_]+$/);
 const activityKey = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
-export const postIdentityContextSchema = z.discriminatedUnion("kind", [
+const postIdentityContextSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("listing"),
     area: z.literal("market"),
@@ -43,6 +44,7 @@ export const postEventInstantSchema = z.iso
   .transform((value) => new Date(value).toISOString());
 const eventDetail = z
   .strictObject({
+    contact_channels: postContactSelectionSchema.optional(),
     starts_at: postEventInstantSchema,
     ends_at: postEventInstantSchema,
     timezone: z
@@ -73,7 +75,11 @@ export function buildCoreDraftCommand(input: unknown) {
   const detail =
     command.context.kind === "event"
       ? eventDetail.parse(command.detail)
-      : z.strictObject({}).parse(command.detail);
+      : command.context.kind === "listing"
+        ? z
+            .strictObject({ contact_channels: postContactSelectionSchema.optional() })
+            .parse(command.detail)
+        : z.strictObject({}).parse(command.detail);
   return {
     p_kind: command.context.kind,
     p_area: command.context.area,

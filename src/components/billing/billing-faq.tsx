@@ -15,7 +15,7 @@ function FaqItem({
 }) {
   return (
     <details id={id} className="group scroll-mt-28 border-b border-border/70 last:border-b-0">
-      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-xl py-3 text-left font-body text-[15px] font-semibold text-foreground transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-brand-green-300 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 rounded-xl py-3 text-left font-body text-[15px] font-semibold text-foreground transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-brand-gold-200 [&::-webkit-details-marker]:hidden">
         {question}
         <ChevronDown
           aria-hidden="true"
@@ -59,7 +59,7 @@ export function BillingFaq({
           Still unsure?{" "}
           <a
             href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
-            className="rounded-sm font-semibold text-brand-green-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+            className="rounded-sm font-semibold text-brand-green-700 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
           >
             Email support
           </a>

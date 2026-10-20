@@ -496,7 +496,7 @@ export function MediaUpload({
             className={cn(
               "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
               totalCount > 0
-                ? "bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-green-200"
+                ? "bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-gold-200"
                 : "bg-muted text-muted-foreground"
             )}
             aria-hidden="true"

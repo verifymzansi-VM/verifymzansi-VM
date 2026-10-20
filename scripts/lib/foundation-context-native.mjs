@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { captureOwnerRestrictions } from "./foundation-native-owner-restrictions.mjs";
 import { randomUUID } from "node:crypto";
 import { createFoundationAuthenticatedApi } from "../../src/lib/foundation/authenticated-api.ts";
 import { createTimeoutFetch } from "../../src/lib/supabase/fetch-with-timeout.ts";
@@ -13,6 +14,7 @@ import reference from "../../src/lib/domains/taxonomy/reference.json" with { typ
 
 export async function testBusinessEventContext({
   createUser,
+  verificationFixture,
   reviewer,
   connection,
   rpc,
@@ -217,17 +219,9 @@ export async function testBusinessEventContext({
   });
   for (const service of [false, true])
     assert.ok([401, 403].includes((await raw(command(), null, service)).status));
-  const claims = JSON.parse(Buffer.from(owner.token.split(".")[1], "base64url"));
-  assert.equal(claims.sub, owner.id);
-  assert.match(claims.session_id, /^[a-f0-9-]{36}$/);
-  const prior = sql(
-    `select case when not_after is null then 'null' else quote_literal(not_after::text)||'::timestamptz' end from auth.sessions where id='${claims.session_id}' and user_id='${owner.id}';`
-  );
-  assert.ok(prior);
+  const restrictions = captureOwnerRestrictions(sql, owner);
   try {
-    sql(
-      `update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${claims.session_id}' and user_id='${owner.id}';`
-    );
+    restrictions.expireSession();
     for (const id of [b.id, randomUUID()]) {
       const before = http.length;
       await assert.rejects(
@@ -238,18 +232,10 @@ export async function testBusinessEventContext({
       assert.deepEqual(http[before], { status: 403, code: "42501" });
     }
   } finally {
-    sql(
-      `update auth.sessions set not_after=${prior} where id='${claims.session_id}' and user_id='${owner.id}';`
-    );
+    restrictions.restoreSession();
   }
-  const banned = sql(
-    `select case when banned_until is null then 'null' else quote_literal(banned_until::text)||'::timestamptz' end from auth.users where id='${owner.id}';`
-  );
-  assert.ok(banned);
   try {
-    sql(
-      `update auth.users set banned_until=clock_timestamp()+interval '1 hour' where id='${owner.id}';`
-    );
+    restrictions.banAccount();
     const before = http.length;
     await assert.rejects(
       () => save(b.id, b.revision, { activity_key: null }),
@@ -258,7 +244,7 @@ export async function testBusinessEventContext({
     assert.equal(http.length, before + 1);
     assert.deepEqual(http[before], { status: 403, code: "42501" });
   } finally {
-    sql(`update auth.users set banned_until=${banned} where id='${owner.id}';`);
+    restrictions.restoreAccount();
   }
   assert.equal(snapshot(b.id), staleBefore);
   assert.equal((await read(b.id)).revision, b.revision);
@@ -280,9 +266,7 @@ export async function testBusinessEventContext({
         (error) => ({ error: error.message })
       );
       await awaitQueuedRpc("save_business_event_context");
-      sql(
-        `update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${claims.session_id}' and user_id='${owner.id}';`
-      );
+      restrictions.expireSession();
       assert.equal(await lock.done, 0);
       assert.deepEqual(await saving, { error: "Foundation business/event context unavailable" });
       assert.equal(http.length, before + 1);
@@ -292,12 +276,11 @@ export async function testBusinessEventContext({
       lock.close();
       await lock.done;
       if (saving) await saving;
-      sql(
-        `update auth.sessions set not_after=${prior} where id='${claims.session_id}' and user_id='${owner.id}';`
-      );
+      restrictions.restoreSession();
     }
     record("native-context-expired-owner-during-post-wait-rolls-back");
   }
+  await verificationFixture.ready(owner);
   await testEventContextApprovals({
     owner,
     reviewer,

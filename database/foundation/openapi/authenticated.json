@@ -1432,6 +1432,45 @@
         ]
       }
     },
+    "/rpc/get_owner_post_contacts": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_owner_post_contacts"
+        ]
+      }
+    },
     "/rpc/staff_identity_history": {
       "post": {
         "parameters": [
@@ -1476,6 +1515,80 @@
         },
         "tags": [
           "(rpc) staff_identity_history"
+        ]
+      }
+    },
+    "/rpc/preview_duplicate_events": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_post_a": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_post_b": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_a",
+                "p_post_b"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) preview_duplicate_events"
+        ]
+      }
+    },
+    "/rpc/get_owner_verification_readiness": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_owner_verification_readiness"
         ]
       }
     },
@@ -1652,6 +1765,54 @@
         },
         "tags": [
           "(rpc) begin_media_upload"
+        ]
+      }
+    },
+    "/rpc/set_post_contacts": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_channels": {
+                  "format": "jsonb"
+                },
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_id",
+                "p_expected_revision",
+                "p_channels"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) set_post_contacts"
         ]
       }
     },
@@ -2083,6 +2244,65 @@
         },
         "tags": [
           "(rpc) propose_verified_identity_ban"
+        ]
+      }
+    },
+    "/rpc/flag_duplicate_events": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_expected_revision_a": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_expected_revision_b": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_post_a": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_post_b": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_a",
+                "p_expected_revision_a",
+                "p_post_b",
+                "p_expected_revision_b",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) flag_duplicate_events"
         ]
       }
     },

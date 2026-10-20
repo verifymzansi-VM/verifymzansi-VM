@@ -7,13 +7,10 @@ export type PackageRulePolicy = "source" | "foundation";
 export const CURRENT_EDIT_RULE = `Each live post can have up to ${CURRENT_MAX_APPROVED_CONTENT_EDITS} approved edits. It stays visible while we review an edit.`;
 
 /** Approved edits per started 30 days of a package; price-only changes are free. */
-export const EDITS_PER_30_DAYS = 2;
+const EDITS_PER_30_DAYS = 2;
 
 /** Days an expired, sold or archived post is kept before it and its media are deleted. */
-export const EXPIRED_POST_KEEP_DAYS = 30;
-
-/** Days an untouched draft, rejected or paused post is kept. */
-export const IDLE_DRAFT_KEEP_DAYS = 60;
+const EXPIRED_POST_KEEP_DAYS = 30;
 
 /** Edits a post gets for a package of `packageDays` (30 → 2, 90 → 6, 180 → 12). */
 export function editAllowanceForDays(packageDays: number): number {
@@ -23,21 +20,16 @@ export function editAllowanceForDays(packageDays: number): number {
 
 export type PostKind = "listing" | "business" | "event";
 
-export const SLOT_EXPLANATION =
-  "A slot is one live post at a time. When a post is sold, archived or deleted, the slot is free for your next post until your package ends.";
-
-export const EDIT_RULE =
+const EDIT_RULE =
   "Each live post gets 2 edits for every 30 days of its package (30 days: 2, 90 days: 6, 180 days: 12). One price change a day doesn't count. Your post stays visible while we check an edit.";
 
 export const EVENT_EDIT_RULE =
   "Each live event can be edited twice. It stays visible while we check an edit.";
 
-export const DELETE_AND_REPOST_RULE =
+const DELETE_AND_REPOST_RULE =
   "Need a bigger change? Delete the post and put up a new one in the same slot. Your package's end date stays the same.";
 
-export const EXPIRY_RULE = `When a post expires it is hidden but kept in your dashboard for ${EXPIRED_POST_KEEP_DAYS} days, with reminders to renew. After that the post and its photos and videos are deleted.`;
-
-export const DRAFT_RULE = `Drafts you don't touch for ${IDLE_DRAFT_KEEP_DAYS} days are deleted; we warn you 15 days before.`;
+const EXPIRY_RULE = `When a post expires it is hidden but kept in your dashboard for ${EXPIRED_POST_KEEP_DAYS} days, with reminders to renew. After that the post and its photos and videos are deleted.`;
 
 const KIND_LABEL: Record<PostKind, string> = {
   listing: "listing",

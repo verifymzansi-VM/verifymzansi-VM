@@ -120,7 +120,7 @@ function MobileNavBar({ pathname }: { pathname: string }) {
                 isPostAction
                   ? "text-foreground"
                   : isActive
-                    ? "text-brand-green-700 dark:text-brand-green-300"
+                    ? "text-brand-green-700 dark:text-brand-gold-300"
                     : "text-muted-foreground hover:text-foreground"
               )}
             >

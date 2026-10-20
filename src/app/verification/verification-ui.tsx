@@ -36,7 +36,7 @@ const OVERALL_STATE_COPY: Record<
   in_progress: {
     label: "In progress",
     className:
-      "border-brand-green-600/20 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400/25 dark:bg-brand-green-500/10 dark:text-brand-green-200",
+      "border-brand-green-600/20 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400/25 dark:bg-brand-green-500/10 dark:text-brand-gold-200",
     icon: Clock3,
   },
   pending: {
@@ -90,8 +90,8 @@ export type CalloutTone = "success" | "pending" | "attention" | "neutral";
 
 const CALLOUT_TONES: Record<CalloutTone, { box: string; icon: string; Icon: IconType }> = {
   success: {
-    box: "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-green-100",
-    icon: "bg-brand-green-600/10 text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-green-300",
+    box: "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-gold-100",
+    icon: "bg-brand-green-600/10 text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-gold-300",
     Icon: CheckCircle2,
   },
   pending: {
@@ -189,7 +189,7 @@ export function StepCard({
           <div className="min-w-0">
             {/* The accessible name stays "Step N: Title" — e2e journeys find steps by it. */}
             <h2 id={id} aria-label={`Step ${stepNumber}: ${title}`} className="font-body">
-              <span className="block text-xs font-semibold text-brand-green-700 dark:text-brand-green-300 sm:text-sm">
+              <span className="block text-xs font-semibold text-brand-green-700 dark:text-brand-gold-300 sm:text-sm">
                 Step {stepNumber} of {totalSteps}
               </span>{" "}
               <span className="mt-0.5 block font-display text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl">
@@ -200,7 +200,7 @@ export function StepCard({
         </div>
         <p className="mt-3 flex items-start gap-2 text-sm leading-6 text-muted-foreground">
           <Lock
-            className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+            className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
             aria-hidden="true"
           />
           {why}
@@ -264,7 +264,7 @@ export function PrivacyPanel() {
       <Link
         href="/privacy"
         prefetch={false}
-        className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+        className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
       >
         Privacy policy
       </Link>
@@ -291,7 +291,7 @@ export function WhatHappensNextPanel({ verified = false }: { verified?: boolean 
           <li key={item} className="flex items-center gap-3 text-sm text-foreground/85">
             <span
               aria-hidden="true"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green-600/10 text-xs font-bold text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-green-300"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green-600/10 text-xs font-bold text-brand-green-700 dark:bg-brand-green-400/15 dark:text-brand-gold-300"
             >
               {index + 1}
             </span>

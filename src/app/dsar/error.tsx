@@ -34,7 +34,7 @@ export default function DsarError({
             happening, email{" "}
             <a
               href={`mailto:${PRIVACY_CONTACT_EMAIL}`}
-              className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-green-300"
+              className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-gold-300"
             >
               {PRIVACY_CONTACT_EMAIL}
             </a>

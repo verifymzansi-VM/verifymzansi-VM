@@ -24,14 +24,14 @@ export function PasswordRequirements({
   return (
     <div id={id}>
       <p className="sr-only">Your password needs:</p>
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 px-1">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5 px-1">
         {requirements.map((requirement) => (
           <li
             key={requirement.label}
             className={cn(
-              "flex items-center gap-2 text-[13px] leading-5 transition-colors duration-200",
+              "flex items-center gap-2 whitespace-nowrap text-[13px] leading-5 transition-colors duration-200 short:gap-1.5 short:text-xs",
               requirement.met
-                ? "font-medium text-brand-green-700 dark:text-brand-green-300"
+                ? "font-medium text-brand-green-700 dark:text-brand-gold-300"
                 : "text-muted-foreground"
             )}
           >

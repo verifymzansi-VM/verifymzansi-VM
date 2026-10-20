@@ -70,7 +70,6 @@ export function parseFoundationListingEditor(input: unknown) {
     throw new Error("Invalid foundation listing editor");
   }
 }
-export type FoundationListingEditor = NonNullable<ReturnType<typeof parseFoundationListingEditor>>;
 export async function readFoundationListingEditor(api: FoundationAuthenticatedApi, input: unknown) {
   const parsed = request.safeParse(input);
   if (!parsed.success) throw new Error("Invalid foundation listing editor request");

@@ -753,7 +753,7 @@ export function KycComparisonViewer({
                       : livenessVerdict.tone === "warn"
                         ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
                         : livenessVerdict.tone === "ok"
-                          ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-brand-gold-200"
                           : "border-warm-300 bg-warm-50 text-warm-900 dark:border-warm-700 dark:bg-muted dark:text-warm-200"
                   }`}
                 >

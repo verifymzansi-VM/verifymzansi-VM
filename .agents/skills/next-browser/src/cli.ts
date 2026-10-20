@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { send } from "./client.ts";
+import { parseCookies } from "./cookies.ts";
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -19,18 +22,27 @@ if (cmd === "--version" || cmd === "-v") {
 
 if (cmd === "open") {
   if (!arg) {
-    console.error("usage: next-browser open <url> [--cookies-json <file>]");
+    console.error("usage: next-browser open <url> [--cookies <file>]");
     process.exit(1);
   }
   const url = /^https?:\/\//.test(arg) ? arg : `http://${arg}`;
-  const cookieIdx = args.indexOf("--cookies-json");
+  const cookieIdx = (() => {
+    const i = args.indexOf("--cookies");
+    if (i >= 0) return i;
+    return args.indexOf("--cookies-json"); // back-compat alias
+  })();
   const cookieFile = cookieIdx >= 0 ? args[cookieIdx + 1] : undefined;
 
   if (cookieFile) {
     const res = await send("open");
     if (!res.ok) exit(res, "");
-    const raw = readFileSync(cookieFile, "utf-8");
-    const cookies = JSON.parse(raw);
+    let cookies;
+    try {
+      cookies = parseCookies(readFileSync(cookieFile, "utf-8"));
+    } catch (e) {
+      console.error(`cookies: ${(e as Error).message}`);
+      process.exit(1);
+    }
     const domain = new URL(url).hostname;
     const cRes = await send("cookies", { cookies, domain });
     if (!cRes.ok) exit(cRes, "");
@@ -138,9 +150,14 @@ if (cmd === "goto") {
   exit(res, res.ok ? `→ ${res.data}` : "");
 }
 
-if (cmd === "ssr-goto") {
-  const res = await send("ssr-goto", { url: arg });
-  exit(res, res.ok ? `→ ${res.data} (external scripts blocked)` : "");
+if (cmd === "ssr" && arg === "lock") {
+  const res = await send("ssr-lock");
+  exit(res, "ssr locked — external scripts blocked on all navigations");
+}
+
+if (cmd === "ssr" && arg === "unlock") {
+  const res = await send("ssr-unlock");
+  exit(res, "ssr unlocked — external scripts re-enabled");
 }
 
 
@@ -149,9 +166,19 @@ if (cmd === "back") {
   exit(res, "back");
 }
 
+
 if (cmd === "screenshot") {
-  const res = await send("screenshot");
-  exit(res, res.ok ? String(res.data) : "");
+  const fullPage = args.includes("--full-page");
+  const caption = args.slice(1).filter((a) => a !== "--full-page").join(" ") || undefined;
+  const res = await send("screenshot", { fullPage, caption });
+  if (res.ok) {
+    const { path, errors } = res.data as { path: string; errors: unknown };
+    const parts = [path];
+    if (errors) parts.push("\nerrors:\n" + json(errors));
+    console.log(parts.join(""));
+    process.exit(0);
+  }
+  exit(res, "");
 }
 
 if (cmd === "snapshot") {
@@ -242,6 +269,139 @@ if (cmd === "logs") {
   process.exit(0);
 }
 
+if (cmd === "browser-logs") {
+  const res = await send("browser-logs");
+  if (!res.ok) exit(res, "");
+  const entries = res.data as { level: string; args: string; timestamp: number }[];
+  if (entries.length === 0) {
+    console.log("(no console output captured)");
+    process.exit(0);
+  }
+  const lines = entries.map(
+    (e) => `[${e.level.toUpperCase().padEnd(5)}] ${e.args}`,
+  );
+  const output = lines.join("\n");
+  if (output.length > 4000) {
+    const path = join(tmpdir(), `next-browser-console-${process.pid}.log`);
+    writeFileSync(path, output);
+    console.log(`(${entries.length} entries written to ${path})`);
+  } else {
+    console.log(output);
+  }
+  process.exit(0);
+}
+
+if (cmd === "renders" && arg === "start") {
+  const res = await send("renders-start");
+  exit(res, "recording renders — interact with the page, then run `renders stop`");
+}
+
+if (cmd === "renders" && arg === "stop") {
+  const useJson = args.includes("--json");
+  const res = await send("renders-stop");
+  if (!res.ok) exit(res, "");
+  type Change = { type: string; name?: string; prev?: string; next?: string };
+  type Component = {
+    name: string;
+    count: number;
+    mounts: number;
+    reRenders: number;
+    instanceCount: number;
+    totalTime: number;
+    selfTime: number;
+    domMutations: number;
+    changes: Change[];
+    changeSummary: Record<string, number>;
+  };
+  const d = res.data as {
+    elapsed: number;
+    fps: { avg: number; min: number; max: number; drops: number };
+    totalRenders: number;
+    totalMounts: number;
+    totalReRenders: number;
+    totalComponents: number;
+    components: Component[];
+  };
+
+  if (d.components.length === 0) {
+    if (useJson) console.log(JSON.stringify(d, null, 2));
+    else console.log("(no renders captured)");
+    process.exit(0);
+  }
+
+  if (useJson) {
+    const output = JSON.stringify(d, null, 2);
+    if (output.length > 4000) {
+      const path = join(tmpdir(), `next-browser-renders-${process.pid}.json`);
+      writeFileSync(path, output);
+      console.log(path);
+    } else {
+      console.log(output);
+    }
+    process.exit(0);
+  }
+
+  const lines: string[] = [
+    `# Render Profile — ${d.elapsed}s recording`,
+    `# ${d.totalRenders} renders (${d.totalMounts} mounts + ${d.totalReRenders} re-renders) across ${d.totalComponents} components`,
+    `# FPS: avg ${d.fps.avg}, min ${d.fps.min}, max ${d.fps.max}, drops (<30fps): ${d.fps.drops}`,
+    "",
+    "## Components by total render time",
+  ];
+
+  const nameW = Math.max(9, ...d.components.slice(0, 50).map((c) => c.name.length));
+  const header = `| ${"Component".padEnd(nameW)} | Insts | Mounts | Re-renders | Total    | Self     | DOM   | Top change reason          |`;
+  const sep    = `| ${"-".repeat(nameW)} | ----- | ------ | ---------- | -------- | -------- | ----- | -------------------------- |`;
+  lines.push(header, sep);
+
+  for (const c of d.components.slice(0, 50)) {
+    const total = c.totalTime > 0 ? `${c.totalTime}ms` : "—";
+    const self = c.selfTime > 0 ? `${c.selfTime}ms` : "—";
+    const dom = `${c.domMutations}/${c.count}`;
+    const topChange = Object.entries(c.changeSummary).sort((a, b) => b[1] - a[1])[0];
+    const changeStr = topChange ? topChange[0] : "—";
+    lines.push(
+      `| ${c.name.padEnd(nameW)} | ${String(c.instanceCount).padStart(5)} | ${String(c.mounts).padStart(6)} | ${String(c.reRenders).padStart(10)} | ${total.padStart(8)} | ${self.padStart(8)} | ${dom.padStart(5)} | ${changeStr.padEnd(26)} |`,
+    );
+  }
+  if (d.components.length > 50) {
+    lines.push(`... and ${d.components.length - 50} more`);
+  }
+
+  // Detail: show prev→next values for top components with non-mount changes
+  const detailed = d.components
+    .filter((c) => c.changes.some((ch) => ch.type !== "mount" && ch.type !== "parent"))
+    .slice(0, 15);
+  if (detailed.length > 0) {
+    lines.push("", "## Change details (prev → next)");
+    for (const c of detailed) {
+      lines.push(`  ${c.name}`);
+      // Deduplicate: show unique type+name combinations with their prev→next
+      const seen = new Set<string>();
+      for (const ch of c.changes) {
+        if (ch.type === "mount" || ch.type === "parent") continue;
+        const key = `${ch.type}:${ch.name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const label = ch.type === "props" ? `props.${ch.name}`
+          : ch.type === "state" ? `state (${ch.name})`
+          : `context (${ch.name})`;
+        lines.push(`    ${label}: ${ch.prev ?? "?"} → ${ch.next ?? "?"}`);
+      }
+    }
+  }
+
+  const output = lines.join("\n");
+  if (output.length > 4000) {
+    const path = join(tmpdir(), `next-browser-renders-${process.pid}.txt`);
+    writeFileSync(path, output);
+    console.log(`(${d.totalComponents} components written to ${path})`);
+  } else {
+    console.log(output);
+  }
+  process.exit(0);
+}
+
 if (cmd === "action") {
   const res = await send("mcp", { tool: "get_server_action_by_id", args: { actionId: arg } });
   exit(res, res.ok ? json(res.data) : "");
@@ -268,6 +428,22 @@ if (cmd === "viewport") {
   if (!res.ok) exit(res, "");
   const data = res.data as { width: number; height: number };
   exit(res, `${data.width}x${data.height}`);
+}
+
+if (cmd === "instrumentation" && arg === "set") {
+  const filePath = args[2];
+  if (!filePath) {
+    console.error("usage: next-browser instrumentation set <path>");
+    process.exit(1);
+  }
+  const script = readFileSync(filePath, "utf-8");
+  const res = await send("instrumentation-set", { instrumentationScript: script });
+  exit(res, "instrumentation set");
+}
+
+if (cmd === "instrumentation" && arg === "clear") {
+  const res = await send("instrumentation-clear");
+  exit(res, "instrumentation cleared");
 }
 
 if (cmd === "close") {
@@ -338,15 +514,18 @@ function printUsage() {
   console.error(
     "usage: next-browser <command> [args]\n" +
       "\n" +
-      "  open <url> [--cookies-json <file>]  launch browser and navigate\n" +
+      "  open <url> [--cookies <file>]  launch browser and navigate\n" +
       "  close              close browser and daemon\n" +
       "\n" +
       "  goto <url>         full-page navigation (new document load)\n" +
-      "  ssr-goto <url>     goto but block external scripts (SSR shell)\n" +
+      "  ssr lock           block external scripts on all navigations\n" +
+      "  ssr unlock         re-enable external scripts\n" +
       "  push [path]        client-side navigation (interactive picker if no path)\n" +
       "  back               go back in history\n" +
       "  reload             reload current page\n" +
       "  perf [url]         profile page load (CWVs + React hydration timing)\n" +
+      "  renders start      start recording React re-renders\n" +
+      "  renders stop [--json]  stop and print render profile\n" +
       "  restart-server     restart the Next.js dev server (clears fs cache)\n" +
       "\n" +
       "  ppr lock           enter PPR instant-navigation mode\n" +
@@ -356,7 +535,7 @@ function printUsage() {
       "  tree <id>          inspect component (props, hooks, state, source)\n" +
       "\n" +
       "  viewport [WxH]     show or set viewport size (e.g. 1280x720)\n" +
-      "  screenshot         save full-page screenshot to tmp file\n" +
+      "  screenshot [caption] [--full-page]  screenshot + Screenshot Log\n" +
       "  snapshot           accessibility tree with interactive refs\n" +
       "  click <ref|sel>    click an element (real pointer events)\n" +
       "  fill <ref|sel> <v> fill a text input\n" +
@@ -366,11 +545,15 @@ function printUsage() {
       "\n" +
       "  errors             show build/runtime errors\n" +
       "  logs               show recent dev server log output\n" +
+      "  browser-logs       show browser console output (log/warn/error/info)\n" +
       "  network [idx]      list network requests, or inspect one\n" +
       "\n" +
       "  page               show current page segments and router info\n" +
       "  project            show project path and dev server url\n" +
       "  routes             list app routes\n" +
-      "  action <id>        inspect a server action by id",
+      "  action <id>        inspect a server action by id\n" +
+      "\n" +
+      "  instrumentation set <path>  inject script before page scripts\n" +
+      "  instrumentation clear       remove instrumentation script",
   );
 }

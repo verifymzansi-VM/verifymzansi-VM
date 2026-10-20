@@ -146,7 +146,7 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
   ) : null;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col">
       <header className="border-b border-border/60 bg-card/80">
         <div className="container-page flex h-16 items-center justify-between gap-4">
           <Link
@@ -159,7 +159,7 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground sm:text-sm">
             <LockKeyhole
               aria-hidden="true"
-              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+              className="h-4 w-4 text-brand-green-700 dark:text-brand-gold-300"
             />
             Secure checkout
           </span>

@@ -11,10 +11,10 @@
  * Module-level state: one browser context, one page, one PPR lock.
  */
 
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { chromium, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { instant } from "@next/playwright";
 import * as componentTree from "./tree.ts";
 import * as suspenseTree from "./suspense.ts";
@@ -37,6 +37,30 @@ let context: BrowserContext | null = null;
 let page: Page | null = null;
 let profileDirPath: string | null = null;
 let initialOrigin: string | null = null;
+let ssrLocked = false;
+let instrumentationVersion = 0;
+
+let screenshotBrowser: Browser | BrowserContext | null = null;
+let screenshotPage: Page | null = null;
+
+type ScreenshotEntry = {
+  caption?: string;
+  imgData: string;
+  timestamp: string;
+};
+let screenshotEntries: ScreenshotEntry[] = [];
+
+/** Install or remove the script-blocking route handler based on ssrLocked. */
+async function syncSsrRoutes() {
+  if (!page) return;
+  await page.unrouteAll({ behavior: "wait" });
+  if (ssrLocked) {
+    await page.route("**/*", (route) => {
+      if (route.request().resourceType() === "script") return route.abort();
+      return route.continue();
+    });
+  }
+}
 
 // ── Browser lifecycle ────────────────────────────────────────────────────────
 
@@ -46,11 +70,12 @@ let initialOrigin: string | null = null;
  * reuse the existing context.
  */
 export async function open(url: string | undefined) {
-  if (!context) {
-    context = await launch();
-    page = context.pages()[0] ?? (await context.newPage());
-    net.attach(page);
+  if (context) {
+    await close();
   }
+  context = await launch();
+  page = context.pages()[0] ?? (await context.newPage());
+  net.attach(page);
   if (url) {
     initialOrigin = new URL(url).origin;
     await page!.goto(url, { waitUntil: "domcontentloaded" });
@@ -72,11 +97,17 @@ export async function cookies(cookies: { name: string; value: string }[], domain
 
 /** Close the browser and reset all state. */
 export async function close() {
+  await screenshotBrowser?.close().catch(() => {});
+  screenshotBrowser = null;
+  screenshotPage = null;
+  screenshotEntries = [];
   await context?.close();
   context = null;
   page = null;
   release = null;
   settled = null;
+  ssrLocked = false;
+  instrumentationVersion = 0;
   // Clean up temp profile directory.
   if (profileDirPath) {
     const { rmSync } = await import("node:fs");
@@ -84,6 +115,33 @@ export async function close() {
     profileDirPath = null;
     initialOrigin = null;
   }
+}
+
+// ── Instrumentation ─────────────────────────────────────────────────────────
+//
+// addInitScript can't be removed, so we version-gate: each `set` bumps the
+// version and registers a new script that only runs when its version matches.
+// `clear` bumps the version with no matching script, disabling the old one.
+
+export async function instrumentationSet(script: string) {
+  if (!page) throw new Error("browser not open");
+  const ctx = page.context();
+  const v = ++instrumentationVersion;
+
+  // The version gate runs first, then the guarded script.
+  await ctx.addInitScript(`window.__NB_IV__=${v}`);
+  await ctx.addInitScript(`if(window.__NB_IV__===${v}){${script}}`);
+
+  // Apply immediately on the current page.
+  await page.evaluate(script);
+}
+
+export async function instrumentationClear() {
+  if (!page) throw new Error("browser not open");
+  const ctx = page.context();
+  // Bump version — no matching script, so nothing runs.
+  const v = ++instrumentationVersion;
+  await ctx.addInitScript(`window.__NB_IV__=${v}`);
 }
 
 // ── PPR lock/unlock ──────────────────────────────────────────────────────────
@@ -102,7 +160,7 @@ let settled: Promise<void> | null = null;
 /** Enter PPR instant-navigation mode. The cookie is set immediately. */
 export function lock() {
   if (!page) throw new Error("browser not open");
-  if (release) throw new Error("already locked");
+  if (release) return Promise.resolve();
 
   return new Promise<void>((locked) => {
     settled = instant(page!, () => {
@@ -160,11 +218,59 @@ export async function unlock() {
   await page.waitForLoadState("load").catch(() => {});
   await waitForDevToolsReconnect(page);
 
+  // Capture an intermediate snapshot while boundaries are still suspended
+  // but now visible (dynamic content is streaming in). This captures the
+  // suspendedBy data that's only available while boundaries are actively
+  // suspended — once they resolve, suspendedBy is cleared.
+  // Poll briefly to catch boundaries mid-suspension.
+  let midTransition: suspenseTree.Boundary[] = [];
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await new Promise((r) => setTimeout(r, 200));
+    const snap = await suspenseTree.snapshot(page).catch(() => [] as suspenseTree.Boundary[]);
+    const hasSuspendedWithData = snap.some(
+      (b) => b.isSuspended && (b.suspendedBy.length > 0 || b.unknownSuspenders),
+    );
+    if (hasSuspendedWithData || snap.some((b) => b.suspendedBy.length > 0)) {
+      midTransition = snap;
+      break;
+    }
+    // Even if no suspendedBy yet, keep the latest snapshot with any suspended boundaries
+    if (snap.some((b) => b.isSuspended)) {
+      midTransition = snap;
+    }
+  }
+
   // Wait for all boundaries to resolve after unlock.
   await waitForSuspenseToSettle(page);
 
-  // Capture the fully-resolved state with rich suspendedBy data.
+  // Capture the fully-resolved state.
   const unlocked = await suspenseTree.snapshot(page).catch(() => [] as suspenseTree.Boundary[]);
+
+  // Merge suspendedBy from mid-transition into unlocked boundaries.
+  // This preserves blocker info that's lost once boundaries resolve.
+  if (midTransition.length > 0) {
+    const midByKey = new Map<string, suspenseTree.Boundary>();
+    for (const b of midTransition) midByKey.set(suspenseTree.boundaryKey(b), b);
+    for (const b of unlocked) {
+      if (b.suspendedBy.length === 0) {
+        const mid = midByKey.get(suspenseTree.boundaryKey(b));
+        if (mid && mid.suspendedBy.length > 0) {
+          b.suspendedBy = mid.suspendedBy;
+          b.unknownSuspenders = mid.unknownSuspenders ?? b.unknownSuspenders;
+        }
+      }
+    }
+    // Also merge into locked boundaries
+    for (const b of locked) {
+      if (b.suspendedBy.length === 0) {
+        const mid = midByKey.get(suspenseTree.boundaryKey(b));
+        if (mid && mid.suspendedBy.length > 0) {
+          b.suspendedBy = mid.suspendedBy;
+          b.unknownSuspenders = mid.unknownSuspenders ?? b.unknownSuspenders;
+        }
+      }
+    }
+  }
 
   if (locked.length === 0 && unlocked.length === 0) {
     return { text: "No suspense boundaries detected.", boundaries: unlocked, locked, report: null };
@@ -247,6 +353,28 @@ async function waitForDevToolsReconnect(p: Page) {
     if (connected) return;
     await new Promise((r) => setTimeout(r, 200));
   }
+}
+
+// ── SSR lock/unlock ──────────────────────────────────────────────────────────
+//
+// While SSR-locked, every navigation blocks external script resources so the
+// page renders only the server-side HTML shell (no React hydration, no client
+// bundles). Useful for inspecting raw SSR output across multiple navigations.
+
+/** Enter SSR-locked mode. All subsequent navigations block external scripts. */
+export async function ssrLock() {
+  if (!page) throw new Error("browser not open");
+  if (ssrLocked) return;
+  ssrLocked = true;
+  await syncSsrRoutes();
+}
+
+/** Exit SSR-locked mode. Re-enables external scripts. */
+export async function ssrUnlock() {
+  if (!page) throw new Error("browser not open");
+  if (!ssrLocked) return;
+  ssrLocked = false;
+  await syncSsrRoutes();
 }
 
 // ── Navigation ───────────────────────────────────────────────────────────────
@@ -455,6 +583,8 @@ export async function links() {
 export async function push(path: string) {
   if (!page) throw new Error("browser not open");
   const before = page.url();
+  const resolved = new URL(path, before).href;
+  if (resolved === before) throw new Error("already on this URL");
   await page.evaluate((p) => (window as any).next.router.push(p), path);
   await page.waitForURL((u) => u.href !== before, { timeout: 10_000 }).catch(() => {});
   return page.url();
@@ -462,32 +592,10 @@ export async function push(path: string) {
 
 /** Full-page navigation (new document load). Resolves relative URLs against the current page. */
 export async function goto(url: string) {
-  if (!page) throw new Error("browser not open");
-  await page.unrouteAll({ behavior: "wait" });
-  const target = new URL(url, page.url()).href;
+  if (!page) await open(undefined);
+  const target = new URL(url, page!.url()).href;
   initialOrigin = new URL(target).origin;
-  await page.goto(target, { waitUntil: "domcontentloaded" });
-  return target;
-}
-
-/**
- * Navigate like goto but block external script resources.
- * The HTML loads and inline <script> blocks still execute, but external JS
- * bundles (React, hydration, etc.) are aborted. Shows the SSR shell.
- */
-export async function ssrGoto(url: string) {
-  if (!page) throw new Error("browser not open");
-  const target = new URL(url, page.url()).href;
-  initialOrigin = new URL(target).origin;
-
-  // Clear any stale route handlers from previous ssr-goto calls.
-  await page.unrouteAll({ behavior: "wait" });
-
-  await page.route("**/*", (route) => {
-    if (route.request().resourceType() === "script") return route.abort();
-    return route.continue();
-  });
-  await page.goto(target, { waitUntil: "domcontentloaded" });
+  await page!.goto(target, { waitUntil: "domcontentloaded" });
   return target;
 }
 
@@ -549,15 +657,170 @@ async function formatSource([file, line, col]: [string, number, number]) {
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
-/** Viewport screenshot saved to a temp file. Returns the file path. */
-export async function screenshot() {
+/** Render screenshot entries as HTML and refresh (or launch) the log window.
+ *  No-op in headless mode. */
+async function refreshScreenshotLog() {
+  if (process.env.NEXT_BROWSER_HEADLESS) return;
+
+  const entriesHtml = screenshotEntries
+    .map((e) => {
+      const header =
+        `<div style="padding:4px 12px;display:flex;align-items:baseline;gap:8px">` +
+        (e.caption
+          ? `<span style="font-size:14px">${escapeHtml(e.caption)}</span>`
+          : "") +
+        `<span style="font-size:11px;opacity:0.5">${escapeHtml(e.timestamp)}</span>` +
+        `</div>`;
+      return header + `<img src="data:image/png;base64,${e.imgData}" style="display:block;max-width:100%">`;
+    })
+    .join(`<hr style="border:none;border-top:1px solid #333;margin:12px 0">`);
+
+  const html =
+    `<html><head><title>Screenshot Log</title></head>` +
+    `<body style="margin:0;background:#111;color:#fff;font-family:system-ui">` +
+    `<div style="padding:8px 12px;font-size:11px;opacity:0.5;text-transform:uppercase;letter-spacing:0.05em">Screenshot Log</div>` +
+    `${entriesHtml}` +
+    `</body></html>`;
+  const htmlPath = join(tmpdir(), `next-browser-screenshots-${process.pid}.html`);
+  writeFileSync(htmlPath, html);
+  const target = `file://${htmlPath}`;
+
+  // Reuse existing log window, or launch a new one.
+  if (screenshotPage && !screenshotPage.isClosed()) {
+    try {
+      await screenshotPage.goto(target);
+      await screenshotPage.bringToFront();
+      return;
+    } catch {
+      // Window was closed by user — fall through to launch a new one.
+      await screenshotBrowser?.close().catch(() => {});
+    }
+  }
+
+  const { mkdtempSync } = await import("node:fs");
+  const userDataDir = mkdtempSync(join(tmpdir(), "nb-screenshots-"));
+  const ctx = await chromium.launchPersistentContext(userDataDir, {
+    headless: false,
+    args: [`--app=${target}`, "--window-size=820,640"],
+    viewport: null,
+  });
+  screenshotBrowser = ctx;
+  screenshotPage = ctx.pages()[0] ?? (await ctx.waitForEvent("page"));
+  await screenshotPage.waitForLoadState();
+  await screenshotPage.bringToFront();
+}
+
+function escapeHtml(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Max screenshot dimension in pixels — keeps images under the 2000px limit
+ *  that multi-image LLM requests impose. */
+const SCREENSHOT_MAX_DIM = 1280;
+
+/** Screenshot saved to a temp file. Opens the Screenshot Log window in headed mode.
+ *  Returns the file path for a single image, or a directory path when the
+ *  image is sliced into multiple chunks (full-page on long pages). */
+export async function screenshot(opts?: { fullPage?: boolean; caption?: string }) {
   if (!page) throw new Error("browser not open");
   await hideDevOverlay();
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
   const path = join(tmpdir(), `next-browser-${Date.now()}.png`);
-  await page.screenshot({ path });
-  return path;
+  // scale: 'css' prevents Retina 2x doubling (1440x900 stays 1440x900).
+  await page.screenshot({ path, fullPage: opts?.fullPage, scale: "css" });
+
+  const result = await sliceIfNeeded(path, SCREENSHOT_MAX_DIM);
+  const timestamp = new Date().toLocaleTimeString();
+
+  if (typeof result === "string") {
+    // Single file — fits within limits.
+    const imgData = readFileSync(result).toString("base64");
+    screenshotEntries.unshift({ caption: opts?.caption, imgData, timestamp });
+  } else {
+    // Multiple chunks — add each to the screenshot log.
+    for (const chunk of result.files) {
+      const imgData = readFileSync(chunk).toString("base64");
+      const label = opts?.caption
+        ? `${opts.caption} (${result.files.indexOf(chunk) + 1}/${result.files.length})`
+        : `chunk ${result.files.indexOf(chunk) + 1}/${result.files.length}`;
+      screenshotEntries.unshift({ caption: label, imgData, timestamp });
+    }
+  }
+  await refreshScreenshotLog();
+
+  return typeof result === "string" ? result : result.dir;
+}
+
+/** If the screenshot fits within `maxDim`, scale it in-place and return the
+ *  path. Otherwise slice it into ≤maxDim chunks inside a temp directory and
+ *  return `{ dir, files }`. */
+async function sliceIfNeeded(
+  filePath: string,
+  maxDim: number,
+): Promise<string | { dir: string; files: string[] }> {
+  const buf = readFileSync(filePath);
+  if (buf.length < 24) return filePath;
+  const w = buf.readUInt32BE(16);
+  const h = buf.readUInt32BE(20);
+  if (w <= maxDim && h <= maxDim) return filePath;
+  if (!page) return filePath;
+
+  const b64 = buf.toString("base64");
+  const wScale = Math.min(maxDim / w, 1);
+  const scaledW = Math.round(w * wScale);
+  const scaledH = Math.round(h * wScale);
+
+  if (scaledH <= maxDim) {
+    // Fits after width scaling — single resized file.
+    const resized: string = await page.evaluate(
+      async ({ src, nw, nh }: { src: string; nw: number; nh: number }) => {
+        const img = new Image();
+        await new Promise<void>((r, e) => { img.onload = () => r(); img.onerror = () => e(); img.src = `data:image/png;base64,${src}`; });
+        const c = document.createElement("canvas");
+        c.width = nw; c.height = nh;
+        c.getContext("2d")!.drawImage(img, 0, 0, nw, nh);
+        return c.toDataURL("image/png").split(",")[1]!;
+      },
+      { src: b64, nw: scaledW, nh: scaledH },
+    );
+    writeFileSync(filePath, Buffer.from(resized, "base64"));
+    return filePath;
+  }
+
+  // Slice into chunks of maxDim height (in scaled pixels).
+  const chunkCount = Math.ceil(scaledH / maxDim);
+  const chunks: string[] = await page.evaluate(
+    async ({ src, nw, totalH, max, count }: {
+      src: string; nw: number; totalH: number; max: number; count: number;
+    }) => {
+      const img = new Image();
+      await new Promise<void>((r, e) => { img.onload = () => r(); img.onerror = () => e(); img.src = `data:image/png;base64,${src}`; });
+      const results: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const sy = (i * max) / (totalH / img.height);
+        const sh = Math.min(max, totalH - i * max) / (totalH / img.height);
+        const dh = Math.min(max, totalH - i * max);
+        const c = document.createElement("canvas");
+        c.width = nw; c.height = dh;
+        c.getContext("2d")!.drawImage(img, 0, sy, img.width, sh, 0, 0, nw, dh);
+        results.push(c.toDataURL("image/png").split(",")[1]!);
+      }
+      return results;
+    },
+    { src: b64, nw: scaledW, totalH: scaledH, max: maxDim, count: chunkCount },
+  );
+
+  const dir = join(tmpdir(), `next-browser-screenshots-${Date.now()}`);
+  mkdirSync(dir, { recursive: true });
+  const files: string[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const p = join(dir, `${String(i + 1).padStart(3, "0")}.png`);
+    writeFileSync(p, Buffer.from(chunks[i], "base64"));
+    files.push(p);
+  }
+  // Clean up the original full file.
+  unlinkSync(filePath);
+
+  return { dir, files };
 }
 
 /** Remove Next.js devtools overlay from the page before screenshots. */
@@ -763,6 +1026,349 @@ export async function mcp(tool: string, args?: Record<string, unknown>) {
   return nextMcp.call(origin, tool, args);
 }
 
+/** Return browser console output captured by the init-script interceptor. */
+export async function browserLogs() {
+  if (!page) throw new Error("browser not open");
+  return page.evaluate(
+    () => (window as any).__NEXT_BROWSER_CONSOLE_LOGS__ ?? [],
+  );
+}
+
+// ── Render Profiling ────────────────────────────────────────────────────────
+
+/**
+ * The browser-side script that installs the onCommitFiberRoot hook.
+ * Extracted so it can be used by both rendersStart (page.evaluate)
+ * and rendersAuto (addInitScript).
+ */
+const rendersHookScript = `(() => {
+  const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  if (!hook || window.__NEXT_BROWSER_RENDERS_ACTIVE__) return;
+
+  const MAX_COMPONENTS = 200;
+  const data = {};
+  const fps = { frames: [], last: 0, rafId: 0 };
+
+  window.__NEXT_BROWSER_RENDERS__ = data;
+  window.__NEXT_BROWSER_RENDERS_FPS__ = fps;
+  window.__NEXT_BROWSER_RENDERS_START__ = performance.now();
+  window.__NEXT_BROWSER_RENDERS_ACTIVE__ = true;
+
+  // FPS tracking via requestAnimationFrame
+  function fpsLoop(now) {
+    if (fps.last > 0) fps.frames.push(now - fps.last);
+    fps.last = now;
+    fps.rafId = requestAnimationFrame(fpsLoop);
+  }
+  fps.rafId = requestAnimationFrame(fpsLoop);
+
+  const origOnCommit = hook.onCommitFiberRoot;
+  window.__NEXT_BROWSER_RENDERS_ORIG_COMMIT__ = origOnCommit;
+
+  hook.onCommitFiberRoot = function(rendererID, root) {
+    try { walkFiber(root.current); } catch {}
+    if (typeof origOnCommit === "function") {
+      return origOnCommit.apply(hook, arguments);
+    }
+  };
+
+  function getName(fiber) {
+    if (!fiber.type || typeof fiber.type === "string") return null;
+    return fiber.type.displayName || fiber.type.name || null;
+  }
+
+  function brief(val) {
+    if (val === undefined) return "undefined";
+    if (val === null) return "null";
+    if (typeof val === "function") return "fn()";
+    if (typeof val === "string") return val.length > 60 ? '"' + val.slice(0, 57) + '..."' : '"' + val + '"';
+    if (typeof val === "number" || typeof val === "boolean") return String(val);
+    if (Array.isArray(val)) return "Array(" + val.length + ")";
+    if (typeof val === "object") {
+      try {
+        const keys = Object.keys(val);
+        return keys.length <= 3 ? "{" + keys.join(", ") + "}" : "{" + keys.slice(0, 3).join(", ") + ", ...}";
+      } catch { return "{...}"; }
+    }
+    return String(val).slice(0, 40);
+  }
+
+  function getChanges(fiber) {
+    const changes = [];
+    const alt = fiber.alternate;
+    if (!alt) { changes.push({ type: "mount" }); return changes; }
+
+    // Props
+    if (fiber.memoizedProps !== alt.memoizedProps) {
+      const curr = fiber.memoizedProps || {};
+      const prev = alt.memoizedProps || {};
+      const allKeys = new Set([...Object.keys(curr), ...Object.keys(prev)]);
+      for (const k of allKeys) {
+        if (k !== "children" && curr[k] !== prev[k]) {
+          changes.push({ type: "props", name: k, prev: brief(prev[k]), next: brief(curr[k]) });
+        }
+      }
+    }
+
+    // State — walk memoizedState linked list
+    if (fiber.memoizedState !== alt.memoizedState) {
+      let curr = fiber.memoizedState;
+      let prev = alt.memoizedState;
+      let hookIdx = 0;
+      while (curr || prev) {
+        if (curr?.memoizedState !== prev?.memoizedState) {
+          changes.push({
+            type: "state", name: "hook #" + hookIdx,
+            prev: brief(prev?.memoizedState), next: brief(curr?.memoizedState)
+          });
+        }
+        curr = curr?.next;
+        prev = prev?.next;
+        hookIdx++;
+      }
+    }
+
+    // Context — walk dependencies linked list
+    if (fiber.dependencies?.firstContext) {
+      let ctx = fiber.dependencies.firstContext;
+      let altCtx = alt.dependencies?.firstContext;
+      while (ctx) {
+        if (!altCtx || ctx.memoizedValue !== altCtx?.memoizedValue) {
+          const ctxName = ctx.context?.displayName || ctx.context?.Provider?.displayName || "unknown";
+          changes.push({
+            type: "context", name: ctxName,
+            prev: brief(altCtx?.memoizedValue), next: brief(ctx.memoizedValue)
+          });
+        }
+        ctx = ctx.next;
+        altCtx = altCtx?.next;
+      }
+    }
+
+    if (changes.length === 0) {
+      // Find the nearest parent component name
+      let parent = fiber.return;
+      while (parent) {
+        const pName = getName(parent);
+        if (pName) {
+          const suffix = !parent.alternate ? " (mount)" : "";
+          changes.push({ type: "parent", name: pName + suffix });
+          break;
+        }
+        parent = parent.return;
+      }
+      if (changes.length === 0) changes.push({ type: "parent", name: "unknown" });
+    }
+
+    return changes;
+  }
+
+  function childrenTime(fiber) {
+    let t = 0;
+    let child = fiber.child;
+    while (child) {
+      if (typeof child.actualDuration === "number") t += child.actualDuration;
+      child = child.sibling;
+    }
+    return t;
+  }
+
+  function hasDomMutation(fiber) {
+    // Check if this fiber or any host (DOM) child has the Mutation flag (4)
+    // or Placement flag (2) or Update flag (4) in subtreeFlags/flags
+    if (!fiber.alternate) return true; // mount always mutates
+    let child = fiber.child;
+    while (child) {
+      if (typeof child.type === "string" && (child.flags & 6) > 0) return true;
+      child = child.sibling;
+    }
+    return false;
+  }
+
+  function walkFiber(fiber) {
+    if (!fiber) return;
+
+    const tag = fiber.tag;
+    if (tag === 0 || tag === 1 || tag === 2 || tag === 11 || tag === 15) {
+      const didRender =
+        fiber.alternate === null ||
+        fiber.flags > 0 ||
+        fiber.memoizedProps !== fiber.alternate?.memoizedProps ||
+        fiber.memoizedState !== fiber.alternate?.memoizedState;
+
+      if (didRender) {
+        const name = getName(fiber);
+        if (name) {
+          if (!(name in data) && Object.keys(data).length >= MAX_COMPONENTS) {
+            // skip — at cap
+          } else {
+            if (!data[name]) {
+              data[name] = {
+                count: 0, mounts: 0, totalTime: 0, selfTime: 0,
+                domMutations: 0, changes: [],
+                _instances: new Set()
+              };
+            }
+            data[name].count++;
+            if (!fiber.alternate) data[name].mounts++;
+            if (!data[name]._instances.has(fiber)) {
+              data[name]._instances.add(fiber);
+              if (fiber.alternate) data[name]._instances.add(fiber.alternate);
+            }
+            if (typeof fiber.actualDuration === "number") {
+              data[name].totalTime += fiber.actualDuration;
+              data[name].selfTime += Math.max(0, fiber.actualDuration - childrenTime(fiber));
+            }
+            if (hasDomMutation(fiber)) data[name].domMutations++;
+            const ch = getChanges(fiber);
+            // Keep last 50 change entries per component to cap memory
+            for (const c of ch) {
+              if (data[name].changes.length < 50) data[name].changes.push(c);
+            }
+          }
+        }
+      }
+    }
+
+    walkFiber(fiber.child);
+    walkFiber(fiber.sibling);
+  }
+})()`;
+
+/**
+ * Start recording React re-renders by hooking into onCommitFiberRoot.
+ * Installs via both addInitScript (survives navigations, captures mount)
+ * and page.evaluate (activates immediately on current page).
+ */
+export async function rendersStart() {
+  if (!page) throw new Error("browser not open");
+  const ctx = page.context();
+  await ctx.addInitScript(rendersHookScript);
+  await page.evaluate(rendersHookScript);
+}
+
+/**
+ * Stop recording and return a per-component render profile with raw data.
+ */
+export async function rendersStop() {
+  if (!page) throw new Error("browser not open");
+  return page.evaluate(() => {
+    const active = (window as any).__NEXT_BROWSER_RENDERS_ACTIVE__;
+    if (!active)
+      throw new Error(
+        "renders recording not active — run `renders start` first",
+      );
+
+    type Change = {
+      type: string;
+      name?: string;
+      prev?: string;
+      next?: string;
+    };
+    const data = (window as any).__NEXT_BROWSER_RENDERS__ as
+      | Record<
+          string,
+          {
+            count: number;
+            mounts: number;
+            totalTime: number;
+            selfTime: number;
+            domMutations: number;
+            changes: Change[];
+            _instances: Set<any>;
+          }
+        >
+      | undefined;
+    const startTime = (window as any).__NEXT_BROWSER_RENDERS_START__ as number;
+    const elapsed = performance.now() - startTime;
+
+    // Collect FPS data
+    const fpsData = (window as any).__NEXT_BROWSER_RENDERS_FPS__ as
+      | { frames: number[]; last: number; rafId: number }
+      | undefined;
+    let fpsStats = { avg: 0, min: 0, max: 0, drops: 0 };
+    if (fpsData) {
+      cancelAnimationFrame(fpsData.rafId);
+      if (fpsData.frames.length > 0) {
+        const fpsSamples = fpsData.frames.map((dt) =>
+          dt > 0 ? 1000 / dt : 0,
+        );
+        const sum = fpsSamples.reduce((a, b) => a + b, 0);
+        fpsStats = {
+          avg: Math.round(sum / fpsSamples.length),
+          min: Math.round(Math.min(...fpsSamples)),
+          max: Math.round(Math.max(...fpsSamples)),
+          drops: fpsSamples.filter((f) => f < 30).length,
+        };
+      }
+    }
+
+    // Restore original hook
+    const hook = (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__;
+    const orig = (window as any).__NEXT_BROWSER_RENDERS_ORIG_COMMIT__;
+    if (hook) {
+      hook.onCommitFiberRoot = orig || undefined;
+    }
+
+    delete (window as any).__NEXT_BROWSER_RENDERS__;
+    delete (window as any).__NEXT_BROWSER_RENDERS_START__;
+    delete (window as any).__NEXT_BROWSER_RENDERS_ACTIVE__;
+    delete (window as any).__NEXT_BROWSER_RENDERS_ORIG_COMMIT__;
+    delete (window as any).__NEXT_BROWSER_RENDERS_FPS__;
+
+    if (!data)
+      return {
+        elapsed: 0,
+        fps: fpsStats,
+        totalRenders: 0,
+        totalMounts: 0,
+        totalReRenders: 0,
+        totalComponents: 0,
+        components: [],
+      };
+
+    const round = (n: number) => Math.round(n * 100) / 100;
+
+    const components = Object.entries(data)
+      .map(([name, entry]) => {
+        // Summarize changes: count by type+name for the table view
+        const summary: Record<string, number> = {};
+        for (const c of entry.changes) {
+          const key = c.type === "props" ? "props." + c.name
+            : c.type === "state" ? "state (" + c.name + ")"
+            : c.type === "context" ? "context (" + c.name + ")"
+            : c.type === "parent" ? "parent (" + c.name + ")"
+            : c.type;
+          summary[key] = (summary[key] || 0) + 1;
+        }
+        return {
+          name,
+          count: entry.count,
+          mounts: entry.mounts,
+          reRenders: entry.count - entry.mounts,
+          instanceCount: entry._instances.size,
+          totalTime: round(entry.totalTime),
+          selfTime: round(entry.selfTime),
+          domMutations: entry.domMutations,
+          changes: entry.changes,
+          changeSummary: summary,
+        };
+      })
+      .sort((a, b) => b.totalTime - a.totalTime || b.count - a.count);
+
+    const totalMounts = components.reduce((s, c) => s + c.mounts, 0);
+    return {
+      elapsed: round(elapsed / 1000),
+      fps: fpsStats,
+      totalRenders: components.reduce((s, c) => s + c.count, 0),
+      totalMounts,
+      totalReRenders: components.reduce((s, c) => s + c.reRenders, 0),
+      totalComponents: components.length,
+      components,
+    };
+  });
+}
+
 /** Get network request log, or detail for a specific request index. */
 export function network(idx?: number) {
   return idx == null ? net.format() : net.detail(idx);
@@ -873,6 +1479,42 @@ async function launch() {
       }
       return orig.apply(console, [label, ...args] as any);
     };
+  });
+
+  // Intercept console.log/warn/error/info to capture browser console output.
+  // This works for both dev and prod builds — unlike `logs`/`errors` which
+  // rely on the Next.js dev server MCP endpoint.
+  await ctx.addInitScript(() => {
+    const MAX = 500;
+    const entries: Array<{ level: string; args: string; timestamp: number }> = [];
+    (window as any).__NEXT_BROWSER_CONSOLE_LOGS__ = entries;
+
+    function safe(val: unknown): string {
+      if (val === undefined) return "undefined";
+      if (val === null) return "null";
+      if (val instanceof Error) return `${val.name}: ${val.message}`;
+      if (typeof val === "object") {
+        try {
+          return JSON.stringify(val);
+        } catch {
+          return String(val);
+        }
+      }
+      return String(val);
+    }
+
+    for (const level of ["log", "warn", "error", "info"] as const) {
+      const orig = console[level];
+      console[level] = function (...args: any[]) {
+        entries.push({
+          level,
+          args: args.map(safe).join(" "),
+          timestamp: performance.now(),
+        });
+        if (entries.length > MAX) entries.splice(0, entries.length - MAX);
+        return orig.apply(console, args);
+      };
+    }
   });
 
   // Next.js devtools overlay is removed before each screenshot via hideDevOverlay().

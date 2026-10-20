@@ -16,14 +16,14 @@ const badgeVariants = cva(
         // Marketplace area badges
         "mzansi-market": "area-mzansi-market border",
         // Status badges
-        live: "border-transparent bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-green-300",
+        live: "border-transparent bg-brand-green-100 text-brand-green-800 dark:bg-brand-green-900/40 dark:text-brand-gold-300",
         pending:
           "border-transparent bg-brand-gold-100 text-brand-gold-800 dark:bg-brand-gold-900/40 dark:text-brand-gold-300",
         rejected:
           "border-transparent bg-brand-red-100 text-brand-red-800 dark:bg-brand-red-900/40 dark:text-brand-red-300",
         draft: "border-transparent bg-warm-100 text-warm-600 dark:bg-warm-800 dark:text-warm-300",
         verified:
-          "border-transparent bg-brand-green-50 text-brand-green-700 ring-1 ring-inset ring-brand-green/20 dark:bg-brand-green/15 dark:text-brand-green-300",
+          "border-transparent bg-brand-green-50 text-brand-green-700 ring-1 ring-inset ring-brand-green/20 dark:bg-brand-green/15 dark:text-brand-gold-300",
       },
     },
     defaultVariants: {

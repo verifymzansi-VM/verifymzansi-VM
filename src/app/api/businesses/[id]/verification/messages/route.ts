@@ -19,8 +19,15 @@ import { requireVerificationOwner } from "../_lib/owner-guard";
 import { formFile, formText, readVerificationForm } from "../_lib/read-upload";
 
 const log = createLogger("BusinessVerificationOwnerMessage");
+const confirmsStatementRollback = (code: string | undefined) =>
+  /^(22|23|42)[A-Z0-9]{3}$/.test(code ?? "") || ["40001", "40P01"].includes(code ?? "");
 
 const caseIdSchema = z.string().uuid();
+
+/** Staff corrected the registered office by hand. */
+function officeCorrected(checks: unknown): boolean {
+  return Boolean((checks as Record<string, unknown> | null)?.officeCorrectedBy);
+}
 
 /**
  * POST /api/businesses/[id]/verification/messages
@@ -30,6 +37,7 @@ const caseIdSchema = z.string().uuid();
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let storedKey: string | null = null;
+  let discardPendingUpload: (() => Promise<void>) | null = null;
   try {
     const ctx = await requireVerificationOwner(request, params, {
       log,
@@ -61,6 +69,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!openCase || openCase.owner_id !== userId) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
+    const expectedCaseVersion = openCase.updated_at;
     if (!["pending", "info_requested"].includes(openCase.status)) {
       return NextResponse.json(
         { error: "This case is closed. Start a new verification instead.", code: "case_closed" },
@@ -69,11 +78,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     let attachmentId: string | null = null;
+    const discardUncommittedUpload = async () => {
+      if (attachmentId) {
+        const { error } = await admin
+          .from("business_verification_files")
+          .delete()
+          .eq("id", attachmentId);
+        if (error) throw new Error("Pending verification file cleanup failed");
+        attachmentId = null;
+      }
+      if (storedKey) {
+        await discardStoredFile(storedKey);
+        storedKey = null;
+      }
+    };
     let newClaimNotice: (() => Promise<void>) | null = null;
     const casePatch: Record<string, unknown> = { status: "pending" };
 
     if (upload) {
-      const file = await readCipcFile(upload);
+      // On a CIPC case the upload replaces the owner's CIPC document, so it
+      // follows the same PDF-only rule as the first upload.
+      const file = await readCipcFile(upload, { pdfOnly: openCase.kind === "cipc" });
       if (isIntakeError(file)) {
         return NextResponse.json({ error: file.error, code: file.code }, { status: file.status });
       }
@@ -92,10 +117,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .select("id")
         .single();
       if (fileError || !fileRowData) {
-        await discardStoredFile(storedKey);
+        if (confirmsStatementRollback(fileError?.code))
+          discardPendingUpload = discardUncommittedUpload;
         throw new Error(fileError?.message ?? "file insert failed");
       }
       attachmentId = fileRowData.id;
+      discardPendingUpload = discardUncommittedUpload;
 
       if (isCipcCase) {
         const { findings, registrationNumber, conflictHolders } = await screenUpload(admin, {
@@ -133,7 +160,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           parsed: file.stored ?? {},
           director_id_hmacs: file.directorIdHmacs,
           findings,
-          registered_office: file.office,
+          // Once staff attached CIPC's own copy (or corrected the office by
+          // hand), the office comes from that, never from the owner's file.
+          ...(adminCopy || officeCorrected(openCase.checks)
+            ? {}
+            : { registered_office: file.office }),
           ...(registrationNumber ? { registration_number: registrationNumber } : {}),
           ...(reCompared ? { admin_copy: reCompared } : {}),
           // New evidence voids an exception proposed on the old document.
@@ -146,20 +177,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Update the case first: if it closed meanwhile, nothing is recorded.
+    // A lost response may still have committed. Preserve evidence once the
+    // update starts unless the database confirms a rolled-back statement.
+    discardPendingUpload = null;
     const { data: updated, error: updateError } = await admin
       .from("business_verifications")
       .update(casePatch)
       .eq("id", openCase.id)
+      .eq("business_id", business.id)
+      .eq("owner_id", userId)
+      .eq("updated_at", expectedCaseVersion)
       .in("status", ["pending", "info_requested"])
       .select("id");
-    if (updateError) throw new Error(updateError.message);
+    if (updateError) {
+      if (confirmsStatementRollback(updateError.code))
+        discardPendingUpload = discardUncommittedUpload;
+      throw new Error(updateError.message);
+    }
     if (!updated?.length) {
-      if (attachmentId) {
-        await admin.from("business_verification_files").delete().eq("id", attachmentId);
-      }
-      if (storedKey) await discardStoredFile(storedKey);
+      await discardUncommittedUpload();
       return NextResponse.json(
-        { error: "This case just closed. Start a new verification instead.", code: "case_closed" },
+        {
+          error: "This case changed while sending. Reload it before replying.",
+          code: "case_changed",
+        },
         { status: 409 }
       );
     }
@@ -196,6 +237,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {
+    if (discardPendingUpload) {
+      try {
+        await discardPendingUpload();
+      } catch {
+        log.error("Pending verification upload needs cleanup");
+      }
+    }
     log.error("Owner verification message failed", {
       error: error instanceof Error ? error.message : String(error),
     });

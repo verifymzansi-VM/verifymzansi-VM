@@ -161,6 +161,7 @@ export async function proveBaselineHttp({
       "src/lib/foundation/post-search.ts",
       "src/lib/foundation/public-post-contract.ts",
       "src/lib/foundation/public-post.ts",
+      "src/lib/foundation/event-window-dto.ts",
       "src/lib/foundation/reference-catalogue.ts",
       "src/lib/supabase/fetch-with-timeout.ts",
       "database/foundation/api.types.ts",

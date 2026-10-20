@@ -37,7 +37,7 @@ const AREA_STYLES: Record<PostFormArea, AreaStyle> = {
   market: {
     icon: ShoppingBag,
     tile: "area-market-tile",
-    pill: "border-brand-green-200 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-800 dark:bg-brand-green-950/60 dark:text-brand-green-200",
+    pill: "border-brand-green-200 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-800 dark:bg-brand-green-950/60 dark:text-brand-gold-200",
     bar: "bg-brand-green-600 dark:bg-brand-green-400",
   },
   business: {

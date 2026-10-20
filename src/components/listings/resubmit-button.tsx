@@ -54,7 +54,7 @@ export function ResubmitButton({
       <Button
         variant="outline"
         size="sm"
-        className="h-11 gap-1.5 border-brand-green-600 px-4 text-brand-green-700 hover:bg-brand-green/10 dark:border-brand-green-400 dark:text-brand-green-300"
+        className="h-11 gap-1.5 border-brand-green-600 px-4 text-brand-green-700 hover:bg-brand-green/10 dark:border-brand-green-400 dark:text-brand-gold-300"
         onClick={handleResubmit}
         disabled={loading}
       >

@@ -109,7 +109,7 @@ export function StatePanel({
             <Link
               href="/contact"
               prefetch={false}
-              className="inline-flex min-h-11 items-center font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+              className="inline-flex min-h-11 items-center font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
             >
               Contact support
             </Link>

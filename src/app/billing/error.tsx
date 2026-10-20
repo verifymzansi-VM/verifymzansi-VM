@@ -33,7 +33,7 @@ export default function BillingError({
           charged, please don&apos;t pay twice: email{" "}
           <a
             href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
-            className="rounded-sm font-medium text-brand-green-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+            className="rounded-sm font-medium text-brand-green-700 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
           >
             {SUPPORT_CONTACT_EMAIL}
           </a>{" "}

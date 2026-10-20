@@ -22,9 +22,9 @@ const toneStyles: Record<
     summary: "Buy and sell locally",
     rgb: "20 154 107",
     iconClassName:
-      "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300",
+      "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-gold-300",
     linkClassName:
-      "text-brand-green-700 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200",
+      "text-brand-green-700 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100",
   },
   blue: {
     icon: Building2,

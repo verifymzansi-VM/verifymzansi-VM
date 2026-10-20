@@ -19,6 +19,23 @@ function titleCase(value: string): string {
     .replace(/\b(Cbd|Po)\b/g, (w) => w.toUpperCase());
 }
 
+/** Profile location fields filled from a registered office. */
+export type OfficeLocation = { province: string; city: string; town: string; address: string };
+
+/**
+ * The trading location a CIPC registered office fills in, or null when the
+ * city isn't one the location picker knows (the owner then types it).
+ */
+export function officeToLocation(office: RegisteredOffice): OfficeLocation | null {
+  if (!office.province || !office.city || office.cityKnown === false) return null;
+  return {
+    province: office.province,
+    city: office.city,
+    town: office.suburb ?? "",
+    address: office.streetLines.join(", "),
+  };
+}
+
 /**
  * Splits the "ADDRESS OF REGISTERED OFFICE" lines from a CIPC document,
  * reading bottom-up: postal code, province, city, then suburb; whatever is

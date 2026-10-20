@@ -1254,7 +1254,7 @@ export default function CreateListingPage() {
                               className={cn(
                                 "flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
                                 negotiable
-                                  ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200"
+                                  ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200"
                                   : "border-input bg-card text-foreground/80 hover:border-foreground/30"
                               )}
                             >
@@ -1321,7 +1321,7 @@ export default function CreateListingPage() {
                                 className={cn(
                                   "relative flex min-h-[4.5rem] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
                                   isSelected
-                                    ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-green-200 dark:ring-brand-green-400"
+                                    ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 ring-1 ring-brand-green-600 dark:border-brand-green-400 dark:bg-brand-green-950/50 dark:text-brand-gold-200 dark:ring-brand-green-400"
                                     : "border-border bg-card text-foreground/80 hover:border-foreground/25 hover:bg-muted/50",
                                   fieldErrors.contactMethods &&
                                     !isSelected &&
@@ -1512,7 +1512,7 @@ export default function CreateListingPage() {
                           visibility period and my responsibility for the accuracy and legality of
                           this post.{" "}
                           <a
-                            className="font-semibold text-brand-green-700 underline underline-offset-2 dark:text-brand-green-300"
+                            className="font-semibold text-brand-green-700 underline underline-offset-2 dark:text-brand-gold-300"
                             href="/terms"
                           >
                             View terms

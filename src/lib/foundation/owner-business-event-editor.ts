@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { foundationEventWindowSchema } from "./event-window-dto";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import reference from "../domains/taxonomy/reference.json";
 import { foundationOwnerMediaSchema, hasValidOwnerMediaSlots } from "./owner-editor-media";
@@ -16,27 +17,6 @@ const content = (title: number, description: number) =>
     locality_label: boundedText(120)
       .refine((value) => value.length > 0)
       .nullable(),
-  });
-const instant = z.iso.datetime({ precision: 3 }).refine((value) => {
-  const date = new Date(value);
-  return (
-    Number.isFinite(date.getTime()) && date.getUTCFullYear() >= 1 && date.getUTCFullYear() <= 9999
-  );
-});
-const window = z
-  .strictObject({
-    starts_at: instant,
-    ends_at: instant,
-    // Preserve stored PostgreSQL timezone aliases; creation canonicalization is separate.
-    timezone: z
-      .string()
-      .min(1)
-      .max(80)
-      .regex(/^[A-Za-z0-9_+./-]+$/),
-  })
-  .refine((value) => {
-    const duration = Date.parse(value.ends_at) - Date.parse(value.starts_at);
-    return duration > 0 && duration <= 90 * 86400000;
   });
 const base = z.strictObject({
   id: z.uuid(),
@@ -68,7 +48,7 @@ const editor = z
       kind: z.literal("event"),
       area: z.literal("tourism_events"),
       content: content(120, 5000),
-      event_window: window,
+      event_window: foundationEventWindowSchema,
     }),
   ])
   .refine((value) => value.edit_of !== value.id)
@@ -97,10 +77,6 @@ export function parseFoundationBusinessEventEditor(input: unknown) {
   if (!parsed.success) throw new Error("Invalid foundation business/event editor");
   return parsed.data;
 }
-export type FoundationBusinessEventEditor = NonNullable<
-  ReturnType<typeof parseFoundationBusinessEventEditor>
->;
-
 export async function readFoundationBusinessEventEditor(
   api: FoundationAuthenticatedApi,
   input: unknown

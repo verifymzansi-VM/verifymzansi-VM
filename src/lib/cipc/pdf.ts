@@ -13,6 +13,21 @@ export type PdfStructure = {
   revisionCount: number;
   pageCount: number;
   hasTextLayer: boolean;
+  /** "1.7" from the %PDF- header. */
+  pdfVersion: string | null;
+  /** Cross-reference and object streams: written by newer tools, never by CIPC. */
+  xrefStreams: number;
+  objectStreams: number;
+  /** XMP metadata: added by Acrobat, Word and most editors on save. */
+  hasXmp: boolean;
+  /** Comments, stamps and typewriter text boxes sit on top of the page. */
+  hasAnnotations: boolean;
+  hasAcroForm: boolean;
+  /** Embedded font names without the subset prefix ("AAAAAB+Arial" → "Arial"). */
+  fonts: string[];
+  imageCount: number;
+  /** Text items printed at the same spot: the trace of whiting out and retyping. */
+  overlappingText: number;
 };
 
 export type ExtractedPdf = { items: PdfTextItem[]; structure: PdfStructure };
@@ -23,9 +38,50 @@ function countOccurrences(text: string, needle: string): number {
   return count;
 }
 
+function countMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
+}
+
+/**
+ * Strings read from an uploaded file end up in findings staff read and in the
+ * database, so they are bounded however the file was crafted.
+ */
+const MAX_META_CHARS = 120;
+const MAX_FONT_NAMES = 20;
+const MAX_FONT_CHARS = 64;
+
 function metaString(info: Record<string, unknown>, key: string): string | null {
   const value = info[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, MAX_META_CHARS) : null;
+}
+
+function fontNames(raw: string): string[] {
+  const names = new Set<string>();
+  for (const m of raw.matchAll(/\/BaseFont\s*\/([^\s/<>[\]()]+)/g)) {
+    names.add(m[1].replace(/^[A-Z]{6}\+/, "").slice(0, MAX_FONT_CHARS));
+    if (names.size >= MAX_FONT_NAMES) break;
+  }
+  return [...names].sort();
+}
+
+const OVERLAP_PT = 2;
+/** Enough for any real CIPC document; keeps the pairwise check cheap. */
+const MAX_OVERLAP_ITEMS = 2000;
+
+function countOverlaps(items: PdfTextItem[]): number {
+  const list = items.slice(0, MAX_OVERLAP_ITEMS);
+  let count = 0;
+  for (let a = 0; a < list.length; a++) {
+    for (let b = a + 1; b < list.length; b++) {
+      if (
+        Math.abs(list[a].x - list[b].x) < OVERLAP_PT &&
+        Math.abs(list[a].y - list[b].y) < OVERLAP_PT
+      ) {
+        count++;
+      }
+    }
+  }
+  return count;
 }
 
 /** CIPC documents are one or two pages; more is never a real disclosure. */
@@ -55,6 +111,7 @@ export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf | null
     const meta = await getMeta(pdf);
     const info = (meta.info ?? {}) as Record<string, unknown>;
     const items: PdfTextItem[] = [];
+    let annotationCount = 0;
     let offset = 0;
     for (let n = 1; n <= Math.min(pdf.numPages, MAX_PAGES); n++) {
       const page = await pdf.getPage(n);
@@ -64,6 +121,7 @@ export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf | null
         if (!("str" in item) || !item.str.trim()) continue;
         items.push({ x: item.transform[4], y: item.transform[5] - offset, text: item.str });
       }
+      annotationCount += (await page.getAnnotations().catch(() => [])).length;
       offset += height;
     }
     return {
@@ -76,6 +134,15 @@ export async function extractPdf(bytes: Uint8Array): Promise<ExtractedPdf | null
         revisionCount,
         pageCount: pdf.numPages,
         hasTextLayer: items.length > 0,
+        pdfVersion: raw.match(/^%PDF-(\d\.\d)/)?.[1] ?? null,
+        xrefStreams: countMatches(raw, /\/Type\s*\/XRef\b/g),
+        objectStreams: countMatches(raw, /\/Type\s*\/ObjStm\b/g),
+        hasXmp: /\/Type\s*\/Metadata\b/.test(raw) || raw.includes("<x:xmpmeta"),
+        hasAnnotations: annotationCount > 0 || /\/Annots\b/.test(raw),
+        hasAcroForm: /\/AcroForm\b/.test(raw),
+        fonts: fontNames(raw),
+        imageCount: countMatches(raw, /\/Subtype\s*\/Image\b/g),
+        overlappingText: countOverlaps(items),
       },
     };
   } catch {

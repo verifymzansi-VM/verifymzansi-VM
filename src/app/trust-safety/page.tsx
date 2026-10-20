@@ -61,7 +61,7 @@ const reportSteps = [
 ] as const;
 
 const textLink =
-  "font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200";
+  "font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100";
 
 function InfoCard({
   title,
@@ -108,7 +108,7 @@ function ExampleProfileCard() {
       <ul className="mt-5 space-y-2.5 border-t border-border/60 pt-4">
         {journeySteps.slice(0, 3).map(({ title }) => (
           <li key={title} className="flex items-center gap-2.5 text-sm text-foreground/85">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:text-brand-green-300">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:text-brand-gold-300">
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
             {title}
@@ -168,7 +168,7 @@ export default function TrustSafetyPage() {
                     <Icon className="h-6 w-6" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 pb-4 lg:mt-4 lg:pb-0">
-                    <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-green-300">
+                    <p className="text-xs font-semibold text-brand-green-700 dark:text-brand-gold-300">
                       Step {index + 1}
                     </p>
                     <h3 className="mt-0.5 font-body text-base font-semibold text-foreground">
@@ -191,7 +191,7 @@ export default function TrustSafetyPage() {
               {businessStickers.map(({ icon: Icon, label }) => (
                 <span key={label} className="chip">
                   <Icon
-                    className="h-3.5 w-3.5 text-brand-green-700 dark:text-brand-green-300"
+                    className="h-3.5 w-3.5 text-brand-green-700 dark:text-brand-gold-300"
                     aria-hidden="true"
                   />
                   {label}
@@ -199,7 +199,7 @@ export default function TrustSafetyPage() {
               ))}
               <Link
                 href="/help/business-verification"
-                className="text-sm font-semibold text-brand-green-700 underline-offset-2 hover:underline dark:text-brand-green-300"
+                className="text-sm font-semibold text-brand-green-700 underline-offset-2 hover:underline dark:text-brand-gold-300"
               >
                 What each sticker means
               </Link>
@@ -334,14 +334,14 @@ export default function TrustSafetyPage() {
                 <div className="grid gap-1">
                   <a
                     href={`mailto:${trustConfig.supportEmail}`}
-                    className="inline-flex min-h-10 items-center gap-2 break-all font-medium text-foreground hover:text-brand-green-700 dark:hover:text-brand-green-300"
+                    className="inline-flex min-h-10 items-center gap-2 break-all font-medium text-foreground hover:text-brand-green-700 dark:hover:text-brand-gold-200"
                   >
                     <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {trustConfig.supportEmail}
                   </a>
                   <a
                     href={`mailto:${trustConfig.securityEmail}`}
-                    className="inline-flex min-h-10 items-center gap-2 break-all font-medium text-foreground hover:text-brand-green-700 dark:hover:text-brand-green-300"
+                    className="inline-flex min-h-10 items-center gap-2 break-all font-medium text-foreground hover:text-brand-green-700 dark:hover:text-brand-gold-200"
                   >
                     <Scale className="h-4 w-4 shrink-0" aria-hidden="true" />
                     {trustConfig.securityEmail}

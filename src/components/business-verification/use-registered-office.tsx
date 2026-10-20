@@ -5,19 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { LocationValue } from "@/components/ui/location-selector";
-import type { RegisteredOffice } from "@/lib/cipc/address";
-
-/** Location fields from a CIPC-verified registered office. */
-export function officeToLocation(office: RegisteredOffice): LocationValue | null {
-  // Only a city we know fits the location picker; otherwise the owner types it.
-  if (!office.province || !office.city || office.cityKnown === false) return null;
-  return {
-    province: office.province,
-    city: office.city,
-    town: office.suburb ?? "",
-    address: office.streetLines.join(", "),
-  };
-}
+import { officeToLocation, type RegisteredOffice } from "@/lib/cipc/address";
 
 /**
  * One-tap pre-fill of the trading location from the CIPC registered office.

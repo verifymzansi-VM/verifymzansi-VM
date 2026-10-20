@@ -189,3 +189,18 @@ docs/*-review-*.md
 # How-to guides for the audit tools (no findings) stay published.
 !docs/audit-tools.md
 !docs/kyc-audit-guide.md
+
+# Public interface contract; detailed foundation evidence remains local.
+!docs/backend-foundation/staff-event-duplicate-flags-contract.md
+# Local one-off foundation recipes depend on private acceptance evidence.
+docs/backend-foundation/tools/prepare-staff-event-types.mjs
+docs/backend-foundation/tools/probe-staff-event-flags-draft.mjs
+
+# One-off type recipe requires private accepted evidence, not public-clone tooling.
+/docs/backend-foundation/tools/prepare-post-contact-types.mjs
+
+!/docs/backend-foundation/post-contact-preferences-contract.md
+
+# Public verification interface; private one-off type preparation remains local.
+!/docs/backend-foundation/publication-verification-contract.md
+/docs/backend-foundation/tools/prepare-publication-readiness-types.mjs

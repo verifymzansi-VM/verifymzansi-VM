@@ -70,10 +70,12 @@ export function BusinessContactSection({
               <MessageCircle className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-green-700 dark:text-green-300">
+              <p className="text-xs font-medium uppercase tracking-wider text-green-700 dark:text-brand-gold-300">
                 WhatsApp
               </p>
-              <p className="font-medium text-green-900 dark:text-green-100">{business.whatsapp}</p>
+              <p className="font-medium text-green-900 dark:text-brand-gold-100">
+                {business.whatsapp}
+              </p>
             </div>
           </a>
         )}

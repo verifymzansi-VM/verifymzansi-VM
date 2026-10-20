@@ -40,7 +40,7 @@ export function OfficialSocialLinks({
             rel="noopener noreferrer"
             className={
               linkClassName ??
-              "inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-brand-green/40 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-green-200"
+              "inline-flex items-center rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground transition-all duration-200 hover:border-brand-green/40 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:hover:text-brand-gold-100"
             }
           >
             {link.label}

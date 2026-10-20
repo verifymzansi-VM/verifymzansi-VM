@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CheckCircle2, Clock, KeyRound, Loader2, Search, XCircle } from "lucide-react";
+import { NumberedSteps } from "@/components/ui/numbered-steps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +40,7 @@ function ResultPanel({
     success: {
       box: "border-brand-green/30 bg-brand-green-50 dark:border-brand-green/40 dark:bg-brand-green-950/40",
       icon: "bg-brand-green-600 text-white dark:bg-brand-green-500 dark:text-brand-green-950",
-      title: "text-brand-green-800 dark:text-brand-green-200",
+      title: "text-brand-green-800 dark:text-brand-gold-200",
     },
     warning: {
       box: "border-brand-gold/40 bg-brand-gold-50 dark:border-brand-gold/30 dark:bg-brand-gold-950/40",
@@ -283,30 +284,13 @@ export default function VerifyBuyerPage() {
                 <h2 id="how-title" className="font-body text-base font-semibold text-foreground">
                   How buyer tokens work
                 </h2>
-                <ol className="mt-4 space-y-4">
-                  {HOW_IT_WORKS.map((step, index) => (
-                    <li key={step.title} className="flex gap-3.5">
-                      <span
-                        aria-hidden="true"
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-green/10 text-xs font-bold text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300"
-                      >
-                        {index + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{step.title}</p>
-                        <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
-                          {step.body}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
+                <NumberedSteps steps={HOW_IT_WORKS} />
               </div>
               <p className="px-1 text-sm leading-6 text-muted-foreground">
                 Meeting up?{" "}
                 <Link
                   href="/safety/meeting-checklist"
-                  className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-green-300"
+                  className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-gold-300"
                 >
                   Use the meeting checklist
                 </Link>

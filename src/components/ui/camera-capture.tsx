@@ -932,7 +932,7 @@ export function CameraCapture({
               ].map(({ icon: TipIcon, text }) => (
                 <li key={text} className="flex items-start gap-2.5">
                   <TipIcon
-                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
                     aria-hidden="true"
                   />
                   <span>{text}</span>
@@ -943,7 +943,7 @@ export function CameraCapture({
             <div className="mb-4 flex items-center gap-3 text-sm text-muted-foreground">
               <span
                 aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-brand-green-700 dark:text-brand-green-300"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-brand-green-700 dark:text-brand-gold-300"
               >
                 {documentGuide ? <IdCard className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
               </span>

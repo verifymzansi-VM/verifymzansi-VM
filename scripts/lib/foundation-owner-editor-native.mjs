@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { captureOwnerRestrictions } from "./foundation-native-owner-restrictions.mjs";
 import { randomUUID } from "node:crypto";
 import { createFoundationAuthenticatedApi } from "../../src/lib/foundation/authenticated-api.ts";
 import { createTimeoutFetch } from "../../src/lib/supabase/fetch-with-timeout.ts";
@@ -146,33 +147,18 @@ export async function testOwnerListingEditor({
     const denied = await rpc("get_owner_listing_editor", { p_post_id: created.id }, null, service);
     assert.ok([401, 403].includes(denied.status));
   }
-  const claims = JSON.parse(Buffer.from(owner.token.split(".")[1], "base64url"));
-  assert.equal(claims.sub, owner.id);
-  assert.match(claims.session_id, /^[a-f0-9-]{36}$/);
-  const prior = sql(
-    `select case when not_after is null then 'null' else quote_literal(not_after::text)||'::timestamptz' end from auth.sessions where id='${claims.session_id}' and user_id='${owner.id}';`
-  );
-  assert.ok(prior);
+  const restrictions = captureOwnerRestrictions(sql, owner);
   try {
-    sql(
-      `update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${claims.session_id}' and user_id='${owner.id}';`
-    );
+    restrictions.expireSession();
     await assert.rejects(() => read(created.id), /^Error: Foundation listing editor unavailable$/);
   } finally {
-    sql(
-      `update auth.sessions set not_after=${prior} where id='${claims.session_id}' and user_id='${owner.id}';`
-    );
+    restrictions.restoreSession();
   }
-  const banned = sql(
-    `select case when banned_until is null then 'null' else quote_literal(banned_until::text)||'::timestamptz' end from auth.users where id='${owner.id}';`
-  );
   try {
-    sql(
-      `update auth.users set banned_until=clock_timestamp()+interval '1 hour' where id='${owner.id}';`
-    );
+    restrictions.banAccount();
     await assert.rejects(() => read(created.id), /^Error: Foundation listing editor unavailable$/);
   } finally {
-    sql(`update auth.users set banned_until=${banned} where id='${owner.id}';`);
+    restrictions.restoreAccount();
   }
   assert.equal((await read(created.id)).revision, editor.revision);
   record("native-owner-editor-foreign-kind-role-expired-session-restricted-account-denials");
@@ -190,9 +176,7 @@ export async function testOwnerListingEditor({
         () => ({ denied: true })
       );
       await awaitQueuedRpc("get_owner_listing_editor");
-      sql(
-        `update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${claims.session_id}' and user_id='${owner.id}';`
-      );
+      restrictions.expireSession();
       assert.equal(await lock.done, 0);
       assert.deepEqual(await reading, { denied: true });
       assert.deepEqual(editorHttp.at(-1), { status: 403, code: "42501" });
@@ -200,9 +184,7 @@ export async function testOwnerListingEditor({
       lock.close();
       await lock.done;
       if (reading) await reading;
-      sql(
-        `update auth.sessions set not_after=${prior} where id='${claims.session_id}' and user_id='${owner.id}';`
-      );
+      restrictions.restoreSession();
     }
     assert.equal((await read(created.id)).revision, editor.revision);
     record("native-owner-editor-session-expiry-during-read-wait-denies-dto");

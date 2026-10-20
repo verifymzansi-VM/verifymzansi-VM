@@ -302,7 +302,7 @@ function getStatusTone(status: VerificationStatus): CalloutTone {
 
 const STATUS_CHIP_CLASSES: Record<VerificationStatus, string> = {
   approved:
-    "bg-brand-green-50 text-brand-green-800 ring-brand-green-600/20 dark:bg-brand-green-500/10 dark:text-brand-green-200 dark:ring-brand-green-400/25",
+    "bg-brand-green-50 text-brand-green-800 ring-brand-green-600/20 dark:bg-brand-green-500/10 dark:text-brand-gold-200 dark:ring-brand-green-400/25",
   pending:
     "bg-brand-gold-50 text-brand-gold-900 ring-brand-gold-400/40 dark:bg-brand-gold-400/10 dark:text-brand-gold-100 dark:ring-brand-gold-400/25",
   rejected:
@@ -1461,7 +1461,7 @@ export default function VerificationPage() {
 
   if (_sessionLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background">
+      <div className="flex min-h-screen flex-col">
         <Header isAuthenticated />
         <main id="main-content" className="flex-1">
           <div className="container-page py-5 sm:py-8">
@@ -1476,7 +1476,7 @@ export default function VerificationPage() {
                   className="mt-2 flex items-center gap-2 text-sm leading-6 text-muted-foreground sm:text-base"
                 >
                   <Loader2
-                    className="h-4 w-4 shrink-0 animate-spin text-brand-green-700 motion-reduce:animate-none dark:text-brand-green-300"
+                    className="h-4 w-4 shrink-0 animate-spin text-brand-green-700 motion-reduce:animate-none dark:text-brand-gold-300"
                     aria-hidden="true"
                   />
                   Loading your latest verification status...
@@ -1520,7 +1520,7 @@ export default function VerificationPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
       <main id="main-content" className="flex-1">
         <div className="container-page py-5 sm:py-8">
@@ -1865,7 +1865,7 @@ export default function VerificationPage() {
                           className={cn(
                             "rounded-xl border px-3.5 py-3 text-sm",
                             idChecksumValid && !idAgeError
-                              ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-green-100"
+                              ? "border-brand-green-600/20 bg-brand-green-50 text-brand-green-900 dark:border-brand-green-400/20 dark:bg-brand-green-500/10 dark:text-brand-gold-100"
                               : "border-brand-red-600/20 bg-brand-red-50 text-brand-red-800 dark:border-brand-red-400/25 dark:bg-brand-red-500/10 dark:text-brand-red-100"
                           )}
                         >
@@ -2383,7 +2383,7 @@ function ReviewRow({
             className={cn(
               "mt-0.5 text-xs leading-5",
               detailTone === "good"
-                ? "font-medium text-brand-green-700 dark:text-brand-green-300"
+                ? "font-medium text-brand-green-700 dark:text-brand-gold-300"
                 : "text-muted-foreground"
             )}
           >

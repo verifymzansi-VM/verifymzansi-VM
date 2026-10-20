@@ -2,8 +2,6 @@
 declare const identityFingerprint: unique symbol;
 export type IdentityFingerprint = string & { readonly [identityFingerprint]: true };
 
-export const IDENTITY_FINGERPRINT_PROTOCOL = "sa-id-hmac-sha256-v1" as const;
-
 export function parseIdentityFingerprint(value: unknown): IdentityFingerprint {
   if (typeof value !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(value)) {
     throw new Error("Invalid identity fingerprint encoding");

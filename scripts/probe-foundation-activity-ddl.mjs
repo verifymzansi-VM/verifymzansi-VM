@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { cleanupOwnedProbeDatabase } from "./lib/foundation-native-probe-cleanup.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -55,6 +56,7 @@ try {
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
       "scripts/lib/foundation-native-paths.mjs",
+      "scripts/lib/foundation-native-probe-cleanup.mjs",
     ].map((file) => [file, digest(file)])
   );
   assert.equal(sql("select count(*) from auth.users;"), "0");
@@ -122,15 +124,12 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    if (createdOid) {
-      assert.equal(sql(`select oid from pg_database where datname='${database}';`), createdOid);
-      sql(`drop database ${database};`);
-      assert.equal(sql(`select count(*) from pg_database where datname='${database}';`), "0");
-      result.databaseCleanup = "PASS owned temporary database removed";
-    } else if (creationAttempted) {
-      assert.equal(sql(`select count(*) from pg_database where datname='${database}';`), "0");
-      result.databaseCleanup = "PASS no database created";
-    } else result.databaseCleanup = "NOT_CREATED";
+    result.databaseCleanup = cleanupOwnedProbeDatabase({
+      sql,
+      database,
+      createdOid,
+      creationAttempted,
+    });
   } catch {
     result.status = "INCOMPLETE";
     result.databaseCleanup = "INCOMPLETE preserve probe for inspection";

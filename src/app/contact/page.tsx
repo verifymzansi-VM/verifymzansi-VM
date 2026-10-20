@@ -369,7 +369,7 @@ export default function ContactPage() {
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   For {selectedCategory?.label.toLowerCase()}, contact{" "}
                   <a
-                    className="break-all font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300 dark:hover:text-brand-green-200"
+                    className="break-all font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300 dark:hover:text-brand-gold-100"
                     href={`mailto:${categoryEmail}`}
                   >
                     {categoryEmail}
@@ -385,7 +385,7 @@ export default function ContactPage() {
                     <li key={href}>
                       <Link
                         href={href}
-                        className="flex min-h-12 items-center gap-3 py-2 text-sm font-medium text-foreground transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-brand-green-300"
+                        className="flex min-h-12 items-center gap-3 py-2 text-sm font-medium text-foreground transition-colors hover:text-brand-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-brand-gold-200"
                       >
                         <Icon
                           className="h-4 w-4 shrink-0 text-muted-foreground"

@@ -14,7 +14,7 @@ const toneClasses: Record<
 > = {
   green: {
     iconClassName:
-      "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-200",
+      "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-gold-200",
     buttonClassName: "bg-brand-green text-white hover:bg-brand-green-600",
   },
   blue: {

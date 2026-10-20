@@ -119,7 +119,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col">
       <Header isAuthenticated />
       <DashboardMobileNav badges={sidebarBadges} />
 

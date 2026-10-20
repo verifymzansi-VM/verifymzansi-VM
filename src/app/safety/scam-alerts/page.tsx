@@ -117,7 +117,7 @@ export default function ScamAlertsPage() {
                         </ul>
                       </div>
                       <div className="rounded-2xl bg-brand-green/5 p-4 dark:bg-brand-green/10">
-                        <h4 className="flex items-center gap-1.5 text-sm font-semibold text-brand-green-800 dark:text-brand-green-300">
+                        <h4 className="flex items-center gap-1.5 text-sm font-semibold text-brand-green-800 dark:text-brand-gold-300">
                           <Check className="h-4 w-4" aria-hidden="true" />
                           What to do
                         </h4>
@@ -131,7 +131,7 @@ export default function ScamAlertsPage() {
                         {"link" in scam && (
                           <Link
                             href={scam.link.href}
-                            className="mt-1 inline-flex min-h-10 items-center text-sm font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-green-300"
+                            className="mt-1 inline-flex min-h-10 items-center text-sm font-semibold text-brand-green-700 underline underline-offset-4 hover:text-brand-green-800 dark:text-brand-gold-300"
                           >
                             {scam.link.label}
                           </Link>
@@ -196,7 +196,7 @@ export default function ScamAlertsPage() {
                   className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border/70 bg-card px-4 text-sm font-medium text-foreground"
                 >
                   <Check
-                    className="h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                    className="h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
                     aria-hidden="true"
                   />
                   {rule}
@@ -207,7 +207,7 @@ export default function ScamAlertsPage() {
               Seen something suspicious?{" "}
               <Link
                 href="/contact?topic=fraud_report"
-                className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-green-300"
+                className="font-semibold text-brand-green-700 underline underline-offset-4 dark:text-brand-gold-300"
               >
                 Report it
               </Link>

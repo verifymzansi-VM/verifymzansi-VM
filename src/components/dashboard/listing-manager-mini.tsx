@@ -38,7 +38,7 @@ interface ListingManagerMiniProps {
 /* ------------------------------------------------------------------ */
 
 const LIVE_TONE =
-  "bg-brand-green-50 text-brand-green-700 ring-brand-green/20 dark:bg-brand-green-500/15 dark:text-brand-green-300";
+  "bg-brand-green-50 text-brand-green-700 ring-brand-green/20 dark:bg-brand-green-500/15 dark:text-brand-gold-300";
 const PENDING_TONE =
   "bg-brand-gold-50 text-brand-gold-900 ring-brand-gold-400/40 dark:bg-brand-gold-400/15 dark:text-brand-gold-200";
 const REJECTED_TONE =

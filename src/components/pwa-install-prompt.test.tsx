@@ -4,7 +4,6 @@
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PUBLIC_RUNTIME_CONFIG_ELEMENT_ID } from "@/lib/public-runtime-config";
 
 const { mockUsePathname, mockIsPlaywrightTestMode } = vi.hoisted(() => ({
   mockUsePathname: vi.fn(),
@@ -15,12 +14,23 @@ vi.mock("next/navigation", () => ({
   usePathname: mockUsePathname,
 }));
 
-vi.mock("lucide-react", () => ({
-  Download: (props: React.SVGProps<SVGSVGElement>) => (
-    <svg data-testid="download-icon" {...props} />
-  ),
-  X: (props: React.SVGProps<SVGSVGElement>) => <svg data-testid="close-icon" {...props} />,
-}));
+vi.mock("lucide-react", () => {
+  const icon = (name: string) =>
+    function Icon(props: React.SVGProps<SVGSVGElement>) {
+      return <svg data-testid={`${name}-icon`} {...props} />;
+    };
+  return {
+    Check: icon("check"),
+    Copy: icon("copy"),
+    Download: icon("download"),
+    Ellipsis: icon("ellipsis"),
+    EllipsisVertical: icon("ellipsis-vertical"),
+    ExternalLink: icon("external-link"),
+    Share: icon("share"),
+    SquarePlus: icon("square-plus"),
+    X: icon("close"),
+  };
+});
 
 vi.mock("@/components/ui/button", () => ({
   Button: ({
@@ -44,6 +54,7 @@ vi.mock("@/lib/supabase/playwright-mode", () => ({
 }));
 
 import { PwaInstallPrompt } from "./pwa-install-prompt";
+import { resetInstallPromptStore } from "@/lib/pwa/install-prompt-store";
 
 describe("PwaInstallPrompt", () => {
   let currentPath = "/advertise";
@@ -51,6 +62,7 @@ describe("PwaInstallPrompt", () => {
 
   beforeEach(() => {
     cleanup();
+    resetInstallPromptStore();
     vi.restoreAllMocks();
     vi.clearAllMocks();
 
@@ -138,11 +150,9 @@ describe("PwaInstallPrompt", () => {
     fireEvent.click(helpButton);
 
     expect(await screen.findByRole("dialog", { name: "Install on iPhone" })).toBeTruthy();
-    expect(screen.getByText("Open the install link on your iPhone.")).toBeTruthy();
-    expect(screen.getByText("Tap the Share button in Safari.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Open install link" }).getAttribute("href")).toBe(
-      "https://verifymzansi.com/"
-    );
+    expect(screen.getByText("Tap Share")).toBeTruthy();
+    expect(screen.getByText("Tap Add to Home Screen")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
 
     // Close via the X button
     fireEvent.click(screen.getByRole("button", { name: "Close install instructions" }));
@@ -160,9 +170,43 @@ describe("PwaInstallPrompt", () => {
     });
   });
 
-  it("uses the public runtime app URL for the iOS install link", async () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
-    document.body.innerHTML = `<div id="${PUBLIC_RUNTIME_CONFIG_ELEMENT_ID}" data-app-url="https://staging.verifymzansi.com"></div>`;
+  it("tells WhatsApp in-app browser visitors to open their real browser", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value:
+        "Mozilla/5.0 (Linux; Android 14; wv) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 WhatsApp/2.24",
+    });
+
+    render(<PwaInstallPrompt />);
+
+    expect(await screen.findByText("Open in your browser to install")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+
+    expect(await screen.findByRole("dialog", { name: "Open in your browser" })).toBeTruthy();
+    expect(screen.getAllByText("Open in Chrome").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Open in Chrome" }).getAttribute("href")).toMatch(
+      /^intent:\/\/localhost(:\d+)?\/install#Intent;scheme=https?;package=com\.android\.chrome;/
+    );
+    expect(screen.getByRole("button", { name: "Copy link" })).toBeTruthy();
+  });
+
+  it("shows the prompt again once a dismissal is older than 30 days", async () => {
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+    });
+    const thirtyOneDaysAgo = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation((key: string) =>
+      key === "pwa-prompt-dismissed" ? String(thirtyOneDaysAgo) : null
+    );
+
+    render(<PwaInstallPrompt />);
+
+    expect(await screen.findByRole("button", { name: "Install" })).toBeTruthy();
+  });
+
+  it("does not render once the app runs from the home screen", () => {
+    standaloneMode = true;
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
       value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
@@ -170,11 +214,7 @@ describe("PwaInstallPrompt", () => {
 
     render(<PwaInstallPrompt />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Install" }));
-
-    expect(screen.getByRole("link", { name: "Open install link" }).getAttribute("href")).toBe(
-      "https://staging.verifymzansi.com/"
-    );
+    expect(screen.queryByRole("button", { name: "Install" })).toBeNull();
   });
 
   it("shows iOS install help for iPadOS desktop-mode Safari", async () => {
@@ -265,6 +305,27 @@ describe("PwaInstallPrompt", () => {
     }
   );
 
+  it("treats saying no in Chrome's dialog as closing the banner", async () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => undefined);
+    render(<PwaInstallPrompt />);
+
+    const beforeInstallPromptEvent = new Event("beforeinstallprompt");
+    Object.assign(beforeInstallPromptEvent, {
+      prompt: vi.fn().mockResolvedValue(undefined),
+      userChoice: Promise.resolve({ outcome: "dismissed", platform: "web" }),
+    });
+    await act(async () => {
+      window.dispatchEvent(beforeInstallPromptEvent);
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Install" }));
+    });
+
+    await waitFor(() => expect(screen.queryByText("Install App")).toBeNull());
+    expect(setItemSpy).toHaveBeenCalledWith("pwa-prompt-dismissed", expect.stringMatching(/^\d+$/));
+  });
+
   it("keeps UI usable when userChoice rejects", async () => {
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => undefined);
 
@@ -304,7 +365,7 @@ describe("PwaInstallPrompt", () => {
 
     fireEvent.click(screen.getByLabelText("Dismiss install prompt"));
     await waitFor(() => expect(screen.queryByText("Install App")).toBeNull());
-    expect(setItemSpy).toHaveBeenCalledWith("pwa-prompt-dismissed", "true");
+    expect(setItemSpy).toHaveBeenCalledWith("pwa-prompt-dismissed", expect.stringMatching(/^\d+$/));
   });
 
   it("survives storage failures without crashing", async () => {
@@ -344,7 +405,7 @@ describe("PwaInstallPrompt", () => {
 
     fireEvent.click(screen.getByLabelText("Dismiss install prompt"));
     await waitFor(() => expect(screen.queryByText("Install App")).toBeNull());
-    expect(setItemSpy).toHaveBeenCalledWith("pwa-prompt-dismissed", "true");
+    expect(setItemSpy).toHaveBeenCalledWith("pwa-prompt-dismissed", expect.stringMatching(/^\d+$/));
   });
 
   it("cleans up visible prompt when suppression flips true after prompt is shown", async () => {

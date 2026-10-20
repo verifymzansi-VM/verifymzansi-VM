@@ -172,7 +172,7 @@ export function MetricList({
               "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
               flagged > 0
                 ? "bg-destructive/10 text-destructive"
-                : "bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-300/10 dark:text-brand-green-300"
+                : "bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-300/10 dark:text-brand-gold-300"
             )}
           >
             {flagged > 0 ? (

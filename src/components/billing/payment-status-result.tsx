@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
 export type PaymentStatusTone = "success" | "pending" | "error" | "neutral";
 
 const TONE_STYLES: Record<PaymentStatusTone, string> = {
-  success:
-    "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300",
+  success: "bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-gold-300",
   pending: "bg-brand-gold/15 text-brand-gold-800 dark:bg-brand-gold/15 dark:text-brand-gold-300",
   error: "bg-destructive/10 text-destructive",
   neutral: "bg-muted text-muted-foreground",
@@ -75,7 +74,7 @@ export function PaymentStatusResult({
                 >
                   <Check
                     aria-hidden="true"
-                    className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+                    className="mt-1 h-4 w-4 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
                     strokeWidth={3}
                   />
                   {step}

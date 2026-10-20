@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { officeToLocation, UseRegisteredOffice } from "./use-registered-office";
+import { officeToLocation } from "@/lib/cipc/address";
+
+import { UseRegisteredOffice } from "./use-registered-office";
 
 const office = {
   streetLines: ["12 Main Road"],

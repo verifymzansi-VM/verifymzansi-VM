@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { foundationEventWindowSchema } from "./event-window-dto";
 import type { FoundationPublicApi } from "./public-api";
 import {
   foundationInstant,
@@ -26,9 +27,11 @@ const detail = z
     ...publicPostCoreSchema.shape,
     description: z.string().max(5000).nullable(),
     visible_until: foundationInstant,
+    event_window: foundationEventWindowSchema.nullable(),
     media: z.array(media).max(100),
   })
   .refine(validPublicPostCore)
+  .refine((value) => (value.kind === "event") === (value.event_window !== null))
   .refine(
     (value) =>
       new Set(value.media.map((row) => `${row.purpose}:${row.position}`)).size ===

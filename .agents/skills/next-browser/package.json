@@ -1,6 +1,6 @@
 {
   "name": "@vercel/next-browser",
-  "version": "0.2.0",
+  "version": "0.7.1",
   "description": "Headed Playwright browser with React DevTools pre-loaded",
   "license": "MIT",
   "repository": {
@@ -41,12 +41,5 @@
     "@changesets/cli": "^2.30.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "js-yaml@3": "3.15.2",
-      "js-yaml@4": "4.3.2",
-      "picomatch@2": "2.3.2"
-    }
   }
 }

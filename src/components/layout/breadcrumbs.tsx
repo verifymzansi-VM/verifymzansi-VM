@@ -20,7 +20,7 @@ export function Breadcrumbs({ items: rawItems, tone = "default" }: BreadcrumbsPr
   const inverse = tone === "inverse";
   const linkTone = inverse
     ? "hover:text-white focus-visible:ring-white focus-visible:ring-offset-brand-green-950"
-    : "hover:text-brand-green-700 focus-visible:ring-ring dark:hover:text-brand-green-300";
+    : "hover:text-brand-green-700 focus-visible:ring-ring dark:hover:text-brand-gold-200";
   // The leading home icon already links to "/", so drop an explicit Home crumb.
   const items = rawItems.filter((item, index) => !(index === 0 && item.href === "/"));
 

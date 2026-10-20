@@ -52,7 +52,7 @@ export default function VerificationError({
         <Link
           href="/help/verification"
           prefetch={false}
-          className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+          className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
         >
           Get verification help
         </Link>

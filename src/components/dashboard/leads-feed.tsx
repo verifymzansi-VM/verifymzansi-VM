@@ -16,7 +16,7 @@ const STATUS_TONES: Record<string, string> = {
   new: "bg-brand-gold-100 text-brand-gold-900 dark:bg-brand-gold-400/15 dark:text-brand-gold-200",
   read: "bg-muted text-muted-foreground",
   contacted:
-    "bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-500/15 dark:text-brand-green-300",
+    "bg-brand-green-50 text-brand-green-700 dark:bg-brand-green-500/15 dark:text-brand-gold-300",
   closed: "bg-muted text-muted-foreground",
 };
 

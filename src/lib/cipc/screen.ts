@@ -33,6 +33,97 @@ const CIPC_PRODUCER = "Powered By Crystal";
 const CIPC_CREATOR = "Crystal Reports";
 const STALE_AFTER_DAYS = 90;
 
+/**
+ * How a CoR14.3 looks straight out of CIPC (checked against a real one,
+ * 2026-10-20): PDF 1.7, one classic xref, no dates or XMP, no annotations or
+ * form fields, only Arial fonts, three pictures (logo, watermark, coat of
+ * arms). Disclosures aren't calibrated yet, so their font and picture
+ * differences stay weak signs.
+ */
+const CIPC_ORIGINAL = {
+  pdfVersion: "1.7",
+  fontFamily: /^Arial\b/,
+  registrationCertificateImages: 3,
+};
+
+export type FingerprintTrait = {
+  /** Strong traits mean the file was changed after CIPC issued it. */
+  strong: boolean;
+  text: string;
+};
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Every way the file differs from an original CIPC download, in plain words. */
+export function fingerprintTraits(
+  structure: PdfStructure,
+  docType: ParsedCipcDocument["docType"] | null
+): FingerprintTrait[] {
+  const calibrated = docType === "registration_certificate";
+  const traits: FingerprintTrait[] = [];
+  const add = (strong: boolean, text: string) => traits.push({ strong, text });
+
+  if (structure.producer !== CIPC_PRODUCER || structure.creator !== CIPC_CREATOR) {
+    const tool = [structure.creator, structure.producer].filter(Boolean).join(" / ") || "unknown";
+    add(
+      true,
+      `creator/producer metadata names ${tool}, rather than the reference Crystal Reports values`
+    );
+  }
+  if (structure.revisionCount > 1) {
+    add(
+      true,
+      `contains ${plural(structure.revisionCount, "PDF revision marker", "PDF revision markers")}`
+    );
+  }
+  if (structure.modDate) add(true, "reports a modification date absent from the reference profile");
+  else if (structure.creationDate)
+    add(false, "reports a creation date absent from the reference profile");
+  if (structure.xrefStreams > 0 || structure.objectStreams > 0) {
+    add(true, "contains cross-reference or object streams absent from the reference profile");
+  }
+  if (structure.hasXmp) add(true, "contains XMP metadata");
+  if (structure.hasAnnotations) add(true, "has comments, stamps or typed-on text boxes");
+  if (structure.hasAcroForm) add(true, "has fillable form fields");
+  const foreignFonts = structure.fonts.filter((f) => !CIPC_ORIGINAL.fontFamily.test(f));
+  if (foreignFonts.length) {
+    const shown = foreignFonts.slice(0, 3).join(", ");
+    const more = foreignFonts.length > 3 ? ` and ${foreignFonts.length - 3} more` : "";
+    add(calibrated, `uses fonts outside the reference profile: ${shown}${more}`);
+  }
+  if (structure.overlappingText > 0) {
+    add(
+      true,
+      `${plural(structure.overlappingText, "piece", "pieces")} of text printed on top of other text`
+    );
+  }
+  if (calibrated && structure.pdfVersion && structure.pdfVersion !== CIPC_ORIGINAL.pdfVersion) {
+    add(false, `PDF version ${structure.pdfVersion} (CIPC uses ${CIPC_ORIGINAL.pdfVersion})`);
+  }
+  if (calibrated && structure.imageCount !== CIPC_ORIGINAL.registrationCertificateImages) {
+    add(
+      false,
+      `${plural(structure.imageCount, "picture", "pictures")} (CIPC certificates have ${CIPC_ORIGINAL.registrationCertificateImages})`
+    );
+  }
+  return traits;
+}
+
+/** No strong recognized edit indicators; editable metadata cannot prove provenance. */
+export function looksOriginal(
+  structure: PdfStructure | null,
+  docType: ParsedCipcDocument["docType"] | null
+): boolean {
+  return !!structure?.hasTextLayer && !fingerprintTraits(structure, docType).some((t) => t.strong);
+}
+
+function sentence(texts: string[]): string {
+  const joined = texts.join("; ");
+  return joined.charAt(0).toUpperCase() + joined.slice(1) + ".";
+}
+
 export type ScreenInput = {
   isPdf: boolean;
   /** Threat name from scanForMalware, when the file carries active content. */
@@ -48,7 +139,50 @@ export type ScreenInput = {
   profileName: string | null;
   office: RegisteredOffice | null;
   today: Date;
+  /** Name on the owner's reviewed ID, when they have one. */
+  ownerLegalName?: { first: string | null; last: string | null } | null;
+  /** Directors as stored (name and ID hash), to compare names with the ID match. */
+  directors?: Array<{ name: string; idHmac: string | null }>;
 };
+
+export type NameMatch = "match" | "partial" | "differs";
+
+function nameTokens(value: string): string[] {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean);
+}
+
+/**
+ * Compares a CIPC director ("DLAMINI, THANDO SIPHO") with the name on the
+ * owner's reviewed ID. "match": same surname and first names that agree;
+ * "partial": only the surname or only the first names agree (marriage, a
+ * missing middle name, a typo); "differs": neither.
+ */
+export function compareDirectorName(
+  directorName: string,
+  legal: { first: string | null; last: string | null }
+): NameMatch {
+  const [surnamePart, ...rest] = directorName.split(",");
+  const directorSurname = nameTokens(surnamePart).join("");
+  const directorFirst = nameTokens(rest.join(" "));
+  const ownerSurname = nameTokens(legal.last ?? "").join("");
+  const ownerFirst = nameTokens(legal.first ?? "");
+  if (!directorSurname || !ownerSurname) return "differs";
+  const surnameSame = directorSurname === ownerSurname;
+  const shared = ownerFirst.filter((t) => directorFirst.includes(t));
+  const firstAgree =
+    shared.length > 0 &&
+    (shared.length === ownerFirst.length || shared.length === directorFirst.length);
+  if (surnameSame && firstAgree) return "match";
+  if (surnameSame || firstAgree) return "partial";
+  return "differs";
+}
 
 /** "VERIFYMZANSI (PTY) LTD" and "Verifymzansi" compare equal. */
 export function comparableCompanyName(name: string): string {
@@ -114,28 +248,32 @@ export function screenCipcSubmission(input: ScreenInput): Finding[] {
     }
   }
 
-  if (structure && input.isPdf) {
-    if (structure.producer !== CIPC_PRODUCER || structure.creator !== CIPC_CREATOR) {
-      const tool = [structure.creator, structure.producer].filter(Boolean).join(" / ") || "unknown";
+  if (structure?.hasTextLayer && input.isPdf) {
+    const traits = fingerprintTraits(structure, parsed?.docType ?? null);
+    const strong = traits.filter((t) => t.strong).map((t) => t.text);
+    const weak = traits.filter((t) => !t.strong).map((t) => t.text);
+    if (strong.length) {
       add({
-        code: "producer_mismatch",
-        severity: "check",
-        title: "Not saved by CIPC's software",
-        detail: `CIPC files are made with Crystal Reports. This one was made or re-saved with: ${tool}.`,
+        code: "file_changed",
+        severity: "attention",
+        title: "Possible editing indicators",
+        detail: `${sentence([...strong, ...weak])} These indicators do not establish when or why the file was saved. Compare every detail with an independent CIPC record.`,
         suggestedReason: "document_altered",
       });
-    }
-    const edited =
-      structure.revisionCount > 1 ||
-      (structure.creationDate && structure.modDate && structure.modDate > structure.creationDate);
-    if (edited) {
+    } else if (weak.length) {
       add({
-        code: "edited_after_issue",
+        code: "file_differs",
         severity: "check",
-        title: "Edited after CIPC issued it",
+        title: "Differs from the reference file profile",
+        detail: `${sentence(weak)} These differences do not prove alteration. Compare it with an independent CIPC record.`,
+      });
+    } else {
+      add({
+        code: "original_file",
+        severity: "ok",
+        title: "No recognized edit indicators",
         detail:
-          "The file was saved again after it was created. Check every detail against your CIPC copy.",
-        suggestedReason: "document_altered",
+          "File metadata and structure show no recognized edit indicators. Authenticity requires comparison with an independent CIPC record.",
       });
     }
   }
@@ -197,6 +335,34 @@ export function screenCipcSubmission(input: ScreenInput): Finding[] {
           "The owner's verified ID number isn't on this document. Use the company representative route, or request information.",
         suggestedReason: "owner_not_director",
       });
+    }
+    const legal = input.ownerLegalName;
+    if (legal?.last) {
+      const idMatch = input.directors?.find(
+        (d) => input.ownerIdHmac && d.idHmac === input.ownerIdHmac
+      );
+      if (idMatch && compareDirectorName(idMatch.name, legal) === "differs") {
+        add({
+          code: "id_matches_name_differs",
+          severity: "check",
+          title: "Same ID number, different name",
+          detail: `The director listed with the owner's ID is ${idMatch.name}; the reviewed ID says ${[legal.first, legal.last].filter(Boolean).join(" ")}. Often a marriage or a typo at CIPC.`,
+        });
+      }
+      const nameOnly = idMatch
+        ? undefined
+        : input.directors?.find(
+            (d) => d.idHmac !== null && compareDirectorName(d.name, legal) === "match"
+          );
+      if (nameOnly) {
+        add({
+          code: "name_matches_id_differs",
+          severity: "attention",
+          title: "Name matches a director, ID number doesn't",
+          detail: `${nameOnly.name} has the owner's name but a different ID number. It may be someone else with the same name.`,
+          suggestedReason: "owner_not_director",
+        });
+      }
     }
     if (input.directorsWithoutSaId > 0) {
       add({

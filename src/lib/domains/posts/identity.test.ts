@@ -45,8 +45,8 @@ describe("canonical post identity candidate", () => {
     });
     expect(
       buildCoreDraftCommand({ context, detail: { ...detail, timezone: "africa/johannesburg" } })
-        .p_detail.timezone
-    ).toBe("Africa/Johannesburg");
+        .p_detail
+    ).toMatchObject({ timezone: "Africa/Johannesburg" });
     for (const bad of [
       { ...detail, ends_at: detail.starts_at },
       { ...detail, timezone: "Moon/Base" },

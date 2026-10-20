@@ -34,7 +34,7 @@ export function HomeAboutSection() {
     >
       <div className="container-page grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16">
         <div data-reveal className="max-w-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
             Why VerifyMzansi
           </p>
           <h2
@@ -65,21 +65,21 @@ export function HomeAboutSection() {
               <Link
                 href="/pricing"
                 prefetch={false}
-                className="underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline dark:hover:text-brand-green-300"
+                className="underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline dark:hover:text-brand-gold-200"
               >
                 Pricing
               </Link>
               <Link
                 href="/advertise"
                 prefetch={false}
-                className="underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline dark:hover:text-brand-green-300"
+                className="underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline dark:hover:text-brand-gold-200"
               >
                 Advertise
               </Link>
               <Link
                 href="/trust-safety"
                 prefetch={false}
-                className="underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline dark:hover:text-brand-green-300"
+                className="underline-offset-4 transition-colors hover:text-brand-green-700 hover:underline dark:hover:text-brand-gold-200"
               >
                 Trust & Safety
               </Link>
@@ -96,7 +96,7 @@ export function HomeAboutSection() {
             >
               <span
                 aria-hidden="true"
-                className="home-feature-icon flex h-10 w-10 items-center justify-center rounded-full bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-green-300"
+                className="home-feature-icon flex h-10 w-10 items-center justify-center rounded-full bg-brand-green/10 text-brand-green-700 dark:bg-brand-green/15 dark:text-brand-gold-300"
               >
                 <Icon className="h-5 w-5" strokeWidth={1.75} />
               </span>

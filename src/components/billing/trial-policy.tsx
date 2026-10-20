@@ -47,7 +47,7 @@ export function TrialPolicy({
             {shortDays} days, or {longDays} days while spaces last.{" "}
             <Link
               href="#billing-faq-trial"
-              className="rounded-sm font-medium text-brand-green-700 underline underline-offset-2 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+              className="rounded-sm font-medium text-brand-green-700 underline underline-offset-2 hover:text-brand-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
             >
               How it works
             </Link>
@@ -83,7 +83,7 @@ export function TrialPolicy({
         <ul className="mt-4 space-y-2.5">
           {points.map((point) => (
             <li key={point} className="flex items-start gap-2.5 text-sm text-foreground/90">
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:text-brand-green-300">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:text-brand-gold-300">
                 <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
               </span>
               {point}

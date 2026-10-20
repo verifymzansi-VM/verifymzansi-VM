@@ -38,7 +38,7 @@ Requires Node >= 20.
 
 | Command                              | Description                                        |
 | ------------------------------------ | -------------------------------------------------- |
-| `open <url> [--cookies-json <file>]` | Launch browser and navigate (with optional cookies) |
+| `open <url> [--cookies <file>]`      | Launch browser and navigate (with optional cookies) |
 | `close`                              | Close browser and kill daemon                      |
 
 ### Navigation
@@ -46,7 +46,8 @@ Requires Node >= 20.
 | Command            | Description                                               |
 | ------------------ | --------------------------------------------------------- |
 | `goto <url>`       | Full-page navigation (new document load)                  |
-| `ssr-goto <url>`   | Navigate blocking external scripts (inspect SSR shell)    |
+| `ssr lock`         | Block external scripts on all navigations (SSR-only mode) |
+| `ssr unlock`       | Re-enable external scripts                                |
 | `push [path]`      | Client-side navigation (interactive picker if no path)    |
 | `back`             | Go back in history                                        |
 | `reload`           | Reload current page                                       |
@@ -61,8 +62,9 @@ Requires Node >= 20.
 | `snapshot`        | Accessibility tree with `[ref=eN]` markers on interactive elements |
 | `errors`          | Build and runtime errors for the current page                 |
 | `logs`            | Recent dev server log output                                  |
+| `browser-logs`    | Browser console output (log, warn, error, info)               |
 | `network [idx]`   | List network requests, or inspect one (headers, body)         |
-| `screenshot`      | Full-page PNG to a temp file                                  |
+| `screenshot [caption] [--full-page]` | Viewport PNG to a temp file (caption shown in Screenshot Log) |
 
 ### Interaction
 
@@ -75,11 +77,20 @@ Requires Node >= 20.
 
 ### Performance & PPR
 
-| Command        | Description                                                  |
-| -------------- | ------------------------------------------------------------ |
-| `perf [url]`   | Core Web Vitals + React hydration timing in one pass         |
-| `ppr lock`     | Freeze dynamic content to inspect the static shell           |
-| `ppr unlock`   | Resume dynamic content and print shell analysis              |
+| Command                        | Description                                          |
+| ------------------------------ | ---------------------------------------------------- |
+| `perf [url]`                   | Core Web Vitals + React hydration timing in one pass |
+| `renders start`                | Start recording React re-renders                     |
+| `renders stop [--json]`        | Stop and print per-component render profile          |
+| `ppr lock`                     | Freeze dynamic content to inspect the static shell   |
+| `ppr unlock`                   | Resume dynamic content and print shell analysis      |
+
+### Instrumentation
+
+| Command                        | Description                                          |
+| ------------------------------ | ---------------------------------------------------- |
+| `instrumentation set <path>`   | Inject script before page scripts on every navigation |
+| `instrumentation clear`        | Remove instrumentation script                        |
 
 ### Next.js MCP
 
@@ -138,8 +149,8 @@ $ next-browser perf http://localhost:3000/dashboard
 $ next-browser ppr lock
 locked
 $ next-browser goto http://localhost:3000/dashboard
-$ next-browser screenshot
-/var/folders/.../next-browser-screenshot.png
+$ next-browser preview "PPR shell — locked"
+preview → /var/folders/.../next-browser-screenshot.png
 $ next-browser ppr unlock
 # PPR Shell Analysis — 131 boundaries: 3 dynamic holes, 128 static
 

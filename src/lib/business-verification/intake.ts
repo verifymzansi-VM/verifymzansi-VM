@@ -81,8 +81,13 @@ function storedParse(parsed: ParsedCipcDocument, secret: string | null): StoredP
 /**
  * Reads an uploaded CIPC document. Size and file-type limits are upload
  * errors; everything else about the content becomes evidence for staff.
+ * Owners must send the PDF itself (`pdfOnly`): photos and scans can't be
+ * checked for edits. Staff visit photos and message attachments may be images.
  */
-export async function readCipcFile(file: File): Promise<CipcFile | IntakeError> {
+export async function readCipcFile(
+  file: File,
+  { pdfOnly = false }: { pdfOnly?: boolean } = {}
+): Promise<CipcFile | IntakeError> {
   if (file.size <= 0) return { error: "The file is empty.", code: "empty_file", status: 400 };
   if (file.size > CIPC_MAX_FILE_BYTES) {
     return { error: "Files can be up to 5 MB.", code: "file_too_large", status: 413 };
@@ -100,6 +105,13 @@ export async function readCipcFile(file: File): Promise<CipcFile | IntakeError> 
   }
 
   const isPdf = mime === "application/pdf";
+  if (pdfOnly && !isPdf) {
+    return {
+      error: "Upload the PDF you got from CIPC. Photos and scans can't be checked.",
+      code: "pdf_required",
+      status: 400,
+    };
+  }
   const scan = scanForMalware(raw, mime);
   const activeContent = scan.safe ? null : (scan.threat ?? "unknown");
   const bytes = isPdf ? raw : stripImageMetadata(raw, mime);

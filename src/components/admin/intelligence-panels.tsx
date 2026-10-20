@@ -21,7 +21,7 @@ const toneClasses: Record<Tone, { bar: string; dot: string; text: string; bg: st
   brand: {
     bar: "bg-brand-green-600 dark:bg-brand-green-400",
     dot: "bg-brand-green-600 dark:bg-brand-green-400",
-    text: "text-brand-green-700 dark:text-brand-green-300",
+    text: "text-brand-green-700 dark:text-brand-gold-300",
     bg: "bg-brand-green-50 dark:bg-brand-green-950/40",
   },
   gold: {
@@ -33,7 +33,7 @@ const toneClasses: Record<Tone, { bar: string; dot: string; text: string; bg: st
   emerald: {
     bar: "bg-emerald-500",
     dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-300",
+    text: "text-emerald-700 dark:text-brand-gold-300",
     bg: "bg-emerald-50 dark:bg-emerald-950/30",
   },
   sky: {

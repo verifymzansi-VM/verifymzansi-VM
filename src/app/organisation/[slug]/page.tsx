@@ -463,7 +463,7 @@ export default async function OrganisationPage({
                 </h2>
                 <Link
                   href={`/mzansi-business?org=${org.slug}`}
-                  className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-green-300"
+                  className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline dark:text-brand-gold-300"
                 >
                   Browse with all Mzansi Business filters
                   <ArrowRight aria-hidden="true" className="h-4 w-4" />

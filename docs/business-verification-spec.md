@@ -107,15 +107,26 @@ and pushed straight to `main` (push = live for everyone).
      `/verification`.
 2. **Guided form (one screen).**
    1. **Upload first.** "Upload any CIPC document for your company". Accepted:
-      free disclosure, Disclosure Certificate, CoR14.3. A PDF downloaded from
-      CIPC/BizPortal is best; photos are accepted but slower to review. A link
-      explains where to download each.
+      free disclosure, Disclosure Certificate, CoR14.3. **PDF only
+      (2026-10-20):** the PDF exactly as CIPC/BizPortal issued it; photos and
+      scans are refused because they can't be checked for edits. A drop zone, a
+      collapsible guide showing a real CoR14.3 with personal details removed and
+      five numbered markers (`cipc-document-guide.tsx`,
+      `public/images/help/cipc-cor14-3-example.webp`) and two how-to steps
+      explain what to send. The same guide is on the help page.
    2. **We read it for you.** The registration number, name, status, directors
       (names only) and registered office appear for the owner to confirm. They
       only type the number if the file can't be read (photo).
    3. **Friendly heads-up, never a block.** "✓ You appear as Director", or "We
       couldn't find you on the director list — you can still submit, or use the
-      company representative route if you're not a director."
+      company representative route if you're not a director." Also "Looks like
+      an original CIPC download", or a warning that the file seems changed after
+      CIPC issued it (the owner can still send it; staff decide). 3a. **Business
+      address (2026-10-20).** When the registered office's city is one we know,
+      a checkbox "Use the registered office as my business address" (ticked when
+      the profile has no street address yet). It is stored as
+      `apply_office_to_profile` and applied only when staff approve: province,
+      city, suburb and, if the owner publishes their address, the street.
    4. **Submit** → "In review — usually within 1 business day".
 3. **Card states:** In review → **Needs info** (admin message; reply and
    re-upload inline) → Verified / Not approved (reason + "Try again") → Renew
@@ -167,21 +178,43 @@ It uses checks we can carry out ourselves:
   - a plain-English meaning and what to do;
   - a suggested reason code.
 
-| Check                                                              | Finding                                                                                                                                                                                                         |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Photo/scan, no text layer                                          | 🔴 "Can't inspect the file — rely on your CIPC copy"                                                                                                                                                            |
-| Active content                                                     | 🔴 "Contains scripts — shown as text only"                                                                                                                                                                      |
-| Document type (fingerprints from the user's real samples)          | 🟢 Official disclosure (`Disclosure Certificate: Companies and Close Corporations` + `CHANGE SUMMARY`) · 🟢 CoR14.3 (`COR14.3: Registration Certificate`) · 🟢 free disclosure (marker TBD) · 🔴 not recognised |
-| Producer `Powered By Crystal` / Creator `Crystal Reports`          | 🟠 if different: "Made or re-saved with X"                                                                                                                                                                      |
-| More than one `startxref`/`%%EOF`; ModDate later than CreationDate | 🟠 "Edited after CIPC issued it"                                                                                                                                                                                |
-| Issue date "Certificate issued … on <date>" more than 90 days old  | 🟠                                                                                                                                                                                                              |
-| Status ≠ In Business                                               | 🔴                                                                                                                                                                                                              |
-| Owner's ID HMAC not among the directors                            | 🔴, with suggestion "Representative route or request info"                                                                                                                                                      |
-| Director without SA ID (date of birth only)                        | 🟠 "Can't ID-match — KYC accepts SA ID only" **(corrected:** KYC accepts no passports, `validations/verification.ts:82`; such companies use the representative route)                                           |
-| Same file hash on another business                                 | 🟠                                                                                                                                                                                                              |
-| Number verified for an unrelated owner                             | 🔴 conflict                                                                                                                                                                                                     |
-| Registered name ≠ profile name                                     | 🟠 informational; trading names are normal                                                                                                                                                                      |
-| City not in our list                                               | 🟠 address kept as read                                                                                                                                                                                         |
+| Check                                                             | Finding                                                                                                                                                                                                         |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Photo/scan, no text layer                                         | 🔴 "Can't inspect the file — rely on your CIPC copy"                                                                                                                                                            |
+| Active content                                                    | 🔴 "Contains scripts — shown as text only"                                                                                                                                                                      |
+| Document type (fingerprints from the user's real samples)         | 🟢 Official disclosure (`Disclosure Certificate: Companies and Close Corporations` + `CHANGE SUMMARY`) · 🟢 CoR14.3 (`COR14.3: Registration Certificate`) · 🟢 free disclosure (marker TBD) · 🔴 not recognised |
+| Original-file fingerprint (2026-10-20, see below)                 | 🔴 "Changed after CIPC issued it" (strong signs) · 🟠 "Differs from an original CIPC download" (weak signs only) · 🟢 "Matches an original CIPC download"                                                       |
+| Issue date "Certificate issued … on <date>" more than 90 days old | 🟠                                                                                                                                                                                                              |
+| Status ≠ In Business                                              | 🔴                                                                                                                                                                                                              |
+| Owner's ID HMAC not among the directors                           | 🔴, with suggestion "Representative route or request info"                                                                                                                                                      |
+| Director without SA ID (date of birth only)                       | 🟠 "Can't ID-match — KYC accepts SA ID only" **(corrected:** KYC accepts no passports, `validations/verification.ts:82`; such companies use the representative route)                                           |
+| Same file hash on another business                                | 🟠                                                                                                                                                                                                              |
+| Number verified for an unrelated owner                            | 🔴 conflict                                                                                                                                                                                                     |
+| Registered name ≠ profile name                                    | 🟠 informational; trading names are normal                                                                                                                                                                      |
+| City not in our list                                              | 🟠 address kept as read                                                                                                                                                                                         |
+| Owner's ID matches a director whose name differs from the ID      | 🟠 "Same ID number, different name" (marriage, typo)                                                                                                                                                            |
+| A director has the owner's name but another ID number             | 🔴 "Name matches a director, ID number doesn't", suggestion owner_not_director                                                                                                                                  |
+
+**Original-file fingerprint** (`fingerprintTraits` in `screen.ts`, calibrated on
+a real CoR14.3 on 2026-10-20; structure only, nothing personal recorded): PDF
+1.7, one classic xref (`startxref`/`%%EOF` once), no xref or object streams, no
+CreationDate/ModDate, no XMP, no annotations or AcroForm, Producer
+`Powered By Crystal` / Creator `Crystal Reports`, only Arial fonts, three
+images, no text printed on top of other text.
+
+- Strong signs: another producer/creator, an extra save, a ModDate, xref/object
+  streams, XMP, annotations, form fields, overlapping text, and (CoR14.3 only)
+  non-Arial fonts.
+- Weak signs: a CreationDate, another PDF version or image count (CoR14.3 only),
+  non-Arial fonts on disclosures (not calibrated yet; send a real free and R30
+  disclosure to calibrate).
+- Checked against edited copies of the real certificate: an editor re-save, an
+  edit date added while keeping the Crystal producer, a whiteout and retype, and
+  a typed-on comment box are all flagged as changed.
+- A skilled forger can imitate the structure, so the staff CIPC copy remains the
+  deciding evidence. `scripts/check-cipc-sample.ts` re-runs the check on local
+  PDFs (`CIPC_SAMPLE_PDF`) and prints flags only. Never commit a real CIPC
+  document.
 
 **Parsed fields:** number, registered name, type, status, registration date;
 directors/members (close corporations list _members_) with name, type, ID HMAC
@@ -590,3 +623,44 @@ Built as specified, with these deliberate differences:
   level as the site-wide trust badge (verification status). Capping it for
   suspended or struck owners would change every trust badge, so it is left to
   the trust-scale work rather than done here.
+
+## Improvements (2026-10-20)
+
+- **PDF only for owners.** `readCipcFile(file, { pdfOnly: true })` in the owner
+  preview, submit and CIPC-case reply routes returns `pdf_required` for photos.
+  Staff visit photos and Seen-case attachments may still be images.
+- **Original-file fingerprint** replaces the `producer_mismatch` and
+  `edited_after_issue` findings with `file_changed` / `file_differs` /
+  `original_file` (§3.4). The owner preview gets `looksOriginal`.
+- **Registered office → business address** on approval when the owner ticked it
+  (`business_verifications.apply_office_to_profile`, migration
+  `20261020120000`). Best effort: logged as
+  `business_verification_office_applied`, the owner is notified, and the sticker
+  stands if it fails. `officeToLocation` moved to `src/lib/cipc/address.ts`.
+- **Identity match card** on the admin case: username, name on ID, and for each
+  director on the owner's upload and the staff copy, "Same ID / Other ID / No SA
+  ID" (HMAC) and a name match (`compareDirectorName`). No ID digits are stored
+  or shown. A date-of-birth row was left out: the owner's date of birth isn't
+  stored, and the ID hash already answers "same person".
+- **Not now:** paid CIPC data APIs that would replace the staff download —
+  SearchWorks (Standard Bank OneHub CIPC Information API: company details,
+  directors with ID numbers, registered address, history), Didit (directors
+  lookup, about US$0.65 a conclusive check), Lexis Windeed (director search,
+  about R18). CK1/CK2 close-corporation documents are still not recognised.
+- **Security review (2026-10-20).**
+  - Owner replies on a CIPC case replace the CIPC document, so they are PDF-only
+    too (the reply path had bypassed the rule).
+  - A reply no longer overwrites the registered office once staff attached
+    CIPC's copy or corrected the office by hand. Before, an owner could swap in
+    an office from an edited file after staff checked it; that office is
+    published with the sticker and can now fill the profile address.
+  - Strings read from uploaded PDFs are bounded: producer, creator and dates 120
+    characters; at most 20 font names of 64 characters, three named in a
+    finding.
+  - The office copied to the profile gets the profile form's limits (suburb 120,
+    street 300) and no hidden or look-alike characters.
+  - The preview gets a daily cap (60 per account and business,
+    `workers/rate-limiter.ts`) so "looks original" can't be used to tune a
+    forged file by trial and error. It ships with the rate-limiter worker.
+  - The bundled pdf.js has no eval path (no `new Function`), so the font-eval
+    exploit CVE-2024-4367 doesn't apply; Workers block eval anyway.

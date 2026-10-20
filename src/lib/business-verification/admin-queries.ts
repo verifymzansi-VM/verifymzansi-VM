@@ -1,4 +1,9 @@
-import { suggestNextStep, type Finding } from "@/lib/cipc/screen";
+import {
+  compareDirectorName,
+  suggestNextStep,
+  type Finding,
+  type NameMatch,
+} from "@/lib/cipc/screen";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -205,6 +210,13 @@ export async function getCaseDetail(caseId: string) {
   const evidence = row.kind === "seen" ? null : await approvalEvidence(admin, row);
   const matchName = (directors: Array<{ name: string; idHmac: string | null }> | undefined) =>
     ownerHmac ? (directors?.find((d) => d.idHmac === ownerHmac)?.name ?? null) : null;
+  const legal = {
+    first: (ownerRes.data?.legal_first_name as string | null) ?? null,
+    last: (ownerRes.data?.legal_last_name as string | null) ?? null,
+  };
+  // How each director's name compares with the name on the owner's reviewed ID.
+  const nameMatch = (name: string): NameMatch | null =>
+    legal.last ? compareDirectorName(name, legal) : null;
 
   return {
     id: row.id as string,
@@ -241,6 +253,7 @@ export async function getCaseDetail(caseId: string) {
         role: d.role,
         hasSaId: d.hasSaId,
         isOwner: Boolean(ownerHmac && d.idHmac === ownerHmac),
+        nameMatch: nameMatch(d.name),
       })),
     },
     ownerMatchOnUpload: matchName(parsed.directors),
@@ -250,7 +263,9 @@ export async function getCaseDetail(caseId: string) {
           directors: adminCopy.directors.map((d) => ({
             name: d.name,
             role: d.role,
+            hasSaId: d.idHmac !== null,
             isOwner: Boolean(ownerHmac && d.idHmac === ownerHmac),
+            nameMatch: nameMatch(d.name),
           })),
         }
       : null,

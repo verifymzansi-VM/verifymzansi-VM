@@ -26,7 +26,7 @@ const AREA_TABS: AreaTab[] = [
     icon: ShoppingBag,
     iconColor: "text-brand-green",
     activeClass:
-      "bg-card text-brand-green-700 shadow-sm ring-1 ring-brand-green/30 dark:text-brand-green-300",
+      "bg-card text-brand-green-700 shadow-sm ring-1 ring-brand-green/30 dark:text-brand-gold-300",
     hoverClass: "hover:bg-card/70 hover:text-foreground",
   },
   {

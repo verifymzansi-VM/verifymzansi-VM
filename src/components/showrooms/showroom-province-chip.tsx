@@ -48,7 +48,7 @@ export function ShowroomProvinceChip({
         )}
       >
         <MapPin
-          className="h-3.5 w-3.5 shrink-0 text-brand-green-700 dark:text-brand-green-300"
+          className="h-3.5 w-3.5 shrink-0 text-brand-green-700 dark:text-brand-gold-300"
           aria-hidden="true"
         />
         <span className="truncate">

@@ -1,7 +1,14 @@
+import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
+import {
+  createPostingVerifier,
+  createTrustedPostingFixture,
+} from "./lib/foundation-trusted-posting-fixture.mjs";
+import { testPublicationVerificationReadiness } from "./lib/foundation-publication-readiness-native.mjs";
+import { nativeTotp } from "./lib/foundation-native-totp.mjs";
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
-import { randomUUID, randomBytes, createHash, createHmac } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
   nativeIsolation,
@@ -29,6 +36,8 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
       "scripts/lib/foundation-native-paths.mjs",
+      "scripts/lib/foundation-native-sql-barrier.mjs",
+      "scripts/lib/foundation-native-owner-restrictions.mjs",
       "scripts/lib/foundation-identity-native.mjs",
       "scripts/lib/foundation-negotiable-native.mjs",
       "scripts/lib/foundation-activity-native.mjs",
@@ -41,6 +50,24 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "scripts/lib/foundation-context-native.mjs",
       "scripts/lib/foundation-event-edit-native.mjs",
       "docs/backend-foundation/prototypes/business-event-context.sql",
+      "docs/backend-foundation/prototypes/public-event-window.sql",
+      "src/lib/foundation/event-window-dto.ts",
+      "scripts/lib/foundation-financial-snapshot.mjs",
+      "scripts/lib/foundation-event-duplicates-native.mjs",
+      "docs/backend-foundation/prototypes/event-duplicate-admission.sql",
+      "src/lib/foundation/post-submission.ts",
+      "scripts/lib/foundation-native-totp.mjs",
+      "scripts/lib/foundation-staff-event-flags-native.mjs",
+      "src/lib/foundation/verification-readiness.ts",
+      "scripts/lib/foundation-publication-readiness-native.mjs",
+      "scripts/lib/foundation-trusted-posting-fixture.mjs",
+      "docs/backend-foundation/prototypes/publication-verification-readiness.sql",
+      "scripts/lib/foundation-post-contacts-native.mjs",
+      "docs/backend-foundation/prototypes/post-contact-preferences.sql",
+      "src/lib/foundation/post-contacts.ts",
+      "src/lib/domains/posts/contact-channels.ts",
+      "docs/backend-foundation/prototypes/staff-event-duplicate-flags.sql",
+      "src/lib/foundation/staff-event-duplicate-flags.ts",
       "src/lib/foundation/business-event-context.ts",
       "scripts/lib/foundation-owner-editor-native.mjs",
       "docs/backend-foundation/prototypes/owner-listing-editor.sql",
@@ -137,7 +164,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       () => sql(statement),
       (error) => new RegExp(`ERROR:\\s+${state}:`).test(String(error.stderr))
     );
-  const controlledSql = (statement) => {
+  const controlledSql = (statement, options) => {
     const child = spawn(
       "docker",
       [
@@ -156,41 +183,14 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       ],
       { env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
     );
-    let resolveBarrier,
-      rejectBarrier,
-      captured = "";
-    const barrier = new Promise((resolve, reject) => {
-      resolveBarrier = resolve;
-      rejectBarrier = reject;
-    });
-    child.stdout.on("data", (chunk) => {
-      captured += chunk.toString();
-      if (captured.includes("EVIDENCE_LOCK_HELD")) resolveBarrier();
-    });
-    child.stderr.resume();
-    const done = new Promise((resolve) => {
-      child.on("exit", (code) => {
-        if (!captured.includes("EVIDENCE_LOCK_HELD"))
-          rejectBarrier(new Error("Local evidence barrier missing"));
-        resolve(code);
-      });
-      child.on("error", () => {
-        rejectBarrier(new Error("Local evidence process failed"));
-        resolve(-1);
-      });
-    });
-    const timeout = setTimeout(
-      () => rejectBarrier(new Error("Local evidence barrier timeout")),
-      10000
-    );
-    child.stdin.end(statement);
-    return { barrier, done, close: () => clearTimeout(timeout) };
+    return controlNativeSqlChild(child, statement, options);
   };
   const record = (id, details = {}) => {
     checks.push({ id, status: "PASS", ...details });
     process.stdout.write(`${id}: PASS\n`);
   };
-  const awaitQueuedRpc = async (name) => {
+  const awaitQueuedRpc = async (name, minimumWaiters = 1) => {
+    if (![1, 2].includes(minimumWaiters)) throw new Error("Invalid synthetic waiter count");
     if (
       ![
         "approve_decision",
@@ -216,6 +216,13 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
         "get_owner_listing_editor",
         "get_owner_business_event_editor",
         "save_business_event_context",
+        "submit_post",
+        "flag_duplicate_events",
+        "preview_duplicate_events",
+        "staff_review_report",
+        "set_post_contacts",
+        "get_owner_post_contacts",
+        "get_owner_verification_readiness",
       ].includes(name)
     )
       throw new Error("Unknown synthetic RPC barrier");
@@ -227,7 +234,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
           sql(
             `select count(*) from pg_stat_activity where datname='postgres' and wait_event_type='Lock' and query like '%${name}%';`
           )
-        ) > 0
+        ) >= minimumWaiters
       )
         return;
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -260,6 +267,19 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
   let exitCode = 0;
   let nativeStage = "unlabelled native assertion";
   let appliedFunctions = [];
+  const createTrackedUser = async (label) => {
+    const email = `foundation-${label}-${randomUUID()}@example.invalid`,
+      password = randomBytes(24).toString("base64url");
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+    assert.equal(created.error, null);
+    const tracked = { id: uuid(created.data.user.id), member: client(), token: null };
+    users.push(tracked);
+    const login = await tracked.member.auth.signInWithPassword({ email, password });
+    assert.equal(login.error, null);
+    tracked.token = login.data.session.access_token;
+    return tracked;
+  };
+  let verificationFixture;
   try {
     const { restoreListingPriceDraft, buildListingPriceDraftCommand } =
       await import("../src/lib/domains/listings/price-draft.ts");
@@ -515,7 +535,12 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
     for (const context of contexts) {
       const command = buildCoreDraftCommand({
         context,
-        detail: context.kind === "event" ? { ...eventWindow, timezone: "africa/johannesburg" } : {},
+        detail:
+          context.kind === "event"
+            ? { ...eventWindow, timezone: "africa/johannesburg", contact_channels: ["form"] }
+            : context.kind === "listing"
+              ? { contact_channels: ["form"] }
+              : {},
       });
       const result = await rpc("create_core_draft", command, owner.token);
       assert.equal(result.status, 200);
@@ -532,7 +557,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       p_kind: "listing",
       p_area: "market",
       p_category_key: "fixture_market",
-      p_detail: {},
+      p_detail: { contact_channels: ["form"] },
     };
     assert.equal((await rpc("create_core_draft", createContext)).status, 401);
     assert.equal((await rpc("create_core_draft", createContext, null, true)).status, 403);
@@ -680,7 +705,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
         "create_core_draft",
         buildCoreDraftCommand({
           context: { kind: "listing", area: "market", category_key: category },
-          detail: {},
+          detail: { contact_channels: ["form"] },
         }),
         other.token
       );
@@ -2983,22 +3008,7 @@ commit;`);
     record("native-billing-immutable-catalogue-and-private-tables");
     // BF-08: live staff AAL2 + recent TOTP, claims/self-review, durable evidence
     // access audit, upload journal, two-person version binding, legal holds.
-    const base32 = (secret) => {
-      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-      let bits = "";
-      for (const ch of secret.replace(/=+$/, "").toUpperCase())
-        bits += alphabet.indexOf(ch).toString(2).padStart(5, "0");
-      const bytes = [];
-      for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
-      return Buffer.from(bytes);
-    };
-    const totp = (secret) => {
-      const counter = Buffer.alloc(8);
-      counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
-      const mac = createHmac("sha1", base32(secret)).update(counter).digest();
-      const offset = mac[mac.length - 1] & 15;
-      return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1000000).padStart(6, "0");
-    };
+    const totp = nativeTotp;
     const staff = {};
     for (const [name, role] of [
       ["moderator", "moderator"],
@@ -4361,9 +4371,22 @@ commit;`);
     {
       // BF-05: media journal and quota, draft content, funded submission, moderation
       // writing the search projection, owner state changes, refunds and event fair use.
+      // Explicit positive cohort: preserve the closed outer owner/other fixtures.
+      const publicationOwner = await createTrackedUser("publication-owner");
+      const verificationReviewer = await createPostingVerifier({
+        createUser: createTrackedUser,
+        sql,
+        fixtureAdminId: staff.admin.id,
+      });
+      verificationFixture = createTrustedPostingFixture({
+        rpc,
+        sql,
+        reviewer: verificationReviewer,
+      });
+      await verificationFixture.ready(publicationOwner);
       const MB = 1024 * 1024;
       const digest = (label) => createHash("sha256").update(label).digest("hex");
-      const upload = async (kind, bytes, token = other.token) =>
+      const upload = async (kind, bytes, token = publicationOwner.token) =>
         rpc("begin_media_upload", { p_kind: kind, p_bytes: bytes }, token);
       const finalize = (id, size, mime, width = 800, height = 600) =>
         rpc(
@@ -4383,14 +4406,14 @@ commit;`);
       assert.equal((await upload("video", 60 * MB)).status, 400);
       // Storage follows the package (DEC-29): (2 x package posts + 10) x 100 MB.
       const storageAllowance = Number(
-        sql(`select internal.media_storage_allowance('${other.id}');`)
+        sql(`select internal.media_storage_allowance('${publicationOwner.id}');`)
       );
       assert.ok(storageAllowance >= 10 * 100 * MB);
       const quotaFill = Array.from({ length: Math.ceil(storageAllowance / (50 * MB)) }, () =>
         randomUUID()
       );
       sql(
-        `insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,state) values ${quotaFill.map((id) => `('${id}','${other.id}','video','media/quota/${id}',${50 * MB},${50 * MB},'${"b".repeat(64)}','video/mp4','ready')`).join(",")};`
+        `insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,state) values ${quotaFill.map((id) => `('${id}','${publicationOwner.id}','video','media/quota/${id}',${50 * MB},${50 * MB},'${"b".repeat(64)}','video/mp4','ready')`).join(",")};`
       );
       assert.equal((await upload("image", MB)).status, 409);
       sql(
@@ -4400,7 +4423,9 @@ commit;`);
       const img2 = (await upload("image", MB)).data;
       const vid1 = (await upload("video", 10 * MB)).data;
       const pending = (await upload("image", MB)).data;
-      assert.ok(img1.object_key.startsWith("media/") && !img1.object_key.includes(other.id));
+      assert.ok(
+        img1.object_key.startsWith("media/") && !img1.object_key.includes(publicationOwner.id)
+      );
       assert.equal(
         (
           await rpc(
@@ -4413,7 +4438,7 @@ commit;`);
               p_width: 1,
               p_height: 1,
             },
-            other.token
+            publicationOwner.token
           )
         ).status,
         403
@@ -4442,12 +4467,12 @@ commit;`);
       const draftPost = async () => {
         const id = randomUUID();
         sql(
-          `begin; insert into private.posts(id,owner_id,kind,area,category_key) values('${id}','${other.id}','listing','market','electronics'); insert into private.listing_details(post_id,price_mode,price_cents,attributes) values('${id}','amount',150000,'{"device_type":"Smartphone","brand":"Samsung"}'); commit;`
+          `begin; insert into private.posts(id,owner_id,kind,area,category_key) values('${id}','${publicationOwner.id}','listing','market','electronics'); insert into private.listing_details(post_id,price_mode,price_cents,attributes) values('${id}','amount',150000,'{"device_type":"Smartphone","brand":"Samsung"}'); insert into private.post_contacts(post_id,post_kind,channels) values('${id}','listing',array['form']); commit;`
         );
         return id;
       };
       const listing = await draftPost();
-      const content = (id, revision, value, token = other.token) =>
+      const content = (id, revision, value, token = publicationOwner.token) =>
         rpc(
           "save_post_content",
           { p_post_id: id, p_expected_revision: revision, p_content: value },
@@ -4488,7 +4513,7 @@ commit;`);
           await rpc(
             "submit_post",
             { p_post_id: whitespacePost, p_expected_revision: whitespaceSaved.data.revision },
-            other.token
+            publicationOwner.token
           )
         ).status,
         400
@@ -4540,13 +4565,18 @@ commit;`);
         rpc(
           "set_post_media",
           { p_post_id: id, p_expected_revision: rev, p_items: items },
-          other.token
+          publicationOwner.token
         );
       assert.equal((await setMedia(listing, null, [])).status, 400);
       assert.equal((await setMedia(listing, revision, null)).status, 400);
       assert.equal(
-        (await rpc("submit_post", { p_post_id: listing, p_expected_revision: null }, other.token))
-          .status,
+        (
+          await rpc(
+            "submit_post",
+            { p_post_id: listing, p_expected_revision: null },
+            publicationOwner.token
+          )
+        ).status,
         400
       );
       const foreign = randomUUID();
@@ -4574,7 +4604,7 @@ commit;`);
         );
       const many = Array.from({ length: 11 }, () => randomUUID());
       sql(
-        `insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,state) values ${many.map((id) => `('${id}','${other.id}','image','media/many/${id}',${MB},${MB},'${"d".repeat(64)}','image/jpeg','ready')`).join(",")};`
+        `insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,state) values ${many.map((id) => `('${id}','${publicationOwner.id}','image','media/many/${id}',${MB},${MB},'${"d".repeat(64)}','image/jpeg','ready')`).join(",")};`
       );
       assert.equal(
         (
@@ -4601,7 +4631,7 @@ commit;`);
       assert.equal(media.status, 200);
       revision = media.data.revision;
       record("native-post-content-and-media-links");
-      const attrs = (id, rev, value, token = other.token) =>
+      const attrs = (id, rev, value, token = publicationOwner.token) =>
         rpc(
           "save_listing_attributes",
           { p_post_id: id, p_expected_revision: rev, p_attributes: value },
@@ -4613,7 +4643,7 @@ commit;`);
         revision = partial.data.revision;
         assert.deepEqual(partial.data.attributes, { condition });
         assert.deepEqual(
-          (await rpc("get_listing_attributes", { p_post_id: listing }, other.token)).data
+          (await rpc("get_listing_attributes", { p_post_id: listing }, publicationOwner.token)).data
             .attributes,
           { condition }
         );
@@ -4629,7 +4659,7 @@ commit;`);
           await rpc(
             "submit_post",
             { p_post_id: listing, p_expected_revision: revision },
-            other.token
+            publicationOwner.token
           )
         ).status,
         400
@@ -4684,7 +4714,7 @@ commit;`);
       );
       for (const bad of [
         null,
-        { owner_id: other.id },
+        { owner_id: publicationOwner.id },
         { brand: " " },
         { brand: "😀".repeat(41) },
         { device_type: "Invented" },
@@ -4707,7 +4737,7 @@ commit;`);
           await rpc(
             "submit_post",
             { p_post_id: listing, p_expected_revision: revision },
-            other.token
+            publicationOwner.token
           )
         ).status,
         400
@@ -4726,7 +4756,7 @@ commit;`);
       const ownerAttributes = await rpc(
         "get_listing_attributes",
         { p_post_id: listing },
-        other.token
+        publicationOwner.token
       );
       assert.deepEqual(ownerAttributes.data.attributes, savedAttributes.data.attributes);
       assert.equal(
@@ -4747,12 +4777,13 @@ commit;`);
         `begin; update private.posts set category_key='jobs_services' where id='${listing}'; update private.listing_details set attributes='{"job_type":"part_time","location_type":"remote"}' where post_id='${listing}'; set constraints all immediate; rollback;`
       );
       assert.deepEqual(
-        (await rpc("get_listing_attributes", { p_post_id: listing }, other.token)).data.attributes,
+        (await rpc("get_listing_attributes", { p_post_id: listing }, publicationOwner.token)).data
+          .attributes,
         savedAttributes.data.attributes
       );
       record("native-listing-parent-category-and-attribute-schema-transaction-integrity");
 
-      const submit = (id, rev, token = other.token) =>
+      const submit = (id, rev, token = publicationOwner.token) =>
         rpc("submit_post", { p_post_id: id, p_expected_revision: rev }, token);
       const bare = await draftPost();
       const bareRevision = (
@@ -4766,7 +4797,11 @@ commit;`);
       assert.equal((await submit(bare, bareRevision)).status, 400); // no photo
       assert.equal((await submit(listing, revision)).status, 402); // no active plan
       const market = billing.data.plans.find((plan) => plan.code === "market_30d");
-      const funding = await rpc("start_checkout", { p_product_id: market.id }, other.token);
+      const funding = await rpc(
+        "start_checkout",
+        { p_product_id: market.id },
+        publicationOwner.token
+      );
       assert.equal(
         (
           await rpc(
@@ -4813,7 +4848,10 @@ commit;`);
           token
         );
       };
-      assert.equal((await moderate(listing, revision, "approve", other.token)).status, 403);
+      assert.equal(
+        (await moderate(listing, revision, "approve", publicationOwner.token)).status,
+        403
+      );
       assert.equal(
         (await moderate(listing, revision, "approve", staff.moderator.token)).status,
         403
@@ -4874,13 +4912,16 @@ commit;`);
       );
       const found = await search({ q: "galaxy s24", category: "electronics" });
       assert.ok(found.data.items.some((item) => item.id === listing));
-      assert.equal((await rpc("release_post", { p_post_id: listing }, other.token)).status, 400);
+      assert.equal(
+        (await rpc("release_post", { p_post_id: listing }, publicationOwner.token)).status,
+        400
+      );
       assert.equal(
         (
           await rpc(
             "set_post_state",
             { p_post_id: listing, p_expected_revision: null, p_action: "pause" },
-            other.token
+            publicationOwner.token
           )
         ).status,
         400
@@ -4898,7 +4939,7 @@ commit;`);
       assert.equal(detail.data.title, "Samsung Galaxy S24 for sale");
       assert.equal(detail.data.media.length, 4);
       assert.equal(detail.data.condition, "like_new");
-      assert.equal(JSON.stringify(detail.data).includes(other.id), false); // no owner id anywhere
+      assert.equal(JSON.stringify(detail.data).includes(publicationOwner.id), false); // no owner id anywhere
       assert.equal((await rpc("get_public_post", { p_id: bare }, null)).data, null);
       assert.equal(
         sql(
@@ -4965,17 +5006,93 @@ commit;`);
         await assertListingVisibility(true);
       };
       await applyVisibilityMutation(
-        `update auth.users set banned_until=statement_timestamp()+interval '1 hour' where id='${other.id}';`,
-        `update auth.users set banned_until=null where id='${other.id}';`
+        `update auth.users set banned_until=statement_timestamp()+interval '1 hour' where id='${publicationOwner.id}';`,
+        `update auth.users set banned_until=null where id='${publicationOwner.id}';`
       );
       await applyVisibilityMutation(
-        `update auth.users set deleted_at=statement_timestamp() where id='${other.id}';`,
-        `update auth.users set deleted_at=null where id='${other.id}';`
+        `update auth.users set deleted_at=statement_timestamp() where id='${publicationOwner.id}';`,
+        `update auth.users set deleted_at=null where id='${publicationOwner.id}';`
       );
-      await applyVisibilityMutation(
-        `insert into private.account_closures(user_id,evidence_delete_after) values('${other.id}',statement_timestamp()+interval '90 days');`,
-        `delete from private.account_closures where user_id='${other.id}';`
-      );
+      // Closure permanently revokes canonical proofs. Use its own real verified
+      // subject, so later positive publication tests never resurrect revoked facts.
+      nativeStage =
+        "dedicated verified owner closure visibility and irreversible proof invalidation";
+      {
+        const closingOwner = await createTrackedUser("publication-closure-owner");
+        await verificationFixture.ready(closingOwner);
+        const closingCall = async (name, args) => {
+          const response = await rpc(name, args, closingOwner.token);
+          assert.equal(response.status, 200, "closure publication fixture " + name);
+          return response.data;
+        };
+        let closingPost = await closingCall("create_core_draft", {
+          p_kind: "listing",
+          p_area: "market",
+          p_category_key: "jobs_services",
+          p_detail: { contact_channels: ["form"] },
+        });
+        closingPost = await closingCall("save_core_listing_terms", {
+          p_id: closingPost.id,
+          p_expected_revision: closingPost.revision,
+          p_terms: { price: { mode: "on_request" }, negotiable: false },
+        });
+        closingPost = await closingCall("save_listing_attributes", {
+          p_post_id: closingPost.id,
+          p_expected_revision: closingPost.revision,
+          p_attributes: { job_type: "full_time", location_type: "remote" },
+        });
+        closingPost = await closingCall("save_post_content", {
+          p_post_id: closingPost.id,
+          p_expected_revision: closingPost.revision,
+          p_content: {
+            title: "Fixture dedicated closure visibility",
+            description: "Synthetic isolated closure visibility and proof invalidation.",
+            province_id: "gp",
+            city_id: "gp_johannesburg",
+          },
+        });
+        sql(
+          "insert into private.entitlements(owner_id,source,area,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at) values('" +
+            closingOwner.id +
+            "','staff_grant','market','" +
+            staff.admin.id +
+            "',1,10,1,clock_timestamp(),clock_timestamp()+interval '1 hour');"
+        );
+        closingPost = await closingCall("submit_post", {
+          p_post_id: closingPost.id,
+          p_expected_revision: closingPost.revision,
+        });
+        assert.equal(
+          (await moderate(closingPost.id, closingPost.revision, "approve", staff.governorC.token))
+            .status,
+          200
+        );
+        assert.equal(
+          (await rpc("get_public_post", { p_id: closingPost.id }, null)).data.id,
+          closingPost.id
+        );
+        sql(
+          "insert into private.account_closures(user_id,evidence_delete_after) values('" +
+            closingOwner.id +
+            "\',statement_timestamp()+interval \'90 days\');"
+        );
+        assert.equal((await rpc("get_public_post", { p_id: closingPost.id }, null)).data, null);
+        assert.equal((await search({ q: "dedicated closure visibility" })).data.total, 0);
+        assert.equal(
+          sql("select internal.current_verified_identity('" + closingOwner.id + "') is null;"),
+          "t"
+        );
+        sql("delete from private.account_closures where user_id='" + closingOwner.id + "';");
+        assert.equal(
+          (await rpc("get_public_post", { p_id: closingPost.id }, null)).data.id,
+          closingPost.id
+        );
+        assert.equal(
+          sql("select internal.current_verified_identity('" + closingOwner.id + "') is null;"),
+          "t"
+        );
+      }
+
       await applyVisibilityMutation(
         `update private.entitlements set status='revoked',revoked_reason='synthetic' where id='${listingEntitlement}';`,
         `update private.entitlements set status='active',revoked_reason=null where id='${listingEntitlement}';`
@@ -5001,9 +5118,13 @@ commit;`);
       const memberPost = await draftPost();
       const memberEntitlement = randomUUID();
       sql(
-        `insert into private.entitlements(id,owner_id,source,slot_capacity,max_photos,max_videos,starts_at,ends_at,area) values('${memberEntitlement}','${searchOwner.id}','intro_trial',1,10,1,statement_timestamp(),statement_timestamp()+interval '2 hours','market'); insert into private.entitlement_members(entitlement_id,member_id,added_by) values('${memberEntitlement}','${other.id}','${searchOwner.id}');`
+        `insert into private.entitlements(id,owner_id,source,slot_capacity,max_photos,max_videos,starts_at,ends_at,area) values('${memberEntitlement}','${searchOwner.id}','intro_trial',1,10,1,statement_timestamp(),statement_timestamp()+interval '2 hours','market'); insert into private.entitlement_members(entitlement_id,member_id,added_by) values('${memberEntitlement}','${publicationOwner.id}','${searchOwner.id}');`
       );
-      const memberActivation = await rpc("activate_post", { p_post_id: memberPost }, other.token);
+      const memberActivation = await rpc(
+        "activate_post",
+        { p_post_id: memberPost },
+        publicationOwner.token
+      );
       assert.equal(memberActivation.status, 200);
       assert.equal(memberActivation.data.entitlement_id, memberEntitlement);
       sql(
@@ -5011,17 +5132,21 @@ commit;`);
       );
       assert.equal((await rpc("get_public_post", { p_id: memberPost }, null)).data.id, memberPost);
       sql(
-        `delete from private.entitlement_members where entitlement_id='${memberEntitlement}' and member_id='${other.id}';`
+        `delete from private.entitlement_members where entitlement_id='${memberEntitlement}' and member_id='${publicationOwner.id}';`
       );
       assert.equal((await rpc("get_public_post", { p_id: memberPost }, null)).data, null);
       assert.equal((await search({ q: "shared funding visibility" })).data.total, 0);
-      const memberReactivation = await rpc("activate_post", { p_post_id: memberPost }, other.token);
+      const memberReactivation = await rpc(
+        "activate_post",
+        { p_post_id: memberPost },
+        publicationOwner.token
+      );
       assert.ok([200, 402, 409].includes(memberReactivation.status));
       assert.notEqual(memberReactivation.data?.entitlement_id, memberEntitlement);
       assert.notEqual(memberReactivation.data?.reused, true);
       // Restore only the named synthetic activation if fallback selected another valid source.
       sql(
-        `update private.post_activations set released_at=statement_timestamp(),release_reason='owner' where post_id='${memberPost}' and released_at is null; insert into private.entitlement_members(entitlement_id,member_id,added_by) values('${memberEntitlement}','${other.id}','${searchOwner.id}'); insert into private.post_activations(post_id,entitlement_id,owner_id) values('${memberPost}','${memberEntitlement}','${other.id}');`
+        `update private.post_activations set released_at=statement_timestamp(),release_reason='owner' where post_id='${memberPost}' and released_at is null; insert into private.entitlement_members(entitlement_id,member_id,added_by) values('${memberEntitlement}','${publicationOwner.id}','${searchOwner.id}'); insert into private.post_activations(post_id,entitlement_id,owner_id) values('${memberPost}','${memberEntitlement}','${publicationOwner.id}');`
       );
       assert.equal((await rpc("get_public_post", { p_id: memberPost }, null)).data.id, memberPost);
       try {
@@ -5038,7 +5163,7 @@ commit;`);
           await rpc(
             "set_post_state",
             { p_post_id: memberPost, p_expected_revision: 1, p_action: "pause" },
-            other.token
+            publicationOwner.token
           )
         ).status,
         200
@@ -5062,7 +5187,7 @@ commit;`);
         rpc(
           "set_post_media",
           { p_post_id: limitedMediaPost, p_expected_revision: limitedRevision, p_items: items },
-          other.token
+          publicationOwner.token
         );
       const twoImages = [
         { object_id: img1.object_id, purpose: "cover", position: 0 },
@@ -5072,7 +5197,7 @@ commit;`);
       assert.equal(draftMedia.status, 200);
       limitedRevision = draftMedia.data.revision;
       sql(
-        `insert into private.entitlements(id,owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at,area) values('${limitedEntitlement}','${other.id}','staff_grant','${staff.governorC.id}',1,1,0,statement_timestamp(),statement_timestamp()+interval '1 hour','market');`
+        `insert into private.entitlements(id,owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at,area) values('${limitedEntitlement}','${publicationOwner.id}','staff_grant','${staff.governorC.id}',1,1,0,statement_timestamp(),statement_timestamp()+interval '1 hour','market');`
       );
       assert.equal((await submit(limitedMediaPost, limitedRevision)).status, 400);
       assert.equal(
@@ -5082,7 +5207,7 @@ commit;`);
         `draft:${limitedRevision}:0`
       );
       assert.equal(
-        (await rpc("activate_post", { p_post_id: limitedMediaPost }, other.token)).data
+        (await rpc("activate_post", { p_post_id: limitedMediaPost }, publicationOwner.token)).data
           .entitlement_id,
         limitedEntitlement
       );
@@ -5127,7 +5252,7 @@ commit;`);
       const paused = await rpc(
         "set_post_state",
         { p_post_id: listing, p_expected_revision: revision, p_action: "pause" },
-        other.token
+        publicationOwner.token
       );
       assert.equal(paused.status, 200);
       revision = paused.data.revision;
@@ -5138,7 +5263,7 @@ commit;`);
         false
       );
       assert.equal((await rpc("get_public_post", { p_id: listing }, null)).data, null);
-      assert.equal((await rpc("my_posting_capacity", {}, other.token)).data.active, 0);
+      assert.equal((await rpc("my_posting_capacity", {}, publicationOwner.token)).data.active, 0);
       const editedAttributes = await attrs(listing, revision, {
         device_type: "Laptop",
         brand: "Fixture",
@@ -5221,7 +5346,7 @@ commit;`);
       const eventActivity = reference.activities.find((a) => a.category === "events").key;
       const eventIds = Array.from({ length: 6 }, () => randomUUID());
       sql(
-        `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id) values ${eventIds.map((id, i) => `('${id}','${other.id}','event','tourism_events','events','${eventActivity}','Synthetic event ${i + 1}','A synthetic community event used only for fixture checks.','gp','gp_johannesburg')`).join(",")}; insert into private.event_details(post_id,starts_at,ends_at,timezone) values ${eventIds.map((id) => `('${id}',date_trunc('second',statement_timestamp())+interval '2 days',date_trunc('second',statement_timestamp())+interval '3 days','Africa/Johannesburg')`).join(",")}; insert into private.post_media(post_id,object_id,purpose,position) values ${eventIds.map((id) => `('${id}','${img1.object_id}','cover',0)`).join(",")}; commit;`
+        `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id) values ${eventIds.map((id, i) => `('${id}','${publicationOwner.id}','event','tourism_events','events','${eventActivity}','Synthetic event ${i + 1}','A synthetic community event used only for fixture checks.','gp','gp_johannesburg')`).join(",")}; insert into private.event_details(post_id,starts_at,ends_at,timezone) values ${eventIds.map((id) => `('${id}',date_trunc('second',statement_timestamp())+interval '2 days',date_trunc('second',statement_timestamp())+interval '3 days','Africa/Johannesburg')`).join(",")}; insert into private.post_media(post_id,object_id,purpose,position) values ${eventIds.map((id) => `('${id}','${img1.object_id}','cover',0)`).join(",")}; insert into private.post_contacts(post_id,post_kind,channels) values ${eventIds.map((id) => `('${id}','event',array['form'])`).join(",")}; commit;`
       );
       const eventResults = [];
       for (const id of eventIds) eventResults.push((await submit(id, 1)).status);
@@ -5238,7 +5363,7 @@ commit;`);
       // Jobs have no mandatory photo, and salary disclosure is an explicit mode.
       const jobPost = randomUUID();
       sql(
-        `begin; insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id) values('${jobPost}','${other.id}','listing','market','jobs_services','Fixture remote vacancy','A synthetic remote vacancy used to verify required job facts.','gp','gp_johannesburg'); insert into private.listing_details(post_id,price_mode,price_cents,attributes) values('${jobPost}','on_request',null,'{"job_type":"full_time","location_type":"remote"}'); insert into private.entitlements(owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at) values('${other.id}','staff_grant','${staff.governorC.id}',1,10,1,statement_timestamp(),statement_timestamp()+interval '30 days'); commit;`
+        `begin; insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id) values('${jobPost}','${publicationOwner.id}','listing','market','jobs_services','Fixture remote vacancy','A synthetic remote vacancy used to verify required job facts.','gp','gp_johannesburg'); insert into private.listing_details(post_id,price_mode,price_cents,attributes) values('${jobPost}','on_request',null,'{"job_type":"full_time","location_type":"remote"}'); insert into private.entitlements(owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at) values('${publicationOwner.id}','staff_grant','${staff.governorC.id}',1,10,1,statement_timestamp(),statement_timestamp()+interval '30 days'); insert into private.post_contacts(post_id,post_kind,channels) values('${jobPost}','listing',array['form']); commit;`
       );
       assert.equal((await submit(jobPost, 1)).status, 200);
       assert.equal((await moderate(jobPost, 2, "approve", staff.governorC.token)).status, 200);
@@ -5250,7 +5375,7 @@ commit;`);
           await rpc(
             "set_post_state",
             { p_post_id: jobPost, p_expected_revision: 3, p_action: "pause" },
-            other.token
+            publicationOwner.token
           )
         ).status,
         200
@@ -5268,14 +5393,14 @@ commit;`);
               p_expected_revision: existingEventRevision,
               p_action: "pause",
             },
-            other.token
+            publicationOwner.token
           )
         ).status,
         200
       );
       const videoEvent = randomUUID();
       sql(
-        `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id) values('${videoEvent}','${other.id}','event','tourism_events','events','${eventActivity}','Show','Synthetic video-only event for submission parity.','gp','gp_johannesburg'); insert into private.event_details(post_id,starts_at,ends_at,timezone) values('${videoEvent}',date_trunc('second',statement_timestamp())+interval '2 days',date_trunc('second',statement_timestamp())+interval '3 days','Africa/Johannesburg'); commit;`
+        `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id) values('${videoEvent}','${publicationOwner.id}','event','tourism_events','events','${eventActivity}','Show','Synthetic video-only event for submission parity.','gp','gp_johannesburg'); insert into private.event_details(post_id,starts_at,ends_at,timezone) values('${videoEvent}',date_trunc('second',statement_timestamp())+interval '2 days',date_trunc('second',statement_timestamp())+interval '3 days','Africa/Johannesburg'); insert into private.post_contacts(post_id,post_kind,channels) values('${videoEvent}','event',array['form']); commit;`
       );
       const videoMedia = await setMedia(videoEvent, 1, [
         { object_id: vid1.object_id, purpose: "video", position: 0 },
@@ -5454,17 +5579,18 @@ commit;`);
       const storageUsed = () =>
         Number(
           sql(
-            `select coalesce(sum(greatest(coalesce(size_bytes,0),declared_bytes)),0) from private.media_objects where owner_id='${other.id}' and state<>'deleted';`
+            `select coalesce(sum(greatest(coalesce(size_bytes,0),declared_bytes)),0) from private.media_objects where owner_id='${publicationOwner.id}' and state<>'deleted';`
           )
         );
       const room =
-        Number(sql(`select internal.media_storage_allowance('${other.id}');`)) - storageUsed();
+        Number(sql(`select internal.media_storage_allowance('${publicationOwner.id}');`)) -
+        storageUsed();
       const fillers = Array.from({ length: Math.max(1, Math.ceil(room / (50 * MB))) }, () =>
         randomUUID()
       );
       try {
         sql(
-          `insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,state) values ${fillers.map((id) => `('${id}','${other.id}','video','media/fill/${id}',${50 * MB},${50 * MB},'${"e".repeat(64)}','video/mp4','ready')`).join(",")};`
+          `insert into private.media_objects(id,owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,state) values ${fillers.map((id) => `('${id}','${publicationOwner.id}','video','media/fill/${id}',${50 * MB},${50 * MB},'${"e".repeat(64)}','video/mp4','ready')`).join(",")};`
         );
         assert.equal((await upload("image", 1)).status, 409);
       } finally {
@@ -5576,7 +5702,7 @@ commit;`);
         ])
       ).data.revision;
       sql(
-        `insert into private.entitlements(owner_id,source,area,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at) values('${other.id}','staff_grant','market','${staff.admin.id}',3,10,1,statement_timestamp()-interval '1 day',statement_timestamp()+interval '2 days');`
+        `insert into private.entitlements(owner_id,source,area,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at) values('${publicationOwner.id}','staff_grant','market','${staff.admin.id}',3,10,1,statement_timestamp()-interval '1 day',statement_timestamp()+interval '2 days');`
       );
       const editSubmitted = await submit(editListing, editRevision);
       assert.equal(editSubmitted.status, 200);
@@ -5592,7 +5718,7 @@ commit;`);
       const liveWindow = sql(
         `select published_at||'/'||visible_until from private.posts where id='${editListing}';`
       );
-      const createEdit = (id, rev, token = other.token) =>
+      const createEdit = (id, rev, token = publicationOwner.token) =>
         rpc("create_post_edit", { p_post_id: id, p_expected_revision: rev }, token);
       assert.equal((await createEdit(editListing, liveRevision, searchOwner.token)).status, 400);
       assert.equal((await createEdit(editListing, liveRevision - 1)).status, 409);
@@ -5643,18 +5769,18 @@ commit;`);
         )
       );
       sqlFails(
-        `insert into private.post_activations(post_id,entitlement_id,owner_id) values('${editId}','${editFunding}','${other.id}');`,
+        `insert into private.post_activations(post_id,entitlement_id,owner_id) values('${editId}','${editFunding}','${publicationOwner.id}');`,
         "23514"
       );
       // Submission is checked against the live post's funding; no slot is used.
       const slotsBefore = sql(
-        `select count(*) from private.post_activations where owner_id='${other.id}' and released_at is null;`
+        `select count(*) from private.post_activations where owner_id='${publicationOwner.id}' and released_at is null;`
       );
       const editSubmit = await submit(editId, copyMedia.data.revision);
       assert.equal(editSubmit.status, 200);
       assert.equal(
         sql(
-          `select count(*) from private.post_activations where owner_id='${other.id}' and released_at is null;`
+          `select count(*) from private.post_activations where owner_id='${publicationOwner.id}' and released_at is null;`
         ),
         slotsBefore
       );
@@ -5688,7 +5814,7 @@ commit;`);
         403
       );
       assert.equal((await reviewPost(editClaim.data, staff.governorB.token)).status, 403);
-      assert.equal((await reviewPost(editClaim.data, other.token)).status, 403);
+      assert.equal((await reviewPost(editClaim.data, publicationOwner.token)).status, 403);
       // Rejection keeps the live version; the owner fixes and resubmits the copy.
       const rejectedEdit = await moderate(
         editId,
@@ -5746,7 +5872,7 @@ commit;`);
       const secondEdit = await createEdit(editListing, liveRevision);
       assert.equal(secondEdit.status, 200);
       assert.equal(secondEdit.data.edits_remaining, 1);
-      const discard = (id, rev, token = other.token) =>
+      const discard = (id, rev, token = publicationOwner.token) =>
         rpc("discard_post_edit", { p_edit_id: id, p_expected_revision: rev }, token);
       assert.equal((await discard(secondEdit.data.id, 2)).status, 409);
       assert.equal((await discard(secondEdit.data.id, 1, searchOwner.token)).status, 400);
@@ -5869,12 +5995,12 @@ commit;`);
       const liveEventFixture = (title) => {
         const id = randomUUID();
         sql(
-          `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id,status,published_at,visible_until) values('${id}','${other.id}','event','tourism_events','events','${eventActivity}','${title}','A synthetic live event used for live edit lifecycle checks.','gp','gp_johannesburg','live',statement_timestamp(),statement_timestamp()+interval '3 days'); insert into private.event_details(post_id,starts_at,ends_at,timezone) values('${id}',date_trunc('second',statement_timestamp())+interval '2 days',date_trunc('second',statement_timestamp())+interval '3 days','Africa/Johannesburg'); insert into private.post_media(post_id,object_id,purpose,position) values('${id}','${img1.object_id}','cover',0); commit;`
+          `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,title,description,province_id,city_id,status,published_at,visible_until) values('${id}','${publicationOwner.id}','event','tourism_events','events','${eventActivity}','${title}','A synthetic live event used for live edit lifecycle checks.','gp','gp_johannesburg','live',statement_timestamp(),statement_timestamp()+interval '3 days'); insert into private.event_details(post_id,starts_at,ends_at,timezone) values('${id}',date_trunc('second',statement_timestamp())+interval '2 days',date_trunc('second',statement_timestamp())+interval '3 days','Africa/Johannesburg'); insert into private.post_media(post_id,object_id,purpose,position) values('${id}','${img1.object_id}','cover',0); insert into private.post_contacts(post_id,post_kind,channels) values('${id}','event',array['form']); commit;`
         );
         return id;
       };
       const eventLive = liveEventFixture("Paused then archived event");
-      const ownerDeadline = sessionExpiry(other);
+      const ownerDeadline = sessionExpiry(publicationOwner);
       for (const name of [
         "create_post_edit",
         "discard_post_edit",
@@ -5894,11 +6020,11 @@ commit;`);
           );
         const before = snapshot();
         const barrier = controlledSql(
-          `begin; select id from private.posts where id='${target}' for update; select 'EVIDENCE_LOCK_HELD'; select pg_sleep(3); update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${sessionOf(other)}'; commit;`
+          `begin; select id from private.posts where id='${target}' for update; select 'EVIDENCE_LOCK_HELD'; select pg_sleep(3); update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='${sessionOf(publicationOwner)}'; commit;`
         );
         try {
           await barrier.barrier;
-          const pending = rpc(name, args, other.token);
+          const pending = rpc(name, args, publicationOwner.token);
           await awaitQueuedRpc(name);
           const [result, code] = await Promise.all([pending, barrier.done]);
           assert.equal(code, 0);
@@ -5906,7 +6032,7 @@ commit;`);
           assert.equal(snapshot(), before);
         } finally {
           barrier.close();
-          restoreSession(other, ownerDeadline);
+          restoreSession(publicationOwner, ownerDeadline);
         }
       }
       record("native-owner-edit-state-delete-expired-session-during-wait-rolls-back");
@@ -5916,7 +6042,7 @@ commit;`);
         rpc(
           "set_post_state",
           { p_post_id: id, p_expected_revision: rev, p_action: action },
-          other.token
+          publicationOwner.token
         );
       assert.equal((await stateChange(eventLive, eventRevision, "pause")).status, 200);
       assert.equal(sql(`select count(*) from private.posts where edit_of='${eventLive}';`), "1");
@@ -6033,7 +6159,7 @@ commit;`);
       record("native-live-post-edit-keeps-approved-version-public-and-merges-atomically");
 
       // Generic queue claims: the evidence-case fence applied to posts and reports.
-      const pendingFixture = (count, ownerId = other.id) => {
+      const pendingFixture = (count, ownerId = publicationOwner.id) => {
         const ids = Array.from({ length: count }, () => randomUUID());
         sql(
           `begin; insert into private.posts(id,owner_id,kind,area,category_key,status,submitted_at) values ${ids.map((id, i) => `('${id}','${ownerId}','listing','market','electronics','pending_moderation',statement_timestamp()-interval '${i} seconds')`).join(",")}; insert into private.listing_details(post_id) values ${ids.map((id) => `('${id}')`).join(",")}; commit;`
@@ -6043,7 +6169,7 @@ commit;`);
       pendingFixture(6);
       const claimBatch = (token, queue = "content", limit = 3) =>
         rpc("claim_queue_items", { p_queue: queue, p_limit: limit }, token);
-      assert.equal((await claimBatch(other.token)).status, 403);
+      assert.equal((await claimBatch(publicationOwner.token)).status, 403);
       assert.equal((await claimBatch(staff.governorC.aal1)).status, 403);
       assert.equal((await claimBatch(staff.moderator.token)).status, 403); // revoked
       assert.equal((await claimBatch(staff.admin.token)).status, 403); // admins reassign only
@@ -6236,7 +6362,7 @@ commit;`);
         403
       );
       assert.equal((await reassign(itemC2, staff.governorB.id, "no")).status, 400);
-      assert.equal((await reassign(itemC2, other.id, "Shift handover")).status, 400);
+      assert.equal((await reassign(itemC2, publicationOwner.id, "Shift handover")).status, 400);
       assert.equal((await reassign(itemC2, staff.governorC.id, "Shift handover")).status, 400);
       assert.equal((await reassign(itemC, staff.governorB.id, "Shift handover")).status, 409);
       const handed = await reassign(itemC2, staff.governorB.id, "Shift handover");
@@ -6295,7 +6421,7 @@ commit;`);
       assert.equal((await claimBatch(staff.governorC.token, "content", 1)).data.length, 0);
       const spare = uuid(
         sql(
-          `select p.id from private.posts p where p.status='pending_moderation' and p.owner_id='${other.id}' and not exists(select 1 from private.queue_claims q where q.post_id=p.id and q.claimed_by is not null and q.claim_expires_at>clock_timestamp()) limit 1;`
+          `select p.id from private.posts p where p.status='pending_moderation' and p.owner_id='${publicationOwner.id}' and not exists(select 1 from private.queue_claims q where q.post_id=p.id and q.claimed_by is not null and q.claim_expires_at>clock_timestamp()) limit 1;`
         )
       );
       assert.equal((await claimOne("post", spare, staff.governorC.token)).status, 429);
@@ -6471,7 +6597,10 @@ commit;`);
         { p_post_id: listing }, // not public now
       ])
         assert.equal((await fileReport(reportBody(bad))).status, 400, JSON.stringify(bad));
-      assert.equal((await fileReport(reportBody({ p_reporter_id: other.id }))).status, 400); // own post
+      assert.equal(
+        (await fileReport(reportBody({ p_reporter_id: publicationOwner.id }))).status,
+        400
+      ); // own post
       assert.equal((await fileReport(reportBody({ p_reporter_id: owner.id }))).status, 403); // closed account
       const signedInReport = await fileReport(reportBody());
       assert.equal(signedInReport.status, 200);
@@ -6504,7 +6633,7 @@ commit;`);
       );
       assert.equal(
         sql(
-          `select internal.queue_conflict('${other.id}',null,'${staffReport.data.id}')::text||internal.queue_conflict('${staff.governorC.id}',null,'${staffReport.data.id}')::text;`
+          `select internal.queue_conflict('${publicationOwner.id}',null,'${staffReport.data.id}')::text||internal.queue_conflict('${staff.governorC.id}',null,'${staffReport.data.id}')::text;`
         ),
         "truefalse"
       ); // the subject cannot work a report about themselves
@@ -6522,7 +6651,7 @@ commit;`);
       const reportView = await reviewReport(signedInClaim);
       assert.equal(reportView.status, 200);
       assert.equal(reportView.data.reporter_signed_in, true);
-      assert.equal(reportView.data.subject_account_id, other.id);
+      assert.equal(reportView.data.subject_account_id, publicationOwner.id);
       assert.equal(reportView.data.subject_open_reports, 3);
       assert.equal(reportView.data.post.id, videoEvent);
       const reportText = JSON.stringify(reportView.data);
@@ -6603,12 +6732,12 @@ commit;`);
       // Deleting a post keeps its reports on the subject account.
       const [goneId] = pendingFixture(1);
       sql(
-        `insert into private.reports(post_id,subject_account_id,category,description,reporter_ip_hmac) values('${goneId}','${other.id}','scam','Synthetic report about a post that is deleted.','${ipHmac("synthetic-ip-3")}');`
+        `insert into private.reports(post_id,subject_account_id,category,description,reporter_ip_hmac) values('${goneId}','${publicationOwner.id}','scam','Synthetic report about a post that is deleted.','${ipHmac("synthetic-ip-3")}');`
       );
       sql(`delete from private.posts where id='${goneId}';`);
       assert.equal(
         sql(
-          `select count(*) from private.reports where post_id is null and subject_account_id='${other.id}';`
+          `select count(*) from private.reports where post_id is null and subject_account_id='${publicationOwner.id}';`
         ),
         "1"
       );
@@ -6657,13 +6786,13 @@ commit;`);
           `select count(*) from private.post_activations where entitlement_id='${deletedFunding}' and activated_at > statement_timestamp()-interval '30 days';`
         );
       const periodBefore = periodCount();
-      const deletePost = (id, rev, token = other.token) =>
+      const deletePost = (id, rev, token = publicationOwner.token) =>
         rpc("delete_post", { p_post_id: id, p_expected_revision: rev }, token);
       assert.equal((await deletePost(deletable, deleteRevision, searchOwner.token)).status, 400);
       assert.equal((await deletePost(deletable, deleteRevision - 1)).status, 409);
       const deletionHold = randomUUID();
       sql(
-        `insert into private.legal_holds(id,subject_id,reason,placed_by) values('${deletionHold}','${other.id}','Synthetic deletion hold','${staff.admin.id}');`
+        `insert into private.legal_holds(id,subject_id,reason,placed_by) values('${deletionHold}','${publicationOwner.id}','Synthetic deletion hold','${staff.admin.id}');`
       );
       try {
         assert.equal((await deletePost(deletable, deleteRevision)).status, 409);
@@ -6746,7 +6875,10 @@ commit;`);
       record("native-draft-allowance-follows-package");
 
       // Lifecycle (DEC-28/29): nothing is kept indefinitely.
-      assert.equal((await rpc("run_post_lifecycle", { p_limit: 100 }, other.token)).status, 403);
+      assert.equal(
+        (await rpc("run_post_lifecycle", { p_limit: 100 }, publicationOwner.token)).status,
+        403
+      );
       const lifeEvent = (
         status,
         title,
@@ -6764,28 +6896,33 @@ commit;`);
       const lapsed = lifeEvent(
         "live",
         "Lapsed event",
-        other.id,
+        publicationOwner.id,
         10,
         "statement_timestamp()-interval '10 days'",
         "statement_timestamp()-interval '1 minute'"
       );
-      const expired22 = lifeEvent("expired", "Expired 22 days", other.id, 22);
-      const expired31 = lifeEvent("expired", "Expired 31 days", other.id, 31);
-      const archived31 = lifeEvent("archived", "Archived 31 days", other.id, 31);
-      const draft46 = lifeEvent("draft", "Draft 46 days", other.id, 46);
-      const draft61 = lifeEvent("draft", "Draft 61 days", other.id, 61);
-      const paused61 = lifeEvent("paused", "Paused 61 days", other.id, 61);
-      const pending61 = lifeEvent("pending_moderation", "Pending 61 days", other.id, 61);
+      const expired22 = lifeEvent("expired", "Expired 22 days", publicationOwner.id, 22);
+      const expired31 = lifeEvent("expired", "Expired 31 days", publicationOwner.id, 31);
+      const archived31 = lifeEvent("archived", "Archived 31 days", publicationOwner.id, 31);
+      const draft46 = lifeEvent("draft", "Draft 46 days", publicationOwner.id, 46);
+      const draft61 = lifeEvent("draft", "Draft 61 days", publicationOwner.id, 61);
+      const paused61 = lifeEvent("paused", "Paused 61 days", publicationOwner.id, 61);
+      const pending61 = lifeEvent("pending_moderation", "Pending 61 days", publicationOwner.id, 61);
       const held31 = lifeEvent("archived", "Held 31 days", searchOwner.id, 31);
       const retainedEdits = [];
       for (const [copyStatus, copyAge] of [
         ["pending_moderation", 61],
         ["draft", 1],
       ]) {
-        const parent = lifeEvent("expired", `Expired parent of ${copyStatus}`, other.id, 31);
+        const parent = lifeEvent(
+          "expired",
+          `Expired parent of ${copyStatus}`,
+          publicationOwner.id,
+          31
+        );
         const copy = randomUUID();
         sql(
-          `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,status,edit_of,status_changed_at,content_updated_at) values('${copy}','${other.id}','event','tourism_events','events','${eventActivity}','${copyStatus}','${parent}',statement_timestamp()-interval '${copyAge} days',statement_timestamp()-interval '${copyAge} days'); insert into private.event_details(post_id,starts_at,ends_at,timezone) select '${copy}',starts_at,ends_at,timezone from private.event_details where post_id='${parent}'; commit;`
+          `begin; insert into private.posts(id,owner_id,kind,area,category_key,activity_key,status,edit_of,status_changed_at,content_updated_at) values('${copy}','${publicationOwner.id}','event','tourism_events','events','${eventActivity}','${copyStatus}','${parent}',statement_timestamp()-interval '${copyAge} days',statement_timestamp()-interval '${copyAge} days'); insert into private.event_details(post_id,starts_at,ends_at,timezone) select '${copy}',starts_at,ends_at,timezone from private.event_details where post_id='${parent}'; commit;`
         );
         retainedEdits.push(parent, copy);
       }
@@ -6840,17 +6977,17 @@ commit;`);
       record("native-post-lifecycle-expiry-notices-and-timed-deletion");
       // Hold placement owns the account guard before either owner deletion or
       // scheduled cleanup can remove data. A sweep skips a busy subject.
-      const heldRace = lifeEvent("archived", "Hold race deletion target", other.id, 31);
+      const heldRace = lifeEvent("archived", "Hold race deletion target", publicationOwner.id, 31);
       const raceHold = randomUUID();
       const holdBarrier = controlledSql(
-        `begin; select internal.lock_evidence_subject('${other.id}'); select 'EVIDENCE_LOCK_HELD'; select pg_sleep(3); insert into private.legal_holds(id,subject_id,reason,placed_by) values('${raceHold}','${other.id}','Synthetic concurrent hold','${staff.admin.id}'); commit;`
+        `begin; select internal.lock_evidence_subject('${publicationOwner.id}'); select 'EVIDENCE_LOCK_HELD'; select pg_sleep(3); insert into private.legal_holds(id,subject_id,reason,placed_by) values('${raceHold}','${publicationOwner.id}','Synthetic concurrent hold','${staff.admin.id}'); commit;`
       );
       try {
         await holdBarrier.barrier;
         const deletion = rpc(
           "delete_post",
           { p_post_id: heldRace, p_expected_revision: 1 },
-          other.token
+          publicationOwner.token
         );
         await awaitQueuedRpc("delete_post");
         await runLifecycle();
@@ -6865,13 +7002,18 @@ commit;`);
         );
       }
       assert.equal(
-        (await rpc("delete_post", { p_post_id: heldRace, p_expected_revision: 1 }, other.token))
-          .status,
+        (
+          await rpc(
+            "delete_post",
+            { p_post_id: heldRace, p_expected_revision: 1 },
+            publicationOwner.token
+          )
+        ).status,
         200
       );
       record("native-owner-and-lifecycle-deletion-serialize-with-legal-hold");
       for (let index = 0; index < 3; index++)
-        lifeEvent("expired", `Bounded notice ${index}`, other.id, 22);
+        lifeEvent("expired", `Bounded notice ${index}`, publicationOwner.id, 22);
       let newNotices = 0;
       for (let index = 0; index < 3; index++) {
         const batch = await rpc("run_post_lifecycle", { p_limit: 1 }, null, true);
@@ -6898,7 +7040,7 @@ commit;`);
       assert.ok(Number(costLine(overview.data, "database_bytes").used) > 0);
       assert.ok(overview.data.drivers.accounts >= 3);
       assert.ok(overview.data.largest_storage_accounts.length > 0);
-      for (const token of [staff.governorB.token, other.token, staff.admin.aal1])
+      for (const token of [staff.governorB.token, publicationOwner.token, staff.admin.aal1])
         assert.equal((await costOverview(token)).status, 403);
       assert.equal((await rpc("check_cost_alarms", {}, staff.admin.token)).status, 403);
       const freeDatabase = sql(
@@ -6986,7 +7128,7 @@ commit;`);
       const meanProbe = lifeEvent(
         "live",
         "Cost linked-media average",
-        other.id,
+        publicationOwner.id,
         0,
         "statement_timestamp()",
         "statement_timestamp()+interval '3 days'"
@@ -6994,7 +7136,7 @@ commit;`);
       lifeEvent(
         "live",
         "Cost empty-post average",
-        other.id,
+        publicationOwner.id,
         0,
         "statement_timestamp()",
         "statement_timestamp()+interval '3 days'"
@@ -7180,18 +7322,6 @@ commit;`);
       );
       record("native-identity-ban-fingerprint-kept-5-years-and-blocks-trials");
     }
-    const createTrackedUser = async (label) => {
-      const email = `foundation-${label}-${randomUUID()}@example.invalid`,
-        password = randomBytes(24).toString("base64url");
-      const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-      assert.equal(created.error, null);
-      const tracked = { id: uuid(created.data.user.id), member: client(), token: null };
-      users.push(tracked);
-      const login = await tracked.member.auth.signInWithPassword({ email, password });
-      assert.equal(login.error, null);
-      tracked.token = login.data.session.access_token;
-      return tracked;
-    };
     await testTrustedIdentity({
       rpc,
       foundationConnection: {
@@ -7211,6 +7341,7 @@ commit;`);
       createUser: createTrackedUser,
     });
     await testPublicNegotiable({
+      verificationFixture,
       controlledSql,
       awaitQueuedRpc,
       rpc,
@@ -7227,6 +7358,12 @@ commit;`);
         nativeStage = value;
       },
       createUser: createTrackedUser,
+      deleteTrackedUser: async (id) => {
+        const index = users.findIndex((user) => user.id === id);
+        assert.ok(index >= 0);
+        assert.equal((await admin.auth.admin.deleteUser(id)).error, null);
+        users.splice(index, 1);
+      },
       createReviewer: async () => {
         nativeStage = "negotiable real reviewer TOTP setup";
         const reviewer = await createTrackedUser("negotiable-reviewer");
@@ -7245,6 +7382,23 @@ commit;`);
           `insert into private.staff_roles(user_id,role,granted_by) values('${reviewer.id}','governor','${staff.admin.id}');`
         );
         return reviewer;
+      },
+    });
+    await testPublicationVerificationReadiness({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      rpc,
+      sql,
+      record,
+      createUser: createTrackedUser,
+      fixtureAdminId: staff.admin.id,
+      controlledSql,
+      awaitQueuedRpc,
+      stage: (value) => {
+        nativeStage = value;
       },
     });
     const types = cli(["gen", "types", "--local", "--schema", "api"]);

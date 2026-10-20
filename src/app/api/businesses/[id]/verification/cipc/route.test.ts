@@ -34,6 +34,26 @@ const OWNER = "owner-1";
 const BIZ = "11111111-1111-4111-8111-111111111111";
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 0xff, 0xd9]);
 
+/** A valid one-page PDF with no text layer, like a scan saved as PDF. */
+function scannedPdfBytes(): Uint8Array<ArrayBuffer> {
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>",
+  ];
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  out += offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("");
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new TextEncoder().encode(out);
+}
+
 const HOLDER_BIZ = "22222222-2222-4222-8222-222222222222";
 
 function seed(verification = "verified") {
@@ -68,6 +88,7 @@ function request(fields: Record<string, string | Blob>) {
 
 const params = Promise.resolve({ id: BIZ });
 const photo = () => new File([JPEG], "cert.jpg", { type: "image/jpeg" });
+const scan = () => new File([scannedPdfBytes()], "cert.pdf", { type: "application/pdf" });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -78,27 +99,37 @@ beforeEach(() => {
 describe("POST /api/businesses/[id]/verification/cipc", () => {
   it("requires sign-in", async () => {
     state.user = null;
-    const res = await POST(request({ file: photo() }) as never, { params });
+    const res = await POST(request({ file: scan() }) as never, { params });
     expect(res.status).toBe(401);
   });
 
   it("hides businesses the caller does not own", async () => {
     state.user = { id: "someone-else" };
-    const res = await POST(request({ file: photo() }) as never, { params });
+    const res = await POST(request({ file: scan() }) as never, { params });
     expect(res.status).toBe(404);
   });
 
   it("needs the ID Reviewed sticker first", async () => {
     seed("pending_review");
-    const res = await POST(request({ file: photo() }) as never, { params });
+    const res = await POST(request({ file: scan() }) as never, { params });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ code: "id_review_required" });
   });
 
   it("asks for the number when the document can't be read", async () => {
-    const res = await POST(request({ file: photo() }) as never, { params });
+    const res = await POST(request({ file: scan() }) as never, { params });
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ code: "registration_number_required" });
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("asks for the CIPC PDF instead of a photo", async () => {
+    const res = await POST(
+      request({ file: photo(), registrationNumber: "2020/123456/07" }) as never,
+      { params }
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ code: "pdf_required" });
     expect(upload).not.toHaveBeenCalled();
   });
 
@@ -114,10 +145,10 @@ describe("POST /api/businesses/[id]/verification/cipc", () => {
     expect(await res.json()).toMatchObject({ code: "unsupported_file" });
   });
 
-  it("stores the photo encrypted and opens a case with findings, never a decision", async () => {
+  it("stores the PDF encrypted and opens a case with findings, never a decision", async () => {
     const res = await POST(
       request({
-        file: photo(),
+        file: scan(),
         registrationNumber: "2020-123456-07",
         route: "representative",
       }) as never,
@@ -138,14 +169,29 @@ describe("POST /api/businesses/[id]/verification/cipc", () => {
     );
     expect(state.db!.tables.business_verification_files[0]).toMatchObject({
       kind: "owner_upload",
-      content_type: "image/jpeg",
+      content_type: "application/pdf",
       quarantined: false,
+    });
+  });
+
+  it("only keeps the address choice when the office can fill the profile", async () => {
+    const res = await POST(
+      request({
+        file: scan(),
+        registrationNumber: "2020/123456/07",
+        useOfficeAsAddress: "1",
+      }) as never,
+      { params }
+    );
+    expect(res.status).toBe(201);
+    expect(state.db!.tables.business_verifications[0]).toMatchObject({
+      apply_office_to_profile: false,
     });
   });
 
   it("tells the current holder when another owner claims their company", async () => {
     const res = await POST(
-      request({ file: photo(), registrationNumber: "2020/123456/07" }) as never,
+      request({ file: scan(), registrationNumber: "2020/123456/07" }) as never,
       { params }
     );
     expect(res.status).toBe(201);
@@ -162,7 +208,7 @@ describe("POST /api/businesses/[id]/verification/cipc", () => {
   });
 
   it("does not notify anyone when the number is unclaimed", async () => {
-    await POST(request({ file: photo(), registrationNumber: "2019/000001/07" }) as never, {
+    await POST(request({ file: scan(), registrationNumber: "2019/000001/07" }) as never, {
       params,
     });
     expect(notify).not.toHaveBeenCalled();

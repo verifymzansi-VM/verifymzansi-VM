@@ -7,6 +7,22 @@
 type Row = Record<string, unknown>;
 type Filter = (row: Row) => boolean;
 
+// Object containment used by the service's atomic JSON consent predicate.
+// This test double does not establish PostgreSQL concurrency behavior.
+function containsObject(actual: unknown, expected: Row): boolean {
+  return (
+    !!actual &&
+    typeof actual === "object" &&
+    !Array.isArray(actual) &&
+    Object.entries(expected).every(([key, value]) => {
+      const found = (actual as Row)[key];
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? containsObject(found, value as Row)
+        : found === value;
+    })
+  );
+}
+
 export function createFakeDb(seed: Record<string, Row[]>) {
   const tables: Record<string, Row[]> = {};
   for (const [name, rows] of Object.entries(seed)) tables[name] = rows.map((r) => ({ ...r }));
@@ -61,6 +77,10 @@ export function createFakeDb(seed: Record<string, Row[]>) {
       },
       eq: (col: string, v: unknown) => (filters.push((r) => r[col] === v), api),
       neq: (col: string, v: unknown) => (filters.push((r) => r[col] !== v), api),
+      contains: (col: string, value: Row) => (
+        filters.push((r) => containsObject(r[col], value)),
+        api
+      ),
       in: (col: string, vs: unknown[]) => (filters.push((r) => vs.includes(r[col])), api),
       not: (col: string, _op: string, _v: null) => (filters.push((r) => r[col] != null), api),
       is: (col: string, _v: null) => (filters.push((r) => r[col] == null), api),

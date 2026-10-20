@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Building2, Eye, IdCard } from "lucide-react";
 
+import { CipcDocumentGuide } from "@/components/business-verification/cipc-document-guide";
 import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
 import { InfoHero, SectionHeading } from "@/components/safety/info-hero";
@@ -58,7 +59,7 @@ const NEEDS_INFO = [
   },
   {
     title: "The document looked edited",
-    fix: "Download a fresh PDF from CIPC and send it as-is, without opening it in another app first.",
+    fix: "Download a fresh PDF from CIPC and send it as-is. Don't open and save it in another app, print it to PDF, or type on it.",
   },
   {
     title: "The status isn't In Business",
@@ -69,60 +70,6 @@ const NEEDS_INFO = [
     fix: "Send the PDF you downloaded from CIPC rather than a photo or scan.",
   },
 ];
-
-/** Annotated layout of a CIPC disclosure. Every value is fictional. */
-function ExampleDocument() {
-  const callout =
-    "ml-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-gold-400 text-[11px] font-bold text-brand-green-950";
-  return (
-    <figure className="surface-card overflow-hidden p-0">
-      <div className="space-y-3 bg-white p-4 font-mono text-[11px] leading-5 text-neutral-800 sm:p-6 sm:text-xs">
-        <p className="text-neutral-500">
-          Certificate issued by the Commissioner of Companies &amp; Intellectual Property Commission
-          on Monday, October 5, 2026
-        </p>
-        <p className="flex items-center font-bold">
-          Disclosure Certificate: Companies and Close Corporations<span className={callout}>1</span>
-        </p>
-        <div className="grid grid-cols-[9rem,1fr] gap-x-3">
-          <span>Registration Number</span>
-          <span className="flex items-center">
-            2020 / 123456 / 07<span className={callout}>2</span>
-          </span>
-          <span>Enterprise Name</span>
-          <span>EXAMPLE TRADING (PTY) LTD</span>
-          <span>Enterprise Status</span>
-          <span className="flex items-center">
-            In Business<span className={callout}>3</span>
-          </span>
-        </div>
-        <div>
-          <p className="flex items-center font-bold">
-            ADDRESS OF REGISTERED OFFICE<span className={callout}>4</span>
-          </p>
-          <p>12 MAIN ROAD · KWADLANGEZWA · EMPANGENI · KWA-ZULU NATAL · 3886</p>
-        </div>
-        <div>
-          <p className="flex items-center font-bold">
-            ACTIVE MEMBERS / DIRECTORS<span className={callout}>5</span>
-          </p>
-          <p>DLAMINI, THANDO · Director · 0000000000000</p>
-        </div>
-      </div>
-      <figcaption className="space-y-1 border-t border-border p-4 text-sm">
-        <p>
-          <strong>1</strong> Document type · <strong>2</strong> registration number ·{" "}
-          <strong>3</strong> must be In Business · <strong>4</strong> becomes the registered office
-          on your profile · <strong>5</strong> your verified ID must match a director, unless you
-          use the company representative route.
-        </p>
-        <p className="text-muted-foreground">
-          Example only — the company and ID number are fictional.
-        </p>
-      </figcaption>
-    </figure>
-  );
-}
 
 export default function BusinessVerificationHelpPage() {
   return (
@@ -179,7 +126,7 @@ export default function BusinessVerificationHelpPage() {
               ))}
             </ul>
             <div className="mt-6">
-              <ExampleDocument />
+              <CipcDocumentGuide />
             </div>
           </section>
 

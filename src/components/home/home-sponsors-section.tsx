@@ -20,7 +20,7 @@ export async function HomeSponsorsSection() {
     <section aria-labelledby="home-sponsors-title" className="border-t border-border/60">
       <div className="container-page py-12 sm:py-14">
         <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-green-300">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
             Business Sponsors
           </p>
           <h2 id="home-sponsors-title" className="section-title mt-2">

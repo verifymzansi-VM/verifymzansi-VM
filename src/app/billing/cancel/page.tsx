@@ -99,7 +99,7 @@ export default async function BillingCancelPage({
             Need help? Contact{" "}
             <a
               href={`mailto:${SUPPORT_CONTACT_EMAIL}`}
-              className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-green-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="rounded-sm font-medium text-brand-green-700 underline dark:text-brand-gold-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {SUPPORT_CONTACT_EMAIL}
             </a>

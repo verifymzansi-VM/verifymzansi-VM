@@ -43,7 +43,7 @@ const AREA_OPTIONS: ReadonlyArray<{
     label: "Mzansi Market",
     short: "Market",
     icon: ShoppingBag,
-    activeIcon: "text-brand-green-700 dark:text-brand-green-300",
+    activeIcon: "text-brand-green-700 dark:text-brand-gold-300",
   },
   {
     value: "MZANSI_BUSINESS",
@@ -92,11 +92,11 @@ function FeatureItem({ children, strong }: { children: ReactNode; strong?: boole
       className={cn(
         "flex items-start gap-2.5 text-sm leading-5",
         strong
-          ? "font-semibold text-brand-green-700 dark:text-brand-green-300"
+          ? "font-semibold text-brand-green-700 dark:text-brand-gold-300"
           : "text-foreground/85"
       )}
     >
-      <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:bg-brand-green/20 dark:text-brand-green-300">
+      <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-brand-green-700 dark:bg-brand-green/20 dark:text-brand-gold-300">
         <Check aria-hidden="true" className="h-3 w-3" strokeWidth={3} />
       </span>
       <span>{children}</span>

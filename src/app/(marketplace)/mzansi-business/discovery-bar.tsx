@@ -183,7 +183,7 @@ export function BusinessDiscoveryBar() {
             {filters.organisation ? (
               <Link
                 href={`/organisation/${filters.organisation}`}
-                className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-green-300"
+                className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-green-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-brand-gold-300"
               >
                 View {selectedOrganisation?.name ?? "programme"} page
                 <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />

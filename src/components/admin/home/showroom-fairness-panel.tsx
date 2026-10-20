@@ -66,7 +66,7 @@ export async function ShowroomFairnessPanel() {
         {report.zeroExposure.length === 0 ? (
           <p className="flex items-center gap-2 text-sm">
             <CheckCircle2
-              className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+              className="h-4 w-4 text-brand-green-700 dark:text-brand-gold-300"
               aria-hidden="true"
             />
             Every live post appeared in its showrooms in the last 24 hours.

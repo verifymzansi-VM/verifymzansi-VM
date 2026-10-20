@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
-import { getPublicRuntimeConfig } from "@/lib/public-runtime-config";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { InAppInstallSteps, IOSInstallSteps } from "@/components/pwa/install-steps";
+import { isDismissalActive, PROMPT_DISMISSED_STORAGE_KEY } from "@/lib/pwa/install-environment";
 
-const DISMISSED_STORAGE_KEY = "pwa-prompt-dismissed";
 const HOME_PROMPT_MIN_SCROLL_Y = 360;
 
+// Auth/verification flows need full attention; the showroom sections keep their
+// bottom edge for the feed controls. /install has its own buttons.
 const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/login",
   "/register",
@@ -18,32 +21,13 @@ const PROMPT_BLOCKED_PATH_PREFIXES = [
   "/auth",
   "/verification",
   "/error",
+  "/install",
   "/mzansi-market",
   "/mzansi-business",
   "/tourism-events",
 ];
 
-// Define the interface for the beforeinstallprompt event
-interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: string[];
-  readonly userChoice: Promise<{
-    outcome: "accepted" | "dismissed";
-    platform: string;
-  }>;
-  prompt(): Promise<void>;
-}
-
-function subscribeDisplayMode(callback: () => void) {
-  const mql = window.matchMedia("(display-mode: standalone)");
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
-}
-
 function safeGetLocalStorageItem(key: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
   try {
     return window.localStorage.getItem(key);
   } catch {
@@ -52,10 +36,6 @@ function safeGetLocalStorageItem(key: string) {
 }
 
 function safeSetLocalStorageItem(key: string, value: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
   try {
     window.localStorage.setItem(key, value);
   } catch {
@@ -63,211 +43,93 @@ function safeSetLocalStorageItem(key: string, value: string) {
   }
 }
 
-function isPromptDismissed() {
-  return safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) === "true";
-}
-
-function isIOSLikeDevice() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const userAgent = navigator.userAgent;
-  const platform = navigator.platform;
-
-  return (
-    /iPad|iPhone|iPod/.test(userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1)
+function readDismissed() {
+  if (typeof window === "undefined") return false;
+  const { active, migrate } = isDismissalActive(
+    safeGetLocalStorageItem(PROMPT_DISMISSED_STORAGE_KEY),
+    Date.now()
   );
-}
-
-function getIOSFallbackSnapshot(suppressed: boolean) {
-  if (typeof window === "undefined" || suppressed) {
-    return false;
-  }
-
-  // Don't show iOS fallback if dismissed from localStorage
-  if (isPromptDismissed()) {
-    return false;
-  }
-
-  return isIOSLikeDevice() && !window.matchMedia("(display-mode: standalone)").matches;
-}
-
-function getInstallLinkHref() {
-  const fallbackHref =
-    typeof window === "undefined"
-      ? "https://verifymzansi.com/"
-      : new URL("/", window.location.origin).toString();
-
-  try {
-    return new URL("/", getPublicRuntimeConfig().appUrl).toString();
-  } catch {
-    return fallbackHref;
-  }
+  if (migrate) safeSetLocalStorageItem(PROMPT_DISMISSED_STORAGE_KEY, migrate);
+  return active;
 }
 
 export function PwaInstallPrompt() {
   const pathname = usePathname();
   const isPlaywright = isPlaywrightTestMode();
-  const installLinkHref = useMemo(() => getInstallLinkHref(), []);
-  const [dismissed, setDismissed] = useState(() => isPromptDismissed());
+  const [dismissed, setDismissed] = useState(readDismissed);
   const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
     (prefix) => pathname != null && (pathname === prefix || pathname.startsWith(`${prefix}/`))
   );
   const promptSuppressed = isPlaywright || dismissed || promptBlockedForRoute;
-  const isIOSFallback = useSyncExternalStore(
-    promptSuppressed ? () => () => {} : subscribeDisplayMode,
-    () => getIOSFallbackSnapshot(promptSuppressed),
-    () => false
-  );
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [showIOSHelp, setShowIOSHelp] = useState(false);
-  const iosDialogRef = useRef<HTMLDivElement>(null);
-  const homePromptScrollHandlerRef = useRef<(() => void) | null>(null);
+  const { environment, canPrompt, promptInstall } = usePwaInstall(!promptSuppressed);
+  const needsHelp = environment === "ios" || environment === "in-app";
+  const eligible = needsHelp || (environment === "browser" && canPrompt);
 
-  const closeIOSHelp = useCallback(() => setShowIOSHelp(false), []);
-  const showInstallPrompt = useCallback(() => {
-    if (homePromptScrollHandlerRef.current) {
-      window.removeEventListener("scroll", homePromptScrollHandlerRef.current);
-      homePromptScrollHandlerRef.current = null;
-    }
+  const [revealed, setRevealed] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const helpDialogRef = useRef<HTMLDivElement>(null);
 
-    if (pathname !== "/") {
-      setShowPrompt(true);
+  const closeHelp = useCallback(() => setShowHelp(false), []);
+
+  // On the home page, wait until the hero has been scrolled past.
+  useEffect(() => {
+    if (!eligible) {
+      queueMicrotask(() => {
+        setRevealed(false);
+        setShowHelp(false);
+      });
       return;
     }
-
-    const revealAfterHero = () => {
-      if (window.scrollY < HOME_PROMPT_MIN_SCROLL_Y) {
-        return;
-      }
-      window.removeEventListener("scroll", revealAfterHero);
-      homePromptScrollHandlerRef.current = null;
-      setShowPrompt(true);
-    };
-
-    revealAfterHero();
-    if (window.scrollY < HOME_PROMPT_MIN_SCROLL_Y) {
-      homePromptScrollHandlerRef.current = revealAfterHero;
-      window.addEventListener("scroll", revealAfterHero, { passive: true });
+    if (pathname !== "/" || window.scrollY >= HOME_PROMPT_MIN_SCROLL_Y) {
+      queueMicrotask(() => setRevealed(true));
+      return;
     }
-  }, [pathname]);
+    // Navigating back to the top of the home page hides it again until the hero is passed.
+    queueMicrotask(() => setRevealed(false));
+    const revealAfterHero = () => {
+      if (window.scrollY < HOME_PROMPT_MIN_SCROLL_Y) return;
+      window.removeEventListener("scroll", revealAfterHero);
+      setRevealed(true);
+    };
+    window.addEventListener("scroll", revealAfterHero, { passive: true });
+    return () => window.removeEventListener("scroll", revealAfterHero);
+  }, [eligible, pathname]);
 
   // Focus the dialog when it opens and handle Escape key
   useEffect(() => {
-    if (!showIOSHelp) return;
-    iosDialogRef.current?.focus();
+    if (!showHelp) return;
+    helpDialogRef.current?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        closeIOSHelp();
+        closeHelp();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showIOSHelp, closeIOSHelp]);
-
-  // Reset visible/deferred state whenever suppression becomes active so stale
-  // UI never remains after a route change, dismissal, or Playwright mode flip.
-  useEffect(() => {
-    if (!promptSuppressed) {
-      return;
-    }
-    if (homePromptScrollHandlerRef.current) {
-      window.removeEventListener("scroll", homePromptScrollHandlerRef.current);
-      homePromptScrollHandlerRef.current = null;
-    }
-    queueMicrotask(() => {
-      setShowPrompt(false);
-      setShowIOSHelp(false);
-      setDeferredPrompt(null);
-    });
-  }, [promptSuppressed]);
-
-  useEffect(() => {
-    if (promptSuppressed) {
-      return;
-    }
-
-    const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
-
-    // iOS Safari does not fire beforeinstallprompt; show manual A2HS guidance.
-    if (isIOSLikeDevice() && !isStandalone) {
-      queueMicrotask(() => {
-        showInstallPrompt();
-      });
-    }
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent Chrome 67 and earlier from automatically showing the prompt
-      e.preventDefault();
-      // Stash the event so it can be triggered later.
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Show the prompt UI
-      showInstallPrompt();
-    };
-
-    const handleAppInstalled = () => {
-      // Hide the prompt if the app was installed successfully
-      setShowPrompt(false);
-      setDeferredPrompt(null);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", handleAppInstalled);
-      if (homePromptScrollHandlerRef.current) {
-        window.removeEventListener("scroll", homePromptScrollHandlerRef.current);
-        homePromptScrollHandlerRef.current = null;
-      }
-    };
-  }, [promptSuppressed, showInstallPrompt]);
+  }, [showHelp, closeHelp]);
 
   const handleInstallClick = async () => {
-    if (isIOSFallback) {
-      setShowIOSHelp(true);
+    if (needsHelp) {
+      setShowHelp(true);
       return;
     }
-
-    if (!deferredPrompt) return;
-
-    try {
-      // Show the install prompt
-      await deferredPrompt.prompt();
-
-      // Guard against browsers that reject userChoice; keep the prompt usable.
-      const choice = await deferredPrompt.userChoice.catch(() => null);
-      if (!choice) {
-        setShowPrompt(true);
-        return;
-      }
-
-      // We no longer need the prompt. Clear it up.
-      setDeferredPrompt(null);
-      setShowPrompt(false);
-    } catch {
-      setShowPrompt(true);
-    }
+    // Saying no in Chrome's own dialog counts as closing the banner.
+    if ((await promptInstall()) === "dismissed") handleDismiss();
   };
 
   const handleDismiss = () => {
-    setShowPrompt(false);
-    setShowIOSHelp(false);
+    setShowHelp(false);
     setDismissed(true);
-    safeSetLocalStorageItem(DISMISSED_STORAGE_KEY, "true");
+    safeSetLocalStorageItem(PROMPT_DISMISSED_STORAGE_KEY, String(Date.now()));
   };
 
-  if (promptSuppressed) {
+  if (promptSuppressed || !eligible || !revealed) {
     return null;
   }
 
-  if (!showPrompt && !isIOSFallback) {
-    return null;
-  }
+  const inApp = environment === "in-app";
+  const helpTitle = inApp ? "Open in your browser" : "Install on iPhone";
 
   return (
     <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
@@ -276,15 +138,13 @@ export function PwaInstallPrompt() {
         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/10 to-transparent pointer-events-none" />
 
         <div className="flex items-center gap-3 relative z-10">
-          <div className="icon-tile h-11 w-11 bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-green-300">
+          <div className="icon-tile h-11 w-11 bg-brand-green/10 text-brand-green dark:bg-brand-green/15 dark:text-brand-gold-300">
             <Download className="w-5 h-5" />
           </div>
           <div>
             <h3 className="font-semibold text-sm">Install App</h3>
             <p className="text-xs text-muted-foreground mr-1">
-              {isIOSFallback
-                ? "Open the install link, then add it to Home Screen"
-                : "Fast & easy access to VerifyMzansi"}
+              {inApp ? "Open in your browser to install" : "Free, no app store needed"}
             </p>
           </div>
         </div>
@@ -307,44 +167,40 @@ export function PwaInstallPrompt() {
         </div>
       </div>
 
-      {showIOSHelp && (
+      {showHelp && (
         <div
           className="fixed inset-0 z-[120] bg-black/70 px-4 py-6 flex items-end md:items-center justify-center"
           role="presentation"
           onClick={(e) => {
-            if (e.target === e.currentTarget) closeIOSHelp();
+            if (e.target === e.currentTarget) closeHelp();
           }}
         >
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Install on iPhone"
-            ref={iosDialogRef}
+            aria-label={helpTitle}
+            ref={helpDialogRef}
             tabIndex={-1}
             className="w-full max-w-md rounded-3xl border border-border/60 bg-background p-6 elev-xl safe-area-inset-bottom"
           >
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="text-base font-semibold">Install on iPhone</h3>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3 className="text-base font-semibold">{helpTitle}</h3>
               <button
                 type="button"
-                onClick={closeIOSHelp}
+                onClick={closeHelp}
                 className="rounded-full p-1 text-muted-foreground hover:bg-muted/50"
                 aria-label="Close install instructions"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <ol className="mt-3 space-y-2 text-sm text-muted-foreground list-decimal pl-5">
-              <li>Open the install link on your iPhone.</li>
-              <li>Tap the Share button in Safari.</li>
-              <li>Scroll and tap Add to Home Screen.</li>
-              <li>Tap Add to finish installation.</li>
-            </ol>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <Button size="sm" asChild className="rounded-full">
-                <a href={installLinkHref}>Open install link</a>
-              </Button>
-              <Button size="sm" onClick={closeIOSHelp} className="rounded-full">
+            {inApp ? (
+              <InAppInstallSteps pageUrl={new URL("/install", window.location.origin).toString()} />
+            ) : (
+              <IOSInstallSteps />
+            )}
+            <div className="mt-5 flex justify-end">
+              <Button size="sm" onClick={closeHelp} className="rounded-full">
                 Got it
               </Button>
             </div>

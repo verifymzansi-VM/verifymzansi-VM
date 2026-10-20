@@ -6,6 +6,9 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { officeToLocation } from "@/lib/cipc/address";
+import { readCustomerAccess } from "@/lib/forms/customer-access";
+import { hasSpoofingChars } from "@/lib/validations/shared";
 import { createNotification } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
 import {
@@ -61,6 +64,8 @@ type CaseRow = {
   seen: Record<string, unknown> | null;
   linked_case_id: string | null;
   checks: Record<string, unknown> | null;
+  /** The owner asked to use the registered office as the business address. */
+  apply_office_to_profile?: boolean;
   updated_at: string;
 };
 
@@ -424,6 +429,102 @@ async function grantSticker(admin: Admin, row: CaseRow, evidence: Evidence, expi
   }
 }
 
+/** Trimmed, length-capped text without hidden or look-alike characters, else null. */
+function clean(value: string, max: number): string | null {
+  const text = value.replace(/\s+/g, " ").trim().slice(0, max).trim();
+  return text && !hasSpoofingChars(text) ? text : null;
+}
+
+/**
+ * Fills the profile's location from the approved registered office when the
+ * owner asked for it at upload. The street address follows the owner's
+ * publish choice (an unpublished address is never stored). Best effort: the
+ * sticker stands even if this fails, and the owner can still use the
+ * "Use registered office" button.
+ */
+async function applyOfficeToProfile(admin: Admin, row: CaseRow, input: DecisionInput) {
+  if (row.kind !== "cipc" || !row.apply_office_to_profile) return;
+  const office = caseOffice(row);
+  // Staff may have corrected the office, so check the place names again.
+  const province = office?.province ? normalizeProvinceName(office.province) : null;
+  const city = province && office?.city ? resolveCityName(province, office.city) : null;
+  const location =
+    office && province && city
+      ? officeToLocation({
+          streetLines: office.streetLines ?? [],
+          suburb: office.suburb ?? null,
+          city,
+          province,
+          postalCode: office.postalCode ?? null,
+          cityKnown: true,
+        })
+      : null;
+  if (!location) return;
+  // The same limits the profile form applies to these fields.
+  const town = clean(location.town, 120);
+  const street = clean(location.address, 300);
+  try {
+    const { data: biz, error: readError } = await admin
+      .from("businesses")
+      .select("business_name, category_details")
+      .eq("id", row.business_id)
+      .eq("owner_id", row.owner_id)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!biz) return;
+    const access = (biz?.category_details as { customer_access?: { version?: number } } | null)
+      ?.customer_access;
+    const publishStreet =
+      access?.version === 2 && readCustomerAccess(access).publishAddress && !!street;
+    let update = admin
+      .from("businesses")
+      .update({
+        location_province: location.province,
+        location_city: location.city,
+        location_town: town,
+        ...(publishStreet ? { location_address: street } : {}),
+      })
+      .eq("id", row.business_id)
+      .eq("owner_id", row.owner_id);
+    // Recheck consent in the write predicate, including after a row-lock wait.
+    // Choosing an office for a location does not itself publish its street.
+    if (publishStreet)
+      update = update.contains("category_details", {
+        customer_access: { version: 2, publishAddress: true },
+      });
+    const { data: applied, error } = await update.select("id").maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!applied) return;
+    await Promise.all([
+      logAuditEvent({
+        actorId: input.actorId,
+        actorRole: input.actorRole,
+        action: "business_verification_office_applied",
+        targetType: "business",
+        targetId: row.business_id,
+        area: "MZANSI_BUSINESS",
+        metadata: { caseId: row.id, streetAddress: publishStreet },
+      }),
+      createNotification({
+        userId: row.owner_id,
+        type: "info",
+        title: "Business address set from CIPC",
+        message:
+          `${(biz?.business_name as string | undefined) ?? "Your business"}: we used your registered office as your business address. You can change it any time.`.slice(
+            0,
+            300
+          ),
+        href: `/post/edit-business/${row.business_id}`,
+      }),
+    ]);
+  } catch (error) {
+    log.error("Could not apply the registered office to the profile", {
+      caseId: row.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 /**
  * Claim the approval on the case first (compare-and-set), then grant the
  * sticker. If granting fails the case is returned to the queue, so a sticker
@@ -459,6 +560,7 @@ async function approveThenGrant(
     }
     throw error;
   }
+  await applyOfficeToProfile(admin, row, input);
   if (row.kind === "cipc") {
     // A renewal supersedes the previous approval, so only the live case can
     // later be revoked (revoking an old case must not wipe the renewal).
@@ -529,7 +631,7 @@ export async function decideBusinessVerification(
   const { data, error } = await admin
     .from("business_verifications")
     .select(
-      "id, business_id, owner_id, kind, route, status, registration_number, parsed, registered_office, admin_copy, representative, seen, linked_case_id, checks, updated_at"
+      "id, business_id, owner_id, kind, route, status, registration_number, parsed, registered_office, admin_copy, representative, seen, linked_case_id, checks, apply_office_to_profile, updated_at"
     )
     .eq("id", input.caseId)
     .maybeSingle();

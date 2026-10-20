@@ -58,7 +58,7 @@ export function ListingAttributeFilters({
     <div className="space-y-3 rounded-xl border border-border/70 bg-muted/40 p-3.5">
       <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
         <selectedCategory.icon
-          className="h-4 w-4 text-brand-green-700 dark:text-brand-green-300"
+          className="h-4 w-4 text-brand-green-700 dark:text-brand-gold-300"
           aria-hidden="true"
         />
         {selectedCategory.label} filters
@@ -248,7 +248,7 @@ function FilterAttributeField({
                   className={cn(
                     "flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-within:ring-2 focus-within:ring-ring",
                     isChecked
-                      ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:bg-brand-green/15 dark:text-brand-green-200"
+                      ? "border-brand-green-600 bg-brand-green-50 text-brand-green-800 dark:bg-brand-green/15 dark:text-brand-gold-200"
                       : "border-border bg-card text-muted-foreground hover:border-foreground/25"
                   )}
                 >

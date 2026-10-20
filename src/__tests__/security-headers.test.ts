@@ -100,6 +100,13 @@ describe("buildCsp", () => {
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
   });
 
+  it("adds unsafe-eval to script-src only when allowDevEval is set", () => {
+    const scripts = buildCsp(null, { allowDevEval: true })
+      .split("; ")
+      .find((value) => value.startsWith("script-src "))!;
+    expect(scripts.split(" ")).toContain("'unsafe-eval'");
+  });
+
   it("uses nonce-based scripts with explicit URL allowlists when nonce provided", () => {
     const csp = buildCsp("abc123");
     expect(csp).toContain(

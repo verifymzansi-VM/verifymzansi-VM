@@ -3,6 +3,7 @@ import { AcquisitionCapture } from "@/components/analytics/acquisition-capture";
 import { cookies, headers } from "next/headers";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
+import { SERVICE_WORKER_VERSION } from "@/lib/service-worker-version";
 
 const fontDisplay = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -28,6 +29,7 @@ import { PointerGlow } from "@/components/marketing/pointer-glow";
 import { AutoReveal } from "@/components/marketing/auto-reveal";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { EARLY_INSTALL_PROMPT_CAPTURE } from "@/lib/pwa/install-prompt-store";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { PrelaunchBanner } from "@/components/layout/prelaunch-banner";
@@ -99,56 +101,65 @@ if (typeof window !== "undefined" && "serviceWorker" in navigator) {
 }
 `;
 
+/**
+ * Auth pages recover from an outdated service worker or its caches, which once
+ * served stale sign-in pages: unregister it, clear its caches and reload once.
+ * The current worker never caches pages or scripts, so it is left alone and a
+ * normal visit loads once (reloading every time replayed the page on each visit).
+ */
 const AUTH_SW_CACHE_RESET = `
 (function () {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
   var marker = "vmzAuthCacheReset";
+  var currentVersion = "v=${SERVICE_WORKER_VERSION}";
   var url = new URL(window.location.href);
-  var markerPresent = url.searchParams.get(marker) === "1";
 
-  if (markerPresent) {
+  if (url.searchParams.get(marker) === "1") {
     url.searchParams.delete(marker);
     window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     return;
   }
 
-  var clearCaches =
-    typeof caches !== "undefined"
-      ? caches
-          .keys()
-          .then(function (keys) {
-            return Promise.allSettled(
-              keys
-                .filter(function (key) {
-                  return key.indexOf("verifymzansi-") === 0;
-                })
-                .map(function (key) {
-                  return caches.delete(key);
-                })
-            );
-          })
-          .catch(function () {})
-      : Promise.resolve();
+  navigator.serviceWorker
+    .getRegistrations()
+    .then(function (registrations) {
+      var outdated = registrations.filter(function (registration) {
+        var worker = registration.active || registration.waiting || registration.installing;
+        return !worker || worker.scriptURL.indexOf(currentVersion) === -1;
+      });
+      if (outdated.length === 0) return;
 
-  var clearWorkers =
-    "serviceWorker" in navigator
-      ? navigator.serviceWorker
-          .getRegistrations()
-          .then(function (registrations) {
-            return Promise.allSettled(
-              registrations.map(function (registration) {
-                return registration.unregister();
+      var clearCaches =
+        typeof caches !== "undefined"
+          ? caches
+              .keys()
+              .then(function (keys) {
+                return Promise.allSettled(
+                  keys
+                    .filter(function (key) {
+                      return key.indexOf("verifymzansi-") === 0;
+                    })
+                    .map(function (key) {
+                      return caches.delete(key);
+                    })
+                );
               })
-            );
-          })
-          .catch(function () {})
-      : Promise.resolve();
+              .catch(function () {})
+          : Promise.resolve();
 
-  Promise.allSettled([clearCaches, clearWorkers]).then(function () {
-    url.searchParams.set(marker, "1");
-    window.location.replace(url.toString());
-  });
+      return Promise.allSettled(
+        outdated
+          .map(function (registration) {
+            return registration.unregister();
+          })
+          .concat([clearCaches])
+      ).then(function () {
+        url.searchParams.set(marker, "1");
+        window.location.replace(url.toString());
+      });
+    })
+    .catch(function () {});
 })();
 `;
 
@@ -209,7 +220,11 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png?v=20260924",
   },
-  manifest: "/manifest.json?v=20261007",
+  appleWebApp: {
+    capable: true,
+    title: "VerifyMzansi",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
@@ -217,7 +232,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f7f7f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0f0d" },
+    { media: "(prefers-color-scheme: dark)", color: "#032820" },
   ],
 };
 
@@ -254,6 +269,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           nonce={nonce}
           data-cfasync="false"
           dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }}
+        />
+        <script
+          id="install-prompt-capture"
+          nonce={nonce}
+          data-cfasync="false"
+          dangerouslySetInnerHTML={{ __html: EARLY_INSTALL_PROMPT_CAPTURE }}
         />
         <style nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_CANVAS_CSS }} />
         {/* Prevent iOS Safari from auto-detecting phone numbers, dates, emails,
