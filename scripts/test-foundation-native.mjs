@@ -239,7 +239,9 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
         return;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
-    throw new Error("Synthetic first RPC did not queue on its lock");
+    const error = new Error("Synthetic first RPC did not queue on its lock");
+    error.code = "RPC_LOCK_NOT_OBSERVED";
+    throw error;
   };
   const options = {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -6036,6 +6038,7 @@ commit;`);
         }
       }
       record("native-owner-edit-state-delete-expired-session-during-wait-rolls-back");
+      nativeStage = "live edit event pause archive and deletion controls";
       const eventRevision = 1;
       assert.equal((await createEdit(eventLive, eventRevision)).status, 200);
       const stateChange = (id, rev, action) =>
@@ -6096,6 +6099,8 @@ commit;`);
         ["archive", true],
         ["archive", false],
       ]) {
+        const raceLabel = `live edit ${rival} approve ${approveFirst ? "first" : "second"}`;
+        nativeStage = `${raceLabel} setup`;
         const fixture = await raceFixture(`Race ${rival} ${approveFirst ? "late" : "early"}`);
         const rivalCall = () =>
           rival === "discard"
@@ -6103,15 +6108,31 @@ commit;`);
             : stateChange(fixture.id, 1, "archive");
         const rivalName = rival === "discard" ? "discard_post_edit" : "set_post_state";
         const raceBarrier = controlledSql(
-          `begin; select id from private.posts where id='${fixture.id}' for update; select 'EVIDENCE_LOCK_HELD'; select pg_sleep(2); commit;`
+          `begin; set local idle_in_transaction_session_timeout='30s'; select id from private.posts where id='${fixture.id}' for update; select 'EVIDENCE_LOCK_HELD:'||pg_backend_pid();`,
+          { hold: true }
         );
+        const settle = (request) =>
+          request.then(
+            (value) => ({ value }),
+            (error) => ({ error })
+          );
+        let first, second;
         try {
           await raceBarrier.barrier;
-          const first = approveFirst ? approveRaced(fixture) : rivalCall();
+          nativeStage = `${raceLabel} first request queued`;
+          first = settle(approveFirst ? approveRaced(fixture) : rivalCall());
           await awaitQueuedRpc(approveFirst ? "moderate_post" : rivalName);
-          const second = approveFirst ? rivalCall() : approveRaced(fixture);
-          const [one, two, code] = await Promise.all([first, second, raceBarrier.done]);
-          assert.equal(code, 0);
+          nativeStage = `${raceLabel} second request queued`;
+          second = settle(approveFirst ? rivalCall() : approveRaced(fixture));
+          await awaitQueuedRpc(approveFirst ? rivalName : "moderate_post");
+          assert.ok(Number.isSafeInteger(raceBarrier.backendPid));
+          nativeStage = `${raceLabel} explicit release and completion`;
+          raceBarrier.release();
+          assert.equal(await raceBarrier.done, 0);
+          const outcomes = await Promise.all([first, second]);
+          for (const outcome of outcomes) if (outcome.error) throw outcome.error;
+          const [one, two] = outcomes.map((outcome) => outcome.value);
+          nativeStage = `${raceLabel} outcome and history assertions`;
           const [approved, rivalResult] = approveFirst ? [one, two] : [two, one];
           const merges = sql(
             `select count(*) from private.moderation_log where post_id='${fixture.id}' and edit_id='${fixture.editId}' and decision='approve';`
@@ -6144,6 +6165,8 @@ commit;`);
           );
         } finally {
           raceBarrier.close();
+          await raceBarrier.done;
+          await Promise.all([first, second]);
         }
       }
       // Every posts column is classified for create_post_edit/apply_post_edit:
@@ -7446,6 +7469,19 @@ commit;`);
       id: "next-native-check",
       status: "FAIL",
       reason: `Assertion or local operation failed at ${nativeStage}; prior check IDs delimit the failure`,
+      failureCode: [
+        "RPC_LOCK_NOT_OBSERVED",
+        "ENOENT",
+        "EPERM",
+        "ENOBUFS",
+        "ETIMEDOUT",
+        "EPIPE",
+      ].includes(error?.code)
+        ? error.code
+        : ["AbortError", "TimeoutError"].includes(error?.name)
+          ? error.name
+          : "UNCLASSIFIED",
+      sqlState: String(error?.stderr ?? "").match(/ERROR:\s+([A-Z0-9]{5}):/)?.[1] ?? null,
       ...(diagnostic ? { diagnostic } : {}),
     });
     process.stderr.write(
