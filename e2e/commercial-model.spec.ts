@@ -24,10 +24,9 @@ test.describe("Commercial model", () => {
     await expect(main.getByTestId("retail-offer-half_year")).toContainText("Save R50");
     await expect(main.getByTestId("retail-offer-year")).toHaveCount(0);
     await expect(main.getByText("Until the event ends")).toBeVisible();
-    await expect(main.getByRole("link", { name: /request a proposal/i })).toHaveAttribute(
-      "href",
-      "/contact?topic=organisation_proposal"
-    );
+    await expect(
+      main.getByRole("link", { name: "Request a sponsor proposal", exact: true })
+    ).toHaveAttribute("href", "/contact?topic=organisation_proposal");
     await expect(main).not.toContainText(/R650|R450|12 months|Growth|Starter/);
 
     // The section picker changes where the slot is used, not the price.

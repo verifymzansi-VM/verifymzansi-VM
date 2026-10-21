@@ -18,6 +18,12 @@ const mediaPositionUtilities = plugin(({ addUtilities }) => {
   addUtilities(utilities);
 });
 
+// Raw media queries in theme.screens disable Tailwind 3's min/max variants.
+// Keep the height condition separate so max-sm mobile layouts still compile.
+const shortViewportVariant = plugin(({ addVariant }) => {
+  addVariant("short", "@media (max-height: 820px)");
+});
+
 const config: Config = {
   darkMode: ["class"],
   content: ["./src/components/**/*.{ts,tsx}", "./src/app/**/*.{ts,tsx}", "./src/lib/**/*.{ts,tsx}"],
@@ -30,8 +36,6 @@ const config: Config = {
       lg: "1024px",
       xl: "1280px",
       "2xl": "1440px",
-      // Short laptop screens and zoomed browsers: tighten single-screen pages so nothing is cut.
-      short: { raw: "(max-height: 820px)" },
     },
 
     extend: {
@@ -314,7 +318,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [tailwindcssAnimate, mediaPositionUtilities],
+  plugins: [tailwindcssAnimate, mediaPositionUtilities, shortViewportVariant],
   safelist: [
     // Trust-level badge colors (dynamically applied based on seller verification status)
     "bg-trust-unregistered",

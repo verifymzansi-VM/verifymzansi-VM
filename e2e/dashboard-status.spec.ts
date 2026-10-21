@@ -37,7 +37,7 @@ test.describe("Dashboard verification state", () => {
 
       await expect(page).toHaveURL(/\/dashboard$/);
       await expect(page.getByRole("heading", { name: /^hi,/i })).toBeVisible();
-      await expect(page.getByText(/^verified$/i)).toBeVisible();
+      await expect(page.getByText("ID reviewed", { exact: true })).toBeVisible();
       await expect(page.getByText(/steps left/i)).toHaveCount(0);
       await expect(page.getByText(/verification under review/i)).toHaveCount(0);
 

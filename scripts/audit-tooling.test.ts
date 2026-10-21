@@ -5,6 +5,9 @@ import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import postcss, { type AtRule } from "postcss";
+import tailwindcss from "tailwindcss";
+import tailwindConfig from "../tailwind.config";
 import {
   execute,
   redact,
@@ -23,6 +26,27 @@ import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
 import { assertKycAuthenticatedScenarios } from "./lib/kyc-browser-evidence";
+
+test("responsive CSS includes both mobile dialog docking and short-screen spacing", async () => {
+  const result = await postcss([
+    tailwindcss({
+      ...tailwindConfig,
+      content: [{ raw: '<div class="max-sm:bottom-0 short:p-4"></div>' }],
+      safelist: [],
+    }),
+  ]).process("@tailwind utilities;", { from: undefined });
+  const mediaFor = (selector: string) => {
+    let media: AtRule | undefined;
+    result.root.walkRules(selector, (rule) => {
+      assert.equal(rule.parent?.type, "atrule");
+      media = rule.parent as AtRule;
+    });
+    assert.ok(media, `Missing responsive utility ${selector}`);
+    return media;
+  };
+  assert.equal(mediaFor(".max-sm\\:bottom-0").params, "not all and (min-width: 640px)");
+  assert.equal(mediaFor(".short\\:p-4").params, "(max-height: 820px)");
+});
 
 test("authenticated KYC evidence cannot be replaced by smoke tests, missing projects, skips or duplicates", () => {
   const titles = [
