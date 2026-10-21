@@ -204,3 +204,7 @@ docs/backend-foundation/tools/probe-staff-event-flags-draft.mjs
 # Public verification interface; private one-off type preparation remains local.
 !/docs/backend-foundation/publication-verification-contract.md
 /docs/backend-foundation/tools/prepare-publication-readiness-types.mjs
+
+# Upstream browser-development tooling is installed locally, outside the site
+# dependency graph. Keep its independent manifests and source out of releases.
+/.agents/skills/next-browser/
