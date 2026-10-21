@@ -50,7 +50,7 @@ export default async function OrganisationsAdminPage() {
     <div className="space-y-6">
       <PageHeader
         title="Organisations"
-        description="Founding Organisation Programme: invitation only, six months at no platform fee, capped sponsored cohort, no automatic renewal. Organisations confirm affiliation; they never award VerifyMzansi verification or change ranking."
+        description="Founding Organisation Programme: invitation only, 90 days at no platform fee, capped sponsored cohort, no automatic renewal. Organisations confirm affiliation; they never award VerifyMzansi verification or change ranking."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Organisations" }]}
       />
 
