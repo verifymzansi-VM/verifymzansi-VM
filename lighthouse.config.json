@@ -1,7 +1,7 @@
 {
   "hostname": "127.0.0.1",
   "port": 3000,
-  "paths": ["/", "/mzansi-market", "/pricing", "/verify-buyer"],
+  "paths": ["/", "/mzansi-market", "/pricing", "/trust-safety"],
   "serverReadyTimeoutMs": 120000,
   "chromeFlags": "--headless=new --no-sandbox --disable-dev-shm-usage",
   "thresholds": {

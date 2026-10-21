@@ -60,10 +60,6 @@
       "description": "Data Subject Access Requests (POPIA)"
     },
     {
-      "name": "Buyer",
-      "description": "Buyer verification"
-    },
-    {
       "name": "Admin",
       "description": "Admin panel operations"
     },
@@ -679,43 +675,6 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
-          }
-        }
-      }
-    },
-    "/api/verify-buyer": {
-      "post": {
-        "tags": ["Buyer"],
-        "summary": "Verify a buyer before a transaction",
-        "operationId": "verifyBuyer",
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["buyerId"],
-                "properties": {
-                  "buyerId": {
-                    "type": "string",
-                    "format": "uuid"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Buyer verification result"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }

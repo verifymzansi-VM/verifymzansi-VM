@@ -26,7 +26,7 @@ import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 export const metadata = {
   title: "Events in South Africa",
   description:
-    "Find upcoming South African events, markets, shows, community gatherings, and live experiences posted by identity-reviewed hosts, organisers, and businesses.",
+    "Find upcoming South African events, markets, shows, community gatherings, and live experiences posted by ID-reviewed hosts, organisers, and businesses.",
 };
 
 export const revalidate = 60;

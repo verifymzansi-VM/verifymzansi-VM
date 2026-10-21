@@ -46,10 +46,10 @@ describe("public trust pages", () => {
     expect(screen.getAllByText("security@verifymzansi.com").length).toBeGreaterThan(0);
     expect(screen.getByText(/VerifyMzansi verifies people who post/i)).toBeInTheDocument();
     // The verification journey and every trust tier label are explained.
-    for (const step of ["Phone confirmed", "ID & selfie reviewed", "Area shared"]) {
+    for (const step of ["Phone verified", "ID & selfie reviewed", "Area shared"]) {
       expect(screen.getByRole("heading", { name: step })).toBeInTheDocument();
     }
-    for (const label of ["Pending Review", "Incomplete", "Unregistered", "ID Reviewed Pro"]) {
+    for (const label of ["Pending review", "Incomplete", "Unregistered", "ID reviewed"]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
   });

@@ -44,14 +44,14 @@ const SCAM_TYPES = [
   {
     icon: MessageSquare,
     title: "Off-platform chats",
-    description: "Pushing you to WhatsApp or Telegram straight away.",
+    description: "Moving you to a new number or Telegram before you have seen anything.",
     redFlags: ["Links to “payment portals”", "Asks for an OTP or PIN"],
     whatToDo: ["Use the enquiry form or keep your WhatsApp history", "Never share an OTP or PIN"],
   },
 ] as const;
 
 const GOLDEN_RULES = [
-  "Deal with ID Reviewed accounts",
+  "Deal with ID-reviewed accounts",
   "Never pay before inspecting",
   "Meet in public, in daylight",
   "Tell someone where you are going",

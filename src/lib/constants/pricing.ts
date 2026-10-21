@@ -108,7 +108,7 @@ const RETAIL_FEATURES: PlanDefinition["features"] = {
 const AREA_PLAN_NAMES: Record<MarketplaceArea, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MZANSI_BUSINESS: "Mzansi Business",
-  PROMOTIONS_EVENTS: "Tourism",
+  PROMOTIONS_EVENTS: "Tourism & Events",
 };
 
 const AREA_CAPACITY_KEY: Record<
@@ -365,7 +365,7 @@ export function getPlanFeatureItems(
       : "Videos",
     features.videoAllowed
   );
-  push("Optional Boost, Featured and Urgent add-ons", features.boostAllowed);
+  push("Optional Urgent label add-on", features.boostAllowed);
   push("No automatic renewal");
 
   return items;

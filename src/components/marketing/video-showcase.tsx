@@ -93,7 +93,7 @@ export function VideoShowcase({ className }: { className?: string }) {
         <div className="absolute inset-x-3 top-3 flex items-center justify-between text-[11px] font-semibold text-white">
           <span className="inline-flex items-center gap-1 rounded-full bg-black/35 px-2.5 py-1 backdrop-blur-sm">
             <BadgeCheck aria-hidden="true" className="h-3.5 w-3.5 text-brand-gold-300" />
-            Identity reviewed
+            ID reviewed
           </span>
           <span className="rounded-full bg-black/35 px-2.5 py-1 tabular-nums backdrop-blur-sm">
             {clock(elapsed)} / {clock(LENGTH_SECONDS)}

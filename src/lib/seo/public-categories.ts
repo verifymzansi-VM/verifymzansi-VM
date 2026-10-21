@@ -11,7 +11,7 @@ export const VERIFY_MZANSI_CATEGORY_SEO = [
     searchSummary:
       "Mzansi Market is for buying, selling, and browsing local classified ads across South Africa.",
     description:
-      "Buy, sell, and browse local classified ads in South Africa. Mzansi Market covers products, vehicles, property, electronics, home goods, and everyday listings from identity-reviewed members.",
+      "Buy, sell, and browse local classified ads in South Africa. Mzansi Market covers products, vehicles, property, electronics, home goods, and everyday listings from ID-reviewed members.",
   },
   {
     id: "mzansi-business",
@@ -22,18 +22,18 @@ export const VERIFY_MZANSI_CATEGORY_SEO = [
     searchSummary:
       "Mzansi Business is a directory for South African shops, trades, services, and professional profiles.",
     description:
-      "Find South African businesses, shops, trades, and professional services. Mzansi Business profiles are posted by identity-reviewed representatives and can be browsed by business type and location.",
+      "Find South African businesses, shops, trades, and professional services. Mzansi Business profiles are posted by ID-reviewed representatives and can be browsed by business type and location.",
   },
   {
     id: "tourism-events",
     name: "Tourism & Events",
-    searchName: "Tourism and Events",
+    searchName: "Tourism & Events",
     href: "/tourism-events",
     title: "Tourism & Events - South African Places, Stays, Experiences, and Events",
     searchSummary:
-      "Tourism and Events covers South African stays, destinations, venues, experiences, and live events.",
+      "Tourism & Events covers South African stays, destinations, venues, experiences, and live events.",
     description:
-      "Discover South African places to visit, accommodation, restaurants, tours, experiences, venues, and live events posted by identity-reviewed hosts, organisers, and local businesses.",
+      "Discover South African places to visit, accommodation, restaurants, tours, experiences, venues, and live events posted by ID-reviewed hosts, organisers, and local businesses.",
   },
 ] as const;
 

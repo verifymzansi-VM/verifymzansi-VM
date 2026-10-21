@@ -219,10 +219,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 10, ttl: 600 },
     { limit: 40, ttl: 86400 },
   ],
-  "verify-buyer": [
-    { limit: 10, ttl: 60 }, // 10 per minute
-    { limit: 30, ttl: 3600 }, // 30 per hour
-  ],
 
   // ── Account ──────────────────────────────────────────
   "account:delete": [

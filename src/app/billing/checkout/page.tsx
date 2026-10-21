@@ -15,7 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AREA_LABELS: Record<string, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MZANSI_BUSINESS: "Mzansi Business",
-  PROMOTIONS_EVENTS: "Tourism",
+  PROMOTIONS_EVENTS: "Tourism & Events",
 };
 
 async function loadSummary(planId: string): Promise<CheckoutSummary | null> {

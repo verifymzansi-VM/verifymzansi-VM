@@ -266,7 +266,7 @@ function getFallbackRejectionReason(stepType: VerificationStepType): string {
     case "id_doc":
       return "Your ID document was not accepted. Upload a clear photo showing the full document and all details.";
     case "selfie":
-      return "Your selfie was not accepted. Retake a clear live selfie with your face fully visible.";
+      return "Your selfie was not accepted. Retake a clear selfie with your face fully visible.";
     case "location":
       return "Your location could not be verified. Confirm your province and city, then save your location again.";
     case "phone":

@@ -17,7 +17,6 @@ const PUBLIC_PAGES = new Set([
   "/help/showroom",
   "/sponsors",
   "/search",
-  "/verify-buyer",
   "/safety",
   "/safety/scam-alerts",
   "/safety/meeting-checklist",

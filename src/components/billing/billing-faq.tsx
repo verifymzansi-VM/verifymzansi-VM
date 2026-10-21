@@ -156,8 +156,7 @@ export function BillingFaq({
             >
               terms
             </Link>
-            . If paid content is rejected, support will help you correct it, or review a credit or
-            refund.
+            . If paid content is rejected, you can correct and resubmit it, or ask us for a refund.
           </p>
         </FaqItem>
       </div>

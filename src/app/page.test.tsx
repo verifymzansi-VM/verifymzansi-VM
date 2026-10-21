@@ -83,7 +83,7 @@ describe("HomePage", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "VerifyMzansi: Mzansi Market, Mzansi Business, Tourism and Events",
+        name: "VerifyMzansi: Mzansi Market, Mzansi Business, Tourism & Events",
       })
     ).toHaveClass("sr-only");
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
@@ -116,9 +116,7 @@ describe("HomePage", () => {
     const ui = await HomePage();
     const { container } = render(ui);
 
-    expect(metadata.title).toBe(
-      "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events"
-    );
+    expect(metadata.title).toBe("VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events");
     // The description is the brand positioning statement; the categories live in
     // the title and the structured data below.
     expect(metadata.description).toContain("businesses, products, services, tourism and events");
@@ -149,7 +147,7 @@ describe("HomePage", () => {
           description: expect.stringContaining("shops, trades, services"),
         }),
         expect.objectContaining({
-          name: "Tourism and Events",
+          name: "Tourism & Events",
           url: "https://verifymzansi.com/tourism-events",
           description: expect.stringContaining("stays, destinations, venues"),
         }),
@@ -177,12 +175,14 @@ describe("HomePage", () => {
     const ui = await HomePage();
     render(ui);
 
-    const about = screen.getByRole("region", { name: "Show it on video. Sell it with trust." });
+    const about = screen.getByRole("region", { name: "Know who you’re dealing with." });
     expect(screen.getByRole("main").lastElementChild).toBe(about);
-    expect(within(about).getAllByRole("listitem")).toHaveLength(4);
-    expect(within(about).getByText(/Your first post is free/)).toBeInTheDocument();
-    expect(
-      within(about).getByRole("heading", { name: "Advertise with video" })
-    ).toBeInTheDocument();
+    const stickers = within(about).getByRole("list", { name: "Verification stickers" });
+    expect(within(stickers).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(about).getByRole("heading", { name: "CIPC registered" })).toBeInTheDocument();
+    expect(within(about).getByRole("link", { name: "How we verify businesses" })).toHaveAttribute(
+      "href",
+      "/help/business-verification"
+    );
   });
 });

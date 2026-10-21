@@ -293,23 +293,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/api/verify-buyer": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Verify a buyer before a transaction */
-    post: operations["verifyBuyer"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/api/dsar/submit": {
     parameters: {
       query?: never;
@@ -1011,32 +994,6 @@ export interface operations {
         content?: never;
       };
       400: components["responses"]["BadRequest"];
-    };
-  };
-  verifyBuyer: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          /** Format: uuid */
-          buyerId: string;
-        };
-      };
-    };
-    responses: {
-      /** @description Buyer verification result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      401: components["responses"]["Unauthorized"];
     };
   };
   submitDsar: {

@@ -136,17 +136,17 @@ const STEPS = [
   {
     icon: FileText,
     name: "Identity document",
-    description: "A clear photo of your Smart ID, green ID book or passport.",
+    description: "A clear photo of your Smart ID, green ID book or SA passport.",
   },
   {
     icon: Camera,
     name: "Selfie",
-    description: "A live selfie we match to your ID photo.",
+    description: "A selfie we match to your ID photo.",
   },
   {
     icon: MapPin,
     name: "Location",
-    description: "GPS, or pick your province and town.",
+    description: "Pick your province and town. We may suggest one from your connection.",
   },
 ];
 
@@ -199,7 +199,7 @@ export default function VerificationHelpPage() {
             <SectionHeading
               id="steps-title"
               title="The four verification steps"
-              lede="Have your SA ID or passport ready."
+              lede="Have your SA ID or SA passport ready."
             />
             <ol className="mt-6 grid gap-3 sm:grid-cols-2">
               {STEPS.map((step, index) => (

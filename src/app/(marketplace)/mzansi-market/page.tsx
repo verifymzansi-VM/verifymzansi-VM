@@ -52,7 +52,7 @@ export default async function MzansiMarketPage() {
       name: "VerifyMzansi",
       url: BASE_URL,
     },
-    about: ["classified ads", "local marketplace", "identity-reviewed members", "South Africa"],
+    about: ["classified ads", "local marketplace", "ID-reviewed members", "South Africa"],
   };
   const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(

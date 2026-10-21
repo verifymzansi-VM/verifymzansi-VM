@@ -29,7 +29,6 @@ const targets: PublicTarget[] = [
   { slug: "promotions-events", pagePath: "/promotions/events" },
   { slug: "advertise", pagePath: "/advertise", fullPage: true },
   { slug: "pricing", pagePath: "/pricing", fullPage: true },
-  { slug: "verify-buyer", pagePath: "/verify-buyer", fullPage: true },
   { slug: "contact", pagePath: "/contact", fullPage: true },
   { slug: "trust-safety", pagePath: "/trust-safety", fullPage: true },
   { slug: "safety-centre", pagePath: "/safety", fullPage: true },

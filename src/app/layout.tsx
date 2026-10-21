@@ -1,15 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import { AcquisitionCapture } from "@/components/analytics/acquisition-capture";
 import { cookies, headers } from "next/headers";
-import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Source_Serif_4 } from "next/font/google";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { SERVICE_WORKER_VERSION } from "@/lib/service-worker-version";
 
-const fontDisplay = Bricolage_Grotesque({
+// Only the 600 weight ships: font-bold / font-extrabold on headings all
+// resolve to it (synthetic bold is off in globals.css), keeping titles calm.
+const fontDisplay = Source_Serif_4({
   subsets: ["latin"],
+  weight: ["600"],
   variable: "--font-display",
   display: "swap",
-  fallback: ["Segoe UI", "Trebuchet MS", "system-ui", "sans-serif"],
+  fallback: ["Georgia", "Cambria", "Times New Roman", "serif"],
 });
 
 const fontBody = Plus_Jakarta_Sans({
@@ -165,7 +168,7 @@ const AUTH_SW_CACHE_RESET = `
 
 export const metadata: Metadata = {
   title: {
-    default: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
+    default: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events",
     template: "%s | VerifyMzansi",
   },
   description: VERIFY_MZANSI_SITE_DESCRIPTION,
@@ -190,20 +193,20 @@ export const metadata: Metadata = {
     locale: "en_ZA",
     url: process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com",
     siteName: "VerifyMzansi",
-    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
+    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events",
     description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
+        alt: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism and Events",
+    title: "VerifyMzansi - Mzansi Market, Mzansi Business, Tourism & Events",
     description: VERIFY_MZANSI_SITE_DESCRIPTION,
     images: ["/twitter-image"],
   },

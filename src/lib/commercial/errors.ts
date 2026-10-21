@@ -152,7 +152,7 @@ const COMMERCIAL_ERRORS: ReadonlyArray<{ code: string; status: number; message: 
     code: "PLAN_ADMIN_UNAVAILABLE",
     status: 404,
     message:
-      "That email does not belong to an identity-reviewed VerifyMzansi account. Ask them to register and complete identity review first.",
+      "That email does not belong to an ID-reviewed VerifyMzansi account. Ask them to register and complete identity review first.",
   },
   { code: "PLAN_ADMIN_SELF", status: 400, message: "You already own this plan." },
   { code: "PLAN_ADMIN_EXISTS", status: 409, message: "This person is already an administrator." },

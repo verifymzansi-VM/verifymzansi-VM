@@ -142,6 +142,8 @@
   /* The page colour lives on <html> so the pattern layer can sit between it and the content. */
   html {
     @apply bg-background;
+    /* The display serif ships one weight (600); never fake heavier ones. */
+    font-synthesis-weight: none;
   }
 
   body {

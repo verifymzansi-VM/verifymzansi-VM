@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Business verification",
   description:
-    "What the ID Reviewed, CIPC Registered and Seen by VerifyMzansi stickers mean, and how to get them.",
+    "What the ID reviewed, CIPC registered and Seen by VerifyMzansi stickers mean, and how to get them.",
 };
 
 const STICKERS = [
@@ -78,7 +78,7 @@ export default function BusinessVerificationHelpPage() {
       <main id="main-content" className="flex-1">
         <InfoHero
           title="Business verification"
-          description="Three stickers that show buyers what we've checked."
+          description="Three stickers that show buyers what we've reviewed."
           breadcrumbs={[
             { label: "Help", href: "/help/verification" },
             { label: "Business verification" },
@@ -95,7 +95,7 @@ export default function BusinessVerificationHelpPage() {
             <SectionHeading
               id="stickers-title"
               title="The three stickers"
-              lede="Each one is checked by our team."
+              lede="Each one is reviewed by our team."
             />
             <ul className="mt-6 grid gap-3 sm:grid-cols-3">
               {STICKERS.map((s) => (

@@ -40,6 +40,28 @@ function businessStickerLabels(state: BusinessStickerState): Array<{
 
 const ICONS = { id: IdCard, cipc: Building2, seen: Eye } as const;
 
+/** One-line meaning of each sticker, for intros that link to the full help page. */
+export const BUSINESS_STICKER_SUMMARIES = [
+  {
+    key: "id",
+    icon: ICONS.id,
+    name: "ID reviewed",
+    summary: "We reviewed the phone, ID and selfie of the person behind the profile.",
+  },
+  {
+    key: "cipc",
+    icon: ICONS.cipc,
+    name: "CIPC registered",
+    summary: "In Business on CIPC's own records, managed by a director or company representative.",
+  },
+  {
+    key: "seen",
+    icon: ICONS.seen,
+    name: "Seen by VerifyMzansi",
+    summary: "We saw the business operating, in person or on a live video call.",
+  },
+] as const;
+
 /**
  * Up to three verification stickers, icon-first with a tooltip each:
  * ID reviewed, CIPC registered, Seen by VerifyMzansi. Nothing renders for a

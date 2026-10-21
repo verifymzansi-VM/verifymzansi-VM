@@ -40,7 +40,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   },
   2: {
     level: 2,
-    label: "Pending Review",
+    label: "Pending review",
     description: "Verification submitted and credibility checks are in review",
     badgeClass: "trust-badge-2",
     cardClass: "trust-card-2",
@@ -50,7 +50,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   },
   3: {
     level: 3,
-    label: "ID Reviewed",
+    label: "ID reviewed",
     description: "The person behind this profile completed identity evidence review",
     badgeClass: "trust-badge-3",
     cardClass: "trust-card-3",
@@ -60,7 +60,7 @@ export const TRUST_TIERS: Record<TrustLevel, TrustTier> = {
   },
   4: {
     level: 4,
-    label: "ID Reviewed Pro",
+    label: "ID reviewed Pro",
     description: "Person-level identity evidence review with Pro visibility",
     badgeClass: "trust-badge-4",
     cardClass: "trust-card-4",

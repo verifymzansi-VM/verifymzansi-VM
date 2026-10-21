@@ -205,7 +205,6 @@ const PAGES = [
     title: "Verification",
     description: "Verify your identity, phone and account.",
   },
-  { href: "/verify-buyer", title: "Verify a buyer", description: "Check buyer verification." },
   {
     href: "/install",
     title: "Get the app",

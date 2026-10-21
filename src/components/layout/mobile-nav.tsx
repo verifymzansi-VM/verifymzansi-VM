@@ -24,7 +24,7 @@ const TABS: TabDef[] = [
   { id: "home", href: "/", icon: Home, label: "Home" },
   { id: "video", href: "/video-mode", icon: Clapperboard, label: "Video" },
   { id: "post", href: "/post/create", icon: Plus, label: "Post", requiresAuth: true },
-  { id: "verify", href: "/verification", icon: ShieldCheck, label: "Verify" },
+  { id: "verify", href: "/verification", icon: ShieldCheck, label: "Get verified" },
   {
     id: "dashboard",
     href: "/dashboard",
@@ -49,7 +49,6 @@ const NAV_EXACT_PATHS = new Set([
   "/pricing",
   "/advertise",
   "/trust-safety",
-  "/verify-buyer",
   "/contact",
 ]);
 

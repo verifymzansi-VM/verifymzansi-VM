@@ -5,7 +5,6 @@ import {
   verificationIdDocSchema,
   verificationSelfieSchema,
   verificationLocationSchema,
-  buyerVerifySchema,
   fileUploadSchema,
   validateUploadedFile,
   dsarRequestSchema,
@@ -127,28 +126,6 @@ describe("verificationLocationSchema", () => {
     ).toBe(false);
     expect(
       verificationLocationSchema.safeParse({ province: "Gauteng", city: "x".repeat(81) }).success
-    ).toBe(false);
-  });
-});
-
-// ── Buyer Verify Schema ─────────────────────────────────────────────────────
-
-describe("buyerVerifySchema", () => {
-  it("accepts valid input", () => {
-    expect(
-      buyerVerifySchema.safeParse({
-        accountProfileId: "550e8400-e29b-41d4-a716-446655440000",
-        turnstileToken: "tok",
-      }).success
-    ).toBe(true);
-  });
-
-  it("rejects non-UUID", () => {
-    expect(
-      buyerVerifySchema.safeParse({
-        accountProfileId: "abc",
-        turnstileToken: "tok",
-      }).success
     ).toBe(false);
   });
 });

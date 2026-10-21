@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { PostCreateClient } from "./post-create-client";
 
 // How a post goes live, shown beside the headline on wide screens.
-const STEPS = ["Choose a section", "Fill in the form", "We check it, then it goes live"] as const;
+const STEPS = ["Choose a section", "Fill in the form", "We review it, then it goes live"] as const;
 
 export const metadata = {
   title: "Create a Post",

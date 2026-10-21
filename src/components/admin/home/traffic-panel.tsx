@@ -40,7 +40,6 @@ const PAGE_LABELS: Record<string, string> = {
   "/sponsors": "Business Sponsors",
   "/help/showroom": "How the showroom works",
   "/contact": "Contact",
-  "/verify-buyer": "Verify a buyer",
   "/privacy": "Privacy policy",
   "/terms": "Terms of service",
 };

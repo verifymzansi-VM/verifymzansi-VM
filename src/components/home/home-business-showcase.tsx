@@ -55,7 +55,7 @@ export async function HomeBusinessShowcase() {
       <HomeShowcaseShell title="Mzansi Business" href="/mzansi-business" tone="blue">
         <HomeShowcaseEmptyState
           title="No businesses yet"
-          description="Add your business and it will show here. Your first post is free."
+          description="Add your business and it will show here. Your first post is free once your ID is reviewed."
           ctaHref="/post/create-business"
           ctaLabel="Add a business"
           tone="blue"

@@ -57,7 +57,7 @@ export async function HomeMzansiMarketShowcase() {
       <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
         <HomeShowcaseEmptyState
           title="No listings yet"
-          description="Post something to sell or rent out and it will show here. Your first post is free."
+          description="Post something to sell or rent out and it will show here. Your first post is free once your ID is reviewed."
           ctaHref="/post/create-listing"
           ctaLabel="Post a listing"
           tone="green"

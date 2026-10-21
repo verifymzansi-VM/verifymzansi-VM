@@ -438,9 +438,8 @@ export default async function DashboardPage() {
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1 pl-1.5 pr-2.5 font-semibold text-white ring-1 ring-inset ring-white/15">
                 <VerifiedTick decorative className="h-4 w-4" />
-                <span>Verified</span>
+                <span>{VERIFICATION_LEVEL_LABELS[verificationLevel]}</span>
               </span>
-              <span className="text-white/70">{VERIFICATION_LEVEL_LABELS[verificationLevel]}</span>
             </p>
           ) : (
             <p className="mt-2 text-sm text-white/70">Welcome to your dashboard.</p>

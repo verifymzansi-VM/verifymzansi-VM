@@ -63,8 +63,8 @@ Area identity helpers: `.area-market-tile`, `.area-business-tile`,
 
 ## Typography
 
-- Display: **Bricolage Grotesque** (`font-display`) — h1–h3, big numbers,
-  section titles.
+- Display: **Source Serif 4**, weight 600 only (`font-display`) — h1–h3, big
+  numbers, section titles. `font-bold`/`font-extrabold` render at 600.
 - Body/UI: **Plus Jakarta Sans** (`font-body`, default). Card titles use
   `font-body`.
 - Page h1:

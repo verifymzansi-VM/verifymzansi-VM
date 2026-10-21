@@ -991,7 +991,7 @@ const BUSINESS_VERIFICATION_COPY: Record<
   approved: {
     tone: "success",
     title: "Your sticker is live",
-    body: "Our team checked your business and the sticker now shows on your profile.",
+    body: "Our team reviewed your business and the sticker now shows on your profile.",
     cta: "See your verification",
   },
   info_requested: {

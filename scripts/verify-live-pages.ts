@@ -247,13 +247,6 @@ const PUBLIC_ROUTE_TARGETS: RouteTarget[] = [
     bodyIncludes: ["Terms of Service", "Acceptance of Terms"],
   },
   {
-    name: "verify-buyer-desktop",
-    path: "/verify-buyer",
-    scope: "public",
-    readySelectors: ["main", 'h1:has-text("Verify a Buyer")'],
-    bodyIncludes: ["Verify a Buyer", "Buyer Token Check"],
-  },
-  {
     name: "help-verification-desktop",
     path: "/help/verification",
     scope: "public",

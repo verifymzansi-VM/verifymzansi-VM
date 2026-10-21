@@ -47,14 +47,6 @@ export const verificationLocationSchema = z.object({
   city: z.string().trim().min(1, "City is required").max(80),
 });
 
-// ── V2M Buyer verification ──────────────────────────────────
-
-/** Zod schema for buyer-initiated verification of an account profile. */
-export const buyerVerifySchema = z.object({
-  accountProfileId: z.string().uuid(),
-  turnstileToken: z.string().min(1, "Complete the CAPTCHA").max(4096),
-});
-
 // ── File upload validation ───────────────────────────────
 /** Allowed MIME types for image uploads (JPEG, PNG, WebP). */
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -204,8 +196,6 @@ type _VerificationIdDocInput = z.infer<typeof verificationIdDocSchema>;
 type _VerificationSelfieInput = z.infer<typeof verificationSelfieSchema>;
 /** Inferred input type for {@link verificationLocationSchema}. */
 type _VerificationLocationInput = z.infer<typeof verificationLocationSchema>;
-/** Inferred input type for {@link buyerVerifySchema}. */
-type _BuyerVerifyInput = z.infer<typeof buyerVerifySchema>;
 /** Inferred input type for {@link fileUploadSchema}. */
 type _FileUploadInput = z.infer<typeof fileUploadSchema>;
 /** Inferred input type for {@link dsarRequestSchema}. */

@@ -37,11 +37,11 @@ export const metadata = {
 };
 
 const journeySteps = [
-  { icon: Smartphone, title: "Phone confirmed", body: "One-time code to an SA number." },
+  { icon: Smartphone, title: "Phone verified", body: "One-time code to an SA number." },
   {
     icon: Fingerprint,
     title: "ID & selfie reviewed",
-    body: "Checked by our team, then encrypted.",
+    body: "Reviewed by our team, then encrypted.",
   },
   { icon: MapPin, title: "Area shared", body: "Province and city, as given by the poster." },
   { icon: BrandShield, title: "Badge shown", body: "On their profile and posts." },
@@ -52,7 +52,7 @@ const businessStickers = [
   { icon: Eye, label: "Seen by VerifyMzansi" },
 ] as const;
 
-const tierOrder: TrustLevel[] = [3, 4, 2, 1, 0];
+const tierOrder: TrustLevel[] = [3, 2, 1, 0];
 
 const reportSteps = [
   { title: "Stop the deal", description: "No more money, codes or documents." },
@@ -220,11 +220,7 @@ export default function TrustSafetyPage() {
               <ul className="mt-6 space-y-2.5 text-sm text-foreground/85">
                 <li className="flex items-center gap-2.5">
                   <VerifiedTick className="h-5 w-5" decorative />
-                  Green tick: ID Reviewed
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <VerifiedTick className="h-5 w-5" pro decorative />
-                  Marigold tick: ID Reviewed Pro
+                  Green tick: ID reviewed
                 </li>
               </ul>
             </div>
@@ -240,7 +236,6 @@ export default function TrustSafetyPage() {
                   </div>
                   <p className="text-sm leading-6 text-muted-foreground">
                     {TRUST_TIERS[level].description}.
-                    {level === 4 && " Pro adds visibility, not a higher safety rating."}
                   </p>
                 </li>
               ))}

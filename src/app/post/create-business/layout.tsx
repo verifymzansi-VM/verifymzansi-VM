@@ -2,7 +2,7 @@ import { requireVerifiedPostAccess } from "@/app/post/_lib/require-verified-post
 
 export const metadata = {
   title: "Register Business",
-  description: "Create a business profile on VerifyMzansi as an identity-reviewed representative.",
+  description: "Create a business profile on VerifyMzansi as an ID-reviewed representative.",
 };
 
 export default async function Layout({ children }: { children: React.ReactNode }) {

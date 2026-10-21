@@ -89,6 +89,12 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        // Buyer tokens were retired; the old checker page is gone.
+        source: "/verify-buyer",
+        destination: "/trust-safety",
+        permanent: true,
+      },
+      {
         source: "/promotions/events",
         destination: "/tourism-events?type=event",
         permanent: true,

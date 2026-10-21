@@ -15,8 +15,8 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("next/font/google", () => ({
-  Bricolage_Grotesque: () => ({
-    className: "bricolage",
+  Source_Serif_4: () => ({
+    className: "source-serif",
     variable: "--font-display",
     style: {},
   }),

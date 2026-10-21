@@ -38,7 +38,7 @@ const SOURCE_LABELS: Record<string, string> = {
 const AREA_LABELS: Record<string, string> = {
   MZANSI_MARKET: "Mzansi Market",
   MZANSI_BUSINESS: "Mzansi Business",
-  PROMOTIONS_EVENTS: "Tourism",
+  PROMOTIONS_EVENTS: "Tourism & Events",
 };
 
 const date = new Intl.DateTimeFormat("en-ZA", {

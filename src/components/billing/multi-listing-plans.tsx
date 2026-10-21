@@ -106,7 +106,8 @@ export function MultiListingPlans({
       </ul>
       <p className="text-xs leading-5 text-muted-foreground">
         Paid once online, nothing renews. {ENTERPRISE_ADMINS_INCLUDED} named administrators can
-        manage the posts. Every poster and post is still identity-reviewed and moderated.{" "}
+        manage the posts. Every poster is still ID reviewed and every post reviewed before it goes
+        live.{" "}
         {checkoutEnabled
           ? `More than ${ENTERPRISE_QUOTE_ABOVE_SLOTS} posts, or need a written quote for your procurement process?`
           : "Online checkout for these plans is paused."}{" "}

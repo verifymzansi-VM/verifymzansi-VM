@@ -51,7 +51,7 @@ const contactCategories = [
     value: "organisation_proposal",
     label: "Organisation or bulk posting proposal",
     response:
-      "Proposals for organisations and 50+ active posting slots are answered within 2 business days.",
+      "Proposals for organisations and more than 100 live posts are answered within 2 business days.",
   },
   {
     value: "general_support",

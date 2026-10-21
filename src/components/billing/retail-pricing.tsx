@@ -54,7 +54,7 @@ const AREA_OPTIONS: ReadonlyArray<{
   },
   {
     value: "PROMOTIONS_EVENTS",
-    label: "Tourism",
+    label: "Tourism & Events",
     short: "Tourism",
     icon: TreePalm,
     activeIcon: "text-teal-700 dark:text-teal-300",

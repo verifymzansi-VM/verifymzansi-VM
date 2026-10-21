@@ -27,7 +27,6 @@ const footerSections = [
       { href: "/safety", label: "Safety Centre" },
       { href: "/safety/scam-alerts", label: "Scam alerts" },
       { href: "/safety/meeting-checklist", label: "Meeting safety" },
-      { href: "/verify-buyer", label: "Verify a buyer" },
     ],
   },
   {

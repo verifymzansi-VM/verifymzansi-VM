@@ -26,7 +26,7 @@ export const VERIFICATION_LEVEL_LABELS: Record<VerificationLevel, string> = {
   NONE: "Not verified",
   EMAIL_VERIFIED: "Email verified",
   PHONE_VERIFIED: "Phone verified",
-  IDENTITY_VERIFIED: "Identity verified",
+  IDENTITY_VERIFIED: "ID reviewed",
   ENHANCED_VERIFIED: "Enhanced verification",
   ORGANISATION_REPRESENTATIVE_VERIFIED: "Organisation representative verified",
 };

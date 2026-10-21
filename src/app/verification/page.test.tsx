@@ -614,7 +614,7 @@ describe("VerificationPage", () => {
     });
 
     expect(
-      screen.getAllByText(/Your selfie was not accepted\. Retake a clear live selfie/i).length
+      screen.getAllByText(/Your selfie was not accepted\. Retake a clear selfie/i).length
     ).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Location: approved/i)).toBeInTheDocument();
   });

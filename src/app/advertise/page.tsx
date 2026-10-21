@@ -112,10 +112,10 @@ const EXTRAS = [
 
 const CHECKS = {
   yes: [
-    "Phone number confirmed",
-    "SA ID or passport and a live selfie reviewed by our team",
-    "Every post moderated before it goes live",
-    "Stickers show what was checked and when: ID reviewed, CIPC registered, Seen by VerifyMzansi",
+    "Phone number verified",
+    "SA ID or SA passport and a selfie reviewed by our team",
+    "Every post reviewed before it goes live",
+    "Stickers show what we reviewed and when: ID reviewed, CIPC registered, Seen by VerifyMzansi",
   ],
   no: [
     "We only visit a business (in person or on live video) if it asks for the Seen sticker",
@@ -129,7 +129,7 @@ const BENEFITS = [
   {
     icon: BadgeCheck,
     title: "Buyers can see you are real",
-    body: "Your phone, ID and a live selfie are reviewed before you go live. Buyers who are wary of scams look for exactly that.",
+    body: "Your phone, ID and a selfie are reviewed before you go live. Buyers who are wary of scams look for exactly that.",
   },
   {
     icon: Video,
@@ -162,7 +162,7 @@ const VIDEO_POINTS = [
   {
     icon: Clapperboard,
     title: "Stand out in the listings",
-    body: "Posts with video catch the eye, and the identity badge tells buyers who is behind it.",
+    body: "Posts with video catch the eye, and the ID reviewed badge tells buyers who is behind it.",
   },
 ] as const;
 
@@ -203,7 +203,7 @@ const PACKAGES: readonly PackageDetail[] = [
       "An ID reviewed sticker, plus optional CIPC registered and Seen stickers for businesses",
       "Photos and a short video on your post",
       "Calls and WhatsApp straight to you, with no commission",
-      "Your first post free for 7 days once your ID is reviewed, then 30, 90 or 180 days",
+      "Your first post free once your ID is reviewed (7 days, or 30 while launch spaces last), then 30, 90 or 180 days",
       "Your package sets the posting limits and how long a post stays active",
       "Up to 2 approved edits per live post",
     ],
@@ -230,7 +230,7 @@ const PACKAGES: readonly PackageDetail[] = [
       `10 to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} live slots at the same time, across every section`,
       "90 or 180 day terms with a fixed end date",
       `${ENTERPRISE_ADMINS_INCLUDED} named administrators to manage posts`,
-      "Every poster and post still identity-reviewed and moderated",
+      "Every poster ID reviewed and every post reviewed before it goes live",
       "Change stock within your plan's live-post and activation limits",
       "Up to 2 approved edits per live post",
       "Bought online and paid once; a written quote is available for procurement",
@@ -401,7 +401,7 @@ const STEPS = [
   { title: "Get verified", body: "Phone, ID and selfie. Once." },
   { title: "Create your post", body: "Photos and a short video." },
   { title: "Pick a plan", body: "30, 90 or 180 days. No automatic renewal." },
-  { title: "Go live after review", body: "Every post is checked first." },
+  { title: "Go live after review", body: "We review every post first." },
 ] as const;
 
 const FAQ = [
@@ -411,7 +411,7 @@ const FAQ = [
   },
   {
     q: "Can I cancel?",
-    a: "Yes, you can take your post down at any time. Unused days are not refunded automatically; we refund rejected posts, duplicate charges and billing errors, and your statutory cooling-off rights apply.",
+    a: "Yes, you can take your post down at any time. Unused days are not refunded. We refund rejected posts, duplicate charges and billing errors, and your statutory cooling-off rights apply.",
   },
   {
     q: "Do you take commission?",
@@ -450,7 +450,8 @@ export default async function AdvertisePage() {
         })),
         { label: "Events", cells: ["Always free"] },
       ],
-      footnote: "The same price in every section. Your first post is free for 7 days.",
+      footnote:
+        "The same price in every section. Your first post is free once your ID is reviewed: 7 days, or 30 days while launch spaces last.",
     },
     "multi-listing": {
       caption: "Multi-listing price (total for the term)",
@@ -499,7 +500,7 @@ export default async function AdvertisePage() {
                 </span>
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
-                Every poster&rsquo;s identity is reviewed before their posts go live.
+                Every poster&rsquo;s ID is reviewed, and every post is reviewed before it goes live.
               </p>
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Button
@@ -521,8 +522,7 @@ export default async function AdvertisePage() {
               </div>
               <ul className="mt-6 flex flex-wrap gap-2 text-sm text-white/85">
                 {[
-                  { icon: BadgeCheck, text: "Identity reviewed" },
-                  { icon: Video, text: "Video-first posts" },
+                  { icon: Video, text: "Photos and a short video" },
                   { icon: MessageCircle, text: "Direct contact, no commission" },
                 ].map(({ icon: Icon, text }) => (
                   <li
@@ -541,7 +541,7 @@ export default async function AdvertisePage() {
           </div>
         </BrandSurface>
 
-        {/* 1b ── Video-first ────────────────────────────────── */}
+        {/* 1b ── Video ────────────────────────────────── */}
         <section
           id="video"
           aria-labelledby="advertise-video-title"
@@ -550,7 +550,7 @@ export default async function AdvertisePage() {
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] lg:gap-16">
             <Reveal>
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
-                Video-first
+                Video
               </p>
               <h2 id="advertise-video-title" className="section-title mt-2">
                 A short video sells what a photo can&rsquo;t
@@ -900,7 +900,8 @@ export default async function AdvertisePage() {
                 Ready when you are.
               </h2>
               <p className="mt-2 text-white/75">
-                Your first post is free for 7 days. Organisations can email{" "}
+                Your first post is free once your ID is reviewed: 7 days, or 30 days while launch
+                spaces last. Organisations can email{" "}
                 <a
                   className="font-semibold text-brand-gold-300 underline-offset-4 hover:underline"
                   href={`mailto:${HELLO_CONTACT_EMAIL}`}

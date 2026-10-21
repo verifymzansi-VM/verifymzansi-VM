@@ -42,10 +42,10 @@ const GUIDES = [
     tile: "bg-brand-gold/15 text-brand-gold-800 dark:text-brand-gold-300",
   },
   {
-    href: "/verify-buyer",
+    href: "/help/business-verification",
     icon: BrandShield,
-    title: "Verify a buyer",
-    body: "Check a buyer token",
+    title: "Business verification",
+    body: "What each sticker means",
     tile: "area-market-tile",
   },
   {
