@@ -36,3 +36,20 @@ native proof exercises real local Auth and gateway behavior. Neither establishes
 hosted configuration, production performance or successful physical recovery.
 
 Detailed security reports and recovery notes are kept outside the public commit.
+
+The request bridge in src/lib/foundation/request-api.ts uses an explicit
+foundation connection and a complete request cookie adapter. It treats the
+cookie session as a candidate token, verifies that exact token with GoTrue, and
+returns only the typed authenticated API RPC surface. SQL remains responsible
+for current session, account, MFA and command authority.
+
+Route handlers can use createFoundationRouteContext from
+src/lib/foundation/request-route.ts. Construct it once per request, enforce the
+route's origin/CSRF and input checks, then await authenticate() before calling a
+domain adapter. Return both success and error responses through respond() to
+preserve refresh/clear cookies and private browser/CDN cache headers. No client
+or context may be shared across requests. These bridges do not switch existing
+routes or provision target Auth accounts. A bounded local transport check is
+available with node --conditions=react-server --import tsx
+scripts/probe-foundation-staff-adapter.mjs --request-session after preparing the
+owned native fixture; it never targets hosted projects.

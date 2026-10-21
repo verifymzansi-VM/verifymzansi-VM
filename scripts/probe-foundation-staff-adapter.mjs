@@ -28,6 +28,7 @@ import { readStaffIdentityHistory } from "../src/lib/foundation/staff-identity.t
 // Bounded real Auth/SQL/SDK denial proof. No accepted-identity or physical bytes
 // are fabricated. The only private history read has an empty subject history.
 const staffFlags = process.argv.length === 3 && process.argv[2] === "--staff-event-flags-races";
+const requestSession = process.argv.length === 3 && process.argv[2] === "--request-session";
 const contacts = process.argv.length === 3 && process.argv[2] === "--post-contacts-races";
 const trustedFixture = process.argv.length === 3 && process.argv[2] === "--trusted-posting-fixture";
 const draftMode =
@@ -41,7 +42,7 @@ const races =
   staffFlags ||
   (process.argv.length === 3 && process.argv[2] === "--negotiable-races");
 const negotiable = races || (process.argv.length === 3 && process.argv[2] === "--negotiable");
-assert.ok(process.argv.length === 2 || negotiable);
+assert.ok(process.argv.length === 2 || negotiable || requestSession);
 const { env, dockerArgs, workdir, cliPath } = nativeIsolation();
 const release = acquireFixtureOperation(workdir, "test");
 const recordedAt = new Date().toISOString();
@@ -150,7 +151,8 @@ try {
     ).error,
     null
   );
-  const token = (await reviewer.auth.getSession()).data.session.access_token;
+  const reviewerSession = (await reviewer.auth.getSession()).data.session;
+  const token = reviewerSession.access_token;
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url"));
   assert.equal(claims.aal, "aal2");
   assert.equal(claims.sub, users[0]);
@@ -161,14 +163,69 @@ try {
   );
   assert.match(roleId, /^[a-f0-9-]{36}$/);
   sql(`insert into private.staff_roles(user_id,role) values('${users[2]}','admin');`);
-  const api = createFoundationAuthenticatedApi(
-    {
-      url: status.API_URL,
-      expectedProjectRef: "local-foundation",
-      publishableKey: status.PUBLISHABLE_KEY,
-    },
-    token
-  );
+  const connection = {
+    url: status.API_URL,
+    expectedProjectRef: "local-foundation",
+    publishableKey: status.PUBLISHABLE_KEY,
+  };
+  let api;
+  if (requestSession) {
+    stage = "real request cookie session bridge";
+    const { createFoundationRequestApi } = await import("../src/lib/foundation/request-api.ts");
+    const { createFoundationRouteContext } = await import("../src/lib/foundation/request-route.ts");
+    const { NextRequest, NextResponse } = await import("next/server.js");
+    const cookieName = "sb-127-auth-token";
+    const cookieJar = (session) => {
+      const values = new Map([
+        [cookieName, "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url")],
+      ]);
+      return {
+        adapter: {
+          getAll: () => [...values].map(([name, value]) => ({ name, value })),
+          setAll: (items) => {
+            for (const item of items) values.set(item.name, item.value);
+          },
+        },
+      };
+    };
+    // Valid token with a deliberately incorrect cookie user and stale local
+    // expiry: GoTrue must refresh/verify; cookie metadata grants no authority.
+    const jar = cookieJar({ ...reviewerSession, expires_at: 1, user: { id: users[1] } });
+    const request = new NextRequest("https://foundation.invalid/api/session-probe", {
+      headers: {
+        cookie: jar.adapter
+          .getAll()
+          .map(({ name, value }) => `${name}=${value}`)
+          .join("; "),
+      },
+    });
+    const context = createFoundationRouteContext(connection, request);
+    api = await context.authenticate();
+    assert.deepEqual(Object.keys(api), ["rpc"]);
+    const response = await context.respond(NextResponse.json({ ok: true }));
+    assert.ok(response.cookies.getAll().some((cookie) => cookie.value.length > 0));
+    assert.ok(response.headers.get("Cache-Control").includes("private, no-cache, no-store"));
+    assert.equal(response.headers.get("Cloudflare-CDN-Cache-Control"), "no-store");
+    const pieces = token.split(".");
+    pieces[2] = (pieces[2][0] === "A" ? "B" : "A") + pieces[2].slice(1);
+    await assert.rejects(
+      () =>
+        createFoundationRequestApi(
+          connection,
+          cookieJar({ ...reviewerSession, access_token: pieces.join(".") }).adapter
+        ),
+      /^Error: A verified foundation account session is required$/
+    );
+    result.requestSessionBridge = {
+      realGoTrueRefresh: "PASS",
+      untrustedCookieUserIgnored: "PASS",
+      forgedSignatureDenied: "PASS",
+      nextResponseCookiesAndNoStore:
+        "PASS actual NextRequest/NextResponse objects; no live route wired",
+    };
+  } else {
+    api = createFoundationAuthenticatedApi(connection, token);
+  }
   const read = () => readStaffIdentityHistory(api, { owner_id: users[1] });
   stage = "actual caller SDK history";
   const history = await read();
@@ -463,6 +520,10 @@ try {
   }
   result.provenance = Object.fromEntries(
     [
+      "scripts/probe-foundation-staff-adapter.mjs",
+      ...(requestSession
+        ? ["src/lib/foundation/request-api.ts", "src/lib/foundation/request-route.ts"]
+        : []),
       "scripts/probe-foundation-staff-adapter.mjs",
       "scripts/lib/foundation-native-sql-barrier.mjs",
       "scripts/lib/foundation-negotiable-native.mjs",
