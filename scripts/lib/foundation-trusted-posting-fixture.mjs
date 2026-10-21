@@ -1,4 +1,5 @@
 import { nativeTotp } from "./foundation-native-totp.mjs";
+import { claimFixtureLegalName } from "./foundation-account-profile-fixture.mjs";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { processIdentityNumber } from "../../src/lib/domains/verification/identity-processing.ts";
@@ -32,9 +33,11 @@ export function createTrustedPostingFixture({ rpc, sql, reviewer }) {
     assert.equal(result.status, 200, "trusted posting fixture " + name);
     return result.data;
   };
-  const identity = async (owner) => {
+  const identity = async (owner, { claimLegalName = true } = {}) => {
     if (typeof reviewer.refresh === "function") await reviewer.refresh();
     uuid(owner.id);
+    // Registration now requires the owner's own legal-name claim.
+    if (claimLegalName) await claimFixtureLegalName(rpc, owner);
     assert.notEqual(owner.id, reviewer.id, "Fixture requires independent reviewer");
     const opened = await call("open_verification_case", {}, owner.token);
     const caseId = uuid(opened.case_id);

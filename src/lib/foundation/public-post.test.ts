@@ -39,6 +39,11 @@ const detail = () => ({
       focal_y: null,
     },
   ],
+  seller: {
+    public_name: "Thando D.",
+    avatar_object_key: `media/${object}`,
+    identity_verified: true,
+  },
 });
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -53,6 +58,10 @@ it("distinguishes a null unavailable post from malformed data and preserves pric
     { ...detail(), price_mode: "free", price_cents: "0" },
     { ...detail(), media: [{ ...detail().media[0], object_key: "evidence/private" }] },
     { ...detail(), media: [{ ...detail().media[0], object_key: "https://remote.invalid/image" }] },
+    { ...detail(), seller: undefined },
+    { ...detail(), seller: { ...detail().seller, owner_id: id } },
+    { ...detail(), seller: { ...detail().seller, legal_last_name: "Dlamini" } },
+    { ...detail(), seller: { ...detail().seller, avatar_object_key: "evidence/private" } },
   ])
     expect(() => parseFoundationPublicPost(bad)).toThrow("Invalid foundation public post");
 });

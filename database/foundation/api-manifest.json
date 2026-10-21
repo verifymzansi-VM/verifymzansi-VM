@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "MdJ_ToNWGxaZ751doZpKvDwHAig8SSlu7o1C5rMLT5c",
+  "candidateHash": "B3z7ysSgzpo-aH2WfmORmyG12pOVlgZPfyw7I2oxVkE",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "nC0GSdO6uJUBgmwEd4lyckYekK_2NOpuOpyb7nRBSG4",
-  "roleTypesHash": "IKIuWRTuYmSVsmA0zF86r5kAzCOoS1j67VvbzCMFZHc",
+  "generatedTypesHash": "aabkCSIfIW1pCTP3tLYnFado0UQtsJP1Cr595uZqQjY",
+  "roleTypesHash": "sb3eEgJdZTa1D2jnDbBeTF9bco1G8u05z6RS1ZIF29o",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -889,6 +889,24 @@
           "optional": false
         }
       ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_my_profile",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
       "execute": {
         "anon": false,
         "authenticated": true,
@@ -1988,6 +2006,74 @@
       }
     },
     {
+      "name": "save_my_legal_name",
+      "signature": "p_expected_revision integer, p_first_name text, p_last_name text",
+      "argumentsWithDefaults": "p_expected_revision integer, p_first_name text, p_last_name text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_first_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_last_name",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "save_my_profile",
+      "signature": "p_expected_revision integer, p_display_name text, p_bio text",
+      "argumentsWithDefaults": "p_expected_revision integer, p_display_name text DEFAULT NULL::text, p_bio text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_display_name",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_bio",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "save_post_content",
       "signature": "p_post_id uuid, p_expected_revision integer, p_content jsonb",
       "argumentsWithDefaults": "p_post_id uuid, p_expected_revision integer, p_content jsonb",
@@ -2041,6 +2127,35 @@
       ],
       "execute": {
         "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "set_my_avatar",
+      "signature": "p_expected_revision integer, p_object_id uuid",
+      "argumentsWithDefaults": "p_expected_revision integer, p_object_id uuid DEFAULT NULL::uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_object_id",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
         "authenticated": true,
         "service_role": false
       }

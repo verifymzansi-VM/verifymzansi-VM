@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { claimFixtureLegalName } from "./foundation-account-profile-fixture.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { sourceIdentityDigestToFingerprint } from "../../src/lib/domains/verification/identity-fingerprint.ts";
 import { processIdentityNumber } from "../../src/lib/domains/verification/identity-processing.ts";
@@ -50,6 +51,7 @@ export async function testTrustedIdentity({
   const prepare = async (owner, risk = 10, number = nextNumber()) => {
     const processed = processIdentityNumber(owner.id, number, keys),
       fingerprint = processed.fingerprint;
+    await claimFixtureLegalName(rpc, owner);
     const opened = await rpc("open_verification_case", {}, owner.token);
     assert.equal(opened.status, 200);
     const caseId = opened.data.case_id;

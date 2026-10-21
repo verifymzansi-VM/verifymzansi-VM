@@ -1061,6 +1061,53 @@
         ]
       }
     },
+    "/rpc/save_my_profile": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_bio": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_display_name": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "p_expected_revision"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) save_my_profile"
+        ]
+      }
+    },
     "/rpc/search_posts": {
       "get": {
         "parameters": [
@@ -1344,6 +1391,49 @@
         ]
       }
     },
+    "/rpc/set_my_avatar": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_object_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_expected_revision"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) set_my_avatar"
+        ]
+      }
+    },
     "/rpc/place_legal_hold": {
       "post": {
         "parameters": [
@@ -1468,6 +1558,55 @@
         },
         "tags": [
           "(rpc) get_owner_post_contacts"
+        ]
+      }
+    },
+    "/rpc/save_my_legal_name": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_first_name": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_last_name": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_expected_revision",
+                "p_first_name",
+                "p_last_name"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) save_my_legal_name"
         ]
       }
     },
@@ -1974,6 +2113,36 @@
         },
         "tags": [
           "(rpc) claim_queue_item"
+        ]
+      }
+    },
+    "/rpc/get_my_profile": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_my_profile"
         ]
       }
     },

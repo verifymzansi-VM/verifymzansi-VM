@@ -22,6 +22,16 @@ const media = z
   })
   .refine((value) => (value.purpose === "video") === (value.kind === "video"))
   .refine((value) => value.kind !== "image" || (value.width !== null && value.height !== null));
+// Public seller card only: "Thando D.", avatar and identity badge. No ids,
+// legal names, contact details or verification evidence.
+const seller = z.strictObject({
+  public_name: z.string().min(1).max(60).nullable(),
+  avatar_object_key: z
+    .string()
+    .regex(/^media\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/)
+    .nullable(),
+  identity_verified: z.boolean(),
+});
 const detail = z
   .strictObject({
     ...publicPostCoreSchema.shape,
@@ -29,6 +39,7 @@ const detail = z
     visible_until: foundationInstant,
     event_window: foundationEventWindowSchema.nullable(),
     media: z.array(media).max(100),
+    seller,
   })
   .refine(validPublicPostCore)
   .refine((value) => (value.kind === "event") === (value.event_window !== null))

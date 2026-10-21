@@ -98,7 +98,7 @@ try {
   for (const [file, digest] of Object.entries(manifest.sourceHashes))
     assert.equal(hash(readFileSync(file)), digest);
   stage = "copy Auth definitions only";
-  const authSchema = exec([
+  const authDump = exec([
     "pg_dump",
     "-U",
     "postgres",
@@ -107,6 +107,19 @@ try {
     "--schema-only",
     "--schema=auth",
   ]);
+  // The candidate owns its triggers on Auth tables and recreates them; the
+  // component copy must not reference application schemas that do not exist yet.
+  const applicationTriggers = [
+    ...authDump.matchAll(/^CREATE TRIGGER .+ EXECUTE FUNCTION internal\.\w+\(\);\n/gm),
+  ];
+  assert.deepEqual(
+    applicationTriggers.map(([line]) => line.trim()),
+    [
+      "CREATE TRIGGER create_account_profile AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION internal.create_account_profile();",
+    ]
+  );
+  const authSchema = applicationTriggers.reduce((dump, [line]) => dump.replace(line, ""), authDump);
+  assert.equal(/\binternal\./.test(authSchema), false);
   result.authSchemaOnlyHash = hash(authSchema);
   result.candidateHash = manifest.candidateHash;
   stage = "create empty owned database";

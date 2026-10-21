@@ -1,6 +1,6 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 245 functions and 82 API commands. It
+This separate target baseline contains 265 functions and 86 API commands. It
 preserves the reviewed domain transactions while excluding six test-only
 functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
@@ -49,6 +49,17 @@ acceptance. A new version requires a separately shipped snapshot and renewed
 acceptance. Existing version files must never be rewritten after publication.
 Keep the explicit FOUNDATION_* application bindings unset until target Auth,
 schema, application workflows and release acceptance are ready.
+
+Account profiles hold the display name, bio, avatar and an unreviewed legal-name
+claim. Identity registration snapshots that claim; an accepted review locks
+exactly those names, and a lock must always match an accepted identity fact.
+Profile input can never set verified names, roles, badges, phone or locality.
+Person names follow one generated Unicode letter/mark table
+(scripts/generate-person-name-rule.mjs) shared by SQL and the app, so both
+accept the same names. Account authority also requires a confirmed email. The
+first administrator is granted only by the operator-only
+internal.bootstrap_first_administrator, once, to a confirmed account that
+already has a verified authenticator app.
 
 Detailed security reports and recovery notes are kept outside the public commit.
 

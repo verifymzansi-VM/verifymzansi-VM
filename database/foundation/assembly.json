@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-21T11-06-28.063Z/results.json",
-  "evidenceHash": "nI7vHnNGdzrHB0Qgj45rzZKRy_VscWuhnDau3eYV6Bc",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-21T21-48-56.414Z/results.json",
+  "evidenceHash": "5cFbdX6kUsDmrq6drqrvIhh8IIq6E1HIzHvrXUmU95M",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -30,7 +30,10 @@
     "docs/backend-foundation/prototypes/staff-event-duplicate-flags.sql": "pJEEIeyVMSKV7f1UkKy2AWT1hmwpuIeZaWJiKY53kQU",
     "docs/backend-foundation/prototypes/post-contact-preferences.sql": "Ac_LAjKRGdnkeILs7rOwpKTd_vIUkVzyVfTyOjt7hp4",
     "docs/backend-foundation/prototypes/publication-verification-readiness.sql": "PGUH39-yhsXejB8BHY7jlff4me8m-940N9Voj9sQCCQ",
-    "docs/backend-foundation/prototypes/posting-terms-acceptance.sql": "c9v-QjCFWiErHRlt8y1BHD1zkvwaD8rDYrLpP5w9P7E"
+    "docs/backend-foundation/prototypes/posting-terms-acceptance.sql": "c9v-QjCFWiErHRlt8y1BHD1zkvwaD8rDYrLpP5w9P7E",
+    "docs/backend-foundation/prototypes/person-name-rule.sql": "FMR-nOmfaVkwwv-rJTqiT0BqFVCoMfUZea6D-rTnh2U",
+    "docs/backend-foundation/prototypes/account-profiles.sql": "qc6cvxRN2a9uCN-tLjB18jisIiPnF9r_HS7cfjLaK6g",
+    "docs/backend-foundation/prototypes/public-seller-card.sql": "uRS5CxPLbnrWjEhiPMf5UUjTN_Z6qa8naTfEOBVrN2k"
   },
   "postingTermsCatalogue": {
     "activeVersion": "posting-v1",
@@ -46,7 +49,7 @@
     },
     "sql": "insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');\ninsert into private.posting_terms_current(version) values('posting-v1');\n"
   },
-  "candidateHash": "MdJ_ToNWGxaZ751doZpKvDwHAig8SSlu7o1C5rMLT5c",
+  "candidateHash": "B3z7ysSgzpo-aH2WfmORmyG12pOVlgZPfyw7I2oxVkE",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",
@@ -76,8 +79,8 @@
     }
   },
   "catalogueSeedIdentitiesHash": "as4g-QYYagtdMoogKzVc3asHo7oJzhGr8Ip5lVYNDjo",
-  "functions": 245,
-  "matchingNativeFunctionBodies": 244,
+  "functions": 265,
+  "matchingNativeFunctionBodies": 264,
   "derivedFunctionChanges": {
     "internal.validate_listing_attributes": "Remove test-only fixture_market bypass; requires separate baseline replay and strict-category proof"
   },

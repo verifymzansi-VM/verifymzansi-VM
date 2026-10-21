@@ -90,6 +90,7 @@ export type Database = {
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
       get_current_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
+      get_my_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_listing_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_post_contacts: { Args: { p_post_id: string }; Returns: Json };
@@ -226,11 +227,20 @@ export type Database = {
         Args: { p_category_key: string; p_expected_revision: number; p_terms: Json };
         Returns: Json;
       };
+      save_my_legal_name: {
+        Args: { p_expected_revision: number; p_first_name: string; p_last_name: string };
+        Returns: Json;
+      };
+      save_my_profile: {
+        Args: { p_bio?: string; p_display_name?: string; p_expected_revision: number };
+        Returns: Json;
+      };
       save_post_content: {
         Args: { p_content: Json; p_expected_revision: number; p_post_id: string };
         Returns: Json;
       };
       search_posts: { Args: { p_request: Json }; Returns: Json };
+      set_my_avatar: { Args: { p_expected_revision: number; p_object_id?: string }; Returns: Json };
       set_post_contacts: {
         Args: { p_channels: Json; p_expected_revision: number; p_post_id: string };
         Returns: Json;

@@ -1,5 +1,6 @@
 import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
 import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
+import { testAccountProfiles } from "./lib/foundation-account-profile-native.mjs";
 import {
   installFixturePostingTerms,
   acceptFixturePostingTerms,
@@ -42,6 +43,14 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "src/lib/foundation/posting-terms.ts",
       "scripts/lib/foundation-posting-terms-fixture.mjs",
       "docs/backend-foundation/prototypes/posting-terms-acceptance.sql",
+      "scripts/lib/foundation-account-profile-native.mjs",
+      "scripts/lib/foundation-account-profile-fixture.mjs",
+      "src/lib/foundation/account-profile.ts",
+      "src/lib/foundation/person-name.ts",
+      "src/lib/foundation/person-name-ranges.json",
+      "docs/backend-foundation/prototypes/person-name-rule.sql",
+      "docs/backend-foundation/prototypes/account-profiles.sql",
+      "docs/backend-foundation/prototypes/public-seller-card.sql",
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
       "scripts/lib/foundation-native-paths.mjs",
@@ -4958,6 +4967,13 @@ commit;`);
       assert.equal(detail.data.media.length, 4);
       assert.equal(detail.data.condition, "like_new");
       assert.equal(JSON.stringify(detail.data).includes(publicationOwner.id), false); // no owner id anywhere
+      // Seller card: reviewed fixture name as "First L.", badge, no legal surname.
+      assert.deepEqual(detail.data.seller, {
+        public_name: "Synthetic F.",
+        avatar_object_key: null,
+        identity_verified: true,
+      });
+      assert.equal(JSON.stringify(detail.data).includes("Fixture"), false);
       assert.equal((await rpc("get_public_post", { p_id: bare }, null)).data, null);
       assert.equal(
         sql(
@@ -7454,6 +7470,20 @@ commit;`);
       verificationFixture,
       controlledSql,
       awaitQueuedRpc,
+      record,
+    });
+    nativeStage = "account profiles and first administrator bootstrap";
+    await testAccountProfiles({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      verificationFixture,
       record,
     });
     const types = cli(["gen", "types", "--local", "--schema", "api"]);

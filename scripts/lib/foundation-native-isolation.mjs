@@ -56,6 +56,10 @@ export const FIXTURE_MIGRATIONS = {
     "docs/backend-foundation/prototypes/publication-verification-readiness.sql",
   "20261021103528_posting_terms_acceptance.sql":
     "docs/backend-foundation/prototypes/posting-terms-acceptance.sql",
+  "20261021183612_person_name_rule.sql": "docs/backend-foundation/prototypes/person-name-rule.sql",
+  "20261021183650_account_profiles.sql": "docs/backend-foundation/prototypes/account-profiles.sql",
+  "20261021195208_public_seller_card.sql":
+    "docs/backend-foundation/prototypes/public-seller-card.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");
