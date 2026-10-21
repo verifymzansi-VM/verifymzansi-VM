@@ -9,6 +9,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_posting_terms: { Args: { p_document_hash: string; p_version: string }; Returns: Json };
       acknowledge_cost_alarm: { Args: { p_alarm_id: string }; Returns: Json };
       activate_post: { Args: { p_post_id: string }; Returns: Json };
       advance_evidence_artifact: {
@@ -86,10 +87,12 @@ export type Database = {
       };
       get_core_draft: { Args: { p_id: string }; Returns: Json };
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
+      get_current_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
       get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_listing_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_post_contacts: { Args: { p_post_id: string }; Returns: Json };
+      get_owner_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_verification_readiness: { Args: Record<PropertyKey, never>; Returns: Json };
       get_public_post: { Args: { p_id: string }; Returns: Json };
       grant_verified_intro_trial: { Args: { p_days: number; p_owner: string }; Returns: Json };

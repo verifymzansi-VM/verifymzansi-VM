@@ -1,4 +1,9 @@
 import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
+import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
+import {
+  installFixturePostingTerms,
+  acceptFixturePostingTerms,
+} from "./lib/foundation-posting-terms-fixture.mjs";
 import {
   createPostingVerifier,
   createTrustedPostingFixture,
@@ -33,6 +38,10 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
   const provenance = Object.fromEntries(
     [
       "scripts/test-foundation-native.mjs",
+      "scripts/lib/foundation-posting-terms-native.mjs",
+      "src/lib/foundation/posting-terms.ts",
+      "scripts/lib/foundation-posting-terms-fixture.mjs",
+      "docs/backend-foundation/prototypes/posting-terms-acceptance.sql",
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
       "scripts/lib/foundation-native-paths.mjs",
@@ -223,6 +232,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
         "set_post_contacts",
         "get_owner_post_contacts",
         "get_owner_verification_readiness",
+        "accept_posting_terms",
       ].includes(name)
     )
       throw new Error("Unknown synthetic RPC barrier");
@@ -269,7 +279,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
   let exitCode = 0;
   let nativeStage = "unlabelled native assertion";
   let appliedFunctions = [];
-  const createTrackedUser = async (label) => {
+  const createTrackedUser = async (label, { postingTerms = true } = {}) => {
     const email = `foundation-${label}-${randomUUID()}@example.invalid`,
       password = randomBytes(24).toString("base64url");
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
@@ -279,10 +289,12 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
     const login = await tracked.member.auth.signInWithPassword({ email, password });
     assert.equal(login.error, null);
     tracked.token = login.data.session.access_token;
+    if (postingTerms) await acceptFixturePostingTerms(tracked.member);
     return tracked;
   };
-  let verificationFixture;
+  let verificationFixture, restorePostingTerms;
   try {
+    restorePostingTerms = installFixturePostingTerms(sql);
     const { restoreListingPriceDraft, buildListingPriceDraftCommand } =
       await import("../src/lib/domains/listings/price-draft.ts");
     const { buildCoreDraftCommand, readCoreDraft } =
@@ -344,6 +356,7 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       const login = await member.auth.signInWithPassword({ email, password });
       assert.equal(login.error, null, "Local sign-in failed");
       Object.assign(tracked, { member, token: login.data.session.access_token });
+      await acceptFixturePostingTerms(member);
     }
     record("real-auth-modern-keys", {
       scope: "Local GoTrue; publishable and secret keys; three real sessions",
@@ -2617,6 +2630,7 @@ commit;`);
     });
     assert.equal(memberLogin.error, null);
     refundMember.token = memberLogin.data.session.access_token;
+    await acceptFixturePostingTerms(refundMember.member);
     const memberClaims = JSON.stringify(
       JSON.parse(Buffer.from(refundMember.token.split(".")[1], "base64url").toString())
     ).replaceAll("'", "''");
@@ -3029,6 +3043,7 @@ commit;`);
       const login = await tracked.member.auth.signInWithPassword({ email, password });
       assert.equal(login.error, null);
       tracked.aal1 = login.data.session.access_token;
+      await acceptFixturePostingTerms(tracked.member);
       nativeStage = "staff TOTP enrollment";
       const enrolled = await tracked.member.auth.mfa.enroll({ factorType: "totp" });
       assert.equal(enrolled.error, null, "Local TOTP enrolment failed");
@@ -3944,6 +3959,7 @@ commit;`);
     });
     assert.equal(closureLogin.error, null);
     closureOwner.token = closureLogin.data.session.access_token;
+    await acceptFixturePostingTerms(closureOwner.member);
     const racingClosureCase = randomUUID();
     sql(
       `insert into private.evidence_cases(id,subject_id,kind) values('${racingClosureCase}','${closureOwner.id}','kyc');`
@@ -7424,6 +7440,22 @@ commit;`);
         nativeStage = value;
       },
     });
+    nativeStage = "versioned posting terms acceptance";
+    await testPostingTerms({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      verificationFixture,
+      controlledSql,
+      awaitQueuedRpc,
+      record,
+    });
     const types = cli(["gen", "types", "--local", "--schema", "api"]);
     assert.ok(types.includes("rename_transport_resource"));
     assert.ok(types.includes("enqueue_transport_reconciliation"));
@@ -7551,6 +7583,13 @@ commit;`);
         checks.push({ id: "synthetic-auth-cleanup", status: "INCOMPLETE" });
         exitCode = 1;
       }
+    }
+    try {
+      restorePostingTerms?.();
+      checks.push({ id: "synthetic-posting-terms-cleanup", status: "PASS" });
+    } catch {
+      checks.push({ id: "synthetic-posting-terms-cleanup", status: "INCOMPLETE" });
+      exitCode = 1;
     }
     if (Object.entries(provenance).some(([file, hash]) => digest(file) !== hash)) {
       checks.push({ id: "immutable-run-provenance", status: "FAIL" });

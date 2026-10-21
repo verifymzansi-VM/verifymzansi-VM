@@ -6,6 +6,9 @@ import { vi } from "vitest";
 // provider-specific tests explicitly supply their own synthetic credentials.
 for (const key of [
   "SUPABASE_SERVICE_ROLE_KEY",
+  "FOUNDATION_SUPABASE_URL",
+  "FOUNDATION_PROJECT_REF",
+  "FOUNDATION_SUPABASE_PUBLISHABLE_KEY",
   "OTP_RATE_LIMITER_URL",
   "RATE_LIMITER_API_KEY",
   "RESEND_API_KEY",

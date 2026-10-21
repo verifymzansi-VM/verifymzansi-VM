@@ -1,6 +1,6 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 237 functions and 79 API commands. It
+This separate target baseline contains 245 functions and 82 API commands. It
 preserves the reviewed domain transactions while excluding six test-only
 functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
@@ -30,10 +30,25 @@ If replay changes generated types captured by the native run, repeat steps 2–4
 with the refreshed inputs. The final native source hashes and clean replay must
 match the same working bytes; an earlier passing record remains historical.
 
-The empty-baseline rehearsal copies Auth definitions without data and checks
-SQL, role surfaces and actual SDK transport with synthetic JWT roles. Separate
-native proof exercises real local Auth and gateway behavior. Neither establishes
-hosted configuration, production performance or successful physical recovery.
+The empty-baseline rehearsal copies the local CLI Auth definitions, ownership,
+permissions and component migration ledger, without copying accounts or
+sessions. It checks SQL, role surfaces, actual SDK transport and a disposable
+GoTrue process: fresh fixture accounts, required confirmation, explicit terms
+consent, cookie refresh, forged-signature denial and live-session revocation.
+Confirmation uses the local admin fixture; no external messages are sent. Its
+path translation and local HS256 keys do not establish hosted ES256 keys,
+gateway/provider or callback configuration. Separate native proof exercises the
+local CLI gateway. Production performance and successful physical recovery
+remain outstanding.
+
+Versioned posting terms are stored as immutable public document snapshots in
+src/lib/legal/terms-documents. The baseline seeds their version and canonical
+document hash only, with no account acceptance data. Authenticated users must
+explicitly accept the current version once; SQL blocks submission without that
+acceptance. A new version requires a separately shipped snapshot and renewed
+acceptance. Existing version files must never be rewritten after publication.
+Keep the explicit FOUNDATION_* application bindings unset until target Auth,
+schema, application workflows and release acceptance are ready.
 
 Detailed security reports and recovery notes are kept outside the public commit.
 

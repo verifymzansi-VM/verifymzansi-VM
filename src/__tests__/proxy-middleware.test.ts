@@ -40,6 +40,30 @@ function createMockRequest(
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
+describe("proxy — immutable posting terms versions", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    "/terms/versions/not-a-published-version",
+    "/terms/versions/constructor",
+    "/terms/versions/posting-v1/extra",
+    "/terms/versions",
+  ])("rejects unpublished paths before streaming or Auth: %s", async (path) => {
+    const response = await routeRequest(createMockRequest(path));
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("Not found");
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("allows the exact archived document and ignores unrelated path prefixes", async () => {
+    for (const path of ["/terms/versions/posting-v1?from=terms", "/terms/versions-extra/example"])
+      expect((await routeRequest(createMockRequest(path))).headers.get("x-middleware-next")).toBe(
+        "1"
+      );
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+});
+
 describe("proxy — missing Supabase env", () => {
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

@@ -221,6 +221,10 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   ],
 
   // ── Account ──────────────────────────────────────────
+  "account:posting-terms": [
+    { limit: 30, ttl: 60 },
+    { limit: 1000, ttl: 86400 },
+  ],
   "account:delete": [
     { limit: 3, ttl: 60 }, // 3 per minute
     { limit: 5, ttl: 3600 }, // 5 per hour

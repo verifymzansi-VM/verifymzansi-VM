@@ -5,7 +5,11 @@ export type FoundationPublicDatabase = {
   api: Omit<Api, "Functions"> & {
     Functions: Pick<
       Api["Functions"],
-      "billing_catalogue" | "get_public_post" | "reference_catalog" | "search_posts"
+      | "billing_catalogue"
+      | "get_current_posting_terms"
+      | "get_public_post"
+      | "reference_catalog"
+      | "search_posts"
     >;
   };
 };
@@ -13,6 +17,7 @@ export type FoundationAuthenticatedDatabase = {
   api: Omit<Api, "Functions"> & {
     Functions: Pick<
       Api["Functions"],
+      | "accept_posting_terms"
       | "acknowledge_cost_alarm"
       | "activate_post"
       | "approve_decision"
@@ -30,10 +35,12 @@ export type FoundationAuthenticatedDatabase = {
       | "flag_duplicate_events"
       | "get_core_draft"
       | "get_core_listing_draft"
+      | "get_current_posting_terms"
       | "get_listing_attributes"
       | "get_owner_business_event_editor"
       | "get_owner_listing_editor"
       | "get_owner_post_contacts"
+      | "get_owner_posting_terms"
       | "get_owner_verification_readiness"
       | "get_public_post"
       | "moderate_post"

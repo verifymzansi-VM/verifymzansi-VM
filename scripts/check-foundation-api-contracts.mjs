@@ -11,6 +11,7 @@ import {
 } from "./lib/foundation-api-contracts.mjs";
 import { API_ROLES, verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 import { assertUnreleasedBaselineGuard } from "./lib/foundation-baseline-guard.mjs";
+import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 
 // Offline consistency gate. A fresh local replay separately proves actual SQL
 // grant/default parity; this gate catches candidate/source/type drift in builds.
@@ -26,6 +27,16 @@ assert.equal(assembly.releaseReady, false);
 assert.equal(manifest.releaseReady, false);
 assert.equal(manifest.schema, "api");
 assert.equal(manifest.candidateHash, assembly.candidateHash);
+assert.deepEqual(
+  assembly.postingTermsCatalogue,
+  readPostingTermsCatalogue(),
+  "Posting terms reference drift"
+);
+assert.ok(
+  read("database/foundation/candidate.sql")
+    .toString("utf8")
+    .includes(assembly.postingTermsCatalogue.sql)
+);
 assert.equal(hash(read("database/foundation/candidate.sql")), manifest.candidateHash);
 assertCompleteFoundationSources(assembly.sourceHashes, Object.values(FIXTURE_MIGRATIONS));
 for (const [file, digest] of Object.entries(assembly.sourceHashes))

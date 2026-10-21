@@ -115,6 +115,28 @@ it("rejects missing sessions without an Auth or data request", async () => {
   expect(fetcher).not.toHaveBeenCalled();
 });
 
+it.each([
+  [401, 401],
+  [403, 401],
+  [422, 401],
+  [429, 503],
+  [503, 503],
+])(
+  "distinguishes Auth denial %s from provider availability using status %s",
+  async (upstream, expected) => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ message: "private upstream diagnostic" }, { status: upstream })
+    );
+    await expect(
+      createFoundationRequestApi(config, cookieAdapter(session(token())), fetcher)
+    ).rejects.toMatchObject({
+      status: expected,
+      message: "A verified foundation account session is required",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  }
+);
+
 it.each(["denied", "different-user", "anonymous"])(
   "never exposes RPCs for an unverified caller: %s",
   async (kind) => {

@@ -27,6 +27,10 @@ export async function submitFoundationPost(api: FoundationAuthenticatedApi, inpu
     }
   );
   if (error) {
+    if (error.code === "PT409" && error.details === "posting_terms_required")
+      throw new Error("Review and accept the current posting terms before submitting");
+    if (error.code === "PT503" && error.details === "posting_terms_unavailable")
+      throw new Error("Posting terms are temporarily unavailable; try again later");
     if (error.code === "42501" && error.details === "posting_verification_required")
       throw new Error("Complete identity, phone and locality verification before submitting");
     if (error.code === "22023" && error.details === "contact_channels_required")

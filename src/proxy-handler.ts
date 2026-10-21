@@ -14,6 +14,7 @@ import { createLogger } from "@/lib/utils/logger";
 import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
+import postingTermsCatalogue from "@/lib/legal/terms-documents/catalogue.json";
 import {
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
@@ -96,6 +97,15 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     }
 
     return NextResponse.redirect(callbackUrl);
+  }
+
+  // Reject unknown immutable document paths before the request-dependent root
+  // layout begins streaming, when notFound() can no longer set a 404 status.
+  const termsPrefix = "/terms/versions";
+  if (matchesPrefix(pathname, termsPrefix)) {
+    const version = pathname.slice(termsPrefix.length + 1).replace(/\/$/, "");
+    if (!Object.hasOwn(postingTermsCatalogue.versions, version))
+      return new NextResponse("Not found", { status: 404 });
   }
 
   // Local design previews. The pages call notFound() themselves, but streaming

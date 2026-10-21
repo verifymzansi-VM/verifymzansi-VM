@@ -8,6 +8,13 @@ import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
+export class FoundationSessionError extends Error {
+  constructor(readonly status: 401 | 503) {
+    super("A verified foundation account session is required");
+  }
+}
+const authFailureStatus = (error: { status?: number }): 401 | 503 =>
+  [400, 401, 403, 422].includes(error.status ?? 0) ? 401 : 503;
 const caller = z.object({
   iss: z.string(),
   sub: z.uuid(),
@@ -62,8 +69,11 @@ export async function createFoundationRequestApi(
     }
   ).auth;
 
+  let failureStatus: 401 | 503 = 401;
   try {
     const { data, error } = await auth.getSession();
+    if (cookieAccessFailed) failureStatus = 503;
+    else if (error) failureStatus = authFailureStatus(error);
     if (cookieAccessFailed || error || !data.session?.access_token) throw new Error();
     const token = data.session.access_token;
     const api = createFoundationAuthenticatedApi(config, token, fetcher);
@@ -73,6 +83,8 @@ export async function createFoundationRequestApi(
     if (claims.iss !== `${config.url}/auth/v1` || claims.exp * 1000 <= Date.now())
       throw new Error();
     const verified = await auth.getUser(token);
+    if (cookieAccessFailed) failureStatus = 503;
+    else if (verified.error) failureStatus = authFailureStatus(verified.error);
     if (
       cookieAccessFailed ||
       verified.error ||
@@ -84,6 +96,6 @@ export async function createFoundationRequestApi(
     return api;
   } catch {
     // Never include cookie contents, tokens or provider error bodies.
-    throw new Error("A verified foundation account session is required");
+    throw new FoundationSessionError(failureStatus);
   }
 }

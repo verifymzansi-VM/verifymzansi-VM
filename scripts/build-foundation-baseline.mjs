@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { FIXTURE_MIGRATIONS } from "./lib/foundation-native-isolation.mjs";
 import { assertFixturePath } from "./lib/foundation-native-paths.mjs";
 import { assertUnreleasedBaselineGuard } from "./lib/foundation-baseline-guard.mjs";
+import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 
 // Local assembly only. No CLI/network/DB execution and no environment loading.
 // A passing prototype run establishes input provenance, not baseline acceptance.
@@ -139,6 +140,11 @@ for (const [, file] of Object.entries(FIXTURE_MIGRATIONS).sort(([a], [b]) => a.l
   }
   modules.push(`-- Source: ${file}\n${sql.trim()}\n`);
 }
+const postingTermsCatalogue = readPostingTermsCatalogue();
+modules.push(
+  "-- Immutable published document metadata only; no account acceptance data.\n" +
+    postingTermsCatalogue.sql
+);
 const candidate = `-- UNRELEASED BF-09 assembly; not an approved target migration.\n-- Source migrations remain unchanged. See README.md and assembly.json.\n\n${modules.join("\n")}\n`;
 assert.equal(
   /transport_resources|transport_jobs|rename_transport_resource|enqueue_transport_reconciliation|'fixture_/.test(
@@ -188,6 +194,7 @@ writeFileSync(
       sourceEvidence: evidencePath,
       evidenceHash: digest(readFileSync(evidencePath)),
       sourceHashes,
+      postingTermsCatalogue,
       candidateHash: digest(candidate),
       catalogueSeedIdentities: identities,
       catalogueSeedIdentitiesHash: digest(readFileSync(identitiesPath)),

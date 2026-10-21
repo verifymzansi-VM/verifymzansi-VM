@@ -1,19 +1,48 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "s4Zu9Qrt76Ys6jZyEOtPBPMcaFT47H4SDsul9tBnKC8",
+  "candidateHash": "MdJ_ToNWGxaZ751doZpKvDwHAig8SSlu7o1C5rMLT5c",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "j8y3CmEFB4pNJ0_LIkrvOeGoKxZiHBZx8m8gunvcv-g",
-  "roleTypesHash": "9gyQoVYsKBL1toFxJxWrEcb42ZRjOpEqgWAL271g6lA",
+  "generatedTypesHash": "nC0GSdO6uJUBgmwEd4lyckYekK_2NOpuOpyb7nRBSG4",
+  "roleTypesHash": "IKIuWRTuYmSVsmA0zF86r5kAzCOoS1j67VvbzCMFZHc",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
   "functions": [
+    {
+      "name": "accept_posting_terms",
+      "signature": "p_version text, p_document_hash text",
+      "argumentsWithDefaults": "p_version text, p_document_hash text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_version",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_document_hash",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
     {
       "name": "acknowledge_cost_alarm",
       "signature": "p_alarm_id uuid",
@@ -825,6 +854,24 @@
       }
     },
     {
+      "name": "get_current_posting_terms",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "get_listing_attributes",
       "signature": "p_post_id uuid",
       "argumentsWithDefaults": "p_post_id uuid",
@@ -914,6 +961,24 @@
           "optional": false
         }
       ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_owner_posting_terms",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
       "execute": {
         "anon": false,
         "authenticated": true,

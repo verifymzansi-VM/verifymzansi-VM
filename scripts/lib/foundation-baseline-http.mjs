@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { captureRoleOpenapi } from "./foundation-api-openapi.mjs";
 import { assertFixturePath } from "./foundation-native-paths.mjs";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { proveBaselineAuth } from "./foundation-baseline-auth.mjs";
+import { removeOwnedBaselineContainer } from "./foundation-baseline-container.mjs";
 
 export function baselineDatabaseUri(raw, database) {
   assert.equal(database, "foundation_baseline_replay");
@@ -27,6 +29,7 @@ export async function proveBaselineHttp({
   database,
   expectedCatalogue,
   candidateHash,
+  sql,
 }) {
   assert.equal(database, "foundation_baseline_replay");
   const name = "vm-foundation-baseline-http";
@@ -37,7 +40,8 @@ export async function proveBaselineHttp({
   let ownedId,
     createAttempted = false,
     stage = "HTTP identity preflight",
-    outcome;
+    outcome,
+    authProof;
   const docker = (args) =>
     execFileSync("docker", [...dockerArgs, ...args], {
       env,
@@ -163,6 +167,10 @@ export async function proveBaselineHttp({
       "src/lib/foundation/public-post.ts",
       "src/lib/foundation/event-window-dto.ts",
       "src/lib/foundation/reference-catalogue.ts",
+      "src/lib/foundation/posting-terms.ts",
+      "scripts/lib/foundation-posting-terms-catalogue.mjs",
+      "src/lib/legal/terms-documents/catalogue.json",
+      "src/lib/legal/terms-documents/posting-v1.json",
       "src/lib/supabase/fetch-with-timeout.ts",
       "database/foundation/api.types.ts",
       "database/foundation/api-role-types.ts",
@@ -214,19 +222,23 @@ export async function proveBaselineHttp({
     });
     assert.equal(trusted.status, 403);
     assert.equal(trusted.data.code, "42501");
+    stage = "real fresh Auth against clean SQL";
+    authProof = await proveBaselineAuth({ env, dockerArgs, database, sql, secret, jwt });
+    assert.ok(authProof.status.startsWith("PASS"));
     outcome = {
       status: "PASS clean-baseline HTTP catalogue/role/schema surface",
       checks,
       adapterProof,
       openapiProof,
+      authProof,
       privateSchemaDenied: true,
       trustedDerivedApiRecognised: true,
       catalogueIdsAndTerms: "PASS",
       authenticationScope:
-        "Synthetic HS256 role JWTs only; separate GoTrue/CLI/hosted configuration remains INCOMPLETE",
+        "Synthetic role JWT surfaces plus genuine fresh local GoTrue sessions; hosted ES256/gateway/provider/callback acceptance remains INCOMPLETE",
     };
   } catch (error) {
-    outcome = { status: "FAIL", stage }; // Never emit DB URI, JWTs or container environment.
+    outcome = { status: "FAIL", stage, ...(authProof ? { authProof } : {}) }; // Never emit DB URI, JWTs or container environment.
     const symptoms = String(error.stderr ?? "");
     const classify = (text) =>
       [
@@ -255,17 +267,16 @@ export async function proveBaselineHttp({
     }
   } finally {
     try {
-      if (!ownedId && createAttempted && docker(["ps", "-aq", "--filter", `name=^/${name}$`])) {
-        const candidate = inspect(name);
-        assert.equal(candidate.Config.Labels[label], nonce);
-        ownedId = candidate.Id;
-      }
-      if (ownedId) {
-        assert.match(ownedId, /^[a-f0-9]{64}$/);
-        assert.equal(inspect(ownedId).Config.Labels[label], nonce);
-        docker(["rm", "--force", ownedId]); // Only the exact container created by this operation.
-      }
-      outcome.httpContainerCleanup = ownedId ? "PASS owned container removed" : "NOT_CREATED";
+      const removed = removeOwnedBaselineContainer({
+        docker,
+        inspect,
+        name,
+        label,
+        nonce,
+        ownedId,
+        createAttempted,
+      });
+      outcome.httpContainerCleanup = removed ? "PASS owned container removed" : "NOT_CREATED";
     } catch {
       outcome.httpContainerCleanup = "INCOMPLETE preserve vm-foundation-baseline-http";
       outcome.status = "INCOMPLETE";

@@ -6,8 +6,13 @@ import PrivacyPolicyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
 import PricingPage from "@/app/pricing/page";
 import PaiaManualPage from "@/app/paia/page";
+import { readCurrentPublishedPostingTerms } from "@/lib/legal/current-posting-terms";
+import { getPublishedPostingTerms } from "@/lib/legal/published-posting-terms";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/legal/current-posting-terms", () => ({
+  readCurrentPublishedPostingTerms: vi.fn(),
+}));
 vi.mock("@/components/layout/header", () => ({ Header: () => <div>Header</div> }));
 vi.mock("@/components/layout/footer", () => ({ Footer: () => <div>Footer</div> }));
 vi.mock("@/components/layout/page-header", () => ({
@@ -30,6 +35,7 @@ vi.mock("@/components/billing/retail-pricing", () => ({
 describe("public trust pages", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.mocked(readCurrentPublishedPostingTerms).mockReset();
   });
 
   it("renders Trust & Safety with public legal identity details", () => {
@@ -99,8 +105,8 @@ describe("public trust pages", () => {
     expect(screen.getByText(/deleted 30 days after an approved review/i)).toBeInTheDocument();
   });
 
-  it("renders payment and verification disclaimers in terms", () => {
-    render(<TermsPage />);
+  it("renders payment and verification disclaimers in terms", async () => {
+    render(await TermsPage());
 
     expect(screen.getByRole("heading", { name: "What our checks mean" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Our role" })).toBeInTheDocument();
@@ -111,6 +117,35 @@ describe("public trust pages", () => {
     expect(screen.getByText(/paid content is rejected/i)).toBeInTheDocument();
     expect(screen.getByText(/Plans do not auto-renew/i)).toBeInTheDocument();
   });
+
+  it("renders the immutable current document after the foundation is explicitly bound", async () => {
+    vi.stubEnv("FOUNDATION_SUPABASE_URL", "https://synthetic-target.supabase.co");
+    vi.mocked(readCurrentPublishedPostingTerms).mockResolvedValue(
+      getPublishedPostingTerms("posting-v1")
+    );
+    render(await TermsPage());
+    expect(readCurrentPublishedPostingTerms).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Posting terms · posting-v1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What our checks mean" })).toBeInTheDocument();
+  });
+
+  it.each(["missing", "failed"])(
+    "does not substitute mutable terms when the current document is %s",
+    async (kind) => {
+      vi.stubEnv("FOUNDATION_SUPABASE_URL", "https://synthetic-target.supabase.co");
+      if (kind === "missing") vi.mocked(readCurrentPublishedPostingTerms).mockResolvedValue(null);
+      else
+        vi.mocked(readCurrentPublishedPostingTerms).mockRejectedValue(
+          new Error("private provider detail")
+        );
+      render(await TermsPage());
+      expect(
+        screen.getByRole("heading", { name: "Terms temporarily unavailable" })
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Payments & billing" })).not.toBeInTheDocument();
+      expect(screen.queryByText("private provider detail")).not.toBeInTheDocument();
+    }
+  );
 
   it("renders payment transparency on pricing", async () => {
     render(await PricingPage());

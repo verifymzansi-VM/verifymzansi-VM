@@ -9,6 +9,10 @@ import { testTrustedPostingFixture } from "./lib/foundation-trusted-posting-prob
 import { testPostContactPreferences } from "./lib/foundation-post-contacts-native.mjs";
 import { testStaffEventDuplicateFlags } from "./lib/foundation-staff-event-flags-native.mjs";
 import { nativeTotp } from "./lib/foundation-native-totp.mjs";
+import {
+  installFixturePostingTerms,
+  acceptFixturePostingTerms,
+} from "./lib/foundation-posting-terms-fixture.mjs";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
@@ -53,6 +57,7 @@ const result = {
   productionMutations: [],
 };
 let draftRehearsal;
+let cleanupPostingTerms;
 let admin,
   stage = "preflight",
   sql;
@@ -116,6 +121,7 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
+  if (negotiable) cleanupPostingTerms = installFixturePostingTerms(sql);
   const options = {
     db: { schema: "api" },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -394,6 +400,7 @@ try {
         const member = createClient(status.API_URL, status.PUBLISHABLE_KEY, options);
         const login = await member.auth.signInWithPassword({ email, password });
         assert.equal(login.error, null);
+        await acceptFixturePostingTerms(member);
         return { id, member, token: login.data.session.access_token };
       },
       deleteTrackedUser: async (id) => {
@@ -521,6 +528,12 @@ try {
   result.provenance = Object.fromEntries(
     [
       "scripts/probe-foundation-staff-adapter.mjs",
+      ...(negotiable
+        ? [
+            "scripts/lib/foundation-posting-terms-fixture.mjs",
+            "docs/backend-foundation/prototypes/posting-terms-acceptance.sql",
+          ]
+        : []),
       ...(requestSession
         ? ["src/lib/foundation/request-api.ts", "src/lib/foundation/request-route.ts"]
         : []),
@@ -669,6 +682,16 @@ try {
   } catch {
     result.status = "INCOMPLETE";
     result.draftRestoration = "INCOMPLETE inspect durable recovery recipe before fixture reuse";
+    process.exitCode = 1;
+  }
+  try {
+    if (cleanupPostingTerms) {
+      cleanupPostingTerms();
+      result.postingTermsCleanup = "PASS synthetic policies and caller acceptance facts removed";
+    }
+  } catch {
+    result.status = "INCOMPLETE";
+    result.postingTermsCleanup = "INCOMPLETE inspect synthetic posting-terms fixture";
     process.exitCode = 1;
   }
   release();

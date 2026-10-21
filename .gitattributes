@@ -8,6 +8,7 @@ patches/*.patch text eol=lf
 /docs/backend-foundation/post-field-proposals.json text eol=lf
 /docs/backend-foundation/evidence/*-inventory.json text eol=lf
 /src/lib/foundation/** text eol=lf
+/src/lib/legal/terms-documents/** text eol=lf
 /src/lib/domains/** text eol=lf
 /scripts/*foundation* text eol=lf
 /scripts/lib/*foundation* text eol=lf

@@ -1768,6 +1768,36 @@
         ]
       }
     },
+    "/rpc/get_owner_posting_terms": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_owner_posting_terms"
+        ]
+      }
+    },
     "/rpc/set_post_contacts": {
       "post": {
         "parameters": [
@@ -2043,6 +2073,50 @@
         ]
       }
     },
+    "/rpc/accept_posting_terms": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_document_hash": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_version": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_version",
+                "p_document_hash"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) accept_posting_terms"
+        ]
+      }
+    },
     "/rpc/get_public_post": {
       "get": {
         "parameters": [
@@ -2244,6 +2318,51 @@
         },
         "tags": [
           "(rpc) propose_verified_identity_ban"
+        ]
+      }
+    },
+    "/rpc/get_current_posting_terms": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_current_posting_terms"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_current_posting_terms"
         ]
       }
     },

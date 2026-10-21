@@ -5,6 +5,8 @@ import { readFoundationReferenceCatalogue } from "../src/lib/foundation/referenc
 import { readFileSync } from "node:fs";
 import { searchFoundationPosts } from "../src/lib/foundation/post-search";
 import { createFoundationPublicApi } from "../src/lib/foundation/public-api";
+import { readFoundationPostingTerms } from "../src/lib/foundation/posting-terms";
+import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 import {
   parseFoundationBillingCatalogue,
   readFoundationBillingCatalogue,
@@ -36,20 +38,27 @@ async function run() {
         const url = new URL(String(request));
         assert.equal(url.origin, "http://127.0.0.1:55443");
         assert.ok(
-          ["billing_catalogue", "search_posts", "get_public_post", "reference_catalog"]
+          [
+            "billing_catalogue",
+            "search_posts",
+            "get_public_post",
+            "reference_catalog",
+            "get_current_posting_terms",
+          ]
             .map((name) => `/rest/v1/rpc/${name}`)
             .includes(url.pathname)
         );
-        assert.equal(init?.method, "POST");
+        const termsRead = url.pathname.endsWith("/get_current_posting_terms");
+        assert.equal(init?.method, termsRead ? "GET" : "POST");
         assert.equal(init?.credentials, "omit");
         assert.equal(init?.cache, "no-store");
         assert.equal(init?.redirect, "error");
         const headers = new Headers(init?.headers);
-        assert.equal(headers.get("content-profile"), "api");
+        assert.equal(headers.get(termsRead ? "accept-profile" : "content-profile"), "api");
         assert.equal(headers.has("cookie"), false);
         headers.set("authorization", `Bearer ${input.token}`);
         requests++;
-        return fetch(`http://127.0.0.1:55443${url.pathname.replace("/rest/v1", "")}`, {
+        return fetch(`http://127.0.0.1:55443${url.pathname.replace("/rest/v1", "")}${url.search}`, {
           ...init,
           headers,
           signal: AbortSignal.timeout(3000),
@@ -77,7 +86,12 @@ async function run() {
       { categories: 31, activities: 136, provinces: 9, cities: 90, fields: 113 }
     );
     assert.equal(await readFoundationPublicPost(api, { id: randomUUID() }), null);
-    assert.equal(requests, 4);
+    const terms = readPostingTermsCatalogue();
+    assert.deepEqual(await readFoundationPostingTerms(api), {
+      ...terms.documents.find((document) => document.version === terms.activeVersion),
+      document_path: `/terms/versions/${terms.activeVersion}`,
+    });
+    assert.equal(requests, 5);
     assert.deepEqual(catalogue, parseFoundationBillingCatalogue(input.expectedCatalogue));
     assert.equal(catalogue.plans.length, 17);
     assert.equal(catalogue.addons.length, 3);
@@ -90,6 +104,8 @@ async function run() {
         emptySearch: "PASS exact empty catalogue search DTO",
         reference: "PASS strict seeded catalogue and parent references",
         missingDetail: "PASS normal null result distinct from transport failure",
+        postingTerms:
+          "PASS exact immutable published version/hash/path; no account acceptance seeded",
         scope:
           "Local PostgREST path mapping and synthetic anon JWT; gateway/modern hosted keys/GoTrue remain separate",
       }) + "\n"

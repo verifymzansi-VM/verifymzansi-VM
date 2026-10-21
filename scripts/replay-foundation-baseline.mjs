@@ -8,6 +8,7 @@ import { assertFixturePath } from "./lib/foundation-native-paths.mjs";
 import { assertUnreleasedBaselineGuard } from "./lib/foundation-baseline-guard.mjs";
 import { generateCleanApiContracts } from "./lib/foundation-api-contracts.mjs";
 import { proveBaselineHttp } from "./lib/foundation-baseline-http.mjs";
+import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 
 // SQL, scoped HTTP and generated-contract feasibility in a fresh owned local database.
 // This does not prove target GoTrue/CLI deployment or bypass the guarded migration.
@@ -76,8 +77,11 @@ try {
     [
       "scripts/replay-foundation-baseline.mjs",
       "scripts/lib/foundation-baseline-http.mjs",
+      "scripts/lib/foundation-baseline-auth.mjs",
+      "scripts/lib/foundation-baseline-container.mjs",
       "scripts/lib/foundation-api-contracts.mjs",
       "scripts/lib/foundation-api-openapi.mjs",
+      "scripts/lib/foundation-posting-terms-catalogue.mjs",
     ].map((file) => [file, hash(readFileSync(file))])
   );
   assertFixturePath(process.cwd(), "database/foundation/catalogue-identities.json", {
@@ -86,6 +90,8 @@ try {
   const identityBytes = readFileSync("database/foundation/catalogue-identities.json");
   assert.equal(hash(identityBytes), manifest.catalogueSeedIdentitiesHash);
   assert.deepEqual(JSON.parse(identityBytes), manifest.catalogueSeedIdentities);
+  const postingTerms = readPostingTermsCatalogue();
+  assert.deepEqual(postingTerms, manifest.postingTermsCatalogue);
   assert.equal(hash(guard), manifest.deploymentGuardHash);
   const candidate = readFileSync("database/foundation/candidate.sql", "utf8");
   assert.equal(hash(candidate), manifest.candidateHash);
@@ -100,8 +106,6 @@ try {
     "postgres",
     "--schema-only",
     "--schema=auth",
-    "--no-owner",
-    "--no-privileges",
   ]);
   result.authSchemaOnlyHash = hash(authSchema);
   result.candidateHash = manifest.candidateHash;
@@ -116,7 +120,57 @@ try {
     database
   );
   stage = "Auth schema definitions";
-  sql(authSchema, database);
+  // Restore the local CLI Auth component's own owners/ACLs, not customer data.
+  // The ordinary postgres role cannot reassign reserved component ownership.
+  assert.equal(sql("select rolsuper from pg_roles where rolname='supabase_admin';"), "t");
+  assert.equal(sql(`select oid from pg_database where datname='${database}';`), createdOid);
+  exec(
+    [
+      "psql",
+      "-XqAt",
+      "-U",
+      "supabase_admin",
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-v",
+      "VERBOSITY=verbose",
+    ],
+    authSchema
+  );
+  stage = "Auth component migration metadata only";
+  const authMigrations = exec([
+    "pg_dump",
+    "-U",
+    "postgres",
+    "-d",
+    "postgres",
+    "--data-only",
+    "--table=auth.schema_migrations",
+    "--no-owner",
+    "--no-privileges",
+  ]);
+  exec(
+    [
+      "psql",
+      "-XqAt",
+      "-U",
+      "supabase_admin",
+      "-d",
+      database,
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-v",
+      "VERBOSITY=verbose",
+    ],
+    authMigrations
+  );
+  result.authSystemMetadata = {
+    scope: "Same local CLI image's Auth migration ledger only; zero accounts/sessions",
+    rows: Number(sql("select count(*) from auth.schema_migrations;", database)),
+    hash: hash(authMigrations),
+  };
   stage = "candidate DDL";
   sql(candidate, database);
   stage = "function bodies and grants";
@@ -205,6 +259,29 @@ try {
     );
     assert.deepEqual(actual, manifest.catalogueSeedIdentities[kind]);
   }
+  stage = "immutable posting terms reference seed without account data";
+  const seededDocuments = JSON.parse(
+    sql(
+      "select jsonb_agg(jsonb_build_object('version',version,'document_hash',document_hash) order by version) from private.posting_terms_versions;",
+      database
+    )
+  );
+  assert.deepEqual(
+    seededDocuments,
+    [...postingTerms.documents].sort((a, b) => a.version.localeCompare(b.version))
+  );
+  assert.equal(sql("select count(*) from private.posting_terms_current;", database), "1");
+  assert.equal(
+    sql("select version from private.posting_terms_current;", database),
+    postingTerms.activeVersion
+  );
+  assert.equal(sql("select count(*) from private.posting_terms_acceptances;", database), "0");
+  result.postingTermsReferenceSeed = {
+    status: "PASS exact published versions/hash and one current version; zero account acceptances",
+    activeVersion: postingTerms.activeVersion,
+    documents: postingTerms.documents,
+    sourceHashes: postingTerms.sourceHashes,
+  };
   assert.equal(sql("select count(*) from auth.users;", database), "0");
   stage = "clean API types and role manifest";
   result.apiContracts = generateCleanApiContracts({
@@ -222,9 +299,10 @@ try {
     database,
     expectedCatalogue: catalogue,
     candidateHash: manifest.candidateHash,
+    sql,
   });
   assert.ok(result.httpProof.status.startsWith("PASS"));
-  result.status = "PASS empty-database SQL and scoped PostgREST feasibility";
+  result.status = "PASS empty-database SQL, scoped PostgREST and fresh local GoTrue feasibility";
   result.functions = functions.length;
   result.catalogueCounts = { plans: catalogue.plans.length, addons: catalogue.addons.length };
   result.fixedCatalogueIdentities = "PASS all20 fixed new-target identifiers match manifest";
@@ -233,9 +311,9 @@ try {
   result.demoObjectsAbsent = true;
   result.rawIdentityApisAbsent =
     "PASS no raw API names/overloads; raw internal core has no client or service execute";
-  result.authDataCopied = false;
+  result.authUserDataCopied = false;
   result.fullCliAuthPostgrestReplay =
-    "INCOMPLETE: copied Auth definitions and synthetic-JWT HTTP role proof; separate GoTrue/CLI/hosted configuration acceptance remains";
+    "INCOMPLETE: local component ownership, fresh GoTrue sessions and mapped PostgREST proven; hosted ES256 keys, gateway, signup delivery/callbacks and full application acceptance remain";
 } catch (error) {
   result.status = "FAIL";
   result.stage = stage;
@@ -245,6 +323,8 @@ try {
   try {
     if (result.httpProof?.httpContainerCleanup?.startsWith("INCOMPLETE"))
       throw new Error("Preserve database until exact owned HTTP container cleanup is confirmed");
+    if (result.httpProof?.authProof?.authContainerCleanup?.startsWith("INCOMPLETE"))
+      throw new Error("Preserve database until exact owned Auth container cleanup is confirmed");
     if (databaseCreated && createdOid === undefined)
       throw new Error("Database created without verified identity; preserve for inspection");
     if (createdOid !== undefined) {

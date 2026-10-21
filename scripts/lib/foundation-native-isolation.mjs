@@ -54,6 +54,8 @@ export const FIXTURE_MIGRATIONS = {
     "docs/backend-foundation/prototypes/post-contact-preferences.sql",
   "20261019133858_publication_verification_readiness.sql":
     "docs/backend-foundation/prototypes/publication-verification-readiness.sql",
+  "20261021103528_posting_terms_acceptance.sql":
+    "docs/backend-foundation/prototypes/posting-terms-acceptance.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

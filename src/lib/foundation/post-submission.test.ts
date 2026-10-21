@@ -25,6 +25,29 @@ const response = (value: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
+it.each([
+  [
+    "PT409",
+    "posting_terms_required",
+    409,
+    "Review and accept the current posting terms before submitting",
+  ],
+  [
+    "PT503",
+    "posting_terms_unavailable",
+    503,
+    "Posting terms are temporarily unavailable; try again later",
+  ],
+])(
+  "handles the exact versioned terms refusal without retrying %#",
+  async (code, details, status, message) => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      response({ code, details, message: "private diagnostic" }, Number(status))
+    );
+    await expect(submitFoundationPost(api(fetcher), request)).rejects.toThrow(String(message));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  }
+);
 it("submits once as the supplied caller and binds the exact whole-post revision", async () => {
   const fetcher = vi.fn<typeof fetch>(async () => response(ack()));
   expect(await submitFoundationPost(api(fetcher), { ...request, id: id.toUpperCase() })).toEqual(
