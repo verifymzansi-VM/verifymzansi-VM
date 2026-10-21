@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/config/env";
+import { isProductionDataEnvironment } from "@/lib/config/security-environment";
+import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import type { AppLogger } from "@/lib/utils/logger";
 
 const DEFAULT_APP_URL = "https://verifymzansi.com";
@@ -13,7 +15,13 @@ export function resolveSafeBillingAppUrl(
     const parsed = new URL(appUrl);
     const { hostname } = parsed;
     const isAllowedHost = hostname === "verifymzansi.com" || hostname.endsWith(".verifymzansi.com");
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = isProductionDataEnvironment();
+    const isLocalTestOrigin =
+      process.env.ENVIRONMENT === "test" &&
+      isPlaywrightTestMode() &&
+      isPlaywrightSupabaseStubMode() &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(hostname) &&
+      parsed.protocol === "http:";
 
     if (
       !["http:", "https:"].includes(parsed.protocol) ||
@@ -22,7 +30,9 @@ export function resolveSafeBillingAppUrl(
       parsed.search ||
       parsed.hash ||
       parsed.pathname !== "/" ||
-      (isProduction && (!isAllowedHost || parsed.protocol !== "https:" || parsed.port))
+      (isProduction &&
+        !isLocalTestOrigin &&
+        (!isAllowedHost || parsed.protocol !== "https:" || parsed.port))
     ) {
       log.error("NEXT_PUBLIC_APP_URL is not an allowed billing origin");
       return {
