@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-20T07-57-28.495Z/results.json",
-  "evidenceHash": "bpzY79Gl-ul613LhVRCEE0ASdMnjsP1R437h7S7oXJg",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-20T23-38-20.910Z/results.json",
+  "evidenceHash": "8dFhtHs_iBCEk_9vYFwA6iiqRDdLitHJ9_ocZmwD_vk",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",

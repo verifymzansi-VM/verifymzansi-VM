@@ -4,7 +4,7 @@
   "candidateHash": "s4Zu9Qrt76Ys6jZyEOtPBPMcaFT47H4SDsul9tBnKC8",
   "generator": {
     "tool": "Supabase CLI",
-    "version": "2.119.0",
+    "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },

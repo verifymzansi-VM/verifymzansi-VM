@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createCloudflareRequest } from "./lib/cloudflare-api.mjs";
+import { createCloudflareRequest, cloudflareRequestErrorMessage } from "./lib/cloudflare-api.mjs";
 
 const rawArgs = process.argv.slice(2);
 const args = new Set(rawArgs);
@@ -222,6 +222,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error.message || error);
+  console.error(cloudflareRequestErrorMessage(error));
   process.exit(1);
 });

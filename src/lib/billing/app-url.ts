@@ -10,12 +10,21 @@ export function resolveSafeBillingAppUrl(
   const appUrl = env("NEXT_PUBLIC_APP_URL") || DEFAULT_APP_URL;
 
   try {
-    const { hostname } = new URL(appUrl);
-    const isAllowedHost =
-      hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith("verifymzansi.com");
+    const parsed = new URL(appUrl);
+    const { hostname } = parsed;
+    const isAllowedHost = hostname === "verifymzansi.com" || hostname.endsWith(".verifymzansi.com");
+    const isProduction = process.env.NODE_ENV === "production";
 
-    if (!isAllowedHost && process.env.NODE_ENV === "production") {
-      log.error("NEXT_PUBLIC_APP_URL has unexpected hostname", { hostname });
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.pathname !== "/" ||
+      (isProduction && (!isAllowedHost || parsed.protocol !== "https:" || parsed.port))
+    ) {
+      log.error("NEXT_PUBLIC_APP_URL is not an allowed billing origin");
       return {
         appUrl: null,
         response: NextResponse.json(
@@ -24,8 +33,9 @@ export function resolveSafeBillingAppUrl(
         ),
       };
     }
+    return { appUrl: parsed.origin, response: null };
   } catch {
-    log.error("NEXT_PUBLIC_APP_URL is not a valid URL", { appUrl });
+    log.error("NEXT_PUBLIC_APP_URL is not a valid URL");
     return {
       appUrl: null,
       response: NextResponse.json(
@@ -34,6 +44,4 @@ export function resolveSafeBillingAppUrl(
       ),
     };
   }
-
-  return { appUrl, response: null };
 }

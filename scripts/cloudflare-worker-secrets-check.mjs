@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import nextEnv from "@next/env";
 import { activeVersionIds, inspectSecretBindings } from "./lib/cloudflare-deployment-bindings.mjs";
+import { runWranglerJson } from "./lib/cloudflare-wrangler.mjs";
 
-const execAsync = promisify(exec);
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
 
@@ -77,36 +75,17 @@ const forbiddenProductionSecrets = [
   "SMS_MOCK",
 ];
 
-function buildWranglerCommand(commandParts) {
-  const parts = ["pnpm", "exec", "wrangler", ...commandParts];
-  if (workerName) {
-    parts.push("--name", workerName);
-  }
-  if (envArg) {
-    parts.push("--env", targetEnv);
-  }
-  return parts.map((part) => (part.includes(" ") ? `\"${part}\"` : part)).join(" ");
-}
-
-async function runWranglerJson(commandParts) {
-  const command = buildWranglerCommand([...commandParts, "--json"]);
-  const { stdout } = await execAsync(command, {
-    windowsHide: true,
-    maxBuffer: 4 * 1024 * 1024,
-  });
-  return JSON.parse(stdout);
-}
-
 async function main() {
   assertCloudflareApiToken();
-  const deployments = await runWranglerJson(["deployments", "list"]);
+  const selectors = { workerName, targetEnv };
+  const deployments = await runWranglerJson(["deployments", "list"], selectors);
   const versionIds = activeVersionIds(deployments);
   let failed = false;
   console.log(
     `Cloudflare Worker secret check: ${workerName || "configured Worker"} (${targetEnv || "production"})`
   );
   for (const versionId of versionIds) {
-    const version = await runWranglerJson(["versions", "view", versionId]);
+    const version = await runWranglerJson(["versions", "view", versionId], selectors);
     const result = inspectSecretBindings(
       version?.resources?.bindings,
       requiredSecrets,
