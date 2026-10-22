@@ -181,13 +181,16 @@ function runBuild(env) {
 }
 
 function main() {
+  const buildOnly = process.argv.length === 3 && process.argv[2] === "--build-only";
+  if (process.argv.length > 2 && !buildOnly) throw new Error("Unsupported browser server argument");
   const env = createDeterministicEnv();
   // Local iteration escape hatch: when the .next output was already built with
   // the deterministic e2e env, skip the lengthy rebuild and just serve it.
   const useDevServer = process.env.PLAYWRIGHT_DEV_SERVER === "1";
-  if (!useDevServer && process.env.PLAYWRIGHT_SKIP_BUILD !== "1") {
+  if (buildOnly || (!useDevServer && process.env.PLAYWRIGHT_SKIP_BUILD !== "1")) {
     runBuild(env);
   }
+  if (buildOnly) return;
 
   // Use the same Turbopack dev runtime as `pnpm dev`. Webpack's eval-based
   // development chunks cannot hydrate under the application's existing CSP.

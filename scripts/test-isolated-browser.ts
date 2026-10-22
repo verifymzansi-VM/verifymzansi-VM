@@ -36,12 +36,15 @@ async function main() {
       )
     ),
     SENTRY_AUTH_TOKEN: "",
+    NODE_OPTIONS: "--max-old-space-size=4096",
     NODE_ENV: "production",
     PLAYWRIGHT_HOST: "127.0.0.1",
     PLAYWRIGHT_PORT: "3197",
     PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3197",
     PLAYWRIGHT_REUSE_SERVER: "0",
-    PLAYWRIGHT_SKIP_BUILD: "0",
+    // The explicit build step below must pass before browser startup. Keeping
+    // its output separate preserves diagnostics even before a reporter starts.
+    PLAYWRIGHT_SKIP_BUILD: "1",
     PLAYWRIGHT_DEV_SERVER: "0",
     PLAYWRIGHT_CAPTURE_SERVER_OUTPUT: "1",
     CI: "1",
@@ -56,6 +59,11 @@ async function main() {
   }> = [];
   for (const [label, args, timeout] of [
     ["install", installArgs, 600_000],
+    [
+      "build",
+      pnpmInvocation(["exec", "node", "scripts/start-playwright-server.cjs", "--build-only"])[1],
+      1_200_000,
+    ],
     [
       "browser",
       pnpmInvocation([
