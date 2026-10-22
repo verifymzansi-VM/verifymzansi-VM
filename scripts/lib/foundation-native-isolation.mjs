@@ -61,6 +61,7 @@ export const FIXTURE_MIGRATIONS = {
   "20261021195208_public_seller_card.sql":
     "docs/backend-foundation/prototypes/public-seller-card.sql",
   "20261022013108_owner_inbox.sql": "docs/backend-foundation/prototypes/owner-inbox.sql",
+  "20261022030541_organisations.sql": "docs/backend-foundation/prototypes/organisations.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

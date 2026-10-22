@@ -1,6 +1,6 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 286 functions and 93 API commands. It
+This separate target baseline contains 339 functions and 115 API commands. It
 preserves the reviewed domain transactions while excluding six test-only
 functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
@@ -71,6 +71,18 @@ sends a bare "inbox changed" signal on the private topic owner:<account id>, and
 only that account's live session may join it (realtime.messages policy, created
 where hosted Realtime exists). Enquiries are kept 12 months and notifications 90
 days, purged by a service command.
+
+Organisations (programme partners) are created and published by staff with
+organisation:manage and a recent second factor; every change needs a reason and
+is recorded in an append-only event log. Administrators join only through an
+emailed invitation whose token is never stored (SHA-256 hash only), must sign in
+with the invited address and must hold a current verified identity. Business
+owners apply with their own business profile and explicit consent; the
+organisation sees a fixed minimal view (business name, category, place, whether
+identity is verified, and the reviewed name only if the applicant agreed).
+Public directory, pages and badges show only listed organisations and live
+businesses, and a logo only with recorded written permission. Sponsorship,
+partner commissions and showcases are a separate later slice.
 
 Detailed security reports and recovery notes are kept outside the public commit.
 

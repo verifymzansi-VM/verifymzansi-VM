@@ -6,6 +6,7 @@ import {
   isPlainText,
   markFoundationNotificationsRead,
   readFoundationEnquiries,
+  readFoundationNotifications,
   setFoundationEnquiryStatus,
 } from "./owner-inbox";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
@@ -101,6 +102,27 @@ describe("foundation owner inbox adapter", () => {
     const client = api({ data: { marked: 2, unread_count: 0 }, error: null });
     await markFoundationNotificationsRead(client, {});
     expect(client.rpc).toHaveBeenCalledWith("mark_my_notifications_read", {});
+  });
+
+  it("parses enquiry and organisation notifications and refuses unknown kinds", async () => {
+    const note = {
+      id,
+      kind: "organisation_application_decided",
+      post_id: post,
+      post_title: "Synthetic workshop",
+      organisation_name: "Synthetic Chamber",
+      created_at: "2026-10-22T08:00:00Z",
+      read_at: null,
+    };
+    const page = { items: [note], unread_count: 1, next_cursor: null };
+    await expect(readFoundationNotifications(api({ data: page, error: null }))).resolves.toEqual(
+      page
+    );
+    await expect(
+      readFoundationNotifications(
+        api({ data: { ...page, items: [{ ...note, kind: "promotion" }] }, error: null })
+      )
+    ).rejects.toMatchObject({ reason: "unavailable" });
   });
 
   it("names the private owner topic only from a valid account id", () => {

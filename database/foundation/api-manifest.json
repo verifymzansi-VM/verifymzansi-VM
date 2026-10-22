@@ -1,19 +1,43 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "tcheG6VhKIX5V8vqa6lKO6gNhnhmeRwDutYxlE8BWBw",
+  "candidateHash": "dxNn1cecREfpIEOpdxn8KCl0vC7EqP1T9UImVNkevS8",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "YOzp75xOxzLFSMblkem5qV1H3cFAS4-r5zaPGLpvmyk",
-  "roleTypesHash": "88C5vxpYDMWA1u1OzcUKPjh_ye2Yd2VuxmddaEhPDi0",
+  "generatedTypesHash": "DQLhXAwRyAEIUBbocCe51wKQPBSAji1CWQCEk8k1uuE",
+  "roleTypesHash": "IAwxblgk4kkcGNjukkJ9UAzUKRNaskPI5Jl83Q88Iag",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
   "functions": [
+    {
+      "name": "accept_organisation_invite",
+      "signature": "p_token_hash text",
+      "argumentsWithDefaults": "p_token_hash text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
     {
       "name": "accept_posting_terms",
       "signature": "p_version text, p_document_hash text",
@@ -92,6 +116,35 @@
       }
     },
     {
+      "name": "add_organisation_note",
+      "signature": "p_org uuid, p_note text",
+      "argumentsWithDefaults": "p_org uuid, p_note text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "advance_evidence_artifact",
       "signature": "p_artifact_id uuid, p_state text, p_sha256 text, p_size integer",
       "argumentsWithDefaults": "p_artifact_id uuid, p_state text, p_sha256 text DEFAULT NULL::text, p_size integer DEFAULT NULL::integer",
@@ -152,6 +205,60 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "apply_to_organisation",
+      "signature": "p_org uuid, p_post_id uuid, p_share_representative_name boolean, p_consent boolean, p_programme uuid, p_reason text, p_member_reference text",
+      "argumentsWithDefaults": "p_org uuid, p_post_id uuid, p_share_representative_name boolean, p_consent boolean, p_programme uuid DEFAULT NULL::uuid, p_reason text DEFAULT NULL::text, p_member_reference text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_share_representative_name",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_consent",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_programme",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_member_reference",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {
@@ -549,6 +656,45 @@
           "name": "p_activity_key",
           "sqlType": "text",
           "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "create_organisation",
+      "signature": "p_slug text, p_name text, p_type text, p_reason text",
+      "argumentsWithDefaults": "p_slug text, p_name text, p_type text, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_type",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
         }
       ],
       "execute": {
@@ -1040,6 +1186,30 @@
       }
     },
     {
+      "name": "get_public_organisation",
+      "signature": "p_slug text",
+      "argumentsWithDefaults": "p_slug text",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "get_public_post",
       "signature": "p_id uuid",
       "argumentsWithDefaults": "p_id uuid",
@@ -1114,6 +1284,45 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "invite_organisation_admin",
+      "signature": "p_org uuid, p_email text, p_token_hash text, p_reason text",
+      "argumentsWithDefaults": "p_org uuid, p_email text, p_token_hash text, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {
@@ -1292,6 +1501,24 @@
       }
     },
     {
+      "name": "my_organisation_links",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "my_posting_capacity",
       "signature": "",
       "argumentsWithDefaults": "",
@@ -1339,6 +1566,127 @@
         "search_path=pg_catalog"
       ],
       "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "org_decide_application",
+      "signature": "p_application uuid, p_decision text, p_note text",
+      "argumentsWithDefaults": "p_application uuid, p_decision text, p_note text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_application",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_decision",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "org_list_affiliations",
+      "signature": "p_org uuid",
+      "argumentsWithDefaults": "p_org uuid",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "org_list_applications",
+      "signature": "p_org uuid, p_status text",
+      "argumentsWithDefaults": "p_org uuid, p_status text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_status",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "org_update_affiliation",
+      "signature": "p_affiliation uuid, p_action text, p_value text",
+      "argumentsWithDefaults": "p_affiliation uuid, p_action text, p_value text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_affiliation",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_value",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
       "execute": {
         "anon": false,
         "authenticated": true,
@@ -1399,6 +1747,30 @@
       ],
       "execute": {
         "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "preview_organisation_invite",
+      "signature": "p_token_hash text",
+      "argumentsWithDefaults": "p_token_hash text",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_token_hash",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
         "authenticated": true,
         "service_role": false
       }
@@ -1477,6 +1849,48 @@
       ],
       "execute": {
         "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "public_organisation_directory",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "public_post_affiliations",
+      "signature": "p_post_ids uuid[]",
+      "argumentsWithDefaults": "p_post_ids uuid[]",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
         "authenticated": true,
         "service_role": false
       }
@@ -1785,6 +2199,40 @@
       }
     },
     {
+      "name": "remove_organisation_admin",
+      "signature": "p_org uuid, p_account uuid, p_reason text",
+      "argumentsWithDefaults": "p_org uuid, p_account uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "renew_evidence_claim",
       "signature": "p_case_id uuid, p_claim_generation text, p_claim_nonce uuid",
       "argumentsWithDefaults": "p_case_id uuid, p_claim_generation text, p_claim_nonce uuid",
@@ -1975,6 +2423,35 @@
         {
           "name": "p_selfie_matches",
           "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "revoke_organisation_invite",
+      "signature": "p_invite uuid, p_reason text",
+      "argumentsWithDefaults": "p_invite uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_invite",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
           "optional": false
         }
       ],
@@ -2213,6 +2690,55 @@
       }
     },
     {
+      "name": "save_organisation_programme",
+      "signature": "p_org uuid, p_slug text, p_name text, p_reason text, p_description text, p_active boolean",
+      "argumentsWithDefaults": "p_org uuid, p_slug text, p_name text, p_reason text, p_description text DEFAULT NULL::text, p_active boolean DEFAULT true",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_description",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_active",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "save_post_content",
       "signature": "p_post_id uuid, p_expected_revision integer, p_content jsonb",
       "argumentsWithDefaults": "p_post_id uuid, p_expected_revision integer, p_content jsonb",
@@ -2319,6 +2845,50 @@
         {
           "name": "p_object_id",
           "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "set_organisation_logo",
+      "signature": "p_id uuid, p_expected_revision integer, p_reason text, p_object_id uuid, p_permission_reference text",
+      "argumentsWithDefaults": "p_id uuid, p_expected_revision integer, p_reason text, p_object_id uuid DEFAULT NULL::uuid, p_permission_reference text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_object_id",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_permission_reference",
+          "sqlType": "text",
           "optional": true
         }
       ],
@@ -2488,6 +3058,30 @@
       }
     },
     {
+      "name": "staff_get_organisation",
+      "signature": "p_id uuid",
+      "argumentsWithDefaults": "p_id uuid",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "staff_identity_history",
       "signature": "p_owner uuid, p_before_time timestamp with time zone, p_before_id uuid",
       "argumentsWithDefaults": "p_owner uuid, p_before_time timestamp with time zone DEFAULT NULL::timestamp with time zone, p_before_id uuid DEFAULT NULL::uuid",
@@ -2549,6 +3143,24 @@
           "optional": false
         }
       ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_list_organisations",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
       "execute": {
         "anon": false,
         "authenticated": true,
@@ -2777,6 +3389,79 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "update_my_application",
+      "signature": "p_application uuid, p_action text, p_response text",
+      "argumentsWithDefaults": "p_application uuid, p_action text, p_response text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_application",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_response",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "update_organisation",
+      "signature": "p_id uuid, p_expected_revision integer, p_patch jsonb, p_reason text",
+      "argumentsWithDefaults": "p_id uuid, p_expected_revision integer, p_patch jsonb, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_patch",
+          "sqlType": "jsonb",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {

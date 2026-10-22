@@ -276,6 +276,19 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
   "inbox:read": [{ limit: 60, ttl: 60 }],
   "inbox:update": [{ limit: 30, ttl: 60 }],
 
+  // ── Organisations ────────────────────────────────────
+  "organisation:public": [{ limit: 120, ttl: 60 }],
+  "organisation:read": [{ limit: 60, ttl: 60 }],
+  "organisation:apply": [
+    { limit: 5, ttl: 60 },
+    { limit: 20, ttl: 86400 },
+  ],
+  "organisation:manage": [{ limit: 30, ttl: 60 }],
+  "organisation:invite": [
+    { limit: 5, ttl: 60 },
+    { limit: 20, ttl: 3600 },
+  ],
+
   // ── Reports ──────────────────────────────────────────
   "report:submit": [
     { limit: 5, ttl: 60 },

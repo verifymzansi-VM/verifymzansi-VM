@@ -2,6 +2,7 @@ import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
 import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
 import { testAccountProfiles } from "./lib/foundation-account-profile-native.mjs";
 import { testOwnerInbox } from "./lib/foundation-owner-inbox-native.mjs";
+import { testOrganisations } from "./lib/foundation-organisations-native.mjs";
 import {
   installFixturePostingTerms,
   acceptFixturePostingTerms,
@@ -56,6 +57,9 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "scripts/lib/foundation-owner-inbox-native.mjs",
       "src/lib/foundation/owner-inbox.ts",
       "src/lib/utils/phone.ts",
+      "docs/backend-foundation/prototypes/organisations.sql",
+      "scripts/lib/foundation-organisations-native.mjs",
+      "src/lib/foundation/organisations.ts",
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
       "scripts/lib/foundation-native-paths.mjs",
@@ -7530,6 +7534,23 @@ commit;`);
         nativeStage = value;
       },
     });
+    nativeStage = "organisations";
+    await testOrganisations({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
     const types = cli(["gen", "types", "--local", "--schema", "api"]);
     assert.ok(types.includes("rename_transport_resource"));
     assert.ok(types.includes("enqueue_transport_reconciliation"));
@@ -7639,6 +7660,7 @@ commit;`);
                 `alter table private.moderation_log disable trigger moderation_log_append_only;` +
                 `delete from private.moderation_log where staff_id in (${ids}) or post_id in (select id from private.posts where owner_id in (${ids}));` +
                 `alter table private.moderation_log enable trigger moderation_log_append_only;` +
+                `delete from private.organisations where created_by in (${ids});` +
                 `delete from private.posts where owner_id in (${ids});` +
                 `delete from private.media_objects where owner_id in (${ids});`)(
                 users.map((user) => `'${uuid(user.id)}'`).join(",")

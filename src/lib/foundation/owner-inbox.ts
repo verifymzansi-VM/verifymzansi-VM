@@ -206,9 +206,15 @@ export async function setFoundationEnquiryStatus(api: FoundationAuthenticatedApi
 
 const notification = z.strictObject({
   id: z.uuid(),
-  kind: z.enum(["enquiry_received"]),
+  kind: z.enum([
+    "enquiry_received",
+    "organisation_application_received",
+    "organisation_application_decided",
+    "organisation_affiliation_ended",
+  ]),
   post_id: z.uuid().nullable(),
   post_title: z.string().nullable(),
+  organisation_name: z.string().nullable(),
   created_at: instant,
   read_at: instant.nullable(),
 });

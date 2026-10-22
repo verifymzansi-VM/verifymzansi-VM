@@ -9,14 +9,28 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_organisation_invite: { Args: { p_token_hash: string }; Returns: Json };
       accept_posting_terms: { Args: { p_document_hash: string; p_version: string }; Returns: Json };
       acknowledge_cost_alarm: { Args: { p_alarm_id: string }; Returns: Json };
       activate_post: { Args: { p_post_id: string }; Returns: Json };
+      add_organisation_note: { Args: { p_note: string; p_org: string }; Returns: Json };
       advance_evidence_artifact: {
         Args: { p_artifact_id: string; p_sha256?: string; p_size?: number; p_state: string };
         Returns: Json;
       };
       apply_provider_event: { Args: { p_event: Json }; Returns: Json };
+      apply_to_organisation: {
+        Args: {
+          p_consent: boolean;
+          p_member_reference?: string;
+          p_org: string;
+          p_post_id: string;
+          p_programme?: string;
+          p_reason?: string;
+          p_share_representative_name: boolean;
+        };
+        Returns: Json;
+      };
       approve_decision: { Args: { p_decision_id: string }; Returns: Json };
       attach_provider_request: {
         Args: { p_payment_id: string; p_request_id: string };
@@ -48,6 +62,10 @@ export type Database = {
           p_detail: Json;
           p_kind: string;
         };
+        Returns: Json;
+      };
+      create_organisation: {
+        Args: { p_name: string; p_reason: string; p_slug: string; p_type: string };
         Returns: Json;
       };
       create_post_edit: { Args: { p_expected_revision: number; p_post_id: string }; Returns: Json };
@@ -96,9 +114,14 @@ export type Database = {
       get_owner_post_contacts: { Args: { p_post_id: string }; Returns: Json };
       get_owner_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_verification_readiness: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_public_organisation: { Args: { p_slug: string }; Returns: Json };
       get_public_post: { Args: { p_id: string }; Returns: Json };
       grant_verified_intro_trial: { Args: { p_days: number; p_owner: string }; Returns: Json };
       identity_status: { Args: { p_identity_hmac: string }; Returns: Json };
+      invite_organisation_admin: {
+        Args: { p_email: string; p_org: string; p_reason: string; p_token_hash: string };
+        Returns: Json;
+      };
       list_my_enquiries: {
         Args: {
           p_before_created?: string;
@@ -128,11 +151,23 @@ export type Database = {
         };
         Returns: Json;
       };
+      my_organisation_links: { Args: Record<PropertyKey, never>; Returns: Json };
       my_posting_capacity: { Args: Record<PropertyKey, never>; Returns: Json };
       my_queue_claims: { Args: Record<PropertyKey, never>; Returns: Json };
       open_verification_case: { Args: Record<PropertyKey, never>; Returns: Json };
+      org_decide_application: {
+        Args: { p_application: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
+      org_list_affiliations: { Args: { p_org: string }; Returns: Json };
+      org_list_applications: { Args: { p_org: string; p_status?: string }; Returns: Json };
+      org_update_affiliation: {
+        Args: { p_action: string; p_affiliation: string; p_value: string };
+        Returns: Json;
+      };
       place_legal_hold: { Args: { p_reason: string; p_subject_id: string }; Returns: Json };
       preview_duplicate_events: { Args: { p_post_a: string; p_post_b: string }; Returns: Json };
+      preview_organisation_invite: { Args: { p_token_hash: string }; Returns: Json };
       propose_decision: {
         Args: { p_action: string; p_case_id: string; p_expected_version: number; p_payload: Json };
         Returns: Json;
@@ -141,6 +176,8 @@ export type Database = {
         Args: { p_category: string; p_fact: string; p_owner: string; p_request: string };
         Returns: Json;
       };
+      public_organisation_directory: { Args: Record<PropertyKey, never>; Returns: Json };
+      public_post_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
       purge_expired_identity_bans: { Args: { p_limit: number }; Returns: number };
       purge_expired_inbox: { Args: { p_limit: number }; Returns: Json };
       purge_expired_trial_identities: { Args: { p_limit: number }; Returns: number };
@@ -173,6 +210,10 @@ export type Database = {
           p_id: string;
           p_subject: string;
         };
+        Returns: Json;
+      };
+      remove_organisation_admin: {
+        Args: { p_account: string; p_org: string; p_reason: string };
         Returns: Json;
       };
       renew_evidence_claim: {
@@ -213,6 +254,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      revoke_organisation_invite: { Args: { p_invite: string; p_reason: string }; Returns: Json };
       run_post_lifecycle: { Args: { p_limit: number }; Returns: Json };
       save_business_event_context: {
         Args: { p_expected_revision: number; p_patch: Json; p_post_id: string };
@@ -238,6 +280,17 @@ export type Database = {
         Args: { p_bio?: string; p_display_name?: string; p_expected_revision: number };
         Returns: Json;
       };
+      save_organisation_programme: {
+        Args: {
+          p_active?: boolean;
+          p_description?: string;
+          p_name: string;
+          p_org: string;
+          p_reason: string;
+          p_slug: string;
+        };
+        Returns: Json;
+      };
       save_post_content: {
         Args: { p_content: Json; p_expected_revision: number; p_post_id: string };
         Returns: Json;
@@ -245,6 +298,16 @@ export type Database = {
       search_posts: { Args: { p_request: Json }; Returns: Json };
       set_enquiry_status: { Args: { p_id: string; p_status: string }; Returns: Json };
       set_my_avatar: { Args: { p_expected_revision: number; p_object_id?: string }; Returns: Json };
+      set_organisation_logo: {
+        Args: {
+          p_expected_revision: number;
+          p_id: string;
+          p_object_id?: string;
+          p_permission_reference?: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       set_post_contacts: {
         Args: { p_channels: Json; p_expected_revision: number; p_post_id: string };
         Returns: Json;
@@ -267,6 +330,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      staff_get_organisation: { Args: { p_id: string }; Returns: Json };
       staff_identity_history: {
         Args: { p_before_id?: string; p_before_time?: string; p_owner: string };
         Returns: Json;
@@ -275,6 +339,7 @@ export type Database = {
         Args: { p_case: string; p_claim_generation: string; p_claim_nonce: string };
         Returns: Json;
       };
+      staff_list_organisations: { Args: Record<PropertyKey, never>; Returns: Json };
       staff_review_post: {
         Args: { p_claim_generation: string; p_claim_nonce: string; p_post_id: string };
         Returns: Json;
@@ -305,6 +370,14 @@ export type Database = {
           p_reporter_id?: string;
           p_reporter_ip_hmac: string;
         };
+        Returns: Json;
+      };
+      update_my_application: {
+        Args: { p_action: string; p_application: string; p_response?: string };
+        Returns: Json;
+      };
+      update_organisation: {
+        Args: { p_expected_revision: number; p_id: string; p_patch: Json; p_reason: string };
         Returns: Json;
       };
       withdraw_decision: {

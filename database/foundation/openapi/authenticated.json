@@ -187,6 +187,50 @@
         ]
       }
     },
+    "/rpc/add_organisation_note": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_note": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org",
+                "p_note"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) add_organisation_note"
+        ]
+      }
+    },
     "/rpc/staff_review_report": {
       "post": {
         "parameters": [
@@ -236,6 +280,55 @@
         ]
       }
     },
+    "/rpc/org_update_affiliation": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_affiliation": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_value": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_affiliation",
+                "p_action",
+                "p_value"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_update_affiliation"
+        ]
+      }
+    },
     "/rpc/get_owner_listing_editor": {
       "post": {
         "parameters": [
@@ -272,6 +365,55 @@
         },
         "tags": [
           "(rpc) get_owner_listing_editor"
+        ]
+      }
+    },
+    "/rpc/remove_organisation_admin": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_account": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org",
+                "p_account",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) remove_organisation_admin"
         ]
       }
     },
@@ -851,6 +993,60 @@
         ]
       }
     },
+    "/rpc/invite_organisation_admin": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_email": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_token_hash": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org",
+                "p_email",
+                "p_token_hash",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) invite_organisation_admin"
+        ]
+      }
+    },
     "/rpc/release_queue_claim": {
       "post": {
         "parameters": [
@@ -1037,6 +1233,117 @@
         ]
       }
     },
+    "/rpc/preview_organisation_invite": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_token_hash",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) preview_organisation_invite"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_token_hash": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_token_hash"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) preview_organisation_invite"
+        ]
+      }
+    },
+    "/rpc/org_decide_application": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_application": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_decision": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_note": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_application",
+                "p_decision"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_decide_application"
+        ]
+      }
+    },
     "/rpc/open_verification_case": {
       "post": {
         "parameters": [
@@ -1064,6 +1371,51 @@
         },
         "tags": [
           "(rpc) open_verification_case"
+        ]
+      }
+    },
+    "/rpc/my_organisation_links": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) my_organisation_links"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) my_organisation_links"
         ]
       }
     },
@@ -1112,6 +1464,69 @@
         },
         "tags": [
           "(rpc) save_business_event_context"
+        ]
+      }
+    },
+    "/rpc/staff_get_organisation": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_get_organisation"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_get_organisation"
         ]
       }
     },
@@ -1227,6 +1642,72 @@
         ]
       }
     },
+    "/rpc/apply_to_organisation": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_consent": {
+                  "format": "boolean",
+                  "type": "boolean"
+                },
+                "p_member_reference": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_programme": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_share_representative_name": {
+                  "format": "boolean",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "p_org",
+                "p_post_id",
+                "p_share_representative_name",
+                "p_consent"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) apply_to_organisation"
+        ]
+      }
+    },
     "/rpc/save_my_profile": {
       "post": {
         "parameters": [
@@ -1333,6 +1814,54 @@
         },
         "tags": [
           "(rpc) search_posts"
+        ]
+      }
+    },
+    "/rpc/update_my_application": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_application": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_response": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_application",
+                "p_action"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) update_my_application"
         ]
       }
     },
@@ -1644,6 +2173,113 @@
         ]
       }
     },
+    "/rpc/org_list_affiliations": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_org",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_list_affiliations"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_list_affiliations"
+        ]
+      }
+    },
+    "/rpc/revoke_organisation_invite": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_invite": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_invite",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) revoke_organisation_invite"
+        ]
+      }
+    },
     "/rpc/delete_post": {
       "post": {
         "parameters": [
@@ -1820,6 +2456,69 @@
         ]
       }
     },
+    "/rpc/get_public_organisation": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_slug",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_public_organisation"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_slug": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_slug"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_public_organisation"
+        ]
+      }
+    },
     "/rpc/save_my_legal_name": {
       "post": {
         "parameters": [
@@ -1960,6 +2659,63 @@
         ]
       }
     },
+    "/rpc/set_organisation_logo": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_object_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_permission_reference": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_id",
+                "p_expected_revision",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) set_organisation_logo"
+        ]
+      }
+    },
     "/rpc/get_owner_verification_readiness": {
       "post": {
         "parameters": [
@@ -2036,6 +2792,59 @@
         },
         "tags": [
           "(rpc) set_post_state"
+        ]
+      }
+    },
+    "/rpc/update_organisation": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_patch": {
+                  "format": "jsonb"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_id",
+                "p_expected_revision",
+                "p_patch",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) update_organisation"
         ]
       }
     },
@@ -2288,6 +3097,72 @@
         ]
       }
     },
+    "/rpc/public_post_affiliations": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid[]",
+            "in": "query",
+            "name": "p_post_ids",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_post_affiliations"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_post_ids": {
+                  "format": "uuid[]",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "p_post_ids"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_post_affiliations"
+        ]
+      }
+    },
     "/rpc/save_post_content": {
       "post": {
         "parameters": [
@@ -2449,6 +3324,68 @@
         ]
       }
     },
+    "/rpc/save_organisation_programme": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_active": {
+                  "format": "boolean",
+                  "type": "boolean"
+                },
+                "p_description": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_name": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_slug": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org",
+                "p_slug",
+                "p_name",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) save_organisation_programme"
+        ]
+      }
+    },
     "/rpc/get_owner_business_event_editor": {
       "post": {
         "parameters": [
@@ -2589,6 +3526,51 @@
         ]
       }
     },
+    "/rpc/public_organisation_directory": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_organisation_directory"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_organisation_directory"
+        ]
+      }
+    },
     "/rpc/get_public_post": {
       "get": {
         "parameters": [
@@ -2695,6 +3677,51 @@
         ]
       }
     },
+    "/rpc/staff_list_organisations": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_organisations"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_organisations"
+        ]
+      }
+    },
     "/rpc/create_post_edit": {
       "post": {
         "parameters": [
@@ -2790,6 +3817,80 @@
         },
         "tags": [
           "(rpc) propose_verified_identity_ban"
+        ]
+      }
+    },
+    "/rpc/org_list_applications": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_org",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_status",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_list_applications"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_status": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_list_applications"
         ]
       }
     },
@@ -3073,6 +4174,60 @@
         ]
       }
     },
+    "/rpc/create_organisation": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_name": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_slug": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_type": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_slug",
+                "p_name",
+                "p_type",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) create_organisation"
+        ]
+      }
+    },
     "/rpc/reference_catalog": {
       "get": {
         "produces": [
@@ -3315,6 +4470,45 @@
         },
         "tags": [
           "(rpc) resolve_report"
+        ]
+      }
+    },
+    "/rpc/accept_organisation_invite": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_token_hash": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_token_hash"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) accept_organisation_invite"
         ]
       }
     }

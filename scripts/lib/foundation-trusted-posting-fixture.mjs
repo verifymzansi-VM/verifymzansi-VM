@@ -160,9 +160,16 @@ export function createTrustedPostingFixture({ rpc, sql, reviewer }) {
 
 /** Trusted harness role setup, then real Auth/TOTP. The role insertion is not
  * evidence acceptance; the routine review still runs as this actual caller. */
-export async function createPostingVerifier({ createUser, sql, fixtureAdminId }) {
+export async function createPostingVerifier({
+  createUser,
+  sql,
+  fixtureAdminId,
+  role = "governor",
+  label = "posting-verification-reviewer",
+}) {
   uuid(fixtureAdminId);
-  const reviewer = await createUser("posting-verification-reviewer");
+  assert.ok(["moderator", "governor", "admin"].includes(role));
+  const reviewer = await createUser(label);
   uuid(reviewer.id);
   const enrolled = await reviewer.member.auth.mfa.enroll({ factorType: "totp" });
   assert.equal(enrolled.error, null);
@@ -194,7 +201,9 @@ export async function createPostingVerifier({ createUser, sql, fixtureAdminId })
   sql(
     "insert into private.staff_roles(user_id,role,granted_by) values('" +
       reviewer.id +
-      "','governor','" +
+      "','" +
+      role +
+      "','" +
       fixtureAdminId +
       "');"
   );

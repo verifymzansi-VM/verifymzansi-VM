@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-22T00-25-10.392Z/results.json",
-  "evidenceHash": "aXzzOl5VK_2wrpzYeBqM277AKze-DC_-RdjU2lVegIc",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-22T03-13-59.924Z/results.json",
+  "evidenceHash": "ncbIg1sqzu4GCFqWaz4_6NO4SEP9-T3K7FeTCsnnIq4",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -34,7 +34,8 @@
     "docs/backend-foundation/prototypes/person-name-rule.sql": "FMR-nOmfaVkwwv-rJTqiT0BqFVCoMfUZea6D-rTnh2U",
     "docs/backend-foundation/prototypes/account-profiles.sql": "qc6cvxRN2a9uCN-tLjB18jisIiPnF9r_HS7cfjLaK6g",
     "docs/backend-foundation/prototypes/public-seller-card.sql": "uRS5CxPLbnrWjEhiPMf5UUjTN_Z6qa8naTfEOBVrN2k",
-    "docs/backend-foundation/prototypes/owner-inbox.sql": "Mqg2ENqZ5qhj5-2PWpKvy-F_sZKCdO5Ss3r1lk0YUh8"
+    "docs/backend-foundation/prototypes/owner-inbox.sql": "Mqg2ENqZ5qhj5-2PWpKvy-F_sZKCdO5Ss3r1lk0YUh8",
+    "docs/backend-foundation/prototypes/organisations.sql": "LIXe5qnLjxICSD4F-SDJgdFTxjUNuDhOUHO6YIrewu4"
   },
   "postingTermsCatalogue": {
     "activeVersion": "posting-v1",
@@ -50,7 +51,7 @@
     },
     "sql": "insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');\ninsert into private.posting_terms_current(version) values('posting-v1');\n"
   },
-  "candidateHash": "tcheG6VhKIX5V8vqa6lKO6gNhnhmeRwDutYxlE8BWBw",
+  "candidateHash": "dxNn1cecREfpIEOpdxn8KCl0vC7EqP1T9UImVNkevS8",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",
@@ -80,8 +81,8 @@
     }
   },
   "catalogueSeedIdentitiesHash": "as4g-QYYagtdMoogKzVc3asHo7oJzhGr8Ip5lVYNDjo",
-  "functions": 286,
-  "matchingNativeFunctionBodies": 285,
+  "functions": 339,
+  "matchingNativeFunctionBodies": 338,
   "derivedFunctionChanges": {
     "internal.validate_listing_attributes": "Remove test-only fixture_market bypass; requires separate baseline replay and strict-category proof"
   },
