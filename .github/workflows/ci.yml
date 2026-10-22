@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 env:
   NODE_OPTIONS: --max-old-space-size=4096
 

@@ -13,6 +13,10 @@ on:
         options:
           - production
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false

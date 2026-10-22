@@ -3,6 +3,10 @@ name: Update Visual Baselines
 on:
   workflow_dispatch:
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 jobs:
   generate-baselines:
     runs-on: ubuntu-latest
