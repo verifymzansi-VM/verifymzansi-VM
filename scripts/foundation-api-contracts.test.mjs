@@ -62,6 +62,25 @@ test("API type AST matches exact schema, RPC names, arguments and default option
     assert.throws(() => inspectApiTypes(value, functions));
 });
 
+test("a reviewed uuid array argument accepts both generator spellings and nothing looser", () => {
+  const ids = [
+    {
+      name: "id_command",
+      returns: "jsonb",
+      arguments: [{ name: "p_ids", sqlType: "uuid[]", optional: true }],
+    },
+  ];
+  const typed = (type) =>
+    source.replace(
+      "test_command: { Args: { p_id: string; p_limit?: number }; Returns: Json }",
+      `id_command: { Args: { p_ids?: ${type} }; Returns: Json }`
+    );
+  assert.equal(inspectApiTypes(typed("(string)[]"), ids), 1);
+  assert.equal(inspectApiTypes(typed("string[]"), ids), 1);
+  for (const type of ["string", "(number)[]", "unknown[]", "Json"])
+    assert.throws(() => inspectApiTypes(typed(type), ids));
+});
+
 test("an exact manifest match cannot legitimise forbidden fixture identity APIs", () => {
   for (const name of [
     "grant_intro_trial",

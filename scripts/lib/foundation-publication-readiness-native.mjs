@@ -1,8 +1,9 @@
 import { createFoundationAuthenticatedApi } from "../../src/lib/foundation/authenticated-api.ts";
 import { readFoundationVerificationReadiness } from "../../src/lib/foundation/verification-readiness.ts";
 import assert from "node:assert/strict";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import {
+  attachFixtureCover,
   createPostingVerifier,
   createTrustedPostingFixture,
 } from "./foundation-trusted-posting-fixture.mjs";
@@ -130,31 +131,7 @@ export async function testPublicationVerificationReadiness({
       },
       user
     );
-    if (event) {
-      const image = await call("begin_media_upload", { p_kind: "image", p_bytes: 128 }, user);
-      await call(
-        "finalize_media",
-        {
-          p_object_id: image.object_id,
-          p_size: 128,
-          p_sha256: createHash("sha256").update(image.object_id).digest("hex"),
-          p_mime: "image/jpeg",
-          p_width: 800,
-          p_height: 600,
-        },
-        null,
-        true
-      );
-      post = await call(
-        "set_post_media",
-        {
-          p_post_id: post.id,
-          p_expected_revision: post.revision,
-          p_items: [{ object_id: image.object_id, purpose: "cover", position: 0 }],
-        },
-        user
-      );
-    }
+    if (event) post = await attachFixtureCover(call, post, user);
     return post;
   };
   const submit = (post, user = owner) =>

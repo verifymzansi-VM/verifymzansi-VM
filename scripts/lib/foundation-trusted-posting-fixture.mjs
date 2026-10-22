@@ -200,3 +200,31 @@ export async function createPostingVerifier({ createUser, sql, fixtureAdminId })
   );
   return reviewer;
 }
+
+/** Attaches a synthetic, server-finalized cover image to an owned draft. Uses
+ * the real owner upload and service finalize commands; no bytes or scanner. */
+export async function attachFixtureCover(call, post, owner) {
+  const image = await call("begin_media_upload", { p_kind: "image", p_bytes: 128 }, owner);
+  await call(
+    "finalize_media",
+    {
+      p_object_id: image.object_id,
+      p_size: 128,
+      p_sha256: createHash("sha256").update(image.object_id).digest("hex"),
+      p_mime: "image/jpeg",
+      p_width: 800,
+      p_height: 600,
+    },
+    null,
+    true
+  );
+  return call(
+    "set_post_media",
+    {
+      p_post_id: post.id,
+      p_expected_revision: post.revision,
+      p_items: [{ object_id: image.object_id, purpose: "cover", position: 0 }],
+    },
+    owner
+  );
+}

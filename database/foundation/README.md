@@ -1,6 +1,6 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 265 functions and 86 API commands. It
+This separate target baseline contains 286 functions and 93 API commands. It
 preserves the reviewed domain transactions while excluding six test-only
 functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
@@ -60,6 +60,17 @@ accept the same names. Account authority also requires a confirmed email. The
 first administrator is granted only by the operator-only
 internal.bootstrap_first_administrator, once, to a confirmed account that
 already has a verified authenticator app.
+
+Enquiries on live posts are a trusted server command: the website checks
+Turnstile, rate limits and the GoTrue-verified sender, and SQL rechecks the
+post, the owner's contact choice, the sender account and flood limits, and
+derives whether the reply email is confirmed. Buyer details are visible only to
+the post owner. Owners get notifications rendered from a closed kind list, and
+an outbox event for email delivery. Realtime carries no content: the database
+sends a bare "inbox changed" signal on the private topic owner:<account id>, and
+only that account's live session may join it (realtime.messages policy, created
+where hosted Realtime exists). Enquiries are kept 12 months and notifications 90
+days, purged by a service command.
 
 Detailed security reports and recovery notes are kept outside the public commit.
 

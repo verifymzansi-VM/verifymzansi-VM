@@ -505,6 +505,72 @@
         ]
       }
     },
+    "/rpc/submit_enquiry": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_buyer_email": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_buyer_name": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_buyer_phone": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_message": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_request_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_sender": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_request_id",
+                "p_post_id",
+                "p_buyer_email",
+                "p_message"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) submit_enquiry"
+        ]
+      }
+    },
     "/rpc/create_verification_phone_challenge": {
       "post": {
         "parameters": [
@@ -970,6 +1036,45 @@
         },
         "tags": [
           "(rpc) check_cost_alarms"
+        ]
+      }
+    },
+    "/rpc/purge_expired_inbox": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "p_limit"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) purge_expired_inbox"
         ]
       }
     },

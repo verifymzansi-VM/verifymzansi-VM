@@ -1,6 +1,7 @@
 import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
 import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
 import { testAccountProfiles } from "./lib/foundation-account-profile-native.mjs";
+import { testOwnerInbox } from "./lib/foundation-owner-inbox-native.mjs";
 import {
   installFixturePostingTerms,
   acceptFixturePostingTerms,
@@ -51,6 +52,10 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "docs/backend-foundation/prototypes/person-name-rule.sql",
       "docs/backend-foundation/prototypes/account-profiles.sql",
       "docs/backend-foundation/prototypes/public-seller-card.sql",
+      "docs/backend-foundation/prototypes/owner-inbox.sql",
+      "scripts/lib/foundation-owner-inbox-native.mjs",
+      "src/lib/foundation/owner-inbox.ts",
+      "src/lib/utils/phone.ts",
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
       "scripts/lib/foundation-native-paths.mjs",
@@ -172,6 +177,27 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
         "ON_ERROR_STOP=1",
         "-v",
         "VERBOSITY=verbose",
+        "-At",
+      ],
+      { input: statement, encoding: "utf8", env, stdio: ["pipe", "pipe", "pipe"] }
+    ).trim();
+  // Local component owner, only for installing and removing hosted-component
+  // stand-ins (for example the Realtime send recorder); never application data.
+  const componentSql = (statement) =>
+    execFileSync(
+      "docker",
+      [
+        ...dockerArgs,
+        "exec",
+        "-i",
+        container,
+        "psql",
+        "-U",
+        "supabase_admin",
+        "-d",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
         "-At",
       ],
       { input: statement, encoding: "utf8", env, stdio: ["pipe", "pipe", "pipe"] }
@@ -7485,6 +7511,24 @@ commit;`);
       sqlFails,
       verificationFixture,
       record,
+    });
+    nativeStage = "owner inbox";
+    await testOwnerInbox({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      componentSql,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
     });
     const types = cli(["gen", "types", "--local", "--schema", "api"]);
     assert.ok(types.includes("rename_transport_resource"));

@@ -89,6 +89,7 @@ export type Database = {
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
       get_current_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
+      get_my_inbox_counts: { Args: Record<PropertyKey, never>; Returns: Json };
       get_my_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_listing_editor: { Args: { p_post_id: string }; Returns: Json };
@@ -98,10 +99,24 @@ export type Database = {
       get_public_post: { Args: { p_id: string }; Returns: Json };
       grant_verified_intro_trial: { Args: { p_days: number; p_owner: string }; Returns: Json };
       identity_status: { Args: { p_identity_hmac: string }; Returns: Json };
+      list_my_enquiries: {
+        Args: {
+          p_before_created?: string;
+          p_before_id?: string;
+          p_limit?: number;
+          p_status?: string;
+        };
+        Returns: Json;
+      };
+      list_my_notifications: {
+        Args: { p_before_created?: string; p_before_id?: string; p_limit?: number };
+        Returns: Json;
+      };
       mark_media_deleted: {
         Args: { p_claim_token: string; p_object_id: string };
         Returns: boolean;
       };
+      mark_my_notifications_read: { Args: { p_ids?: string[] }; Returns: Json };
       moderate_post: {
         Args: {
           p_claim_generation: string;
@@ -127,6 +142,7 @@ export type Database = {
         Returns: Json;
       };
       purge_expired_identity_bans: { Args: { p_limit: number }; Returns: number };
+      purge_expired_inbox: { Args: { p_limit: number }; Returns: Json };
       purge_expired_trial_identities: { Args: { p_limit: number }; Returns: number };
       read_listing_price_draft: { Args: Record<PropertyKey, never>; Returns: Json };
       reassign_queue_claim: {
@@ -227,6 +243,7 @@ export type Database = {
         Returns: Json;
       };
       search_posts: { Args: { p_request: Json }; Returns: Json };
+      set_enquiry_status: { Args: { p_id: string; p_status: string }; Returns: Json };
       set_my_avatar: { Args: { p_expected_revision: number; p_object_id?: string }; Returns: Json };
       set_post_contacts: {
         Args: { p_channels: Json; p_expected_revision: number; p_post_id: string };
@@ -267,6 +284,18 @@ export type Database = {
         Returns: Json;
       };
       start_checkout: { Args: { p_product_id: string; p_target_post?: string }; Returns: Json };
+      submit_enquiry: {
+        Args: {
+          p_buyer_email: string;
+          p_buyer_name?: string;
+          p_buyer_phone?: string;
+          p_message: string;
+          p_post_id: string;
+          p_request_id: string;
+          p_sender?: string;
+        };
+        Returns: Json;
+      };
       submit_post: { Args: { p_expected_revision: number; p_post_id: string }; Returns: Json };
       submit_report: {
         Args: {

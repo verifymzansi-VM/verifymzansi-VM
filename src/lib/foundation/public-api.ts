@@ -5,6 +5,19 @@ import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 
 export type FoundationPublicApi = Pick<SupabaseClient<FoundationPublicDatabase, "api">, "rpc">;
 
+/** Client options for keyed (publishable or secret) API RPC clients: api schema,
+ * no retries, sessions, cookies, caching or redirects. */
+export function foundationRpcClientOptions(fetcher: typeof fetch) {
+  return {
+    db: { schema: "api" as const, retry: false },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: {
+      fetch: (request: Parameters<typeof fetch>[0], init?: RequestInit) =>
+        fetcher(request, { ...init, credentials: "omit", cache: "no-store", redirect: "error" }),
+    },
+  };
+}
+
 /** A separate foundation connection: legacy factories stay on their source schema.
  * Explicit identity prevents accidentally pointing new adapters at Mumbai or a
  * benchmark project. No cookies, session persistence or ambient env credentials.
@@ -15,13 +28,10 @@ export function createFoundationPublicApi(
   fetcher: typeof fetch = createTimeoutFetch()
 ): FoundationPublicApi {
   const config = parseFoundationConnection(input);
-  const client = createClient<FoundationPublicDatabase, "api">(config.url, config.publishableKey, {
-    db: { schema: "api", retry: false },
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: {
-      fetch: (request, init) =>
-        fetcher(request, { ...init, credentials: "omit", cache: "no-store", redirect: "error" }),
-    },
-  });
+  const client = createClient<FoundationPublicDatabase, "api">(
+    config.url,
+    config.publishableKey,
+    foundationRpcClientOptions(fetcher)
+  );
   return Object.freeze({ rpc: client.rpc.bind(client) });
 }

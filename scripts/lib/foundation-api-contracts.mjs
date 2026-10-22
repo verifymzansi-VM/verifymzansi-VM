@@ -20,6 +20,9 @@ const scalarTypes = new Map([
   ["boolean", "boolean"],
   ["timestamp with time zone", "string"],
   ["jsonb", "Json"],
+  // Bounded id lists (for example mark_my_notifications_read); SQL validates
+  // cardinality and null elements.
+  ["uuid[]", "string[]"],
 ]);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("base64url");
 
@@ -102,8 +105,10 @@ export function inspectApiTypes(source, functions) {
           `${fn.name}.${arg.name} optionality`
         );
         assert.ok(scalarTypes.has(arg.sqlType), "Unreviewed SQL argument type");
+        // The raw generator writes (string)[]; Prettier writes string[].
+        const text = members.get(arg.name).type.getText(file);
         assert.equal(
-          members.get(arg.name).type.getText(file),
+          text.startsWith("(") && text.endsWith(")[]") ? text.slice(1, -3) + "[]" : text,
           scalarTypes.get(arg.sqlType),
           `${fn.name}.${arg.name} type`
         );

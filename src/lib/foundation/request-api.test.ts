@@ -237,7 +237,7 @@ it("route responses retain refreshed cookies, override shared caching and authen
     return Response.json(user());
   });
   const context = createFoundationRouteContext(config, request, fetcher);
-  expect(Object.keys(context)).toEqual(["authenticate", "respond"]);
+  expect(Object.keys(context)).toEqual(["authenticate", "authenticateCaller", "respond"]);
   const first = context.authenticate();
   expect(context.authenticate()).toBe(first);
   await first;

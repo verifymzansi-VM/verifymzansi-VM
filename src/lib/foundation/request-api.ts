@@ -33,6 +33,16 @@ export async function createFoundationRequestApi(
   cookies: RequestCookies,
   fetcher: typeof fetch = createTimeoutFetch()
 ) {
+  return (await createFoundationRequestCaller(input, cookies, fetcher)).api;
+}
+
+/** Same verification, also returning the GoTrue-verified account id for
+ * trusted server commands that act on the caller's behalf. */
+export async function createFoundationRequestCaller(
+  input: unknown,
+  cookies: RequestCookies,
+  fetcher: typeof fetch = createTimeoutFetch()
+) {
   const config = parseFoundationConnection(input);
   if (typeof cookies?.getAll !== "function" || typeof cookies?.setAll !== "function")
     throw new Error("A complete request cookie adapter is required");
@@ -93,7 +103,7 @@ export async function createFoundationRequestApi(
       verified.data.user.is_anonymous
     )
       throw new Error();
-    return api;
+    return { api, accountId: claims.sub };
   } catch {
     // Never include cookie contents, tokens or provider error bodies.
     throw new FoundationSessionError(failureStatus);
