@@ -288,6 +288,7 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 },
     { limit: 20, ttl: 3600 },
   ],
+  "partner:attribution": [{ limit: 10, ttl: 3600 }],
 
   // ── Reports ──────────────────────────────────────────
   "report:submit": [

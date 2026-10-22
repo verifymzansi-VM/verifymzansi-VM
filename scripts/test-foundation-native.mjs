@@ -3,6 +3,8 @@ import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
 import { testAccountProfiles } from "./lib/foundation-account-profile-native.mjs";
 import { testOwnerInbox } from "./lib/foundation-owner-inbox-native.mjs";
 import { testOrganisations } from "./lib/foundation-organisations-native.mjs";
+import { testSponsorships } from "./lib/foundation-sponsorships-native.mjs";
+import { testPartners } from "./lib/foundation-partners-native.mjs";
 import { testStaffSessionPolicy } from "./lib/foundation-staff-session-native.mjs";
 import { testAccessMatrix } from "./lib/foundation-access-matrix-native.mjs";
 import {
@@ -61,6 +63,12 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "src/lib/utils/phone.ts",
       "docs/backend-foundation/prototypes/organisations.sql",
       "scripts/lib/foundation-organisations-native.mjs",
+      "docs/backend-foundation/prototypes/organisation-sponsorships.sql",
+      "scripts/lib/foundation-sponsorships-native.mjs",
+      "src/lib/foundation/organisation-sponsorships.ts",
+      "docs/backend-foundation/prototypes/partner-commissions.sql",
+      "scripts/lib/foundation-partners-native.mjs",
+      "src/lib/foundation/partners.ts",
       "docs/backend-foundation/prototypes/staff-session-policy.sql",
       "scripts/lib/foundation-staff-session-native.mjs",
       "scripts/lib/foundation-access-matrix-native.mjs",
@@ -7556,6 +7564,40 @@ commit;`);
         nativeStage = value;
       },
     });
+    nativeStage = "sponsorships";
+    await testSponsorships({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
+    nativeStage = "partners";
+    await testPartners({
+      connection: {
+        url: status.API_URL,
+        expectedProjectRef: "local-foundation",
+        publishableKey: status.PUBLISHABLE_KEY,
+      },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
     nativeStage = "staff session policy";
     await testStaffSessionPolicy({
       createUser: createTrackedUser,
@@ -7671,6 +7713,11 @@ commit;`);
                 `delete from private.account_closures where user_id in (${ids});` +
                 `delete from private.evidence_cases where subject_id in (${ids});` +
                 `delete from private.staff_roles where user_id in (${ids});` +
+                `delete from private.organisation_sponsorships where owner_id in (${ids}) or organisation_id in (select id from private.organisations where created_by in (${ids}));` +
+                `delete from private.partner_events where partner_id in (select id from private.partners where account_id in (${ids}) or created_by in (${ids}));` +
+                `delete from private.partner_commissions where referred_account_id in (${ids}) or partner_id in (select id from private.partners where account_id in (${ids}) or created_by in (${ids}));` +
+                `delete from private.account_acquisitions where account_id in (${ids}) or partner_id in (select id from private.partners where account_id in (${ids}) or created_by in (${ids}));` +
+                `delete from private.partners where account_id in (${ids}) or created_by in (${ids});` +
                 `delete from private.provider_events where merchant_reference='bf07-unknown' or payment_id in (select id from private.payments where owner_id in (${ids}));` +
                 `delete from private.invoices where payment_id in (select id from private.payments where owner_id in (${ids}));` +
                 `delete from private.post_addon_windows where payment_id in (select id from private.payments where owner_id in (${ids}));` +

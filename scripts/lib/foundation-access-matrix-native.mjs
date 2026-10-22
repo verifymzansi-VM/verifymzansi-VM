@@ -19,12 +19,15 @@ export const ANON_API = [
   "preview_organisation_invite",
   "public_organisation_directory",
   "public_post_affiliations",
+  "public_post_sponsorships",
+  "public_programme_showcases",
   "reference_catalog",
   "search_posts",
 ];
 export const SERVICE_API = [
   "advance_evidence_artifact",
   "apply_provider_event",
+  "approve_due_commissions",
   "attach_provider_request",
   "check_cost_alarms",
   "claim_evidence_cleanup",
@@ -46,6 +49,7 @@ export const SERVICE_API = [
   "run_post_lifecycle",
   "submit_enquiry",
   "submit_report",
+  "sweep_sponsorships",
 ];
 // Local fixture drivers, never part of the clean candidate.
 const FIXTURE_ONLY_API = [
@@ -445,6 +449,10 @@ export async function testAccessMatrix({
           ["entitlements", "owner_id='" + owner.id + "'"],
           ["organisation_applications", "applicant_id='" + owner.id + "'"],
           ["legal_holds", "subject_id='" + owner.id + "'"],
+          ["organisation_sponsorships", "owner_id='" + owner.id + "'"],
+          ["account_acquisitions", "account_id='" + owner.id + "'"],
+          ["partners", "account_id='" + owner.id + "'"],
+          ["partner_commissions", "referred_account_id='" + owner.id + "'"],
         ]
           .filter(([table]) => !skip.includes(table))
           .map(

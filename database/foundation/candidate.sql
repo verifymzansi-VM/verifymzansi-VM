@@ -10626,6 +10626,1003 @@ create event trigger require_table_rls on ddl_command_end
   when tag in ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO', 'ALTER TABLE')
   execute function internal.require_table_rls();
 
+-- Source: docs/backend-foundation/prototypes/organisation-sponsorships.sql
+-- Sponsored places and programme showcases. A sponsorship gives one affiliated
+-- business owner one business posting place, funded by VerifyMzansi during a
+-- founding pilot or by the organisation on a paid programme; the type follows
+-- the programme status, never caller input. Places are counted under the
+-- organisation row lock; requests beyond capacity wait in arrival order.
+-- Each active sponsorship owns exactly one 'sponsorship' entitlement. Ending
+-- it revokes that entitlement and takes the posts it funds off the site in
+-- the same commit, then fills freed places from the waiting list.
+-- Lock order: affiliation, organisation, sponsorship, funded posts, entitlement
+-- (activate_post locks a post before entitlements, so posts come first here).
+
+create table private.organisation_sponsorships (
+  id uuid primary key default pg_catalog.gen_random_uuid(),
+  organisation_id uuid not null references private.organisations(id) on delete cascade,
+  affiliation_id uuid not null references private.organisation_affiliations(id) on delete cascade,
+  post_id uuid not null,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  sponsor_type text not null check(sponsor_type in('founding','organisation')),
+  status text not null default 'waitlisted' check(status in('active','waitlisted','ended','revoked')),
+  starts_at timestamptz,
+  ends_at timestamptz,
+  entitlement_id uuid unique references private.entitlements(id) on delete restrict,
+  requested_by uuid not null,
+  created_at timestamptz not null default statement_timestamp(),
+  ended_at timestamptz,
+  ended_by uuid,
+  end_reason text check(end_reason is null or internal.plain_text_valid(end_reason,5,500,true)),
+  check(case status
+    when 'waitlisted' then entitlement_id is null and starts_at is null and ends_at is null and ended_at is null
+    when 'active' then entitlement_id is not null and ends_at>starts_at and ended_at is null and end_reason is null
+    else ended_at is not null and end_reason is not null end)
+);
+create unique index organisation_sponsorships_open_idx on private.organisation_sponsorships(affiliation_id)
+  where status in('active','waitlisted');
+create index organisation_sponsorships_org_idx on private.organisation_sponsorships(organisation_id,status,created_at,id);
+create index organisation_sponsorships_owner_idx on private.organisation_sponsorships(owner_id,created_at desc);
+create index organisation_sponsorships_post_idx on private.organisation_sponsorships(post_id) where status='active';
+create index organisation_sponsorships_due_idx on private.organisation_sponsorships(ends_at) where status='active';
+alter table private.organisation_sponsorships enable row level security;
+revoke all on private.organisation_sponsorships from public,anon,authenticated,service_role;
+
+-- Who, what and why are fixed at request time; ended sponsorships are history.
+create function internal.sponsorship_guard()
+returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
+begin
+  if (new.id,new.organisation_id,new.affiliation_id,new.post_id,new.owner_id,new.sponsor_type,new.requested_by,new.created_at)
+      is distinct from (old.id,old.organisation_id,old.affiliation_id,old.post_id,old.owner_id,old.sponsor_type,
+        old.requested_by,old.created_at)
+    or old.status in('ended','revoked')
+    or (old.status='active' and new.status='waitlisted')
+    or (old.entitlement_id is not null and new.entitlement_id is distinct from old.entitlement_id) then
+    raise exception 'sponsorship history is immutable' using errcode='23514'; end if;
+  return new;
+end;
+$$;
+revoke all on function internal.sponsorship_guard() from public,anon,authenticated,service_role;
+create trigger organisation_sponsorships_guard before update on private.organisation_sponsorships
+  for each row execute function internal.sponsorship_guard();
+
+alter table private.notifications drop constraint notifications_kind_check;
+alter table private.notifications add constraint notifications_kind_check check(kind in('enquiry_received',
+  'organisation_application_received','organisation_application_decided','organisation_affiliation_ended',
+  'organisation_sponsorship_activated','organisation_sponsorship_ended'));
+
+-- Revokes a sponsorship entitlement and takes the posts it funds off the site.
+create function internal.release_sponsorship_entitlement(p_entitlement uuid)
+returns integer language plpgsql security invoker set search_path=pg_catalog as $$
+declare v_post_ids uuid[];
+begin
+  if p_entitlement is null then return 0; end if;
+  perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p;
+  perform e.id from private.entitlements e where e.id=p_entitlement for update;
+  update private.entitlements set status='revoked',revoked_reason='sponsorship_ended'
+    where id=p_entitlement and status<>'revoked';
+  with released as (
+    update private.post_activations a set released_at=statement_timestamp(),release_reason='entitlement_ended'
+    where a.entitlement_id=p_entitlement and a.released_at is null returning a.post_id)
+  select coalesce(array_agg(post_id) filter(where post_id is not null),'{}') into v_post_ids from released;
+  update private.posts set status='expired',status_reason='Sponsorship ended',revision=revision+1
+    where id=any(v_post_ids) and status in('live','pending_moderation');
+  update private.post_search_documents set is_visible=false where post_id=any(v_post_ids);
+  return cardinality(v_post_ids);
+end;
+$$;
+revoke all on function internal.release_sponsorship_entitlement(uuid) from public,anon,authenticated,service_role;
+
+-- Ends one open sponsorship. The caller holds the organisation row lock and
+-- fills freed places afterwards. Returns true when an active place was freed.
+create function internal.finish_sponsorship(p_id uuid,p_status text,p_reason text,p_actor uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog as $$
+declare s private.organisation_sponsorships;
+begin
+  select * into s from private.organisation_sponsorships where id=p_id for update;
+  if not found or s.status not in('active','waitlisted') then return false; end if;
+  perform internal.release_sponsorship_entitlement(s.entitlement_id);
+  update private.organisation_sponsorships set status=p_status,ended_at=statement_timestamp(),ended_by=p_actor,
+    end_reason=p_reason where id=s.id;
+  if s.status='active' then
+    perform internal.notify_account(s.owner_id,'organisation_sponsorship_ended',s.id,s.post_id,s.organisation_id);
+  end if;
+  return s.status='active';
+end;
+$$;
+revoke all on function internal.finish_sponsorship(uuid,text,text,uuid) from public,anon,authenticated,service_role;
+
+-- Starts a waiting sponsorship (organisation row lock held). A request whose
+-- basis has gone is revoked instead. Starting binds the owner's verified
+-- identity to the introductory-trial register, so a sponsored member does not
+-- later also receive a public introductory trial (source rule).
+create function internal.start_sponsorship(p_id uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog as $$
+declare s private.organisation_sponsorships; o private.organisations; ends timestamptz; ent uuid; fingerprint text;
+begin
+  select * into s from private.organisation_sponsorships where id=p_id for update;
+  if not found or s.status<>'waitlisted' then return false; end if;
+  perform internal.lock_verification_subject(s.owner_id);
+  select * into o from private.organisations where id=s.organisation_id;
+  ends:=coalesce(o.programme_ends_at,statement_timestamp()+interval '180 days');
+  if not exists(select 1 from private.organisation_affiliations f join private.posts p on p.id=f.post_id
+      where f.id=s.affiliation_id and f.status='active' and p.owner_id=s.owner_id)
+    or not exists(select 1 from private.current_account_access u where u.id=s.owner_id)
+    or ends<=statement_timestamp() + interval '1 day' then
+    update private.organisation_sponsorships set status='revoked',ended_at=statement_timestamp(),
+      end_reason='Sponsorship basis no longer valid' where id=s.id;
+    return false;
+  end if;
+  insert into private.entitlements(owner_id,source,area,sponsorship_id,slot_capacity,activations_per_period,
+      activation_period_days,max_photos,max_videos,starts_at,ends_at)
+    values(s.owner_id,'sponsorship','business',s.id,1,10,30,10,1,statement_timestamp(),ends)
+    returning id into ent;
+  update private.organisation_sponsorships set status='active',starts_at=statement_timestamp(),ends_at=ends,
+    entitlement_id=ent where id=s.id;
+  fingerprint:=internal.current_verified_identity(s.owner_id);
+  if fingerprint is not null then
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(fingerprint,2701));
+    insert into private.trial_identities(identity_hmac,owner_id,entitlement_id) values(fingerprint,s.owner_id,ent)
+      on conflict(identity_hmac) do nothing;
+  end if;
+  perform internal.notify_account(s.owner_id,'organisation_sponsorship_activated',s.id,s.post_id,s.organisation_id);
+  return true;
+end;
+$$;
+revoke all on function internal.start_sponsorship(uuid) from public,anon,authenticated,service_role;
+
+-- Fills free places in arrival order (organisation row lock held).
+create function internal.fill_sponsorship_places(p_org uuid)
+returns integer language plpgsql security invoker set search_path=pg_catalog as $$
+declare o private.organisations; used integer; next_id uuid; started integer:=0;
+begin
+  select * into o from private.organisations where id=p_org;
+  if not found or o.programme_status not in('founding_trial','active_paid') then return 0; end if;
+  loop
+    select count(*) into used from private.organisation_sponsorships where organisation_id=p_org and status='active';
+    exit when used>=o.sponsored_capacity;
+    select id into next_id from private.organisation_sponsorships where organisation_id=p_org and status='waitlisted'
+      order by created_at,id limit 1;
+    exit when next_id is null;
+    if internal.start_sponsorship(next_id) then started:=started+1; end if;
+  end loop;
+  return started;
+end;
+$$;
+revoke all on function internal.fill_sponsorship_places(uuid) from public,anon,authenticated,service_role;
+
+-- Programme status, type and capacity changes apply to places immediately.
+create function internal.organisation_sponsorship_rules()
+returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
+declare s record; kind text:=case new.programme_status when 'founding_trial' then 'founding'
+  when 'active_paid' then 'organisation' end;
+begin
+  if new.programme_status is distinct from old.programme_status then
+    for s in select id from private.organisation_sponsorships where organisation_id=new.id
+        and status in('active','waitlisted') and sponsor_type is distinct from kind order by created_at,id loop
+      perform internal.finish_sponsorship(s.id,'ended','Programme status changed',null);
+    end loop;
+  end if;
+  perform internal.fill_sponsorship_places(new.id);
+  return null;
+end;
+$$;
+revoke all on function internal.organisation_sponsorship_rules() from public,anon,authenticated,service_role;
+create trigger organisations_sponsorship_rules after update of programme_status,sponsored_capacity
+  on private.organisations for each row
+  when (new.programme_status is distinct from old.programme_status or new.sponsored_capacity<>old.sponsored_capacity)
+  execute function internal.organisation_sponsorship_rules();
+
+-- An affiliation that stops being active ends its sponsorship.
+create function internal.affiliation_sponsorship_rules()
+returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
+declare s record; freed boolean:=false;
+begin
+  perform 1 from private.organisations o where o.id=new.organisation_id for update;
+  for s in select id from private.organisation_sponsorships where affiliation_id=new.id
+      and status in('active','waitlisted') loop
+    freed:=internal.finish_sponsorship(s.id,'revoked','Affiliation ended',new.revoked_by) or freed;
+  end loop;
+  if freed then perform internal.fill_sponsorship_places(new.organisation_id); end if;
+  return null;
+end;
+$$;
+revoke all on function internal.affiliation_sponsorship_rules() from public,anon,authenticated,service_role;
+create trigger organisation_affiliations_sponsorship_rules after update of status on private.organisation_affiliations
+  for each row when (old.status='active' and new.status<>'active')
+  execute function internal.affiliation_sponsorship_rules();
+
+-- Deleted posts or organisations cascade here: the entitlement must not outlive
+-- its sponsorship. Freed places are filled by the next sweep.
+create function internal.sponsorship_delete_release()
+returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
+begin
+  if old.status='active' then perform internal.release_sponsorship_entitlement(old.entitlement_id); end if;
+  return old;
+end;
+$$;
+revoke all on function internal.sponsorship_delete_release() from public,anon,authenticated,service_role;
+create trigger organisation_sponsorships_delete_release before delete on private.organisation_sponsorships
+  for each row execute function internal.sponsorship_delete_release();
+
+-- ── Organisation administrators and staff ─────────────────────────────────
+
+create function internal.sponsor_business(p_affiliation uuid,p_reason text)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare actor uuid; f private.organisation_affiliations; o private.organisations; owner uuid; open_count integer;
+  s private.organisation_sponsorships;
+begin
+  perform internal.organisation_reason(p_reason);
+  select * into f from private.organisation_affiliations where id=p_affiliation;
+  if not found then raise exception 'affiliation not found' using errcode='PT404',detail='affiliation_unavailable'; end if;
+  actor:=internal.organisation_actor(f.organisation_id);
+  select * into f from private.organisation_affiliations where id=f.id for update;
+  select * into o from private.organisations where id=f.organisation_id for update;
+  actor:=internal.organisation_actor(o.id);
+  if f.status<>'active' then
+    raise exception 'affiliation is not active' using errcode='PT409',detail='affiliation_state'; end if;
+  if o.programme_status not in('founding_trial','active_paid') then
+    raise exception 'programme has no sponsored places' using errcode='PT409',detail='programme_inactive'; end if;
+  select p.owner_id into owner from private.posts p where p.id=f.post_id and p.kind='business';
+  if owner is null or not exists(select 1 from private.current_account_access u where u.id=owner) then
+    raise exception 'business owner unavailable' using errcode='PT409',detail='sponsorship_owner_unavailable'; end if;
+  if owner=actor then
+    raise exception 'own business cannot be sponsored' using errcode='42501',detail='self_sponsorship'; end if;
+  if exists(select 1 from private.organisation_sponsorships x where x.affiliation_id=f.id
+      and x.status in('active','waitlisted')) then
+    raise exception 'business already sponsored or waiting' using errcode='PT409',detail='sponsorship_exists'; end if;
+  select count(*) into open_count from private.organisation_sponsorships x where x.organisation_id=o.id
+    and x.status in('active','waitlisted');
+  if open_count>=o.sponsored_capacity+500 then
+    raise exception 'waiting list is full' using errcode='PT409',detail='sponsorship_waitlist_full'; end if;
+  insert into private.organisation_sponsorships(organisation_id,affiliation_id,post_id,owner_id,sponsor_type,requested_by)
+    values(o.id,f.id,f.post_id,owner,case o.programme_status when 'founding_trial' then 'founding' else 'organisation' end,
+      actor) returning * into s;
+  perform internal.record_organisation_event(o.id,actor,'sponsorship_requested',s.id,p_reason);
+  perform internal.fill_sponsorship_places(o.id);
+  select * into s from private.organisation_sponsorships where id=s.id;
+  return jsonb_build_object('id',s.id,'status',s.status,'sponsor_type',s.sponsor_type,'ends_at',s.ends_at);
+end;
+$$;
+revoke all on function internal.sponsor_business(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function internal.sponsor_business(uuid,text) to authenticated;
+create function api.sponsor_business(p_affiliation uuid,p_reason text)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.sponsor_business(p_affiliation,p_reason);
+$$;
+revoke all on function api.sponsor_business(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function api.sponsor_business(uuid,text) to authenticated;
+
+create function internal.end_sponsorship(p_sponsorship uuid,p_reason text)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare actor uuid; s private.organisation_sponsorships;
+begin
+  perform internal.organisation_reason(p_reason);
+  select * into s from private.organisation_sponsorships where id=p_sponsorship;
+  if not found then raise exception 'sponsorship not found' using errcode='PT404',detail='sponsorship_unavailable'; end if;
+  actor:=internal.organisation_actor(s.organisation_id);
+  perform 1 from private.organisations o where o.id=s.organisation_id for update;
+  actor:=internal.organisation_actor(s.organisation_id);
+  if not exists(select 1 from private.organisation_sponsorships x where x.id=s.id and x.status in('active','waitlisted')) then
+    raise exception 'sponsorship already ended' using errcode='PT409',detail='sponsorship_state'; end if;
+  if internal.finish_sponsorship(s.id,'ended',p_reason,actor) then
+    perform internal.fill_sponsorship_places(s.organisation_id); end if;
+  perform internal.record_organisation_event(s.organisation_id,actor,'sponsorship_ended',s.id,p_reason);
+  return jsonb_build_object('id',s.id,'status','ended');
+end;
+$$;
+revoke all on function internal.end_sponsorship(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function internal.end_sponsorship(uuid,text) to authenticated;
+create function api.end_sponsorship(p_sponsorship uuid,p_reason text)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.end_sponsorship(p_sponsorship,p_reason);
+$$;
+revoke all on function api.end_sponsorship(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function api.end_sponsorship(uuid,text) to authenticated;
+
+create function internal.org_list_sponsorships(p_org uuid)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.organisation_actor(p_org); o private.organisations;
+begin
+  select * into o from private.organisations where id=p_org;
+  return jsonb_build_object('capacity',o.sponsored_capacity,'programme_status',o.programme_status,
+    'active',(select count(*) from private.organisation_sponsorships x where x.organisation_id=p_org and x.status='active'),
+    'waitlisted',(select count(*) from private.organisation_sponsorships x where x.organisation_id=p_org
+      and x.status='waitlisted'),
+    'items',(select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'affiliation_id',s.affiliation_id,'post_id',s.post_id,
+        'business_name',p.title,'sponsor_type',s.sponsor_type,'status',s.status,'starts_at',s.starts_at,
+        'ends_at',s.ends_at,'created_at',s.created_at,'ended_at',s.ended_at,'end_reason',s.end_reason)
+        order by s.created_at desc,s.id desc),'[]')
+      from (select * from private.organisation_sponsorships x where x.organisation_id=p_org
+        order by x.created_at desc,x.id desc limit 500) s
+      left join private.posts p on p.id=s.post_id));
+end;
+$$;
+revoke all on function internal.org_list_sponsorships(uuid) from public,anon,authenticated,service_role;
+grant execute on function internal.org_list_sponsorships(uuid) to authenticated;
+create function api.org_list_sponsorships(p_org uuid)
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.org_list_sponsorships(p_org);
+$$;
+revoke all on function api.org_list_sponsorships(uuid) from public,anon,authenticated,service_role;
+grant execute on function api.org_list_sponsorships(uuid) to authenticated;
+
+-- Business owner's own sponsored places (open, and ended in the last 90 days).
+create function internal.my_sponsorships()
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.price_draft_actor();
+begin
+  return (select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'post_id',s.post_id,'business_name',p.title,
+      'organisation_slug',o.slug,'organisation_name',o.name,'label',o.sponsorship_wording,'status',s.status,
+      'starts_at',s.starts_at,'ends_at',s.ends_at,'ended_at',s.ended_at) order by s.created_at desc,s.id desc),'[]')
+    from (select * from private.organisation_sponsorships x where x.owner_id=actor
+      and (x.status in('active','waitlisted') or x.ended_at>statement_timestamp()-interval '90 days')
+      order by x.created_at desc,x.id desc limit 100) s
+    join private.organisations o on o.id=s.organisation_id
+    left join private.posts p on p.id=s.post_id);
+end;
+$$;
+revoke all on function internal.my_sponsorships() from public,anon,authenticated,service_role;
+grant execute on function internal.my_sponsorships() to authenticated;
+create function api.my_sponsorships()
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.my_sponsorships();
+$$;
+revoke all on function api.my_sponsorships() from public,anon,authenticated,service_role;
+grant execute on function api.my_sponsorships() to authenticated;
+
+-- Server sweep: ends places whose period (or programme) is over, revokes places
+-- whose owner lost access, then fills free places.
+create function internal.sweep_sponsorships(p_limit integer)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare s record; o record; ended integer:=0; started integer:=0;
+begin
+  if p_limit is null or p_limit not between 1 and 1000 then
+    raise exception 'limit 1 to 1000' using errcode='22023'; end if;
+  for s in select x.id,x.organisation_id,
+        case when exists(select 1 from private.current_account_access u where u.id=x.owner_id)
+          then 'ended' else 'revoked' end as next_status
+      from private.organisation_sponsorships x join private.organisations g on g.id=x.organisation_id
+      where x.status='active' and (x.ends_at<=statement_timestamp() or g.programme_ends_at<=statement_timestamp()
+        or not exists(select 1 from private.current_account_access u where u.id=x.owner_id))
+      order by x.ends_at,x.id limit p_limit loop
+    perform 1 from private.organisations g where g.id=s.organisation_id for update;
+    if internal.finish_sponsorship(s.id,s.next_status,
+        case s.next_status when 'ended' then 'Sponsorship period ended' else 'Owner account unavailable' end,null) then
+      ended:=ended+1; end if;
+  end loop;
+  for o in select g.id from private.organisations g
+      where g.programme_status in('founding_trial','active_paid')
+        and exists(select 1 from private.organisation_sponsorships w where w.organisation_id=g.id and w.status='waitlisted')
+        and (select count(*) from private.organisation_sponsorships a where a.organisation_id=g.id
+          and a.status='active')<g.sponsored_capacity
+      order by g.id limit 100 loop
+    perform 1 from private.organisations g where g.id=o.id for update;
+    started:=started+internal.fill_sponsorship_places(o.id);
+  end loop;
+  return jsonb_build_object('ended',ended,'started',started);
+end;
+$$;
+revoke all on function internal.sweep_sponsorships(integer) from public,anon,authenticated,service_role;
+grant execute on function internal.sweep_sponsorships(integer) to service_role;
+create function api.sweep_sponsorships(p_limit integer)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.sweep_sponsorships(p_limit);
+$$;
+revoke all on function api.sweep_sponsorships(integer) from public,anon,authenticated,service_role;
+grant execute on function api.sweep_sponsorships(integer) to service_role;
+
+-- Public "Supported by" badges for up to 100 live business posts.
+create function internal.public_post_sponsorships(p_post_ids uuid[])
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+begin
+  if p_post_ids is null or cardinality(p_post_ids) not between 1 and 100 then
+    raise exception 'between 1 and 100 post ids required' using errcode='22023'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('post_id',s.post_id,'organisation_slug',o.slug,
+      'organisation_name',o.name,'label',o.sponsorship_wording) order by s.post_id,o.name),'[]')
+    from private.organisation_sponsorships s
+    join private.organisations o on o.id=s.organisation_id
+    join private.public_eligible_posts e on e.id=s.post_id
+    where s.post_id=any(p_post_ids) and s.status='active' and s.starts_at<=statement_timestamp()
+      and s.ends_at>statement_timestamp() and internal.organisation_listed(o));
+end;
+$$;
+revoke all on function internal.public_post_sponsorships(uuid[]) from public,anon,authenticated,service_role;
+grant execute on function internal.public_post_sponsorships(uuid[]) to anon,authenticated;
+create function api.public_post_sponsorships(p_post_ids uuid[])
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.public_post_sponsorships(p_post_ids);
+$$;
+revoke all on function api.public_post_sponsorships(uuid[]) from public,anon,authenticated,service_role;
+grant execute on function api.public_post_sponsorships(uuid[]) to anon,authenticated;
+
+-- ── Programme showcases ───────────────────────────────────────────────────
+-- Staff-configured programme spotlights, separate from organic ranking.
+
+create table private.programme_showcases (
+  id uuid primary key default pg_catalog.gen_random_uuid(),
+  organisation_id uuid not null references private.organisations(id) on delete cascade,
+  programme_id uuid,
+  title text not null check(internal.plain_text_valid(title,3,120,false)),
+  placement text not null check(placement in('home','business','tourism','market')),
+  enabled boolean not null default false,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  max_cards integer not null default 12 check(max_cards between 3 and 48),
+  province_id text references private.provinces(id),
+  city_id text references private.cities(id),
+  display_order integer not null default 100 check(display_order between 0 and 100000),
+  sponsored_only boolean not null default false,
+  revision integer not null default 1 check(revision between 1 and 2147483647),
+  created_by uuid not null,
+  created_at timestamptz not null default statement_timestamp(),
+  updated_at timestamptz not null default statement_timestamp(),
+  foreign key(programme_id,organisation_id) references private.organisation_programmes(id,organisation_id),
+  check(ends_at>starts_at and ends_at<=starts_at+interval '366 days')
+);
+create index programme_showcases_placement_idx on private.programme_showcases(placement,display_order)
+  where enabled;
+create index programme_showcases_org_idx on private.programme_showcases(organisation_id);
+alter table private.programme_showcases enable row level security;
+revoke all on private.programme_showcases from public,anon,authenticated,service_role;
+
+-- Creates (p_showcase null) or replaces a showcase, revision-fenced.
+create function internal.save_programme_showcase(p_org uuid,p_showcase uuid,p_expected_revision integer,
+  p_title text,p_placement text,p_enabled boolean,p_starts_at timestamptz,p_ends_at timestamptz,p_max_cards integer,
+  p_display_order integer,p_sponsored_only boolean,p_reason text,p_province text,p_city text,p_programme uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.staff_actor('organisation:manage'); x private.programme_showcases;
+begin
+  perform internal.organisation_reason(p_reason);
+  perform 1 from private.organisations o where o.id=p_org for update;
+  if not found then raise exception 'organisation not found' using errcode='PT404',detail='organisation_unavailable'; end if;
+  actor:=internal.staff_actor('organisation:manage');
+  if p_title is null or not internal.plain_text_valid(p_title,3,120,false)
+    or p_placement is null or p_placement not in('home','business','tourism','market')
+    or p_enabled is null or p_sponsored_only is null or p_starts_at is null or p_ends_at is null
+    or p_ends_at<=p_starts_at or p_ends_at>p_starts_at+interval '366 days'
+    or p_max_cards is null or p_max_cards not between 3 and 48
+    or p_display_order is null or p_display_order not between 0 and 100000
+    or (p_city is not null and not exists(select 1 from private.cities c where c.id=p_city
+      and (p_province is null or c.province_id=p_province)))
+    or (p_province is not null and not exists(select 1 from private.provinces v where v.id=p_province))
+    or (p_programme is not null and not exists(select 1 from private.organisation_programmes g
+      where g.id=p_programme and g.organisation_id=p_org)) then
+    raise exception 'invalid showcase' using errcode='22023',detail='showcase_invalid'; end if;
+  if p_showcase is null then
+    if (select count(*) from private.programme_showcases s where s.organisation_id=p_org)>=20 then
+      raise exception 'showcase limit reached' using errcode='PT409',detail='showcase_limit'; end if;
+    insert into private.programme_showcases(organisation_id,programme_id,title,placement,enabled,starts_at,ends_at,
+        max_cards,province_id,city_id,display_order,sponsored_only,created_by)
+      values(p_org,p_programme,p_title,p_placement,p_enabled,p_starts_at,p_ends_at,p_max_cards,p_province,p_city,
+        p_display_order,p_sponsored_only,actor) returning * into x;
+  else
+    update private.programme_showcases set programme_id=p_programme,title=p_title,placement=p_placement,
+        enabled=p_enabled,starts_at=p_starts_at,ends_at=p_ends_at,max_cards=p_max_cards,province_id=p_province,
+        city_id=p_city,display_order=p_display_order,sponsored_only=p_sponsored_only,revision=revision+1,
+        updated_at=statement_timestamp()
+      where id=p_showcase and organisation_id=p_org and revision=p_expected_revision returning * into x;
+    if not found then
+      if exists(select 1 from private.programme_showcases s where s.id=p_showcase and s.organisation_id=p_org) then
+        raise exception 'showcase changed' using errcode='PT409',detail='showcase_changed'; end if;
+      raise exception 'showcase not found' using errcode='PT404',detail='showcase_unavailable';
+    end if;
+  end if;
+  perform internal.record_organisation_event(p_org,actor,'showcase_saved',x.id,p_reason);
+  return jsonb_build_object('id',x.id,'revision',x.revision);
+end;
+$$;
+revoke all on function internal.save_programme_showcase(uuid,uuid,integer,text,text,boolean,timestamptz,timestamptz,
+  integer,integer,boolean,text,text,text,uuid) from public,anon,authenticated,service_role;
+grant execute on function internal.save_programme_showcase(uuid,uuid,integer,text,text,boolean,timestamptz,timestamptz,
+  integer,integer,boolean,text,text,text,uuid) to authenticated;
+create function api.save_programme_showcase(p_org uuid,p_title text,p_placement text,p_enabled boolean,
+  p_starts_at timestamptz,p_ends_at timestamptz,p_max_cards integer,p_display_order integer,p_sponsored_only boolean,
+  p_reason text,p_showcase uuid default null,p_expected_revision integer default null,p_province text default null,
+  p_city text default null,p_programme uuid default null)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.save_programme_showcase(p_org,p_showcase,p_expected_revision,p_title,p_placement,p_enabled,
+    p_starts_at,p_ends_at,p_max_cards,p_display_order,p_sponsored_only,p_reason,p_province,p_city,p_programme);
+$$;
+revoke all on function api.save_programme_showcase(uuid,text,text,boolean,timestamptz,timestamptz,integer,integer,
+  boolean,text,uuid,integer,text,text,uuid) from public,anon,authenticated,service_role;
+grant execute on function api.save_programme_showcase(uuid,text,text,boolean,timestamptz,timestamptz,integer,integer,
+  boolean,text,uuid,integer,text,text,uuid) to authenticated;
+
+create function internal.staff_list_programme_showcases(p_org uuid)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.staff_actor('organisation:manage');
+begin
+  return (select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'programme_id',s.programme_id,'title',s.title,
+      'placement',s.placement,'enabled',s.enabled,'starts_at',s.starts_at,'ends_at',s.ends_at,'max_cards',s.max_cards,
+      'province',s.province_id,'city',s.city_id,'display_order',s.display_order,'sponsored_only',s.sponsored_only,
+      'revision',s.revision,'updated_at',s.updated_at) order by s.display_order,s.created_at),'[]')
+    from private.programme_showcases s where s.organisation_id=p_org);
+end;
+$$;
+revoke all on function internal.staff_list_programme_showcases(uuid) from public,anon,authenticated,service_role;
+grant execute on function internal.staff_list_programme_showcases(uuid) to authenticated;
+create function api.staff_list_programme_showcases(p_org uuid)
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.staff_list_programme_showcases(p_org);
+$$;
+revoke all on function api.staff_list_programme_showcases(uuid) from public,anon,authenticated,service_role;
+grant execute on function api.staff_list_programme_showcases(uuid) to authenticated;
+
+-- Up to two live showcases for a placement. Cards are live business posts of
+-- the programme with a ready cover image; a showcase with fewer than three
+-- cards is hidden (source default programmeMinItems).
+create function internal.public_programme_showcases(p_placement text)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+begin
+  if p_placement is null or p_placement not in('home','business','tourism','market') then
+    raise exception 'unknown placement' using errcode='22023'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('id',v.id,'title',v.title,'organisation_slug',v.slug,
+      'organisation_name',v.name,'cards',v.cards) order by v.display_order,v.id),'[]')
+    from (select s.id,s.title,s.display_order,o.slug,o.name,c.cards
+      from private.programme_showcases s
+      join private.organisations o on o.id=s.organisation_id
+      cross join lateral (select jsonb_agg(jsonb_build_object('post_id',k.id,'title',k.title,'city',k.city_id,
+          'cover_object_key',k.object_key,'sponsored',k.sponsored) order by k.sponsored desc,k.title,k.id) cards,
+          count(*) n
+        from (select q.* from (select p.id,p.title,p.city_id,m.object_key,
+              exists(select 1 from private.organisation_sponsorships x where x.post_id=p.id and x.organisation_id=o.id
+                and x.status='active' and x.starts_at<=statement_timestamp()
+                and x.ends_at>statement_timestamp()) sponsored
+            from private.organisation_affiliations f
+            join private.posts p on p.id=f.post_id
+            join private.public_eligible_posts e on e.id=p.id
+            join private.post_search_documents d on d.post_id=p.id and d.is_visible
+              and (d.visible_until is null or d.visible_until>statement_timestamp())
+            join private.post_media pm on pm.post_id=p.id and pm.purpose='cover'
+            join private.media_objects m on m.id=pm.object_id and m.state='ready' and m.kind='image'
+            where f.organisation_id=o.id and f.status='active'
+              and (s.programme_id is null or f.programme_id=s.programme_id)
+              and (s.province_id is null or p.province_id=s.province_id)
+              and (s.city_id is null or p.city_id=s.city_id)) q
+          where not s.sponsored_only or q.sponsored
+          order by q.sponsored desc,q.title,q.id limit s.max_cards) k) c
+      where s.placement=p_placement and s.enabled and s.starts_at<=statement_timestamp()
+        and s.ends_at>statement_timestamp() and internal.organisation_listed(o)
+        and (s.programme_id is null or exists(select 1 from private.organisation_programmes g
+          where g.id=s.programme_id and g.active))
+        and c.n>=3
+      order by s.display_order,s.id limit 2) v);
+end;
+$$;
+revoke all on function internal.public_programme_showcases(text) from public,anon,authenticated,service_role;
+grant execute on function internal.public_programme_showcases(text) to anon,authenticated;
+create function api.public_programme_showcases(p_placement text)
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.public_programme_showcases(p_placement);
+$$;
+revoke all on function api.public_programme_showcases(text) from public,anon,authenticated,service_role;
+grant execute on function api.public_programme_showcases(text) to anon,authenticated;
+
+-- Source: docs/backend-foundation/prototypes/partner-commissions.sql
+-- Referral partners, first-touch account attribution and commissions.
+-- Attribution is first touch, recorded by the member's own session within
+-- seven days of sign-up; self-referral attributes nothing. A completed payment
+-- by an attributed member creates one pending commission (default 20%); it
+-- becomes payable after 30 days if the payment still stands, and a refund or
+-- chargeback reverses it. Partners see totals and their own commissions only,
+-- never who they referred. Staff manage partners with partner:manage (admin,
+-- recent MFA); payouts happen outside the platform and are recorded here.
+
+insert into private.staff_capabilities(role,capability,requires_recent_mfa) values('admin','partner:manage',true);
+
+create table private.partners (
+  id uuid primary key default pg_catalog.gen_random_uuid(),
+  account_id uuid not null unique references auth.users(id) on delete restrict,
+  code text not null unique check(code ~ '^[A-Z0-9]{4,16}$'),
+  status text not null default 'pending' check(status in('pending','active','suspended')),
+  commission_bps integer check(commission_bps is null or commission_bps between 0 and 5000),
+  revision integer not null default 1 check(revision between 1 and 2147483647),
+  created_by uuid not null,
+  created_at timestamptz not null default statement_timestamp(),
+  updated_at timestamptz not null default statement_timestamp()
+);
+alter table private.partners enable row level security;
+revoke all on private.partners from public,anon,authenticated,service_role;
+
+create table private.account_acquisitions (
+  account_id uuid primary key references auth.users(id) on delete cascade,
+  source text not null check(source in('direct','organic','social','paid_campaign','strategic_invite','partner',
+    'organisation')),
+  partner_id uuid references private.partners(id) on delete restrict,
+  organisation_id uuid references private.organisations(id) on delete set null,
+  campaign text check(campaign is null or campaign ~ '^[a-z0-9][a-z0-9_-]{0,79}$'),
+  landing_path text check(landing_path is null or (char_length(landing_path)<=300
+    and landing_path ~ '^/[A-Za-z0-9/_.~-]*$')),
+  referrer_host text check(referrer_host is null or referrer_host ~ '^[a-z0-9-]+([.][a-z0-9-]+)+$'
+    and char_length(referrer_host)<=200),
+  utm jsonb not null default '{}' check(jsonb_typeof(utm)='object'),
+  first_touch_at timestamptz,
+  recorded_at timestamptz not null default statement_timestamp(),
+  check((source='partner')=(partner_id is not null)),
+  check(source<>'organisation' or organisation_id is not null)
+);
+create index account_acquisitions_partner_idx on private.account_acquisitions(partner_id) where partner_id is not null;
+create index account_acquisitions_organisation_idx on private.account_acquisitions(organisation_id)
+  where organisation_id is not null;
+alter table private.account_acquisitions enable row level security;
+revoke all on private.account_acquisitions from public,anon,authenticated,service_role;
+
+create table private.partner_commissions (
+  id uuid primary key default pg_catalog.gen_random_uuid(),
+  partner_id uuid not null references private.partners(id) on delete restrict,
+  payment_id uuid not null unique references private.payments(id) on delete restrict,
+  referred_account_id uuid not null references auth.users(id) on delete restrict,
+  base_cents bigint not null check(base_cents>0),
+  rate_bps integer not null check(rate_bps between 0 and 5000),
+  amount_cents bigint not null check(amount_cents>=0),
+  status text not null default 'pending' check(status in('pending','approved','paid','reversed')),
+  eligible_at timestamptz not null,
+  approved_at timestamptz,
+  approved_by uuid,
+  paid_at timestamptz,
+  paid_by uuid,
+  paid_reference text check(paid_reference is null or internal.plain_text_valid(paid_reference,3,120,false)),
+  reversed_at timestamptz,
+  reversed_by uuid,
+  reversal_reason text check(reversal_reason is null or internal.plain_text_valid(reversal_reason,5,500,true)),
+  created_at timestamptz not null default statement_timestamp(),
+  check(amount_cents=floor(base_cents::numeric*rate_bps/10000)),
+  check((status in('approved','paid') or (status='reversed' and approved_at is not null))=(approved_at is not null)),
+  check((paid_at is null)=(paid_by is null) and (paid_at is null)=(paid_reference is null)),
+  check(status<>'paid' or paid_at is not null),
+  check(status='reversed' or (paid_at is null)=(status<>'paid')),
+  check((status='reversed')=(reversed_at is not null and reversal_reason is not null))
+);
+create index partner_commissions_partner_idx on private.partner_commissions(partner_id,created_at desc,id desc);
+create index partner_commissions_due_idx on private.partner_commissions(eligible_at) where status='pending';
+create index partner_commissions_referred_idx on private.partner_commissions(referred_account_id);
+alter table private.partner_commissions enable row level security;
+revoke all on private.partner_commissions from public,anon,authenticated,service_role;
+
+-- Amounts and parties are fixed; status only moves forward.
+create function internal.partner_commission_guard()
+returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
+begin
+  if (new.id,new.partner_id,new.payment_id,new.referred_account_id,new.base_cents,new.rate_bps,new.amount_cents,
+      new.eligible_at,new.created_at) is distinct from (old.id,old.partner_id,old.payment_id,old.referred_account_id,
+      old.base_cents,old.rate_bps,old.amount_cents,old.eligible_at,old.created_at)
+    or old.status='reversed'
+    or (old.status,new.status) not in(('pending','pending'),('pending','approved'),('pending','reversed'),
+      ('approved','approved'),('approved','paid'),('approved','reversed'),('paid','paid'),('paid','reversed')) then
+    raise exception 'commission history is immutable' using errcode='23514'; end if;
+  return new;
+end;
+$$;
+revoke all on function internal.partner_commission_guard() from public,anon,authenticated,service_role;
+create trigger partner_commissions_guard before update on private.partner_commissions
+  for each row execute function internal.partner_commission_guard();
+
+create table private.partner_events (
+  id uuid primary key default pg_catalog.gen_random_uuid(),
+  partner_id uuid not null references private.partners(id) on delete restrict,
+  commission_id uuid references private.partner_commissions(id) on delete restrict,
+  actor_id uuid not null,
+  action text not null check(action ~ '^[a-z_]{3,60}$'),
+  reason text not null check(internal.plain_text_valid(reason,5,500,true)),
+  created_at timestamptz not null default statement_timestamp()
+);
+create index partner_events_partner_idx on private.partner_events(partner_id,created_at desc);
+create index partner_events_commission_idx on private.partner_events(commission_id) where commission_id is not null;
+alter table private.partner_events enable row level security;
+revoke all on private.partner_events from public,anon,authenticated,service_role;
+create trigger partner_events_append_only before update on private.partner_events
+  for each row execute function internal.organisation_events_append_only();
+
+alter table private.notifications drop constraint notifications_kind_check;
+alter table private.notifications add constraint notifications_kind_check check(kind in('enquiry_received',
+  'organisation_application_received','organisation_application_decided','organisation_affiliation_ended',
+  'organisation_sponsorship_activated','organisation_sponsorship_ended',
+  'partner_commission_approved','partner_commission_reversed'));
+
+-- ── Attribution ───────────────────────────────────────────────────────────
+
+create function internal.record_my_acquisition(p_partner_code text,p_organisation_slug text,p_source text,
+  p_campaign text,p_landing_path text,p_referrer_host text,p_utm jsonb,p_first_touch_at timestamptz)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.price_draft_actor(); x private.account_acquisitions; partner private.partners;
+  org uuid; src text;
+begin
+  if (p_source is not null and p_source not in('direct','organic','social','paid_campaign','strategic_invite'))
+    or (p_partner_code is not null and p_partner_code !~ '^[A-Za-z0-9]{4,16}$')
+    or (p_organisation_slug is not null and p_organisation_slug !~ '^[a-z0-9]+(-[a-z0-9]+)*$')
+    or (p_campaign is not null and p_campaign !~ '^[a-z0-9][a-z0-9_-]{0,79}$')
+    or (p_landing_path is not null and (char_length(p_landing_path)>300
+      or p_landing_path !~ '^/[A-Za-z0-9/_.~-]*$'))
+    or (p_referrer_host is not null and (p_referrer_host !~ '^[a-z0-9-]+([.][a-z0-9-]+)+$'
+      or char_length(p_referrer_host)>200))
+    or p_utm is null or jsonb_typeof(p_utm)<>'object'
+    or exists(select 1 from jsonb_each(p_utm) u where u.key not in('utm_source','utm_medium','utm_campaign',
+      'utm_term','utm_content') or jsonb_typeof(u.value)<>'string'
+      or not internal.plain_text_valid(u.value #>> '{}',1,100,false)) then
+    raise exception 'invalid attribution' using errcode='22023',detail='acquisition_invalid'; end if;
+  select * into x from private.account_acquisitions a where a.account_id=actor;
+  if found then return jsonb_build_object('source',x.source,'recorded',false); end if;
+  if not exists(select 1 from auth.users u where u.id=actor and u.created_at>statement_timestamp()-interval '7 days') then
+    return jsonb_build_object('source',null,'recorded',false); end if;
+  select * into partner from private.partners p where p.code=upper(p_partner_code) and p.status='active'
+    and p.account_id<>actor;
+  select o.id into org from private.organisations o where o.slug=p_organisation_slug and internal.organisation_listed(o);
+  src:=case when partner.id is not null then 'partner' when org is not null then 'organisation'
+    else coalesce(p_source,'direct') end;
+  insert into private.account_acquisitions(account_id,source,partner_id,organisation_id,campaign,landing_path,
+      referrer_host,utm,first_touch_at)
+    values(actor,src,partner.id,org,p_campaign,p_landing_path,p_referrer_host,p_utm,
+      case when p_first_touch_at between statement_timestamp()-interval '90 days' and statement_timestamp()
+        then p_first_touch_at end)
+    on conflict(account_id) do nothing;
+  select * into x from private.account_acquisitions a where a.account_id=actor;
+  return jsonb_build_object('source',x.source,'recorded',x.recorded_at=statement_timestamp());
+end;
+$$;
+revoke all on function internal.record_my_acquisition(text,text,text,text,text,text,jsonb,timestamptz)
+  from public,anon,authenticated,service_role;
+grant execute on function internal.record_my_acquisition(text,text,text,text,text,text,jsonb,timestamptz) to authenticated;
+create function api.record_my_acquisition(p_utm jsonb,p_partner_code text default null,
+  p_organisation_slug text default null,p_source text default null,p_campaign text default null,
+  p_landing_path text default null,p_referrer_host text default null,p_first_touch_at timestamptz default null)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.record_my_acquisition(p_partner_code,p_organisation_slug,p_source,p_campaign,p_landing_path,
+    p_referrer_host,p_utm,p_first_touch_at);
+$$;
+revoke all on function api.record_my_acquisition(jsonb,text,text,text,text,text,text,timestamptz)
+  from public,anon,authenticated,service_role;
+grant execute on function api.record_my_acquisition(jsonb,text,text,text,text,text,text,timestamptz) to authenticated;
+
+-- ── Commissions follow payments ──────────────────────────────────────────
+
+create function internal.payment_partner_commission()
+returns trigger language plpgsql security invoker set search_path=pg_catalog as $$
+declare acq private.account_acquisitions; partner private.partners; c record;
+begin
+  if new.status in('refunded','chargeback') then
+    for c in select x.id,p.account_id from private.partner_commissions x join private.partners p on p.id=x.partner_id
+        where x.payment_id=new.id and x.status<>'reversed' for update of x loop
+      update private.partner_commissions set status='reversed',reversed_at=statement_timestamp(),
+        reversal_reason='Payment '||new.status where id=c.id;
+      perform internal.notify_account(c.account_id,'partner_commission_reversed',c.id,null,null);
+    end loop;
+    return null;
+  end if;
+  if new.status<>'complete' then return null; end if;
+  select * into acq from private.account_acquisitions a where a.account_id=new.owner_id;
+  if acq.partner_id is null then return null; end if;
+  select * into partner from private.partners p where p.id=acq.partner_id;
+  if partner.status<>'active' or partner.account_id=new.owner_id then return null; end if;
+  insert into private.partner_commissions(partner_id,payment_id,referred_account_id,base_cents,rate_bps,amount_cents,
+      eligible_at)
+    values(partner.id,new.id,new.owner_id,new.amount_cents,coalesce(partner.commission_bps,2000),
+      floor(new.amount_cents::numeric*coalesce(partner.commission_bps,2000)/10000),
+      statement_timestamp()+interval '30 days')
+    on conflict(payment_id) do nothing;
+  return null;
+end;
+$$;
+revoke all on function internal.payment_partner_commission() from public,anon,authenticated,service_role;
+create trigger payments_partner_commission after update of status on private.payments
+  for each row when (old.status is distinct from new.status)
+  execute function internal.payment_partner_commission();
+
+-- Server sweep: pending commissions whose 30 days have passed and whose
+-- payment still stands become payable.
+create function internal.approve_due_commissions(p_limit integer)
+returns integer language plpgsql security definer set search_path=pg_catalog as $$
+declare c record; n integer:=0;
+begin
+  if p_limit is null or p_limit not between 1 and 1000 then
+    raise exception 'limit 1 to 1000' using errcode='22023'; end if;
+  for c in select x.id,p.account_id from private.partner_commissions x
+      join private.payments pay on pay.id=x.payment_id and pay.status='complete'
+      join private.partners p on p.id=x.partner_id
+      where x.status='pending' and x.eligible_at<=statement_timestamp()
+      order by x.eligible_at,x.id limit p_limit for update of x skip locked loop
+    update private.partner_commissions set status='approved',approved_at=statement_timestamp() where id=c.id;
+    perform internal.notify_account(c.account_id,'partner_commission_approved',c.id,null,null);
+    n:=n+1;
+  end loop;
+  return n;
+end;
+$$;
+revoke all on function internal.approve_due_commissions(integer) from public,anon,authenticated,service_role;
+grant execute on function internal.approve_due_commissions(integer) to service_role;
+create function api.approve_due_commissions(p_limit integer)
+returns integer language sql security invoker set search_path=pg_catalog as $$
+  select internal.approve_due_commissions(p_limit);
+$$;
+revoke all on function api.approve_due_commissions(integer) from public,anon,authenticated,service_role;
+grant execute on function api.approve_due_commissions(integer) to service_role;
+
+-- ── Partner ───────────────────────────────────────────────────────────────
+
+create function internal.my_partner_dashboard()
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.price_draft_actor(); p private.partners;
+begin
+  select * into p from private.partners x where x.account_id=actor;
+  if not found then return null; end if;
+  return jsonb_build_object('code',p.code,'status',p.status,'rate_bps',coalesce(p.commission_bps,2000),
+    'referrals',(select count(*) from private.account_acquisitions a where a.partner_id=p.id),
+    'paying_referrals',(select count(distinct c.referred_account_id) from private.partner_commissions c
+      where c.partner_id=p.id and c.status<>'reversed'),
+    'totals',(select coalesce(jsonb_object_agg(t.status,t.total::text),'{}') from (select c.status,sum(c.amount_cents) total
+      from private.partner_commissions c where c.partner_id=p.id group by c.status) t),
+    'recent',(select coalesce(jsonb_agg(jsonb_build_object('id',c.id,'amount_cents',c.amount_cents::text,
+        'base_cents',c.base_cents::text,'status',c.status,'created_at',c.created_at,'eligible_at',c.eligible_at,
+        'paid_at',c.paid_at) order by c.created_at desc,c.id desc),'[]')
+      from (select * from private.partner_commissions x where x.partner_id=p.id
+        order by x.created_at desc,x.id desc limit 50) c));
+end;
+$$;
+revoke all on function internal.my_partner_dashboard() from public,anon,authenticated,service_role;
+grant execute on function internal.my_partner_dashboard() to authenticated;
+create function api.my_partner_dashboard()
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.my_partner_dashboard();
+$$;
+revoke all on function api.my_partner_dashboard() from public,anon,authenticated,service_role;
+grant execute on function api.my_partner_dashboard() to authenticated;
+
+-- ── Staff ─────────────────────────────────────────────────────────────────
+
+-- create (pending), activate (requires a current verified identity, since
+-- payouts go to a known person), suspend, set_rate (null = default).
+create function internal.staff_save_partner(p_account uuid,p_action text,p_code text,p_commission_bps integer,
+  p_reason text)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.staff_actor('partner:manage'); p private.partners;
+begin
+  perform internal.organisation_reason(p_reason);
+  if p_account is null or p_account=actor then
+    raise exception 'staff cannot manage their own partner record' using errcode='42501',detail='self_partner'; end if;
+  perform internal.lock_verification_subject(p_account);
+  select * into p from private.partners x where x.account_id=p_account for update;
+  actor:=internal.staff_actor('partner:manage');
+  if p_commission_bps is not null and p_commission_bps not between 0 and 5000 then
+    raise exception 'invalid rate' using errcode='22023',detail='partner_invalid'; end if;
+  if p_action='create' then
+    if p.id is not null then raise exception 'already a partner' using errcode='PT409',detail='partner_exists'; end if;
+    if p_code is null or p_code !~ '^[A-Z0-9]{4,16}$' then
+      raise exception 'invalid code' using errcode='22023',detail='partner_invalid'; end if;
+    if not exists(select 1 from private.current_account_access u where u.id=p_account) then
+      raise exception 'account unavailable' using errcode='PT409',detail='partner_account_unavailable'; end if;
+    if exists(select 1 from private.partners x where x.code=p_code) then
+      raise exception 'code taken' using errcode='PT409',detail='partner_code_taken'; end if;
+    insert into private.partners(account_id,code,commission_bps,created_by) values(p_account,p_code,p_commission_bps,actor)
+      returning * into p;
+  elsif p.id is null then
+    raise exception 'partner not found' using errcode='PT404',detail='partner_unavailable';
+  elsif p_action='activate' then
+    if internal.current_verified_identity(p_account) is null then
+      raise exception 'verified identity required' using errcode='PT409',detail='verification_required'; end if;
+    update private.partners set status='active',revision=revision+1,updated_at=statement_timestamp()
+      where id=p.id returning * into p;
+  elsif p_action='suspend' then
+    update private.partners set status='suspended',revision=revision+1,updated_at=statement_timestamp()
+      where id=p.id returning * into p;
+  elsif p_action='set_rate' then
+    update private.partners set commission_bps=p_commission_bps,revision=revision+1,updated_at=statement_timestamp()
+      where id=p.id returning * into p;
+  else
+    raise exception 'unknown action' using errcode='22023',detail='partner_invalid';
+  end if;
+  insert into private.partner_events(partner_id,actor_id,action,reason) values(p.id,actor,'partner_'||p_action,p_reason);
+  return jsonb_build_object('id',p.id,'code',p.code,'status',p.status,'commission_bps',p.commission_bps,
+    'revision',p.revision);
+end;
+$$;
+revoke all on function internal.staff_save_partner(uuid,text,text,integer,text) from public,anon,authenticated,service_role;
+grant execute on function internal.staff_save_partner(uuid,text,text,integer,text) to authenticated;
+create function api.staff_save_partner(p_account uuid,p_action text,p_reason text,p_code text default null,
+  p_commission_bps integer default null)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.staff_save_partner(p_account,p_action,p_code,p_commission_bps,p_reason);
+$$;
+revoke all on function api.staff_save_partner(uuid,text,text,text,integer) from public,anon,authenticated,service_role;
+grant execute on function api.staff_save_partner(uuid,text,text,text,integer) to authenticated;
+
+-- approve (only once due and while the payment stands), mark_paid (with the
+-- external payout reference), reverse (with reason).
+create function internal.staff_decide_commission(p_commission uuid,p_action text,p_reference text,p_reason text)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.staff_actor('partner:manage'); c private.partner_commissions; owner uuid;
+begin
+  perform internal.organisation_reason(p_reason);
+  select * into c from private.partner_commissions x where x.id=p_commission for update;
+  if not found then raise exception 'commission not found' using errcode='PT404',detail='commission_unavailable'; end if;
+  actor:=internal.staff_actor('partner:manage');
+  select p.account_id into owner from private.partners p where p.id=c.partner_id;
+  if owner=actor or c.referred_account_id=actor then
+    raise exception 'staff cannot decide their own commission' using errcode='42501',detail='self_partner'; end if;
+  if p_action='approve' then
+    if c.status<>'pending' or c.eligible_at>statement_timestamp()
+      or not exists(select 1 from private.payments pay where pay.id=c.payment_id and pay.status='complete') then
+      raise exception 'commission is not due' using errcode='PT409',detail='commission_state'; end if;
+    update private.partner_commissions set status='approved',approved_at=statement_timestamp(),approved_by=actor
+      where id=c.id returning * into c;
+    perform internal.notify_account(owner,'partner_commission_approved',c.id,null,null);
+  elsif p_action='mark_paid' then
+    if c.status<>'approved' then
+      raise exception 'commission is not approved' using errcode='PT409',detail='commission_state'; end if;
+    if p_reference is null or not internal.plain_text_valid(p_reference,3,120,false) then
+      raise exception 'payout reference required' using errcode='22023',detail='commission_invalid'; end if;
+    update private.partner_commissions set status='paid',paid_at=statement_timestamp(),paid_by=actor,
+      paid_reference=p_reference where id=c.id returning * into c;
+  elsif p_action='reverse' then
+    if c.status='reversed' then
+      raise exception 'commission already reversed' using errcode='PT409',detail='commission_state'; end if;
+    update private.partner_commissions set status='reversed',reversed_at=statement_timestamp(),reversed_by=actor,
+      reversal_reason=p_reason where id=c.id returning * into c;
+    perform internal.notify_account(owner,'partner_commission_reversed',c.id,null,null);
+  else
+    raise exception 'unknown action' using errcode='22023',detail='commission_invalid';
+  end if;
+  insert into private.partner_events(partner_id,commission_id,actor_id,action,reason)
+    values(c.partner_id,c.id,actor,'commission_'||p_action,p_reason);
+  return jsonb_build_object('id',c.id,'status',c.status);
+end;
+$$;
+revoke all on function internal.staff_decide_commission(uuid,text,text,text) from public,anon,authenticated,service_role;
+grant execute on function internal.staff_decide_commission(uuid,text,text,text) to authenticated;
+create function api.staff_decide_commission(p_commission uuid,p_action text,p_reason text,p_reference text default null)
+returns jsonb language sql security invoker set search_path=pg_catalog as $$
+  select internal.staff_decide_commission(p_commission,p_action,p_reference,p_reason);
+$$;
+revoke all on function api.staff_decide_commission(uuid,text,text,text) from public,anon,authenticated,service_role;
+grant execute on function api.staff_decide_commission(uuid,text,text,text) to authenticated;
+
+create function internal.staff_list_partners()
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.staff_actor('partner:manage');
+begin
+  return (select coalesce(jsonb_agg(jsonb_build_object('id',p.id,'account_id',p.account_id,'code',p.code,
+      'status',p.status,'commission_bps',p.commission_bps,'revision',p.revision,
+      'referrals',(select count(*) from private.account_acquisitions a where a.partner_id=p.id),
+      'pending_cents',(select coalesce(sum(c.amount_cents),0)::text from private.partner_commissions c
+        where c.partner_id=p.id and c.status='pending'),
+      'approved_cents',(select coalesce(sum(c.amount_cents),0)::text from private.partner_commissions c
+        where c.partner_id=p.id and c.status='approved')) order by p.created_at desc),'[]')
+    from (select * from private.partners x order by x.created_at desc limit 500) p);
+end;
+$$;
+revoke all on function internal.staff_list_partners() from public,anon,authenticated,service_role;
+grant execute on function internal.staff_list_partners() to authenticated;
+create function api.staff_list_partners()
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.staff_list_partners();
+$$;
+revoke all on function api.staff_list_partners() from public,anon,authenticated,service_role;
+grant execute on function api.staff_list_partners() to authenticated;
+
+create function internal.staff_list_commissions(p_partner uuid,p_status text)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+declare actor uuid:=internal.staff_actor('partner:manage');
+begin
+  if p_status is not null and p_status not in('pending','approved','paid','reversed') then
+    raise exception 'unknown status' using errcode='22023',detail='commission_invalid'; end if;
+  return (select coalesce(jsonb_agg(jsonb_build_object('id',c.id,'partner_id',c.partner_id,'payment_id',c.payment_id,
+      'base_cents',c.base_cents::text,'rate_bps',c.rate_bps,'amount_cents',c.amount_cents::text,'status',c.status,
+      'eligible_at',c.eligible_at,'approved_at',c.approved_at,'paid_at',c.paid_at,'paid_reference',c.paid_reference,
+      'reversed_at',c.reversed_at,'reversal_reason',c.reversal_reason,'created_at',c.created_at)
+      order by c.created_at desc,c.id desc),'[]')
+    from (select * from private.partner_commissions x where (p_partner is null or x.partner_id=p_partner)
+      and (p_status is null or x.status=p_status) order by x.created_at desc,x.id desc limit 500) c);
+end;
+$$;
+revoke all on function internal.staff_list_commissions(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function internal.staff_list_commissions(uuid,text) to authenticated;
+create function api.staff_list_commissions(p_partner uuid default null,p_status text default null)
+returns jsonb language sql stable security invoker set search_path=pg_catalog as $$
+  select internal.staff_list_commissions(p_partner,p_status);
+$$;
+revoke all on function api.staff_list_commissions(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function api.staff_list_commissions(uuid,text) to authenticated;
+
 -- Immutable published document metadata only; no account acceptance data.
 insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');
 insert into private.posting_terms_current(version) values('posting-v1');

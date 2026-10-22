@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "iNzZeGLJstYZTFIAq2SZHVgwGeQhObomkIP2PEMPEbQ",
+  "candidateHash": "U_wVkZ6xvW3z39ycmX2jUezKZEaoyPPrMOnP-PTAoPo",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "DQLhXAwRyAEIUBbocCe51wKQPBSAji1CWQCEk8k1uuE",
-  "roleTypesHash": "IAwxblgk4kkcGNjukkJ9UAzUKRNaskPI5Jl83Q88Iag",
+  "generatedTypesHash": "sedbVE8kFtZBB4x_m5odeptmiYWNWhDWHtzHnaIIcB4",
+  "roleTypesHash": "NXOYNQgEjaKqonjxyVf8P91izrCtSk7XZJeE46CVYNE",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -283,6 +283,30 @@
         "anon": false,
         "authenticated": true,
         "service_role": false
+      }
+    },
+    {
+      "name": "approve_due_commissions",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer",
+      "returns": "integer",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
       }
     },
     {
@@ -815,6 +839,35 @@
         {
           "name": "p_expected_revision",
           "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "end_sponsorship",
+      "signature": "p_sponsorship uuid, p_reason text",
+      "argumentsWithDefaults": "p_sponsorship uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_sponsorship",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
           "optional": false
         }
       ],
@@ -1519,6 +1572,24 @@
       }
     },
     {
+      "name": "my_partner_dashboard",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "my_posting_capacity",
       "signature": "",
       "argumentsWithDefaults": "",
@@ -1542,6 +1613,24 @@
       "argumentsWithDefaults": "",
       "returns": "jsonb",
       "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "my_sponsorships",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
       "securityDefiner": false,
       "owner": "postgres",
       "searchPath": [
@@ -1651,6 +1740,30 @@
           "name": "p_status",
           "sqlType": "text",
           "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "org_list_sponsorships",
+      "signature": "p_org uuid",
+      "argumentsWithDefaults": "p_org uuid",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
         }
       ],
       "execute": {
@@ -1896,6 +2009,54 @@
       }
     },
     {
+      "name": "public_post_sponsorships",
+      "signature": "p_post_ids uuid[]",
+      "argumentsWithDefaults": "p_post_ids uuid[]",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "public_programme_showcases",
+      "signature": "p_placement text",
+      "argumentsWithDefaults": "p_placement text",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_placement",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "purge_expired_identity_bans",
       "signature": "p_limit integer",
       "argumentsWithDefaults": "p_limit integer",
@@ -2046,6 +2207,65 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "record_my_acquisition",
+      "signature": "p_utm jsonb, p_partner_code text, p_organisation_slug text, p_source text, p_campaign text, p_landing_path text, p_referrer_host text, p_first_touch_at timestamp with time zone",
+      "argumentsWithDefaults": "p_utm jsonb, p_partner_code text DEFAULT NULL::text, p_organisation_slug text DEFAULT NULL::text, p_source text DEFAULT NULL::text, p_campaign text DEFAULT NULL::text, p_landing_path text DEFAULT NULL::text, p_referrer_host text DEFAULT NULL::text, p_first_touch_at timestamp with time zone DEFAULT NULL::timestamp with time zone",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_utm",
+          "sqlType": "jsonb",
+          "optional": false
+        },
+        {
+          "name": "p_partner_code",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_organisation_slug",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_source",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_campaign",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_landing_path",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_referrer_host",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_first_touch_at",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {
@@ -2773,6 +2993,100 @@
       }
     },
     {
+      "name": "save_programme_showcase",
+      "signature": "p_org uuid, p_title text, p_placement text, p_enabled boolean, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_max_cards integer, p_display_order integer, p_sponsored_only boolean, p_reason text, p_showcase uuid, p_expected_revision integer, p_province text, p_city text, p_programme uuid",
+      "argumentsWithDefaults": "p_org uuid, p_title text, p_placement text, p_enabled boolean, p_starts_at timestamp with time zone, p_ends_at timestamp with time zone, p_max_cards integer, p_display_order integer, p_sponsored_only boolean, p_reason text, p_showcase uuid DEFAULT NULL::uuid, p_expected_revision integer DEFAULT NULL::integer, p_province text DEFAULT NULL::text, p_city text DEFAULT NULL::text, p_programme uuid DEFAULT NULL::uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_title",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_placement",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_enabled",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_starts_at",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_ends_at",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_max_cards",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_display_order",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_sponsored_only",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_showcase",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_province",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_city",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_programme",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "search_posts",
       "signature": "p_request jsonb",
       "argumentsWithDefaults": "p_request jsonb",
@@ -3001,6 +3315,35 @@
       }
     },
     {
+      "name": "sponsor_business",
+      "signature": "p_affiliation uuid, p_reason text",
+      "argumentsWithDefaults": "p_affiliation uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_affiliation",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "staff_cost_overview",
       "signature": "",
       "argumentsWithDefaults": "",
@@ -3012,6 +3355,45 @@
         "search_path=pg_catalog"
       ],
       "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_decide_commission",
+      "signature": "p_commission uuid, p_action text, p_reason text, p_reference text",
+      "argumentsWithDefaults": "p_commission uuid, p_action text, p_reason text, p_reference text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_commission",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reference",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
       "execute": {
         "anon": false,
         "authenticated": true,
@@ -3150,6 +3532,35 @@
       }
     },
     {
+      "name": "staff_list_commissions",
+      "signature": "p_partner uuid, p_status text",
+      "argumentsWithDefaults": "p_partner uuid DEFAULT NULL::uuid, p_status text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_partner",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_status",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "staff_list_organisations",
       "signature": "",
       "argumentsWithDefaults": "",
@@ -3161,6 +3572,48 @@
         "search_path=pg_catalog"
       ],
       "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_list_partners",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_list_programme_showcases",
+      "signature": "p_org uuid",
+      "argumentsWithDefaults": "p_org uuid",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
       "execute": {
         "anon": false,
         "authenticated": true,
@@ -3227,6 +3680,50 @@
           "name": "p_claim_nonce",
           "sqlType": "uuid",
           "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_save_partner",
+      "signature": "p_account uuid, p_action text, p_reason text, p_code text, p_commission_bps integer",
+      "argumentsWithDefaults": "p_account uuid, p_action text, p_reason text, p_code text DEFAULT NULL::text, p_commission_bps integer DEFAULT NULL::integer",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_code",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_commission_bps",
+          "sqlType": "integer",
+          "optional": true
         }
       ],
       "execute": {
@@ -3383,6 +3880,30 @@
           "name": "p_reporter_id",
           "sqlType": "uuid",
           "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "sweep_sponsorships",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
         }
       ],
       "execute": {

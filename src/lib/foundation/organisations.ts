@@ -3,19 +3,19 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationPublicApi } from "./public-api";
 import { isPlainText } from "./owner-inbox";
 
-const instant = z
+export const instant = z
   .string()
   .regex(
     /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})$/
   )
   .pipe(z.iso.datetime({ offset: true }));
-const slug = z
+export const slug = z
   .string()
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
   .min(3)
   .max(60);
-const key = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
-const objectKey = z.string().regex(/^media[/][a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
+export const key = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
+export const objectKey = z.string().regex(/^media[/][a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/);
 const programmeStatus = z.enum([
   "invited",
   "founding_trial",
@@ -42,7 +42,7 @@ const organisationType = z.enum([
   "university_tvet",
   "other",
 ]);
-const text = (min: number, max: number, multiline: boolean) =>
+export const text = (min: number, max: number, multiline: boolean) =>
   z
     .string()
     .max(max * 4)
@@ -77,6 +77,10 @@ const reasons = new Map<string, FoundationOrganisationError["reason"]>([
     "consent_required",
     "reason_required",
     "logo_unavailable",
+    "showcase_invalid",
+    "acquisition_invalid",
+    "partner_invalid",
+    "commission_invalid",
   ].map((detail) => [detail, "invalid"] as const),
   ...[
     "organisation_unavailable",
@@ -86,6 +90,10 @@ const reasons = new Map<string, FoundationOrganisationError["reason"]>([
     "affiliation_unavailable",
     "invite_unavailable",
     "admin_unavailable",
+    "sponsorship_unavailable",
+    "showcase_unavailable",
+    "partner_unavailable",
+    "commission_unavailable",
   ].map((detail) => [detail, "not_found"] as const),
   ...[
     "organisation_changed",
@@ -98,9 +106,22 @@ const reasons = new Map<string, FoundationOrganisationError["reason"]>([
     "affiliation_state",
     "admin_exists",
     "admin_limit",
+    "programme_inactive",
+    "sponsorship_exists",
+    "sponsorship_state",
+    "sponsorship_owner_unavailable",
+    "sponsorship_waitlist_full",
+    "showcase_changed",
+    "showcase_limit",
+    "partner_exists",
+    "partner_code_taken",
+    "partner_account_unavailable",
+    "commission_state",
   ].map((detail) => [detail, "conflict"] as const),
   ["invite_invalid", "invite_invalid"],
   ["invite_email_mismatch", "forbidden"],
+  ["self_sponsorship", "forbidden"],
+  ["self_partner", "forbidden"],
   ["verification_required", "verification_required"],
   ["application_limit", "limited"],
 ]);
@@ -109,7 +130,7 @@ type OrganisationRpc = PromiseLike<{
   error: { code?: string; details?: string | null } | null;
 }>;
 /** One request, no automatic retry after an uncertain reply. */
-async function settle<T>(request: OrganisationRpc, schema: z.ZodType<T>) {
+export async function settle<T>(request: OrganisationRpc, schema: z.ZodType<T>) {
   const { data, error } = await Promise.resolve(request).then(
     (result) => result,
     () => {
@@ -125,7 +146,7 @@ async function settle<T>(request: OrganisationRpc, schema: z.ZodType<T>) {
   if (!parsed.success) throw new FoundationOrganisationError("unavailable");
   return parsed.data;
 }
-function input<T>(schema: z.ZodType<T>, value: unknown): T {
+export function input<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
   if (!parsed.success) throw new FoundationOrganisationError("invalid");
   return parsed.data;
@@ -458,7 +479,7 @@ export async function updateFoundationAffiliation(api: FoundationAuthenticatedAp
 
 // ── Staff (organisation:manage, recent second factor) ───────────────────
 
-const staffReason = text(5, 500, true);
+export const staffReason = text(5, 500, true);
 /** Staff invitation: the token is generated here and must be emailed by the
  * caller; only its hash is stored. Never log or return it to the browser. */
 export async function inviteFoundationOrganisationAdmin(

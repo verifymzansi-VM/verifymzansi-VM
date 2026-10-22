@@ -34,7 +34,11 @@ function organisationRefusal(error: unknown): FoundationRefusal | null {
 export function handleOrganisationRoute<T>(
   request: NextRequest,
   action:
-    "organisation:read" | "organisation:apply" | "organisation:manage" | "organisation:invite",
+    | "organisation:read"
+    | "organisation:apply"
+    | "organisation:manage"
+    | "organisation:invite"
+    | "partner:attribution",
   mutate: boolean,
   command: (api: FoundationAuthenticatedApi, input: unknown) => Promise<T>
 ) {

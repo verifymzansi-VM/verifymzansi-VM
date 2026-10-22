@@ -32,6 +32,7 @@ export type Database = {
         Returns: Json;
       };
       approve_decision: { Args: { p_decision_id: string }; Returns: Json };
+      approve_due_commissions: { Args: { p_limit: number }; Returns: number };
       attach_provider_request: {
         Args: { p_payment_id: string; p_request_id: string };
         Returns: boolean;
@@ -78,6 +79,7 @@ export type Database = {
         Args: { p_edit_id: string; p_expected_revision: number };
         Returns: Json;
       };
+      end_sponsorship: { Args: { p_reason: string; p_sponsorship: string }; Returns: Json };
       enqueue_transport_reconciliation: { Args: { p_id: string }; Returns: boolean };
       finalize_media: {
         Args: {
@@ -157,8 +159,10 @@ export type Database = {
         Returns: Json;
       };
       my_organisation_links: { Args: Record<PropertyKey, never>; Returns: Json };
+      my_partner_dashboard: { Args: Record<PropertyKey, never>; Returns: Json };
       my_posting_capacity: { Args: Record<PropertyKey, never>; Returns: Json };
       my_queue_claims: { Args: Record<PropertyKey, never>; Returns: Json };
+      my_sponsorships: { Args: Record<PropertyKey, never>; Returns: Json };
       open_verification_case: { Args: Record<PropertyKey, never>; Returns: Json };
       org_decide_application: {
         Args: { p_application: string; p_decision: string; p_note?: string };
@@ -166,6 +170,7 @@ export type Database = {
       };
       org_list_affiliations: { Args: { p_org: string }; Returns: Json };
       org_list_applications: { Args: { p_org: string; p_status?: string }; Returns: Json };
+      org_list_sponsorships: { Args: { p_org: string }; Returns: Json };
       org_update_affiliation: {
         Args: { p_action: string; p_affiliation: string; p_value: string };
         Returns: Json;
@@ -183,6 +188,8 @@ export type Database = {
       };
       public_organisation_directory: { Args: Record<PropertyKey, never>; Returns: Json };
       public_post_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
+      public_post_sponsorships: { Args: { p_post_ids: string[] }; Returns: Json };
+      public_programme_showcases: { Args: { p_placement: string }; Returns: Json };
       purge_expired_identity_bans: { Args: { p_limit: number }; Returns: number };
       purge_expired_inbox: { Args: { p_limit: number }; Returns: Json };
       purge_expired_trial_identities: { Args: { p_limit: number }; Returns: number };
@@ -194,6 +201,19 @@ export type Database = {
       reconcile_verified_identity_ban: { Args: { p_decision: string }; Returns: Json };
       record_identity_ban: {
         Args: { p_category: string; p_decision_id: string; p_identity_hmac: string };
+        Returns: Json;
+      };
+      record_my_acquisition: {
+        Args: {
+          p_campaign?: string;
+          p_first_touch_at?: string;
+          p_landing_path?: string;
+          p_organisation_slug?: string;
+          p_partner_code?: string;
+          p_referrer_host?: string;
+          p_source?: string;
+          p_utm: Json;
+        };
         Returns: Json;
       };
       reference_catalog: { Args: Record<PropertyKey, never>; Returns: Json };
@@ -308,6 +328,26 @@ export type Database = {
         Args: { p_content: Json; p_expected_revision: number; p_post_id: string };
         Returns: Json;
       };
+      save_programme_showcase: {
+        Args: {
+          p_city?: string;
+          p_display_order: number;
+          p_enabled: boolean;
+          p_ends_at: string;
+          p_expected_revision?: number;
+          p_max_cards: number;
+          p_org: string;
+          p_placement: string;
+          p_programme?: string;
+          p_province?: string;
+          p_reason: string;
+          p_showcase?: string;
+          p_sponsored_only: boolean;
+          p_starts_at: string;
+          p_title: string;
+        };
+        Returns: Json;
+      };
       search_posts: { Args: { p_request: Json }; Returns: Json };
       set_enquiry_status: { Args: { p_id: string; p_status: string }; Returns: Json };
       set_my_avatar: { Args: { p_expected_revision: number; p_object_id?: string }; Returns: Json };
@@ -333,7 +373,12 @@ export type Database = {
         Args: { p_action: string; p_expected_revision: number; p_post_id: string };
         Returns: Json;
       };
+      sponsor_business: { Args: { p_affiliation: string; p_reason: string }; Returns: Json };
       staff_cost_overview: { Args: Record<PropertyKey, never>; Returns: Json };
+      staff_decide_commission: {
+        Args: { p_action: string; p_commission: string; p_reason: string; p_reference?: string };
+        Returns: Json;
+      };
       staff_evidence_metadata: {
         Args: {
           p_case_id: string;
@@ -352,13 +397,26 @@ export type Database = {
         Args: { p_case: string; p_claim_generation: string; p_claim_nonce: string };
         Returns: Json;
       };
+      staff_list_commissions: { Args: { p_partner?: string; p_status?: string }; Returns: Json };
       staff_list_organisations: { Args: Record<PropertyKey, never>; Returns: Json };
+      staff_list_partners: { Args: Record<PropertyKey, never>; Returns: Json };
+      staff_list_programme_showcases: { Args: { p_org: string }; Returns: Json };
       staff_review_post: {
         Args: { p_claim_generation: string; p_claim_nonce: string; p_post_id: string };
         Returns: Json;
       };
       staff_review_report: {
         Args: { p_claim_generation: string; p_claim_nonce: string; p_report_id: string };
+        Returns: Json;
+      };
+      staff_save_partner: {
+        Args: {
+          p_account: string;
+          p_action: string;
+          p_code?: string;
+          p_commission_bps?: number;
+          p_reason: string;
+        };
         Returns: Json;
       };
       start_checkout: { Args: { p_product_id: string; p_target_post?: string }; Returns: Json };
@@ -385,6 +443,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      sweep_sponsorships: { Args: { p_limit: number }; Returns: Json };
       update_my_application: {
         Args: { p_action: string; p_application: string; p_response?: string };
         Returns: Json;

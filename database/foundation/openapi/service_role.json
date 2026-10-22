@@ -84,6 +84,45 @@
         ]
       }
     },
+    "/rpc/sweep_sponsorships": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "p_limit"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) sweep_sponsorships"
+        ]
+      }
+    },
     "/rpc/finalize_media": {
       "post": {
         "parameters": [
@@ -1119,6 +1158,45 @@
         },
         "tags": [
           "(rpc) attach_provider_request"
+        ]
+      }
+    },
+    "/rpc/approve_due_commissions": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "p_limit"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) approve_due_commissions"
         ]
       }
     }

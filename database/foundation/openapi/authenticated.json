@@ -954,6 +954,72 @@
         ]
       }
     },
+    "/rpc/record_my_acquisition": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_campaign": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_first_touch_at": {
+                  "format": "timestamp with time zone",
+                  "type": "string"
+                },
+                "p_landing_path": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_organisation_slug": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_partner_code": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_referrer_host": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_source": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_utm": {
+                  "format": "jsonb"
+                }
+              },
+              "required": [
+                "p_utm"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) record_my_acquisition"
+        ]
+      }
+    },
     "/rpc/activate_post": {
       "post": {
         "parameters": [
@@ -990,6 +1056,51 @@
         },
         "tags": [
           "(rpc) activate_post"
+        ]
+      }
+    },
+    "/rpc/staff_list_partners": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_partners"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_partners"
         ]
       }
     },
@@ -1865,6 +1976,77 @@
         ]
       }
     },
+    "/rpc/staff_list_commissions": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_partner",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_status",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_commissions"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_partner": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_status": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_commissions"
+        ]
+      }
+    },
     "/rpc/withdraw_decision": {
       "post": {
         "parameters": [
@@ -1911,6 +2093,69 @@
         },
         "tags": [
           "(rpc) withdraw_decision"
+        ]
+      }
+    },
+    "/rpc/org_list_sponsorships": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_org",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_list_sponsorships"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) org_list_sponsorships"
         ]
       }
     },
@@ -3097,6 +3342,69 @@
         ]
       }
     },
+    "/rpc/public_programme_showcases": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_placement",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_programme_showcases"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_placement": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_placement"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_programme_showcases"
+        ]
+      }
+    },
     "/rpc/public_post_affiliations": {
       "get": {
         "parameters": [
@@ -3250,6 +3558,50 @@
         ]
       }
     },
+    "/rpc/sponsor_business": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_affiliation": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_affiliation",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) sponsor_business"
+        ]
+      }
+    },
     "/rpc/claim_queue_item": {
       "post": {
         "parameters": [
@@ -3386,6 +3738,51 @@
         ]
       }
     },
+    "/rpc/my_sponsorships": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) my_sponsorships"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) my_sponsorships"
+        ]
+      }
+    },
     "/rpc/get_owner_business_event_editor": {
       "post": {
         "parameters": [
@@ -3422,6 +3819,69 @@
         },
         "tags": [
           "(rpc) get_owner_business_event_editor"
+        ]
+      }
+    },
+    "/rpc/staff_list_programme_showcases": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_org",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_programme_showcases"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_list_programme_showcases"
         ]
       }
     },
@@ -3523,6 +3983,63 @@
         },
         "tags": [
           "(rpc) accept_posting_terms"
+        ]
+      }
+    },
+    "/rpc/staff_save_partner": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_account": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_code": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_commission_bps": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_account",
+                "p_action",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_save_partner"
         ]
       }
     },
@@ -3766,6 +4283,154 @@
         ]
       }
     },
+    "/rpc/end_sponsorship": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_sponsorship": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_sponsorship",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) end_sponsorship"
+        ]
+      }
+    },
+    "/rpc/save_programme_showcase": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_city": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_display_order": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_enabled": {
+                  "format": "boolean",
+                  "type": "boolean"
+                },
+                "p_ends_at": {
+                  "format": "timestamp with time zone",
+                  "type": "string"
+                },
+                "p_expected_revision": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_max_cards": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_org": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_placement": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_programme": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_province": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_showcase": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_sponsored_only": {
+                  "format": "boolean",
+                  "type": "boolean"
+                },
+                "p_starts_at": {
+                  "format": "timestamp with time zone",
+                  "type": "string"
+                },
+                "p_title": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_org",
+                "p_title",
+                "p_placement",
+                "p_enabled",
+                "p_starts_at",
+                "p_ends_at",
+                "p_max_cards",
+                "p_display_order",
+                "p_sponsored_only",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) save_programme_showcase"
+        ]
+      }
+    },
     "/rpc/propose_verified_identity_ban": {
       "post": {
         "parameters": [
@@ -3817,6 +4482,117 @@
         },
         "tags": [
           "(rpc) propose_verified_identity_ban"
+        ]
+      }
+    },
+    "/rpc/my_partner_dashboard": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) my_partner_dashboard"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) my_partner_dashboard"
+        ]
+      }
+    },
+    "/rpc/public_post_sponsorships": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid[]",
+            "in": "query",
+            "name": "p_post_ids",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_post_sponsorships"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_post_ids": {
+                  "format": "uuid[]",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "p_post_ids"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) public_post_sponsorships"
         ]
       }
     },
@@ -4083,6 +4859,59 @@
         },
         "tags": [
           "(rpc) begin_evidence_upload"
+        ]
+      }
+    },
+    "/rpc/staff_decide_commission": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_commission": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_reference": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_commission",
+                "p_action",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_decide_commission"
         ]
       }
     },
