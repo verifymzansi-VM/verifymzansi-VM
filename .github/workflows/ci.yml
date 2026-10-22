@@ -262,7 +262,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps
+      - run: npx playwright install --with-deps chromium
       - run: pnpm exec playwright test --grep "@smoke" --project ${{ matrix.project }}
 
   launch-flows-bundle:
