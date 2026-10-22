@@ -1,6 +1,6 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 339 functions and 115 API commands. It
+This separate target baseline contains 340 functions and 115 API commands. It
 preserves the reviewed domain transactions while excluding six test-only
 functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
@@ -83,6 +83,22 @@ identity is verified, and the reviewed name only if the applicant agreed).
 Public directory, pages and badges show only listed organisations and live
 businesses, and a logo only with recorded written permission. Sponsorship,
 partner commissions and showcases are a separate later slice.
+
+Every staff role (moderator, governor, admin) needs a verified authenticator app
+(TOTP) on the account and an AAL2 session whose last authenticator code is under
+12 hours old; sensitive capabilities need one under 15 minutes. A session raised
+by any other factor type grants nothing. An event trigger enables row level
+security on every new table in public, api, private and internal, and refuses
+any change that would leave an application table without it. The native access
+matrix calls every production API command as a signed-out visitor, another
+account, an unverified account, an organisation administrator and each staff
+role, with the owner's real identifiers and current revisions, and fails if any
+of the owner's private values (legal surname, phone, email, enquiries, identity,
+payment and application records) appear outside a short reviewed list, or if
+anyone else changes the owner's data. Before cutover,
+scripts/check-foundation-hosted-exposure.mjs probes the hosted Data API with the
+publishable key: private and internal must stay unexposed, GraphQL must answer
+nothing, and from cutover api must be the only exposed schema.
 
 Detailed security reports and recovery notes are kept outside the public commit.
 

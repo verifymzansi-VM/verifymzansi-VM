@@ -3,6 +3,8 @@ import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
 import { testAccountProfiles } from "./lib/foundation-account-profile-native.mjs";
 import { testOwnerInbox } from "./lib/foundation-owner-inbox-native.mjs";
 import { testOrganisations } from "./lib/foundation-organisations-native.mjs";
+import { testStaffSessionPolicy } from "./lib/foundation-staff-session-native.mjs";
+import { testAccessMatrix } from "./lib/foundation-access-matrix-native.mjs";
 import {
   installFixturePostingTerms,
   acceptFixturePostingTerms,
@@ -59,6 +61,9 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "src/lib/utils/phone.ts",
       "docs/backend-foundation/prototypes/organisations.sql",
       "scripts/lib/foundation-organisations-native.mjs",
+      "docs/backend-foundation/prototypes/staff-session-policy.sql",
+      "scripts/lib/foundation-staff-session-native.mjs",
+      "scripts/lib/foundation-access-matrix-native.mjs",
       "src/lib/foundation/organisations.ts",
       "scripts/lib/foundation-native-isolation.mjs",
       "scripts/lib/foundation-native-lock.mjs",
@@ -7541,6 +7546,29 @@ commit;`);
         expectedProjectRef: "local-foundation",
         publishableKey: status.PUBLISHABLE_KEY,
       },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
+    nativeStage = "staff session policy";
+    await testStaffSessionPolicy({
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
+    nativeStage = "access matrix";
+    await testAccessMatrix({
       createUser: createTrackedUser,
       rpc,
       sql,

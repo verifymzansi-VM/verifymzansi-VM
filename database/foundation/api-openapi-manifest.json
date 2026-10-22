@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "candidateHash": "dxNn1cecREfpIEOpdxn8KCl0vC7EqP1T9UImVNkevS8",
-  "apiManifestHash": "wc91eGSmPv8Hox0TfRP6tnHbKBSbn90cnQppMivNTiQ",
+  "candidateHash": "iNzZeGLJstYZTFIAq2SZHVgwGeQhObomkIP2PEMPEbQ",
+  "apiManifestHash": "Trm95jYyWdrABcq4UQVP__bHkA6BOkWBiMwe-sefBO8",
   "releaseReady": false,
   "source": "Fresh local PostgREST role-sensitive OpenAPI, synthetic JWT roles; generated operations unchanged",
   "normalisation": "Only host/basePath/schemes replaced with foundation.invalid/rest/v1/https; no target URL or credentials",

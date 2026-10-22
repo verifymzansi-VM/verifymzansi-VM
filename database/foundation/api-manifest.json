@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "dxNn1cecREfpIEOpdxn8KCl0vC7EqP1T9UImVNkevS8",
+  "candidateHash": "iNzZeGLJstYZTFIAq2SZHVgwGeQhObomkIP2PEMPEbQ",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",

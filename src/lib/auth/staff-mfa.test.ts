@@ -84,6 +84,30 @@ describe("evaluateStaffMfa", () => {
     });
   });
 
+  it("asks staff to verify again once the last authenticator code is over 12 hours old", async () => {
+    const at = (hours: number) =>
+      aal("aal2", "aal2", [{ method: "totp", timestamp: seconds(minutesAgo(hours * 60)) }]);
+    await expect(evaluateStaffMfa(at(11.9), GRACE_OVER, NOW)).resolves.toMatchObject({
+      status: "verified",
+    });
+    await expect(evaluateStaffMfa(at(12.1), GRACE_OVER, NOW)).resolves.toEqual({
+      status: "required",
+      hasFactor: true,
+    });
+  });
+
+  it("does not accept a session raised by a factor other than an authenticator app", async () => {
+    for (const method of ["phone", "webauthn", "mfa/phone"]) {
+      await expect(
+        evaluateStaffMfa(
+          aal("aal2", "aal2", [{ method, timestamp: seconds(minutesAgo(1)) }]),
+          IN_GRACE,
+          NOW
+        )
+      ).resolves.toEqual({ status: "required", hasFactor: true });
+    }
+  });
+
   it("requires verification when a factor is enrolled, even during the grace period", async () => {
     await expect(evaluateStaffMfa(aal("aal1", "aal2"), IN_GRACE, NOW)).resolves.toEqual({
       status: "required",

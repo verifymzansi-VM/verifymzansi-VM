@@ -8,6 +8,9 @@ export const STAFF_MFA_FLAG = "staff_mfa_enforced";
 /** Sensitive actions need a second factor verified within this window. */
 export const STEP_UP_WINDOW_MS = 15 * 60 * 1000;
 
+/** Any staff access needs an authenticator code verified within this window. */
+export const STAFF_SESSION_MFA_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
 /** Where staff enrol or verify their authenticator app. */
 export const STAFF_MFA_PATH = "/staff/two-step";
 
@@ -21,14 +24,9 @@ export type StaffMfaState =
   /** Access is blocked until the staff member enrols or verifies. */
   | { status: "required"; hasFactor: boolean };
 
-const SECOND_FACTOR_METHODS = new Set([
-  "totp",
-  "mfa/totp",
-  "webauthn",
-  "mfa/webauthn",
-  "phone",
-  "mfa/phone",
-]);
+// Staff use an authenticator app. A session raised to AAL2 by any other factor
+// type (SMS, WebAuthn) does not count, matching the database staff check.
+const SECOND_FACTOR_METHODS = new Set(["totp", "mfa/totp"]);
 
 function lastSecondFactorAt(methods: AMREntry[] | string[]): Date | null {
   let latest = 0;
@@ -66,7 +64,8 @@ async function mfaSwitchedOff(): Promise<boolean> {
 /**
  * Decide whether a staff session satisfies the MFA policy.
  *
- * - Enrolled but not verified this session → required (verify now).
+ * - Enrolled but not verified this session, or the last authenticator code is
+ *   older than 12 hours → required (verify now).
  * - Not enrolled → allowed until `mfaRequiredAfter`, then required.
  * - If the assurance level cannot be read, the grace period still applies but
  *   nothing is treated as verified (fail closed).
@@ -91,15 +90,17 @@ export async function evaluateStaffMfa(
       : { status: "required", hasFactor: false };
   }
 
-  if (data.currentLevel === "aal2") {
-    return {
-      status: "verified",
-      lastVerifiedAt: lastSecondFactorAt(data.currentAuthenticationMethods),
-    };
+  const lastVerifiedAt =
+    data.currentLevel === "aal2" ? lastSecondFactorAt(data.currentAuthenticationMethods) : null;
+  if (lastVerifiedAt) {
+    const ageMs = now.getTime() - lastVerifiedAt.getTime();
+    if (ageMs <= STAFF_SESSION_MFA_MAX_AGE_MS) return { status: "verified", lastVerifiedAt };
   }
   // Disabling routine enforcement must not hide a verified factor from the
   // sensitive-action guard, or make fresh verification impossible to satisfy.
   if (enforcementOff) return { status: "not_enforced" };
+  // An AAL2 session without a recent authenticator code verifies again.
+  if (data.currentLevel === "aal2") return { status: "required", hasFactor: true };
   if (data.nextLevel === "aal2") {
     return { status: "required", hasFactor: true };
   }

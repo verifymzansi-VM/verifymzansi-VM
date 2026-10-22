@@ -14,6 +14,7 @@ import {
   attachFixtureCover,
   createPostingVerifier,
   createTrustedPostingFixture,
+  publishFixturePost,
 } from "./foundation-trusted-posting-fixture.mjs";
 import reference from "../../src/lib/domains/taxonomy/reference.json" with { type: "json" };
 
@@ -68,23 +69,7 @@ export async function testOwnerInbox({
       },
     });
     post = await attachFixtureCover(call, post, owner);
-    post = await call("submit_post", { p_post_id: post.id, p_expected_revision: post.revision });
-    await reviewer.refresh();
-    const lease = await call("claim_queue_item", { p_subject: "post", p_id: post.id }, reviewer);
-    await call(
-      "moderate_post",
-      {
-        p_post_id: post.id,
-        p_expected_revision: post.revision,
-        p_decision: "approve",
-        p_reason: null,
-        p_claim_generation: lease.claim_generation,
-        p_claim_nonce: lease.claim_nonce,
-      },
-      reviewer
-    );
-    assert.equal(sql("select status from private.posts where id='" + post.id + "';"), "live");
-    return post;
+    return publishFixturePost({ call, sql, post, reviewer });
   };
   const formEvent = await liveEvent(["form"]);
   const callEvent = await liveEvent(["call"]);

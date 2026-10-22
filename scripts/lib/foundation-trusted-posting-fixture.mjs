@@ -176,10 +176,13 @@ export async function createPostingVerifier({
   const factorId = enrolled.data.id,
     secret = enrolled.data.totp.secret;
   let lastVerifiedAt = 0;
-  const refresh = async () => {
+  const refresh = async (force = false) => {
     // A local scheduling hint only. Fresh authority still comes from GoTrue/SQL;
     // no claim or server AMR timestamp is forged, extended or restored here.
-    if (Date.now() - lastVerifiedAt < 120000) return reviewer;
+    if (!force && Date.now() - lastVerifiedAt < 120000) return reviewer;
+    // A forced re-verification uses the next TOTP step, never a reused code.
+    const step = 30000 - (Date.now() % 30000);
+    if (force && Date.now() - lastVerifiedAt < 31000) await new Promise((r) => setTimeout(r, step));
     const challenge = await reviewer.member.auth.mfa.challenge({ factorId });
     assert.equal(challenge.error, null);
     const verified = await reviewer.member.auth.mfa.verify({
@@ -208,6 +211,28 @@ export async function createPostingVerifier({
       "');"
   );
   return reviewer;
+}
+
+/** Submits an owned draft and approves it as the independent reviewer through
+ * the real submit, queue claim and moderation commands; the post is then live. */
+export async function publishFixturePost({ call, sql, post, reviewer }) {
+  post = await call("submit_post", { p_post_id: post.id, p_expected_revision: post.revision });
+  await reviewer.refresh();
+  const lease = await call("claim_queue_item", { p_subject: "post", p_id: post.id }, reviewer);
+  await call(
+    "moderate_post",
+    {
+      p_post_id: post.id,
+      p_expected_revision: post.revision,
+      p_decision: "approve",
+      p_reason: null,
+      p_claim_generation: lease.claim_generation,
+      p_claim_nonce: lease.claim_nonce,
+    },
+    reviewer
+  );
+  assert.equal(sql("select status from private.posts where id='" + post.id + "';"), "live");
+  return post;
 }
 
 /** Attaches a synthetic, server-finalized cover image to an owned draft. Uses

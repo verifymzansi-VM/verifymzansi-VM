@@ -1,4 +1,5 @@
 import { verifyIndependentUsers } from "./lib/independent-users";
+import { verifyLegacyAccessMatrix } from "./lib/legacy-access-matrix";
 import { cp, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -38,7 +39,7 @@ async function main() {
   // Dedicated local config with no remote references, production secrets or auth integrations.
   await writeFile(
     path.join(workdir, "supabase/config.toml"),
-    `project_id = "${project}"\n[api]\nenabled = true\nport = 56421\nschemas = ["public", "graphql_public"]\nextra_search_path = ["public", "extensions"]\n[db]\nport = 56422\nshadow_port = 56420\nmajor_version = 17\n[db.seed]\nenabled = false\n[auth]\nenabled = true\nsite_url = "http://localhost:3197"\n[studio]\nenabled = false\n[inbucket]\nenabled = false\n[analytics]\nenabled = false\n`
+    `project_id = "${project}"\n[api]\nenabled = true\nport = 56421\nschemas = ["public", "graphql_public"]\nextra_search_path = ["public", "extensions"]\n[db]\nport = 56422\nshadow_port = 56420\nmajor_version = 17\n[db.seed]\nenabled = false\n[auth]\nenabled = true\nsite_url = "http://localhost:3197"\n[auth.mfa.totp]\nenroll_enabled = true\nverify_enabled = true\n[studio]\nenabled = false\n[inbucket]\nenabled = false\n[analytics]\nenabled = false\n`
   );
   const runPnpm = async (name: string, args: string[], timeout = 600_000) => {
     const [command, invocation] = pnpmInvocation(args);
@@ -381,6 +382,16 @@ async function main() {
     await verifyIndependentUsers(status.API_URL, status.ANON_KEY, status.SERVICE_ROLE_KEY);
     results.push({
       name: "Two real synthetic Auth accounts: owner isolation, private metadata and ordinary-user staff denial",
+      status: "PASS",
+    });
+    const matrix = await verifyLegacyAccessMatrix(
+      status.API_URL,
+      status.ANON_KEY,
+      status.SERVICE_ROLE_KEY,
+      sql
+    );
+    results.push({
+      name: `Personal-data access matrix: ${matrix.tables} tables x ${matrix.principals} principals (owner, other, anon, staff with and without a fresh TOTP)`,
       status: "PASS",
     });
     passed = true;
