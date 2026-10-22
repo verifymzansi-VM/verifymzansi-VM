@@ -130,6 +130,40 @@ describe("logger", () => {
     expect(parsed.meta.token).toBe("***");
   });
 
+  it.each(["production", "development"])(
+    "never retains secret or personal-value fragments in %s metadata",
+    (environment) => {
+      vi.stubEnv("NODE_ENV", environment);
+      const log = createLogger("Auth");
+      log.warn("Protection check failed", {
+        otp: "935714",
+        password: "synthetic-password",
+        phone: "+27821234567",
+        email: "synthetic@example.invalid",
+        attempts: [{ refreshToken: "synthetic-refresh-token", attempt: 2 }],
+      });
+      const output = vi.mocked(console.warn).mock.calls[0][0] as string;
+      for (const field of ["otp", "password", "phone", "email", "refreshToken"])
+        expect(output).toContain(`"${field}":"***"`);
+      expect(output).toContain('"attempt":2');
+    }
+  );
+
+  it("recognises case and separator variants of personal field names", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    createLogger("Privacy").info("Protection check", {
+      EMAIL: "synthetic@example.invalid",
+      Phone: "+27821234567",
+      "IP-Address": "192.0.2.10",
+      EmailAddress: "another@example.invalid",
+      safeTraceId: "trace-123",
+    });
+    const output = JSON.parse(vi.mocked(console.info).mock.calls[0][0] as string);
+    for (const field of ["EMAIL", "Phone", "IP-Address", "EmailAddress"])
+      expect(output.meta[field]).toBe("***");
+    expect(output.meta.safeTraceId).toBe("trace-123");
+  });
+
   it("scrubs sensitive key variants and headers recursively", () => {
     vi.stubEnv("NODE_ENV", "production");
     const log = createLogger("Webhook");

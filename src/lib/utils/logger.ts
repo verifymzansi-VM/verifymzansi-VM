@@ -4,7 +4,7 @@
  * Lightweight logging utility that:
  * - Supports log levels (debug, info, warn, error)
  * - Outputs structured JSON in production, human-readable in dev
- * - Scrubs PII fields (phone, email, OTP) from metadata
+ * - Fully redacts sensitive fields (phone, email, OTP) from metadata
  * - Zero external dependencies
  */
 
@@ -17,7 +17,7 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-/** Fields whose values should be masked in logs */
+/** Fields whose values must be fully redacted in logs. */
 const PII_FIELDS = new Set([
   "phone",
   "email",
@@ -94,24 +94,21 @@ function isSensitiveFieldName(key: string): boolean {
     .replace(/[-\s.]+/g, "_")
     .toLowerCase();
 
-  return SENSITIVE_KEY_PARTS.some((part) => normalized.includes(part));
-}
-
-function maskValue(value: unknown): string {
-  if (typeof value !== "string") return "***";
-  if (value.length <= 4) return "***";
-  return value.slice(0, 2) + "***" + value.slice(-2);
+  return (
+    PII_FIELDS.has(normalized) || SENSITIVE_KEY_PARTS.some((part) => normalized.includes(part))
+  );
 }
 
 /**
  * Recursively scrub PII fields from a metadata object.
- * Returns a new object with sensitive values masked.
+ * Redact entire values: keeping a prefix and suffix exposes most of a short
+ * verification code, and can expose pieces of passwords or personal details.
  */
 function scrubPii(obj: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (isSensitiveFieldName(key)) {
-      result[key] = maskValue(value);
+      result[key] = "***";
     } else if (Array.isArray(value)) {
       result[key] = value.map((item) =>
         item && typeof item === "object" ? scrubPii(item as Record<string, unknown>) : item
