@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { BadgeHelp, CheckCircle2, Clock, FileLock2, Flag, Loader2, Mail, Send } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
@@ -69,8 +70,15 @@ const HELP_LINKS = [
 export default function ContactPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [category, setCategory] =
-    useState<(typeof contactCategories)[number]["value"]>("general_support");
+  const hydrated = useHydrated();
+  const [categoryChoice, setCategory] = useState<
+    (typeof contactCategories)[number]["value"] | null
+  >(null);
+  const topic = hydrated ? new URLSearchParams(window.location.search).get("topic") : null;
+  const category =
+    categoryChoice ??
+    contactCategories.find((item) => item.value === topic)?.value ??
+    "general_support";
   const [message, setMessage] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileUnavailable, setTurnstileUnavailable] = useState(false);
@@ -81,13 +89,6 @@ export default function ContactPage() {
   const { toast } = useToast();
   const runtimeConfig = getPublicRuntimeConfig();
   const selectedCategory = contactCategories.find((item) => item.value === category);
-
-  // Deep links such as /contact?topic=organisation_proposal preselect a category.
-  useEffect(() => {
-    const topic = new URLSearchParams(window.location.search).get("topic");
-    const match = contactCategories.find((item) => item.value === topic);
-    if (match) setCategory(match.value);
-  }, []);
 
   const handleTurnstileSuccess = useCallback((token: string) => {
     setTurnstileToken(token);

@@ -10,10 +10,10 @@ import { validateBufferIntegrity } from "@/lib/utils/file-validation";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
 import {
-  stripExifFromJpeg,
-  stripMetadataFromPng,
-  stripMetadataFromWebp,
-} from "@/lib/utils/exif-strip";
+  ImageReencodeError,
+  reencodeImage,
+  type ReencodableImageType,
+} from "@/lib/utils/image-reencode";
 
 const log = createLogger("AvatarUpload");
 
@@ -124,13 +124,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Strip metadata (POPIA data minimization) ─────────────
-    if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
-      fileBuffer = new Uint8Array(stripExifFromJpeg(fileBuffer));
-    } else if (file.type === "image/png") {
-      fileBuffer = new Uint8Array(stripMetadataFromPng(fileBuffer));
-    } else if (file.type === "image/webp") {
-      fileBuffer = new Uint8Array(stripMetadataFromWebp(fileBuffer));
+    // ── Re-encode: keep only pixels (POPIA data minimization) ─
+    try {
+      fileBuffer = new Uint8Array(
+        await reencodeImage(fileBuffer, file.type as ReencodableImageType)
+      );
+    } catch (error) {
+      const unavailable = !(error instanceof ImageReencodeError) || error.code === "unavailable";
+      log.warn("Avatar re-encode refused upload", {
+        userId: user.id,
+        error: error instanceof Error ? error.message : "Unknown",
+      });
+      return unavailable
+        ? NextResponse.json(
+            { error: "Photo processing is busy. Please try again shortly." },
+            { status: 503 }
+          )
+        : NextResponse.json({ error: "This file could not be read as an image." }, { status: 400 });
     }
 
     const ext = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";

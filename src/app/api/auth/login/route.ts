@@ -16,6 +16,7 @@ import {
 } from "@/lib/utils/account-lockout";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordSecurityEvent, securityContext } from "@/lib/security/security-events";
 
 const log = createLogger("Login");
 const emittedE2eAuthWarnings = new Set<string>();
@@ -60,7 +61,11 @@ export async function POST(request: NextRequest) {
     if (originBlock) return originBlock;
 
     const csrfBlock = enforceCsrfToken(request, log);
-    if (csrfBlock) return csrfBlock;
+    if (csrfBlock) {
+      recordSecurityEvent({ event: "request.csrf_rejected", ...securityContext(request) });
+      return csrfBlock;
+    }
+    const context = securityContext(request);
 
     const isPlaywrightTestMode = checkPlaywrightTestMode();
     const turnstileStatus = getTurnstileConfigStatus({ requestHost: request.nextUrl.hostname });
@@ -119,6 +124,12 @@ export async function POST(request: NextRequest) {
     // Check in-memory lockout first (fast, single-isolate)
     const lockout = checkAccountLockout(parsedBody.data.email);
     if (lockout.locked) {
+      recordSecurityEvent({
+        event: "auth.sign_in.locked",
+        ...context,
+        email: parsedBody.data.email,
+        reason: "local_lockout",
+      });
       logAuthProtectionWarning("Account locked due to too many failed attempts", {
         email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
         ip,
@@ -135,6 +146,12 @@ export async function POST(request: NextRequest) {
     // Cross-isolate distributed lockout (survives worker restarts)
     const distLockout = await checkDistributedLockout(parsedBody.data.email);
     if (distLockout.locked) {
+      recordSecurityEvent({
+        event: "auth.sign_in.locked",
+        ...context,
+        email: parsedBody.data.email,
+        reason: "distributed_lockout",
+      });
       logAuthProtectionWarning("Account locked (distributed) due to too many failed attempts", {
         email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
         ip,
@@ -267,11 +284,18 @@ export async function POST(request: NextRequest) {
             email: parsedBody.data.email.replace(/(.{2}).*(@.*)/, "$1***$2"),
             status: accountStatus,
           });
+          recordSecurityEvent({
+            event: "auth.sign_in.blocked",
+            ...context,
+            accountId: user.id,
+            reason: accountStatus,
+          });
           return NextResponse.json(
             { error: "Your account has been suspended. Contact support for assistance." },
             { status: 403 }
           );
         }
+        recordSecurityEvent({ event: "auth.sign_in.succeeded", ...context, accountId: user.id });
       }
     }
 
@@ -286,11 +310,19 @@ export async function POST(request: NextRequest) {
         });
       });
 
+      const unconfirmed = isEmailNotConfirmedError(error);
+      recordSecurityEvent({
+        event: "auth.sign_in.failed",
+        ...context,
+        email: parsedBody.data.email,
+        reason: unconfirmed ? "email_not_confirmed" : "invalid_credentials",
+      });
+
       // Correct password + unconfirmed email: return a distinct code so the
       // login page can offer to resend the confirmation link. This reveals
       // nothing beyond what knowing the correct password already proves;
       // every other failure still gets the generic 401.
-      if (isEmailNotConfirmedError(error)) {
+      if (unconfirmed) {
         return NextResponse.json(
           {
             error: "Please confirm your email address before signing in.",

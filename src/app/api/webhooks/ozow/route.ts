@@ -19,6 +19,7 @@ import {
 } from "@/lib/payments/store";
 import { auditPaymentCompleted, sendPaymentStatusEmail } from "@/lib/payments/notifications";
 import { readBoundedRequestText, RequestBodyTooLargeError } from "@/lib/utils/request-body";
+import { recordSecurityEvent, securityContext } from "@/lib/security/security-events";
 
 const log = createLogger("OzowWebhook");
 const SUPPORTED_OZOW_EVENT_TYPE = "transaction.complete";
@@ -101,6 +102,11 @@ export async function POST(request: NextRequest) {
       } else {
         log.warn("Invalid Ozow webhook signature");
       }
+      recordSecurityEvent({
+        event: "payment.callback_rejected",
+        ...securityContext(request),
+        reason: "invalid_signature",
+      });
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
 

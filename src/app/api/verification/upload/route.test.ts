@@ -1,3 +1,4 @@
+import type * as ImageReencodeModule from "@/lib/utils/image-reencode";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
@@ -22,8 +23,7 @@ const {
   mockGetClientIp,
   mockValidateBufferIntegrity,
   mockScanForMalware,
-  mockStripExifFromJpeg,
-  mockStripMetadataFromPng,
+  mockReencodeImage,
   mockIsFeatureEnabled,
 } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
@@ -45,8 +45,7 @@ const {
   mockScanForMalware: vi.fn<(buffer: Uint8Array, declaredMime: string) => ScanResult>(() => ({
     safe: true,
   })),
-  mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
-  mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
+  mockReencodeImage: vi.fn(async (buf: Uint8Array) => buf),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -87,9 +86,9 @@ vi.mock("@/lib/utils/malware-scan", () => ({
   scanForMalware: mockScanForMalware,
 }));
 
-vi.mock("@/lib/utils/exif-strip", () => ({
-  stripExifFromJpeg: mockStripExifFromJpeg,
-  stripMetadataFromPng: mockStripMetadataFromPng,
+vi.mock("@/lib/utils/image-reencode", async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageReencodeModule>()),
+  reencodeImage: mockReencodeImage,
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -365,8 +364,7 @@ describe("POST /api/verification/upload", () => {
       mismatch: false,
     });
     mockScanForMalware.mockReturnValue({ safe: true });
-    mockStripExifFromJpeg.mockImplementation((buf: Uint8Array) => buf);
-    mockStripMetadataFromPng.mockImplementation((buf: Uint8Array) => buf);
+    mockReencodeImage.mockImplementation(async (buf: Uint8Array) => buf);
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("KYC_ENCRYPTION_KEY", "ab".repeat(32));
     vi.stubEnv(
@@ -578,7 +576,7 @@ describe("POST /api/verification/upload", () => {
     expect(mockUploadKycDocument).not.toHaveBeenCalled();
   });
 
-  it("strips JPEG metadata before upload", async () => {
+  it("re-encodes JPEG photos before upload", async () => {
     mockAuth({ id: "user-1", email: "test@example.com" });
     setupDefaultAdminMocks();
     mockValidateBufferIntegrity.mockReturnValue({
@@ -595,11 +593,11 @@ describe("POST /api/verification/upload", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockStripExifFromJpeg).toHaveBeenCalledTimes(1);
-    expect(mockStripMetadataFromPng).not.toHaveBeenCalled();
+    expect(mockReencodeImage).toHaveBeenCalledTimes(1);
+    expect(mockReencodeImage).toHaveBeenCalledWith(expect.anything(), "image/jpeg");
   });
 
-  it("strips PNG metadata before upload", async () => {
+  it("re-encodes PNG photos before upload", async () => {
     mockAuth({ id: "user-1" });
     setupDefaultAdminMocks();
     mockValidateBufferIntegrity.mockReturnValue({
@@ -616,8 +614,8 @@ describe("POST /api/verification/upload", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockStripMetadataFromPng).toHaveBeenCalledTimes(1);
-    expect(mockStripExifFromJpeg).not.toHaveBeenCalled();
+    expect(mockReencodeImage).toHaveBeenCalledTimes(1);
+    expect(mockReencodeImage).toHaveBeenCalledWith(expect.anything(), "image/png");
   });
 
   it("calls processKycArtifact with correct params", async () => {

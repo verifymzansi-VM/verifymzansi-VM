@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createFeedSessionStore } from "@/lib/feed/session-store";
 import { decodeRef, encodeRef, slideRef } from "@/lib/feed/refs";
 import { describeBrowse, serializeBrowse, type FeedBrowse } from "@/lib/feed/browse";
 import {
@@ -64,8 +65,38 @@ export function useFeedSequence(
   /** Design previews: a fixed list, no storage and no network. */
   fixtures?: FeedSlide[]
 ): FeedSequence {
-  const [session, setSession] = useState<FeedSession | null>(null);
-  const [notice, setNotice] = useState<"expired" | null>(null);
+  const sessionStore = useMemo(
+    () =>
+      createFeedSessionStore(() => {
+        if (fixtures)
+          return {
+            session: {
+              v: 1,
+              id: "preview",
+              createdAt: 0, // Fixed design preview; never persisted or expired.
+              source: { kind: "list", label: "Design preview" },
+              returnUrl: null,
+              refs: fixtures.map((slide) => encodeRef(slideRef(slide))),
+              nextPage: null,
+              directLoaded: true,
+              terminal: "exhausted",
+            },
+            notice: null,
+          };
+        const started = startSession(slideRef(initialSlide), ctx);
+        const first = started.session.refs[0] ? decodeRef(started.session.refs[0]) : null;
+        if (first && first.id === initialSlide.id && first.kind === "t")
+          started.session.refs[0] = encodeRef(slideRef(initialSlide));
+        saveSession(started.session);
+        return { session: started.session, notice: started.notice };
+      }),
+    [ctx, initialSlide, fixtures]
+  );
+  const { session, notice } = useSyncExternalStore(
+    sessionStore.subscribe,
+    sessionStore.getSnapshot,
+    sessionStore.getServerSnapshot
+  );
   const [slides, setSlides] = useState<Map<string, FeedSlide | null>>(
     () => new Map((fixtures ?? [initialSlide]).map((slide) => [slide.id, slide]))
   );
@@ -82,37 +113,13 @@ export function useFeedSequence(
     return () => controller.abort();
   }, []);
 
-  // Session: resume `ctx`, adopt the clicked list, or start fresh (browser only).
-  useEffect(() => {
-    if (fixtures) {
-      setSession({
-        v: 1,
-        id: "preview",
-        createdAt: Date.now(),
-        source: { kind: "list", label: "Design preview" },
-        returnUrl: null,
-        refs: fixtures.map((slide) => encodeRef(slideRef(slide))),
-        nextPage: null,
-        directLoaded: true,
-        terminal: "exhausted",
-      });
-      return;
-    }
-    const started = startSession(slideRef(initialSlide), ctx);
-    // The opened post leads the sequence under its resolved kind.
-    const first = started.session.refs[0] ? decodeRef(started.session.refs[0]) : null;
-    if (first && first.id === initialSlide.id && first.kind === "t") {
-      started.session.refs[0] = encodeRef(slideRef(initialSlide));
-    }
-    saveSession(started.session);
-    setSession(started.session);
-    setNotice(started.notice);
-  }, [ctx, initialSlide, fixtures]);
-
-  const update = useCallback((next: FeedSession) => {
-    saveSession(next);
-    setSession(next);
-  }, []);
+  const update = useCallback(
+    (next: FeedSession) => {
+      saveSession(next);
+      sessionStore.setSession(next);
+    },
+    [sessionStore]
+  );
 
   const refs = useMemo(
     () =>
@@ -157,12 +164,11 @@ export function useFeedSequence(
   }, [session, posts, activeIndex, slides, failed, loadSlides]);
 
   /* ── Extending the sequence ── */
-  const grow = useCallback(async () => {
+  const grow = useCallback(() => {
     if (!session || growing.current || session.terminal) return;
     growing.current = true;
-    setGrowError(false);
     const signal = abort.current.signal;
-    try {
+    const load = async () => {
       const continuation = session.source.continuation;
       if (
         continuation &&
@@ -214,13 +220,18 @@ export function useFeedSequence(
       }
       // A list or search section with nothing more to read stops at its own edge.
       update({ ...session, terminal: session.source.continuation ? "exhausted" : "source_limit" });
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) setGrowError(true);
-    } finally {
-      growing.current = false;
-    }
+    };
+    return load()
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) setGrowError(true);
+      })
+      .finally(() => {
+        growing.current = false;
+      });
   }, [session, update]);
 
+  const returnUrl = session?.returnUrl ?? null;
+  const terminal = session?.terminal;
   const browseTo = useCallback(
     async (browse: FeedBrowse) => {
       try {
@@ -234,17 +245,17 @@ export function useFeedSequence(
           describeBrowse(browse),
           refs,
           payload.terminal,
-          session?.returnUrl ?? null
+          returnUrl
         );
         setFailed(new Set());
         setGrowError(false);
-        setSession(next);
+        sessionStore.setSession(next);
         return { ok: true, firstId: refs[0]?.id ?? null };
       } catch {
         return { ok: false, firstId: null };
       }
     },
-    [session?.returnUrl]
+    [returnUrl, sessionStore]
   );
 
   const remaining = posts.length - 1 - activeIndex;
@@ -265,10 +276,10 @@ export function useFeedSequence(
       slide: slides.get(ref.id) ?? undefined,
       failed: failed.has(ref.id),
     }));
-    if (session?.terminal) list.push({ type: "end", terminal: session.terminal });
+    if (terminal) list.push({ type: "end", terminal });
     else if (growError) list.push({ type: "more-error" });
     return list;
-  }, [posts, slides, failed, session?.terminal, growError]);
+  }, [posts, slides, failed, terminal, growError]);
 
   return {
     ready: Boolean(session),

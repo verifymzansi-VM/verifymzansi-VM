@@ -1,23 +1,15 @@
+import type * as ImageReencodeModule from "@/lib/utils/image-reencode";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const {
-  mockCreateClient,
-  mockCreateAdminClient,
-  mockCheckRateLimit,
-  mockStripExifFromJpeg,
-  mockStripMetadataFromPng,
-  mockStripMetadataFromWebp,
-  mockWarn,
-} = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
-  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-  mockStripExifFromJpeg: vi.fn((buf: Uint8Array) => buf),
-  mockStripMetadataFromPng: vi.fn((buf: Uint8Array) => buf),
-  mockStripMetadataFromWebp: vi.fn((buf: Uint8Array) => buf),
-  mockWarn: vi.fn(),
-}));
+const { mockCreateClient, mockCreateAdminClient, mockCheckRateLimit, mockReencodeImage, mockWarn } =
+  vi.hoisted(() => ({
+    mockCreateClient: vi.fn(),
+    mockCreateAdminClient: vi.fn(),
+    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+    mockReencodeImage: vi.fn(async (buf: Uint8Array) => buf),
+    mockWarn: vi.fn(),
+  }));
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mockCreateAdminClient }));
@@ -35,10 +27,9 @@ vi.mock("@/lib/utils/file-validation", () => ({
 vi.mock("@/lib/utils/malware-scan", () => ({
   scanForMalware: vi.fn(() => ({ safe: true })),
 }));
-vi.mock("@/lib/utils/exif-strip", () => ({
-  stripExifFromJpeg: mockStripExifFromJpeg,
-  stripMetadataFromPng: mockStripMetadataFromPng,
-  stripMetadataFromWebp: mockStripMetadataFromWebp,
+vi.mock("@/lib/utils/image-reencode", async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageReencodeModule>()),
+  reencodeImage: mockReencodeImage,
 }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: mockWarn, error: vi.fn() }),
@@ -46,6 +37,7 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/utils/csrf", () => ({ enforceCsrfToken: vi.fn().mockReturnValue(null) }));
 
 import { POST } from "@/app/api/profile/avatar/route";
+import { ImageReencodeError } from "@/lib/utils/image-reencode";
 
 function createRequest(formData: FormData, headers: Record<string, string> = {}) {
   return {
@@ -185,8 +177,8 @@ describe("POST /api/profile/avatar", () => {
         action: "profile:avatar",
       });
       expect(upload).toHaveBeenCalled();
-      // PNG metadata must be stripped before upload
-      expect(mockStripMetadataFromPng).toHaveBeenCalled();
+      // The PNG is re-encoded (metadata and hidden bytes dropped) before upload
+      expect(mockReencodeImage).toHaveBeenCalledWith(expect.any(Uint8Array), "image/png");
       // Stale variants with other extensions are cleaned up best-effort
       expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.webp"]);
       expect(updateEq.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
@@ -244,7 +236,7 @@ describe("POST /api/profile/avatar", () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it("strips EXIF from JPEG avatars and removes stale png/webp variants", async () => {
+  it("re-encodes JPEG avatars and removes stale png/webp variants", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
     const remove = vi.fn().mockResolvedValue({ data: [], error: null });
     const getPublicUrl = vi.fn().mockReturnValue({
@@ -274,14 +266,13 @@ describe("POST /api/profile/avatar", () => {
     const res = await POST(createRequest(formData));
 
     expect(res.status).toBe(200);
-    expect(mockStripExifFromJpeg).toHaveBeenCalled();
-    expect(mockStripMetadataFromPng).not.toHaveBeenCalled();
-    expect(mockStripMetadataFromWebp).not.toHaveBeenCalled();
+    expect(mockReencodeImage).toHaveBeenCalledTimes(1);
+    expect(mockReencodeImage).toHaveBeenCalledWith(expect.any(Uint8Array), "image/jpeg");
     expect(remove).toHaveBeenCalledWith(["user-1/avatar.png", "user-1/avatar.webp"]);
     expect(update).toHaveBeenCalledWith({ avatar_url: expect.stringContaining("avatar.jpg?v=") });
   });
 
-  it("strips metadata from WebP avatars", async () => {
+  it("re-encodes WebP avatars", async () => {
     const upload = vi.fn().mockResolvedValue({ error: null });
     const remove = vi.fn().mockResolvedValue({ data: [], error: null });
     const getPublicUrl = vi.fn().mockReturnValue({
@@ -311,8 +302,32 @@ describe("POST /api/profile/avatar", () => {
     const res = await POST(createRequest(formData));
 
     expect(res.status).toBe(200);
-    expect(mockStripMetadataFromWebp).toHaveBeenCalled();
+    expect(mockReencodeImage).toHaveBeenCalledWith(expect.any(Uint8Array), "image/webp");
     expect(remove).toHaveBeenCalledWith(["user-1/avatar.jpg", "user-1/avatar.png"]);
     expect(update).toHaveBeenCalledWith({ avatar_url: expect.stringContaining("avatar.webp?v=") });
+  });
+
+  it.each([
+    ["unavailable", 503],
+    ["undecodable", 400],
+  ] as const)("refuses the avatar when re-encoding is %s", async (code, status) => {
+    const upload = vi.fn();
+    mockReencodeImage.mockRejectedValueOnce(new ImageReencodeError(code, "failed"));
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+      },
+    });
+    mockCreateAdminClient.mockReturnValue({
+      storage: { from: vi.fn().mockReturnValue({ upload }) },
+    });
+
+    const formData = new FormData();
+    formData.set("file", new File(["hello"], "avatar.png", { type: "image/png" }));
+
+    const res = await POST(createRequest(formData));
+
+    expect(res.status).toBe(status);
+    expect(upload).not.toHaveBeenCalled();
   });
 });

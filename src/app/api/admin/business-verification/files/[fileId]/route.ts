@@ -7,7 +7,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { authorizeEvidenceRequest } from "@/app/api/admin/verification/_lib/evidence-route-auth";
-import { detectEvidenceContentType, hashIp } from "@/lib/services/evidence-serving";
+import { evidenceViewResponse, hashIp } from "@/lib/services/evidence-serving";
 import { downloadKycDocument } from "@/lib/services/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
@@ -108,19 +108,7 @@ export async function GET(
       });
     }
 
-    const buffer = await downloadKycDocument(file.r2_key);
-    const contentType = detectEvidenceContentType(buffer);
-    return new NextResponse(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": contentType ?? "application/octet-stream",
-        "Content-Disposition": contentType ? "inline" : "attachment",
-        "Cache-Control": NO_STORE,
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY",
-        "Content-Security-Policy": "default-src 'none'; base-uri 'none'; img-src 'self'; sandbox",
-      },
-    });
+    return evidenceViewResponse(await downloadKycDocument(file.r2_key));
   } catch (error) {
     log.error("Serving business verification file failed", {
       error: error instanceof Error ? error.message : String(error),

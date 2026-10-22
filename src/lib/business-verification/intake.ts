@@ -4,12 +4,12 @@ import { parseRegisteredOffice, type RegisteredOffice } from "@/lib/cipc/address
 import { parseCipcText, type ParsedCipcDocument } from "@/lib/cipc/parse";
 import { extractPdf, type PdfStructure } from "@/lib/cipc/pdf";
 import { getIdNumberHmacSecret, hmacIdNumber } from "@/lib/services/id-number-hmac";
-import {
-  stripExifFromJpeg,
-  stripMetadataFromPng,
-  stripMetadataFromWebp,
-} from "@/lib/utils/exif-strip";
 import { validateBufferIntegrity } from "@/lib/utils/file-validation";
+import {
+  ImageReencodeError,
+  isReencodableImageType,
+  reencodeImage,
+} from "@/lib/utils/image-reencode";
 import { createLogger } from "@/lib/utils/logger";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 
@@ -58,11 +58,25 @@ export function isIntakeError(value: CipcFile | IntakeError): value is IntakeErr
   return "error" in value;
 }
 
-function stripImageMetadata(bytes: Uint8Array, mime: string): Uint8Array {
-  if (mime === "image/jpeg") return stripExifFromJpeg(bytes);
-  if (mime === "image/png") return stripMetadataFromPng(bytes);
-  if (mime === "image/webp") return stripMetadataFromWebp(bytes);
-  return bytes;
+/** Photos are stored re-encoded: only pixels, no metadata or hidden bytes. */
+async function reencodePhoto(bytes: Uint8Array, mime: string): Promise<Uint8Array | IntakeError> {
+  try {
+    if (!isReencodableImageType(mime)) {
+      throw new ImageReencodeError("undecodable", `Unsupported image type ${mime}`);
+    }
+    return await reencodeImage(bytes, mime);
+  } catch (error) {
+    log.warn("Photo re-encode refused upload", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return error instanceof ImageReencodeError && error.code === "undecodable"
+      ? { error: "This photo could not be read.", code: "unreadable_image", status: 400 }
+      : {
+          error: "Photo processing is busy. Please try again shortly.",
+          code: "image_processing_unavailable",
+          status: 503,
+        };
+  }
 }
 
 function storedParse(parsed: ParsedCipcDocument, secret: string | null): StoredParse {
@@ -114,7 +128,10 @@ export async function readCipcFile(
   }
   const scan = scanForMalware(raw, mime);
   const activeContent = scan.safe ? null : (scan.threat ?? "unknown");
-  const bytes = isPdf ? raw : stripImageMetadata(raw, mime);
+  // A PDF with active content is kept as fraud evidence but quarantined:
+  // staff only ever get its extracted text, never the file.
+  const bytes = isPdf ? raw : await reencodePhoto(raw, mime);
+  if (!(bytes instanceof Uint8Array)) return bytes;
 
   const extracted = isPdf ? await extractPdf(raw) : null;
   const parsed = extracted?.structure.hasTextLayer ? parseCipcText(extracted.items) : null;

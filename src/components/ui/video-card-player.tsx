@@ -699,9 +699,8 @@ function VideoCardPlayerInner({
     showPlaybackControl,
     deferVideoLoadUntilPlay,
   });
-  /* eslint-disable react-hooks/set-state-in-effect -- applies client-only
-     preferences once after hydration; reading them during render would make
-     the first client render differ from the server HTML (React #418). */
+  // Apply client-only preferences after hydration and before painting; reading
+  // them during render would make client and server HTML disagree.
   useLayoutEffect(() => {
     // Sticky intent (mute-button style): when the user has pressed play on
     // any card, newly focused showroom cards start playing on their own
@@ -724,7 +723,6 @@ function VideoCardPlayerInner({
       setIsPlaybackPaused(true);
     }
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
   const [tapIndicator, setTapIndicator] = useState<{
     key: number;
     action: "play" | "pause";

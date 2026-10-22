@@ -17,6 +17,11 @@ const IMAGE_TYPES = [
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime"];
 /** HEIC/HEIF are accepted by the file-picker but converted client-side to JPEG before upload. */
 const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
+/**
+ * The server only stores JPEG, PNG and WebP (it re-encodes every photo), so
+ * GIF (first frame) and AVIF are converted to WebP in the browser first.
+ */
+const WEBP_CONVERT_TYPES = new Set(["image/gif", "image/avif"]);
 const ALL_ACCEPT = [...IMAGE_TYPES, ...VIDEO_TYPES].join(",");
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -48,6 +53,34 @@ async function convertHeicToJpeg(file: File): Promise<File | null> {
     const baseName = file.name.replace(/\.[^.]+$/, "") || file.name;
     return new File([result], `${baseName}.jpg`, {
       type: "image/jpeg",
+      lastModified: file.lastModified,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Re-draw a GIF/AVIF as WebP via canvas. Returns null when the browser can't decode it. */
+async function convertToWebp(file: File): Promise<File | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      bitmap.close();
+      return null;
+    }
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/webp", 0.9)
+    );
+    if (!blob || blob.type !== "image/webp") return null;
+    const baseName = file.name.replace(/\.[^.]+$/, "") || file.name;
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
       lastModified: file.lastModified,
     });
   } catch {
@@ -318,6 +351,18 @@ export function MediaUpload({
             rejectFile(
               "File too large",
               `"${file.name}" exceeds the 5 MB image limit after conversion.`
+            );
+            continue;
+          }
+          normalized = converted;
+        }
+
+        if (WEBP_CONVERT_TYPES.has(normalized.type)) {
+          const converted = await convertToWebp(normalized);
+          if (!converted || converted.size > MAX_IMAGE_SIZE) {
+            rejectFile(
+              "Conversion failed",
+              `"${file.name}" could not be converted. Please save it as JPEG or PNG and try again.`
             );
             continue;
           }

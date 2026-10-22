@@ -12,11 +12,11 @@ import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import {
-  stripExifFromJpeg,
-  stripMetadataFromAvif,
-  stripMetadataFromPng,
-  stripMetadataFromWebp,
-} from "@/lib/utils/exif-strip";
+  ImageReencodeError,
+  REENCODABLE_IMAGE_TYPES,
+  reencodeImage,
+  type ReencodableImageType,
+} from "@/lib/utils/image-reencode";
 import { scrubVideoLocationMetadata } from "@/lib/utils/isobmff-metadata";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { generateImageVariants } from "@/lib/services/image-variants";
@@ -26,15 +26,9 @@ import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/util
 
 const log = createLogger("MediaUpload");
 
-const IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-  "image/avif",
-  "image/heic",
-  "image/heif",
-]);
+// Photos are re-encoded server-side, so only formats the re-encoder reads.
+// The picker converts HEIC, GIF and AVIF to JPEG/WebP before upload.
+const IMAGE_TYPES = new Set<string>(REENCODABLE_IMAGE_TYPES);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -46,10 +40,6 @@ const EXTENSION_MIME_MAP: Record<string, string> = {
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
-  gif: "image/gif",
-  avif: "image/avif",
-  heic: "image/heic",
-  heif: "image/heif",
   mp4: "video/mp4",
   webm: "video/webm",
 };
@@ -291,25 +281,39 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
+      // Re-encode photos so only pixels are stored: metadata (GPS, POPIA)
+      // and anything hidden in or after the image data is dropped.
+      let reencodedBytes: Uint8Array | null = null;
+      if (isImage) {
+        try {
+          reencodedBytes = await reencodeImage(fileBuffer, file.type as ReencodableImageType);
+        } catch (error) {
+          const unavailable =
+            !(error instanceof ImageReencodeError) || error.code === "unavailable";
+          log.warn("Image re-encode refused upload", {
+            filename: file.name,
+            userId: user.id,
+            error: error instanceof Error ? error.message : "Unknown",
+          });
+          if (unavailable) {
+            hadUploadFailure = true;
+            failureStatus = 503;
+          }
+          errors.push(
+            unavailable
+              ? `"${file.name}": photo processing is busy, please try again shortly`
+              : `"${file.name}": could not be read as an image`
+          );
+          continue;
+        }
+      }
+
       const key = generateStorageKey(`media/${area}`, user.id, file.name, file.type);
 
       try {
-        // Strip metadata from images and GPS from videos to prevent
-        // location/PII leaks (POPIA)
         let uploadFile: File | Blob = file;
-        let strippedBytes: Uint8Array = fileBuffer;
-        if (file.type === "image/jpeg") {
-          strippedBytes = stripExifFromJpeg(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
-        } else if (file.type === "image/png") {
-          strippedBytes = stripMetadataFromPng(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
-        } else if (file.type === "image/webp") {
-          strippedBytes = stripMetadataFromWebp(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
-        } else if (file.type === "image/avif") {
-          strippedBytes = stripMetadataFromAvif(fileBuffer);
-          uploadFile = new Blob([toArrayBuffer(strippedBytes)], { type: file.type });
+        if (reencodedBytes) {
+          uploadFile = new Blob([toArrayBuffer(reencodedBytes)], { type: file.type });
         } else if (file.type === "video/mp4") {
           // Blank ©xyz / Apple ISO6709 location values in place (same length,
           // so chunk offsets stay valid). fileBuffer is this request's own
@@ -317,12 +321,6 @@ export async function POST(request: NextRequest) {
           if (scrubVideoLocationMetadata(fileBuffer) > 0) {
             uploadFile = new Blob([fileBuffer], { type: file.type });
           }
-        } else if (file.type === "image/heic" || file.type === "image/heif") {
-          // HEIC/HEIF EXIF stripping is not supported server-side.
-          // Clients must convert to JPEG before upload. Reject raw HEIC to
-          // prevent GPS/PII metadata leaks (POPIA compliance).
-          errors.push(`"${file.name}": HEIC/HEIF must be converted to JPEG before upload`);
-          continue;
         }
 
         const result = await uploadToR2({
@@ -380,12 +378,12 @@ export async function POST(request: NextRequest) {
         // width to the nearest variant key. Failures here never block the
         // original upload — the original is already stored and served.
         //
-        // Variants are generated from the STRIPPED bytes (not fileBuffer) so
+        // Variants are generated from the RE-ENCODED bytes (not fileBuffer) so
         // GPS/PII metadata removed for POPIA compliance is not re-introduced
         // into the derived WebP variants.
-        if (isImage) {
+        if (reencodedBytes) {
           try {
-            const variantSource = Buffer.from(toArrayBuffer(strippedBytes));
+            const variantSource = Buffer.from(toArrayBuffer(reencodedBytes));
             const variants = await generateImageVariants(variantSource, key);
             for (const variant of variants) {
               try {

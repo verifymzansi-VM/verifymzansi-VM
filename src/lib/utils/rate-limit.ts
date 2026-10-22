@@ -5,6 +5,7 @@
  */
 
 import { createLogger } from "@/lib/utils/logger";
+import { recordSecurityEvent } from "@/lib/security/security-events";
 
 const logger = createLogger("rate-limit");
 
@@ -190,8 +191,20 @@ export function getClientRateLimitKey(request: Request): string {
  * or `{ limited: false }` if the request should proceed.
  *
  * Uses the configured degraded mode when the worker is unavailable or errors.
+ * A shared-limiter refusal is recorded as a security event (key fingerprinted).
  */
 export async function checkRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
+  const result = await checkSharedRateLimit(opts);
+  if (result.limited && !result.degraded)
+    recordSecurityEvent({
+      event: "request.rate_limited",
+      rateLimitKey: opts.key,
+      reason: opts.action,
+    });
+  return result;
+}
+
+async function checkSharedRateLimit(opts: RateLimitOptions): Promise<RateLimitResult> {
   const url = process.env.OTP_RATE_LIMITER_URL;
   if (!url) {
     if (opts.degradedMode === "block") {

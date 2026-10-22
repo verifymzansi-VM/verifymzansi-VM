@@ -8,6 +8,7 @@
 import { createLogger } from "@/lib/utils/logger";
 import { TURNSTILE_VERIFY_REQUEST_TIMEOUT_MS } from "@/lib/turnstile-constants";
 import { shouldBypassTurnstileInNonProduction } from "@/lib/turnstile-mode";
+import { recordSecurityEvent } from "@/lib/security/security-events";
 
 const log = createLogger("Turnstile");
 
@@ -167,6 +168,11 @@ export async function verifyTurnstileToken(
       log.warn("Turnstile token verification failed", {
         category: "invalid_token",
         errorCodes,
+      });
+      recordSecurityEvent({
+        event: "request.captcha_failed",
+        ip: params.remoteIp,
+        reason: "invalid_token",
       });
       return {
         success: false,

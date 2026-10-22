@@ -8,24 +8,15 @@ import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { InAppInstallSteps, IOSInstallSteps } from "@/components/pwa/install-steps";
 import { isDismissalActive, PROMPT_DISMISSED_STORAGE_KEY } from "@/lib/pwa/install-environment";
+import { shouldShowMobileNav } from "@/components/layout/mobile-nav-paths";
 
 const HOME_PROMPT_MIN_SCROLL_Y = 360;
 
-// Auth/verification flows need full attention; the showroom sections keep their
-// bottom edge for the feed controls. /install has its own buttons.
-const PROMPT_BLOCKED_PATH_PREFIXES = [
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-  "/auth",
-  "/verification",
-  "/error",
-  "/install",
-  "/mzansi-market",
-  "/mzansi-business",
-  "/tourism-events",
-];
+// The banner sits just above the bottom tab bar, so it only shows where that bar
+// does. Elsewhere (detail pages, posting, checkout, auth, dashboards, /install) the
+// bottom edge belongs to the page's own sticky actions. The showroom sections also
+// keep their bottom edge for the feed controls.
+const PROMPT_BLOCKED_PATH_PREFIXES = ["/mzansi-market", "/mzansi-business", "/tourism-events"];
 
 function safeGetLocalStorageItem(key: string) {
   try {
@@ -57,9 +48,12 @@ export function PwaInstallPrompt() {
   const pathname = usePathname();
   const isPlaywright = isPlaywrightTestMode();
   const [dismissed, setDismissed] = useState(readDismissed);
-  const promptBlockedForRoute = PROMPT_BLOCKED_PATH_PREFIXES.some(
-    (prefix) => pathname != null && (pathname === prefix || pathname.startsWith(`${prefix}/`))
-  );
+  const promptBlockedForRoute =
+    pathname == null ||
+    !shouldShowMobileNav(pathname) ||
+    PROMPT_BLOCKED_PATH_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    );
   const promptSuppressed = isPlaywright || dismissed || promptBlockedForRoute;
   const { environment, canPrompt, promptInstall } = usePwaInstall(!promptSuppressed);
   const needsHelp = environment === "ios" || environment === "in-app";
@@ -132,7 +126,9 @@ export function PwaInstallPrompt() {
   const helpTitle = inApp ? "Open in your browser" : "Install on iPhone";
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
+    // Steps aside while the lead-alert prompt (same spot) or a full-screen pop-up
+    // such as "Launching soon" is on screen.
+    <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe [body:has([data-lead-alert-prompt])_&]:hidden [body:has([data-full-screen-popup])_&]:hidden">
       <div className="glass-panel elev-lg relative flex w-full max-w-sm items-center justify-between gap-4 overflow-hidden rounded-2xl p-4">
         {/* Decorative background element for premium feel */}
         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/10 to-transparent pointer-events-none" />

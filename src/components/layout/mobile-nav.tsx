@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Clapperboard, Home, Plus, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { shouldShowMobileNav } from "./mobile-nav-paths";
 import { useAuth } from "@/hooks/use-auth";
 import { useSignedInShell } from "@/components/providers/session-hint-provider";
 import { triggerHaptic } from "@/lib/utils/haptics";
@@ -33,30 +34,6 @@ const TABS: TabDef[] = [
     requiresAuth: true,
   },
 ];
-
-/**
- * Discovery surfaces get the app-style tab bar. Detail pages, posting,
- * checkout, auth and dashboards keep the screen for their own sticky actions.
- */
-const NAV_EXACT_PATHS = new Set([
-  "/",
-  "/search",
-  "/mzansi-market",
-  "/mzansi-business",
-  "/tourism-events",
-  "/promotions",
-  "/promotions/events",
-  "/pricing",
-  "/advertise",
-  "/trust-safety",
-  "/contact",
-]);
-
-function shouldShowMobileNav(pathname: string | null): boolean {
-  if (!pathname) return false;
-  if (NAV_EXACT_PATHS.has(pathname)) return true;
-  return pathname === "/safety" || pathname.startsWith("/safety/");
-}
 
 export function MobileNav() {
   const pathname = usePathname();

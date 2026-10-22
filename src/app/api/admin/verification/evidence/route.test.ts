@@ -352,16 +352,16 @@ describe("/api/admin/verification/evidence", () => {
     }
   );
 
-  it("downloads unrecognised bytes as an octet-stream attachment even when labelled as an image", async () => {
+  it("refuses unrecognised bytes even when labelled as an image", async () => {
     mockAdminClientForArtifact(makeArtifact({ content_type: "image/jpeg" }));
     mockDownloadResult(HTML_BYTES);
 
     const response = await GET(createGetRequest(EVIDENCE_URL));
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("application/octet-stream");
-    expect(response.headers.get("Content-Disposition")).toBe("attachment");
-    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.status).toBe(415);
+    expect(response.headers.get("Content-Disposition")).toBeNull();
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(await response.json()).toMatchObject({ code: "unviewable_evidence" });
   });
 
   it("sends a sandboxed CSP and hardening headers with evidence", async () => {

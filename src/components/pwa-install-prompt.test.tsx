@@ -288,6 +288,11 @@ describe("PwaInstallPrompt", () => {
     "/mzansi-market",
     "/mzansi-business",
     "/tourism-events",
+    "/install",
+    "/listing/0b8f8c1e-3f8f-4c1e-9d2a-0f3c2b1a9e7d",
+    "/billing/checkout",
+    "/post/create",
+    "/dashboard",
   ])(
     "suppresses rendering on blocked route %s even when iOS fallback conditions match",
     (blockedPath) => {

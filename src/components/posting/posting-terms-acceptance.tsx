@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
@@ -43,7 +43,9 @@ export function PostingTermsAcceptance({
   const id = useId();
   const key = document ? `${document.version}:${document.document_hash}` : null;
   const currentKey = useRef(key);
-  currentKey.current = key;
+  useLayoutEffect(() => {
+    currentKey.current = key;
+  }, [key]);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;

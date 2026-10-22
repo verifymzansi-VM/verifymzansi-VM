@@ -1,3 +1,4 @@
+import type * as ImageReencodeModule from "@/lib/utils/image-reencode";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -8,9 +9,7 @@ const {
   mockDecodeImageToPixels,
   mockComputeLaplacianVariance,
   mockComputePerceptualHash,
-  mockStripExifFromJpeg,
-  mockStripMetadataFromPng,
-  mockStripMetadataFromWebp,
+  mockReencodeImage,
 } = vi.hoisted(() => ({
   mockValidateBufferIntegrity: vi.fn(),
   mockScanForMalware: vi.fn(),
@@ -19,9 +18,7 @@ const {
   mockDecodeImageToPixels: vi.fn(),
   mockComputeLaplacianVariance: vi.fn(),
   mockComputePerceptualHash: vi.fn(),
-  mockStripExifFromJpeg: vi.fn(),
-  mockStripMetadataFromPng: vi.fn(),
-  mockStripMetadataFromWebp: vi.fn(),
+  mockReencodeImage: vi.fn(),
 }));
 
 vi.mock("@/lib/utils/file-validation", () => ({
@@ -37,16 +34,16 @@ vi.mock("@/lib/utils/blur-detection", () => ({
 vi.mock("@/lib/utils/perceptual-hash", () => ({
   computePerceptualHash: mockComputePerceptualHash,
 }));
-vi.mock("@/lib/utils/exif-strip", () => ({
-  stripExifFromJpeg: mockStripExifFromJpeg,
-  stripMetadataFromPng: mockStripMetadataFromPng,
-  stripMetadataFromWebp: mockStripMetadataFromWebp,
+vi.mock("@/lib/utils/image-reencode", async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageReencodeModule>()),
+  reencodeImage: mockReencodeImage,
 }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() }),
 }));
 
 import { analyzeKycUploadFile } from "@/app/api/verification/upload/_lib/kyc-file-analysis";
+import { ImageReencodeError } from "@/lib/utils/image-reencode";
 
 function makeFile(type: string, name = "upload.jpg") {
   return new File([new Uint8Array([1, 2, 3])], name, { type });
@@ -62,9 +59,7 @@ describe("analyzeKycUploadFile", () => {
     mockDecodeImageToPixels.mockResolvedValue({ width: 2, height: 2, data: new Uint8Array(16) });
     mockComputeLaplacianVariance.mockReturnValue(123);
     mockComputePerceptualHash.mockResolvedValue("abcd1234abcd1234");
-    mockStripExifFromJpeg.mockImplementation((buffer: Buffer) => buffer);
-    mockStripMetadataFromPng.mockImplementation((buffer: Buffer) => buffer);
-    mockStripMetadataFromWebp.mockImplementation((buffer: Buffer) => buffer);
+    mockReencodeImage.mockImplementation(async (buffer: Uint8Array) => buffer);
   });
 
   it("rejects files whose declared MIME type does not match their bytes", async () => {
@@ -98,7 +93,7 @@ describe("analyzeKycUploadFile", () => {
     expect(mockInspectJpegExif).not.toHaveBeenCalled();
   });
 
-  it("returns fraud signals and strips JPEG metadata for clean image uploads", async () => {
+  it("returns fraud signals from the original and stores the re-encoded JPEG", async () => {
     const fileBuffer = Buffer.from([1, 2, 3]);
 
     const result = await analyzeKycUploadFile({
@@ -115,14 +110,14 @@ describe("analyzeKycUploadFile", () => {
       expect(result.phash).toBe("abcd1234abcd1234");
       expect(result.fileBuffer).toEqual(fileBuffer);
     }
-    expect(mockStripExifFromJpeg).toHaveBeenCalledWith(fileBuffer);
+    expect(mockReencodeImage).toHaveBeenCalledWith(fileBuffer, "image/jpeg");
   });
 
-  it("strips WebP metadata (EXIF/XMP, including GPS) before storage", async () => {
+  it("stores the re-encoded WebP (EXIF/XMP, including GPS, dropped)", async () => {
     mockValidateBufferIntegrity.mockReturnValue({ valid: true, detectedMime: "image/webp" });
     const fileBuffer = Buffer.from([1, 2, 3]);
-    const stripped = Buffer.from([9]);
-    mockStripMetadataFromWebp.mockReturnValue(stripped);
+    const stripped = new Uint8Array([9]);
+    mockReencodeImage.mockResolvedValue(stripped);
 
     const result = await analyzeKycUploadFile({
       file: makeFile("image/webp", "selfie.webp"),
@@ -132,8 +127,40 @@ describe("analyzeKycUploadFile", () => {
     });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.fileBuffer).toEqual(stripped);
-    expect(mockStripMetadataFromWebp).toHaveBeenCalledWith(fileBuffer);
+    if (result.ok) expect(new Uint8Array(result.fileBuffer)).toEqual(stripped);
+    expect(mockReencodeImage).toHaveBeenCalledWith(fileBuffer, "image/webp");
+  });
+
+  it("stores PDFs as uploaded, without re-encoding", async () => {
+    mockValidateBufferIntegrity.mockReturnValue({ valid: true, detectedMime: "application/pdf" });
+    const fileBuffer = Buffer.from([1, 2, 3]);
+
+    const result = await analyzeKycUploadFile({
+      file: makeFile("application/pdf", "id.pdf"),
+      fileBuffer,
+      requestId: "req-pdf",
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockReencodeImage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["unavailable", 503],
+    ["undecodable", 400],
+  ] as const)("refuses the upload when re-encoding is %s", async (code, status) => {
+    mockReencodeImage.mockRejectedValue(new ImageReencodeError(code, "failed"));
+
+    const result = await analyzeKycUploadFile({
+      file: makeFile("image/jpeg"),
+      fileBuffer: Buffer.from([1, 2, 3]),
+      requestId: "req-reencode",
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(status);
   });
 
   it("rejects undersized images", async () => {

@@ -1,3 +1,4 @@
+import type * as ImageReencodeModule from "@/lib/utils/image-reencode";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST as uploadMedia } from "@/app/api/media/upload/route";
 import { createClient } from "@/lib/supabase/server";
@@ -6,6 +7,7 @@ import { type NextRequest } from "next/server";
 import { uploadToR2, deleteFromR2, generateStorageKey } from "@/lib/services/storage";
 import { generateImageVariants } from "@/lib/services/image-variants";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { ImageReencodeError, reencodeImage } from "@/lib/utils/image-reencode";
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -22,6 +24,12 @@ vi.mock("@/lib/services/storage", () => ({
 }));
 vi.mock("@/lib/services/image-variants", () => ({
   generateImageVariants: vi.fn().mockResolvedValue([]),
+}));
+// The real re-encoder is covered in src/lib/utils/image-reencode.test.ts; these
+// fixtures are hand-built headers that no decoder would accept.
+vi.mock("@/lib/utils/image-reencode", async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageReencodeModule>()),
+  reencodeImage: vi.fn(),
 }));
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -167,6 +175,7 @@ describe("Media Upload Routes", () => {
       rpc: vi.fn().mockResolvedValue({ data: 0, error: null }),
     } as never);
     vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
+    vi.mocked(reencodeImage).mockImplementation(async (bytes) => bytes.slice());
   });
 
   describe("POST /api/media/upload", () => {
@@ -485,7 +494,7 @@ describe("Media Upload Routes", () => {
       expect(uploadToR2).not.toHaveBeenCalled();
     });
 
-    it("strips WebP EXIF chunks and records the post-strip size", async () => {
+    it("stores the re-encoded WebP and records its size", async () => {
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
       mockSupabase.from.mockImplementation((table: string) => {
         if (table === "media_uploads") {
@@ -501,6 +510,8 @@ describe("Media Upload Routes", () => {
 
       const webpBytes = buildWebpWithExif();
       const file = new File([webpBytes], "photo.webp", { type: "image/webp" });
+      const reencoded = webpBytes.slice(0, 20);
+      vi.mocked(reencodeImage).mockResolvedValue(reencoded);
       vi.mocked(uploadToR2).mockResolvedValue({ url: "https://example.com/photo.webp" } as never);
 
       const res = await uploadMedia(createFormDataRequest([file]));
@@ -509,16 +520,17 @@ describe("Media Upload Routes", () => {
       expect(res.status).toBe(200);
       expect(data.success).toBe(true);
 
-      // The stored blob must be smaller than the original (EXIF chunk removed)
+      // Only the re-encoded bytes are stored, never the uploaded original
+      expect(reencodeImage).toHaveBeenCalledWith(expect.any(Uint8Array), "image/webp");
       const uploadArg = vi.mocked(uploadToR2).mock.calls[0][0] as unknown as {
         file: Blob;
         contentType: string;
       };
       expect(uploadArg.contentType).toBe("image/webp");
+      expect(new Uint8Array(await uploadArg.file.arrayBuffer())).toEqual(reencoded);
       const strippedSize = uploadArg.file.size;
-      expect(strippedSize).toBeLessThan(webpBytes.byteLength);
 
-      // Tracking row must record the post-strip size, not the client size
+      // Tracking row must record the stored size, not the client size
       expect(adminInsert).toHaveBeenCalledWith(
         expect.objectContaining({
           content_type: "image/webp",
@@ -549,25 +561,47 @@ describe("Media Upload Routes", () => {
       expect(containsAscii(stored, "VIDEO-SAMPLES")).toBe(true);
     });
 
-    it("zeroes AVIF Exif (GPS) payloads before storing the image", async () => {
+    it.each([
+      ["photo.avif", "image/avif", () => buildAvifWithExif()],
+      [
+        "anim.gif",
+        "image/gif",
+        () => new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0]),
+      ],
+    ])("refuses %s: only JPEG, PNG and WebP are stored", async (name, type, bytes) => {
       mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
       mockSupabase.from.mockImplementation(() => ({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
       }));
-      const avif = buildAvifWithExif();
-      expect(containsAscii(avif, "GPSLatitude")).toBe(true);
-      const file = new File([avif], "photo.avif", { type: "image/avif" });
-      vi.mocked(uploadToR2).mockResolvedValue({ url: "https://example.com/photo.avif" } as never);
+
+      const res = await uploadMedia(createFormDataRequest([new File([bytes()], name, { type })]));
+
+      expect(res.status).toBe(400);
+      expect(vi.mocked(uploadToR2)).not.toHaveBeenCalled();
+      expect(reencodeImage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["unavailable", 503, "busy"],
+      ["undecodable", 400, "could not be read"],
+    ] as const)("stores nothing when re-encoding is %s", async (code, status, message) => {
+      mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: "user-1" } } });
+      mockSupabase.from.mockImplementation(() => ({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { id: "profile-1" } }),
+      }));
+      vi.mocked(reencodeImage).mockRejectedValue(new ImageReencodeError(code, "failed"));
+      const file = new File([buildWebpWithExif()], "photo.webp", { type: "image/webp" });
 
       const res = await uploadMedia(createFormDataRequest([file]));
+      const body = await res.json();
 
-      expect(res.status).toBe(200);
-      const uploadArg = vi.mocked(uploadToR2).mock.calls[0][0] as unknown as { file: Blob };
-      const stored = new Uint8Array(await uploadArg.file.arrayBuffer());
-      expect(stored.length).toBe(avif.length);
-      expect(containsAscii(stored, "GPSLatitude")).toBe(false);
+      expect(res.status).toBe(status);
+      expect(body.errors[0]).toContain(message);
+      expect(vi.mocked(uploadToR2)).not.toHaveBeenCalled();
     });
   });
 });

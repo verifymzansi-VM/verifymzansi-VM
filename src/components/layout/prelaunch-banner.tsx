@@ -81,6 +81,7 @@ export function PrelaunchBanner() {
         {open ? (
           <div
             aria-hidden="true"
+            data-full-screen-popup
             className="fixed inset-0 z-[90] animate-in fade-in-0 bg-brand-green-950/85"
           />
         ) : null}

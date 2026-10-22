@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  stripExifFromJpeg,
-  stripMetadataFromPng,
-  stripMetadataFromWebp,
-} from "@/lib/utils/exif-strip";
+  ImageReencodeError,
+  isReencodableImageType,
+  reencodeImage,
+} from "@/lib/utils/image-reencode";
 import { inspectJpegExif, type ExifSignals } from "@/lib/utils/exif-inspect";
 import { getImageDimensions } from "@/lib/utils/image-dimensions";
 import { decodeImageToPixels, computeLaplacianVariance } from "@/lib/utils/blur-detection";
@@ -135,13 +135,32 @@ export async function analyzeKycUploadFile(params: {
     }
   }
 
-  if (file.type === "image/jpeg" || integrity.detectedMime === "image/jpeg") {
-    fileBuffer = Buffer.from(stripExifFromJpeg(fileBuffer));
-  } else if (file.type === "image/png" || integrity.detectedMime === "image/png") {
-    fileBuffer = Buffer.from(stripMetadataFromPng(fileBuffer));
-  } else if (file.type === "image/webp" || integrity.detectedMime === "image/webp") {
-    // Phone WebP exports can carry EXIF/XMP, including GPS location.
-    fileBuffer = Buffer.from(stripMetadataFromWebp(fileBuffer));
+  // Store only the pixels: re-encoding drops EXIF/XMP (phone photos carry GPS)
+  // and anything hidden in or after the image data. Signals above were read
+  // from the original first.
+  if (isImageFile) {
+    const mime = integrity.detectedMime ?? file.type;
+    try {
+      if (!isReencodableImageType(mime)) {
+        throw new ImageReencodeError("undecodable", `Unsupported image type ${mime}`);
+      }
+      fileBuffer = Buffer.from(await reencodeImage(fileBuffer, mime));
+    } catch (error) {
+      const unavailable = !(error instanceof ImageReencodeError) || error.code === "unavailable";
+      log.warn("KYC image re-encode refused upload", {
+        userId,
+        error: error instanceof Error ? error.message : "Unknown",
+      });
+      return {
+        ok: false,
+        response: NextResponse.json(
+          unavailable
+            ? { error: "Photo processing is busy. Please try again shortly.", requestId }
+            : { error: "This photo could not be read. Please take a new photo.", requestId },
+          { status: unavailable ? 503 : 400 }
+        ),
+      };
+    }
   }
 
   return {

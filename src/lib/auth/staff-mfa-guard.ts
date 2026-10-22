@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasActiveStaffSession } from "@/lib/auth/staff-session";
 import { readStaffAccessFromDb } from "@/lib/auth/admin-access";
 import { evaluateStaffMfa, hasRecentSecondFactor, STAFF_MFA_PATH } from "@/lib/auth/staff-mfa";
+import { recordSecurityEvent } from "@/lib/security/security-events";
 
 /**
  * Enforce the staff MFA policy on a back-office API request, after the
@@ -25,6 +26,11 @@ export async function checkStaffApiMfa(
 
   const mfa = await evaluateStaffMfa(supabase, access.mfaRequiredAfter);
   if (mfa.status === "required") {
+    recordSecurityEvent({
+      event: "staff.second_factor_required",
+      accountId: userId,
+      reason: "mfa_required",
+    });
     return NextResponse.json(
       {
         error: "Verify with your authenticator app to continue.",
@@ -35,6 +41,11 @@ export async function checkStaffApiMfa(
     );
   }
   if (stepUp && !hasRecentSecondFactor(mfa)) {
+    recordSecurityEvent({
+      event: "staff.second_factor_required",
+      accountId: userId,
+      reason: "step_up_required",
+    });
     return NextResponse.json(
       {
         error: "Confirm it's you with your authenticator app, then try again.",

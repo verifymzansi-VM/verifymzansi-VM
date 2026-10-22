@@ -12,29 +12,33 @@ import {
 function ActivePostingTermsGate({ children }: { children: ReactNode }) {
   const [document, setDocument] = useState<FoundationOwnerPostingTerms | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "unavailable" | "signin">("loading");
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setState("loading");
-    try {
-      const response = await fetch("/api/foundation/posting-terms", {
-        cache: "no-store",
-        redirect: "error",
-        signal,
+  const load = useCallback((signal?: AbortSignal) => {
+    return fetch("/api/foundation/posting-terms", {
+      cache: "no-store",
+      redirect: "error",
+      signal,
+    })
+      .then(async (response) => {
+        if (signal?.aborted) return;
+        if (response.status === 401) {
+          setState("signin");
+          return;
+        }
+        if (!response.ok) throw new Error();
+        const current = parseFoundationOwnerPostingTerms(await response.json());
+        if (!current) throw new Error();
+        if (signal?.aborted) return;
+        setDocument(current);
+        setState("ready");
+      })
+      .catch(() => {
+        if (!signal?.aborted) setState("unavailable");
       });
-      if (signal?.aborted) return;
-      if (response.status === 401) {
-        setState("signin");
-        return;
-      }
-      if (!response.ok) throw new Error();
-      const current = parseFoundationOwnerPostingTerms(await response.json());
-      if (!current) throw new Error();
-      if (signal?.aborted) return;
-      setDocument(current);
-      setState("ready");
-    } catch {
-      if (!signal?.aborted) setState("unavailable");
-    }
   }, []);
+  const refresh = () => {
+    setState("loading");
+    void load();
+  };
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
@@ -53,18 +57,14 @@ function ActivePostingTermsGate({ children }: { children: ReactNode }) {
     return (
       <div className="space-y-3">
         <p role="alert">Posting terms are temporarily unavailable.</p>
-        <Button type="button" onClick={() => void load()}>
+        <Button type="button" onClick={refresh}>
           Try again
         </Button>
       </div>
     );
   if (document?.accepted_at) return <>{children}</>;
   return (
-    <PostingTermsAcceptance
-      document={document}
-      onAccepted={setDocument}
-      onRefresh={() => void load()}
-    />
+    <PostingTermsAcceptance document={document} onAccepted={setDocument} onRefresh={refresh} />
   );
 }
 

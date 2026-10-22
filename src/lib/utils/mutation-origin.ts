@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import type { Logger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
+import { recordSecurityEvent, securityContext } from "@/lib/security/security-events";
 
 interface RequestLike {
   headers: Headers;
@@ -116,6 +117,11 @@ export function enforceSameOriginMutation(
     reason: decision.reason,
     origin: request.headers.get("origin") ?? undefined,
     secFetchSite: request.headers.get("sec-fetch-site") ?? undefined,
+  });
+  recordSecurityEvent({
+    event: "request.origin_rejected",
+    ...securityContext(request),
+    reason: decision.reason,
   });
 
   return NextResponse.json({ error: decision.error }, { status: decision.status });

@@ -9,6 +9,7 @@ import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import type { Logger } from "@/lib/utils/logger";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
+import { recordSecurityEvent, securityContext } from "@/lib/security/security-events";
 
 export const foundationNoStore = {
   "Cache-Control": "private, no-store",
@@ -93,6 +94,12 @@ export async function handleFoundationOwnerRoute<T>({
     return context.respond(NextResponse.json(await command(api, input)));
   } catch (error) {
     const known = refusal(error);
+    if (known?.status === 403)
+      recordSecurityEvent({
+        event: "request.permission_denied",
+        ...securityContext(request),
+        reason: known.reason,
+      });
     if (known)
       return context.respond(
         NextResponse.json({ error: known.error, reason: known.reason }, { status: known.status })

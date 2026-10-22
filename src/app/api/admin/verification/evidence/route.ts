@@ -14,7 +14,7 @@ import { uuidSchema } from "@/lib/validations/shared";
 import { z } from "zod";
 import { authorizeEvidenceRequest } from "../_lib/evidence-route-auth";
 import { forwardEvidencePostBodyToGet } from "../_lib/evidence-post-wrapper";
-import { detectEvidenceContentType, hashIp } from "@/lib/services/evidence-serving";
+import { evidenceViewResponse, hashIp } from "@/lib/services/evidence-serving";
 
 const log = createLogger("EvidenceProxy");
 const evidenceQuerySchema = z.object({
@@ -271,22 +271,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Serve the type the bytes actually are (images and PDF only), not the
-    // stored label; anything else downloads instead of rendering.
-    const contentType = detectEvidenceContentType(decryptedBuffer);
-
-    const responseHeaders: Record<string, string> = {
-      "Content-Type": contentType ?? "application/octet-stream",
-      "Content-Disposition": contentType ? "inline" : "attachment",
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-      "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "DENY",
-      "Content-Security-Policy": "default-src 'none'; base-uri 'none'; img-src 'self'; sandbox",
-    };
-
-    return new NextResponse(new Uint8Array(decryptedBuffer), {
-      status: 200,
-      headers: responseHeaders,
-    });
+    // stored label; anything else is refused rather than downloaded.
+    const response = evidenceViewResponse(decryptedBuffer);
+    responseStatus = response.status;
+    return response;
   } catch (err) {
     responseStatus = 500;
     log.error("Unexpected error", {

@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
 
 const ICON_VERSION = "v=20260924";
-const SCREENSHOT_VERSION = "v=20261019";
+// Maskable icons were redrawn with a bigger shield on 2026-10-22.
+const MASKABLE_VERSION = "v=20261022";
 
 // The only web app manifest. Next links it as /manifest.webmanifest; do not add
 // metadata.manifest or a public/manifest.json, or browsers may pick the wrong one.
@@ -11,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "VerifyMzansi",
     short_name: "VerifyMzansi",
     description:
-      "VerifyMzansi is a trusted South African platform connecting people with verified businesses, products, services, tourism and events. Discover, connect and do business with confidence.",
+      "Adds VerifyMzansi to your home screen or app list. Tap the icon to open it in its own window. Free, no app store needed.",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -47,46 +48,16 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "any",
       },
       {
-        src: `/icons/icon-maskable-192.png?${ICON_VERSION}`,
+        src: `/icons/icon-maskable-192.png?${MASKABLE_VERSION}`,
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: `/icons/icon-maskable-512.png?${ICON_VERSION}`,
+        src: `/icons/icon-maskable-512.png?${MASKABLE_VERSION}`,
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
-      },
-    ],
-    screenshots: [
-      {
-        src: `/images/pwa/home-narrow.webp?${SCREENSHOT_VERSION}`,
-        sizes: "1080x1920",
-        type: "image/webp",
-        form_factor: "narrow",
-        label: "VerifyMzansi home",
-      },
-      {
-        src: `/images/pwa/market-narrow.webp?${SCREENSHOT_VERSION}`,
-        sizes: "1080x1920",
-        type: "image/webp",
-        form_factor: "narrow",
-        label: "Mzansi Market listings",
-      },
-      {
-        src: `/images/pwa/business-narrow.webp?${SCREENSHOT_VERSION}`,
-        sizes: "1080x1920",
-        type: "image/webp",
-        form_factor: "narrow",
-        label: "Mzansi Business directory",
-      },
-      {
-        src: `/images/pwa/home-wide.webp?${SCREENSHOT_VERSION}`,
-        sizes: "1920x1080",
-        type: "image/webp",
-        form_factor: "wide",
-        label: "VerifyMzansi on desktop",
       },
     ],
     shortcuts: [

@@ -111,6 +111,17 @@ binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
 
 # ────────────────────────────────────────────────────────────────────────────
+# Cloudflare Images (re-encodes every uploaded photo server-side)
+# sharp cannot load in Workers, so src/lib/utils/image-reencode.ts uses this
+# binding to re-save photos (dropping metadata and hidden content). Without it
+# photo uploads are refused. Images Free: 5,000 unique transformations a
+# month; over that, uploads fail until the next month (no charge).
+# Bindings are not inherited: keep [env.*.images] below in step.
+# ────────────────────────────────────────────────────────────────────────────
+[images]
+binding = "IMAGES"
+
+# ────────────────────────────────────────────────────────────────────────────
 # R2 Access
 # ────────────────────────────────────────────────────────────────────────────
 # The main app uses R2's S3-compatible API via the R2_* secrets below. Native
@@ -199,6 +210,9 @@ bindings = [
 binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
 
+[env.production.images]
+binding = "IMAGES"
+
 [env.production.vars]
 NODE_ENV = "production"
 ENVIRONMENT = "production"
@@ -248,6 +262,9 @@ bindings = [
 [[env.staging.kv_namespaces]]
 binding = "OTP_RATE_LIMITS"
 id = "247144b6d9b1406093351378a57c62fa"
+
+[env.staging.images]
+binding = "IMAGES"
 
 [env.staging.vars]
 NODE_ENV = "production"

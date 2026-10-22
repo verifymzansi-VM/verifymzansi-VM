@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { createPortal } from "react-dom";
 import { Bell, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,16 +44,17 @@ export function LeadNotificationPermissionPrompt({
   // Start hidden on both server and client; storage and the Notification API
   // only exist in the browser, so reading them during render caused a
   // hydration mismatch in the header on every page.
-  const [dismissed, setDismissed] = useState(true);
-  const [permissionIsDefault, setPermissionIsDefault] = useState(false);
+  const hydrated = useHydrated();
+  const [dismissed, setDismissed] = useState(false);
   const [requesting, setRequesting] = useState(false);
 
-  useEffect(() => {
-    setDismissed(safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) === "true");
-    setPermissionIsDefault("Notification" in window && Notification.permission === "default");
-  }, []);
-
-  const shouldShow = enabled && !dismissed && permissionIsDefault;
+  const shouldShow =
+    hydrated &&
+    enabled &&
+    !dismissed &&
+    safeGetLocalStorageItem(DISMISSED_STORAGE_KEY) !== "true" &&
+    "Notification" in window &&
+    Notification.permission === "default";
 
   async function handleEnable() {
     if (typeof window === "undefined" || !("Notification" in window)) {
@@ -104,7 +106,10 @@ export function LeadNotificationPermissionPrompt({
   // Portal to <body>: the sticky header uses backdrop-filter, which would
   // otherwise become the containing block and pin this banner to the header.
   return createPortal(
-    <div className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe">
+    <div
+      data-lead-alert-prompt
+      className="fixed bottom-24 left-4 right-4 z-50 md:hidden animate-in slide-in-from-bottom flex justify-center pb-safe"
+    >
       <div className="bg-background/95 backdrop-blur-md border shadow-lg rounded-xl p-3 flex items-center justify-between gap-3 w-full max-w-sm relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-brand-green/10 to-transparent pointer-events-none" />
 

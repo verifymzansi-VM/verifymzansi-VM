@@ -1,3 +1,4 @@
+import type * as ImageReencodeModule from "@/lib/utils/image-reencode";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
@@ -46,8 +47,9 @@ vi.mock("@/lib/utils/logger", () => ({
 vi.mock("@/lib/services/kyc-engine", () => ({
   processKycArtifact: mockProcessKycArtifact,
 }));
-vi.mock("@/lib/utils/exif-strip", () => ({
-  stripExifFromJpeg: (buf: Buffer) => buf,
+vi.mock("@/lib/utils/image-reencode", async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageReencodeModule>()),
+  reencodeImage: async (buf: Uint8Array) => buf,
 }));
 vi.mock("@/lib/utils/malware-scan", () => ({
   scanForMalware: () => ({ safe: true }),

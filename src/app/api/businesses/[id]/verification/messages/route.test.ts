@@ -5,6 +5,7 @@ import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFakeDb } from "@/lib/business-verification/test-db";
+import sharp from "sharp";
 
 type FakeDb = ReturnType<typeof createFakeDb>;
 
@@ -36,7 +37,11 @@ const OWNER = "owner-1";
 const BIZ = "11111111-1111-4111-8111-111111111111";
 const CASE = "33333333-3333-4333-8333-333333333333";
 const CIPC_OFFICE = { city: "Empangeni", province: "KwaZulu-Natal", streetLines: ["12 MAIN ROAD"] };
-const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 0xff, 0xd9]);
+const JPEG = new Uint8Array(
+  await sharp({ create: { width: 20, height: 20, channels: 3, background: "white" } })
+    .jpeg()
+    .toBuffer()
+);
 
 /** A valid one-page PDF with no text layer. */
 function scannedPdfBytes(): Uint8Array<ArrayBuffer> {
