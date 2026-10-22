@@ -54,6 +54,7 @@ describe("foundation sponsorship adapter", () => {
   it("maps refusals to stable reasons", async () => {
     for (const [details, reason] of [
       ["programme_inactive", "conflict"],
+      ["sponsorship_busy", "conflict"],
       ["self_sponsorship", "forbidden"],
       ["sponsorship_unavailable", "not_found"],
     ])

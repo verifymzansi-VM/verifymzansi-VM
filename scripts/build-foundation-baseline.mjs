@@ -15,6 +15,7 @@ assert.match(evidencePath, /^docs\/backend-foundation\/evidence\/native-[\dTZ.-]
 assertFixturePath(root, evidencePath, { type: "file" });
 const evidence = JSON.parse(readFileSync(evidencePath, "utf8"));
 assert.equal(evidence.status, "PASS");
+assert.equal(evidence.scope ?? "full", "full", "Focused proof cannot promote a clean baseline");
 assert.equal(evidence.fixtureProject, "backend-foundation-impl");
 assert.equal(evidence.releaseReady, false);
 const workspace = "database/foundation";

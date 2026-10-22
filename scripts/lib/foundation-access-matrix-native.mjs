@@ -47,6 +47,7 @@ export const SERVICE_API = [
   "register_identity_submission",
   "reverse_payment",
   "run_post_lifecycle",
+  "run_retention",
   "submit_enquiry",
   "submit_report",
   "sweep_sponsorships",

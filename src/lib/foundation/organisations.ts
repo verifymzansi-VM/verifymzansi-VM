@@ -111,6 +111,7 @@ const reasons = new Map<string, FoundationOrganisationError["reason"]>([
     "sponsorship_state",
     "sponsorship_owner_unavailable",
     "sponsorship_waitlist_full",
+    "sponsorship_busy",
     "showcase_changed",
     "showcase_limit",
     "partner_exists",

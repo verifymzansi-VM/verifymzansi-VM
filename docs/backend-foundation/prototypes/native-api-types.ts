@@ -51,6 +51,10 @@ export type Database = {
         Returns: Json;
       };
       close_account_evidence: { Args: { p_user_id: string }; Returns: Json };
+      close_evidence_fraud_hold: {
+        Args: { p_case_id: string; p_hold_id: string; p_reason: string };
+        Returns: Json;
+      };
       confirm_verification_locality: {
         Args: { p_city: string; p_province: string };
         Returns: Json;
@@ -175,6 +179,7 @@ export type Database = {
         Args: { p_action: string; p_affiliation: string; p_value: string };
         Returns: Json;
       };
+      place_evidence_fraud_hold: { Args: { p_case_id: string; p_reason: string }; Returns: Json };
       place_legal_hold: { Args: { p_reason: string; p_subject_id: string }; Returns: Json };
       preview_duplicate_events: { Args: { p_post_a: string; p_post_b: string }; Returns: Json };
       preview_organisation_invite: { Args: { p_token_hash: string }; Returns: Json };
@@ -289,6 +294,7 @@ export type Database = {
       };
       revoke_organisation_invite: { Args: { p_invite: string; p_reason: string }; Returns: Json };
       run_post_lifecycle: { Args: { p_limit: number }; Returns: Json };
+      run_retention: { Args: { p_limit: number }; Returns: Json };
       save_business_event_context: {
         Args: { p_expected_revision: number; p_patch: Json; p_post_id: string };
         Returns: Json;

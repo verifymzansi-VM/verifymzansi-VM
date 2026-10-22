@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
+import { testSponsorshipBusy } from "./foundation-sponsorship-races-native.mjs";
 import { createFoundationAuthenticatedApi } from "../../src/lib/foundation/authenticated-api.ts";
 import { createFoundationPublicApi } from "../../src/lib/foundation/public-api.ts";
 import {
@@ -33,6 +34,7 @@ export async function testSponsorships({
   connection,
   fixtureAdminId,
   stage,
+  controlledSql,
 }) {
   stage("sponsorships staff, reviewer and verified people");
   const reviewer = await createPostingVerifier({ createUser, sql, fixtureAdminId });
@@ -254,6 +256,17 @@ export async function testSponsorships({
     },
   ]);
   record("native-sponsorship-funds-a-live-post-badge-and-blocks-a-later-intro-trial");
+  stage("sponsorship busy retirement and active period invariants");
+  await testSponsorshipBusy({
+    sql,
+    sqlFails,
+    controlledSql,
+    rpc,
+    postId: postA.id,
+    sponsorshipId: placeA.id,
+    token: orgAdmin.token,
+    record,
+  });
 
   stage("sponsorships administrator and owner views");
   const view = await readFoundationOrganisationSponsorships(typed(orgAdmin), {

@@ -27,7 +27,8 @@ create table private.organisation_sponsorships (
   end_reason text check(end_reason is null or internal.plain_text_valid(end_reason,5,500,true)),
   check(case status
     when 'waitlisted' then entitlement_id is null and starts_at is null and ends_at is null and ended_at is null
-    when 'active' then entitlement_id is not null and ends_at>starts_at and ended_at is null and end_reason is null
+    when 'active' then entitlement_id is not null and starts_at is not null and ends_at is not null
+      and ends_at>starts_at and ended_at is null and end_reason is null
     else ended_at is not null and end_reason is not null end)
 );
 create unique index organisation_sponsorships_open_idx on private.organisation_sponsorships(affiliation_id)
@@ -69,8 +70,12 @@ declare v_post_ids uuid[];
 begin
   if p_entitlement is null then return 0; end if;
   perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
-    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p;
-  perform e.id from private.entitlements e where e.id=p_entitlement for update;
+    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+  perform e.id from private.entitlements e where e.id=p_entitlement for update nowait;
+  -- Re-read after the entitlement lock: an activation may have committed
+  -- since the first post scan. Never wait on a newly discovered post here.
+  perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
   update private.entitlements set status='revoked',revoked_reason='sponsorship_ended'
     where id=p_entitlement and status<>'revoked';
   with released as (
@@ -81,6 +86,8 @@ begin
     where id=any(v_post_ids) and status in('live','pending_moderation');
   update private.post_search_documents set is_visible=false where post_id=any(v_post_ids);
   return cardinality(v_post_ids);
+exception when lock_not_available then
+  raise exception 'sponsorship is busy; retry the operation' using errcode='PT409',detail='sponsorship_busy';
 end;
 $$;
 revoke all on function internal.release_sponsorship_entitlement(uuid) from public,anon,authenticated,service_role;
@@ -91,7 +98,7 @@ create function internal.finish_sponsorship(p_id uuid,p_status text,p_reason tex
 returns boolean language plpgsql security invoker set search_path=pg_catalog as $$
 declare s private.organisation_sponsorships;
 begin
-  select * into s from private.organisation_sponsorships where id=p_id for update;
+  select * into s from private.organisation_sponsorships where id=p_id for update nowait;
   if not found or s.status not in('active','waitlisted') then return false; end if;
   perform internal.release_sponsorship_entitlement(s.entitlement_id);
   update private.organisation_sponsorships set status=p_status,ended_at=statement_timestamp(),ended_by=p_actor,
@@ -100,6 +107,8 @@ begin
     perform internal.notify_account(s.owner_id,'organisation_sponsorship_ended',s.id,s.post_id,s.organisation_id);
   end if;
   return s.status='active';
+exception when lock_not_available then
+  raise exception 'sponsorship is busy; retry the operation' using errcode='PT409',detail='sponsorship_busy';
 end;
 $$;
 revoke all on function internal.finish_sponsorship(uuid,text,text,uuid) from public,anon,authenticated,service_role;
@@ -252,6 +261,7 @@ begin
       actor) returning * into s;
   perform internal.record_organisation_event(o.id,actor,'sponsorship_requested',s.id,p_reason);
   perform internal.fill_sponsorship_places(o.id);
+  actor:=internal.organisation_actor(o.id);
   select * into s from private.organisation_sponsorships where id=s.id;
   return jsonb_build_object('id',s.id,'status',s.status,'sponsor_type',s.sponsor_type,'ends_at',s.ends_at);
 end;
@@ -279,6 +289,7 @@ begin
     raise exception 'sponsorship already ended' using errcode='PT409',detail='sponsorship_state'; end if;
   if internal.finish_sponsorship(s.id,'ended',p_reason,actor) then
     perform internal.fill_sponsorship_places(s.organisation_id); end if;
+  actor:=internal.organisation_actor(s.organisation_id);
   perform internal.record_organisation_event(s.organisation_id,actor,'sponsorship_ended',s.id,p_reason);
   return jsonb_build_object('id',s.id,'status','ended');
 end;

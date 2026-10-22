@@ -727,6 +727,50 @@
         ]
       }
     },
+    "/rpc/place_evidence_fraud_hold": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_case_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_case_id",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) place_evidence_fraud_hold"
+        ]
+      }
+    },
     "/rpc/claim_evidence_case": {
       "post": {
         "parameters": [
@@ -5099,6 +5143,55 @@
         },
         "tags": [
           "(rpc) reference_catalog"
+        ]
+      }
+    },
+    "/rpc/close_evidence_fraud_hold": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_case_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_hold_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_case_id",
+                "p_hold_id",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) close_evidence_fraud_hold"
         ]
       }
     },

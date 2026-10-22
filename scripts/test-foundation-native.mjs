@@ -5,6 +5,7 @@ import { testOwnerInbox } from "./lib/foundation-owner-inbox-native.mjs";
 import { testOrganisations } from "./lib/foundation-organisations-native.mjs";
 import { testSponsorships } from "./lib/foundation-sponsorships-native.mjs";
 import { testPartners } from "./lib/foundation-partners-native.mjs";
+import { testRetention } from "./lib/foundation-retention-native.mjs";
 import { testStaffSessionPolicy } from "./lib/foundation-staff-session-native.mjs";
 import { testAccessMatrix } from "./lib/foundation-access-matrix-native.mjs";
 import {
@@ -32,6 +33,8 @@ import { testPublicNegotiable } from "./lib/foundation-negotiable-native.mjs";
 import { testTrustedIdentity } from "./lib/foundation-identity-native.mjs";
 
 // Fixed isolated workspace/container. No .env loading or arbitrary URL/SQL arguments.
+const retentionOnly = process.argv.length === 3 && process.argv[2] === "--retention-only";
+assert.ok(process.argv.length === 2 || retentionOnly, "Unsupported native test scope");
 async function run() {
   const isolation = nativeIsolation();
   const release = acquireFixtureOperation(isolation.workdir, "test");
@@ -65,10 +68,13 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "scripts/lib/foundation-organisations-native.mjs",
       "docs/backend-foundation/prototypes/organisation-sponsorships.sql",
       "scripts/lib/foundation-sponsorships-native.mjs",
+      "scripts/lib/foundation-sponsorship-races-native.mjs",
       "src/lib/foundation/organisation-sponsorships.ts",
       "docs/backend-foundation/prototypes/partner-commissions.sql",
       "scripts/lib/foundation-partners-native.mjs",
       "src/lib/foundation/partners.ts",
+      "docs/backend-foundation/prototypes/data-retention.sql",
+      "scripts/lib/foundation-retention-native.mjs",
       "docs/backend-foundation/prototypes/staff-session-policy.sql",
       "scripts/lib/foundation-staff-session-native.mjs",
       "scripts/lib/foundation-access-matrix-native.mjs",
@@ -434,6 +440,22 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       });
       return { status: response.status, data: await response.json() };
     };
+    if (retentionOnly) {
+      nativeStage = "focused data retention";
+      sql(`insert into private.staff_roles(user_id,role) values('${owner.id}','admin');`);
+      await testRetention({
+        createUser: createTrackedUser,
+        rpc,
+        sql,
+        sqlFails,
+        record,
+        fixtureAdminId: owner.id,
+        stage: (value) => {
+          nativeStage = value;
+        },
+      });
+      return;
+    }
     const payload = { p_id: resource, p_revision: 1, p_title: "After" };
     const success = await rpc("rename_transport_resource", payload, owner.token);
     assert.equal(success.status, 200);
@@ -2864,8 +2886,9 @@ commit;`);
           sql(
             `update private.entitlements set ends_at=clock_timestamp()+interval '2 seconds' where id='${funding.entitlement}';`
           );
-        const barrier = heldAction(
-          `do $test$ begin perform id from private.entitlements where id='${funding.entitlement}' for update; end $test$;`
+        const barrier = controlledSql(
+          `begin; select id from private.entitlements where id='${funding.entitlement}' for update; select 'EVIDENCE_LOCK_HELD:'||pg_backend_pid();`,
+          { hold: true }
         );
         try {
           await barrier.barrier;
@@ -2875,6 +2898,20 @@ commit;`);
             sql(
               `delete from private.entitlement_members where entitlement_id='${funding.entitlement}' and member_id='${refundMember.id}';`
             );
+          else {
+            // Hold until the authority has actually expired. A fixed-duration
+            // blocker can release before the revocation on a busy machine.
+            const deadline = Date.now() + 5000;
+            while (
+              sql(
+                `select ends_at<=clock_timestamp() from private.entitlements where id='${funding.entitlement}';`
+              ) !== "t"
+            ) {
+              assert.ok(Date.now() < deadline, "synthetic entitlement did not expire");
+              await new Promise((resolve) => setTimeout(resolve, 25));
+            }
+          }
+          barrier.release();
           const [result, code] = await Promise.all([pending, barrier.done]);
           assert.equal(code, 0);
           assert.equal(result.status, 402);
@@ -7566,6 +7603,7 @@ commit;`);
     });
     nativeStage = "sponsorships";
     await testSponsorships({
+      controlledSql,
       connection: {
         url: status.API_URL,
         expectedProjectRef: "local-foundation",
@@ -7588,6 +7626,18 @@ commit;`);
         expectedProjectRef: "local-foundation",
         publishableKey: status.PUBLISHABLE_KEY,
       },
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      sqlFails,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
+    nativeStage = "data retention";
+    await testRetention({
       createUser: createTrackedUser,
       rpc,
       sql,
@@ -7708,6 +7758,7 @@ commit;`);
                 `alter table private.decisions disable trigger decision_binding;` +
                 `delete from private.decisions where proposed_by in (${ids}) or approved_by in (${ids});` +
                 `alter table private.decisions enable trigger decision_binding;` +
+                `delete from private.evidence_fraud_holds where placed_by in (${ids}) or case_id in (select id from private.evidence_cases where subject_id in (${ids}));` +
                 `delete from private.legal_holds where subject_id in (${ids}) or placed_by in (${ids});` +
                 `delete from private.evidence_artifacts where owner_id in (${ids});` +
                 `delete from private.account_closures where user_id in (${ids});` +
@@ -7783,6 +7834,7 @@ commit;`);
           finishedAt: new Date().toISOString(),
           engine: "Native PostgreSQL 17 + PostgREST + local GoTrue",
           fixtureProject: config.project_id,
+          scope: retentionOnly ? "retention-only" : "full",
           referenceSqlHash: provenance["docs/backend-foundation/prototypes/transport.sql"],
           provenance,
           appliedFunctions,
@@ -7806,6 +7858,7 @@ commit;`);
       ) + "\n"
     );
     process.stdout.write(`Redacted native results: ${dir}/results.json\n`);
+    process.exitCode = exitCode;
   }
   process.exitCode = exitCode;
 }

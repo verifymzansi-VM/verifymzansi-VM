@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "U_wVkZ6xvW3z39ycmX2jUezKZEaoyPPrMOnP-PTAoPo",
+  "candidateHash": "Oa7oRAzroAWIXYExeMdAO6iSUPCj1n9ip2gHi5yg8wA",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "sedbVE8kFtZBB4x_m5odeptmiYWNWhDWHtzHnaIIcB4",
-  "roleTypesHash": "NXOYNQgEjaKqonjxyVf8P91izrCtSk7XZJeE46CVYNE",
+  "generatedTypesHash": "3gj05hffLGvCefCGhXYsSRlySScVgUiE8yI_FEcXVdA",
+  "roleTypesHash": "LyIuATNepPQrPDOPvaucBKlnDmcZ2mhLthNlEs6H3f0",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -613,6 +613,40 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "close_evidence_fraud_hold",
+      "signature": "p_case_id uuid, p_hold_id uuid, p_reason text",
+      "argumentsWithDefaults": "p_case_id uuid, p_hold_id uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_case_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_hold_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {
@@ -1807,6 +1841,35 @@
       }
     },
     {
+      "name": "place_evidence_fraud_hold",
+      "signature": "p_case_id uuid, p_reason text",
+      "argumentsWithDefaults": "p_case_id uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_case_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "place_legal_hold",
       "signature": "p_subject_id uuid, p_reason text",
       "argumentsWithDefaults": "p_subject_id uuid, p_reason text",
@@ -2683,6 +2746,30 @@
     },
     {
       "name": "run_post_lifecycle",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "run_retention",
       "signature": "p_limit integer",
       "argumentsWithDefaults": "p_limit integer",
       "returns": "jsonb",

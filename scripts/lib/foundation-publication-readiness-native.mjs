@@ -252,20 +252,6 @@ export async function testPublicationVerificationReadiness({
       (ready) =>
         "update private.evidence_cases set version=version+1 where id='" + ready.caseId + "';",
     ],
-    [
-      "expired-artifact",
-      (ready) =>
-        "update private.evidence_artifacts set retain_until=clock_timestamp()-interval '1 second' where case_id='" +
-        ready.caseId +
-        "';",
-    ],
-    [
-      "unclean-artifact",
-      (ready) =>
-        "update private.evidence_artifacts set state='cleanup_required' where case_id='" +
-        ready.caseId +
-        "';",
-    ],
   ];
   for (const [label, mutate] of adverse) {
     stage("publication readiness " + label);
@@ -277,13 +263,38 @@ export async function testPublicationVerificationReadiness({
     await denied(() => submit(post, user));
     record("native-readiness-" + label + "-blocks-submit-without-publication-or-financial-change");
   }
+  // DEC-35: files of a decided case are deleted after 30 days; the reviewed
+  // decision, not the stored bytes, keeps the account verified.
+  const retired = [
+    [
+      "expired-artifact",
+      (ready) =>
+        "update private.evidence_artifacts set retain_until=clock_timestamp()-interval '1 second' where case_id='" +
+        ready.caseId +
+        "';",
+    ],
+    [
+      "retired-artifact",
+      (ready) =>
+        "update private.evidence_artifacts set state='cleanup_required' where case_id='" +
+        ready.caseId +
+        "';",
+    ],
+  ];
+  for (const [label, mutate] of retired) {
+    stage("publication readiness " + label);
+    const user = await createUser("readiness-" + label),
+      ready = await fixture.ready(user);
+    sql(mutate(ready));
+    assert.deepEqual(await observe(user), expected(true, true, true));
+    record("native-readiness-" + label + "-after-decision-keeps-verification");
+  }
 
   if (controlledSql) {
     for (const label of [
       "phone-revoked",
       "locality-removed",
       "identity-revoked",
-      "artifact-expired",
       "caller-expired",
     ]) {
       stage("publication readiness confirmed queued submit " + label);
@@ -303,13 +314,9 @@ export async function testPublicationVerificationReadiness({
               ? "update private.accepted_identity_facts set revoked_at=clock_timestamp() where id='" +
                 ready.factId +
                 "';"
-              : label === "artifact-expired"
-                ? "update private.evidence_artifacts set retain_until=clock_timestamp()-interval '1 second' where case_id='" +
-                  ready.caseId +
-                  "';"
-                : "update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='" +
-                  session +
-                  "';";
+              : "update auth.sessions set not_after=clock_timestamp()-interval '1 second' where id='" +
+                session +
+                "';";
       const before = snapshot();
       const blocker = controlledSql(
         "begin;select id from private.posts where id='" +

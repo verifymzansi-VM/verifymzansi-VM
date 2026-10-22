@@ -1,6 +1,6 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 340 functions and 115 API commands. It
+This separate target baseline contains 398 functions and 134 API commands. It
 preserves the reviewed domain transactions while excluding six test-only
 functions and synthetic category compatibility. Browser roles have no base-table
 access. API execution eligibility remains distinct from business authorization.
@@ -81,8 +81,15 @@ owners apply with their own business profile and explicit consent; the
 organisation sees a fixed minimal view (business name, category, place, whether
 identity is verified, and the reviewed name only if the applicant agreed).
 Public directory, pages and badges show only listed organisations and live
-businesses, and a logo only with recorded written permission. Sponsorship,
-partner commissions and showcases are a separate later slice.
+businesses, and a logo only with recorded written permission. Sponsored places,
+programme showcases and referral commissions have separate transactional
+commands; their staff screens and scheduled processing still need integration.
+
+Retention commands preserve accepted identity verification when unchanged
+evidence files are retired. Fraud holds require a recent staff second factor;
+closing one identifies the exact hold so a stale retry cannot close its
+replacement. Only the service role may run the bounded retention sweep.
+Scheduling and physical object cleanup remain separate deployment work.
 
 Every staff role (moderator, governor, admin) needs a verified authenticator app
 (TOTP) on the account and an AAL2 session whose last authenticator code is under
