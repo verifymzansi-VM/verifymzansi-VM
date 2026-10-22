@@ -1,0 +1,58 @@
+# Gitleaks configuration (used by the CI and weekly full-history scans and
+# picked up automatically by gitleaks-action).
+#
+# The full history was scanned on 2026-10-22 with Gitleaks 8.30.1 and every
+# finding was checked by hand: none was a real credential. Each allowlist below
+# matches exact values only, scoped to the files where they were verified, so a
+# new real key anywhere else is still reported. Never add a broad path or rule
+# exclusion here; rotate a leaked key instead.
+
+title = "VerifyMzansi gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deterministic test fixtures: obviously fake keys (counting hex, *_test_*, placeholder JWT bodies) used to exercise validators and the repo's own secret scanner"
+condition = "AND"
+paths = [
+  '''(^|/)src/.+\.test\.tsx?$''',
+  '''(^|/)src/__tests__/.+\.tsx?$''',
+  '''(^|/)scripts/start-playwright-server\.cjs$''',
+]
+regexes = [
+  '''^0123456789abcdef(0123456789abcdef)*$''',
+  '''^fedcba9876543210$''',
+  '''^abcdef1234567890(abcdef1234567890)*$''',
+  '''^atsk_(test)?1234567890abcdefghijklmnop$''',
+  '''^sbp_(test)?1234567890abcdefghijklmnop$''',
+  '''^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.(1234567890|test-key-long-enough|test\.signature)$''',
+  '''^eyJhbGciOiJIUzI1NiJ9\.legacy$''',
+  '''^re_(abc123def456|live_123456789|test_1234567890)$''',
+  '''^secret-key-12345678$''',
+  '''^test-secret-key-1234567890$''',
+  # Base64 of the ASCII text "playwright-ozow-webhook-secret-32hars".
+  '''^whsec_cGxheXdyaWdodC1vem93LXdlYmhvb2stc2VjcmV0LTMyaGFycw==$''',
+  # Svix / Standard Webhooks public documentation example secret.
+  '''^whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw$''',
+]
+
+[[allowlists]]
+description = "SQL identifiers in migrations (a column name and a retention reason code), not credentials"
+condition = "AND"
+paths = ['''(^|/)supabase/migrations/[^/]+\.sql$''']
+regexes = ['''^(kyc_artifacts\.r2_key|approved_kyc_30d_purge)$''']
+
+[[allowlists]]
+description = "SHA-256 content hash of the generated API manifest, not a credential"
+regexTarget = "line"
+condition = "AND"
+paths = ['''(^|/)database/foundation/api-openapi-manifest\.json$''']
+regexes = ['''^\s*"apiManifestHash":\s*"[A-Za-z0-9_-]{43}",?\s*$''']
+
+[[allowlists]]
+description = "Mumbai Supabase anon key (role=anon): a public browser key by design, protected by row-level security"
+condition = "AND"
+targetRules = ["jwt"]
+paths = ['''(^|/)(wrangler\.toml|next\.config\.js)$''']
+regexes = ['''^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRueWdkZ29ybW5vZnBnamtubGhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE0OTE3MTYsImV4cCI6MjA4NzA2NzcxNn0\.HmPHCahnbYDoT0X8IbCsclCbhg3K2Mr0mlDa8RKFML0$''']

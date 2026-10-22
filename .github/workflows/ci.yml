@@ -64,6 +64,85 @@ jobs:
           path: tmp/jscpd/**
           if-no-files-found: warn
 
+  # Pushes and PRs scan only their new commits; security.yml rescans the whole
+  # history weekly. Reviewed fixture exceptions live in .gitleaks.toml.
+  gitleaks:
+    name: Secret scan (Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan commits for secrets
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          # The repository is public: keep findings in the job log, not in a
+          # downloadable artifact.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+
+  # Fails only on findings this change introduces; the full result set goes to
+  # private code scanning so existing findings stay visible until fixed.
+  semgrep:
+    name: Semgrep static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      image: semgrep/semgrep@sha256:529ee8a277ec8adc5b534d7c74eea0a47e9de21d62852b6ba7ac6ba9566845c3 # 1.180.0 image digest; secret-scan: allow
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Trust the checkout inside the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Fail on new findings
+        env:
+          BASELINE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASELINE" ] || [ "$BASELINE" = "0000000000000000000000000000000000000000" ]; then
+            echo "::notice::No baseline commit for this event; the full scan below still reports to code scanning."
+            exit 0
+          fi
+          semgrep scan --config p/default --metrics=off --error --baseline-commit "$BASELINE"
+      - name: Full scan
+        if: always() && github.event_name == 'push'
+        run: semgrep scan --config p/default --metrics=off --sarif --output semgrep.sarif
+      - name: Upload to code scanning
+        if: always() && github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  # Reviewed exceptions, each with a reason and an expiry, live in osv-scanner.toml.
+  osv-scanner:
+    name: Dependency vulnerabilities (OSV-Scanner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan the lockfile against OSV
+        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+        with:
+          scan-args: |-
+            --config=osv-scanner.toml
+            --lockfile=pnpm-lock.yaml
+
   unit-api-contract:
     runs-on: ubuntu-latest
     needs: lint-type-security

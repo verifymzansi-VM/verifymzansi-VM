@@ -69,6 +69,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 0
+    # Same supply-chain wait as npm: a compromised action release is usually
+    # caught and pulled within days.
+    cooldown:
+      default-days: 8
     # init, autobuild and analyze must share one version or CodeQL fails.
     groups:
       codeql-action:
