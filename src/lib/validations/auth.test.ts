@@ -41,8 +41,8 @@ describe("registerSchema", () => {
     lastName: "Doe",
     email: "jane@example.com",
     phone: "+27812345678",
-    password: "Str0ngPass",
-    confirmPassword: "Str0ngPass",
+    password: "Str0ngPass12",
+    confirmPassword: "Str0ngPass12",
     acceptTerms: true as const,
     turnstileToken: "tok",
   };
@@ -102,8 +102,8 @@ describe("resetPasswordSchema", () => {
   it("accepts valid matching passwords", () => {
     expect(
       resetPasswordSchema.safeParse({
-        password: "NewPass1x",
-        confirmPassword: "NewPass1x",
+        password: "NewPass1xyz9",
+        confirmPassword: "NewPass1xyz9",
       }).success
     ).toBe(true);
   });
@@ -111,7 +111,7 @@ describe("resetPasswordSchema", () => {
   it("rejects mismatch", () => {
     expect(
       resetPasswordSchema.safeParse({
-        password: "NewPass1x",
+        password: "NewPass1xyz9",
         confirmPassword: "Other1xxx",
       }).success
     ).toBe(false);

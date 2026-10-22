@@ -12,11 +12,7 @@ import {
   PASSWORD_RECOVERY_MAX_AGE_SECONDS,
   verifyRecoveryProof,
 } from "@/lib/auth/password-recovery";
-import {
-  isPwnedPassword,
-  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR,
-  PWNED_PASSWORD_ERROR,
-} from "@/lib/security/pwned-passwords";
+import { checkPasswordBreach, PWNED_PASSWORD_ERROR } from "@/lib/security/pwned-passwords";
 
 const log = createLogger("ResetPassword");
 
@@ -140,19 +136,9 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
-    try {
-      if (await isPwnedPassword(parsedBody.data.password)) {
-        return NextResponse.json({ error: PWNED_PASSWORD_ERROR }, { status: 400 });
-      }
-    } catch (passwordCheckError) {
-      log.warn("Password breach check unavailable during password reset", {
-        userId: user.id,
-        error: passwordCheckError instanceof Error ? passwordCheckError.message : "Unknown",
-      });
-      return NextResponse.json(
-        { error: PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR },
-        { status: 503, headers: { "Retry-After": "60" } }
-      );
+    // Fails open: an unreachable breach service is logged, not shown to the user.
+    if ((await checkPasswordBreach(parsedBody.data.password, "reset_password")) === "breached") {
+      return NextResponse.json({ error: PWNED_PASSWORD_ERROR }, { status: 400 });
     }
 
     const { error: updateError } = await supabase.auth.updateUser({

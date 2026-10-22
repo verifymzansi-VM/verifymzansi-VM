@@ -56,7 +56,7 @@ describe("RegisterPage", () => {
       "aria-describedby",
       "password-requirements"
     );
-    expect(screen.getByText("8+ characters")).toBeInTheDocument();
+    expect(screen.getByText("12+ characters")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show password confirmation" })).toBeInTheDocument();
   });
 });

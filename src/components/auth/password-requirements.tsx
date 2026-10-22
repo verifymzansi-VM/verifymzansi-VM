@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PASSWORD_MIN_LENGTH } from "@/lib/validations/shared";
 
 /**
  * Mirrors `passwordSchema` in `@/lib/validations/shared` so people see each
@@ -9,7 +10,7 @@ import { cn } from "@/lib/utils";
  */
 export function getPasswordRequirements(password: string) {
   return [
-    { label: "8+ characters", met: password.length >= 8 },
+    { label: `${PASSWORD_MIN_LENGTH}+ characters`, met: password.length >= PASSWORD_MIN_LENGTH },
     { label: "Up to 128 characters", met: password.length <= 128 },
   ];
 }

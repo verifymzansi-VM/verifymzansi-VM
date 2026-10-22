@@ -261,7 +261,7 @@ describe("auth page Turnstile retry behavior", () => {
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password123" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password1234" } });
     fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
@@ -330,9 +330,9 @@ describe("auth page Turnstile retry behavior", () => {
     fireEvent.change(screen.getByLabelText(/sa mobile number/i), {
       target: { value: "0712345678" },
     });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password123" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password1234" } });
     fireEvent.change(screen.getByLabelText(/confirm password/i), {
-      target: { value: "Password123" },
+      target: { value: "Password1234" },
     });
     fireEvent.click(screen.getByLabelText(/i agree to the/i));
     fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
@@ -369,7 +369,7 @@ describe("auth page Turnstile retry behavior", () => {
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password123" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password1234" } });
     fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
@@ -414,9 +414,9 @@ describe("auth page Turnstile retry behavior", () => {
     fireEvent.change(screen.getByLabelText(/sa mobile number/i), {
       target: { value: "0712345678" },
     });
-    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password123" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "Password1234" } });
     fireEvent.change(screen.getByLabelText(/confirm password/i), {
-      target: { value: "Password123" },
+      target: { value: "Password1234" },
     });
     fireEvent.click(screen.getByLabelText(/i agree to the/i));
     fireEvent.click(screen.getByRole("button", { name: "Trigger Turnstile Success" }));

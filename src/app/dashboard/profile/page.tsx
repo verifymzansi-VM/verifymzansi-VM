@@ -41,6 +41,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";
+import { PASSWORD_MIN_LENGTH } from "@/lib/validations/shared";
 import { ACCOUNT_PHONE_IN_USE_ERROR, sanitizeSaPhoneInput } from "@/lib/utils/phone";
 import { formatSaLongDate, formatSaShortDate } from "@/lib/utils/format";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
@@ -136,7 +137,7 @@ export default function ProfilePage() {
     : "U";
 
   const passwordRequirements = [
-    { label: "8+ characters", met: newPassword.length >= 8 },
+    { label: `${PASSWORD_MIN_LENGTH}+ characters`, met: newPassword.length >= PASSWORD_MIN_LENGTH },
     { label: "Up to 128 characters", met: newPassword.length <= 128 },
   ];
 

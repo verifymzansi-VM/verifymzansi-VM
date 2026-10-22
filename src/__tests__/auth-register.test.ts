@@ -59,11 +59,10 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientRateLimitIdentity: mockGetClientRateLimitIdentity,
 }));
 vi.mock("@/lib/security/pwned-passwords", () => ({
-  isPwnedPassword: mockIsPwnedPassword,
+  checkPasswordBreach: async (password: string) =>
+    (await mockIsPwnedPassword(password)) ? "breached" : "clear",
   PWNED_PASSWORD_ERROR:
     "This password has appeared in a known data breach. Choose a different password.",
-  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR:
-    "Password breach checks are temporarily unavailable. Please try again shortly.",
 }));
 vi.mock("@/lib/utils/api", async () => {
   const actual = await vi.importActual<typeof ApiModule>("@/lib/utils/api");
@@ -123,8 +122,8 @@ function createRequest(body: unknown): NextRequest {
 
 const validBody = {
   email: "user@example.com",
-  password: "StrongP@ss1",
-  confirmPassword: "StrongP@ss1",
+  password: "StrongP@ss123",
+  confirmPassword: "StrongP@ss123",
   firstName: "Test",
   lastName: "User",
   phone: "+27821234567",
@@ -272,7 +271,7 @@ describe("POST /api/auth/register", () => {
     expect(body.success).toBe(true);
     expect(mockSignUp).toHaveBeenCalledWith({
       email: "user@example.com",
-      password: "StrongP@ss1",
+      password: "StrongP@ss123",
       options: {
         emailRedirectTo: "https://verifymzansi.com/auth/callback?next=%2Flogin%3Fconfirmed%3Dtrue",
         data: {

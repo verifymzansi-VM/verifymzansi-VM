@@ -84,7 +84,7 @@ async function prepareTurnstile(page: Page) {
 // ── Shared state ─────────────────────────────────────────────
 const hasAuthCreds = Boolean(process.env.E2E_EMAIL && process.env.E2E_PASSWORD);
 let registeredEmail = "";
-const registeredPassword = "QaTestPass1";
+const registeredPassword = "QaTestPass1234";
 
 // ── Test config ──────────────────────────────────────────────
 test.use({ trace: "on" });
@@ -225,7 +225,7 @@ test.describe("Registration Validation", () => {
     await expect(page.locator("text=Enter a valid email address")).toBeVisible();
     // Phone error: "Phone number is required" from min(10)
     await expect(page.locator("text=Phone number is required")).toBeVisible();
-    await expect(page.locator("text=Password must be at least 8 characters")).toBeVisible();
+    await expect(page.locator("text=Password must be at least 12 characters")).toBeVisible();
     await expect(page.locator("text=You must accept the terms of service")).toBeVisible();
 
     await screenshot(page, "TC03a-validation-errors");
@@ -240,8 +240,8 @@ test.describe("Registration Validation", () => {
     await page.fill("#lastName", "Mismatch");
     await page.fill("#email", freshEmail());
     await page.fill("#phone", "0712345678");
-    await page.fill("#password", "TestPass1");
-    await page.fill("#confirmPassword", "TestPass2");
+    await page.fill("#password", "TestPass1234");
+    await page.fill("#confirmPassword", "TestPass5678");
     await page.check("#acceptTerms");
     await prepareTurnstile(page);
 
@@ -260,8 +260,8 @@ test.describe("Registration Validation", () => {
     await page.fill("#lastName", "Phone");
     await page.fill("#email", freshEmail());
     await page.fill("#phone", "1234567890"); // not SA format
-    await page.fill("#password", "TestPass1");
-    await page.fill("#confirmPassword", "TestPass1");
+    await page.fill("#password", "TestPass1234");
+    await page.fill("#confirmPassword", "TestPass1234");
     await page.check("#acceptTerms");
     await prepareTurnstile(page);
 

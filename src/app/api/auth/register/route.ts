@@ -12,11 +12,7 @@ import { normalizeSaPhone } from "@/lib/utils/phone";
 import { ACCOUNT_PROFILE_WRITE_TABLE } from "@/lib/account/compat";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { sendAlreadyRegisteredEmail } from "@/lib/services/email";
-import {
-  isPwnedPassword,
-  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR,
-  PWNED_PASSWORD_ERROR,
-} from "@/lib/security/pwned-passwords";
+import { checkPasswordBreach, PWNED_PASSWORD_ERROR } from "@/lib/security/pwned-passwords";
 import { isPlaywrightTestMode as checkPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
@@ -198,18 +194,9 @@ export async function POST(request: NextRequest) {
     const normalizedEmail = parsedBody.data.email.trim().toLowerCase();
     const normalizedPhone = normalizeSaPhone(parsedBody.data.phone);
     const displayName = `${parsedBody.data.firstName} ${parsedBody.data.lastName}`.trim();
-    try {
-      if (await isPwnedPassword(parsedBody.data.password)) {
-        return NextResponse.json({ error: PWNED_PASSWORD_ERROR }, { status: 400 });
-      }
-    } catch (passwordCheckError) {
-      log.warn("Password breach check unavailable during registration", {
-        error: passwordCheckError instanceof Error ? passwordCheckError.message : "Unknown",
-      });
-      return NextResponse.json(
-        { error: PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR },
-        { status: 503, headers: { "Retry-After": "60" } }
-      );
+    // Fails open: an unreachable breach service is logged, not shown to the user.
+    if ((await checkPasswordBreach(parsedBody.data.password, "register")) === "breached") {
+      return NextResponse.json({ error: PWNED_PASSWORD_ERROR }, { status: 400 });
     }
 
     // Phone is NOT canonical at registration time — requires OTP verification.

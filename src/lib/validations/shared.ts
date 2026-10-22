@@ -56,13 +56,16 @@ export const emailSchema = z
 
 // ── Password ────────────────────────────────────────────────
 
+/** Owner decision (22 Oct 2026): 12 characters, together with the breached-password check. */
+export const PASSWORD_MIN_LENGTH = 12;
+
 /**
- * Zod schema for a strong password.
- * Accepts 8–128 characters without composition rules; server routes check breached passwords.
+ * Zod schema for a new password.
+ * Accepts 12–128 characters without composition rules; server routes check breached passwords.
  */
 export const passwordSchema = z
   .string()
-  .min(8, "Password must be at least 8 characters")
+  .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
   .max(128, "Password is too long");
 
 // ── OTP ─────────────────────────────────────────────────────

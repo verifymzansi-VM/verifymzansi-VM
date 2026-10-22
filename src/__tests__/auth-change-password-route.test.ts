@@ -21,11 +21,10 @@ vi.mock("@/lib/utils/csrf", () => ({
   enforceCsrfToken: vi.fn(() => null),
 }));
 vi.mock("@/lib/security/pwned-passwords", () => ({
-  isPwnedPassword: mockIsPwnedPassword,
+  checkPasswordBreach: async (password: string) =>
+    (await mockIsPwnedPassword(password)) ? "breached" : "clear",
   PWNED_PASSWORD_ERROR:
     "This password has appeared in a known data breach. Choose a different password.",
-  PWNED_PASSWORD_CHECK_UNAVAILABLE_ERROR:
-    "Password breach checks are temporarily unavailable. Please try again shortly.",
 }));
 
 import { POST } from "@/app/api/auth/change-password/route";

@@ -110,24 +110,27 @@ describe("emailSchema", () => {
 // ── Password Schema ─────────────────────────────────────────────────────────
 
 describe("passwordSchema", () => {
-  it("accepts a strong password", () => {
-    expect(passwordSchema.safeParse("Str0ngPass").success).toBe(true);
+  it("accepts a 12-character password", () => {
+    expect(passwordSchema.safeParse("Str0ngPass12").success).toBe(true);
   });
 
-  it("rejects short passwords", () => {
+  it("rejects passwords shorter than 12 characters", () => {
     expect(passwordSchema.safeParse("Ab1").success).toBe(false);
+    const result = passwordSchema.safeParse("Str0ngPass1");
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].message).toBe("Password must be at least 12 characters");
   });
 
   it("accepts passwords without uppercase", () => {
-    expect(passwordSchema.safeParse("alllower1").success).toBe(true);
+    expect(passwordSchema.safeParse("alllowercase1").success).toBe(true);
   });
 
   it("accepts passwords without lowercase", () => {
-    expect(passwordSchema.safeParse("ALLUPPER1").success).toBe(true);
+    expect(passwordSchema.safeParse("ALLUPPERCASE1").success).toBe(true);
   });
 
   it("accepts passwords without a digit", () => {
-    expect(passwordSchema.safeParse("NoDigitsHere").success).toBe(true);
+    expect(passwordSchema.safeParse("NoDigitsHereAtAll").success).toBe(true);
   });
 
   it("rejects passwords exceeding max length", () => {
