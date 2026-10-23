@@ -9,6 +9,13 @@
 
 title = "VerifyMzansi gitleaks config"
 
+[[allowlists]]
+description = "Public SHA-256 of the reviewed Sentry compatibility patch, verified against the patch bytes"
+condition = "AND"
+targetRules = ["sentry-access-token"]
+paths = ['''(^|/)src/lib/security/secret-scan\.ts$''']
+regexes = ['''^fde48f895c304800de59be37296068150b1b441eb0f818aa88e479810a34c75a$'''] # secret-scan: allow public patch integrity
+
 [extend]
 useDefault = true
 
