@@ -49,12 +49,21 @@ export async function signInFoundationPassword(
     throw new FoundationPasswordAuthError(503);
 
   let cookieAccessFailed = false;
+  // Match the SDK's project-specific session name, including local Auth.
+  const cookieName = `sb-${new URL(config.url).hostname.split(".")[0]}-auth-token`;
   const client = createServerClient(config.url, config.publishableKey, {
-    cookieOptions: { secure: config.url.startsWith("https://") },
+    cookieOptions: { name: cookieName, secure: config.url.startsWith("https://") },
     cookies: {
       async getAll() {
         try {
-          return await cookies.getAll();
+          // INITIAL_SESSION subscribers may otherwise refresh an expired old
+          // account concurrently with this password sign-in. Keep its cookie
+          // names for obsolete-chunk cleanup, while withholding session values.
+          return ((await cookies.getAll()) ?? []).map((item) =>
+            item.name === cookieName || item.name.startsWith(`${cookieName}.`)
+              ? { ...item, value: "" }
+              : item
+          );
         } catch {
           cookieAccessFailed = true;
           return [];

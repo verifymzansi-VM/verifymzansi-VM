@@ -24,7 +24,7 @@ const credentials = {
 };
 function request(
   body: unknown = credentials,
-  { origin = "https://verifymzansi.com", validCsrf = true } = {}
+  { origin = "https://verifymzansi.com", validCsrf = true, extraCookies = "" } = {}
 ) {
   return new NextRequest("https://verifymzansi.com/api/foundation/auth/login", {
     method: "POST",
@@ -32,20 +32,24 @@ function request(
     headers: {
       "content-type": "application/json",
       origin,
-      cookie: `vm_csrf=${csrf}; sb-tnygdgormnofpgjknlhr-auth-token=old-source-cookie`,
+      cookie: `vm_csrf=${csrf}; sb-tnygdgormnofpgjknlhr-auth-token=old-source-cookie${extraCookies ? `; ${extraCookies}` : ""}`,
       ...(validCsrf ? { "x-csrf-token": csrf } : {}),
     },
   });
 }
 const id = "00000000-0000-4000-8000-000000000001";
-const session = (email = credentials.email) => ({
+const session = (
+  email = credentials.email,
+  accountId = id,
+  expiresAt = Math.floor(Date.now() / 1000) + 3600
+) => ({
   access_token: [
     Buffer.from('{"alg":"ES256"}').toString("base64url"),
     Buffer.from(
       JSON.stringify({
-        sub: id,
+        sub: accountId,
         iss: `${config.url}/auth/v1`,
-        exp: Math.floor(Date.now() / 1000) + 3600,
+        exp: expiresAt,
       })
     ).toString("base64url"),
     "unsigned_synthetic_unit_only",
@@ -53,8 +57,9 @@ const session = (email = credentials.email) => ({
   refresh_token: "synthetic-refresh-unit-only",
   token_type: "bearer",
   expires_in: 3600,
+  expires_at: expiresAt,
   user: {
-    id,
+    id: accountId,
     email,
     aud: "authenticated",
     is_anonymous: false,
@@ -116,6 +121,54 @@ it("uses the real SSR/SDK transport, consuming the token in one GoTrue password 
   expect(cookie).not.toContain("sb-tnygdgormnofpgjknlhr");
 });
 
+it.each(["whole", "chunks"])(
+  "starts a fresh account sign-in without refreshing expired %s cookies, and removes old chunks",
+  async (format) => {
+    const previousId = "00000000-0000-4000-8000-000000000002";
+    const previous = session("previous@example.invalid", previousId, 1);
+    const encoded = "base64-" + Buffer.from(JSON.stringify(previous)).toString("base64url");
+    const name = `sb-${ref}-auth-token`;
+    const half = Math.ceil(encoded.length / 2);
+    const extraCookies =
+      format === "whole"
+        ? `${name}=${encoded}`
+        : `${name}.0=${encoded.slice(0, half)}; ${name}.1=${encoded.slice(half)}`;
+    fetcher.mockImplementation(async (url) =>
+      Response.json(
+        new URL(String(url)).searchParams.get("grant_type") === "refresh_token"
+          ? session("previous@example.invalid", previousId)
+          : session()
+      )
+    );
+    const response = await POST(request(credentials, { extraCookies }));
+    // Initial-session subscribers must settle without refreshing old identity.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0][0])).toBe(
+      `${config.url}/auth/v1/token?grant_type=password`
+    );
+    const value = response.cookies.get(name)!.value;
+    expect(JSON.parse(Buffer.from(value.slice(7), "base64url").toString()).user.id).toBe(id);
+    if (format === "chunks")
+      for (const suffix of [".0", ".1"])
+        expect(response.cookies.get(name + suffix)).toMatchObject({ value: "", maxAge: 0 });
+  }
+);
+it("keeps the previous browser session unchanged when the new credentials are refused", async () => {
+  const name = `sb-${ref}-auth-token`;
+  const previous =
+    "base64-" +
+    Buffer.from(JSON.stringify(session("previous@example.invalid", id, 1))).toString("base64url");
+  fetcher.mockImplementation(async () =>
+    Response.json({ code: "invalid_credentials", msg: "refused" }, { status: 400 })
+  );
+  const response = await POST(request(credentials, { extraCookies: `${name}=${previous}` }));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(response.status).toBe(401);
+  expect(response.headers.has("set-cookie")).toBe(false);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
 it.each([undefined, "", "app-siteverify"])(
   "stays closed without the explicit native integration mode: %s",
   async (mode) => {
