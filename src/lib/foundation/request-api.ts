@@ -51,6 +51,7 @@ export async function createFoundationRequestCaller(
     config.url,
     config.publishableKey,
     {
+      cookieOptions: { secure: config.url.startsWith("https://") },
       db: { schema: "api", retry: false },
       cookies: {
         async getAll() {

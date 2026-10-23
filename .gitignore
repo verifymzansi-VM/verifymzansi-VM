@@ -191,6 +191,7 @@ docs/*-review-*.md
 !docs/kyc-audit-guide.md
 
 # Public interface contract; detailed foundation evidence remains local.
+!docs/foundation-auth-integration.md
 !docs/backend-foundation/staff-event-duplicate-flags-contract.md
 # Local one-off foundation recipes depend on private acceptance evidence.
 docs/backend-foundation/tools/prepare-staff-event-types.mjs

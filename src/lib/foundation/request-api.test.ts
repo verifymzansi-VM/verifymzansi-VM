@@ -175,6 +175,11 @@ it("uses the refreshed token and forwards SSR cookie writes plus mandatory cache
     Pragma: "no-cache",
     Expires: "0",
   });
+  expect(
+    jar.setAll.mock.calls[0][0].every(
+      (item) => "options" in item && (item.options as { secure?: boolean }).secure === true
+    )
+  ).toBe(true);
 });
 
 it("rejects source projects and incomplete cookie adapters before inspecting cookies", async () => {
