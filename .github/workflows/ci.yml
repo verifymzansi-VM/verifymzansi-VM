@@ -180,8 +180,11 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Build Next.js app
-        run: pnpm run build
+      - name: Build Cloudflare app
+        run: pnpm run build:cloudflare
+      - name: Verify built Worker startup in workerd
+        timeout-minutes: 5
+        run: pnpm test:cloudflare:startup
       - name: Verify critical payment routes in build
         run: |
           echo "Checking critical addon/payment routes exist in build output..."

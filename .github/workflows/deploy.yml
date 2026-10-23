@@ -160,6 +160,9 @@ jobs:
         run: pnpm run db:verify-schema
       - name: Build for Cloudflare
         run: pnpm run build:cloudflare
+      - name: Verify built Worker startup before deployment
+        timeout-minutes: 5
+        run: pnpm test:cloudflare:startup
 
       - name: Annotate known Cloudflare warning classes
         run: |

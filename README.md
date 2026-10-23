@@ -252,6 +252,14 @@ pnpm supabase:cli -- --env-file=.env.local migration list
 - If you set `RATE_LIMITER_API_KEY`, you must also set `OTP_RATE_LIMITER_URL`
 - Sensitive values belong in GitHub Actions secrets and Cloudflare Wrangler
   secrets, not in committed files
+- After `pnpm build:cloudflare` on Linux/WSL, run
+  `pnpm test:cloudflare:startup`. This runs the built Worker in local workerd
+  with synthetic credentials, strict startup validation, and no production
+  resource bindings. It checks dynamic health, rejects unauthenticated job
+  execution, and renders login with its security policy. CI and deployment both
+  require it; the deployment still requires live readiness afterward.
+- OpenNext is pinned to 1.20.12 for Next.js 16.4 manifest support. Review
+  adapter release notes and rerun the Worker check when upgrading Next.js.
 
 ### Ozow webhook secret setup
 
