@@ -622,10 +622,26 @@ export function createPlaywrightStubSupabaseClient(
       async getClaims() {
         const token = options.sessionToken ?? cookieStore?.get(PLAYWRIGHT_SESSION_COOKIE) ?? null;
         const user = resolveStubUser(cookieStore, options.sessionToken);
+        const session = token
+          ? listPlaywrightTableRows("auth_sessions").find(
+              (row) => row.id === playwrightSessionId(token)
+            )
+          : null;
+        const staff =
+          user &&
+          listPlaywrightTableRows("staff_roles").some(
+            (row) => row.user_id === user.id && row.status === "active"
+          );
         return {
           data:
             user && token
-              ? { claims: { sub: user.id, session_id: playwrightSessionId(token) } }
+              ? {
+                  claims: {
+                    sub: user.id,
+                    session_id: playwrightSessionId(token),
+                    aal: session?.issued_aal ?? (staff ? "aal2" : "aal1"),
+                  },
+                }
               : null,
           error: null,
         };
@@ -768,10 +784,21 @@ export function createPlaywrightStubSupabaseClient(
     async rpc(fn: string, params?: Record<string, unknown>) {
       const decision = handlePlaywrightKycDecisionRpc(fn, params);
       if (decision !== undefined) return { data: decision, error: null };
-      if (fn === "staff_session_is_active") {
+      if (fn === "staff_session_is_active" || fn === "staff_session_has_live_mfa") {
         return {
           data: listPlaywrightTableRows("auth_sessions").some(
-            (row) => row.id === params?.p_session && row.user_id === params?.p_user
+            (row) =>
+              row.id === params?.p_session &&
+              row.user_id === params?.p_user &&
+              (row.not_after == null || Date.parse(String(row.not_after)) > Date.now()) &&
+              (fn === "staff_session_is_active" ||
+                (row.aal === "aal2" &&
+                  listPlaywrightTableRows("auth_mfa_factors").some(
+                    (f) =>
+                      f.user_id === row.user_id &&
+                      f.factor_type === "totp" &&
+                      f.status === "verified"
+                  )))
           ),
           error: null,
         };

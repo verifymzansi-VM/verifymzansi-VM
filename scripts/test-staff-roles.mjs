@@ -738,3 +738,132 @@ assert.equal(
   "MFA enrolment lookup preserved"
 );
 console.log("Strict MFA and session revocation checks passed.");
+
+// The deployment policy must be exercised after the historical migrations,
+// rather than ending this lane at the older session-existence guard.
+await db.exec(`ALTER TABLE auth.sessions ADD COLUMN aal text NOT NULL DEFAULT 'aal2';
+  ALTER TABLE auth.mfa_factors ADD COLUMN factor_type text NOT NULL DEFAULT 'totp';`);
+await db.exec(read("20261022061500_staff_rls_totp_freshness.sql"));
+await db.exec(read("20261023090558_staff_rls_require_live_mfa.sql"));
+let policyChecks = 0;
+for (const role of ["admin", "moderator", "governance_controller"]) {
+  const actor = await person(null),
+    sessionId = uuid(),
+    otherSessionId = uuid();
+  await db.query("INSERT INTO staff_roles(user_id,role) VALUES ($1,$2)", [actor, role]);
+  await db.query("INSERT INTO auth.sessions(id,user_id) VALUES ($1,$2)", [sessionId, actor]);
+  await db.query("INSERT INTO auth.sessions(id,user_id) VALUES ($1,$2)", [otherSessionId, admin]);
+  await db.query("INSERT INTO auth.mfa_factors(user_id,status) VALUES ($1,'verified')", [actor]);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const claims = {
+    aal: "aal2",
+    session_id: sessionId,
+    amr: [{ method: "totp", timestamp }],
+  };
+  async function expectRole(expected, label, overrides = {}) {
+    await as(actor, "admin", async () => {
+      await db.query("SELECT set_config('test.jwt',$1,false)", [
+        JSON.stringify({ ...claims, ...overrides }),
+      ]);
+      assert.equal(
+        await scalar("SELECT public.current_staff_role()"),
+        expected,
+        `${role}: ${label}`
+      );
+      assert.equal(await scalar("SELECT public.has_role($1)", [role]), expected !== null);
+      await assert.rejects(
+        db.query("SELECT public.staff_session_has_live_mfa($1,$2)", [actor, sessionId]),
+        /permission denied/
+      );
+      if (role === "admin")
+        assert.equal(
+          (await scalar("SELECT count(*)::int FROM reports")) > 0,
+          expected !== null,
+          `actual reports RLS follows ${label}`
+        );
+      policyChecks++;
+    });
+  }
+  await expectRole(role, "verified recent TOTP grants the actual database role");
+  await db.query("UPDATE auth.sessions SET aal='aal1' WHERE id=$1", [sessionId]);
+  await expectRole(null, "an old AAL2 token cannot outlive a live session downgrade");
+  // AAL1 must still reach the service-only enrolment lookup, never staff data.
+  await db.exec("SET ROLE service_role");
+  try {
+    assert.equal(
+      await scalar("SELECT public.staff_session_is_active($1,$2)", [actor, sessionId]),
+      true
+    );
+    assert.equal(await scalar("SELECT public.staff_role_of($1)", [actor]), role);
+    assert.equal(
+      await scalar("SELECT public.staff_session_has_live_mfa($1,$2)", [actor, sessionId]),
+      false
+    );
+    policyChecks++;
+  } finally {
+    await db.exec("RESET ROLE");
+  }
+  await db.query("UPDATE auth.sessions SET aal='aal2' WHERE id=$1", [sessionId]);
+  assert.equal(
+    await scalar("SELECT public.staff_session_has_live_mfa($1,$2)", [actor, sessionId]),
+    true
+  );
+  await expectRole(null, "password-only JWT", { aal: "aal1" });
+  await expectRole(null, "anonymous JWT", { is_anonymous: true });
+  await expectRole(null, "missing session", { session_id: undefined });
+  await expectRole(null, "another user's live session", { session_id: otherSessionId });
+  await expectRole(null, "expired authenticator verification", {
+    amr: [{ method: "totp", timestamp: timestamp - 13 * 60 * 60 }],
+  });
+  await expectRole(null, "another second-factor method", { amr: [{ method: "otp", timestamp }] });
+  for (const amr of [
+    undefined,
+    null,
+    {},
+    ["totp"],
+    [{ method: "totp", timestamp: "not-a-timestamp" }],
+    [{ method: "totp", timestamp: "9".repeat(40) }],
+  ])
+    await expectRole(null, "missing or malformed authenticator methods fail closed", { amr });
+  await db.query("UPDATE auth.mfa_factors SET factor_type='phone' WHERE user_id=$1", [actor]);
+  await expectRole(null, "verified phone factor cannot replace a TOTP enrollment");
+  await db.query(
+    "UPDATE auth.mfa_factors SET factor_type='totp',status='unverified' WHERE user_id=$1",
+    [actor]
+  );
+  await expectRole(null, "unfinished authenticator enrollment");
+  assert.equal(
+    await scalar("SELECT public.staff_session_has_live_mfa($1,$2)", [actor, sessionId]),
+    false
+  );
+  await db.query("UPDATE auth.mfa_factors SET status='verified' WHERE user_id=$1", [actor]);
+  await db.query("UPDATE account_profiles SET account_status='suspended' WHERE user_id=$1", [
+    actor,
+  ]);
+  await expectRole(null, "suspended account with a valid MFA token");
+  await db.query("UPDATE account_profiles SET account_status='active' WHERE user_id=$1", [actor]);
+  await db.query(
+    "UPDATE staff_roles SET status='revoked',revoked_at=now(),revoked_reason='fixture' WHERE user_id=$1",
+    [actor]
+  );
+  await expectRole(null, "revoked role with a valid MFA token");
+  await db.query(
+    "UPDATE staff_roles SET status='active',revoked_at=NULL,revoked_reason=NULL WHERE user_id=$1",
+    [actor]
+  );
+  await db.query("UPDATE auth.sessions SET not_after=now()-interval '1 second' WHERE id=$1", [
+    sessionId,
+  ]);
+  await expectRole(null, "expired session with a valid MFA token");
+  await db.query("UPDATE auth.sessions SET not_after=NULL WHERE id=$1", [sessionId]);
+  await expectRole(role, "valid authority restored after fixture restrictions are removed");
+  await db.query("DELETE FROM auth.sessions WHERE id=$1", [sessionId]);
+  await expectRole(null, "deleted session with a still-signed MFA token");
+  assert.equal(
+    await scalar("SELECT public.staff_session_has_live_mfa($1,$2)", [actor, sessionId]),
+    false
+  );
+  await db.query("DELETE FROM auth.sessions WHERE id=$1", [otherSessionId]);
+}
+console.log(`Current TOTP policy cases passed: ${policyChecks} across all three staff roles.`);
+await db.close();

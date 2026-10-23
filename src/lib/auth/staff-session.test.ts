@@ -20,6 +20,41 @@ describe("live privileged sessions", () => {
       p_session: sessionId,
     });
   });
+  it.each([true, false, null])(
+    "checks live MFA facts for a signed AAL2 token: %s",
+    async (data) => {
+      getClaims.mockResolvedValue({
+        data: { claims: { sub: "staff-1", session_id: sessionId, aal: "aal2" } },
+        error: null,
+      });
+      rpc.mockResolvedValue({ data, error: null });
+      expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(data === true);
+      expect(rpc).toHaveBeenCalledExactlyOnceWith("staff_session_has_live_mfa", {
+        p_user: "staff-1",
+        p_session: sessionId,
+      });
+    }
+  );
+  it("fails closed when the new MFA lookup is missing or unavailable", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: "staff-1", session_id: sessionId, aal: "aal2" } },
+      error: null,
+    });
+    rpc.mockResolvedValue({ data: null, error: { code: "PGRST202" } });
+    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+  it("keeps an active AAL1 session available for authenticator enrolment", async () => {
+    getClaims.mockResolvedValue({
+      data: { claims: { sub: "staff-1", session_id: sessionId, aal: "aal1" } },
+      error: null,
+    });
+    expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(true);
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("staff_session_is_active", {
+      p_user: "staff-1",
+      p_session: sessionId,
+    });
+  });
   it.each([false, null])("rejects revoked/missing session result %s", async (data) => {
     rpc.mockResolvedValue({ data, error: null });
     expect(await hasActiveStaffSession(supabase, "staff-1")).toBe(false);

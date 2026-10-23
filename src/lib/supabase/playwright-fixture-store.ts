@@ -222,13 +222,20 @@ export function ensurePlaywrightVerifiedMember(persona: string): StubUser {
   const staffRole = getPlaywrightPersonaRole(persona);
   if (staffRole !== "member") {
     const roles = ensureTable(store, "staff_roles");
-    if (!roles.some((row) => row.user_id === userId))
+    if (!roles.some((row) => row.user_id === userId)) {
       roles.push({
         user_id: userId,
         role: staffRole,
         status: "active",
         mfa_required_after: "2026-01-01T00:00:00.000Z",
       });
+      ensureTable(store, "auth_mfa_factors").push({
+        id: stableUuid(`totp:${persona}`),
+        user_id: userId,
+        factor_type: "totp",
+        status: "verified",
+      });
+    }
   }
   const existingProfileIndex = profiles.findIndex((row) => row.user_id === userId);
   const profile = {
@@ -262,7 +269,20 @@ export function createPlaywrightSession(persona: string): { token: string; user:
   store.sessions.set(token, user.id);
   const sessionId = playwrightSessionId(token);
   const sessions = listPlaywrightTableRows("auth_sessions").filter((row) => row.id !== sessionId);
-  writePlaywrightTableRows("auth_sessions", [...sessions, { id: sessionId, user_id: user.id }]);
+  const aal = listPlaywrightTableRows("staff_roles").some(
+    (row) => row.user_id === user.id && row.status === "active"
+  )
+    ? "aal2"
+    : "aal1";
+  writePlaywrightTableRows("auth_sessions", [
+    ...sessions,
+    {
+      id: sessionId,
+      user_id: user.id,
+      aal,
+      issued_aal: aal,
+    },
+  ]);
   return { token, user };
 }
 
