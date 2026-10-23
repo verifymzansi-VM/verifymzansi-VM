@@ -104,9 +104,13 @@ export function LocationSelector({
             value={value.province}
             disabled={disabled}
             onChange={(e) => {
+              const changedSelect = e.currentTarget;
               onChange({ province: e.target.value, city: "", town: "", address: "" });
               if (e.target.value) {
-                requestAnimationFrame(() => document.getElementById(cityId)?.focus());
+                requestAnimationFrame(() => {
+                  if (document.activeElement === changedSelect)
+                    document.getElementById(cityId)?.focus();
+                });
               }
             }}
           >
@@ -142,9 +146,13 @@ export function LocationSelector({
             value={value.city}
             disabled={disabled || !value.province}
             onChange={(e) => {
+              const changedSelect = e.currentTarget;
               onChange({ ...value, city: e.target.value, town: "", address: value.address ?? "" });
               if (e.target.value && showTown) {
-                requestAnimationFrame(() => document.getElementById(townId)?.focus());
+                requestAnimationFrame(() => {
+                  if (document.activeElement === changedSelect)
+                    document.getElementById(townId)?.focus();
+                });
               }
             }}
           >
