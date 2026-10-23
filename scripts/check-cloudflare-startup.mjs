@@ -86,6 +86,11 @@ try {
   console.log(
     "Cloudflare startup PASS: health200, unauthorized jobs401 and login HTML/CSP in workerd."
   );
+} catch (error) {
+  // Only synthetic runtime credentials are installed above. Preserve the
+  // workerd exception that caused a 500, rather than reporting just its status.
+  server.debug();
+  throw error;
 } finally {
   await server.close();
   await rm(sandbox, { recursive: true, force: true });
