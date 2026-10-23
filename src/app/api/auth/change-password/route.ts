@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { changePasswordSchema } from "@/lib/validations/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createPublicClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -52,12 +52,23 @@ export async function POST(request: NextRequest) {
       return parsedBody.response;
     }
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: parsedBody.data.currentPassword,
-    });
+    // Legacy projects may not enforce current_password themselves. Verify on a
+    // cookieless client so the password-only sign-in cannot replace an existing
+    // AAL2 browser session. Retire only this temporary session afterwards.
+    const verifier = createPublicClient();
+    let passwordVerified = false;
+    try {
+      const { data, error } = await verifier.auth.signInWithPassword({
+        email: user.email,
+        password: parsedBody.data.currentPassword,
+      });
+      passwordVerified = !error && data.user?.id === user.id;
+    } finally {
+      const { error } = await verifier.auth.signOut({ scope: "local" });
+      if (error) log.error("Temporary password verification session cleanup failed");
+    }
 
-    if (signInError) {
+    if (!passwordVerified) {
       log.warn("Password change failed: incorrect current password", { userId: user.id });
       return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
     }
@@ -71,9 +82,34 @@ export async function POST(request: NextRequest) {
 
     const { error: updateError } = await supabase.auth.updateUser({
       password: parsedBody.data.newPassword,
+      current_password: parsedBody.data.currentPassword,
     });
 
     if (updateError) {
+      if (updateError.code === "insufficient_aal") {
+        return NextResponse.json(
+          { code: "mfa_required", error: "Verify your authenticator code before trying again." },
+          { status: 403 }
+        );
+      }
+      if (updateError.code === "reauthentication_needed") {
+        return NextResponse.json(
+          {
+            code: "reauthentication_required",
+            error: "Sign in again before changing your password.",
+          },
+          { status: 409 }
+        );
+      }
+      if (
+        [
+          "current_password_invalid",
+          "current_password_mismatch",
+          "current_password_required",
+        ].includes(updateError.code ?? "")
+      ) {
+        return NextResponse.json({ error: "Current password is incorrect" }, { status: 401 });
+      }
       log.error("Password update failed", { userId: user.id, error: updateError.message });
       return NextResponse.json(
         { error: "Failed to update password. Please try again." },

@@ -98,6 +98,11 @@ export async function proveBaselineAuth({ env, dockerArgs, database, sql, secret
       GOTRUE_SMTP_PORT: "1",
       GOTRUE_SMTP_ADMIN_EMAIL: "no-reply@example.invalid",
       GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true",
+      GOTRUE_PASSWORD_MIN_LENGTH: "12",
+      GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_REAUTHENTICATION: "true",
+      GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD: "true",
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true",
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true",
       GOTRUE_LOG_LEVEL: "error",
     };
     stage = "create owned Auth process";
@@ -153,6 +158,7 @@ export async function proveBaselineAuth({ env, dockerArgs, database, sql, secret
     stage = "real fresh Auth and request adapter";
     const files = [
       "scripts/prove-foundation-clean-auth.ts",
+      "scripts/lib/foundation-native-totp.mjs",
       "src/lib/foundation/request-api.ts",
       "src/lib/foundation/request-route.ts",
       "src/lib/foundation/authenticated-api.ts",
@@ -206,6 +212,17 @@ export async function proveBaselineAuth({ env, dockerArgs, database, sql, secret
       const failed = JSON.parse(String(error.stdout ?? ""));
       if (failed.status === "FAIL" && typeof failed.stage === "string")
         outcome.probeStage = failed.stage;
+      if (
+        failed.status === "FAIL" &&
+        failed.assertion &&
+        [failed.assertion.actual, failed.assertion.expected].every(
+          (value) =>
+            value === null ||
+            typeof value === "number" ||
+            (typeof value === "string" && /^[a-z_]{1,64}$/.test(value))
+        )
+      )
+        outcome.probeAssertion = failed.assertion;
     } catch {
       /* Child output is never copied verbatim. */
     }

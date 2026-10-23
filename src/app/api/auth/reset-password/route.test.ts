@@ -93,7 +93,7 @@ function createGetRequest(cookieValues: Record<string, string> = {}): NextReques
 function createSupabaseAuthClient(overrides?: {
   user?: Record<string, unknown> | null;
   getUserError?: { message: string } | null;
-  updateUserError?: { message: string } | null;
+  updateUserError?: { message: string; code?: string } | null;
   amr?: Array<string | { method: string; timestamp: number }>;
 }) {
   const user =
@@ -389,6 +389,21 @@ describe("POST /api/auth/reset-password", () => {
       error: "Failed to update password. Please try again.",
     });
     expect(mockLogger.error).toHaveBeenCalled();
+  });
+
+  it("keeps recovery available when an existing authenticator needs verification", async () => {
+    const client = createSupabaseAuthClient({
+      updateUserError: { code: "insufficient_aal", message: "AAL2 required" },
+    });
+    mockCreateClient.mockResolvedValue(client);
+    const response = await POST(
+      createRequest({ password: "NewPassword123!", confirmPassword: "NewPassword123!" })
+    );
+    expect(response.status).toBe(403);
+    expect((await response.json()).code).toBe("mfa_required");
+    expect(client.auth.signOut).not.toHaveBeenCalled();
+    expect(response.cookies.get("vm_password_recovery")).toBeUndefined();
+    expect(mockSendPasswordChangeNotification).not.toHaveBeenCalled();
   });
 
   it("updates password and signs out on success", async () => {

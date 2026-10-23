@@ -36,6 +36,13 @@ vi.mock("@/lib/supabase/client", () => ({
       getUser: mockGetUser,
       signOut: mockSignOut,
       signInWithPassword: mockSignInWithPassword,
+      mfa: {
+        listFactors: async () => ({
+          data: { totp: [{ id: "factor", status: "verified" }] },
+          error: null,
+        }),
+        challengeAndVerify: async () => ({ error: null }),
+      },
     },
     from: mockFrom,
   }),
@@ -245,6 +252,76 @@ describe("ProfilePage", () => {
       );
     });
     window.location.hash = "";
+  });
+
+  async function submitPasswordChange() {
+    window.location.hash = "#security";
+    render(<ProfilePage />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Change$/ }));
+    fireEvent.change(screen.getByLabelText("Current password"), {
+      target: { value: "OldPassword123!" },
+    });
+    fireEvent.change(screen.getByLabelText("New password"), {
+      target: { value: "NewPassword123!" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), {
+      target: { value: "NewPassword123!" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+    window.location.hash = "";
+  }
+
+  it("offers a fresh sign-in when an old session cannot change credentials", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ code: "reauthentication_required", error: "Sign in again" }),
+      })
+    );
+    await submitPasswordChange();
+    expect(await screen.findByRole("link", { name: "Sign in again" })).toHaveAttribute(
+      "href",
+      "/login?returnUrl=%2Fdashboard%2Fprofile%23security"
+    );
+  });
+
+  it("preserves typed credentials until the existing authenticator is verified", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ code: "mfa_required", error: "Verify authenticator" }),
+      })
+    );
+    await submitPasswordChange();
+    const code = await screen.findByLabelText("Authenticator code");
+    expect(screen.getByRole("button", { name: "Update password" })).toBeDisabled();
+    fireEvent.change(code, { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify authenticator" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Update password" })).toBeEnabled()
+    );
+    expect(screen.getByLabelText("New password")).toHaveValue("NewPassword123!");
+  });
+
+  it("shows the session-revocation warning returned after a password change", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, warning: "Other sessions could not be revoked" }),
+      })
+    );
+    await submitPasswordChange();
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: "Other sessions could not be revoked",
+          variant: "default",
+        })
+      )
+    );
   });
 
   it("does not require a current password before deleting Google-only accounts", async () => {

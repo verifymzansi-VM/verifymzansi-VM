@@ -10,6 +10,7 @@ import {
   readFoundationOwnerPostingTerms,
 } from "../src/lib/foundation/posting-terms";
 import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
+import { nativeTotp } from "./lib/foundation-native-totp.mjs";
 
 // Parent owns both processes and the disposable clean database. Credentials stay
 // on stdin/in memory. This transport replaces local Kong path routing only.
@@ -19,7 +20,10 @@ async function run() {
     adminToken: string | undefined,
     cleanup = "NOT_CREATED";
   const admin = async (path: string, method: string, body?: unknown) => {
-    assert.ok(path === "/admin/users" || /^\/admin\/users\/[a-f0-9-]{36}$/.test(path));
+    assert.ok(
+      ["/admin/users", "/admin/generate_link"].includes(path) ||
+        /^\/admin\/users\/[a-f0-9-]{36}$/.test(path)
+    );
     return fetch(`http://127.0.0.1:55444${path}`, {
       method,
       headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" },
@@ -55,7 +59,11 @@ async function run() {
       assert.equal(headers.has("cookie"), false);
       let target;
       if (url.pathname.startsWith("/auth/v1/")) {
-        assert.ok(["/token", "/user", "/logout"].includes(url.pathname.slice(8)));
+        const authPath = url.pathname.slice(8);
+        assert.ok(
+          ["/token", "/user", "/logout", "/verify", "/factors"].includes(authPath) ||
+            /^\/factors\/[a-f0-9-]{36}\/(challenge|verify)$/.test(authPath)
+        );
         target = `http://127.0.0.1:55444${url.pathname.slice(8)}${url.search}`;
         authRequests++;
       } else {
@@ -201,6 +209,119 @@ async function run() {
       () => readFoundationOwnerPostingTerms(refreshed),
       /^Error: Posting terms status is temporarily unavailable$/
     );
+    stage = "strict current-password enforcement on a genuine password session";
+    assert.equal((await member.auth.signInWithPassword({ email, password })).error, null);
+    const rotatedPassword = randomBytes(32).toString("base64url");
+    stage = "strict password missing current password is rejected";
+    assert.equal(
+      (await member.auth.updateUser({ password: rotatedPassword })).error?.code,
+      "current_password_required"
+    );
+    stage = "strict password wrong current password is rejected";
+    assert.equal(
+      (
+        await member.auth.updateUser({
+          password: rotatedPassword,
+          current_password: "wrong-synthetic-password",
+        })
+      ).error?.code,
+      "current_password_invalid"
+    );
+    stage = "strict password too short is rejected";
+    assert.equal(
+      (await member.auth.updateUser({ password: "short", current_password: password })).error?.code,
+      "weak_password"
+    );
+    stage = "strict password correct current password is accepted";
+    assert.equal(
+      (await member.auth.updateUser({ password: rotatedPassword, current_password: password }))
+        .error,
+      null
+    );
+    assert.equal((await member.auth.signOut({ scope: "global" })).error, null);
+    stage = "real token-hash recovery bypasses only the current-password requirement";
+    const recover = async () => {
+      // Admin link generation is an explicit LOCAL fixture, never an email.
+      const generated = await admin("/admin/generate_link", "POST", { type: "recovery", email });
+      assert.equal(generated.status, 200);
+      const link = await generated.json();
+      assert.equal(typeof link.hashed_token, "string");
+      const verified = await member.auth.verifyOtp({
+        token_hash: link.hashed_token,
+        type: "recovery",
+      });
+      assert.equal(verified.error, null);
+      assert.ok(verified.data.session);
+    };
+    await recover();
+    const recoveredPassword = randomBytes(32).toString("base64url");
+    assert.equal((await member.auth.updateUser({ password: recoveredPassword })).error, null);
+    stage = "MFA recovery requires a genuine enrolled authenticator";
+    const enrolled = await member.auth.mfa.enroll({ factorType: "totp" });
+    assert.equal(enrolled.error, null);
+    assert.ok(enrolled.data);
+    const factor = enrolled.data!;
+    const verifiedAt = Date.now();
+    assert.equal(
+      (
+        await member.auth.mfa.challengeAndVerify({
+          factorId: factor.id,
+          code: nativeTotp(factor.totp.secret, verifiedAt),
+        })
+      ).error,
+      null
+    );
+    // Verify the password flow preserves this actual AAL2 session.
+    const temporary = createClient(config.url, config.publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: transport },
+    });
+    assert.equal(
+      (await temporary.auth.signInWithPassword({ email, password: recoveredPassword })).error,
+      null
+    );
+    assert.equal((await temporary.auth.signOut({ scope: "local" })).error, null);
+    assert.equal(
+      (await member.auth.mfa.getAuthenticatorAssuranceLevel()).data?.currentLevel,
+      "aal2"
+    );
+    const mfaPassword = randomBytes(32).toString("base64url");
+    assert.equal(
+      (await member.auth.updateUser({ password: mfaPassword, current_password: recoveredPassword }))
+        .error,
+      null
+    );
+    assert.equal((await member.auth.signOut({ scope: "global" })).error, null);
+    await recover();
+    const finalPassword = randomBytes(32).toString("base64url");
+    assert.equal(
+      (await member.auth.updateUser({ password: finalPassword })).error?.code,
+      "insufficient_aal"
+    );
+    // A previously used TOTP is deliberately not replayed in the next session.
+    const nextTick = (Math.floor(verifiedAt / 30000) + 1) * 30000 + 250;
+    if (Date.now() < nextTick)
+      await new Promise((resolve) => setTimeout(resolve, nextTick - Date.now()));
+    assert.equal(
+      (
+        await member.auth.mfa.challengeAndVerify({
+          factorId: factor.id,
+          code: nativeTotp(factor.totp.secret),
+        })
+      ).error,
+      null
+    );
+    assert.equal((await member.auth.updateUser({ password: finalPassword })).error, null);
+    assert.equal((await member.auth.signOut({ scope: "global" })).error, null);
+    assert.equal(
+      (await member.auth.signInWithPassword({ email, password: mfaPassword })).error?.code,
+      "invalid_credentials"
+    );
+    assert.equal(
+      (await member.auth.signInWithPassword({ email, password: finalPassword })).error,
+      null
+    );
+    assert.equal((await member.auth.signOut({ scope: "global" })).error, null);
     outcome = {
       status:
         "PASS real fresh Auth, account/version consent, refresh and revoked-session SQL denial",
@@ -213,11 +334,33 @@ async function run() {
       realRefreshAndResponseCookies: true,
       noStore: true,
       actualLogoutInvalidatesCommands: true,
+      strictPasswordPolicy: {
+        minimumLength: 12,
+        currentPasswordRequired: true,
+        wrongCurrentPasswordRejected: true,
+        recoveryWithoutOldPassword: true,
+        mfaRecoveryWithoutFactorRejected: true,
+        mfaRecoveryAfterFactor: true,
+        temporaryVerificationPreservesAal2: true,
+      },
       requests: { auth: authRequests, rpc: rpcRequests },
       externalMessages: 0,
     };
-  } catch {
+  } catch (error) {
     outcome = { status: "FAIL", stage };
+    // Only fixed assertion error codes/statuses are useful diagnostics. Never
+    // include provider bodies, credentials, tokens, passwords or TOTP seeds.
+    if (
+      error instanceof assert.AssertionError &&
+      [error.actual, error.expected].every(
+        (value) =>
+          value === null ||
+          typeof value === "number" ||
+          (typeof value === "string" && /^[a-z_]{1,64}$/.test(value))
+      )
+    ) {
+      outcome.assertion = { actual: error.actual, expected: error.expected };
+    }
     process.exitCode = 1;
   } finally {
     if (userId) {

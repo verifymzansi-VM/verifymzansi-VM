@@ -146,6 +146,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (updateError) {
+      // A real recovery session bypasses current-password confirmation, but
+      // accounts with MFA still need AAL2. Keep the recovery proof and form so
+      // the user can verify their existing factor and retry the same reset.
+      if (updateError.code === "insufficient_aal") {
+        return NextResponse.json(
+          { code: "mfa_required", error: "Verify your authenticator code before trying again." },
+          { status: 403 }
+        );
+      }
       if (
         updateError.message?.toLowerCase().includes("session") ||
         updateError.message?.toLowerCase().includes("token") ||

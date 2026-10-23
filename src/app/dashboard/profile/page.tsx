@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
+import { PasswordMfaChallenge } from "@/components/auth/password-mfa-challenge";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -103,6 +104,8 @@ export default function ProfilePage() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordMfaRequired, setPasswordMfaRequired] = useState(false);
+  const [passwordSignInRequired, setPasswordSignInRequired] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -403,6 +406,8 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.code === "mfa_required") setPasswordMfaRequired(true);
+        if (data.code === "reauthentication_required") setPasswordSignInRequired(true);
         toast({
           title: "Password change failed",
           description: data.error || "Please try again.",
@@ -414,11 +419,13 @@ export default function ProfilePage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
+      setPasswordMfaRequired(false);
+      setPasswordSignInRequired(false);
       setShowPasswordForm(false);
       toast({
         title: "Password changed",
-        description: "Your password has been updated successfully.",
-        variant: "success",
+        description: data.warning || "Your password has been updated successfully.",
+        variant: data.warning ? "default" : "success",
       });
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
@@ -954,12 +961,26 @@ export default function ProfilePage() {
                       />
                     </div>
 
+                    {passwordMfaRequired && (
+                      <PasswordMfaChallenge onVerified={() => setPasswordMfaRequired(false)} />
+                    )}
+                    {passwordSignInRequired && (
+                      <p role="alert" className="text-sm">
+                        Your session needs a fresh sign-in.{" "}
+                        <Link
+                          href="/login?returnUrl=%2Fdashboard%2Fprofile%23security"
+                          className="underline"
+                        >
+                          Sign in again
+                        </Link>
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         type="submit"
                         size="sm"
                         className="h-11 flex-1 gap-2"
-                        disabled={isChangingPassword}
+                        disabled={isChangingPassword || passwordMfaRequired}
                       >
                         {isChangingPassword ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -978,6 +999,8 @@ export default function ProfilePage() {
                           setCurrentPassword("");
                           setNewPassword("");
                           setConfirmNewPassword("");
+                          setPasswordMfaRequired(false);
+                          setPasswordSignInRequired(false);
                         }}
                       >
                         Cancel

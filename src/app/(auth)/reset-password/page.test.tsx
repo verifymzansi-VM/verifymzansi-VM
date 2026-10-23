@@ -5,6 +5,19 @@ import ResetPasswordPage from "./page";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({
+    auth: {
+      mfa: {
+        listFactors: async () => ({
+          data: { totp: [{ id: "factor", status: "verified" }] },
+          error: null,
+        }),
+        challengeAndVerify: async () => ({ error: null }),
+      },
+    },
+  }),
+}));
 
 describe("ResetPasswordPage keyboard access", () => {
   it("lets keyboard users reveal both password fields", async () => {
@@ -111,5 +124,28 @@ describe("ResetPasswordPage recovery session check", () => {
     expect(confirmation).toHaveValue("Str0ng!Passw0rd#2026");
     expect(screen.getByRole("button", { name: "Save password" })).toBeEnabled();
     expect(screen.queryByText("Reset link expired")).not.toBeInTheDocument();
+  });
+
+  it("keeps the recovery form and typed passwords through an MFA challenge", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === "POST"
+        ? jsonResponse(403, { code: "mfa_required", error: "Authenticator required" })
+        : jsonResponse(200, { valid: true })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ResetPasswordPage />);
+    const password = await screen.findByLabelText("New password");
+    await user.type(password, "Str0ng!Passw0rd#2026");
+    await user.type(screen.getByLabelText("Confirm password"), "Str0ng!Passw0rd#2026");
+    await user.click(screen.getByRole("button", { name: "Save password" }));
+    await screen.findByLabelText("Authenticator code");
+    expect(screen.queryByText("Reset link expired")).not.toBeInTheDocument();
+    expect(password).toHaveValue("Str0ng!Passw0rd#2026");
+    expect(screen.getByRole("button", { name: "Save password" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Authenticator code"), "123456");
+    await user.click(screen.getByRole("button", { name: "Verify authenticator" }));
+    expect(screen.getByRole("button", { name: "Save password" })).toBeEnabled();
+    expect(password).toHaveValue("Str0ng!Passw0rd#2026");
   });
 });

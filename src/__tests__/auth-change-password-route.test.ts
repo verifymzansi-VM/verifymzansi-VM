@@ -1,18 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
-const { mockCreateClient, mockCheckRateLimit, mockIsPwnedPassword, mockNotify } = vi.hoisted(
-  () => ({
-    mockCreateClient: vi.fn(),
-    mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
-    mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
-    mockNotify: vi.fn().mockResolvedValue(true),
-  })
-);
+const {
+  mockCreateClient,
+  mockCreatePublicClient,
+  mockCheckRateLimit,
+  mockIsPwnedPassword,
+  mockNotify,
+} = vi.hoisted(() => ({
+  mockCreateClient: vi.fn(),
+  mockCreatePublicClient: vi.fn(),
+  mockCheckRateLimit: vi.fn().mockResolvedValue({ limited: false }),
+  mockIsPwnedPassword: vi.fn().mockResolvedValue(false),
+  mockNotify: vi.fn().mockResolvedValue(true),
+}));
 
 vi.mock("@/lib/services/email", () => ({ sendPasswordChangeNotification: mockNotify }));
 
-vi.mock("@/lib/supabase/server", () => ({ createClient: mockCreateClient }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: mockCreateClient,
+  createPublicClient: mockCreatePublicClient,
+}));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: mockCheckRateLimit,
   getClientIp: vi.fn().mockReturnValue("127.0.0.1"),
@@ -49,6 +57,14 @@ describe("POST /api/auth/change-password", () => {
     mockCheckRateLimit.mockResolvedValue({ limited: false });
     mockIsPwnedPassword.mockResolvedValue(false);
     mockNotify.mockResolvedValue(true);
+    mockCreatePublicClient.mockReturnValue({
+      auth: {
+        signInWithPassword: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-1" } }, error: null }),
+        signOut: vi.fn().mockResolvedValue({ error: null }),
+      },
+    });
   });
 
   it("rejects cross-site requests", async () => {
@@ -129,6 +145,14 @@ describe("POST /api/auth/change-password", () => {
   });
 
   it("returns 401 when the current password is incorrect", async () => {
+    mockCreatePublicClient.mockReturnValue({
+      auth: {
+        signInWithPassword: vi
+          .fn()
+          .mockResolvedValue({ data: { user: null }, error: { message: "bad password" } }),
+        signOut: vi.fn().mockResolvedValue({ error: null }),
+      },
+    });
     mockCreateClient.mockResolvedValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
@@ -178,13 +202,81 @@ describe("POST /api/auth/change-password", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(signInWithPassword).toHaveBeenCalledWith({
+    expect(signInWithPassword).not.toHaveBeenCalled();
+    expect(mockCreatePublicClient().auth.signInWithPassword).toHaveBeenCalledWith({
       email: "user@example.com",
       password: "old-password-123",
     });
-    expect(updateUser).toHaveBeenCalledWith({ password: "NewPassword123" });
+    expect(updateUser).toHaveBeenCalledWith({
+      password: "NewPassword123",
+      current_password: "old-password-123",
+    });
+    expect(mockCreatePublicClient().auth.signOut).toHaveBeenCalledWith({ scope: "local" });
     expect(signOut).toHaveBeenCalledWith({ scope: "others" });
     expect(mockNotify).toHaveBeenCalledWith("user@example.com");
+  });
+
+  it.each([
+    ["insufficient_aal", 403, "mfa_required"],
+    ["reauthentication_needed", 409, "reauthentication_required"],
+    ["current_password_mismatch", 401, undefined],
+    ["current_password_invalid", 401, undefined],
+  ])(
+    "handles %s without replacing or revoking the caller session",
+    async (code, status, responseCode) => {
+      const signInWithPassword = vi.fn();
+      const signOut = vi.fn();
+      mockCreateClient.mockResolvedValue({
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: { user: { id: "user-1", email: "user@example.com" } },
+            error: null,
+          }),
+          signInWithPassword,
+          signOut,
+          updateUser: vi.fn().mockResolvedValue({ error: { code, message: "provider refusal" } }),
+        },
+      });
+      const res = await POST(
+        createRequest({
+          currentPassword: "old-password-123",
+          newPassword: "NewPassword123",
+          confirmNewPassword: "NewPassword123",
+        })
+      );
+      expect(res.status).toBe(status);
+      expect((await res.json()).code).toBe(responseCode);
+      expect(signInWithPassword).not.toHaveBeenCalled();
+      expect(signOut).not.toHaveBeenCalled();
+      expect(mockNotify).not.toHaveBeenCalled();
+    }
+  );
+
+  it("refuses a different identity returned by password verification", async () => {
+    mockCreatePublicClient().auth.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "other-user" } },
+      error: null,
+    });
+    const updateUser = vi.fn();
+    mockCreateClient.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1", email: "user@example.com" } },
+          error: null,
+        }),
+        updateUser,
+      },
+    });
+    const res = await POST(
+      createRequest({
+        currentPassword: "old-password-123",
+        newPassword: "NewPassword123",
+        confirmNewPassword: "NewPassword123",
+      })
+    );
+    expect(res.status).toBe(401);
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(mockCreatePublicClient().auth.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
   it("rejects known-breached new passwords before updating the user", async () => {

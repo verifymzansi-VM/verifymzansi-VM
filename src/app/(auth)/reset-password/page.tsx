@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, KeyRound, Loader2, RotateCw, TimerOff, WifiOff } from "lucide-react";
 
 import { AuthPasswordField } from "@/components/auth/auth-password-field";
+import { PasswordMfaChallenge } from "@/components/auth/password-mfa-challenge";
 import {
   getPasswordRequirements,
   PasswordRequirements,
@@ -51,6 +52,7 @@ export default function ResetPasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [sessionState, setSessionState] = useState<RecoverySessionState>("checking");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -108,6 +110,10 @@ export default function ResetPasswordPage() {
       const result = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        if (res.status === 403 && result.code === "mfa_required") {
+          setMfaRequired(true);
+          return;
+        }
         if (res.status === 401) {
           setSessionState("invalid");
           return;
@@ -267,6 +273,7 @@ export default function ResetPasswordPage() {
           toggleLabel={{ show: "Show confirm password", hide: "Hide confirm password" }}
         />
 
+        {mfaRequired && <PasswordMfaChallenge onVerified={() => setMfaRequired(false)} />}
         {submitError && (
           <p
             role="alert"
@@ -281,7 +288,7 @@ export default function ResetPasswordPage() {
           size="lg"
           className="h-11 w-full text-[15px]"
           variant="trust-verified"
-          disabled={isSubmitting}
+          disabled={isSubmitting || mfaRequired}
           aria-busy={isSubmitting || undefined}
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
