@@ -4,6 +4,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
+import { validateLaunchConfiguration } from "../src/lib/config/launch-validation.ts";
+
+test("Worker startup fixture satisfies strict production launch configuration", () => {
+  const summary = validateLaunchConfiguration(createCloudflareStartupFixture(), {
+    mode: "production",
+  });
+  assert.deepEqual(summary.errors, []);
+});
 
 const require = createRequire(import.meta.url);
 const sentryRoot = path.dirname(require.resolve("@sentry/nextjs/package.json"));
