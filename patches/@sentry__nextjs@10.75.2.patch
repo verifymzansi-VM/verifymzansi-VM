@@ -1,0 +1,28 @@
+diff --git a/build/cjs/config/util.js b/build/cjs/config/util.js
+index 6aa9939afcecd0b55465569aa45f91fce28d596f..fe3bb1f2fec5f22154cf61a3b4b1826fce19de90 100644
+--- a/build/cjs/config/util.js
++++ b/build/cjs/config/util.js
+@@ -19,8 +19,8 @@ function getNextjsVersion() {
+   return void 0;
+ }
+ let sdkRequire;
+-sdkRequire = module$1.createRequire(__filename);
+ function resolveNextjsPackageJson() {
++  sdkRequire ??= module$1.createRequire(__filename);
+   for (const nodeRequire of [module$1.createRequire(`${process.cwd()}/`), sdkRequire]) {
+     try {
+       return nodeRequire.resolve("next/package.json");
+diff --git a/build/esm/config/util.js b/build/esm/config/util.js
+index 36e3205d799ded437ff7c9821d5acdd9d39ae429..b82bb5ed10003cac40d183fbc78ba09c08349794 100644
+--- a/build/esm/config/util.js
++++ b/build/esm/config/util.js
+@@ -17,8 +17,8 @@ function getNextjsVersion() {
+   return void 0;
+ }
+ let sdkRequire;
+-sdkRequire = createRequire(import.meta.url);
+ function resolveNextjsPackageJson() {
++  sdkRequire ??= createRequire(import.meta.url);
+   for (const nodeRequire of [createRequire(`${process.cwd()}/`), sdkRequire]) {
+     try {
+       return nodeRequire.resolve("next/package.json");

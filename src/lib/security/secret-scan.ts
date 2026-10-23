@@ -125,10 +125,20 @@ function isAllowedComputedHashMatch({ filePath, line, ruleName }: SecretScanMatc
   }
 
   const normalizedPath = normalizeFilePath(filePath);
+  // Public SHA-256 of the reviewed Sentry patch, not a credential.
+  const sentryPatchHash = "fde48f895c304800de59be37296068150b1b441eb0f818aa88e479810a34c75a"; // secret-scan: allow public patch integrity
+  const sentryEntry =
+    /^\s*(?:'@sentry\/nextjs@10\.75\.2|version:\s*10\.75\.2)\(patch_hash=([0-9a-f]{64})\)/.exec(
+      line
+    );
+  const reviewedSentryEntry =
+    sentryEntry?.[1] === sentryPatchHash &&
+    (line.match(/[0-9a-fA-F]{64}/g) ?? []).every((hash) => hash === sentryPatchHash);
   return (
     (normalizedPath === "skills-lock.json" && line.includes('"computedHash"')) ||
     (normalizedPath === "pnpm-lock.yaml" &&
-      (/^\s*hash:\s*[0-9a-f]{64}\s*$/.test(line) ||
+      (reviewedSentryEntry ||
+        /^\s*hash:\s*[0-9a-f]{64}\s*$/.test(line) ||
         /^\s*(?:braces@3\.0\.3|(?:braces|version):\s*3\.0\.3)\(patch_hash=[0-9a-f]{64}\):?\s*$/.test(
           line
         )))

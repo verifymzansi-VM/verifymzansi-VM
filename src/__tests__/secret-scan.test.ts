@@ -13,6 +13,26 @@ function getRule(name: string) {
 
 describe("secret scan allowlisting", () => {
   const fakeHash = "f".repeat(64);
+  it("recognizes only the reviewed Sentry lockfile fingerprint and keeps other secrets blocking", () => {
+    const hash = "fde48f895c304800de59be37296068150b1b441eb0f818aa88e479810a34c75a"; // secret-scan: allow public patch integrity
+    const ruleName = "64-char hex string (potential encryption key)";
+    for (const prefix of ["  '@sentry/nextjs@10.75.2", "        version: 10.75.2"]) {
+      const line = `${prefix}(patch_hash=${hash})(next@16.4.1)`;
+      expect(shouldIgnoreSecretFinding({ filePath: "pnpm-lock.yaml", line, ruleName })).toBe(true);
+      for (const unsafe of [line.replace(hash, fakeHash), `${line} ${fakeHash}`])
+        expect(
+          shouldIgnoreSecretFinding({ filePath: "pnpm-lock.yaml", line: unsafe, ruleName })
+        ).toBe(false);
+      expect(shouldIgnoreSecretFinding({ filePath: "notes.txt", line, ruleName })).toBe(false);
+      expect(
+        shouldIgnoreSecretFinding({
+          filePath: "pnpm-lock.yaml",
+          line,
+          ruleName: "Supabase secret key",
+        })
+      ).toBe(false);
+    }
+  });
   it("allows pnpm computed patch hashes without exempting neighbouring or named secrets", () => {
     for (const line of [
       `    hash: ${fakeHash}`,

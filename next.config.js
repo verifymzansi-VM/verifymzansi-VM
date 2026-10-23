@@ -25,6 +25,17 @@ const sharpServerExternalPackages = [
 
 const nextConfig = {
   reactStrictMode: true,
+  webpack(config) {
+    // A patched dependency retains its npm version. Invalidate persistent
+    // compiler output when this runtime compatibility patch changes.
+    if (config.cache && config.cache.type === "filesystem") {
+      config.cache.buildDependencies = {
+        ...config.cache.buildDependencies,
+        sentryRuntimePatch: [require.resolve("./patches/@sentry__nextjs@10.75.2.patch")],
+      };
+    }
+    return config;
+  },
   poweredByHeader: false,
   // Keep native sharp packages external so OpenNext/esbuild does not
   // attempt to resolve hashed sharp bundle specifiers on Cloudflare.

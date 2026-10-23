@@ -260,6 +260,12 @@ pnpm supabase:cli -- --env-file=.env.local migration list
   require it; the deployment still requires live readiness afterward.
 - OpenNext is pinned to 1.20.12 for Next.js 16.4 manifest support. Review
   adapter release notes and rerun the Worker check when upgrading Next.js.
+- The Sentry 10.75.2 patch defers its build-helper module loader until a
+  build-time version lookup needs it. This prevents the exported build helper
+  from crashing Worker instrumentation on import. Both package formats have
+  regression coverage in `test:tooling`; webpack tracks the patch for cache
+  invalidation. Remove it when an upstream replacement passes these tests and
+  the built Worker startup check.
 
 ### Ozow webhook secret setup
 
