@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { handleFoundationConfirmation } from "@/app/api/foundation/auth/_lib/confirmation";
 import { recordAcquisitionFromCookie } from "@/lib/analytics/record-acquisition";
 import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -112,6 +113,7 @@ async function finalizePendingEmailChange(userId: string, confirmedEmail: string
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  if (searchParams.get("backend") === "foundation") return handleFoundationConfirmation(request);
   const origin = resolveAppOrigin(request);
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");

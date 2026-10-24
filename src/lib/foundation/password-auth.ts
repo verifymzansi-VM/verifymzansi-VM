@@ -1,19 +1,17 @@
 import "server-only";
 
-import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
+import type { CookieMethodsServer } from "@supabase/ssr";
 import { z } from "zod";
 import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
+import { createFoundationAuthAttempt } from "./auth-attempt";
+import { foundationAuthEmail, foundationCaptchaToken } from "./auth-input";
 
 const credentialsSchema = z.strictObject({
-  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+  email: foundationAuthEmail,
   // Signing in must not apply the rules for choosing a new password.
   password: z.string().min(1).max(128),
-  turnstileToken: z
-    .string()
-    .min(1)
-    .max(2048)
-    .refine((value) => value.trim() === value && value !== "turnstile-unavailable"),
+  turnstileToken: foundationCaptchaToken,
 });
 
 export class FoundationPasswordAuthError extends Error {
@@ -48,49 +46,15 @@ export async function signInFoundationPassword(
   if (typeof cookies?.getAll !== "function" || typeof cookies?.setAll !== "function")
     throw new FoundationPasswordAuthError(503);
 
-  let cookieAccessFailed = false;
-  // Match the SDK's project-specific session name, including local Auth.
-  const cookieName = `sb-${new URL(config.url).hostname.split(".")[0]}-auth-token`;
-  const client = createServerClient(config.url, config.publishableKey, {
-    cookieOptions: { name: cookieName, secure: config.url.startsWith("https://") },
-    cookies: {
-      async getAll() {
-        try {
-          // INITIAL_SESSION subscribers may otherwise refresh an expired old
-          // account concurrently with this password sign-in. Keep its cookie
-          // names for obsolete-chunk cleanup, while withholding session values.
-          return ((await cookies.getAll()) ?? []).map((item) =>
-            item.name === cookieName || item.name.startsWith(`${cookieName}.`)
-              ? { ...item, value: "" }
-              : item
-          );
-        } catch {
-          cookieAccessFailed = true;
-          return [];
-        }
-      },
-      async setAll(items, headers) {
-        try {
-          await cookies.setAll(items, headers);
-        } catch {
-          // Let the SDK subscriber settle, then fail closed below.
-          cookieAccessFailed = true;
-        }
-      },
-    },
-    global: {
-      fetch: (request, init) =>
-        fetcher(request, { ...init, credentials: "omit", cache: "no-store", redirect: "error" }),
-    },
-  });
   try {
+    const attempt = createFoundationAuthAttempt(config, cookies, fetcher);
     const { email, password, turnstileToken } = parsed.data;
-    const { data, error } = await client.auth.signInWithPassword({
+    const { data, error } = await attempt.auth.signInWithPassword({
       email,
       password,
       options: { captchaToken: turnstileToken },
     });
-    if (cookieAccessFailed) throw new FoundationPasswordAuthError(503);
+    if (attempt.cookieAccessFailed()) throw new FoundationPasswordAuthError(503);
     if (error)
       throw new FoundationPasswordAuthError(
         error.status === 429 ? 429 : [400, 401, 403, 422].includes(error.status ?? 0) ? 401 : 503
