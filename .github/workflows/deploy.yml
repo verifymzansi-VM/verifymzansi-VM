@@ -32,9 +32,15 @@ jobs:
     env:
       NODE_ENV: production
       WRANGLER_SEND_ERROR_REPORTS: "false"
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_DATA_BACKEND: foundation
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+      FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+      FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
+      FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+      FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+      FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
       AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
       AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
@@ -76,7 +82,7 @@ jobs:
         run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Normalize deploy env aliases
         env:
-          RAW_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          RAW_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
           RAW_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || secrets.APP_URL || secrets.PRODUCTION_APP_URL }}
           RAW_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY || secrets.TURNSTILE_SITE_KEY }}
           RAW_KYC_PROVIDER: ${{ secrets.KYC_PROVIDER }}
@@ -121,6 +127,8 @@ jobs:
           echo "APP_URL=$NORMALIZED_APP_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=$RAW_TURNSTILE_SITE_KEY" >> "$GITHUB_ENV"
           echo "KYC_PROVIDER=$NORMALIZED_KYC_PROVIDER" >> "$GITHUB_ENV"
+      - name: Verify London release and API contracts
+        run: pnpm run preflight:foundation
       - name: Strict secret scan
         run: pnpm run secret-scan:strict
       - name: Security audit
@@ -154,10 +162,7 @@ jobs:
             fi
           done
           exit $FAILED
-      - name: Run production preflight
-        run: pnpm run preflight:prod
-      - name: Verify database schema invariants
-        run: pnpm run db:verify-schema
+      # The retired database's public-table checks must never run on London.
       - name: Build for Cloudflare
         run: pnpm run build:cloudflare
       - name: Verify built Worker startup before deployment

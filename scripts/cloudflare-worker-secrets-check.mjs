@@ -18,6 +18,8 @@ const workerName = workerArg ? workerArg.slice("--name=".length) : undefined;
 
 const requiredSecrets = [
   "SUPABASE_SERVICE_ROLE_KEY",
+  "FOUNDATION_SUPABASE_SECRET_KEY",
+  "FOUNDATION_PHONE_OTP_KEY",
   "RESEND_API_KEY",
   "AFRICASTALKING_API_KEY",
   "AFRICASTALKING_USERNAME",

@@ -142,6 +142,21 @@ binding, shared limiter and SMS provider acceptance are ready. Automated tests
 use synthetic delivery; they do not establish real SMS delivery. Hosted
 foundation data retains production security checks even in local development.
 
+## Deployment connection
+
+The deployment workflow takes the public URL/key and the server credential from
+the `FOUNDATION_SUPABASE_*` settings. The older `SUPABASE_SERVICE_ROLE_KEY` name
+is a compatibility alias for the same modern foundation server key. No secret
+value belongs in Wrangler variables. Wrangler's public connection must agree
+with the compiled `foundation` selection.
+
+`preflight:foundation` refuses mixed projects or keys and verifies the reviewed
+release assembly. An unreleased assembly produces `INCOMPLETE` before network
+checks. Once accepted, it checks the anonymous/service API contracts and hidden
+schemas. It does not run the retired database's public-table checks or establish
+authenticated, provider, storage or recovery acceptance by itself. Publishing
+configuration changes alone does not switch the running website.
+
 ## Remaining integration
 
 This endpoint is not a completed authentication migration. The foundation still

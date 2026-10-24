@@ -82,6 +82,7 @@ function wireOutputFilters(child) {
 
 function createDeterministicEnv() {
   const deterministicValues = {
+    NEXT_PUBLIC_DATA_BACKEND: "source",
     PORT: String(PLAYWRIGHT_PORT),
     PLAYWRIGHT_TEST_MODE: "1",
     PLAYWRIGHT_SUPABASE_MODE: "stub",
