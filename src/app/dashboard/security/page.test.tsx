@@ -22,12 +22,16 @@ vi.mock("@/app/staff/two-step/two-step-client", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(readFoundationServerSession).mockResolvedValue({
-    account: { staff: null, totp_enrolled: false },
+    account: {
+      account_id: "00000000-0000-4000-8000-000000000001",
+      staff: null,
+      totp_enrolled: false,
+    },
   } as Awaited<ReturnType<typeof readFoundationServerSession>>);
 });
 it("lets a fresh ordinary account set up its own authenticator before any staff assignment", async () => {
   render(await AccountSecurityPage());
-  expect(screen.getByRole("heading", { name: "Authenticator setup" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Account security" })).toBeInTheDocument();
   expect(screen.getByText("VerifyMzansi account")).toBeInTheDocument();
 });
 it.each([

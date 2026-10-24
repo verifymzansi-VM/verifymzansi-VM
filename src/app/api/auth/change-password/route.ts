@@ -8,10 +8,16 @@ import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { rateLimitExceededResponse } from "@/lib/utils/rate-limit-responses";
 import { checkPasswordBreach, PWNED_PASSWORD_ERROR } from "@/lib/security/pwned-passwords";
+import { getDataBackend } from "@/lib/data-backend";
 
 const log = createLogger("ChangePassword");
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") {
+    const { handleFoundationPasswordChange } =
+      await import("@/app/api/foundation/auth/_lib/password-change");
+    return handleFoundationPasswordChange(request);
+  }
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

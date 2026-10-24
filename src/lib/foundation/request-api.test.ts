@@ -1,6 +1,10 @@
 /** @vitest-environment node */
 import { expect, it, vi } from "vitest";
-import { createFoundationRequestApi, readFoundationRequestCaller } from "./request-api";
+import {
+  createFoundationRequestApi,
+  createFoundationRequestCaller,
+  readFoundationRequestCaller,
+} from "./request-api";
 import { createFoundationRouteContext } from "./request-route";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -58,6 +62,29 @@ const user = (n = 1, anonymous = false) => ({
   aud: "authenticated",
   email_confirmed_at: "2026-10-01T00:00:00Z",
   is_anonymous: anonymous,
+});
+
+it("pins password updates to the verified MFA token even if cookie state changes afterwards", async () => {
+  const candidate = token(1, { aal: "aal2" });
+  const jar = cookieAdapter(session(candidate));
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    expect(new URL(String(url)).pathname).toBe("/auth/v1/user");
+    expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${candidate}`);
+    return Response.json(user(1));
+  });
+  const caller = await createFoundationRequestCaller(config, jar, fetcher);
+  await jar.setAll(
+    [
+      {
+        name: "sb-abcdefghijklmnopqrst-auth-token",
+        value: "base64-" + Buffer.from(JSON.stringify(session(token(2), 2))).toString("base64url"),
+      },
+    ],
+    {}
+  );
+  await caller.updatePassword("synthetic-current-password", "synthetic-next-password");
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
 });
 
 it("reads a near-expiry page token without consuming its refresh token or writing cookies", async () => {

@@ -13,6 +13,7 @@ import { createFoundationAuthenticatedApi } from "./authenticated-api";
 import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { foundationRpcClientOptions } from "./public-api";
+import { createFoundationPasswordUpdater } from "./password-update";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
@@ -93,9 +94,13 @@ export async function createFoundationRequestCaller(
     if (cookieAccessFailed) failureStatus = 503;
     else if (error) failureStatus = authFailureStatus(error);
     if (cookieAccessFailed || error || !data.session?.access_token) throw new Error();
-    const verified = await verifyFoundationCallerToken(config, data.session.access_token, fetcher);
+    const token = data.session.access_token;
+    const verified = await verifyFoundationCallerToken(config, token, fetcher);
     if (cookieAccessFailed) throw new FoundationSessionError(503);
-    return verified;
+    return {
+      ...verified,
+      updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher),
+    };
   } catch (error) {
     if (error instanceof FoundationSessionError) throw error;
     // Never include cookie contents, tokens or provider error bodies.

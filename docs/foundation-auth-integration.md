@@ -122,6 +122,21 @@ up a factor never grants staff status. Native verification starts a fresh
 document so server guards receive the updated session. Real-user enrolment and
 provider/browser acceptance remain separate from synthetic component tests.
 
+## Current-password changes
+
+`POST /api/foundation/auth/password` verifies the live caller and canonical
+account, applies shared network/account limits, and requires the current
+password with a matching new password of 12–128 characters. An unavailable
+breach check stops the operation. The provider receives one update using the
+exact verified token and enforces its current-password and MFA rules. A second
+password sign-in cannot replace the existing two-step session.
+
+The account security page submits this native command. In foundation mode the
+older `/api/auth/change-password` URL delegates to the same handler. Replies
+contain no credentials or provider diagnostics, and an unavailable notification
+does not repeat an already committed password update. Native Auth must be
+enabled before this route accepts commands.
+
 ## Phone completion
 
 The foundation account-completion screen uses `POST /api/foundation/phone/send`
