@@ -49,6 +49,7 @@ export type FoundationAuthenticatedDatabase = {
       | "get_core_listing_draft"
       | "get_current_posting_terms"
       | "get_listing_attributes"
+      | "get_my_account_context"
       | "get_my_inbox_counts"
       | "get_my_profile"
       | "get_owner_business_event_editor"

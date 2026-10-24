@@ -69,6 +69,8 @@ export const FIXTURE_MIGRATIONS = {
   "20261022111600_partner_commissions.sql":
     "docs/backend-foundation/prototypes/partner-commissions.sql",
   "20261022160000_data_retention.sql": "docs/backend-foundation/prototypes/data-retention.sql",
+  "20261024081843_account_session_context.sql":
+    "docs/backend-foundation/prototypes/account-session-context.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

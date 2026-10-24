@@ -36,6 +36,7 @@ const profile = z.strictObject({
   updated_at: instant,
 });
 export type FoundationAccountProfile = z.infer<typeof profile>;
+export const foundationAccountProfileSchema = profile;
 
 export class FoundationProfileError extends Error {
   constructor(

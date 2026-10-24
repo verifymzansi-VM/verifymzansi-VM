@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "Oa7oRAzroAWIXYExeMdAO6iSUPCj1n9ip2gHi5yg8wA",
+  "candidateHash": "AXX7qN6ZN7nZ5nFtkwoNioIq6nf_21L4vf2GKC8l2o8",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "3gj05hffLGvCefCGhXYsSRlySScVgUiE8yI_FEcXVdA",
-  "roleTypesHash": "LyIuATNepPQrPDOPvaucBKlnDmcZ2mhLthNlEs6H3f0",
+  "generatedTypesHash": "60vMRC0a8iW8b9zH0Rl3EhR68fxYX5A2PrW5EuOvGN0",
+  "roleTypesHash": "mUwXa56iiiFk-iGZLYCMazYd-ea_7spi_ax5onAM7BY",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -1122,6 +1122,24 @@
           "optional": false
         }
       ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_my_account_context",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
       "execute": {
         "anon": false,
         "authenticated": true,

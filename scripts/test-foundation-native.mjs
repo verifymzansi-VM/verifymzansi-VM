@@ -1,6 +1,7 @@
 import { controlNativeSqlChild } from "./lib/foundation-native-sql-barrier.mjs";
 import { testPostingTerms } from "./lib/foundation-posting-terms-native.mjs";
 import { testAccountProfiles } from "./lib/foundation-account-profile-native.mjs";
+import { testAccountContext } from "./lib/foundation-account-context-native.mjs";
 import { testOwnerInbox } from "./lib/foundation-owner-inbox-native.mjs";
 import { testOrganisations } from "./lib/foundation-organisations-native.mjs";
 import { testSponsorships } from "./lib/foundation-sponsorships-native.mjs";
@@ -34,7 +35,12 @@ import { testTrustedIdentity } from "./lib/foundation-identity-native.mjs";
 
 // Fixed isolated workspace/container. No .env loading or arbitrary URL/SQL arguments.
 const retentionOnly = process.argv.length === 3 && process.argv[2] === "--retention-only";
-assert.ok(process.argv.length === 2 || retentionOnly, "Unsupported native test scope");
+const accountContextOnly =
+  process.argv.length === 3 && process.argv[2] === "--account-context-only";
+assert.ok(
+  process.argv.length === 2 || retentionOnly || accountContextOnly,
+  "Unsupported native test scope"
+);
 async function run() {
   const isolation = nativeIsolation();
   const release = acquireFixtureOperation(isolation.workdir, "test");
@@ -59,6 +65,8 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "src/lib/foundation/person-name-ranges.json",
       "docs/backend-foundation/prototypes/person-name-rule.sql",
       "docs/backend-foundation/prototypes/account-profiles.sql",
+      "docs/backend-foundation/prototypes/account-session-context.sql",
+      "scripts/lib/foundation-account-context-native.mjs",
       "docs/backend-foundation/prototypes/public-seller-card.sql",
       "docs/backend-foundation/prototypes/owner-inbox.sql",
       "scripts/lib/foundation-owner-inbox-native.mjs",
@@ -440,6 +448,21 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       });
       return { status: response.status, data: await response.json() };
     };
+    if (accountContextOnly) {
+      nativeStage = "focused account context";
+      sql(`insert into private.staff_roles(user_id,role) values('${owner.id}','admin');`);
+      await testAccountContext({
+        createUser: createTrackedUser,
+        rpc,
+        sql,
+        record,
+        fixtureAdminId: owner.id,
+        stage: (value) => {
+          nativeStage = value;
+        },
+      });
+      return;
+    }
     if (retentionOnly) {
       nativeStage = "focused data retention";
       sql(`insert into private.staff_roles(user_id,role) values('${owner.id}','admin');`);
@@ -7584,6 +7607,16 @@ commit;`);
         nativeStage = value;
       },
     });
+    await testAccountContext({
+      createUser: createTrackedUser,
+      rpc,
+      sql,
+      record,
+      fixtureAdminId: staff.admin.id,
+      stage: (value) => {
+        nativeStage = value;
+      },
+    });
     nativeStage = "organisations";
     await testOrganisations({
       connection: {
@@ -7834,7 +7867,11 @@ commit;`);
           finishedAt: new Date().toISOString(),
           engine: "Native PostgreSQL 17 + PostgREST + local GoTrue",
           fixtureProject: config.project_id,
-          scope: retentionOnly ? "retention-only" : "full",
+          scope: accountContextOnly
+            ? "account-context-only"
+            : retentionOnly
+              ? "retention-only"
+              : "full",
           referenceSqlHash: provenance["docs/backend-foundation/prototypes/transport.sql"],
           provenance,
           appliedFunctions,

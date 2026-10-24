@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-22T20-24-39.984Z/results.json",
-  "evidenceHash": "pbWuK8dIheZQEwCX89vPCzA65c-fSuRHFezHHbLO3n8",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-24T09-04-17.938Z/results.json",
+  "evidenceHash": "fBADUVmpxPBzHBm0_HxSK1V8_WGVbx_jJsetBXvQhmM",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -39,7 +39,8 @@
     "docs/backend-foundation/prototypes/staff-session-policy.sql": "OG-Et5Ghzm_fiTMB63-OTx4WdHbrHlwibbFpoWedS4I",
     "docs/backend-foundation/prototypes/organisation-sponsorships.sql": "JtSjuzGjU8cJKkIEGJQQhDitvsSKxJHSOKGwh_4Gtyc",
     "docs/backend-foundation/prototypes/partner-commissions.sql": "xrHx7i-83JU1IPSBQqron6pE7WVpXSePFbdwIG3UeKY",
-    "docs/backend-foundation/prototypes/data-retention.sql": "pompriiBzfITFAUaqfB5Vww7UhQ6ICvNphIL-nBGg1g"
+    "docs/backend-foundation/prototypes/data-retention.sql": "pompriiBzfITFAUaqfB5Vww7UhQ6ICvNphIL-nBGg1g",
+    "docs/backend-foundation/prototypes/account-session-context.sql": "WMHkOx1sGuZ2CzL0D3FZ8dMm9aPw4A7O0TLxb__NWRw"
   },
   "postingTermsCatalogue": {
     "activeVersion": "posting-v1",
@@ -55,7 +56,7 @@
     },
     "sql": "insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');\ninsert into private.posting_terms_current(version) values('posting-v1');\n"
   },
-  "candidateHash": "Oa7oRAzroAWIXYExeMdAO6iSUPCj1n9ip2gHi5yg8wA",
+  "candidateHash": "AXX7qN6ZN7nZ5nFtkwoNioIq6nf_21L4vf2GKC8l2o8",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",
@@ -85,8 +86,8 @@
     }
   },
   "catalogueSeedIdentitiesHash": "as4g-QYYagtdMoogKzVc3asHo7oJzhGr8Ip5lVYNDjo",
-  "functions": 398,
-  "matchingNativeFunctionBodies": 397,
+  "functions": 400,
+  "matchingNativeFunctionBodies": 399,
   "derivedFunctionChanges": {
     "internal.validate_listing_attributes": "Remove test-only fixture_market bypass; requires separate baseline replay and strict-category proof"
   },

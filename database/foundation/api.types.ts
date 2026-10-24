@@ -113,6 +113,7 @@ export type Database = {
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
       get_current_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
+      get_my_account_context: { Args: Record<PropertyKey, never>; Returns: Json };
       get_my_inbox_counts: { Args: Record<PropertyKey, never>; Returns: Json };
       get_my_profile: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
