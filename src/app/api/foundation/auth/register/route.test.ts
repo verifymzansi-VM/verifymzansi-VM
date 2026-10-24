@@ -84,7 +84,7 @@ it("uses native CAPTCHA and PKCE in one signup call, without a legacy profile wr
   expect(target.origin + target.pathname).toBe(`https://${project}.supabase.co/auth/v1/signup`);
   const callback = new URL(target.searchParams.get("redirect_to")!);
   expect(callback.origin + callback.pathname).toBe("https://verifymzansi.com/auth/callback");
-  expect(callback.searchParams.get("next")).toBe("/complete-profile");
+  expect(callback.searchParams.get("next")).toBe("/dashboard/complete-profile");
   expect(callback.searchParams.get("backend")).toBe("foundation");
   const body = JSON.parse(String(options?.body));
   expect(body).toMatchObject({

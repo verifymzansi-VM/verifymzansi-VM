@@ -4,6 +4,7 @@ import {
   registerFoundationAccount,
 } from "@/lib/foundation/registration";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
+import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { handleFoundationAuthAttempt } from "../_lib/attempt-route";
 
 export function POST(request: NextRequest) {
@@ -15,7 +16,7 @@ export function POST(request: NextRequest) {
       process.env.FOUNDATION_AUTH_CALLBACK_ENABLED === "true",
     unavailableMessage: "Registration is temporarily unavailable",
     operation: async (connection, input, cookies) => {
-      const callback = new URL(buildAuthCallbackUrl(request, "/complete-profile"));
+      const callback = new URL(buildAuthCallbackUrl(request, FOUNDATION_POST_SIGNUP_PATH));
       callback.searchParams.set("backend", "foundation");
       await registerFoundationAccount(connection, input, callback.toString(), cookies);
       return {

@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/(auth)/auth/callback/route";
@@ -157,7 +158,14 @@ it("confirms the selected signup PKCE flow and verifies the new account without 
     new NextRequest(link(flow, "&next=https://other.example/"), { headers: headers(jar) })
   );
   expect(response.status).toBe(303);
-  expect(response.headers.get("location")).toBe("https://verifymzansi.com/complete-profile");
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/dashboard/complete-profile"
+  );
+  const destination = new URL(response.headers.get("location")!);
+  expect(
+    existsSync(`src/app${destination.pathname}/page.tsx`),
+    "Confirmation destination has a real page"
+  ).toBe(true);
   expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   expect(response.headers.get("Cache-Control")).toContain("no-store");
   expect(fetcher).toHaveBeenCalledTimes(2);
@@ -171,11 +179,11 @@ it("keeps concurrent confirmation flows separate even when the legacy verifier s
   const first = await begin(jar, 1);
   const second = await begin(jar, 2);
   const firstResponse = await GET(new NextRequest(link(first), { headers: headers(jar) }));
-  expect(firstResponse.headers.get("location")).toContain("/complete-profile");
+  expect(firstResponse.headers.get("location")).toContain("/dashboard/complete-profile");
   applyCookies(jar, firstResponse.cookies.getAll());
   expect(jar.has(`${baseCookie}-flow-${second.id}-code-verifier`)).toBe(true);
   const secondResponse = await GET(new NextRequest(link(second), { headers: headers(jar) }));
-  expect(secondResponse.headers.get("location")).toContain("/complete-profile");
+  expect(secondResponse.headers.get("location")).toContain("/dashboard/complete-profile");
   const value = secondResponse.cookies.get(baseCookie)!.value;
   expect(JSON.parse(Buffer.from(value.slice(7), "base64url").toString()).user.id).toBe(uuid(2));
 });
@@ -195,7 +203,7 @@ it("does not publish a session when a consumed code is replayed", async () => {
   const flow = await begin(jar);
   expect(
     (await GET(new NextRequest(link(flow), { headers: headers(jar) }))).headers.get("location")
-  ).toContain("/complete-profile");
+  ).toContain("/dashboard/complete-profile");
   fetcher.mockClear();
   const response = await GET(new NextRequest(link(flow), { headers: headers(jar) }));
   expect(response.headers.get("location")).toContain("confirmation_failed");

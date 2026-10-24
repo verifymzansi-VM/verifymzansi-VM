@@ -5,6 +5,7 @@ import type { FoundationAuthCookies } from "@/lib/foundation/auth-attempt";
 import { confirmFoundationAccount } from "@/lib/foundation/auth-confirmation";
 import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connection";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
+import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { foundationAuthPrivateResponse } from "./attempt-route";
 
@@ -64,7 +65,7 @@ export async function handleFoundationConfirmation(incoming: Request) {
   }
   const response = foundationAuthPrivateResponse(
     NextResponse.redirect(
-      new URL(success ? "/complete-profile" : "/login?error=confirmation_failed", origin),
+      new URL(success ? FOUNDATION_POST_SIGNUP_PATH : "/login?error=confirmation_failed", origin),
       303
     )
   );
