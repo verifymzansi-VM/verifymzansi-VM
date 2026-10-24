@@ -1,7 +1,11 @@
 import "server-only";
 
 import { z } from "zod";
-import { createFoundationAuthAttempt, type FoundationAuthCookies } from "./auth-attempt";
+import {
+  createFoundationAuthAttempt,
+  foundationVerificationCookies,
+  type FoundationAuthCookies,
+} from "./auth-attempt";
 import { foundationRegistrationSchema } from "./registration-input";
 import { isPwnedPassword, PWNED_PASSWORD_ERROR } from "../security/pwned-passwords";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
@@ -52,13 +56,7 @@ export async function registerFoundationAccount(
       {
         getAll: () => cookies.getAll(),
         setAll: async (items, headers) => {
-          for (const item of items)
-            if (
-              /-code-verifier(?:\.\d+)?$/.test(item.name) &&
-              item.options.maxAge !== 0 &&
-              item.value
-            )
-              verifierWrites.push(item);
+          verifierWrites.push(...foundationVerificationCookies(items));
           await cookies.setAll(items, headers);
         },
       },

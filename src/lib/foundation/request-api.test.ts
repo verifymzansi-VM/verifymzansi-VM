@@ -87,6 +87,25 @@ it("pins password updates to the verified MFA token even if cookie state changes
   expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
 });
 
+it("derives recovery only from the exact GoTrue-verified token, never cookie user metadata", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const sid = id(101);
+  const fetcher = vi.fn<typeof fetch>(async () => Response.json(user(1)));
+  const recovery = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "recovery", timestamp: now }] }))),
+    fetcher
+  );
+  expect(recovery.recovery).toEqual({ sessionId: sid, issuedAt: now });
+  const forgedCookie = {
+    ...session(token()),
+    user: { ...user(1), amr: [{ method: "recovery", timestamp: now }], recovery: true },
+  };
+  expect(
+    (await readFoundationRequestCaller(config, cookieAdapter(forgedCookie), fetcher)).recovery
+  ).toBeNull();
+});
+
 it("reads a near-expiry page token without consuming its refresh token or writing cookies", async () => {
   const expires = Math.floor(Date.now() / 1000) + 30;
   const candidate = token(1, { exp: expires });

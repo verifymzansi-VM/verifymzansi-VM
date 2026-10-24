@@ -10,6 +10,8 @@ import { ACCOUNT_PROFILE_NOT_FOUND_ERROR, ACCOUNT_PROFILE_WRITE_TABLE } from "@/
 import { ensureAccountProfile } from "@/lib/account/ensure-profile";
 import { createLogger } from "@/lib/utils/logger";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationAuthPrivateResponse } from "@/app/api/foundation/auth/_lib/attempt-route";
 import {
   createRecoveryProof,
   PASSWORD_RECOVERY_COOKIE,
@@ -113,7 +115,18 @@ async function finalizePendingEmailChange(userId: string, confirmedEmail: string
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  if (searchParams.get("backend") === "foundation") return handleFoundationConfirmation(request);
+  if (searchParams.get("backend") === "foundation")
+    return handleFoundationConfirmation(
+      request,
+      searchParams.get("recovery") === "1" ? "recovery" : "signup"
+    );
+  if (getDataBackend() === "foundation")
+    return foundationAuthPrivateResponse(
+      NextResponse.redirect(
+        new URL("/login?error=confirmation_failed", resolveAppOrigin(request)),
+        303
+      )
+    );
   const origin = resolveAppOrigin(request);
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");

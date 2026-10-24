@@ -14,6 +14,7 @@ import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { foundationRpcClientOptions } from "./public-api";
 import { createFoundationPasswordUpdater } from "./password-update";
+import { foundationRecoveryClaim } from "./recovery-claims";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
@@ -27,6 +28,8 @@ const caller = z.object({
   iss: z.string(),
   sub: z.uuid(),
   exp: z.number().int().positive(),
+  session_id: z.uuid(),
+  amr: z.unknown().optional(),
 });
 
 /** One request, one explicit foundation project, one verified caller token.
@@ -134,7 +137,12 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
     )
       throw new Error();
     // Server-only caller data; role authority still comes from live SQL.
-    return { api, accountId: claims.sub, user: verified.data.user };
+    return {
+      api,
+      accountId: claims.sub,
+      user: verified.data.user,
+      recovery: foundationRecoveryClaim(claims.session_id, claims.amr),
+    };
   } catch {
     // Never include cookie contents, tokens or provider error bodies.
     throw new FoundationSessionError(failureStatus);

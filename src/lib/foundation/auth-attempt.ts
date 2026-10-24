@@ -5,6 +5,17 @@ import { parseFoundationConnection } from "./connection";
 
 export type FoundationAuthCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 
+export function foundationVerificationCookies(
+  items: Parameters<FoundationAuthCookies["setAll"]>[0]
+) {
+  return items.filter(
+    (item) =>
+      /-code-verifier(?:\.\d+)?$/.test(item.name) &&
+      item.options.maxAge !== 0 &&
+      Boolean(item.value)
+  );
+}
+
 /** A fresh Auth operation. Existing sessions cannot start INITIAL_SESSION
  * refreshes here; their names remain available for stale cookie chunk cleanup.
  * This is distinct from the verified-session bridge used by protected commands.

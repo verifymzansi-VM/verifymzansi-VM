@@ -5,6 +5,7 @@ import { createFoundationAuthAttempt, type FoundationAuthCookies } from "./auth-
 import { parseFoundationConnection } from "./connection";
 import { createFoundationRequestCaller, FoundationSessionError } from "./request-api";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
+import { readFoundationAccountProfile } from "./account-profile";
 
 const exchange = z.strictObject({
   code: z
@@ -22,15 +23,18 @@ class FoundationConfirmationError extends Error {
 }
 
 /** Exchange only the requested PKCE flow, then verify the resulting caller
- * through GoTrue. No legacy profile creation and no recovery authorization.
+ * through GoTrue. No legacy profile creation or cookie-metadata authority.
  * The caller updates its cookie jar on every staged write so the verified
  * session bridge sees the newly exchanged session, never the incoming one.
+ * Recovery requires a signed provider AMR and a live owner profile; a mutable
+ * redirect type, query marker or cookie user object cannot authorize it.
  */
 export async function confirmFoundationAccount(
   connection: unknown,
   input: unknown,
   cookies: FoundationAuthCookies,
-  fetcher: typeof fetch = createTimeoutFetch()
+  fetcher: typeof fetch = createTimeoutFetch(),
+  purpose: "signup" | "recovery" = "signup"
 ): Promise<void> {
   const parsed = exchange.safeParse(input);
   if (!parsed.success) throw new FoundationConfirmationError(401);
@@ -49,11 +53,15 @@ export async function confirmFoundationAccount(
       !data.session ||
       !data.user?.email_confirmed_at ||
       data.user.is_anonymous ||
-      ("redirectType" in data && data.redirectType === "recovery")
+      (purpose === "signup" && "redirectType" in data && data.redirectType === "recovery")
     )
       throw new FoundationConfirmationError(401);
     const caller = await createFoundationRequestCaller(config, cookies, fetcher);
     if (caller.accountId !== data.user.id) throw new FoundationConfirmationError(401);
+    if (purpose === "recovery") {
+      if (!caller.recovery) throw new FoundationConfirmationError(401);
+      await readFoundationAccountProfile(caller.api);
+    }
   } catch (error) {
     if (error instanceof FoundationConfirmationError) throw error;
     if (error instanceof FoundationSessionError)

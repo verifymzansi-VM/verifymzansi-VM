@@ -13,7 +13,10 @@ import { foundationAuthPrivateResponse } from "./attempt-route";
  * mutation CSRF header used by in-app POSTs. The flow id selects one verifier.
  * Invalid attempts clear verifier state without publishing an unverified session.
  */
-export async function handleFoundationConfirmation(incoming: Request) {
+export async function handleFoundationConfirmation(
+  incoming: Request,
+  purpose: "signup" | "recovery" = "signup"
+) {
   const request = new NextRequest(incoming.url, { headers: incoming.headers });
   const origin = resolveAppOrigin(incoming);
   const writes: Parameters<FoundationAuthCookies["setAll"]>[0] = [];
@@ -23,7 +26,8 @@ export async function handleFoundationConfirmation(incoming: Request) {
   try {
     if (
       process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha" ||
-      process.env.FOUNDATION_AUTH_CALLBACK_ENABLED !== "true"
+      process.env.FOUNDATION_AUTH_CALLBACK_ENABLED !== "true" ||
+      (purpose === "recovery" && process.env.FOUNDATION_RECOVERY_ENABLED !== "true")
     )
       throw new Error();
     const config = readFoundationRuntimeConnection();
@@ -36,6 +40,12 @@ export async function handleFoundationConfirmation(incoming: Request) {
       query.getAll("sb_flow_id").length !== 1 ||
       query.has("token_hash") ||
       query.has("error")
+    )
+      throw new Error();
+    if (
+      purpose === "recovery"
+        ? query.getAll("recovery").length !== 1 || query.get("recovery") !== "1"
+        : query.has("recovery")
     )
       throw new Error();
     const limit = await checkRateLimit({
@@ -57,7 +67,9 @@ export async function handleFoundationConfirmation(incoming: Request) {
           for (const item of items) values.set(item.name, item.value);
           writes.push(...items);
         },
-      }
+      },
+      undefined,
+      purpose
     );
     success = true;
   } catch {
@@ -65,7 +77,16 @@ export async function handleFoundationConfirmation(incoming: Request) {
   }
   const response = foundationAuthPrivateResponse(
     NextResponse.redirect(
-      new URL(success ? FOUNDATION_POST_SIGNUP_PATH : "/login?error=confirmation_failed", origin),
+      new URL(
+        success
+          ? purpose === "recovery"
+            ? "/reset-password"
+            : FOUNDATION_POST_SIGNUP_PATH
+          : purpose === "recovery"
+            ? "/forgot-password?error=recovery_failed"
+            : "/login?error=confirmation_failed",
+        origin
+      ),
       303
     )
   );

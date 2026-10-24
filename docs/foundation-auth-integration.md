@@ -122,6 +122,22 @@ up a factor never grants staff status. Native verification starts a fresh
 document so server guards receive the updated session. Real-user enrolment and
 provider/browser acceptance remain separate from synthetic component tests.
 
+## Recovery entry and callback
+
+`POST /api/foundation/auth/recovery/request` uses native CAPTCHA, same-origin
+request proof, shared network/recipient protection and an explicit PKCE slot.
+Its accepted reply does not reveal whether an address has an account. Recovery
+links return through `/auth/callback?backend=foundation&recovery=1`. The
+selector chooses routing only; a signup code or edited verifier suffix cannot
+grant recovery authority. The exact GoTrue-verified token must contain a recent
+signed `recovery` authentication method, and the live profile guard must accept
+its session before cookies are published.
+
+`FOUNDATION_RECOVERY_ENABLED` stays empty while reset completion and its browser
+integration remain unfinished. The local request/mail/callback rehearsal does
+not establish hosted email delivery, real CAPTCHA acceptance or reset
+completion.
+
 ## Current-password changes
 
 `POST /api/foundation/auth/password` verifies the live caller and canonical

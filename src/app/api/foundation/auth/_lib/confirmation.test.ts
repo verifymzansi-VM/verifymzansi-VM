@@ -150,6 +150,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("a client recovery selector cannot turn a signup code into password-recovery authority", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  const jar = new Map([["vm_csrf", csrf]]);
+  const flow = await begin(jar);
+  const slot = `${baseCookie}-flow-${flow.id}-code-verifier`;
+  const original = JSON.parse(Buffer.from(jar.get(slot)!.slice(7), "base64url").toString());
+  jar.set(
+    slot,
+    "base64-" + Buffer.from(JSON.stringify(original + "/recovery")).toString("base64url")
+  );
+  const response = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe(
+    "https://verifymzansi.com/forgot-password?error=recovery_failed"
+  );
+  expect(
+    response.cookies
+      .getAll()
+      .filter((item) => item.name === baseCookie || item.name.startsWith(baseCookie + "."))
+  ).toEqual([]);
+  expect(legacyClient).not.toHaveBeenCalled();
+  expect(legacyAdmin).not.toHaveBeenCalled();
+});
+
 it("confirms the selected signup PKCE flow and verifies the new account without any source-profile access", async () => {
   const jar = new Map([["vm_csrf", csrf]]);
   const flow = await begin(jar);
