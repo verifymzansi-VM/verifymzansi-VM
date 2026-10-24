@@ -15,6 +15,7 @@ import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
 import postingTermsCatalogue from "@/lib/legal/terms-documents/catalogue.json";
+import { getDataBackend } from "@/lib/data-backend";
 import {
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
@@ -82,6 +83,7 @@ function matchesPrefix(pathname: string, prefix: string): boolean {
 export async function routeRequest(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
+  const foundationMode = getDataBackend() === "foundation";
 
   // Recover legacy signup links that land on "/?code=..." instead of the
   // dedicated auth callback route. Keep this scoped to the root path so
@@ -119,7 +121,9 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   }
 
   // -- Playwright stub mode --------------------------------------------------
-  const playwrightResult = handlePlaywrightStubRouting(request, PROTECTED_PREFIXES, AUTH_ROUTES);
+  const playwrightResult = foundationMode
+    ? null
+    : handlePlaywrightStubRouting(request, PROTECTED_PREFIXES, AUTH_ROUTES);
   if (playwrightResult) {
     return playwrightResult;
   }
@@ -161,6 +165,14 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
 
   if (!needsAuth) {
     return NextResponse.next();
+  }
+
+  if (foundationMode) {
+    const { checkFoundationPageAccess } = await import("@/lib/foundation/page-access");
+    return checkFoundationPageAccess(
+      request,
+      AUTH_ROUTES.some((route) => matchesPrefix(pathname, route))
+    );
   }
 
   // -- Supabase client -------------------------------------------------------

@@ -93,6 +93,13 @@ after success. Both require a fresh security challenge after an unsuccessful
 attempt. Unsupported OAuth and source confirmation-resend controls are hidden.
 These screens do not enable the backend or hosted signup.
 
+Protected-page routing also selects the foundation account context when the
+compiled backend is `foundation`. It forwards refreshed cookies downstream and
+to the browser, refuses unavailable or forbidden account contexts, checks the
+verified phone rather than a cached phone hint, and directs unready staff to
+two-step verification. Source browser fixtures cannot satisfy this check. Page
+layouts and API commands must still enforce their own authorization.
+
 **Keep the compiled selection at `source` until the remaining integration is
 accepted.** The isolated source-browser test explicitly pins that selection; its
 success cannot establish foundation browser or provider readiness.
@@ -103,8 +110,8 @@ This endpoint is not a completed authentication migration. The foundation still
 needs provider/browser acceptance of registration and confirmation, recovery,
 current-password changes, MFA and complete browser session integration, with
 their corresponding account policies and abuse controls. The current frontend
-must not be switched until its middleware, account-completion screens and other
-services handle foundation sessions and subsequent onboarding. Registration
-stays closed during preparation. Production cutover also requires the remaining
-application domains, workers, storage and recovery verification. Old accounts,
-data and administrator grants must not be imported.
+must not be switched until its server guards, account-completion screens and
+other services handle foundation sessions and subsequent onboarding.
+Registration stays closed during preparation. Production cutover also requires
+the remaining application domains, workers, storage and recovery verification.
+Old accounts, data and administrator grants must not be imported.
