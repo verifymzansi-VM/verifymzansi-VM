@@ -7,13 +7,16 @@ const request = {
 } as never;
 describe("live-data security environment", () => {
   afterEach(() => vi.unstubAllEnvs());
-  it("preserves production checks for a development server using the live project", () => {
-    vi.stubEnv("NODE_ENV", "development");
-    vi.stubEnv("ENVIRONMENT", "");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://tnygdgormnofpgjknlhr.supabase.co");
-    expect(isProductionDataEnvironment()).toBe(true);
-    expect(isStrictLocalDevelopmentRequest(request)).toBe(false);
-  });
+  it.each(["gntzjtuncsyefujajmjy", "tnygdgormnofpgjknlhr"])(
+    "preserves production checks when development settings reference hosted data: %s",
+    (project) => {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("ENVIRONMENT", "");
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", `https://${project}.supabase.co`);
+      expect(isProductionDataEnvironment()).toBe(true);
+      expect(isStrictLocalDevelopmentRequest(request)).toBe(false);
+    }
+  );
   it("preserves explicit production markers", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("ENVIRONMENT", "production");

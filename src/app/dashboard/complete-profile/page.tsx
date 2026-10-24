@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationCompleteProfile } from "@/components/auth/foundation-complete-profile";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Loader2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,14 @@ type Step = "phone" | "otp" | "verified";
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
 export default function CompleteProfilePage() {
+  return getDataBackend() === "foundation" ? (
+    <FoundationCompleteProfile />
+  ) : (
+    <LegacyCompleteProfilePage />
+  );
+}
+
+function LegacyCompleteProfilePage() {
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");

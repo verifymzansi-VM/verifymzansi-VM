@@ -1,8 +1,9 @@
 # Foundation authentication integration
 
-The foundation authentication integration is incremental. The live application
-continues using its existing authentication routes until the complete cutover
-has been rehearsed. Adding a foundation route does not switch the live backend.
+The foundation authentication integration is incremental. The older database is
+retired. Do not deploy against it or run its migrations and schema checks on the
+foundation project. Adding a foundation route does not switch the live backend;
+the approved foundation build and its deployment bindings must be published.
 
 ## Password sign-in
 
@@ -100,9 +101,31 @@ verified phone rather than a cached phone hint, and directs unready staff to
 two-step verification. Source browser fixtures cannot satisfy this check. Page
 layouts and API commands must still enforce their own authorization.
 
-**Keep the compiled selection at `source` until the remaining integration is
-accepted.** The isolated source-browser test explicitly pins that selection; its
-success cannot establish foundation browser or provider readiness.
+The `source` selection remains for synthetic regression fixtures during the
+conversion. It is not a production deployment target. The isolated
+source-browser test explicitly pins that selection; its success cannot establish
+foundation browser or provider readiness. Production requires the approved
+`foundation` build after the remaining integration is accepted.
+
+## Phone completion
+
+The foundation account-completion screen uses `POST /api/foundation/phone/send`
+and `POST /api/foundation/phone/verify`. Both require a verified account,
+same-origin/CSRF proof and shared abuse protection. Send protection applies to
+the network, the account and the recipient across accounts. The server obtains
+the subject from the caller-bound account context; submitted account selectors
+are refused. SQL bounds attempts and expiration and checks contact-change rules.
+
+Only trusted service RPCs create, claim and finalize challenges. The code digest
+uses a separate random server key, `FOUNDATION_PHONE_OTP_KEY`, and binds the
+account, phone and random nonce. Browser replies contain no code or stored
+digest. Delivery is attempted once by the adapter. The browser keeps pending
+state separate for each account and refreshes the canonical verified phone.
+
+Keep `FOUNDATION_PHONE_VERIFICATION_ENABLED` empty until the new key, service
+binding, shared limiter and SMS provider acceptance are ready. Automated tests
+use synthetic delivery; they do not establish real SMS delivery. Hosted
+foundation data retains production security checks even in local development.
 
 ## Remaining integration
 
@@ -110,8 +133,8 @@ This endpoint is not a completed authentication migration. The foundation still
 needs provider/browser acceptance of registration and confirmation, recovery,
 current-password changes, MFA and complete browser session integration, with
 their corresponding account policies and abuse controls. The current frontend
-must not be switched until its server guards, account-completion screens and
-other services handle foundation sessions and subsequent onboarding.
+must not be switched until its server guards and remaining services handle
+foundation sessions and onboarding has deployment/provider acceptance.
 Registration stays closed during preparation. Production cutover also requires
 the remaining application domains, workers, storage and recovery verification.
 Old accounts, data and administrator grants must not be imported.
