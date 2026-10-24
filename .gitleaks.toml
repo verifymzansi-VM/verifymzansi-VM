@@ -20,6 +20,13 @@ regexes = ['''^fde48f895c304800de59be37296068150b1b441eb0f818aa88e479810a34c75a$
 useDefault = true
 
 [[allowlists]]
+description = "London Supabase publishable key: verified public browser/API key, never a server secret"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''(^|/)wrangler\.toml$''']
+regexes = ['''^sb_publishable_0nTWArCyTVta1nDx_U3u1Q_YOdMfZpi$''']
+
+[[allowlists]]
 description = "Deterministic test fixtures: obviously fake keys (counting hex, *_test_*, placeholder JWT bodies) used to exercise validators and the repo's own secret scanner"
 condition = "AND"
 paths = [
