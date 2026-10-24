@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationRegisterForm } from "@/components/auth/foundation-register-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
@@ -43,6 +45,10 @@ import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("AuthRegisterPage");
 
 export default function RegisterPage() {
+  return getDataBackend() === "foundation" ? <FoundationRegisterForm /> : <LegacyRegisterPage />;
+}
+
+function LegacyRegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);

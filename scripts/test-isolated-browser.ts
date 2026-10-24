@@ -38,6 +38,9 @@ async function main() {
     SENTRY_AUTH_TOKEN: "",
     NODE_OPTIONS: "--max-old-space-size=4096",
     NODE_ENV: "production",
+    // This lane exercises the source fixtures, independent of the caller's
+    // eventual London build selection. Native foundation proofs run separately.
+    NEXT_PUBLIC_DATA_BACKEND: "source",
     PLAYWRIGHT_HOST: "127.0.0.1",
     PLAYWRIGHT_PORT: "3197",
     PLAYWRIGHT_BASE_URL: "http://127.0.0.1:3197",

@@ -5,4 +5,9 @@ export const foundationCaptchaToken = z
   .string()
   .min(1)
   .max(2048)
-  .refine((value) => value.trim() === value && value !== "turnstile-unavailable");
+  .refine(
+    (value) =>
+      value.trim() === value &&
+      value !== "turnstile-unavailable" &&
+      value !== "dev-turnstile-bypass"
+  );

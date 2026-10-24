@@ -1,28 +1,11 @@
 import "server-only";
 
 import { z } from "zod";
-import { foundationAuthEmail, foundationCaptchaToken } from "./auth-input";
 import { createFoundationAuthAttempt, type FoundationAuthCookies } from "./auth-attempt";
-import { normalizePersonName, isPersonName, isReservedPersonName } from "./person-name";
+import { foundationRegistrationSchema } from "./registration-input";
 import { isPwnedPassword, PWNED_PASSWORD_ERROR } from "../security/pwned-passwords";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { parseFoundationConnection } from "./connection";
-
-const registration = z
-  .strictObject({
-    email: foundationAuthEmail,
-    displayName: z
-      .string()
-      .max(400)
-      .transform(normalizePersonName)
-      .refine(isPersonName)
-      .refine((value) => !isReservedPersonName(value)),
-    password: z.string().min(12).max(128),
-    confirmPassword: z.string().max(128),
-    acceptTerms: z.literal(true),
-    turnstileToken: foundationCaptchaToken,
-  })
-  .refine((value) => value.password === value.confirmPassword);
 
 export class FoundationRegistrationError extends Error {
   constructor(
@@ -52,7 +35,7 @@ export async function registerFoundationAccount(
   cookies: FoundationAuthCookies,
   fetcher: typeof fetch = createTimeoutFetch()
 ): Promise<void> {
-  const parsed = registration.safeParse(input);
+  const parsed = foundationRegistrationSchema.safeParse(input);
   if (!parsed.success) throw new FoundationRegistrationError(400);
   try {
     const config = parseFoundationConnection(connection);

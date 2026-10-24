@@ -1,8 +1,47 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require("@sentry/nextjs/config");
+const dataBackend = process.env.NEXT_PUBLIC_DATA_BACKEND || "source";
+if (!["source", "foundation"].includes(dataBackend))
+  throw new Error("Invalid NEXT_PUBLIC_DATA_BACKEND");
+if (dataBackend === "foundation") {
+  let targetUrl;
+  try {
+    targetUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || "invalid");
+  } catch {
+    throw new Error("Foundation builds require the approved public connection");
+  }
+  const hosted = targetUrl.origin === "https://gntzjtuncsyefujajmjy.supabase.co";
+  const local =
+    process.env.ENVIRONMENT === "test" &&
+    process.env.VERIFYMZANSI_RUNTIME_MODE === "e2e" &&
+    targetUrl.protocol === "http:" &&
+    targetUrl.hostname === "127.0.0.1" &&
+    ["55441", "55443"].includes(targetUrl.port);
+  let localApp = false;
+  if (local) {
+    try {
+      const appUrl = new URL(process.env.NEXT_PUBLIC_APP_URL || "invalid");
+      localApp = appUrl.protocol === "http:" && appUrl.hostname === "127.0.0.1";
+    } catch {
+      // Invalid local settings use the same non-disclosing configuration error.
+    }
+  }
+  if (
+    (!hosted && !local) ||
+    (local && !localApp) ||
+    targetUrl.pathname !== "/" ||
+    targetUrl.search ||
+    targetUrl.hash ||
+    targetUrl.username ||
+    targetUrl.password ||
+    !/^sb_publishable_[A-Za-z0-9_-]+$/.test(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "")
+  )
+    throw new Error("Foundation builds require the approved public connection");
+}
 
 const clientEnv = Object.fromEntries(
   Object.entries({
+    NEXT_PUBLIC_DATA_BACKEND: dataBackend,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

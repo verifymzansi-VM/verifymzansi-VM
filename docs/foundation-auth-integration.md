@@ -76,14 +76,35 @@ unsuccessful attempt clears its verification state without publishing a new
 session; other pending confirmation attempts stay separate. Caller-controlled
 recovery markers cannot grant recovery authorization through this signup path.
 
+## Browser integration
+
+`NEXT_PUBLIC_DATA_BACKEND` selects the compiled browser integration. Its default
+is `source`. The `foundation` build requires the approved target URL and a
+publishable key; changing the selection requires a new build. The browser uses
+its own API-schema client, never the source client's singleton. Old-project
+cookies cannot identify a foundation session. The account store reads the
+verified `/api/foundation/auth/session` response and drops stale account data
+when accounts change or requests fail. Role hints come from the canonical
+account context; each protected server operation still enforces authorization.
+
+The foundation registration screen sends the shared validated registration
+payload. The sign-in screen uses the native endpoint and refreshes the document
+after success. Both require a fresh security challenge after an unsuccessful
+attempt. Unsupported OAuth and source confirmation-resend controls are hidden.
+These screens do not enable the backend or hosted signup.
+
+**Keep the compiled selection at `source` until the remaining integration is
+accepted.** The isolated source-browser test explicitly pins that selection; its
+success cannot establish foundation browser or provider readiness.
+
 ## Remaining integration
 
 This endpoint is not a completed authentication migration. The foundation still
 needs provider/browser acceptance of registration and confirmation, recovery,
-current-password changes, MFA, sign-out and browser session integration, with
+current-password changes, MFA and complete browser session integration, with
 their corresponding account policies and abuse controls. The current frontend
-must not be pointed at this endpoint until it handles the foundation session and
-subsequent onboarding. Registration stays closed during preparation. Production
-cutover also requires the remaining application domains, workers, storage and
-recovery verification. Old accounts, data and administrator grants must not be
-imported.
+must not be switched until its middleware, account-completion screens and other
+services handle foundation sessions and subsequent onboarding. Registration
+stays closed during preparation. Production cutover also requires the remaining
+application domains, workers, storage and recovery verification. Old accounts,
+data and administrator grants must not be imported.

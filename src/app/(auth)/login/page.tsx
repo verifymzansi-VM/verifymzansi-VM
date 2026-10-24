@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Mail, MailCheck, Send } from "lucide-react";
 
@@ -31,6 +31,9 @@ import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { clearClientAccountState } from "@/hooks/use-auth";
+import { foundationCaptchaToken } from "@/lib/foundation/auth-input";
 
 const log = createLogger("AuthLoginPage");
 
@@ -58,6 +61,7 @@ function describeSignIn(returnUrl: string | null): string {
 }
 
 export default function LoginPage() {
+  const foundationMode = getDataBackend() === "foundation";
   const [showPassword, setShowPassword] = useState(false);
   const [turnstileError, setTurnstileError] = useState(false);
   const [turnstileLoaded, setTurnstileLoaded] = useState(false);
@@ -81,6 +85,7 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
     setValue,
     getValues,
+    control,
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -89,6 +94,8 @@ export default function LoginPage() {
       turnstileToken: "",
     },
   });
+  const challengeToken = useWatch({ control, name: "turnstileToken" });
+  const nativeChallengeReady = foundationCaptchaToken.safeParse(challengeToken).success;
 
   const loginPageFlags = isInteractive
     ? (() => {
@@ -135,7 +142,14 @@ export default function LoginPage() {
       });
     }
 
-    if (loginPageFlags.error === "auth_callback_failed") {
+    if (loginPageFlags.error === "confirmation_failed") {
+      toast({
+        title: "Confirmation could not be completed",
+        description:
+          "Open the link in the browser where you registered, or try signing in if your email is already confirmed.",
+        variant: "destructive",
+      });
+    } else if (loginPageFlags.error === "auth_callback_failed") {
       toast({
         title: "Authentication failed",
         description:
@@ -349,6 +363,14 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginInput) {
     try {
+      if (foundationMode && !foundationCaptchaToken.safeParse(data.turnstileToken).success) {
+        toast({
+          title: "Complete the security check",
+          description: "Retry the security check before signing in.",
+          variant: "destructive",
+        });
+        return;
+      }
       const csrfToken = await ensureCsrfTokenReady();
       if (!csrfToken) {
         toast({
@@ -359,18 +381,29 @@ export default function LoginPage() {
         return;
       }
 
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(data),
-      });
+      if (foundationMode) await clearClientAccountState();
+      const response = await fetch(
+        foundationMode ? "/api/foundation/auth/login" : "/api/auth/login",
+        {
+          method: "POST",
+          ...(foundationMode
+            ? {
+                credentials: "same-origin" as const,
+                cache: "no-store" as const,
+                redirect: "error" as const,
+              }
+            : {}),
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(data),
+        }
+      );
 
       const result = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         resetTurnstileChallenge();
 
-        if (result.code === "email_not_confirmed") {
+        if (!foundationMode && result.code === "email_not_confirmed") {
           setResendPromptVisible(true);
         }
 
@@ -386,10 +419,15 @@ export default function LoginPage() {
       }
 
       toast({ title: "Welcome back!", variant: "success" });
-      router.refresh();
       const returnUrl = sanitizeReturnUrl(
         new URLSearchParams(window.location.search).get("returnUrl")
       );
+      if (foundationMode) {
+        // A fresh document discards pre-login browser clients and cached state.
+        window.location.assign(returnUrl);
+        return;
+      }
+      router.refresh();
       router.push(returnUrl);
     } catch {
       // The request may have reached the server and consumed the single-use
@@ -411,7 +449,7 @@ export default function LoginPage() {
         </AuthNotice>
       )}
 
-      {justRegistered && !emailConfirmed && (
+      {!foundationMode && justRegistered && !emailConfirmed && (
         <AuthNotice tone="info" icon={<Mail />} title="Check your email" role="status">
           <p>We&apos;ve sent a confirmation link to your email address.</p>
           <Button
@@ -433,9 +471,12 @@ export default function LoginPage() {
 
       <AuthPageHeader title="Sign in to your account" description={headerDescription} />
 
-      <GoogleOAuthButton mode="login" />
-
-      <AuthDivider>or</AuthDivider>
+      {!foundationMode && (
+        <>
+          <GoogleOAuthButton mode="login" />
+          <AuthDivider>or</AuthDivider>
+        </>
+      )}
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
         <AuthEmailField
@@ -486,7 +527,13 @@ export default function LoginPage() {
           size="lg"
           className="h-11 w-full text-[15px]"
           variant="trust-verified"
-          disabled={!isInteractive || isSubmitting || captchaUnavailable || turnstileError}
+          disabled={
+            !isInteractive ||
+            isSubmitting ||
+            captchaUnavailable ||
+            turnstileError ||
+            (foundationMode && !nativeChallengeReady)
+          }
           aria-busy={isSubmitting || undefined}
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

@@ -138,6 +138,7 @@ it.each([
   { password: "short", confirmPassword: "short" },
   { confirmPassword: "different" },
   { turnstileToken: "turnstile-unavailable" },
+  { turnstileToken: "dev-turnstile-bypass" },
   { role: "admin" },
   { user_metadata: { admin: true } },
   { displayName: "x".repeat(4096) },

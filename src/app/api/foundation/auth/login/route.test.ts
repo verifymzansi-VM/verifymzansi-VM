@@ -217,6 +217,7 @@ it.each([
   { ...credentials, turnstileToken: "" },
   { ...credentials, turnstileToken: " " },
   { ...credentials, turnstileToken: "turnstile-unavailable" },
+  { ...credentials, turnstileToken: "dev-turnstile-bypass" },
   { ...credentials, turnstileToken: "x".repeat(2049) },
   { ...credentials, password: "x".repeat(129) },
   { ...credentials, email: "invalid" },

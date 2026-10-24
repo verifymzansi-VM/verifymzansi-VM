@@ -12,6 +12,8 @@ import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { toast } from "@/hooks/use-toast";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
+import { getDataBackend } from "@/lib/data-backend";
+import { hasFoundationBrowserSession } from "@/lib/foundation/browser-session-cookie";
 
 const log = createLogger("useAuth");
 const PROFILE_FETCH_RETRY_DELAYS_MS = [150, 400] as const;
@@ -28,6 +30,10 @@ let supabaseClientPromise: Promise<SupabaseClient> | null = null;
 let authRequestVersion = 0;
 
 function getSupabaseClient(): Promise<SupabaseClient> {
+  if (getDataBackend() === "foundation")
+    return import("@/lib/foundation/browser-client").then(
+      (module) => module.getFoundationBrowserClient() as unknown as SupabaseClient
+    );
   if (!supabaseClientPromise) {
     supabaseClientPromise = import("@/lib/supabase/client")
       .then((mod) => mod.createClient())
@@ -50,6 +56,13 @@ function getSupabaseClient(): Promise<SupabaseClient> {
  * on every navigation.
  */
 export function hasBrowserAuthSession(): boolean {
+  if (getDataBackend() === "foundation") {
+    try {
+      return hasFoundationBrowserSession();
+    } catch {
+      return false;
+    }
+  }
   if (typeof document === "undefined") {
     return true;
   }
@@ -69,7 +82,10 @@ export function hasBrowserAuthSession(): boolean {
 export async function signOutBrowserSession(): Promise<boolean> {
   try {
     const supabase = await getSupabaseClient();
-    const { error } = await supabase.auth.signOut();
+    const { error } =
+      getDataBackend() === "foundation"
+        ? await supabase.auth.signOut({ scope: "local" })
+        : await supabase.auth.signOut();
     if (error) throw error;
   } catch (err) {
     log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
@@ -109,8 +125,17 @@ export async function clearClientAccountState(): Promise<void> {
  * Automatically syncs with Supabase auth state.
  */
 export function useAuth() {
-  const { user, profile, trustLevel, isLoading, setUser, setProfile, setLoading, reset } =
-    useAuthStore();
+  const {
+    user,
+    profile,
+    trustLevel,
+    isLoading,
+    foundationContext,
+    setUser,
+    setProfile,
+    setLoading,
+    reset,
+  } = useAuthStore();
 
   const fetchedRef = useRef(false);
 
@@ -218,6 +243,23 @@ export function useAuth() {
 
       setLoading(true);
       try {
+        if (getDataBackend() === "foundation") {
+          // Account switches and failed refreshes must never retain another
+          // account's source profile or phone/role hints while loading.
+          useAuthStore.setState({
+            user: null,
+            profile: null,
+            foundationContext: null,
+            trustLevel: 0,
+          });
+          const { fetchFoundationAccountSession } =
+            await import("@/lib/foundation/account-session-client");
+          if (!isCurrentRequest()) return;
+          const account = await fetchFoundationAccountSession();
+          if (!isCurrentRequest()) return;
+          useAuthStore.getState().applyFoundationContext(account);
+          return;
+        }
         const supabase = await getSupabaseClient();
         if (!isCurrentRequest()) return;
         const {
@@ -289,6 +331,7 @@ export function useAuth() {
         if (cancelled) return;
         const { data } = supabase.auth.onAuthStateChange(
           (event: AuthChangeEvent, session: Session | null) => {
+            if (getDataBackend() === "foundation" && event === "INITIAL_SESSION") return;
             if (session?.user) {
               void fetchUser({ force: true });
             } else {
@@ -321,12 +364,19 @@ export function useAuth() {
 
   const isAuthenticated = !!user;
   const isAdmin = user?.role === "admin";
-  const isModerator = user?.role === "moderator" || isAdmin;
-  const isVerified = readAccountVerificationStatus(profile) === "verified";
+  const isModerator =
+    user?.role === "moderator" ||
+    isAdmin ||
+    (getDataBackend() === "foundation" && user?.role === "governor");
+  const isVerified =
+    getDataBackend() === "foundation"
+      ? foundationContext?.profile.identity_verified === true
+      : readAccountVerificationStatus(profile) === "verified";
 
   return {
     user,
     profile,
+    foundationContext,
     trustLevel,
     isLoading,
     isAuthenticated,

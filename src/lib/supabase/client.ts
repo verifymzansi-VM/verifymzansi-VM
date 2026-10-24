@@ -9,6 +9,8 @@ import { getStablePlanId } from "@/lib/constants/plan-ids";
 import { PLANS, isActiveMarketplaceArea } from "@/lib/constants/pricing";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { getFoundationBrowserClient } from "@/lib/foundation/browser-client";
 
 const log = createLogger("SupabaseClient");
 let _client: SupabaseClient | null = null;
@@ -256,6 +258,8 @@ function createBrowserPlaywrightStubClient(): SupabaseClient {
  * middleware and Client Components can agree on the current user.
  */
 export function createClient(): SupabaseClient {
+  if (getDataBackend() === "foundation")
+    return getFoundationBrowserClient() as unknown as SupabaseClient;
   if (_client) return _client;
 
   if (isPlaywrightSupabaseStubMode()) {
