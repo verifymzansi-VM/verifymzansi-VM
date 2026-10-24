@@ -9,11 +9,18 @@ import type { Capability } from "@/lib/auth/roles";
 import { readStaffAccessFromDb, roleHasCapability } from "@/lib/auth/admin-access";
 import { evaluateStaffMfa, STAFF_MFA_PATH, type StaffMfaState } from "@/lib/auth/staff-mfa";
 import type { StaffRole } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
 
 export type StaffSession =
   | { status: "anonymous" }
   | { status: "not_staff"; user: User }
-  | { status: "staff"; user: User; role: StaffRole; mfa: StaffMfaState };
+  | {
+      status: "staff";
+      user: User;
+      role: StaffRole;
+      mfa: StaffMfaState;
+      assignedCapabilities?: readonly string[];
+    };
 
 /**
  * The current request's staff session, read once per request (the layout and
@@ -21,6 +28,35 @@ export type StaffSession =
  * JWT role is never trusted.
  */
 const getStaffSession = cache(async (): Promise<StaffSession> => {
+  if (getDataBackend() === "foundation") {
+    const { readFoundationServerSession, FoundationServerSessionError } =
+      await import("@/lib/foundation/server-session");
+    let current: Awaited<ReturnType<typeof readFoundationServerSession>>;
+    try {
+      current = await readFoundationServerSession();
+    } catch (error) {
+      if (error instanceof FoundationServerSessionError && error.status === 401)
+        return { status: "anonymous" };
+      redirect(
+        error instanceof FoundationServerSessionError && error.status === 403
+          ? "/error?reason=forbidden"
+          : "/error?reason=unavailable"
+      );
+    }
+    const staff = current.account.staff;
+    if (!staff) return { status: "not_staff", user: current.user };
+    return {
+      status: "staff",
+      user: current.user,
+      // Legacy navigation label only. Native capability decisions below use
+      // the canonical assignment, never this presentation alias or metadata.
+      role: staff.role === "governor" ? "governance_controller" : staff.role,
+      assignedCapabilities: staff.assigned_capabilities,
+      mfa: staff.can_access
+        ? { status: "verified", lastVerifiedAt: null }
+        : { status: "required", hasFactor: current.account.totp_enrolled },
+    };
+  }
   const supabase = await createClient();
   const {
     data: { user },
@@ -53,7 +89,12 @@ export async function requireStaff(
   if (!options.allowPendingMfa && session.mfa.status === "required") {
     redirect(STAFF_MFA_PATH);
   }
-  if (capability && !roleHasCapability(session.role, capability)) {
+  if (
+    capability &&
+    !(session.assignedCapabilities
+      ? session.assignedCapabilities.includes(capability)
+      : roleHasCapability(session.role, capability))
+  ) {
     redirect("/admin");
   }
   return session;

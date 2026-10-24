@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { expect, it, vi } from "vitest";
-import { createFoundationRequestApi } from "./request-api";
+import { createFoundationRequestApi, readFoundationRequestCaller } from "./request-api";
 import { createFoundationRouteContext } from "./request-route";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -58,6 +58,98 @@ const user = (n = 1, anonymous = false) => ({
   aud: "authenticated",
   email_confirmed_at: "2026-10-01T00:00:00Z",
   is_anonymous: anonymous,
+});
+
+it("reads a near-expiry page token without consuming its refresh token or writing cookies", async () => {
+  const expires = Math.floor(Date.now() / 1000) + 30;
+  const candidate = token(1, { exp: expires });
+  const jar = cookieAdapter(session(candidate, 99, expires));
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    expect(new URL(String(url)).pathname).toBe("/auth/v1/user");
+    expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${candidate}`);
+    return Response.json(user(1));
+  });
+  const verified = await readFoundationRequestCaller(config, jar, fetcher);
+  expect(verified.accountId).toBe(id(1));
+  expect(verified.user.id).toBe(id(1));
+  expect(Object.keys(verified.api)).toEqual(["rpc"]);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(jar.setAll).not.toHaveBeenCalled();
+});
+
+it("assembles SDK session chunks for verification without trusting the embedded user", async () => {
+  const candidate = token();
+  const encoded =
+    "base64-" + Buffer.from(JSON.stringify(session(candidate, 99))).toString("base64url");
+  const chunks = encoded.match(/.{1,64}/g)!;
+  const fetcher = vi.fn<typeof fetch>(async () => Response.json(user(1)));
+  const verified = await readFoundationRequestCaller(
+    config,
+    {
+      getAll: () =>
+        chunks.map((value, index) => ({
+          name: `sb-abcdefghijklmnopqrst-auth-token.${index}`,
+          value,
+        })),
+    },
+    fetcher
+  );
+  expect(verified.user.id).toBe(id(1));
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("does not refresh an expired token from a read-only page", async () => {
+  const expires = Math.floor(Date.now() / 1000) - 10;
+  const jar = cookieAdapter(session(token(1, { exp: expires }), 1, expires));
+  const fetcher = vi.fn<typeof fetch>();
+  await expect(readFoundationRequestCaller(config, jar, fetcher)).rejects.toMatchObject({
+    status: 401,
+  });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(jar.setAll).not.toHaveBeenCalled();
+});
+
+it("ignores retired-project and pending-verification cookies in page reads", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  await expect(
+    readFoundationRequestCaller(
+      config,
+      {
+        getAll: () => [
+          { name: "sb-tnygdgormnofpgjknlhr-auth-token", value: "source" },
+          { name: "sb-abcdefghijklmnopqrst-auth-token-code-verifier", value: "pending" },
+        ],
+      },
+      fetcher
+    )
+  ).rejects.toMatchObject({ status: 401 });
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each([401, 503])("read-only pages fail closed when GoTrue returns %s", async (status) => {
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json({ message: "Unavailable" }, { status })
+  );
+  await expect(
+    readFoundationRequestCaller(config, cookieAdapter(session(token())), fetcher)
+  ).rejects.toMatchObject({ status });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("does not mistake an unavailable cookie store for a valid or anonymous page session", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  await expect(
+    readFoundationRequestCaller(
+      config,
+      {
+        getAll: () => {
+          throw new Error("Cookie store unavailable");
+        },
+      },
+      fetcher
+    )
+  ).rejects.toMatchObject({ status: 503 });
+  expect(fetcher).not.toHaveBeenCalled();
 });
 
 it("verifies exact caller tokens with real SSR/SDK transport and isolates concurrent requests", async () => {

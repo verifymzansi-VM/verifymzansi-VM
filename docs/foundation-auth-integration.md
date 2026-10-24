@@ -107,6 +107,21 @@ source-browser test explicitly pins that selection; its success cannot establish
 foundation browser or provider readiness. Production requires the approved
 `foundation` build after the remaining integration is accepted.
 
+## Server sessions and authenticator setup
+
+Protected server-rendered pages verify the current cookie token with GoTrue and
+read the same canonical account context. They do not rotate refresh tokens or
+attempt cookie writes; routing owns session refresh. Cookie user metadata cannot
+grant a role. Staff access requires the current native readiness decision and
+the exact assigned capabilities. A legacy role label used by navigation does not
+add permissions.
+
+An ordinary signed-in account can set up its authenticator at
+`/dashboard/security` before an administrator is explicitly appointed. Setting
+up a factor never grants staff status. Native verification starts a fresh
+document so server guards receive the updated session. Real-user enrolment and
+provider/browser acceptance remain separate from synthetic component tests.
+
 ## Phone completion
 
 The foundation account-completion screen uses `POST /api/foundation/phone/send`
