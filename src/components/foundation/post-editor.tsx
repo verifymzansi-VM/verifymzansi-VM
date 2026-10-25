@@ -1,8 +1,8 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { FoundationAccountBoundary } from "@/components/auth/foundation-account-boundary";
 import { z } from "zod";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getFoundationBrowserClient } from "@/lib/foundation/browser-client";
 import {
@@ -58,12 +58,24 @@ async function fetchEditorState(target: string | undefined, kind: Kind) {
   return { catalogue, currentTerms, data, contact };
 }
 export function FoundationPostRoute({ kind, area }: { kind: Kind; area: Area }) {
+  return (
+    <Suspense fallback={<p role="status">Loading your post…</p>}>
+      <SelectedPostRoute kind={kind} area={area} />
+    </Suspense>
+  );
+}
+function SelectedPostRoute({ kind, area }: { kind: Kind; area: Area }) {
   const params = useParams<{ id?: string }>();
+  const query = useSearchParams();
+  const initialKind =
+    !params.id && area === "tourism_events" && query.get("type") === "tourism_business"
+      ? "business"
+      : kind;
   return (
     <FoundationAccountBoundary>
       <FoundationPostEditor
-        key={params.id ?? "new"}
-        initialKind={kind}
+        key={`${initialKind}/${params.id ?? "new"}`}
+        initialKind={initialKind}
         area={area}
         postId={params.id}
       />

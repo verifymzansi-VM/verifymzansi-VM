@@ -1,12 +1,5 @@
 import "server-only";
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  createHmac,
-  randomBytes,
-  randomUUID,
-} from "node:crypto";
+import { createDecipheriv, createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
@@ -22,6 +15,7 @@ import {
 } from "../utils/sa-id-validation";
 import { readStaffIdentityContext } from "./staff-identity";
 import { foundationVerificationStatusSchema } from "./verification-status";
+import { processIdentityNumber } from "../domains/verification/identity-processing";
 
 const encryptedNumber = z.strictObject({
   ciphertext: z.string().regex(/^[a-f0-9]{26}$/),
@@ -141,9 +135,13 @@ export async function submitFoundationIdentity(
   const dob = extractDobFromSaId(idNumber);
   if (!dob || calculateAgeFromDob(dob) < 18)
     throw new FoundationVerificationError(400, "You must be at least 18 years old to register");
-  const hmacKey = secret("HMAC_SECRET");
-  const numberKey = secret("ID_ENCRYPTION_KEY");
-  const fingerprint = createHmac("sha256", hmacKey).update(idNumber).digest("base64url");
+  const identity = processIdentityNumber(owner, idNumber, {
+    identityMatchKey: secret("HMAC_SECRET").toString("hex"),
+    numberEncryptionKey: secret("ID_ENCRYPTION_KEY").toString("hex"),
+    identityKeyId: "identity-match-v1",
+    encryptionKeyId: "identity-number-v1",
+  });
+  const fingerprint = identity.fingerprint;
   const [idBytes, faceBytes] = await Promise.all([
     cleanEvidence(document, false),
     cleanEvidence(selfie, true),
@@ -179,9 +177,6 @@ export async function submitFoundationIdentity(
     );
   const id = await persistEvidence(api, service, owner, current.case_id, "id_front", idBytes);
   const face = await persistEvidence(api, service, owner, current.case_id, "selfie", faceBytes);
-  const iv = randomBytes(12),
-    cipher = createCipheriv("aes-256-gcm", numberKey, iv, { authTagLength: 16 });
-  const sealed = Buffer.concat([cipher.update(idNumber, "utf8"), cipher.final()]);
   const receipt = randomUUID();
   const submitted = await service.rpc("register_identity_submission", {
     p_case: current.case_id,
@@ -190,12 +185,7 @@ export async function submitFoundationIdentity(
     p_selfie_artifact: face.id,
     p_fingerprint: fingerprint,
     p_identity_key: "identity-match-v1",
-    p_encrypted_number: {
-      ciphertext: sealed.toString("hex"),
-      iv: iv.toString("hex"),
-      tag: cipher.getAuthTag().toString("hex"),
-      key_id: "identity-number-v1",
-    },
+    p_encrypted_number: identity.encryptedNumber,
     p_receipt: receipt,
     p_risk_score: risk.risk_score,
   });
@@ -203,6 +193,18 @@ export async function submitFoundationIdentity(
     throw new FoundationVerificationError(
       submitted.error.code === "PT409" ? 409 : 503,
       "The submission could not be confirmed. Refresh your verification status before trying again."
+    );
+  const accepted = z
+    .strictObject({
+      submission_id: z.uuid(),
+      case_version: z.number().int().positive(),
+      reused: z.boolean(),
+    })
+    .parse(submitted.data);
+  if (accepted.case_version !== current.version + 1)
+    throw new FoundationVerificationError(
+      409,
+      "The submission changed. Refresh your verification status before trying again."
     );
   return { submitted: true };
 }
@@ -212,6 +214,7 @@ const reviewRequest = z.strictObject({
   claim_nonce: z.uuid(),
 });
 const objectInfo = z.object({
+  owner_id: z.uuid(),
   artifact_id: z.uuid(),
   object_key: z.string().regex(/^evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}$/),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -265,6 +268,7 @@ export async function readFoundationReviewContext(
     Buffer.from(number.iv, "hex"),
     { authTagLength: 16 }
   );
+  decipher.setAAD(Buffer.from(`${artifact.owner_id}:id_doc`, "utf8"));
   decipher.setAuthTag(Buffer.from(number.tag, "hex"));
   const claimedNumber = Buffer.concat([
     decipher.update(Buffer.from(number.ciphertext, "hex")),

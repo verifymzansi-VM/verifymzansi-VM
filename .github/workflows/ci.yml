@@ -302,7 +302,9 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - run: pnpm exec playwright test --grep "@smoke" --project ${{ matrix.project }}
+      - run: pnpm exec playwright test --grep "@smoke" --project "$BROWSER_PROJECT"
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
 
   launch-flows-bundle:
     runs-on: ubuntu-latest

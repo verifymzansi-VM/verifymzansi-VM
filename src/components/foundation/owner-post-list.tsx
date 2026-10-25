@@ -12,6 +12,8 @@ import {
   type FoundationOwnerPost,
 } from "@/lib/foundation/owner-posts";
 import { FoundationOwnerPostActions } from "./owner-post-actions";
+import { readFoundationBillingCatalogue } from "@/lib/foundation/billing-catalogue";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 
 export async function FoundationOwnerPostList({ offset = 0 }: { offset?: number }) {
   let current;
@@ -21,7 +23,10 @@ export async function FoundationOwnerPostList({ offset = 0 }: { offset?: number 
     if (error instanceof FoundationServerSessionError && error.status === 401) redirect("/login");
     throw error;
   }
-  const page = await listFoundationOwnerPosts(current.api, 48, offset);
+  const [page, catalogue] = await Promise.all([
+    listFoundationOwnerPosts(current.api, 48, offset),
+    readFoundationBillingCatalogue(foundationServerPublicApi()),
+  ]);
   return (
     <FoundationAccountBoundary accountId={current.account.account_id}>
       <div className="space-y-7">
@@ -34,7 +39,7 @@ export async function FoundationOwnerPostList({ offset = 0 }: { offset?: number 
           </div>
           <Link
             className="rounded-full bg-primary px-5 py-3 font-semibold text-primary-foreground"
-            href="/post"
+            href="/post/create"
           >
             Create a post
           </Link>
@@ -71,7 +76,11 @@ export async function FoundationOwnerPostList({ offset = 0 }: { offset?: number 
                     View
                   </Link>
                 )}
-                <FoundationOwnerPostActions post={post} />
+                <FoundationOwnerPostActions
+                  post={post}
+                  addons={catalogue.addons}
+                  accountId={current.account.account_id}
+                />
               </div>
             </article>
           ))}

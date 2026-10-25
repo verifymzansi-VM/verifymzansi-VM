@@ -7,6 +7,7 @@ import { readStaffIdentityContext } from "./staff-identity";
 import { getR2ObjectBytes } from "../services/storage";
 import { decryptData } from "../utils/encryption";
 import { readFoundationEvidenceBytes, readFoundationReviewContext } from "./verification-runtime";
+import { processIdentityNumber } from "../domains/verification/identity-processing";
 vi.mock("server-only", () => ({}));
 vi.mock("./staff-identity", () => ({ readStaffIdentityContext: vi.fn() }));
 vi.mock("../services/storage", () => ({ uploadToR2: vi.fn(), getR2ObjectBytes: vi.fn() }));
@@ -36,8 +37,10 @@ beforeEach(() => {
     iv = randomBytes(12);
   vi.stubEnv("ID_ENCRYPTION_KEY", key.toString("hex"));
   const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(Buffer.from(`${id("9")}:id_doc`, "utf8"));
   const ciphertext = Buffer.concat([cipher.update("0000000000000"), cipher.final()]);
   artifact = {
+    owner_id: id("9"),
     artifact_id: context.id_artifact_id,
     object_key: `evidence/${input.case_id}/${context.id_artifact_id}`,
     sha256: createHash("sha256").update(stored).digest("hex"),
@@ -67,6 +70,17 @@ it("returns number and submitted names only through current claims and repeated 
   expect(rpc).toHaveBeenCalledTimes(2);
   expect(rpc.mock.calls.every(([name]) => name === "staff_evidence_metadata")).toBe(true);
 });
+it("reads the canonical owner-bound identity packet used by the existing native processing primitive", async () => {
+  artifact.encrypted_number = processIdentityNumber(id("9"), "8001015009087", {
+    identityMatchKey: randomBytes(32).toString("hex"),
+    numberEncryptionKey: process.env.ID_ENCRYPTION_KEY!,
+    identityKeyId: "identity-match-v1",
+    encryptionKeyId: "identity-number-v1",
+  }).encryptedNumber;
+  expect((await readFoundationReviewContext(api, service, input)).claimed_number).toBe(
+    "8001015009087"
+  );
+});
 it("refuses number access before machine lookup if audited staff authority is revoked", async () => {
   rpc.mockResolvedValueOnce({ data: null, error: { code: "42501" } });
   await expect(readFoundationReviewContext(api, service, input)).rejects.toMatchObject({
@@ -77,6 +91,10 @@ it("refuses number access before machine lookup if audited staff authority is re
 it("rejects a shortened GCM authentication tag before returning a number", async () => {
   const number = artifact.encrypted_number as { tag: string };
   number.tag = number.tag.slice(0, 8);
+  await expect(readFoundationReviewContext(api, service, input)).rejects.toThrow();
+});
+it("refuses an encrypted identity packet transplanted to another owner", async () => {
+  artifact.owner_id = id("10");
   await expect(readFoundationReviewContext(api, service, input)).rejects.toThrow();
 });
 it("does not return a number after its submission version changes during the read", async () => {

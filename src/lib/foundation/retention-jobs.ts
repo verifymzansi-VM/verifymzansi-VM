@@ -40,7 +40,7 @@ export async function runFoundationRetention(
   const publicRows = mediaClaims.parse(media.data),
     privateRows = evidenceClaims.parse(evidence.data);
   const result = { claimed: publicRows.length + privateRows.length, deleted: 0, retrying: 0 };
-  await Promise.all([
+  const completed = await Promise.allSettled([
     ...publicRows.map(async (row) => {
       if (Date.parse(row.lease_until) <= Date.now()) {
         result.retrying++;
@@ -82,5 +82,6 @@ export async function runFoundationRetention(
       }
     }),
   ]);
+  result.retrying += completed.filter((item) => item.status === "rejected").length;
   return result;
 }

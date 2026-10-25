@@ -6,6 +6,7 @@ import type { FoundationBilling } from "@/lib/foundation/billing-runtime";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRouter } from "next/navigation";
+import { navigateToFoundationCheckout } from "@/lib/foundation/checkout-navigation";
 async function fetchBilling(accountId?: string): Promise<FoundationBilling | null> {
   if (!accountId) return null;
   const response = await fetch("/api/foundation/billing", { cache: "no-store", redirect: "error" });
@@ -89,16 +90,7 @@ function FoundationBillingAccount({
     setMessage("");
     try {
       const data = await command("/api/billing/create-checkout", { planId });
-      const destination = new URL(data.checkoutUrl);
-      if (
-        destination.protocol !== "https:" ||
-        destination.username ||
-        destination.password ||
-        destination.port ||
-        !(destination.hostname === "ozow.com" || destination.hostname.endsWith(".ozow.com"))
-      )
-        throw new Error("The payment destination could not be verified");
-      window.location.assign(destination.href);
+      navigateToFoundationCheckout(data, accountId!);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Checkout could not be started");
       setBusy(false);

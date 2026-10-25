@@ -150,7 +150,7 @@ export async function FoundationMarketplace({
                     alt={post.title}
                     width={640}
                     height={480}
-                    className="aspect-[4/3] w-full object-cover"
+                    className="aspect-[4/3] w-full bg-muted object-contain"
                   />
                 ) : (
                   <div className="flex aspect-[4/3] items-center justify-center bg-muted px-5 text-center text-muted-foreground">
@@ -250,7 +250,7 @@ export async function FoundationPublicDetail({ id, area }: { id: string; area?: 
                     alt={post.title}
                     width={item.width ?? 1000}
                     height={item.height ?? 750}
-                    className="h-auto w-full rounded-xl object-cover"
+                    className="h-auto w-full rounded-xl object-contain"
                   />
                 ))
               );

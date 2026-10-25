@@ -18,6 +18,8 @@ import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { createLogger, type AppLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 
 type AllowedResult = {
   allowed: boolean;
@@ -143,6 +145,24 @@ export function createAddonCheckoutRouteCore<
   PaymentType extends string,
 >(config: CoreConfig<Params, Entity, PaymentType>) {
   return async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
+    if (getDataBackend() === "foundation") {
+      const parsed = parseAndValidateRouteParams(await params, config.paramsSchema, {
+        validationErrorMessage: config.validationErrorMessage,
+        includeValidationDetails: false,
+      });
+      if (!parsed.success) return parsed.response;
+      const kind =
+        config.activeUntilField === "featured_until"
+          ? "featured"
+          : config.activeUntilField === "boost_until"
+            ? "boost"
+            : "urgent";
+      return handleFoundationBillingRoute(request, "checkout", {
+        postId: config.getEntityId(parsed.data),
+        kind,
+        days: config.durationDays,
+      });
+    }
     const supabase = await createClient();
     const admin = createAdminClient();
     const log = createLogger(config.loggerName);

@@ -182,7 +182,7 @@ export async function handleFoundationBillingRoute(
       postId,
       process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com"
     );
-    return context.respond(NextResponse.json(result));
+    return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
   } catch (error) {
     const status =
       error instanceof FoundationBillingError || error instanceof FoundationSessionError

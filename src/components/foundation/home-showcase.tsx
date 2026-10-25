@@ -35,7 +35,7 @@ export async function FoundationHomeShowcase({
                     alt={post.title}
                     width={640}
                     height={480}
-                    className="aspect-[4/3] w-full object-cover"
+                    className="aspect-[4/3] w-full bg-muted object-contain"
                   />
                 )}
                 <div className="space-y-1 p-4">
@@ -92,7 +92,7 @@ export async function FoundationProgrammeShowcase({
                   alt={card.title ?? "Business"}
                   width={640}
                   height={480}
-                  className="aspect-[4/3] w-full object-cover"
+                  className="aspect-[4/3] w-full bg-muted object-contain"
                 />
                 <h3 className="p-4 font-semibold">{card.title ?? "Business profile"}</h3>
               </Link>

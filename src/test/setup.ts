@@ -16,6 +16,10 @@ for (const key of [
   "FOUNDATION_PASSWORD_AUTH_MODE",
   "FOUNDATION_REGISTRATION_ENABLED",
   "FOUNDATION_AUTH_CALLBACK_ENABLED",
+  "FOUNDATION_RECOVERY_ENABLED",
+  "INTERNAL_JOBS_SECRET",
+  "OPS_JOBS_SECRET",
+  "KYC_WEBHOOK_SECRET",
   "OTP_RATE_LIMITER_URL",
   "RATE_LIMITER_API_KEY",
   "RESEND_API_KEY",
@@ -60,6 +64,13 @@ vi.mock("next/font/google", () => {
     }
   );
 });
+vi.mock("next/font/local", () => ({
+  default: () => ({
+    className: "mocked-font",
+    variable: "mocked-font-variable",
+    style: { fontFamily: "mocked-font" },
+  }),
+}));
 
 // Polyfill IntersectionObserver for jsdom (not available in jsdom by default)
 if (typeof globalThis.IntersectionObserver === "undefined") {

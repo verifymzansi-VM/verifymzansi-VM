@@ -11,6 +11,9 @@ it("removes live foundation service authority before application imports", () =>
     "FOUNDATION_PHONE_OTP_KEY",
     "SUPABASE_ACCESS_TOKEN",
     "CLOUDFLARE_API_TOKEN",
+    "INTERNAL_JOBS_SECRET",
+    "OPS_JOBS_SECRET",
+    "KYC_WEBHOOK_SECRET",
   ])
     // Test presence only so an isolation failure cannot print a live secret.
     expect(name in process.env, `${name} must be absent from unit tests`).toBe(false);
