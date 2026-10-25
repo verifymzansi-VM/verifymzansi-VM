@@ -42,3 +42,22 @@ export function inspectSecretBindings(bindings, required, forbidden) {
     forbidden: forbidden.filter((name) => names.has(name)),
   };
 }
+
+/** Compare public configuration only. Return names, never supplied values/keys.
+ * Secret bindings are write-only; their presence cannot prove value equality. */
+export function inspectPublicBindings(bindings, expected) {
+  if (!Array.isArray(bindings)) throw new Error("Missing deployed version bindings");
+  const invalid = [];
+  for (const [name, value] of Object.entries(expected)) {
+    const matches = bindings.filter((binding) => binding.name === name);
+    if (
+      typeof value !== "string" ||
+      !value ||
+      matches.length !== 1 ||
+      matches[0].type !== "plain_text" ||
+      matches[0].text !== value
+    )
+      invalid.push(name);
+  }
+  return invalid;
+}

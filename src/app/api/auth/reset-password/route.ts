@@ -13,6 +13,7 @@ import {
   verifyRecoveryProof,
 } from "@/lib/auth/password-recovery";
 import { checkPasswordBreach, PWNED_PASSWORD_ERROR } from "@/lib/security/pwned-passwords";
+import { getDataBackend } from "@/lib/data-backend";
 
 const log = createLogger("ResetPassword");
 
@@ -53,6 +54,11 @@ async function hasValidRecoverySession(
  * Returns { valid: true } if the user has an active recovery session.
  */
 export async function GET(_request: NextRequest) {
+  if (getDataBackend() === "foundation") {
+    const { handleFoundationRecoveryCompletion } =
+      await import("@/app/api/foundation/auth/_lib/recovery-complete");
+    return handleFoundationRecoveryCompletion(_request, false);
+  }
   try {
     const supabase = await createClient();
     const {
@@ -86,6 +92,11 @@ export async function GET(_request: NextRequest) {
  * This route validates the session server-side and updates the password.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") {
+    const { handleFoundationRecoveryCompletion } =
+      await import("@/app/api/foundation/auth/_lib/recovery-complete");
+    return handleFoundationRecoveryCompletion(request, true);
+  }
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

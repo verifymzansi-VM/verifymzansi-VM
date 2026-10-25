@@ -22,6 +22,8 @@ export default defineConfig({
     // Unit tests must never inherit the workstation's production database.
     // Tests of production detection explicitly stub their target/settings.
     env: {
+      // Source suites use synthetic fixtures; foundation suites opt in explicitly.
+      NEXT_PUBLIC_DATA_BACKEND: "source",
       NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-public-anon",
       ENVIRONMENT: "test",

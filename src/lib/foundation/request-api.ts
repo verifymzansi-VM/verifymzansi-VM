@@ -13,7 +13,10 @@ import { createFoundationAuthenticatedApi } from "./authenticated-api";
 import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { foundationRpcClientOptions } from "./public-api";
-import { createFoundationPasswordUpdater } from "./password-update";
+import {
+  createFoundationPasswordUpdater,
+  createFoundationPasswordResetter,
+} from "./password-update";
 import { foundationRecoveryClaim } from "./recovery-claims";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
@@ -103,6 +106,15 @@ export async function createFoundationRequestCaller(
     return {
       ...verified,
       updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher),
+      resetPassword: verified.recovery
+        ? createFoundationPasswordResetter(
+            config,
+            token,
+            verified.accountId,
+            verified.recovery.issuedAt,
+            fetcher
+          )
+        : null,
     };
   } catch (error) {
     if (error instanceof FoundationSessionError) throw error;

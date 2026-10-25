@@ -4,6 +4,8 @@ import {
 } from "@/lib/config/launch-validation";
 import { checkCriticalEnvVars } from "@/lib/config/env";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { verifyFoundationGateway } from "@/lib/foundation/gateway-readiness";
 
 const logger = createLogger("Health");
 const AUDIT_FAILURE_DEGRADE_THRESHOLD = 5;
@@ -65,6 +67,17 @@ function readinessFromEnv(names: readonly string[], detail: string): HealthCheck
 function probeCriticalEnvVars(): HealthCheckStatus {
   try {
     const missing = checkCriticalEnvVars();
+    if (getDataBackend() === "foundation") {
+      missing.push(
+        ...missingEnvCheck([
+          "FOUNDATION_SUPABASE_URL",
+          "FOUNDATION_PROJECT_REF",
+          "FOUNDATION_SUPABASE_PUBLISHABLE_KEY",
+          "FOUNDATION_SUPABASE_SECRET_KEY",
+          "FOUNDATION_PHONE_OTP_KEY",
+        ])
+      );
+    }
     if (missing.length > 0) {
       return {
         status: "degraded",
@@ -438,9 +451,24 @@ async function probeSchema(
 export async function getLaunchHealthSnapshot(): Promise<LaunchHealthSnapshot> {
   const mode = resolveLaunchValidationMode(process.env);
   const configSummary = validateLaunchConfiguration(process.env, { mode });
-  const [supabase, schema, r2, audit, rateLimiter] = await Promise.all([
-    probeSupabase(mode),
-    probeSchema(mode),
+  const database = async (): Promise<[HealthCheckStatus, HealthCheckStatus]> => {
+    if (mode !== "production" || getDataBackend() !== "foundation")
+      return Promise.all([probeSupabase(mode), probeSchema(mode)]);
+    try {
+      await verifyFoundationGateway(process.env);
+      return [
+        { status: "ok", detail: "Foundation public read and service credential verified" },
+        { status: "ok", detail: "Foundation function-only API and schema isolation verified" },
+      ];
+    } catch {
+      return [
+        { status: "degraded", detail: "Foundation gateway or credential check failed" },
+        { status: "degraded", detail: "Foundation API readiness could not be verified" },
+      ];
+    }
+  };
+  const [[supabase, schema], r2, audit, rateLimiter] = await Promise.all([
+    database(),
     probeR2(mode),
     getAuditHealth(),
     probeRateLimiter(mode),

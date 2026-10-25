@@ -110,7 +110,7 @@ describe("Health route", () => {
     const { GET } = await import("@/app/api/health/route");
     const response = await GET(deepRequest({ Authorization: `Bearer ${DIAGNOSTIC_TOKEN}` }));
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
       status: "degraded",
       readiness: "degraded",
@@ -150,7 +150,7 @@ describe("Health route", () => {
       const { GET } = await import("@/app/api/health/route");
       const response = await GET(deepRequest());
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
       await expect(response.json()).resolves.toEqual(summaryOnly("degraded"));
       expect(getLaunchHealthSnapshot).toHaveBeenCalledTimes(1);
     });
@@ -164,7 +164,7 @@ describe("Health route", () => {
       const { GET } = await import("@/app/api/health/route");
       const response = await GET(deepRequest({ Authorization: "Bearer wrong-token-value-xxxxxx" }));
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
       await expect(response.json()).resolves.toEqual(summaryOnly("degraded"));
     });
 

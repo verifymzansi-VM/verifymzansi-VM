@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuditFailureCount } from "@/lib/services/audit";
 import { getLaunchHealthSnapshot } from "./launch-health";
+import { verifyFoundationGateway } from "@/lib/foundation/gateway-readiness";
+
+vi.mock("@/lib/foundation/gateway-readiness", () => ({ verifyFoundationGateway: vi.fn() }));
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(),
@@ -52,6 +55,7 @@ describe("getLaunchHealthSnapshot", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     stubLaunchEnv(VALID_PRODUCTION_ENV);
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
     // Default: the rate limiter worker accepts the shared secret.
     vi.stubGlobal(
       "fetch",
@@ -62,6 +66,28 @@ describe("getLaunchHealthSnapshot", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  it("uses foundation gateway readiness without querying legacy tables", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    vi.mocked(verifyFoundationGateway).mockResolvedValue({ serviceOpenapi: {} });
+    const snapshot = await getLaunchHealthSnapshot();
+    expect(verifyFoundationGateway).toHaveBeenCalledOnce();
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(snapshot.checks.supabase.status).toBe("ok");
+    expect(snapshot.checks.schema.status).toBe("ok");
+    expect(snapshot.checks.criticalEnv.status).toBe("degraded");
+    expect(snapshot.checks.criticalEnv.failedChecks).toContain("FOUNDATION_PHONE_OTP_KEY");
+  });
+
+  it("fails foundation readiness without falling back to legacy access", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    vi.mocked(verifyFoundationGateway).mockRejectedValue(new Error("private-provider-detail"));
+    const snapshot = await getLaunchHealthSnapshot();
+    expect(createAdminClient).not.toHaveBeenCalled();
+    expect(snapshot.checks.supabase.status).toBe("degraded");
+    expect(snapshot.checks.schema.status).toBe("degraded");
+    expect(JSON.stringify(snapshot)).not.toContain("private-provider-detail");
   });
 
   it("returns degraded when schema probes are unavailable in the test harness", async () => {

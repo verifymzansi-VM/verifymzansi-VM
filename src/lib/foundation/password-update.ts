@@ -16,14 +16,9 @@ export class FoundationPasswordUpdateError extends Error {
  * caller for the PUT: no second sign-in, refresh, cookie-user claim or submitted
  * account selector can substitute another account or downgrade its MFA session.
  */
-export function createFoundationPasswordUpdater(
-  input: unknown,
-  token: string,
-  subject: string,
-  fetcher: typeof fetch
-) {
+function passwordCommand(input: unknown, token: string, subject: string, fetcher: typeof fetch) {
   const connection = parseFoundationConnection(input);
-  return async (currentPassword: string, newPassword: string): Promise<void> => {
+  return async (currentPassword: string | undefined, newPassword: string): Promise<void> => {
     let response: Response;
     try {
       response = await fetcher(`${connection.url}/auth/v1/user`, {
@@ -37,7 +32,10 @@ export function createFoundationPasswordUpdater(
           "Content-Type": "application/json",
           "X-Supabase-Api-Version": "2024-01-01",
         },
-        body: JSON.stringify({ password: newPassword, current_password: currentPassword }),
+        body: JSON.stringify({
+          password: newPassword,
+          ...(currentPassword === undefined ? {} : { current_password: currentPassword }),
+        }),
       });
     } catch {
       throw new FoundationPasswordUpdateError(503, "unavailable");
@@ -61,5 +59,48 @@ export function createFoundationPasswordUpdater(
     const user = body && typeof body === "object" && "user" in body ? body.user : body;
     if (!user || typeof user !== "object" || !("id" in user) || user.id !== subject)
       throw new FoundationPasswordUpdateError(503, "unavailable");
+  };
+}
+
+export function createFoundationPasswordUpdater(
+  input: unknown,
+  token: string,
+  subject: string,
+  fetcher: typeof fetch
+) {
+  const update = passwordCommand(input, token, subject, fetcher);
+  return (currentPassword: string, newPassword: string) => update(currentPassword, newPassword);
+}
+
+/** Issued only for a GoTrue-verified signed recovery method. Logout failure is
+ * reported separately after a committed update; callers must not repeat the PUT.
+ */
+export function createFoundationPasswordResetter(
+  input: unknown,
+  token: string,
+  subject: string,
+  issuedAt: number,
+  fetcher: typeof fetch
+) {
+  const connection = parseFoundationConnection(input);
+  const update = passwordCommand(connection, token, subject, fetcher);
+  return async (password: string) => {
+    const now = Math.floor(Date.now() / 1000);
+    if (!Number.isSafeInteger(issuedAt) || issuedAt > now + 30 || now - issuedAt > 3600)
+      throw new FoundationPasswordUpdateError(401, "reauthentication");
+    await update(undefined, password);
+    try {
+      const response = await fetcher(`${connection.url}/auth/v1/logout?scope=global`, {
+        method: "POST",
+        headers: { apikey: connection.publishableKey, Authorization: `Bearer ${token}` },
+        credentials: "omit",
+        cache: "no-store",
+        redirect: "error",
+      });
+      await response.body?.cancel();
+      return { signOutComplete: response.ok };
+    } catch {
+      return { signOutComplete: false };
+    }
   };
 }

@@ -1,6 +1,9 @@
 /** @vitest-environment node */
 import { expect, it, vi } from "vitest";
-import { createFoundationPasswordUpdater } from "./password-update";
+import {
+  createFoundationPasswordUpdater,
+  createFoundationPasswordResetter,
+} from "./password-update";
 import { foundationPasswordUpdateSchema } from "./password-update-input";
 vi.mock("server-only", () => ({}));
 const config = {
@@ -9,6 +12,58 @@ const config = {
   publishableKey: "sb_publishable_synthetic",
 };
 const id = "00000000-0000-4000-8000-000000000001";
+
+it("recovery omits the old password and revokes sessions only after one verified update", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ id }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  const result = await createFoundationPasswordResetter(
+    config,
+    "verified-recovery-token",
+    id,
+    Math.floor(Date.now() / 1000),
+    fetcher
+  )("synthetic-next-password");
+  expect(result).toEqual({ signOutComplete: true });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toEqual({
+    password: "synthetic-next-password",
+  });
+  expect(String(fetcher.mock.calls[1][0])).toBe(config.url + "/auth/v1/logout?scope=global");
+  expect(new Headers(fetcher.mock.calls[1][1]?.headers).get("authorization")).toBe(
+    "Bearer verified-recovery-token"
+  );
+});
+it("expired recovery cannot send a password update", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  await expect(
+    createFoundationPasswordResetter(
+      config,
+      "token",
+      id,
+      Math.floor(Date.now() / 1000) - 3601,
+      fetcher
+    )("synthetic-next-password")
+  ).rejects.toMatchObject({ status: 401 });
+  expect(fetcher).not.toHaveBeenCalled();
+});
+it("keeps a committed reset distinct from an unavailable sign-out", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ id }))
+    .mockRejectedValueOnce(new Error("network unavailable"));
+  await expect(
+    createFoundationPasswordResetter(
+      config,
+      "token",
+      id,
+      Math.floor(Date.now() / 1000),
+      fetcher
+    )("synthetic-next-password")
+  ).resolves.toEqual({ signOutComplete: false });
+  expect(fetcher.mock.calls.filter((call) => call[1]?.method === "PUT")).toHaveLength(1);
+});
 it("sends only current/new passwords to the fixed target and verified caller token once", async () => {
   const fetcher = vi.fn<typeof fetch>(async () => Response.json({ id }));
   await createFoundationPasswordUpdater(

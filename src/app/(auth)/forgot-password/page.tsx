@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, KeyRound, Loader2, MailCheck } from "lucide-react";
 import { useCallback, useState, useEffect, useRef } from "react";
@@ -20,8 +20,12 @@ import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/validation
 import { useToast } from "@/hooks/use-toast";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationCaptchaToken } from "@/lib/foundation/auth-input";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 
 export default function ForgotPasswordPage() {
+  const native = getDataBackend() === "foundation";
   const [sent, setSent] = useState(false);
   const [sentTo, setSentTo] = useState("");
   const [turnstileError, setTurnstileError] = useState(false);
@@ -41,6 +45,7 @@ export default function ForgotPasswordPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
     setValue,
+    control,
   } = useForm<ForgotPasswordInput>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
@@ -49,6 +54,7 @@ export default function ForgotPasswordPage() {
     },
   });
 
+  const captcha = useWatch({ control, name: "turnstileToken" });
   // Turnstile widget load timeout
   const turnstileState = getTurnstileClientState();
   const captchaUnavailable = Boolean(turnstileUnavailableMessage);
@@ -117,6 +123,7 @@ export default function ForgotPasswordPage() {
   }, []);
 
   async function onSubmit(data: ForgotPasswordInput) {
+    if (native && !foundationCaptchaToken.safeParse(data.turnstileToken).success) return;
     try {
       const csrfToken = await ensureCsrfTokenReady();
       if (!csrfToken) {
@@ -128,11 +135,21 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      const response = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(data),
-      });
+      const response = await (native ? createTimeoutFetch(20000) : fetch)(
+        native ? "/api/foundation/auth/recovery/request" : "/api/auth/forgot-password",
+        {
+          method: "POST",
+          ...(native
+            ? {
+                credentials: "same-origin" as const,
+                cache: "no-store" as const,
+                redirect: "error" as const,
+              }
+            : {}),
+          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(data),
+        }
+      );
 
       const result = await response.json().catch(() => ({}));
 
@@ -246,7 +263,12 @@ export default function ForgotPasswordPage() {
           size="lg"
           className="h-11 w-full text-[15px]"
           variant="trust-verified"
-          disabled={!isInteractive || isSubmitting || captchaUnavailable}
+          disabled={
+            !isInteractive ||
+            isSubmitting ||
+            captchaUnavailable ||
+            (native && !foundationCaptchaToken.safeParse(captcha).success)
+          }
           aria-busy={isSubmitting || undefined}
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

@@ -2,9 +2,40 @@ import { describe, expect, it } from "vitest";
 import {
   activeVersionIds,
   inspectSecretBindings,
+  inspectPublicBindings,
 } from "../../scripts/lib/cloudflare-deployment-bindings.mjs";
 
 describe("deployed Worker security gate", () => {
+  it("detects stale project/key pairs, missing selectors, wrong types and duplicate bindings without returning values", () => {
+    const expected = {
+      URL: "https://new.supabase.co",
+      KEY: "synthetic-public-key",
+      BACKEND: "foundation",
+    };
+    expect(
+      inspectPublicBindings(
+        [
+          { name: "URL", type: "plain_text", text: "https://old.supabase.co" },
+          { name: "KEY", type: "plain_text", text: "private-marker" },
+        ],
+        expected
+      )
+    ).toEqual(["URL", "KEY", "BACKEND"]);
+    const bindings = Object.entries(expected).map(([name, text]) => ({
+      name,
+      text,
+      type: "plain_text",
+    }));
+    expect(inspectPublicBindings(bindings, expected)).toEqual([]);
+    expect(inspectPublicBindings([...bindings, bindings[0]], expected)).toEqual(["URL"]);
+    expect(
+      inspectPublicBindings(
+        bindings.map((binding) => ({ ...binding, type: "secret_text" })),
+        expected
+      )
+    ).toEqual(["URL", "KEY", "BACKEND"]);
+    expect(() => inspectPublicBindings(undefined, expected)).toThrow("Missing");
+  });
   it("checks every traffic-serving version in the latest deployment", () => {
     expect(
       activeVersionIds([

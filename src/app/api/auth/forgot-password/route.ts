@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { forgotPasswordSchema } from "@/lib/validations/auth";
+import { getDataBackend } from "@/lib/data-backend";
 import { createClient } from "@/lib/supabase/server";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
@@ -17,6 +18,11 @@ const log = createLogger("ForgotPassword");
 const forgotPasswordRequestSchema = forgotPasswordSchema.partial({ turnstileToken: true });
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") {
+    const { POST: requestRecovery } =
+      await import("@/app/api/foundation/auth/recovery/request/route");
+    return requestRecovery(request);
+  }
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

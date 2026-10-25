@@ -73,12 +73,15 @@ test("an intact but unreleased foundation assembly remains blocked", () => {
   );
 });
 test("deployment and runtime configuration never select the deleted database", () => {
+  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+  assert.ok(pkg.scripts.deploy.startsWith("pnpm preflight:foundation &&"));
   const config = readFileSync("wrangler.toml", "utf8");
   assert.equal(config.includes("tnygdgormnofpgjknlhr"), false);
   const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
   assert.ok(workflow.includes("NEXT_PUBLIC_DATA_BACKEND: foundation"));
   assert.ok(workflow.includes("secrets.FOUNDATION_SUPABASE_SECRET_KEY"));
   assert.ok(workflow.includes("pnpm run preflight:foundation"));
+  assert.ok(workflow.includes("pnpm run backend:verify:live"));
   assert.equal(workflow.includes("run: pnpm run db:verify-schema"), false);
   assert.equal(workflow.includes("run: pnpm run preflight:prod"), false);
 });

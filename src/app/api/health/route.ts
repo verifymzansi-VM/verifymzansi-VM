@@ -134,7 +134,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       publicHealthPayload(status, hasDiagnosticAccess(request) ? snapshot : undefined),
       {
-        status: 200,
+        status: status === "ok" ? 200 : 503,
         headers: healthHeaders(),
       }
     );

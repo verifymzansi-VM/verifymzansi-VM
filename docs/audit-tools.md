@@ -123,6 +123,23 @@ about a genuine signed Ozow delivery. No audit performs a payment, production
 migration, customer document submission, deployment or remote configuration
 change.
 
+`pnpm backend:verify:live` compares the approved foundation connection with both
+production Wrangler variable sets and every traffic-serving
+app/payment/retention Worker version. It also verifies a public terms read, the
+service-role API contract, hidden schemas, live deep readiness and the project
+referenced in the served HTML. It writes a redacted report to
+`tmp/backend-alignment/latest.json` and exits nonzero for mismatches or
+unavailable checks. Cloudflare secret values are never readable: binding
+names/types do not prove their equality. This check does not attest
+authenticated workflows, lazy-loaded browser bundles, cleanup adapter
+compatibility or provider delivery. Run it after a cutover as well as when
+diagnosing migration drift; the deploy workflow includes it in the post-deploy
+readiness step.
+
+The alignment check also sends a read-only rate-limit probe with the local
+`RATE_LIMITER_API_KEY`. A refusal identifies a local/deployed pairing problem;
+it cannot establish the value stored on the remote app Worker.
+
 The Cloudflare build calls `sanitize:cloudflare-env` after OpenNext generation
 and before strict scanning. OpenNext reads `.env*` files into its generated
 fallback module; the sanitizer retains only public settings and removes private
