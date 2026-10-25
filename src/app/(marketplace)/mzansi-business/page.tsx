@@ -45,7 +45,7 @@ export const metadata: Metadata = {
 /** Revalidate every 60 seconds (ISR) */
 export const revalidate = 60;
 
-export default async function MzansiBusinessPage(props?: {
+export default async function MzansiBusinessPage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (getDataBackend() === "foundation")

@@ -5,7 +5,7 @@ import { readFoundationServerSession } from "./server-session";
 
 const count = z.number().int().nonnegative();
 const instant = z.iso.datetime({ offset: true });
-export const foundationStaffDashboardSchema = z
+const foundationStaffDashboardSchema = z
   .strictObject({
     version: z.literal(1),
     role: z.enum(["moderator", "governor", "admin"]),

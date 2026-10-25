@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 
 export const revalidate = 60;
 
-export default async function PromotionsPage(props?: {
+export default async function PromotionsPage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (getDataBackend() === "foundation")

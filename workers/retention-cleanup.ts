@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "./timing-safe-equal";
+import { runAuthorizedWorkerTrigger } from "./manual-trigger";
 
 /**
  * Cloudflare Worker — Data Retention R2 Cleanup
@@ -23,6 +23,7 @@ import { timingSafeEqual } from "./timing-safe-equal";
 import { supabaseServiceHeaders } from "./supabase-headers";
 import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
 import { withVariantKeys } from "../src/lib/media/variant-keys";
+import type { ScheduledWorker } from "./handler-types";
 
 interface R2Bucket {
   delete(key: string | string[]): Promise<void>;
@@ -35,18 +36,6 @@ interface R2Object {
 }
 interface R2ObjectBody extends R2Object {
   body: ReadableStream;
-}
-interface ScheduledEvent {
-  cron: string;
-  scheduledTime: number;
-}
-interface ExecutionContext {
-  waitUntil(promise: Promise<unknown>): void;
-  passThroughOnException(): void;
-}
-interface ExportedHandler<E = Record<string, unknown>> {
-  fetch?(request: Request, env: E, ctx: ExecutionContext): Promise<Response>;
-  scheduled?(event: ScheduledEvent, env: E, ctx: ExecutionContext): Promise<void>;
 }
 
 interface Env {
@@ -434,12 +423,12 @@ async function expireElapsedPosts(
   return { listings, businesses, promotions };
 }
 
-const worker: ExportedHandler<Env | FoundationJobEnv> = {
+const worker: ScheduledWorker<Env | FoundationJobEnv> = {
   /**
    * Cron trigger: runs daily at 03:00 UTC
    * Processes all unprocessed records in r2_cleanup_queue.
    */
-  async scheduled(_event: ScheduledEvent, env: Env | FoundationJobEnv, _ctx: ExecutionContext) {
+  async scheduled(_event, env, _ctx) {
     if (env.DATA_BACKEND === "foundation") {
       await triggerFoundationJob(env, "/api/internal/retention/run");
       return;
@@ -712,33 +701,18 @@ const worker: ExportedHandler<Env | FoundationJobEnv> = {
   /**
    * HTTP handler — health check / manual trigger
    */
-  async fetch(
-    request: Request,
-    env: Env | FoundationJobEnv,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env | FoundationJobEnv, ctx): Promise<Response> {
     if (request.method === "POST") {
-      // Authenticate manual trigger via shared secret (constant-time comparison)
-      const authHeader = request.headers.get("Authorization");
-      const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
-      if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      await this.scheduled!({} as ScheduledEvent, env, ctx);
-      return new Response(JSON.stringify({ triggered: true }), {
-        headers: { "Content-Type": "application/json" },
-      });
+      return runAuthorizedWorkerTrigger(request, env.WORKER_API_KEY, () =>
+        this.scheduled!({ cron: "manual", scheduledTime: Date.now() }, env, ctx)
+      );
     }
 
     return new Response(
       JSON.stringify({
         worker: "verifymzansi-retention-cleanup",
         status: "healthy",
-        schedule: "0 3 * * *",
+        schedule: env.DATA_BACKEND === "foundation" ? "0 * * * *" : "0 3 * * *",
       }),
       { headers: { "Content-Type": "application/json" } }
     );

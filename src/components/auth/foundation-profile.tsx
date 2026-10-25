@@ -49,6 +49,7 @@ function FoundationProfileAccount({ currentId }: { currentId?: string }) {
         }
         if (value.account_id !== currentId || useAuthStore.getState().user?.id !== currentId)
           return;
+        useAuthStore.getState().applyFoundationContext(value);
         setAccount(value);
         setDisplayName(value.profile.display_name ?? "");
         setBio(value.profile.bio ?? "");
@@ -88,6 +89,9 @@ function FoundationProfileAccount({ currentId }: { currentId?: string }) {
     }
     const profile = foundationAccountProfileSchema.parse(value);
     setAccount((old) => (old ? { ...old, profile } : null));
+    const current = useAuthStore.getState().foundationContext;
+    if (current && current.account_id === account?.account_id)
+      useAuthStore.getState().applyFoundationContext({ ...current, profile });
   }
   async function save(event: FormEvent, legal: boolean) {
     event.preventDefault();

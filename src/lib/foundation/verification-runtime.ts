@@ -180,7 +180,7 @@ export async function submitFoundationIdentity(
   const id = await persistEvidence(api, service, owner, current.case_id, "id_front", idBytes);
   const face = await persistEvidence(api, service, owner, current.case_id, "selfie", faceBytes);
   const iv = randomBytes(12),
-    cipher = createCipheriv("aes-256-gcm", numberKey, iv);
+    cipher = createCipheriv("aes-256-gcm", numberKey, iv, { authTagLength: 16 });
   const sealed = Buffer.concat([cipher.update(idNumber, "utf8"), cipher.final()]);
   const receipt = randomUUID();
   const submitted = await service.rpc("register_identity_submission", {
@@ -262,7 +262,8 @@ export async function readFoundationReviewContext(
   const decipher = createDecipheriv(
     "aes-256-gcm",
     secret("ID_ENCRYPTION_KEY"),
-    Buffer.from(number.iv, "hex")
+    Buffer.from(number.iv, "hex"),
+    { authTagLength: 16 }
   );
   decipher.setAuthTag(Buffer.from(number.tag, "hex"));
   const claimedNumber = Buffer.concat([

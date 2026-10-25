@@ -41,7 +41,7 @@ export const metadata: Metadata = {
 /** Revalidate marketplace data every 60 seconds (ISR) */
 export const revalidate = 60;
 
-export default async function MzansiMarketPage(props?: {
+export default async function MzansiMarketPage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (getDataBackend() === "foundation")

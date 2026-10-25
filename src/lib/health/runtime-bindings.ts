@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 // Fixed names prevent this operator-only check becoming an environment reader.
-export const runtimeBindingNames = [
+const runtimeBindingNames = [
   "FOUNDATION_SUPABASE_SECRET_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "TURNSTILE_SECRET_KEY",

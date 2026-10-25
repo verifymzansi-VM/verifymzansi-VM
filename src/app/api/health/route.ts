@@ -8,7 +8,9 @@ import { createLogger } from "@/lib/utils/logger";
 // static generation and trigger a build warning.
 
 const logger = createLogger("HealthRoute");
-const HEALTH_SNAPSHOT_TIMEOUT_MS = 1200;
+// The authenticated limiter alone has a 2.5s deadline. Allow the parallel
+// database/gateway probes to finish during a cold start before failing closed.
+const HEALTH_SNAPSHOT_TIMEOUT_MS = 5000;
 const HEALTH_SNAPSHOT_CACHE_MS = 5000;
 
 let cachedSnapshot:

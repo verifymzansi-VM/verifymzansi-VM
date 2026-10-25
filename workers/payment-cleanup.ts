@@ -1,22 +1,8 @@
-import { timingSafeEqual } from "./timing-safe-equal";
+import { runAuthorizedWorkerTrigger } from "./manual-trigger";
 import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
 
 import { supabaseServiceHeaders } from "./supabase-headers";
-
-interface ScheduledEvent {
-  cron: string;
-  scheduledTime: number;
-}
-
-interface ExecutionContext {
-  waitUntil(promise: Promise<unknown>): void;
-  passThroughOnException(): void;
-}
-
-interface ExportedHandler<E = Record<string, unknown>> {
-  fetch?(request: Request, env: E, ctx: ExecutionContext): Promise<Response>;
-  scheduled?(event: ScheduledEvent, env: E, ctx: ExecutionContext): Promise<void>;
-}
+import type { ScheduledWorker } from "./handler-types";
 
 interface Env {
   DATA_BACKEND?: "source";
@@ -170,7 +156,7 @@ async function createNotification(
   return true;
 }
 
-const worker: ExportedHandler<Env | FoundationJobEnv> = {
+const worker: ScheduledWorker<Env | FoundationJobEnv> = {
   async scheduled(_event, env) {
     if (env.DATA_BACKEND === "foundation") {
       await triggerFoundationJob(env, "/api/internal/payments/reconcile");
@@ -355,19 +341,9 @@ const worker: ExportedHandler<Env | FoundationJobEnv> = {
 
   async fetch(request, env, ctx) {
     if (request.method === "POST") {
-      const authHeader = request.headers.get("Authorization");
-      const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
-      if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      await this.scheduled!({} as ScheduledEvent, env, ctx);
-      return new Response(JSON.stringify({ triggered: true }), {
-        headers: { "Content-Type": "application/json" },
-      });
+      return runAuthorizedWorkerTrigger(request, env.WORKER_API_KEY, () =>
+        this.scheduled!({ cron: "manual", scheduledTime: Date.now() }, env, ctx)
+      );
     }
 
     return new Response(

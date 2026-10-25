@@ -74,6 +74,11 @@ it("refuses number access before machine lookup if audited staff authority is re
   });
   expect(machine).not.toHaveBeenCalled();
 });
+it("rejects a shortened GCM authentication tag before returning a number", async () => {
+  const number = artifact.encrypted_number as { tag: string };
+  number.tag = number.tag.slice(0, 8);
+  await expect(readFoundationReviewContext(api, service, input)).rejects.toThrow();
+});
 it("does not return a number after its submission version changes during the read", async () => {
   vi.mocked(readStaffIdentityContext)
     .mockResolvedValueOnce(context)

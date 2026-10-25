@@ -208,7 +208,7 @@ describe("Health route", () => {
     const { GET } = await import("@/app/api/health/route");
     const responsePromise = GET(new Request("https://verifymzansi.com/api/health?deep=1"));
 
-    await vi.advanceTimersByTimeAsync(1200);
+    await vi.advanceTimersByTimeAsync(5000);
     const response = await responsePromise;
 
     expect(response.status).toBe(503);
@@ -220,5 +220,27 @@ describe("Health route", () => {
     expect(mockError).toHaveBeenCalledWith("Health snapshot generation failed", {
       error: "Health snapshot timed out",
     });
+  });
+  it("allows healthy gateway probes that finish after the former cold-start deadline", async () => {
+    vi.useFakeTimers();
+    vi.mocked(getLaunchHealthSnapshot).mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                status: "ok",
+                mode: "production",
+                timestamp: "2026-10-25T00:00:00Z",
+                checks: {},
+              } as Awaited<ReturnType<typeof getLaunchHealthSnapshot>>),
+            1800
+          )
+        )
+    );
+    const { GET } = await import("@/app/api/health/route");
+    const responsePromise = GET(deepRequest());
+    await vi.advanceTimersByTimeAsync(1800);
+    expect((await responsePromise).status).toBe(200);
   });
 });

@@ -632,7 +632,7 @@ export async function uploadKycDocument(
 
 /** Foundation journals own their immutable object key before any bytes move.
  * Encryption stays byte-compatible with existing KYC objects and private reads. */
-export async function uploadEncryptedEvidenceAtKey(
+async function uploadEncryptedEvidenceAtKey(
   file: File | Blob,
   ownerId: string,
   docType: string,

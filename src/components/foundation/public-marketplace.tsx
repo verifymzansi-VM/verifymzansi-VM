@@ -22,7 +22,7 @@ const sections = {
 };
 const single = (value: string | string[] | undefined) =>
   typeof value === "string" ? value : undefined;
-export function foundationPrice(post: {
+function foundationPrice(post: {
   price_mode: string | null;
   price_cents: string | null;
   price_negotiable?: boolean;

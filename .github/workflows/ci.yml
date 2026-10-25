@@ -143,10 +143,10 @@ jobs:
             echo "::notice::No baseline commit for this event; the full scan below still reports to code scanning."
             exit 0
           fi
-          semgrep scan --config p/default --metrics=off --error --baseline-commit "$BASELINE"
+          semgrep scan --config p/default --metrics=off --error --strict --timeout 60 --timeout-threshold 0 --baseline-commit "$BASELINE"
       - name: Full scan
         if: always() && github.event_name == 'push'
-        run: semgrep scan --config p/default --metrics=off --sarif --output semgrep.sarif
+        run: semgrep scan --config p/default --metrics=off --strict --timeout 60 --timeout-threshold 0 --sarif --output semgrep.sarif
       - name: Upload to code scanning
         if: always() && github.event_name == 'push'
         uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0

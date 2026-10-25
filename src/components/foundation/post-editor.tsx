@@ -70,7 +70,7 @@ export function FoundationPostRoute({ kind, area }: { kind: Kind; area: Area }) 
     </FoundationAccountBoundary>
   );
 }
-export function FoundationPostEditor({
+function FoundationPostEditor({
   initialKind,
   area,
   postId,

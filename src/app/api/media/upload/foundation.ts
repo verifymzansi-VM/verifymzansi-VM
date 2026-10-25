@@ -17,7 +17,18 @@ const log = createLogger("FoundationMediaUpload");
 export async function uploadFoundationMediaRequest(request: NextRequest) {
   const blocked = enforceMutationRequest(request, log);
   if (blocked) return blocked;
-  const context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
+  let context: ReturnType<typeof createFoundationRouteContext>;
+  try {
+    context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
+  } catch {
+    return NextResponse.json(
+      { error: "Media upload is temporarily unavailable" },
+      {
+        status: 503,
+        headers: { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" },
+      }
+    );
+  }
   try {
     const limit = await checkRateLimit({
       key: getClientRateLimitIdentity(request).key,

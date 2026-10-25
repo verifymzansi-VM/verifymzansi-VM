@@ -144,7 +144,7 @@ export async function readFoundationPayment(
   const data = await command(api, "get_my_payment", { p_payment_id: z.uuid().parse(paymentId) });
   return data === null ? null : foundationPaymentSchema.parse(data);
 }
-export async function readFoundationServicePayment(
+async function readFoundationServicePayment(
   service: FoundationServiceApi,
   selector: { id?: string; reference?: string }
 ) {
