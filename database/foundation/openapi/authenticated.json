@@ -771,6 +771,68 @@
         ]
       }
     },
+    "/rpc/search_post_cards": {
+      "get": {
+        "parameters": [
+          {
+            "format": "jsonb",
+            "in": "query",
+            "name": "p_request",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) search_post_cards"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_request": {
+                  "format": "jsonb"
+                }
+              },
+              "required": [
+                "p_request"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) search_post_cards"
+        ]
+      }
+    },
     "/rpc/claim_evidence_case": {
       "post": {
         "parameters": [
@@ -2091,6 +2153,36 @@
         ]
       }
     },
+    "/rpc/get_my_verification_case": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_my_verification_case"
+        ]
+      }
+    },
     "/rpc/withdraw_decision": {
       "post": {
         "parameters": [
@@ -2418,6 +2510,69 @@
         ]
       }
     },
+    "/rpc/get_public_contact_channels": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_post_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_public_contact_channels"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_public_contact_channels"
+        ]
+      }
+    },
     "/rpc/place_legal_hold": {
       "post": {
         "parameters": [
@@ -2742,6 +2897,69 @@
         },
         "tags": [
           "(rpc) list_my_enquiries"
+        ]
+      }
+    },
+    "/rpc/get_my_payment": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_payment_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_my_payment"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_payment_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_payment_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_my_payment"
         ]
       }
     },
@@ -3220,6 +3438,51 @@
         ]
       }
     },
+    "/rpc/get_staff_dashboard": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_staff_dashboard"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_staff_dashboard"
+        ]
+      }
+    },
     "/rpc/begin_media_upload": {
       "post": {
         "parameters": [
@@ -3563,6 +3826,51 @@
         ]
       }
     },
+    "/rpc/get_my_billing": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_my_billing"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_my_billing"
+        ]
+      }
+    },
     "/rpc/get_listing_attributes": {
       "post": {
         "parameters": [
@@ -3690,6 +3998,65 @@
         ]
       }
     },
+    "/rpc/return_identity_submission": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_case": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_claim_generation": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_claim_nonce": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_expected_version": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_case",
+                "p_expected_version",
+                "p_claim_generation",
+                "p_claim_nonce",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) return_identity_submission"
+        ]
+      }
+    },
     "/rpc/get_my_profile": {
       "post": {
         "parameters": [
@@ -3717,6 +4084,45 @@
         },
         "tags": [
           "(rpc) get_my_profile"
+        ]
+      }
+    },
+    "/rpc/staff_verification_queue": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "p_limit"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) staff_verification_queue"
         ]
       }
     },
@@ -4238,6 +4644,55 @@
         ]
       }
     },
+    "/rpc/release_evidence_claim": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_case": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_claim_generation": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_claim_nonce": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_case",
+                "p_claim_generation",
+                "p_claim_nonce"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) release_evidence_claim"
+        ]
+      }
+    },
     "/rpc/staff_list_organisations": {
       "get": {
         "produces": [
@@ -4280,6 +4735,77 @@
         },
         "tags": [
           "(rpc) staff_list_organisations"
+        ]
+      }
+    },
+    "/rpc/list_my_posts": {
+      "get": {
+        "parameters": [
+          {
+            "format": "int32",
+            "in": "query",
+            "name": "p_limit",
+            "required": false,
+            "type": "integer"
+          },
+          {
+            "format": "int32",
+            "in": "query",
+            "name": "p_offset",
+            "required": false,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) list_my_posts"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_offset": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) list_my_posts"
         ]
       }
     },
@@ -4368,6 +4894,55 @@
         },
         "tags": [
           "(rpc) end_sponsorship"
+        ]
+      }
+    },
+    "/rpc/manage_plan_member": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_email": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_entitlement_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_entitlement_id",
+                "p_action",
+                "p_email"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) manage_plan_member"
         ]
       }
     },

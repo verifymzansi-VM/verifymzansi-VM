@@ -23,6 +23,8 @@ import { generateImageVariants } from "@/lib/services/image-variants";
 import { parseAndValidateFormData } from "@/lib/utils/api";
 import { z } from "zod";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "@/lib/utils/request-body";
+import { getDataBackend } from "@/lib/data-backend";
+import { uploadFoundationMediaRequest } from "./foundation";
 
 const log = createLogger("MediaUpload");
 
@@ -70,6 +72,7 @@ export function HEAD() {
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return uploadFoundationMediaRequest(request);
   const traceId = crypto.randomUUID();
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);

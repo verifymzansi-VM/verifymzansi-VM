@@ -141,8 +141,13 @@ it("fails closed when the service binding or Auth is unavailable", async () => {
 });
 
 it("lists and updates only through the owner commands", async () => {
+  authenticateCaller.mockResolvedValueOnce({ api: { rpc }, accountId: account });
   const listed = await GET(request("GET", undefined, { query: "?limit=10&status=new" }));
   expect(listed.status).toBe(200);
+  expect(await listed.json()).toEqual({
+    account_id: account,
+    data: { items: [], unread_count: 0, next_cursor: null },
+  });
   expect(rpc).toHaveBeenLastCalledWith("list_my_enquiries", { p_limit: 10, p_status: "new" });
   rpc.mockResolvedValueOnce({ data: null, error: null });
   expect((await PATCH(request("PATCH", { id: account, status: "read" }))).status).toBe(404);

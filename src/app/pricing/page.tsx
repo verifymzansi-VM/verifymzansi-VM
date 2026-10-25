@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationBillingPage } from "@/components/foundation/billing-page";
 import { CalendarDays, LockKeyhole, ReceiptText, ShieldCheck } from "lucide-react";
 import { CURRENT_EDIT_RULE } from "@/lib/posting/package-rules";
 
@@ -38,6 +40,7 @@ async function loadSettings() {
 }
 
 export default async function PricingPage() {
+  if (getDataBackend() === "foundation") return <FoundationBillingPage />;
   const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
   const trustConfig = getTrustPublicConfig();
   const jsonLd = {

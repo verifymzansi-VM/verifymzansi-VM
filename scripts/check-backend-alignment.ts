@@ -37,6 +37,10 @@ async function main() {
     FOUNDATION_SUPABASE_URL: connection.url,
     FOUNDATION_PROJECT_REF: connection.expectedProjectRef,
     FOUNDATION_SUPABASE_PUBLISHABLE_KEY: connection.publishableKey,
+    FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
+    FOUNDATION_REGISTRATION_ENABLED: "true",
+    FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
+    FOUNDATION_RECOVERY_ENABLED: "true",
   };
   await check(
     "Local production configuration",
@@ -94,15 +98,18 @@ async function main() {
             const bindings = version.resources?.bindings;
             const invalid = inspectPublicBindings(
               bindings,
-              mainApp ? expected : { SUPABASE_URL: connection.url }
+              mainApp
+                ? expected
+                : { DATA_BACKEND: "foundation", APP_URL: "https://verifymzansi.com" }
             );
             const secretNames = mainApp
               ? [
                   "FOUNDATION_SUPABASE_SECRET_KEY",
                   "SUPABASE_SERVICE_ROLE_KEY",
                   "FOUNDATION_PHONE_OTP_KEY",
+                  "INTERNAL_JOBS_SECRET",
                 ]
-              : ["SUPABASE_SERVICE_ROLE_KEY", "WORKER_API_KEY"];
+              : ["WORKER_API_KEY"];
             const secrets = inspectSecretBindings(bindings, secretNames, []);
             const problems = [...invalid, ...secrets.missing, ...secrets.unsafe];
             if (problems.length) {

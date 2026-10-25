@@ -37,6 +37,7 @@ export interface CarouselItem {
   description?: string;
   location?: string;
   mediaUrl?: string;
+  mediaKind?: "image" | "video";
   posterUrl?: string;
   logoUrl?: string;
   price?: number | null;
@@ -763,7 +764,9 @@ export function ShowroomCardCarousel({
   }, [disableAutoplay]);
 
   const displayIndex = normalizedActiveIndex;
-  const activeIsVideo = isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
+  const activeIsVideo =
+    carouselItems[displayIndex]?.mediaKind === "video" ||
+    isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
 
   useEffect(() => {
     videoEndedRef.current = false;
@@ -976,9 +979,13 @@ export function ShowroomCardCarousel({
             const offset = signedOffset(i);
             const sideMediaFallback =
               item.posterUrl ??
-              (isVideoUrl(item.mediaUrl) ? getFallbackMediaUrl(item) : item.mediaUrl);
+              (item.mediaKind === "video" || isVideoUrl(item.mediaUrl)
+                ? getFallbackMediaUrl(item)
+                : item.mediaUrl);
             const activeVideoNeedsArtwork =
-              offset === 0 && isVideoUrl(item.mediaUrl) && !item.posterUrl;
+              offset === 0 &&
+              (item.mediaKind === "video" || isVideoUrl(item.mediaUrl)) &&
+              !item.posterUrl;
             const cardMediaUrl =
               offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
 
@@ -1020,6 +1027,11 @@ export function ShowroomCardCarousel({
                   title={item.title}
                   location={item.location}
                   mediaUrl={cardMediaUrl}
+                  isVideo={
+                    offset === 0 &&
+                    (item.mediaKind === "video" || isVideoUrl(item.mediaUrl)) &&
+                    cardMediaUrl === item.mediaUrl
+                  }
                   posterUrl={item.posterUrl}
                   mediaFallbackUrl={getFallbackMediaUrl(item)}
                   logoUrl={item.logoUrl}

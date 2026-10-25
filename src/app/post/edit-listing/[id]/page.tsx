@@ -1,4 +1,6 @@
 "use client";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationPostRoute } from "@/components/foundation/post-editor";
 import { PostSelect } from "@/components/post/post-select";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
@@ -59,7 +61,7 @@ const log = createLogger("EditListingPage");
 const TITLE_MAX = 100;
 const DESC_MAX = 5000;
 
-export default function EditListingPage() {
+function EditListingPage() {
   const params = useParams();
   const id = params.id as string;
   const [title, setTitle] = useState("");
@@ -1025,3 +1027,9 @@ export default function EditListingPage() {
     </div>
   );
 }
+
+function FoundationPage() {
+  return <FoundationPostRoute kind="listing" area="market" />;
+}
+const SelectedPage = getDataBackend() === "foundation" ? FoundationPage : EditListingPage;
+export default SelectedPage;

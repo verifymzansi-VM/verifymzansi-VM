@@ -23,6 +23,8 @@ export const ANON_API = [
   "public_programme_showcases",
   "reference_catalog",
   "search_posts",
+  "search_post_cards",
+  "get_public_contact_channels",
 ];
 export const SERVICE_API = [
   "advance_evidence_artifact",
@@ -51,6 +53,21 @@ export const SERVICE_API = [
   "submit_enquiry",
   "submit_report",
   "sweep_sponsorships",
+  "claim_notification_outbox",
+  "complete_notification_outbox",
+  "get_checkout_payment",
+  "claim_checkout_request",
+  "complete_checkout_request",
+  "claim_payment_reconciliation",
+  "list_reconcilable_payments",
+  "finish_unpaid_checkout",
+  "assess_identity_upload",
+  "complete_evidence_upload",
+  "evidence_review_object",
+  "evidence_upload_target",
+  "mark_evidence_deleted",
+  "reveal_post_phone",
+  "reconcile_intro_trials",
 ];
 // Local fixture drivers, never part of the clean candidate.
 const FIXTURE_ONLY_API = [

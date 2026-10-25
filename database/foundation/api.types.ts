@@ -33,6 +33,15 @@ export type Database = {
       };
       approve_decision: { Args: { p_decision_id: string }; Returns: Json };
       approve_due_commissions: { Args: { p_limit: number }; Returns: number };
+      assess_identity_upload: {
+        Args: {
+          p_document_sha256: string;
+          p_fingerprint: string;
+          p_owner: string;
+          p_selfie_sha256: string;
+        };
+        Returns: Json;
+      };
       attach_provider_request: {
         Args: { p_payment_id: string; p_request_id: string };
         Returns: boolean;
@@ -41,9 +50,12 @@ export type Database = {
       begin_media_upload: { Args: { p_bytes: number; p_kind: string }; Returns: Json };
       billing_catalogue: { Args: Record<PropertyKey, never>; Returns: Json };
       check_cost_alarms: { Args: Record<PropertyKey, never>; Returns: number };
+      claim_checkout_request: { Args: { p_owner_id: string; p_payment_id: string }; Returns: Json };
       claim_evidence_case: { Args: { p_case_id: string }; Returns: Json };
       claim_evidence_cleanup: { Args: { p_limit: number }; Returns: Json };
       claim_media_cleanup: { Args: { p_limit: number }; Returns: Json };
+      claim_notification_outbox: { Args: { p_limit?: number }; Returns: Json };
+      claim_payment_reconciliation: { Args: { p_payment_id: string }; Returns: Json };
       claim_queue_item: { Args: { p_id: string; p_subject: string }; Returns: Json };
       claim_queue_items: { Args: { p_limit: number; p_queue: string }; Returns: Json };
       claim_verification_phone_attempt: {
@@ -54,6 +66,29 @@ export type Database = {
       close_evidence_fraud_hold: {
         Args: { p_case_id: string; p_hold_id: string; p_reason: string };
         Returns: Json;
+      };
+      complete_checkout_request: {
+        Args: {
+          p_checkout_url: string;
+          p_claim_token: string;
+          p_owner_id: string;
+          p_payment_id: string;
+          p_request_id: string;
+        };
+        Returns: boolean;
+      };
+      complete_evidence_upload: {
+        Args: {
+          p_artifact: string;
+          p_content_sha256: string;
+          p_size: number;
+          p_stored_sha256: string;
+        };
+        Returns: Json;
+      };
+      complete_notification_outbox: {
+        Args: { p_claim: string; p_error?: string; p_id: string; p_ok: boolean };
+        Returns: boolean;
       };
       confirm_verification_locality: {
         Args: { p_city: string; p_province: string };
@@ -84,6 +119,8 @@ export type Database = {
         Returns: Json;
       };
       end_sponsorship: { Args: { p_reason: string; p_sponsorship: string }; Returns: Json };
+      evidence_review_object: { Args: { p_artifact: string; p_case: string }; Returns: Json };
+      evidence_upload_target: { Args: { p_artifact: string; p_owner: string }; Returns: Json };
       finalize_media: {
         Args: {
           p_height?: number;
@@ -99,6 +136,10 @@ export type Database = {
         Args: { p_challenge: string; p_expected_hash: string; p_owner: string };
         Returns: Json;
       };
+      finish_unpaid_checkout: {
+        Args: { p_payment_id: string; p_status: string };
+        Returns: boolean;
+      };
       flag_duplicate_events: {
         Args: {
           p_expected_revision_a: number;
@@ -109,20 +150,29 @@ export type Database = {
         };
         Returns: Json;
       };
+      get_checkout_payment: {
+        Args: { p_merchant_reference?: string; p_payment_id?: string };
+        Returns: Json;
+      };
       get_core_draft: { Args: { p_id: string }; Returns: Json };
       get_core_listing_draft: { Args: { p_id: string }; Returns: Json };
       get_current_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_listing_attributes: { Args: { p_post_id: string }; Returns: Json };
       get_my_account_context: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_billing: { Args: Record<PropertyKey, never>; Returns: Json };
       get_my_inbox_counts: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_payment: { Args: { p_payment_id: string }; Returns: Json };
       get_my_profile: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_verification_case: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_business_event_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_listing_editor: { Args: { p_post_id: string }; Returns: Json };
       get_owner_post_contacts: { Args: { p_post_id: string }; Returns: Json };
       get_owner_posting_terms: { Args: Record<PropertyKey, never>; Returns: Json };
       get_owner_verification_readiness: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_public_contact_channels: { Args: { p_post_id: string }; Returns: Json };
       get_public_organisation: { Args: { p_slug: string }; Returns: Json };
       get_public_post: { Args: { p_id: string }; Returns: Json };
+      get_staff_dashboard: { Args: Record<PropertyKey, never>; Returns: Json };
       grant_verified_intro_trial: { Args: { p_days: number; p_owner: string }; Returns: Json };
       identity_status: { Args: { p_identity_hmac: string }; Returns: Json };
       invite_organisation_admin: {
@@ -141,6 +191,16 @@ export type Database = {
       list_my_notifications: {
         Args: { p_before_created?: string; p_before_id?: string; p_limit?: number };
         Returns: Json;
+      };
+      list_my_posts: { Args: { p_limit?: number; p_offset?: number }; Returns: Json };
+      list_reconcilable_payments: { Args: { p_limit?: number }; Returns: Json };
+      manage_plan_member: {
+        Args: { p_action: string; p_email: string; p_entitlement_id: string };
+        Returns: Json;
+      };
+      mark_evidence_deleted: {
+        Args: { p_artifact: string; p_claim_token: string };
+        Returns: boolean;
       };
       mark_media_deleted: {
         Args: { p_claim_token: string; p_object_id: string };
@@ -199,6 +259,7 @@ export type Database = {
         Args: { p_id: string; p_reason: string; p_subject: string; p_to: string };
         Returns: Json;
       };
+      reconcile_intro_trials: { Args: { p_limit?: number }; Returns: number };
       reconcile_verified_identity_ban: { Args: { p_decision: string }; Returns: Json };
       record_my_acquisition: {
         Args: {
@@ -227,6 +288,10 @@ export type Database = {
           p_selfie_artifact: string;
         };
         Returns: Json;
+      };
+      release_evidence_claim: {
+        Args: { p_case: string; p_claim_generation: string; p_claim_nonce: string };
+        Returns: boolean;
       };
       release_post: { Args: { p_post_id: string; p_reason?: string }; Returns: boolean };
       release_queue_claim: {
@@ -265,6 +330,17 @@ export type Database = {
         };
         Returns: Json;
       };
+      return_identity_submission: {
+        Args: {
+          p_case: string;
+          p_claim_generation: string;
+          p_claim_nonce: string;
+          p_expected_version: number;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      reveal_post_phone: { Args: { p_channel: string; p_post_id: string }; Returns: string };
       reverse_payment: {
         Args: { p_kind: string; p_payment_id: string; p_reason: string };
         Returns: Json;
@@ -342,6 +418,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      search_post_cards: { Args: { p_request: Json }; Returns: Json };
       search_posts: { Args: { p_request: Json }; Returns: Json };
       set_enquiry_status: { Args: { p_id: string; p_status: string }; Returns: Json };
       set_my_avatar: { Args: { p_expected_revision: number; p_object_id?: string }; Returns: Json };
@@ -413,6 +490,7 @@ export type Database = {
         };
         Returns: Json;
       };
+      staff_verification_queue: { Args: { p_limit: number }; Returns: Json };
       start_checkout: { Args: { p_product_id: string; p_target_post?: string }; Returns: Json };
       submit_enquiry: {
         Args: {

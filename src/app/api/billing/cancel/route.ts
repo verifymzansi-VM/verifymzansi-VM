@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -19,6 +21,7 @@ const cancelSchema = z.object({
  * Cancel the caller's active subscription entitlement.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationBillingRoute(request, "retired");
   try {
     const guard = await enforceBillingMutationGuard({
       request,

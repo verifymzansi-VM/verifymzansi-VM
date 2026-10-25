@@ -1,4 +1,7 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
+import { searchFoundationCards, foundationMediaUrl } from "@/lib/foundation/public-cards";
 
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -253,6 +256,27 @@ export async function loadShowroomItems(
     client?: SupabaseClient;
   }
 ): Promise<CarouselItem[]> {
+  if (getDataBackend() === "foundation") {
+    const page = await searchFoundationCards(foundationServerPublicApi(), {
+      limit: SHOWROOM_LIMITS[surface],
+      ...(surface === "home" ? {} : { area: surface === "tourism" ? "tourism_events" : surface }),
+    });
+    return page.items.map((post) => ({
+      id: post.id,
+      type: post.kind === "event" ? "promotion" : post.kind,
+      href: `${post.kind === "listing" ? "/listing" : post.area === "business" ? "/mzansi-business" : "/tourism-events"}/${post.id}`,
+      title: post.title,
+      description: post.summary,
+      location: post.locality,
+      mediaUrl:
+        foundationMediaUrl(post.preview.video_key) ??
+        foundationMediaUrl(post.preview.image_key) ??
+        undefined,
+      mediaKind: post.preview.video_key ? "video" : "image",
+      posterUrl: foundationMediaUrl(post.preview.image_key) ?? undefined,
+      price: post.price_cents === null ? null : Number(post.price_cents) / 100,
+    }));
+  }
   const limit = SHOWROOM_LIMITS[surface];
   const supabase = options.client ?? publicClient();
   if (!supabase) return [];

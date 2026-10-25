@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationPartnerPage } from "@/components/foundation/partner-page";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -39,6 +41,7 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 export default async function PartnerDashboardPage() {
+  if (getDataBackend() === "foundation") return <FoundationPartnerPage />;
   const supabase = await createClient();
   const {
     data: { user },

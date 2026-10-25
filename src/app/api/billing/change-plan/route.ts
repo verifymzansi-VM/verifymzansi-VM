@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +23,7 @@ const changePlanSchema = z.object({
  * Starts a new checkout for a different subscription plan.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationBillingRoute(request, "retired");
   try {
     const guard = await enforceBillingMutationGuard({
       request,

@@ -13,7 +13,9 @@
  * Existing artifacts still require environment sanitization and a strict
  * secret scan. Cached output must never bypass the credential policy.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import nextEnv from "@next/env";
+import { cloudflareBuildFingerprint } from "./lib/cloudflare-build-fingerprint.mjs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,14 +30,28 @@ if ((process.env.WRANGLER_COMMAND || "") === "types") {
   process.exit(0);
 }
 
-if (existsSync(workerBundle) && existsSync(assetsDir)) {
-  console.log("✓ .open-next output already present — checking cached artifact credentials.");
+nextEnv.loadEnvConfig(repoRoot);
+let current = false;
+try {
+  const recorded = JSON.parse(
+    readFileSync(path.join(repoRoot, ".open-next", "build-fingerprint.json"), "utf8")
+  );
+  current =
+    recorded.schemaVersion === 1 &&
+    recorded.fingerprint === cloudflareBuildFingerprint(repoRoot, process.env);
+} catch {
+  /* Missing or stale output always requires a fresh build. */
+}
+if (current && existsSync(workerBundle) && existsSync(assetsDir)) {
+  console.log(
+    "Worker output matches the current source and public configuration; checking credentials."
+  );
   runTask("sanitize:cloudflare-env");
   runTask("secret-scan:strict");
   process.exit(0);
 }
 
-console.log("⚙  .open-next output missing — running `pnpm run build:cloudflare`…");
+console.log("Worker output is missing or stale; running build:cloudflare.");
 function runTask(task) {
   const result = spawnSync("pnpm", ["run", task], {
     cwd: repoRoot,

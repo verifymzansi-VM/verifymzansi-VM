@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDataBackend } from "@/lib/data-backend";
+import { runFoundationPaymentReconciliation } from "@/lib/foundation/billing-runtime";
 import { reconcileOzowPayment } from "@/lib/payments/reconciliation";
 import type { PaymentRecordShape } from "@/lib/payments/types";
 import { createLogger } from "@/lib/utils/logger";
@@ -9,11 +11,25 @@ const log = createLogger("OzowReconciliation");
 
 export async function POST(request: Request) {
   // Companion worker WORKER_API_KEY already matches the app's rate limiter key.
-  const secret = process.env.RATE_LIMITER_API_KEY;
+  const secret =
+    getDataBackend() === "foundation"
+      ? process.env.INTERNAL_JOBS_SECRET
+      : process.env.RATE_LIMITER_API_KEY;
   const expected = Buffer.from(secret ? `Bearer ${secret}` : "");
   const received = Buffer.from(request.headers.get("authorization") || "");
   if (!secret || expected.length !== received.length || !timingSafeEqual(expected, received)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (getDataBackend() === "foundation") {
+    try {
+      const result = await runFoundationPaymentReconciliation();
+      return NextResponse.json(result, {
+        status: result.failures ? 503 : 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    } catch {
+      return NextResponse.json({ error: "Payment reconciliation unavailable" }, { status: 503 });
+    }
   }
   const admin = createAdminClient();
   // Small rotating batch; last-check ordering prevents pending bank transactions

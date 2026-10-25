@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationBillingPage } from "@/components/foundation/billing-page";
 import Link from "next/link";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
@@ -50,6 +52,7 @@ async function loadCheckoutEnabled() {
  * pricing and advertise pages: buy a multi-listing plan directly.
  */
 export default async function MultiListingPage() {
+  if (getDataBackend() === "foundation") return <FoundationBillingPage />;
   const [catalog, checkoutEnabled] = await Promise.all([
     getCommercialCatalog(),
     loadCheckoutEnabled(),

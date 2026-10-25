@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +23,8 @@ const schema = z.object({
  * caller bought this plan and enforces the two-administrator limit.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationBillingRoute(request, "manage-member");
   const guard = await enforceBillingMutationGuard({
     request,
     log,

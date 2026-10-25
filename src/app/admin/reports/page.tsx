@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationModerationQueue } from "@/components/foundation/moderation-queue";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { countMyClaims, getClaimsForItems } from "@/lib/services/queue-claims";
@@ -19,6 +21,7 @@ const OPEN_LIMIT = 200;
 const RECENT_CLOSED_LIMIT = 50;
 
 export default async function AdminReportsPage() {
+  if (getDataBackend() === "foundation") return <FoundationModerationQueue mode="reports" />;
   const { user, role } = await requireStaff("queue:view");
   const admin = createAdminClient();
 

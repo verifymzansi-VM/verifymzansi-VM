@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationHomeShowcase } from "@/components/foundation/home-showcase";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { TreePalm } from "lucide-react";
 import { PromotionCard } from "@/components/listings/promotion-card";
@@ -68,6 +70,7 @@ type ShowcaseItem =
   { kind: "event"; data: PromotionRow } | { kind: "tourism"; data: TourismBusinessRow };
 
 export async function HomePromotionsShowcase() {
+  if (getDataBackend() === "foundation") return <FoundationHomeShowcase area="tourism_events" />;
   const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)

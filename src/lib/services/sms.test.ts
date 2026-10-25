@@ -43,6 +43,25 @@ describe("sms service", () => {
   });
 
   describe("sendSms", () => {
+    it.each(["provider error", "network error", "invalid sender"])(
+      "makes only one SMS request in single-attempt mode: %s",
+      async (mode) => {
+        globalThis.fetch =
+          mode === "network error"
+            ? vi.fn().mockRejectedValue(new TypeError("network unavailable"))
+            : mockFetchResponse(
+                mode === "invalid sender"
+                  ? { SMSMessageData: { Message: "InvalidSenderId", Recipients: [] } }
+                  : { message: "PRIVATE_RECIPIENT_RESPONSE" },
+                mode === "provider error" ? 503 : 200
+              );
+        const result = await sendOtpSms("+27821234567", "123456", { retry: false });
+        expect(result.success).toBe(false);
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(mockLog.warn.mock.calls)).not.toContain("PRIVATE_RECIPIENT_RESPONSE");
+        expect(JSON.stringify(result)).not.toContain("PRIVATE_RECIPIENT_RESPONSE");
+      }
+    );
     it("sends SMS successfully", async () => {
       globalThis.fetch = mockFetchResponse({
         SMSMessageData: {

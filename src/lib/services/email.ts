@@ -31,6 +31,82 @@ function getResend(): Resend {
 
 const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
 
+const platformNotices = {
+  payment_completed: [
+    "Payment received",
+    "Your payment has been recorded. View your posting allowance and invoice in Billing.",
+  ],
+  payment_reversed: [
+    "Payment update",
+    "A payment reversal has been recorded. Review the current details in Billing.",
+  ],
+  payment_reconciliation_required: [
+    "Payment review in progress",
+    "A payment needs reconciliation. Its current status is available in Billing.",
+  ],
+  trial_started: [
+    "Your introductory posting allowance is ready",
+    "Your eligible introductory allowance is now recorded on your account.",
+  ],
+  post_expired: [
+    "A post reached its visibility end date",
+    "Review your posts to see the available renewal and posting options.",
+  ],
+  post_expiry_reminder: [
+    "A post is approaching its visibility end date",
+    "Review your posts and posting allowance before its visibility period ends.",
+  ],
+  draft_deletion_warning: [
+    "A saved draft needs attention",
+    "An old draft is approaching the retention limit. Review your saved posts.",
+  ],
+  post_deleted: [
+    "Post deleted",
+    "A post was deleted from your account. You can review your remaining posts in the dashboard.",
+  ],
+  verification_phone_confirmed: [
+    "Mobile number verified",
+    "Your mobile verification has been recorded. Review any remaining verification steps.",
+  ],
+  identity_accepted: [
+    "Identity review completed",
+    "Your identity documents have been reviewed. Your current status is available on the verification page.",
+  ],
+  enquiry_received: [
+    "New enquiry",
+    "A member sent you an enquiry. Sign in to read it and manage the conversation.",
+  ],
+} as const;
+export type PlatformNoticeKind = keyof typeof platformNotices;
+export async function sendPlatformNotice(
+  to: string,
+  kind: PlatformNoticeKind,
+  idempotencyKey: string
+): Promise<SendEmailResult> {
+  const [subject, intro] = platformNotices[kind];
+  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  const path = kind.startsWith("payment_")
+    ? "/billing"
+    : kind === "enquiry_received"
+      ? "/dashboard/leads"
+      : kind === "identity_accepted" || kind === "verification_phone_confirmed"
+        ? "/verification"
+        : "/dashboard";
+  return sendEmail({
+    to,
+    subject,
+    idempotencyKey,
+    html: brandedEmail({
+      title: subject,
+      intro,
+      bodyHtml: paragraph("Sign in to your account to view the details."),
+      cta: { label: "View your account", href: appUrl + path },
+      reason: "This is an operational update about your VerifyMzansi account.",
+    }),
+    text: `${subject}\n\n${intro}\n\nSign in to view the details: ${appUrl}${path}`,
+  });
+}
+
 interface SendEmailParams {
   idempotencyKey?: string;
   replyTo?: string;

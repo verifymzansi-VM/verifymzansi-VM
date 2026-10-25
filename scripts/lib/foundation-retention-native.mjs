@@ -119,7 +119,7 @@ export async function testRetention({
       ready.caseId +
       "';"
   );
-  const heldClaim = await service("claim_evidence_cleanup", { p_limit: 500 });
+  const heldClaim = await service("claim_evidence_cleanup", { p_limit: 100 });
   assert.equal(
     heldClaim.some((row) => files.includes(row.artifact_id)),
     false
@@ -183,7 +183,7 @@ export async function testRetention({
   );
   record("native-retention-stale-close-cannot-release-a-new-fraud-hold");
   const versionBefore = caseVersion(ready.caseId);
-  const released = await service("claim_evidence_cleanup", { p_limit: 500 });
+  const released = await service("claim_evidence_cleanup", { p_limit: 100 });
   assert.deepEqual(
     released
       .map((row) => row.artifact_id)
@@ -191,8 +191,13 @@ export async function testRetention({
       .sort(),
     [...files].sort()
   );
-  for (const id of files)
-    await service("advance_evidence_artifact", { p_artifact_id: id, p_state: "deleted" });
+  for (const row of released.filter((row) => files.includes(row.artifact_id))) {
+    assert.match(row.claim_token, /^[a-f0-9-]{36}$/);
+    await service("mark_evidence_deleted", {
+      p_artifact: row.artifact_id,
+      p_claim_token: row.claim_token,
+    });
+  }
   assert.equal(caseVersion(ready.caseId), versionBefore);
   assert.equal(verified(owner), "t");
   assert.equal(
@@ -286,11 +291,11 @@ export async function testRetention({
       closingReady.caseId +
       "';"
   );
-  const closedFiles = await service("claim_evidence_cleanup", { p_limit: 500 });
+  const closedFiles = await service("claim_evidence_cleanup", { p_limit: 100 });
   for (const row of closedFiles.filter((r) => files2.includes(r.artifact_id)))
-    await service("advance_evidence_artifact", {
-      p_artifact_id: row.artifact_id,
-      p_state: "deleted",
+    await service("mark_evidence_deleted", {
+      p_artifact: row.artifact_id,
+      p_claim_token: row.claim_token,
     });
   await sweep();
   assert.equal(

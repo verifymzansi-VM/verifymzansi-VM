@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationEnquiries } from "@/components/foundation/enquiries";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { ACCOUNT_PROFILE_TABLE, applyOwnerFilter, getOwnerColumn } from "@/lib/account/compat";
@@ -10,6 +12,7 @@ export const metadata = {
 };
 
 export default async function LeadsPage() {
+  if (getDataBackend() === "foundation") return <FoundationEnquiries />;
   const supabase = await createClient();
   const {
     data: { user },

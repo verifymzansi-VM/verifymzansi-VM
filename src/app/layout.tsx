@@ -1,27 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import { AcquisitionCapture } from "@/components/analytics/acquisition-capture";
 import { cookies, headers } from "next/headers";
-import { Plus_Jakarta_Sans, Source_Serif_4 } from "next/font/google";
+import localFont from "next/font/local";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 import { SERVICE_WORKER_VERSION } from "@/lib/service-worker-version";
 
 // Only the 600 weight ships: font-bold / font-extrabold on headings all
 // resolve to it (synthetic bold is off in globals.css), keeping titles calm.
-const fontDisplay = Source_Serif_4({
-  subsets: ["latin"],
-  weight: ["600"],
+const fontDisplay = localFont({
+  src: "../../public/fonts/app/source-serif-4-latin-600.woff2",
+  weight: "600",
   variable: "--font-display",
   display: "swap",
   fallback: ["Georgia", "Cambria", "Times New Roman", "serif"],
 });
 
-const fontBody = Plus_Jakarta_Sans({
-  subsets: ["latin"],
+const fontBody = localFont({
+  src: "../../public/fonts/app/plus-jakarta-sans-latin-variable.woff2",
+  weight: "200 800",
   variable: "--font-body",
   display: "swap",
   fallback: ["Segoe UI", "system-ui", "sans-serif"],
 });
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { FoundationSessionBootstrap } from "@/components/auth/foundation-session-bootstrap";
 import { SessionHintProvider } from "@/components/providers/session-hint-provider";
 import { hasAuthSessionCookie } from "@/lib/supabase/auth-session-cookie";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
@@ -309,6 +311,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           nonce={nonce}
         >
           <SessionHintProvider hasSession={hasSessionCookie}>
+            <FoundationSessionBootstrap />
             <DesktopPageShell>
               {showPrelaunchBanner ? <PrelaunchBanner /> : null}
               <VideoPlaybackProvider>{children}</VideoPlaybackProvider>

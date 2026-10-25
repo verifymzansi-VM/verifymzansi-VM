@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationOrganisations } from "@/components/foundation/organisation-public";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { SponsorLink } from "@/components/organisations/sponsor-link";
 import { SponsorLogo } from "@/components/organisations/sponsor-logo";
@@ -13,6 +15,7 @@ const MAX_TILES = 8;
  * without an eligible sponsor.
  */
 export async function HomeSponsorsSection() {
+  if (getDataBackend() === "foundation") return <FoundationOrganisations home />;
   const sponsors = (await getPublicSponsors()).filter((s) => s.on_home).slice(0, MAX_TILES);
   if (sponsors.length === 0) return null;
 

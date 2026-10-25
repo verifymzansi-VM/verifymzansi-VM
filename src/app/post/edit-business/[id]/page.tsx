@@ -1,4 +1,6 @@
 "use client";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationPostRoute } from "@/components/foundation/post-editor";
 import {
   BusinessContactFields,
   readContactMethods,
@@ -100,7 +102,7 @@ const PAYMENT_METHOD_OPTIONS = [
   { value: "other", label: "Other" },
 ];
 
-export default function EditBusinessPage() {
+function EditBusinessPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const businessId = params.id;
@@ -1639,3 +1641,9 @@ export default function EditBusinessPage() {
     </div>
   );
 }
+
+function FoundationPage() {
+  return <FoundationPostRoute kind="business" area="business" />;
+}
+const SelectedPage = getDataBackend() === "foundation" ? FoundationPage : EditBusinessPage;
+export default SelectedPage;

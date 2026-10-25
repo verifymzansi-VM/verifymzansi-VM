@@ -21,6 +21,7 @@ import { timingSafeEqual } from "./timing-safe-equal";
 // ---------------------------------------------------------------------------
 
 import { supabaseServiceHeaders } from "./supabase-headers";
+import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
 import { withVariantKeys } from "../src/lib/media/variant-keys";
 
 interface R2Bucket {
@@ -49,6 +50,7 @@ interface ExportedHandler<E = Record<string, unknown>> {
 }
 
 interface Env {
+  DATA_BACKEND?: "source";
   R2_PUBLIC: R2Bucket;
   R2_PRIVATE: R2Bucket;
   SUPABASE_URL: string;
@@ -432,12 +434,16 @@ async function expireElapsedPosts(
   return { listings, businesses, promotions };
 }
 
-const worker: ExportedHandler<Env> = {
+const worker: ExportedHandler<Env | FoundationJobEnv> = {
   /**
    * Cron trigger: runs daily at 03:00 UTC
    * Processes all unprocessed records in r2_cleanup_queue.
    */
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
+  async scheduled(_event: ScheduledEvent, env: Env | FoundationJobEnv, _ctx: ExecutionContext) {
+    if (env.DATA_BACKEND === "foundation") {
+      await triggerFoundationJob(env, "/api/internal/retention/run");
+      return;
+    }
     const supabaseUrl = env.SUPABASE_URL;
     const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
     const headers = supabaseServiceHeaders(supabaseKey, {
@@ -706,7 +712,11 @@ const worker: ExportedHandler<Env> = {
   /**
    * HTTP handler — health check / manual trigger
    */
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env | FoundationJobEnv,
+    ctx: ExecutionContext
+  ): Promise<Response> {
     if (request.method === "POST") {
       // Authenticate manual trigger via shared secret (constant-time comparison)
       const authHeader = request.headers.get("Authorization");

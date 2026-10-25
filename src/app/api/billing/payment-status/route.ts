@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isTerminalPaymentStatusView, toPaymentStatusView } from "@/lib/payments/status-view";
@@ -19,6 +21,8 @@ const paymentStatusQuerySchema = z.object({
 const PAYMENT_STATUS_RATE_LIMIT_PER_MINUTE = 60;
 
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationBillingRoute(request, "payment-status");
   const parsedQuery = parseAndValidateSearchParams(
     request.nextUrl.searchParams,
     paymentStatusQuerySchema,

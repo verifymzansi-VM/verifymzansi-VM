@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { useToast } from "@/hooks/use-toast";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationNotifications } from "@/components/notifications/foundation-notifications";
 
 interface NotificationItem {
   id: string;
@@ -56,6 +58,14 @@ const DEFAULT_PREFERENCES: OptionalPreferences = {
 };
 
 export function CommunicationHub() {
+  return getDataBackend() === "foundation" ? (
+    <FoundationNotifications />
+  ) : (
+    <LegacyCommunicationHub />
+  );
+}
+
+function LegacyCommunicationHub() {
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);

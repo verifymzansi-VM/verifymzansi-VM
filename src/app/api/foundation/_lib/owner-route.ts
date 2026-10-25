@@ -33,6 +33,7 @@ export async function handleFoundationOwnerRoute<T>({
   signInMessage,
   command,
   refusal,
+  includeAccountId = false,
 }: {
   request: NextRequest;
   log: Logger;
@@ -42,6 +43,7 @@ export async function handleFoundationOwnerRoute<T>({
   signInMessage: string;
   command: (api: FoundationAuthenticatedApi, input: unknown) => Promise<T>;
   refusal: (error: unknown) => FoundationRefusal | null;
+  includeAccountId?: boolean;
 }) {
   const unavailable = () =>
     NextResponse.json({ error: unavailableMessage }, { status: 503, headers: foundationNoStore });
@@ -76,8 +78,13 @@ export async function handleFoundationOwnerRoute<T>({
         )
       );
     let api: FoundationAuthenticatedApi;
+    let accountId: string | undefined;
     try {
-      api = await context.authenticate();
+      if (includeAccountId) {
+        const caller = await context.authenticateCaller();
+        api = caller.api;
+        accountId = caller.accountId;
+      } else api = await context.authenticate();
     } catch (error) {
       if (!(error instanceof FoundationSessionError) || error.status === 503)
         return context.respond(unavailable());
@@ -91,7 +98,10 @@ export async function handleFoundationOwnerRoute<T>({
           NextResponse.json({ error: "Check the details and try again" }, { status: 400 })
         );
     }
-    return context.respond(NextResponse.json(await command(api, input)));
+    const data = await command(api, input);
+    return context.respond(
+      NextResponse.json(includeAccountId ? { account_id: accountId, data } : data)
+    );
   } catch (error) {
     const known = refusal(error);
     if (known?.status === 403)

@@ -16,6 +16,7 @@ export function GET(request: NextRequest) {
     log,
     action: "inbox:read",
     mutate: false,
+    includeAccountId: true,
     unavailableMessage: "Notifications are temporarily unavailable",
     signInMessage: "Sign in to see your notifications",
     command: (api) => readFoundationNotifications(api, inboxPageQuery(request, false)),

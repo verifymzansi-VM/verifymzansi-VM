@@ -229,6 +229,17 @@ export function useAuth() {
       // The Zustand store is shared, so other useAuth() consumers see the
       // same data without triggering duplicate Supabase round-trips.
       if (fetchedRef.current && !options?.force) return;
+      const loaded = useAuthStore.getState();
+      if (
+        getDataBackend() === "foundation" &&
+        !options?.force &&
+        !loaded.isLoading &&
+        loaded.user &&
+        loaded.foundationContext?.account_id === loaded.user.id
+      ) {
+        fetchedRef.current = true;
+        return;
+      }
       fetchedRef.current = true;
       const requestVersion = ++authRequestVersion;
       const isCurrentRequest = () => requestVersion === authRequestVersion;

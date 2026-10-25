@@ -1,4 +1,6 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { getDataBackend } from "@/lib/data-backend";
+import { POST as submitFoundationReport } from "../foundation/reports/route";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reportSchema } from "@/lib/validations/contact";
@@ -21,6 +23,7 @@ const REPORT_DESCRIPTION_MAX_LENGTH = 2000;
 const DEV_IP_HASH_FALLBACK_KEY = crypto.randomBytes(32).toString("hex");
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return submitFoundationReport(request);
   try {
     const parsedBody = await parseAndValidateJsonRequest(request, reportSchema, {
       invalidJsonMessage: "Invalid JSON payload",

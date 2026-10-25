@@ -232,12 +232,10 @@ export const CHECKS: Check[] = [
   ),
   check(
     "cloudflare-build",
-    ["build:cloudflare"],
+    ["test:cloudflare:runtime"],
     "isolated production Worker bundle and runtime-binding integration",
     ["release"],
     {
-      unavailable:
-        "Isolated Worker runtime-binding integration fixture is still missing; separate successful Worker builds, config checks and sanitizer fixtures do not attest runtime bindings",
       dependencies: [
         "isolated Linux/macOS checkout",
         "build-time public config",
@@ -247,6 +245,8 @@ export const CHECKS: Check[] = [
         "scripts/audit-tooling.test.ts",
         "scripts/preflight-cloudflare.js",
         "scripts/sanitize-cloudflare-env.ts",
+        "scripts/check-cloudflare-startup.mjs",
+        "src/lib/health/runtime-bindings.test.ts",
       ],
     }
   ),

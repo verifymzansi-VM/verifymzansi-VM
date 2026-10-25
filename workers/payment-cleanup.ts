@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "./timing-safe-equal";
+import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
 
 import { supabaseServiceHeaders } from "./supabase-headers";
 
@@ -18,6 +19,7 @@ interface ExportedHandler<E = Record<string, unknown>> {
 }
 
 interface Env {
+  DATA_BACKEND?: "source";
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   WORKER_API_KEY: string;
@@ -168,8 +170,12 @@ async function createNotification(
   return true;
 }
 
-const worker: ExportedHandler<Env> = {
+const worker: ExportedHandler<Env | FoundationJobEnv> = {
   async scheduled(_event, env) {
+    if (env.DATA_BACKEND === "foundation") {
+      await triggerFoundationJob(env, "/api/internal/payments/reconcile");
+      return;
+    }
     if (env.APP_URL) {
       try {
         const appUrl = new URL(env.APP_URL);
@@ -369,7 +375,10 @@ const worker: ExportedHandler<Env> = {
         worker: "verifymzansi-payment-cleanup",
         status: "healthy",
         schedule: "*/10 * * * *",
-        processingStaleMinutes: env.PROCESSING_PAYMENT_STALE_MINUTES || "30",
+        processingStaleMinutes:
+          env.DATA_BACKEND === "foundation"
+            ? undefined
+            : env.PROCESSING_PAYMENT_STALE_MINUTES || "30",
       }),
       { headers: { "Content-Type": "application/json" } }
     );

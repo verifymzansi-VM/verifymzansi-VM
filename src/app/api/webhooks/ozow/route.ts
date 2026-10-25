@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDataBackend } from "@/lib/data-backend";
+import { applyFoundationOzowNotification } from "@/lib/foundation/billing-runtime";
 import { createLogger } from "@/lib/utils/logger";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { fulfillPayment, type FulfillmentResult } from "@/lib/payments/fulfillment";
@@ -137,6 +139,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing transaction status" }, { status: 400 });
     }
 
+    if (getDataBackend() === "foundation") {
+      return NextResponse.json(await applyFoundationOzowNotification(payload, rawBody));
+    }
     const supabase = createAdminClient() as unknown as PaymentStoreClient;
     const reconstructedId = fromOzowMerchantReference(payload.merchantReference);
     const payment =

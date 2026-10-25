@@ -31,6 +31,7 @@ export function GET(request: NextRequest) {
     log,
     action: "inbox:read",
     mutate: false,
+    includeAccountId: true,
     unavailableMessage: "Your messages are temporarily unavailable",
     signInMessage: "Sign in to see your messages",
     command: (api) => readFoundationEnquiries(api, inboxPageQuery(request, true)),

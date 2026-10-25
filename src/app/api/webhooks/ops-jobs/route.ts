@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runOperationJobs } from "@/lib/services/operation-jobs";
+import { getDataBackend } from "@/lib/data-backend";
+import { runFoundationOperationJobs } from "@/lib/foundation/operation-jobs";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("OpsJobsWebhook");
@@ -27,7 +29,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const summary = await runOperationJobs(20);
+    const summary =
+      getDataBackend() === "foundation"
+        ? await runFoundationOperationJobs()
+        : await runOperationJobs(20);
     return NextResponse.json(summary);
   } catch (err) {
     log.error("Operation job run failed", {

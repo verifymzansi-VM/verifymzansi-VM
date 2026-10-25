@@ -1,4 +1,6 @@
 "use client";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationPostRoute } from "@/components/foundation/post-editor";
 import { EventDateFields } from "@/components/post/event-date-fields";
 import { eventTimeToIso, eventTimeForInput } from "@/lib/forms/event-time";
 import { PostSelect } from "@/components/post/post-select";
@@ -50,7 +52,7 @@ import { isValidUserEnteredUrl, normalizeUserEnteredUrl } from "@/lib/utils/exte
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-shadow sm:h-10 sm:text-sm";
 
-export default function EditPromotionPage() {
+function EditPromotionPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const promotionId = params.id;
@@ -1387,3 +1389,9 @@ export default function EditPromotionPage() {
     </div>
   );
 }
+
+function FoundationPage() {
+  return <FoundationPostRoute kind="event" area="tourism_events" />;
+}
+const SelectedPage = getDataBackend() === "foundation" ? FoundationPage : EditPromotionPage;
+export default SelectedPage;

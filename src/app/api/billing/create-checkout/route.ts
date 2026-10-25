@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
 import { NextResponse, type NextRequest } from "next/server";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -63,6 +65,7 @@ function buildPendingPaymentResponse({
  * Requires an authenticated user with an account profile.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationBillingRoute(request, "checkout");
   try {
     const guard = await enforceBillingMutationGuard({
       request,

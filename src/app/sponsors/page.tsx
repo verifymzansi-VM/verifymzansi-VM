@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationOrganisations } from "@/components/foundation/organisation-public";
 import Link from "next/link";
 import { ArrowRight, MapPin, Users } from "lucide-react";
 import { Header } from "@/components/layout/header";
@@ -27,6 +29,16 @@ export const metadata: Metadata = {
 export const revalidate = 300;
 
 export default async function SponsorsPage() {
+  if (getDataBackend() === "foundation")
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main id="main-content" className="flex-1">
+          <FoundationOrganisations />
+        </main>
+        <Footer />
+      </div>
+    );
   const sponsors = await getPublicSponsors();
 
   return (

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getDataBackend } from "@/lib/data-backend";
 import { CheckoutConfirm, type CheckoutSummary } from "./checkout-confirm";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 import {
@@ -48,6 +49,7 @@ export default async function CheckoutPage({
   searchParams: Promise<{ plan?: string }>;
 }) {
   const { plan: planId } = await searchParams;
+  if (getDataBackend() === "foundation") redirect("/billing");
   if (!planId) redirect("/pricing");
   const summary = UUID.test(planId) ? await loadSummary(planId).catch(() => null) : null;
   return <CheckoutConfirm summary={summary} />;

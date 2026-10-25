@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-24T09-04-17.938Z/results.json",
-  "evidenceHash": "fBADUVmpxPBzHBm0_HxSK1V8_WGVbx_jJsetBXvQhmM",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-25T15-53-04.005Z/results.json",
+  "evidenceHash": "qvW18zxkr957BYrEipKxNXI6GljOv_zqjOLQjd4E4Z8",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -40,7 +40,11 @@
     "docs/backend-foundation/prototypes/organisation-sponsorships.sql": "JtSjuzGjU8cJKkIEGJQQhDitvsSKxJHSOKGwh_4Gtyc",
     "docs/backend-foundation/prototypes/partner-commissions.sql": "xrHx7i-83JU1IPSBQqron6pE7WVpXSePFbdwIG3UeKY",
     "docs/backend-foundation/prototypes/data-retention.sql": "pompriiBzfITFAUaqfB5Vww7UhQ6ICvNphIL-nBGg1g",
-    "docs/backend-foundation/prototypes/account-session-context.sql": "WMHkOx1sGuZ2CzL0D3FZ8dMm9aPw4A7O0TLxb__NWRw"
+    "docs/backend-foundation/prototypes/account-session-context.sql": "WMHkOx1sGuZ2CzL0D3FZ8dMm9aPw4A7O0TLxb__NWRw",
+    "docs/backend-foundation/prototypes/application-runtime.sql": "bCzLmXci8KUjCZPmu4iDGq64FlxoXMBaa5JjBSak2cM",
+    "docs/backend-foundation/prototypes/billing-runtime.sql": "jgS3Dql8PLlYQtYVmxDFno32x3rRKBOXda-LI6LcMl4",
+    "docs/backend-foundation/prototypes/media-evidence-runtime.sql": "3oEsTDr6dZDbAcaV8gGKxZXshjJa5RdAGgJfcXYujME",
+    "docs/backend-foundation/prototypes/staff-dashboard-runtime.sql": "xVx_lxmX6EzTd3euaKIvWN8FC0MXm6LYyUoC5rS4jgs"
   },
   "postingTermsCatalogue": {
     "activeVersion": "posting-v1",
@@ -56,7 +60,7 @@
     },
     "sql": "insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');\ninsert into private.posting_terms_current(version) values('posting-v1');\n"
   },
-  "candidateHash": "AXX7qN6ZN7nZ5nFtkwoNioIq6nf_21L4vf2GKC8l2o8",
+  "candidateHash": "ZG2_-vSuNWH7Jl5kG9lUK0j0aPWTpKz-btwG4SFmDHg",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",
@@ -86,8 +90,8 @@
     }
   },
   "catalogueSeedIdentitiesHash": "as4g-QYYagtdMoogKzVc3asHo7oJzhGr8Ip5lVYNDjo",
-  "functions": 400,
-  "matchingNativeFunctionBodies": 399,
+  "functions": 458,
+  "matchingNativeFunctionBodies": 457,
   "derivedFunctionChanges": {
     "internal.validate_listing_attributes": "Remove test-only fixture_market bypass; requires separate baseline replay and strict-category proof"
   },

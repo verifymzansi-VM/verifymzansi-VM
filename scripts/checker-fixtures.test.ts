@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, mkdir, rm, cp, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pnpmInvocation } from "./lib/audit-runtime";
+import { cloudflareBuildFingerprint } from "./lib/cloudflare-build-fingerprint.mjs";
 const root = process.cwd();
 async function fixture(run: (directory: string) => Promise<void>) {
   const base = path.join(root, "tmp");
@@ -54,6 +55,12 @@ test("Cloudflare build hook sanitizes cached artifacts and blocks failed secret 
       path.join(root, "scripts/ensure-opennext-build.mjs"),
       path.join(dir, "scripts/hook.mjs")
     );
+    await mkdir(path.join(dir, "scripts/lib"));
+    await cp(
+      path.join(root, "scripts/lib/cloudflare-build-fingerprint.mjs"),
+      path.join(dir, "scripts/lib/cloudflare-build-fingerprint.mjs")
+    );
+    assert.equal(spawnSync("git", ["init", "--quiet"], { cwd: dir }).status, 0);
     await mkdir(path.join(dir, ".open-next/assets"), { recursive: true });
     await mkdir(path.join(dir, ".open-next/cloudflare"), { recursive: true });
     await writeFile(path.join(dir, ".open-next/worker.js"), "export default {};");
@@ -88,6 +95,13 @@ test("Cloudflare build hook sanitizes cached artifacts and blocks failed secret 
         timeout: 60_000,
         env: { ...process.env, VM_FIXTURE_SCAN_FAILURE: failure ? "1" : "0" },
       });
+    await writeFile(
+      path.join(dir, ".open-next/build-fingerprint.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        fingerprint: cloudflareBuildFingerprint(dir, process.env),
+      })
+    );
     const good = run();
     assert.equal(good.status, 0, good.stdout + good.stderr);
     assert(!(await readFile(envModule, "utf8")).includes("fixture-sensitive"));
@@ -95,6 +109,13 @@ test("Cloudflare build hook sanitizes cached artifacts and blocks failed secret 
     assert.equal(run(true).status, 1);
     await writeFile(envModule, "malformed export");
     assert.equal(run().status, 1);
+    await writeFile(path.join(dir, "src-placeholder"), "not a build source");
+    const pkg = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));
+    await writeFile(
+      path.join(dir, "package.json"),
+      JSON.stringify({ ...pkg, changedBuildInput: true })
+    );
+    assert.equal(run().status, 99, "A stale source fingerprint must require a new build");
   }));
 test("Knip detects an unused export then accepts its removal", async () =>
   fixture(async (dir) => {

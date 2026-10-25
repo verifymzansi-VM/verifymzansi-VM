@@ -53,6 +53,8 @@ import {
 } from "@/lib/account/identity-policy";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { AccountVerificationStatus } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationProfile } from "@/components/auth/foundation-profile";
 
 type TabValue = "profile" | "security" | "account";
 
@@ -86,6 +88,10 @@ function hasPasswordProvider(user: { app_metadata?: unknown; identities?: unknow
 }
 
 export default function ProfilePage() {
+  return getDataBackend() === "foundation" ? <FoundationProfile /> : <LegacyProfilePage />;
+}
+
+function LegacyProfilePage() {
   const [email, setEmail] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<AccountVerificationStatus | null>(
     null

@@ -236,6 +236,11 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
 
   // ── Billing / webhooks ───────────────────────────────
   "billing:checkout": [{ limit: 10, ttl: 60 }],
+  "billing:read": [{ limit: 60, ttl: 60 }],
+  "reports:create": [
+    { limit: 5, ttl: 60 },
+    { limit: 20, ttl: 3600 },
+  ],
   "billing:change-plan": [
     { limit: 5, ttl: 60 }, // 5 per minute
     { limit: 10, ttl: 3600 }, // 10 per hour

@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "AXX7qN6ZN7nZ5nFtkwoNioIq6nf_21L4vf2GKC8l2o8",
+  "candidateHash": "ZG2_-vSuNWH7Jl5kG9lUK0j0aPWTpKz-btwG4SFmDHg",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "60vMRC0a8iW8b9zH0Rl3EhR68fxYX5A2PrW5EuOvGN0",
-  "roleTypesHash": "mUwXa56iiiFk-iGZLYCMazYd-ea_7spi_ax5onAM7BY",
+  "generatedTypesHash": "SoXtwV-iJx4LuJEsZkilTIFOT1QADAL9XgfiLKRcUm4",
+  "roleTypesHash": "k5WSk-eQljZAPrjpTG9wYJEYx8drqSjnJR8os7aiQoQ",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -310,6 +310,45 @@
       }
     },
     {
+      "name": "assess_identity_upload",
+      "signature": "p_owner uuid, p_fingerprint text, p_document_sha256 text, p_selfie_sha256 text",
+      "argumentsWithDefaults": "p_owner uuid, p_fingerprint text, p_document_sha256 text, p_selfie_sha256 text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_fingerprint",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_document_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_selfie_sha256",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
       "name": "attach_provider_request",
       "signature": "p_payment_id uuid, p_request_id text",
       "argumentsWithDefaults": "p_payment_id uuid, p_request_id text",
@@ -433,6 +472,35 @@
       }
     },
     {
+      "name": "claim_checkout_request",
+      "signature": "p_payment_id uuid, p_owner_id uuid",
+      "argumentsWithDefaults": "p_payment_id uuid, p_owner_id uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_owner_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
       "name": "claim_evidence_case",
       "signature": "p_case_id uuid",
       "argumentsWithDefaults": "p_case_id uuid",
@@ -495,6 +563,54 @@
         {
           "name": "p_limit",
           "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "claim_notification_outbox",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer DEFAULT 20",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "claim_payment_reconciliation",
+      "signature": "p_payment_id uuid",
+      "argumentsWithDefaults": "p_payment_id uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
           "optional": false
         }
       ],
@@ -647,6 +763,128 @@
         "anon": false,
         "authenticated": true,
         "service_role": false
+      }
+    },
+    {
+      "name": "complete_checkout_request",
+      "signature": "p_payment_id uuid, p_owner_id uuid, p_claim_token uuid, p_request_id text, p_checkout_url text",
+      "argumentsWithDefaults": "p_payment_id uuid, p_owner_id uuid, p_claim_token uuid, p_request_id text, p_checkout_url text",
+      "returns": "boolean",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_owner_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim_token",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_request_id",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_checkout_url",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "complete_evidence_upload",
+      "signature": "p_artifact uuid, p_stored_sha256 text, p_content_sha256 text, p_size integer",
+      "argumentsWithDefaults": "p_artifact uuid, p_stored_sha256 text, p_content_sha256 text, p_size integer",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_stored_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_content_sha256",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_size",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "complete_notification_outbox",
+      "signature": "p_id uuid, p_claim uuid, p_ok boolean, p_error text",
+      "argumentsWithDefaults": "p_id uuid, p_claim uuid, p_ok boolean, p_error text DEFAULT NULL::text",
+      "returns": "boolean",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_ok",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_error",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
       }
     },
     {
@@ -912,6 +1150,64 @@
       }
     },
     {
+      "name": "evidence_review_object",
+      "signature": "p_case uuid, p_artifact uuid",
+      "argumentsWithDefaults": "p_case uuid, p_artifact uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "evidence_upload_target",
+      "signature": "p_owner uuid, p_artifact uuid",
+      "argumentsWithDefaults": "p_owner uuid, p_artifact uuid",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
       "name": "finalize_media",
       "signature": "p_object_id uuid, p_size integer, p_sha256 text, p_mime text, p_width integer, p_height integer",
       "argumentsWithDefaults": "p_object_id uuid, p_size integer, p_sha256 text, p_mime text, p_width integer DEFAULT NULL::integer, p_height integer DEFAULT NULL::integer",
@@ -995,6 +1291,35 @@
       }
     },
     {
+      "name": "finish_unpaid_checkout",
+      "signature": "p_payment_id uuid, p_status text",
+      "argumentsWithDefaults": "p_payment_id uuid, p_status text",
+      "returns": "boolean",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_status",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
       "name": "flag_duplicate_events",
       "signature": "p_post_a uuid, p_expected_revision_a integer, p_post_b uuid, p_expected_revision_b integer, p_reason text",
       "argumentsWithDefaults": "p_post_a uuid, p_expected_revision_a integer, p_post_b uuid, p_expected_revision_b integer, p_reason text",
@@ -1036,6 +1361,35 @@
         "anon": false,
         "authenticated": true,
         "service_role": false
+      }
+    },
+    {
+      "name": "get_checkout_payment",
+      "signature": "p_payment_id uuid, p_merchant_reference text",
+      "argumentsWithDefaults": "p_payment_id uuid DEFAULT NULL::uuid, p_merchant_reference text DEFAULT NULL::text",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_merchant_reference",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
       }
     },
     {
@@ -1147,6 +1501,24 @@
       }
     },
     {
+      "name": "get_my_billing",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "get_my_inbox_counts",
       "signature": "",
       "argumentsWithDefaults": "",
@@ -1165,7 +1537,49 @@
       }
     },
     {
+      "name": "get_my_payment",
+      "signature": "p_payment_id uuid",
+      "argumentsWithDefaults": "p_payment_id uuid",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "get_my_profile",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_my_verification_case",
       "signature": "",
       "argumentsWithDefaults": "",
       "returns": "jsonb",
@@ -1291,6 +1705,30 @@
       }
     },
     {
+      "name": "get_public_contact_channels",
+      "signature": "p_post_id uuid",
+      "argumentsWithDefaults": "p_post_id uuid",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "get_public_organisation",
       "signature": "p_slug text",
       "argumentsWithDefaults": "p_slug text",
@@ -1334,6 +1772,24 @@
       ],
       "execute": {
         "anon": true,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "get_staff_dashboard",
+      "signature": "",
+      "argumentsWithDefaults": "",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [],
+      "execute": {
+        "anon": false,
         "authenticated": true,
         "service_role": false
       }
@@ -1501,6 +1957,122 @@
         "anon": false,
         "authenticated": true,
         "service_role": false
+      }
+    },
+    {
+      "name": "list_my_posts",
+      "signature": "p_limit integer, p_offset integer",
+      "argumentsWithDefaults": "p_limit integer DEFAULT 48, p_offset integer DEFAULT 0",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_offset",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "list_reconcilable_payments",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer DEFAULT 20",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
+      "name": "manage_plan_member",
+      "signature": "p_entitlement_id uuid, p_action text, p_email text",
+      "argumentsWithDefaults": "p_entitlement_id uuid, p_action text, p_email text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_entitlement_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "mark_evidence_deleted",
+      "signature": "p_artifact uuid, p_claim_token uuid",
+      "argumentsWithDefaults": "p_artifact uuid, p_claim_token uuid",
+      "returns": "boolean",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim_token",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
       }
     },
     {
@@ -2267,6 +2839,30 @@
       }
     },
     {
+      "name": "reconcile_intro_trials",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer DEFAULT 20",
+      "returns": "integer",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      }
+    },
+    {
       "name": "reconcile_verified_identity_ban",
       "signature": "p_decision uuid",
       "argumentsWithDefaults": "p_decision uuid",
@@ -2429,6 +3025,40 @@
         "anon": false,
         "authenticated": false,
         "service_role": true
+      }
+    },
+    {
+      "name": "release_evidence_claim",
+      "signature": "p_case uuid, p_claim_generation text, p_claim_nonce uuid",
+      "argumentsWithDefaults": "p_case uuid, p_claim_generation text, p_claim_nonce uuid",
+      "returns": "boolean",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_claim_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
       }
     },
     {
@@ -2648,6 +3278,79 @@
         "anon": false,
         "authenticated": true,
         "service_role": false
+      }
+    },
+    {
+      "name": "return_identity_submission",
+      "signature": "p_case uuid, p_expected_version integer, p_claim_generation text, p_claim_nonce uuid, p_reason text",
+      "argumentsWithDefaults": "p_case uuid, p_expected_version integer, p_claim_generation text, p_claim_nonce uuid, p_reason text",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_version",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_claim_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_claim_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "reveal_post_phone",
+      "signature": "p_post_id uuid, p_channel text",
+      "argumentsWithDefaults": "p_post_id uuid, p_channel text",
+      "returns": "text",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_channel",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
       }
     },
     {
@@ -3187,6 +3890,30 @@
       ],
       "execute": {
         "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "search_post_cards",
+      "signature": "p_request jsonb",
+      "argumentsWithDefaults": "p_request jsonb",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "execute": {
+        "anon": true,
         "authenticated": true,
         "service_role": false
       }
@@ -3829,6 +4556,30 @@
           "name": "p_commission_bps",
           "sqlType": "integer",
           "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_verification_queue",
+      "signature": "p_limit integer",
+      "argumentsWithDefaults": "p_limit integer",
+      "returns": "jsonb",
+      "volatility": "v",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
         }
       ],
       "execute": {

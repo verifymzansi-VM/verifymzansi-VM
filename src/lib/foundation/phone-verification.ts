@@ -69,7 +69,8 @@ export async function issueFoundationPhoneChallenge(
   owner: string,
   input: unknown,
   environment: PhoneEnvironment = process.env,
-  deliver: (phone: string, code: string) => Promise<{ success: boolean }> = sendOtpSms
+  deliver: (phone: string, code: string) => Promise<{ success: boolean }> = (phone, code) =>
+    sendOtpSms(phone, code, { retry: false })
 ) {
   const parsed = foundationPhoneSendSchema.safeParse(input);
   if (!z.uuid().safeParse(owner).success || !parsed.success) throw new FoundationPhoneError(400);

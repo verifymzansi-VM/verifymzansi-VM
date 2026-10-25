@@ -227,6 +227,7 @@ const notificationPage = z.strictObject({
   unread_count: z.number().int().min(0),
   next_cursor: cursor.nullable(),
 });
+export const foundationNotificationPageSchema = notificationPage;
 const notificationPageInput = z.strictObject({
   limit: z.number().int().min(1).max(50).default(25),
   cursor: cursor.optional(),

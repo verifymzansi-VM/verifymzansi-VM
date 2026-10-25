@@ -1,3 +1,5 @@
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationBillingPage } from "@/components/foundation/billing-page";
 import { TrialPolicy } from "@/components/billing/trial-policy";
 import { BillingFaq } from "@/components/billing/billing-faq";
 import { Header } from "@/components/layout/header";
@@ -28,6 +30,7 @@ async function loadTrialSettings() {
 }
 
 export default async function BillingPage() {
+  if (getDataBackend() === "foundation") return <FoundationBillingPage />;
   const [catalog, trials] = await Promise.all([getCommercialCatalog(), loadTrialSettings()]);
   const trustConfig = getTrustPublicConfig();
 

@@ -124,6 +124,8 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
   },
   experimental: {
+    // Bound parallel build/render workers on developer machines and CI.
+    cpus: 2,
     serverActions: {
       bodySizeLimit: "50mb",
     },

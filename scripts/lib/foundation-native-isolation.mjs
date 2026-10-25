@@ -71,6 +71,14 @@ export const FIXTURE_MIGRATIONS = {
   "20261022160000_data_retention.sql": "docs/backend-foundation/prototypes/data-retention.sql",
   "20261024081843_account_session_context.sql":
     "docs/backend-foundation/prototypes/account-session-context.sql",
+  "20261025000532_foundation_application_runtime.sql":
+    "docs/backend-foundation/prototypes/application-runtime.sql",
+  "20261025000535_foundation_billing_runtime.sql":
+    "docs/backend-foundation/prototypes/billing-runtime.sql",
+  "20261025000537_foundation_media_evidence_runtime.sql":
+    "docs/backend-foundation/prototypes/media-evidence-runtime.sql",
+  "20261025000539_foundation_staff_runtime.sql":
+    "docs/backend-foundation/prototypes/staff-dashboard-runtime.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

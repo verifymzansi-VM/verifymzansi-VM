@@ -53,6 +53,7 @@ async function run() {
 async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release) {
   const provenance = Object.fromEntries(
     [
+      ...Object.values(FIXTURE_MIGRATIONS),
       "scripts/test-foundation-native.mjs",
       "scripts/lib/foundation-posting-terms-native.mjs",
       "src/lib/foundation/posting-terms.ts",
@@ -1593,7 +1594,7 @@ commit;`);
       sql(
         `select vat_cents||'/'||total_cents from private.invoices where payment_id='${uuid(checkout.data.payment_id)}';`
       ),
-      "652/5000"
+      "0/5000"
     );
     record("native-billing-checkout-and-idempotent-provider-inbox");
 
@@ -1857,6 +1858,11 @@ commit;`);
       target_owner_id: other.id,
       purchase_entitlement_id: tourismEntitlement,
       addon_capabilities: ["boost", "featured", "urgent"],
+      merchant_invoice: {
+        registration_status: "not_registered",
+        vat_number: null,
+        vat_rate_bps: 0,
+      },
     });
     for (const change of [
       "target_post_id=gen_random_uuid()",
@@ -4238,12 +4244,19 @@ commit;`);
     nativeStage = "released hold exact cleanup result";
     assert.equal(sweep.status, 200);
     assert.deepEqual(
-      sweep.data.map((row) => row.artifact_id),
-      [artifact]
+      sweep.data.map((row) => row.artifact_id).sort(),
+      [artifact, abandoned.data.artifact_id].sort()
     );
     nativeStage = "released hold cleanup key binding";
-    assert.ok(sweep.data.every((row) => row.object_key.startsWith(`evidence/${caseId}/`)));
-    for (const id of [artifact, abandoned.data.artifact_id]) {
+    assert.ok(
+      sweep.data.every((row) =>
+        row.object_key.startsWith(`evidence/${row.artifact_id === artifact ? caseId : secondCase}/`)
+      )
+    );
+    for (const row of sweep.data) {
+      const id = row.artifact_id;
+      assert.match(row.claim_token, /^[a-f0-9-]{36}$/);
+      assert.ok(Date.parse(row.lease_until) > Date.now());
       nativeStage =
         id === artifact
           ? "reviewed artifact deletion acknowledgement"
@@ -4251,8 +4264,8 @@ commit;`);
       assert.equal(
         (
           await rpc(
-            "advance_evidence_artifact",
-            { p_artifact_id: id, p_state: "deleted" },
+            "mark_evidence_deleted",
+            { p_artifact: id, p_claim_token: row.claim_token },
             null,
             true
           )

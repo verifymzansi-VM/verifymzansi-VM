@@ -1,4 +1,6 @@
 "use client";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationPostRoute } from "@/components/foundation/post-editor";
 import {
   BusinessContactFields,
   readContactMethods,
@@ -261,7 +263,7 @@ function generateSlug(name: string): string {
     .slice(0, 60);
 }
 
-export default function CreateBusinessPage() {
+function CreateBusinessPage() {
   return (
     <Suspense
       fallback={
@@ -2241,3 +2243,9 @@ function CreateBusinessContent() {
     </div>
   );
 }
+
+function FoundationPage() {
+  return <FoundationPostRoute kind="business" area="business" />;
+}
+const SelectedPage = getDataBackend() === "foundation" ? FoundationPage : CreateBusinessPage;
+export default SelectedPage;

@@ -626,13 +626,29 @@ export async function uploadKycDocument(
   ownerId: string,
   docType: string
 ): Promise<UploadResult> {
+  const key = generateStorageKey(`kyc/${docType}`, ownerId, "encrypted.bin");
+  return uploadEncryptedEvidenceAtKey(file, ownerId, docType, key);
+}
+
+/** Foundation journals own their immutable object key before any bytes move.
+ * Encryption stays byte-compatible with existing KYC objects and private reads. */
+export async function uploadEncryptedEvidenceAtKey(
+  file: File | Blob,
+  ownerId: string,
+  docType: string,
+  key: string
+): Promise<UploadResult & { storedBytes: number; storedSha256: string }> {
+  assertSafeStorageKey(key);
   const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
 
   // Encrypt file before upload
   const encryptedBuffer = await encryptFile(file);
 
-  // Generate storage key
-  const key = generateStorageKey(`kyc/${docType}`, ownerId, "encrypted.bin");
+  const { createHash } = await import("node:crypto");
+  const receipt = {
+    storedBytes: encryptedBuffer.length,
+    storedSha256: createHash("sha256").update(encryptedBuffer).digest("hex"),
+  };
 
   // Playwright e2e stub: persist the encrypted artifact on local disk instead
   // of reaching real R2 with fixture credentials (mirrors uploadToR2's stub).
@@ -644,7 +660,7 @@ export async function uploadKycDocument(
     const destination = path.join(root, key);
     await fs.mkdir(path.dirname(destination), { recursive: true });
     await fs.writeFile(destination, encryptedBuffer);
-    return { url: `private://${privateBucket}/${key}`, key };
+    return { url: `private://${privateBucket}/${key}`, key, ...receipt };
   }
 
   // Prefer native R2 binding when running on Cloudflare Workers (no S3 credentials needed).
@@ -653,7 +669,7 @@ export async function uploadKycDocument(
     await r2Binding.put(key, encryptedBuffer, {
       customMetadata: { ownerId, docType, encrypted: "true" },
     });
-    return { url: `private://${privateBucket}/${key}`, key };
+    return { url: `private://${privateBucket}/${key}`, key, ...receipt };
   }
 
   // Fall back to S3-compatible API (local Next.js dev, or Cloudflare without binding).
@@ -663,6 +679,7 @@ export async function uploadKycDocument(
     Key: key,
     Body: encryptedBuffer,
     ContentType: "application/octet-stream",
+    CacheControl: "private, no-store",
     Metadata: {
       ownerId: ownerId,
       docType: docType,
@@ -675,6 +692,7 @@ export async function uploadKycDocument(
   return {
     url: `private://${privateBucket}/${key}`, // Use private:// scheme to indicate no public access
     key: key,
+    ...receipt,
   };
 }
 

@@ -1,3 +1,4 @@
+import { FoundationAccountBoundary } from "@/components/auth/foundation-account-boundary";
 import Link from "next/link";
 import { AdminMobileNav, AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminLiveNotifier } from "@/components/admin/admin-live-notifier";
@@ -10,6 +11,8 @@ import { navFor } from "@/lib/admin/nav";
 import { getStaffNavCounts } from "@/lib/services/staff-dashboard";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { formatSaLongDate } from "@/lib/utils/format";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationStaffDashboard } from "@/lib/foundation/staff-dashboard";
 
 /** Prevent search engines from indexing admin pages */
 export const metadata = {
@@ -26,13 +29,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Staff role, account status and two-step verification come from the
   // database on every request; the JWT role is never trusted.
   const staff = await requireStaff();
+  const foundation = getDataBackend() === "foundation";
   const [counts, evidenceDeskEnabled] = await Promise.all([
-    getStaffNavCounts(staff.user.id),
-    isFeatureEnabled("kyc_evidence_desk"),
+    foundation
+      ? readFoundationStaffDashboard().then((overview) => ({
+          ...overview.counts,
+          content: overview.counts.content,
+        }))
+      : getStaffNavCounts(staff.user.id),
+    foundation ? Promise.resolve(true) : isFeatureEnabled("kyc_evidence_desk"),
   ]);
   const sections = navFor(staff.role, { kyc_evidence_desk: evidenceDeskEnabled });
 
-  return (
+  const content = (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <a
         href="#main-content"
@@ -64,8 +73,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       )}
 
-      <AdminLiveNotifier userId={staff.user.id} userRole={staff.role} />
-      <AdminRealtimeRefresh userId={staff.user.id} />
+      {!foundation && <AdminLiveNotifier userId={staff.user.id} userRole={staff.role} />}
+      {!foundation && <AdminRealtimeRefresh userId={staff.user.id} />}
 
       <div className="flex w-full min-w-0 flex-1 overflow-x-hidden">
         <AdminSidebar sections={sections} counts={counts} />
@@ -74,5 +83,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </main>
       </div>
     </div>
+  );
+  return foundation ? (
+    <FoundationAccountBoundary accountId={staff.user.id} staff>
+      {content}
+    </FoundationAccountBoundary>
+  ) : (
+    content
   );
 }

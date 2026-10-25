@@ -97,7 +97,11 @@ function isRetryable(error: unknown, statusCode?: number): boolean {
   return false;
 }
 
-export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
+export async function sendSms(
+  params: SendSmsParams,
+  options: { retry?: boolean } = {}
+): Promise<SendSmsResult> {
+  const retries = options.retry === false ? 0 : MAX_RETRIES;
   // Explicit e2e runtime (Playwright stub server) never leaves the local
   // machine — mock SMS the same way storage/auth are stubbed there.
   const runtimeMode = process.env.VERIFYMZANSI_RUNTIME_MODE?.trim().toLowerCase();
@@ -185,7 +189,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
         }
         return {
           success: false,
-          error: `HTTP ${response.status}: ${rawBody}`,
+          error: `HTTP ${response.status} from SMS provider`,
           httpStatus: response.status,
         };
       }
@@ -240,7 +244,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
 
           // AT can accept the message before per-recipient details are available.
           log.warn("AT returned 200 OK with empty Recipients array", {
-            rawBody: rawBody.slice(0, 500),
+            recipientCount: 0,
             includeSenderId,
           });
           return { success: true, messageId: "at-accepted-empty-recipients" };
@@ -274,7 +278,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       // SMSMessageData or Recipients missing but AT returned 200 OK
       // Without recipient status data, we cannot confirm delivery — report failure
       log.warn("AT returned 200 OK but no SMSMessageData.Recipients", {
-        rawBody: rawBody.slice(0, 500),
+        recipientDataMissing: true,
         includeSenderId,
       });
       return { success: false, error: "No recipient data in response" };
@@ -283,6 +287,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
     const firstAttempt = await sendAttempt(senderIdResult.valid);
     if (
       !firstAttempt.success &&
+      options.retry !== false &&
       firstAttempt.invalidSenderIdRejected &&
       senderIdResult.valid &&
       senderIdResult.value
@@ -299,7 +304,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
       !firstAttempt.invalidSenderIdRejected &&
       isRetryable(undefined, firstAttempt.httpStatus)
     ) {
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      for (let attempt = 1; attempt <= retries; attempt++) {
         const backoff = RETRY_BASE_MS * Math.pow(2, attempt - 1);
         log.warn("Retrying SMS after transient failure", {
           attempt,
@@ -319,7 +324,7 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
   } catch (error) {
     // Retry transient errors (network failures, timeouts) at the outer level
     if (isRetryable(error)) {
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      for (let attempt = 1; attempt <= retries; attempt++) {
         const backoff = RETRY_BASE_MS * Math.pow(2, attempt - 1);
         log.warn("Retrying SMS after caught exception", {
           attempt,
@@ -389,16 +394,23 @@ export async function sendSms(params: SendSmsParams): Promise<SendSmsResult> {
  */
 const OtpFormat = z.string().regex(/^\d{6}$/, "OTP must be exactly 6 digits");
 
-export async function sendOtpSms(phone: string, otp: string): Promise<SendSmsResult> {
+export async function sendOtpSms(
+  phone: string,
+  otp: string,
+  options: { retry?: boolean } = {}
+): Promise<SendSmsResult> {
   // Validate OTP format before embedding in SMS text
   OtpFormat.parse(otp);
 
   const message = `Your VerifyMzansi verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`;
 
-  return sendSms({
-    to: phone,
-    message,
-  });
+  return sendSms(
+    {
+      to: phone,
+      message,
+    },
+    options
+  );
 }
 
 /**

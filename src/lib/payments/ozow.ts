@@ -397,6 +397,10 @@ export interface OzowHostedPaymentRequest {
   amountCents: number;
   returnUrl: string;
   cancelUrl: string;
+  /** Persist these with the quote so an uncertain response can be retried safely. */
+  idempotencyKey?: string;
+  correlationId?: string;
+  expireAt?: string;
 }
 
 export interface OzowHostedPaymentResponse {
@@ -434,9 +438,9 @@ export async function createOzowHostedPayment(
   input: OzowHostedPaymentRequest
 ): Promise<OzowHostedPaymentResponse> {
   const amount = input.amountCents / 100;
-  const expireAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-  const correlationId = crypto.randomUUID();
-  const idempotencyKey = crypto.randomUUID();
+  const expireAt = input.expireAt ?? new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const correlationId = input.correlationId ?? crypto.randomUUID();
+  const idempotencyKey = input.idempotencyKey ?? crypto.randomUUID();
   const referenceField = toOzowReferenceField(input.merchantReference);
 
   if (isMockOzowEnabled()) {

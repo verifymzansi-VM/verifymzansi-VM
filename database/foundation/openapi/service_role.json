@@ -40,6 +40,50 @@
         ]
       }
     },
+    "/rpc/evidence_upload_target": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_artifact": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_owner": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_owner",
+                "p_artifact"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) evidence_upload_target"
+        ]
+      }
+    },
     "/rpc/claim_verification_phone_attempt": {
       "post": {
         "parameters": [
@@ -81,6 +125,66 @@
         },
         "tags": [
           "(rpc) claim_verification_phone_attempt"
+        ]
+      }
+    },
+    "/rpc/list_reconcilable_payments": {
+      "get": {
+        "parameters": [
+          {
+            "format": "int32",
+            "in": "query",
+            "name": "p_limit",
+            "required": false,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) list_reconcilable_payments"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) list_reconcilable_payments"
         ]
       }
     },
@@ -231,6 +335,193 @@
         },
         "tags": [
           "(rpc) finalize_verification_phone"
+        ]
+      }
+    },
+    "/rpc/complete_evidence_upload": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_artifact": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_content_sha256": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_size": {
+                  "format": "int32",
+                  "type": "integer"
+                },
+                "p_stored_sha256": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_artifact",
+                "p_stored_sha256",
+                "p_content_sha256",
+                "p_size"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) complete_evidence_upload"
+        ]
+      }
+    },
+    "/rpc/complete_notification_outbox": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_claim": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_error": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_ok": {
+                  "format": "boolean",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "p_id",
+                "p_claim",
+                "p_ok"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) complete_notification_outbox"
+        ]
+      }
+    },
+    "/rpc/mark_evidence_deleted": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_artifact": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_claim_token": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_artifact",
+                "p_claim_token"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) mark_evidence_deleted"
+        ]
+      }
+    },
+    "/rpc/claim_notification_outbox": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) claim_notification_outbox"
         ]
       }
     },
@@ -414,6 +705,50 @@
         ]
       }
     },
+    "/rpc/evidence_review_object": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_artifact": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_case": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_case",
+                "p_artifact"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) evidence_review_object"
+        ]
+      }
+    },
     "/rpc/claim_evidence_cleanup": {
       "post": {
         "parameters": [
@@ -450,6 +785,86 @@
         },
         "tags": [
           "(rpc) claim_evidence_cleanup"
+        ]
+      }
+    },
+    "/rpc/reconcile_intro_trials": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_limit": {
+                  "format": "int32",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) reconcile_intro_trials"
+        ]
+      }
+    },
+    "/rpc/claim_checkout_request": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_owner_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_payment_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_payment_id",
+                "p_owner_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) claim_checkout_request"
         ]
       }
     },
@@ -541,6 +956,116 @@
         },
         "tags": [
           "(rpc) advance_evidence_artifact"
+        ]
+      }
+    },
+    "/rpc/get_checkout_payment": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_payment_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_merchant_reference",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_checkout_payment"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_merchant_reference": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_payment_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) get_checkout_payment"
+        ]
+      }
+    },
+    "/rpc/claim_payment_reconciliation": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_payment_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_payment_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) claim_payment_reconciliation"
         ]
       }
     },
@@ -785,6 +1310,125 @@
         ]
       }
     },
+    "/rpc/finish_unpaid_checkout": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_payment_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_status": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_payment_id",
+                "p_status"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) finish_unpaid_checkout"
+        ]
+      }
+    },
+    "/rpc/reveal_post_phone": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_post_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_channel",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) reveal_post_phone"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_channel": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_post_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_post_id",
+                "p_channel"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) reveal_post_phone"
+        ]
+      }
+    },
     "/rpc/run_retention": {
       "post": {
         "parameters": [
@@ -865,6 +1509,65 @@
         },
         "tags": [
           "(rpc) grant_verified_intro_trial"
+        ]
+      }
+    },
+    "/rpc/complete_checkout_request": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_checkout_url": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_claim_token": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_owner_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_payment_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_request_id": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_payment_id",
+                "p_owner_id",
+                "p_claim_token",
+                "p_request_id",
+                "p_checkout_url"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) complete_checkout_request"
         ]
       }
     },
@@ -1114,6 +1817,60 @@
         },
         "tags": [
           "(rpc) check_cost_alarms"
+        ]
+      }
+    },
+    "/rpc/assess_identity_upload": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_document_sha256": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_fingerprint": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_owner": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_selfie_sha256": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_owner",
+                "p_fingerprint",
+                "p_document_sha256",
+                "p_selfie_sha256"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) assess_identity_upload"
         ]
       }
     },

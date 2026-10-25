@@ -1,0 +1,18 @@
+[
+  {
+    "name": "source-serif-4-latin-600",
+    "source": "https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600&display=swap",
+    "fileURL": "https://fonts.gstatic.com/s/sourceserif4/v15/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjisltnhtdDg.woff2",
+    "license": "https://raw.githubusercontent.com/google/fonts/main/ofl/sourceserif4/OFL.txt",
+    "bytes": 21532,
+    "integrity": "sha256-8rfhzx0ne3YIIxhoE1ZI+K2OK1jY6XygiL7hXcNXvuc="
+  },
+  {
+    "name": "plus-jakarta-sans-latin-variable",
+    "source": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&display=swap",
+    "fileURL": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+    "license": "https://raw.githubusercontent.com/google/fonts/main/ofl/plusjakartasans/OFL.txt",
+    "bytes": 27348,
+    "integrity": "sha256-FT/IW3Api+6x1hpfcjMxZJ5/I7t3MCpm5hyz4vvbXnk="
+  }
+]

@@ -40,6 +40,7 @@ const requiredSecrets = [
   "IP_HASH_SECRET",
   "RATE_LIMITER_API_KEY",
   "OPS_JOBS_SECRET",
+  "INTERNAL_JOBS_SECRET",
 ];
 
 function hasCloudflareApiToken() {
