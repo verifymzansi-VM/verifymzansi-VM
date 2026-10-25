@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
 import { validateLaunchConfiguration } from "../src/lib/config/launch-validation.ts";
 
@@ -12,6 +13,35 @@ test("Worker startup fixture satisfies strict production launch configuration", 
     mode: "production",
   });
   assert.deepEqual(summary.errors, []);
+});
+test("Worker fixture also passes the actual strict instrumentation environment validator", () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "-e",
+      'require("./src/lib/config/env.ts").validateEnv({mode:"production",strict:true});',
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...createCloudflareStartupFixture(),
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        TEMP: process.env.TEMP,
+        TMP: process.env.TMP,
+      },
+      encoding: "utf8",
+      timeout: 30000,
+      windowsHide: true,
+    }
+  );
+  assert.equal(
+    result.status,
+    0,
+    "Synthetic runtime settings must pass the same validation as instrumentation"
+  );
 });
 
 const require = createRequire(import.meta.url);

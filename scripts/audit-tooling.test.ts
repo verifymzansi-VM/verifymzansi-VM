@@ -146,7 +146,11 @@ test("isolated snapshots preserve staged deletions, renames, edits and untracked
       "-m",
       "fixture",
     ]);
-    await cp(source, checkout, { recursive: true });
+    // Clone through Git so background object maintenance cannot remove a lock
+    // file while a recursive filesystem copy is traversing .git.
+    execFileSync("git", ["clone", "--quiet", "--no-local", source, checkout], {
+      windowsHide: true,
+    });
     git(["rm", "deleted.txt"]);
     git(["mv", "renamed.txt", "new-name.txt"]);
     await writeFile(path.join(source, "edited.txt"), "changed");

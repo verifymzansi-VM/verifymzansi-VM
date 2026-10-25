@@ -25,6 +25,7 @@ export function createCloudflareStartupFixture(publicSettings = {}) {
     FOUNDATION_PHONE_OTP_KEY: fixture(),
     INTERNAL_JOBS_SECRET: fixture(),
     RATE_LIMITER_API_KEY: fixture(),
+    OTP_RATE_LIMITER_URL: "https://limiter.runtime-check.invalid",
     KYC_WEBHOOK_SECRET: fixture(),
     NEXT_PUBLIC_APP_URL: "https://runtime-check.invalid",
     KYC_PROVIDER: "manual",
