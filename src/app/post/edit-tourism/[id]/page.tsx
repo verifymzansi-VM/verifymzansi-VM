@@ -666,7 +666,7 @@ function EditPromotionPage() {
                   value={categoryKey}
                   onChange={(e) => setCategoryKey(e.target.value as BusinessCategory | "")}
                 >
-                  <option value="">General & Other</option>
+                  <option value="">General &amp; Other</option>
                   {BUSINESS_CATEGORIES.map((item) => (
                     <option key={item.value} value={item.value}>
                       {item.label}
@@ -1063,7 +1063,7 @@ function EditPromotionPage() {
                       onChange={(e) => setFoodDrinksAvailable(e.target.checked)}
                       className="rounded"
                     />
-                    Food & drinks available
+                    Food &amp; drinks available
                   </label>
                 </div>
 

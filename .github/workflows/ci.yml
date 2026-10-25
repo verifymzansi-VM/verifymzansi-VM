@@ -197,13 +197,15 @@ jobs:
         env:
           STRICT_COVERAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
         run: pnpm safety:ci-review -- --checks=unit,coverage,db-trials,db-commercial,db-media,db-visits,db-staff-roles,db-decisions,db-queue-claims,db-operation-jobs,db-dsar,db-dashboard,db-admin-lists,db-business-counts,contracts,canaries,preflight
+      - name: Preserve unit, coverage and contract evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unit-contract-audit
+          path: tmp/safety-gate/**
   build-route-verify:
     runs-on: ubuntu-latest
     needs: lint-type-security
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -212,6 +214,8 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      - name: Prepare isolated foundation configuration
+        run: node scripts/prepare-cloudflare-runtime-check.mjs
       - name: Build Cloudflare app
         run: pnpm run build:cloudflare
       - name: Verify built Worker startup in workerd
@@ -361,9 +365,18 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps ${{ matrix.project == 'firefox' && 'chromium firefox' || 'chromium' }}
+      - run: |
+          if [ "$BROWSER_PROJECT" = "firefox" ]; then
+            npx playwright install --with-deps chromium firefox
+          else
+            npx playwright install --with-deps chromium
+          fi
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
         timeout-minutes: 10
-      - run: pnpm exec playwright test --project ${{ matrix.project }}
+      - run: pnpm exec playwright test --project "$BROWSER_PROJECT"
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
       - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

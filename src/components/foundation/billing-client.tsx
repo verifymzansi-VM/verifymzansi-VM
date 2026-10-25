@@ -107,7 +107,7 @@ function FoundationBillingAccount({
   return (
     <div className="space-y-9">
       <header>
-        <h1 className="font-display text-3xl font-bold">Plans & billing</h1>
+        <h1 className="font-display text-3xl font-bold">Plans &amp; billing</h1>
         <p className="mt-3 max-w-3xl text-muted-foreground">
           Buy a prepaid posting plan when you need one. Plans end after their stated duration and do
           not renew automatically. Event posts are free; paid visibility add-ons are optional.
