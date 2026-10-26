@@ -796,7 +796,7 @@ export function UnifiedLayout({
             <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
               Active posts
             </p>
-            <h2 className="font-display text-xl font-semibold">Tourism & Events posts</h2>
+            <h2 className="font-display text-xl font-semibold">Tourism &amp; Events posts</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {promotions.map((promo) => (

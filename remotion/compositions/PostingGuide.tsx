@@ -477,13 +477,13 @@ const Market = () => {
         </FormWindow>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 20 }}>
           <Card style={{ padding: 20, opacity: enter(frame, 68, 20) }}>
-            <div style={{ fontWeight: 850, fontSize: 22 }}>Price & Location</div>
+            <div style={{ fontWeight: 850, fontSize: 22 }}>Price &amp; Location</div>
             <div style={{ marginTop: 12, fontSize: 18, lineHeight: 1.32, color: colors.muted }}>
               Enter price, select Province and City, then choose at least one contact method.
             </div>
           </Card>
           <Card style={{ padding: 20, opacity: enter(frame, 86, 20) }}>
-            <div style={{ fontWeight: 850, fontSize: 22 }}>Media & Review</div>
+            <div style={{ fontWeight: 850, fontSize: 22 }}>Media &amp; Review</div>
             <div style={{ marginTop: 12, fontSize: 18, lineHeight: 1.32, color: colors.muted }}>
               Add at least one photo. Put the strongest image first—it becomes the cover.
             </div>

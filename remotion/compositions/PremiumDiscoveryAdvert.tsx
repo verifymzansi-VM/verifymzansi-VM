@@ -451,7 +451,7 @@ const Tourism = () => {
       <AbsoluteFill
         style={{ background: "linear-gradient(180deg, #081f1bef, #081f1b66 65%, #081f1bc9)" }}
       />
-      <Eyebrow>03 / TOURISM & EVENTS</Eyebrow>
+      <Eyebrow>03 / TOURISM &amp; EVENTS</Eyebrow>
       <Line top={360} size={125}>
         Make room for
       </Line>
@@ -598,7 +598,7 @@ const Finale = () => {
           color: c.gold,
         }}
       >
-        MARKET / BUSINESS / TOURISM & EVENTS
+        MARKET / BUSINESS / TOURISM &amp; EVENTS
       </div>
     </Stage>
   );

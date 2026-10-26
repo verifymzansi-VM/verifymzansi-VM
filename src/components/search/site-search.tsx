@@ -348,7 +348,7 @@ function PageResults({
         />
       ) : (
         <h2 id="results-pages-title" className="sr-only">
-          Help & website pages
+          Help &amp; website pages
         </h2>
       )}
       <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

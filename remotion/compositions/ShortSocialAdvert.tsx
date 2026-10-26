@@ -393,7 +393,7 @@ const Tourism = () => {
         GO LOCAL.
       </Type>
       <div style={{ position: "absolute", left: 76, top: 640, fontSize: 35 }}>
-        Tourism & Events · Places, stays, experiences
+        Tourism &amp; Events · Places, stays, experiences
       </div>
       <Phone kind="tourism" left={330} top={850} width={490} angle={-8} delay={5} />
       <Chip left={65} top={930} delay={18} rotate={-9}>

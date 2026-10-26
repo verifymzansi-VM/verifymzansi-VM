@@ -1,4 +1,5 @@
 patches/*.patch text eol=lf
+/Dockerfile text eol=lf
 
 # Keep hash-checked foundation sources reproducible across Windows and CI.
 /database/foundation/** text eol=lf

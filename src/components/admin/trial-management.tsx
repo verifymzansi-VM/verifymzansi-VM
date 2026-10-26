@@ -70,7 +70,7 @@ export function TrialManagement({
   }
   return (
     <div className="space-y-6 p-4">
-      <h1 className="text-2xl font-bold">Free Posts & Trials</h1>
+      <h1 className="text-2xl font-bold">Free Posts &amp; Trials</h1>
       <p className="text-sm text-muted-foreground">
         One introductory choice per verified identity. Capacity counts active 30-day launch trials;
         paid posts, staff posts and individual account grants are excluded. Changes are audited.
