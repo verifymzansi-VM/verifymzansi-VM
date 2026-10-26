@@ -136,6 +136,19 @@ async function main() {
     "Public API read, service credential, function contract or hidden-schema check failed. Review Supabase exposure and key pairing."
   );
   await check(
+    "Supabase Google sign-in provider",
+    async () => {
+      const response = await fetch(`${connection.url}/auth/v1/settings`, {
+        headers: { apikey: connection.publishableKey },
+        redirect: "error",
+        cache: "no-store",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok || (await response.json())?.external?.google !== true) throw new Error();
+    },
+    "Google sign-in is disabled or unavailable on the approved Supabase project. Configure the existing OAuth client and its new project callback before claiming auth alignment."
+  );
+  await check(
     "Live deep readiness",
     async () => {
       await checkDeploymentHealth(readinessUrl("https://verifymzansi.com"));

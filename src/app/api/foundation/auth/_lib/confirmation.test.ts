@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/(auth)/auth/callback/route";
 import { POST as register } from "../register/route";
+import { handleFoundationGoogleOAuth } from "./google-oauth";
 import { createClient as legacyClient } from "@/lib/supabase/server";
 import { createAdminClient as legacyAdmin } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -28,6 +29,7 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0
 const flows: Array<{ id: string; code: string; challenge: string; user: number; used: boolean }> =
   [];
 const issued = new Map<string, number>();
+const googleUsers = new Set<number>();
 const fetcher = vi.fn<typeof fetch>();
 const user = (n: number) => ({
   id: uuid(n),
@@ -35,6 +37,18 @@ const user = (n: number) => ({
   aud: "authenticated",
   email_confirmed_at: "2026-10-24T00:00:00Z",
   is_anonymous: false,
+  identities: googleUsers.has(n)
+    ? [
+        {
+          id: uuid(n),
+          user_id: uuid(n),
+          provider: "google",
+          identity_id: uuid(n),
+          created_at: "2026-10-24T00:00:00Z",
+          updated_at: "2026-10-24T00:00:00Z",
+        },
+      ]
+    : [],
 });
 function session(n: number) {
   const token = [
@@ -102,6 +116,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   flows.length = 0;
   issued.clear();
+  googleUsers.clear();
   for (const [key, value] of Object.entries({
     FOUNDATION_PASSWORD_AUTH_MODE: "native-captcha",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
@@ -116,6 +131,8 @@ beforeEach(() => {
   fetcher.mockImplementation(async (url, init) => {
     const request = new URL(String(url));
     expect(request.origin + "/auth/v1").toBe(authUrl);
+    if (request.pathname.endsWith("/settings"))
+      return Response.json({ external: { google: true } });
     if (request.pathname.endsWith("/signup")) {
       const body = JSON.parse(String(init?.body));
       const redirect = new URL(request.searchParams.get("redirect_to")!);
@@ -148,6 +165,88 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+async function beginGoogle(jar: Map<string, string>, returnUrl = "/dashboard") {
+  const response = await handleFoundationGoogleOAuth(
+    new NextRequest("https://verifymzansi.com/api/auth/oauth/google", {
+      method: "POST",
+      headers: {
+        ...headers(jar),
+        origin: "https://verifymzansi.com",
+        "x-csrf-token": csrf,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ returnUrl }),
+    })
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+  applyCookies(jar, response.cookies.getAll());
+  expect(response.cookies.getAll().every((cookie) => cookie.secure)).toBe(true);
+  const authorization = new URL((await response.json()).url);
+  expect(authorization.origin + authorization.pathname).toBe(`${authUrl}/authorize`);
+  expect(authorization.searchParams.get("provider")).toBe("google");
+  expect(authorization.searchParams.get("code_challenge_method")).toBe("s256");
+  const callback = new URL(authorization.searchParams.get("redirect_to")!);
+  const flow = {
+    id: callback.searchParams.get("sb_flow_id")!,
+    code: "synthetic_google_code",
+    challenge: authorization.searchParams.get("code_challenge")!,
+    user: 1,
+    used: false,
+  };
+  expect(flow.id).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+  flows.push(flow);
+  callback.searchParams.set("code", flow.code);
+  return callback;
+}
+
+it("completes Google PKCE in the target project and preserves a safe return path", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar, "/dashboard/profile");
+  googleUsers.add(1);
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe("https://verifymzansi.com/dashboard/profile");
+  expect(response.cookies.get(baseCookie)?.secure).toBe(true);
+  expect(response.cookies.get("vm_password_recovery")).toBeUndefined();
+  expect(legacyClient).not.toHaveBeenCalled();
+  expect(legacyAdmin).not.toHaveBeenCalled();
+});
+
+it("does not redirect Google sign-in to an external return URL", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar, "https://other.example/");
+  googleUsers.add(1);
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toBe("https://verifymzansi.com/");
+});
+
+it("does not publish Google callback sessions without a verified Google identity", async () => {
+  const jar = new Map([["vm_csrf", csrf]]);
+  const callback = await beginGoogle(jar);
+  const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
+  expect(response.headers.get("location")).toContain("confirmation_failed");
+  expect(response.cookies.get(baseCookie)).toBeUndefined();
+});
+
+it("fails privately without verifier cookies when the target Google provider is disabled", async () => {
+  fetcher.mockResolvedValue(Response.json({ external: { google: false } }));
+  const response = await handleFoundationGoogleOAuth(
+    new NextRequest("https://verifymzansi.com/api/auth/oauth/google", {
+      method: "POST",
+      headers: {
+        ...headers(new Map([["vm_csrf", csrf]])),
+        origin: "https://verifymzansi.com",
+        "x-csrf-token": csrf,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ returnUrl: "/dashboard" }),
+    })
+  );
+  expect(response.status).toBe(503);
+  expect(response.cookies.getAll()).toEqual([]);
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
 });
 
 it("a client recovery selector cannot turn a signup code into password-recovery authority", async () => {

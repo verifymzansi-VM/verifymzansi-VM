@@ -8,6 +8,7 @@ import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { foundationAuthPrivateResponse } from "./attempt-route";
+import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 
 /** PKCE protects this top-level email navigation; it cannot require the
  * mutation CSRF header used by in-app POSTs. The flow id selects one verifier.
@@ -15,7 +16,7 @@ import { foundationAuthPrivateResponse } from "./attempt-route";
  */
 export async function handleFoundationConfirmation(
   incoming: Request,
-  purpose: "signup" | "recovery" = "signup"
+  purpose: "signup" | "recovery" | "google" = "signup"
 ) {
   const request = new NextRequest(incoming.url, { headers: incoming.headers });
   const origin = resolveAppOrigin(incoming);
@@ -46,6 +47,12 @@ export async function handleFoundationConfirmation(
       purpose === "recovery"
         ? query.getAll("recovery").length !== 1 || query.get("recovery") !== "1"
         : query.has("recovery")
+    )
+      throw new Error();
+    if (
+      purpose === "google"
+        ? query.getAll("oauth").length !== 1 || query.get("oauth") !== "google"
+        : query.has("oauth")
     )
       throw new Error();
     const limit = await checkRateLimit({
@@ -81,7 +88,9 @@ export async function handleFoundationConfirmation(
         success
           ? purpose === "recovery"
             ? "/reset-password"
-            : FOUNDATION_POST_SIGNUP_PATH
+            : purpose === "google"
+              ? sanitizeReturnUrl(request.nextUrl.searchParams.get("next"))
+              : FOUNDATION_POST_SIGNUP_PATH
           : purpose === "recovery"
             ? "/forgot-password?error=recovery_failed"
             : "/login?error=confirmation_failed",

@@ -268,7 +268,7 @@ if (platform === "win32") {
 ║     cd ~/verifymzansi                                        ║
 ║     pnpm build:cloudflare                                    ║
 ║                                                              ║
-║  2. Push to master and let GitHub Actions deploy on Ubuntu   ║
+║  2. Push to main and run Cloudflare Candidate on Ubuntu      ║
 ║                                                              ║
 ║  CI/CD deploys on ubuntu-latest — no action needed there.    ║
 ║                                                              ║

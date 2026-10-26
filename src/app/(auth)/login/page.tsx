@@ -471,12 +471,8 @@ export default function LoginPage() {
 
       <AuthPageHeader title="Sign in to your account" description={headerDescription} />
 
-      {!foundationMode && (
-        <>
-          <GoogleOAuthButton mode="login" />
-          <AuthDivider>or</AuthDivider>
-        </>
-      )}
+      <GoogleOAuthButton mode="login" />
+      <AuthDivider>or</AuthDivider>
 
       <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
         <AuthEmailField

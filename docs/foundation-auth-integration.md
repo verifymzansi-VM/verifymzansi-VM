@@ -91,8 +91,29 @@ account context; each protected server operation still enforces authorization.
 The foundation registration screen sends the shared validated registration
 payload. The sign-in screen uses the native endpoint and refreshes the document
 after success. Both require a fresh security challenge after an unsuccessful
-attempt. Unsupported OAuth and source confirmation-resend controls are hidden.
-These screens do not enable the backend or hosted signup.
+attempt. Source confirmation-resend controls are hidden. These screens do not
+enable the backend or hosted signup.
+
+## Google sign-in
+
+The shared Google button uses foundation PKCE when the compiled backend is
+`foundation`. Its same-origin, CSRF-protected POST uses shared login rate
+limiting and first checks that Google is enabled on the approved project's Auth
+service. Disabled or unreachable providers fail without issuing verifier
+cookies. The redirect is pinned to that project's authorize endpoint. The
+callback requires `backend=foundation`, `oauth=google`, one code and one
+explicit `sb_flow_id`. Session cookies are published only after code exchange
+and fresh GoTrue user verification with a Google identity. Recovery callbacks
+cannot use this path. The return destination is restricted to an internal path.
+No source profile or service-role client is used.
+
+Reuse the existing Google OAuth web client, registering
+`https://gntzjtuncsyefujajmjy.supabase.co/auth/v1/callback` in Google Cloud.
+Configure that client's ID and secret in the foundation project's Google
+provider and allow the app's `/auth/callback` URL with PKCE query parameters in
+Supabase. Secrets belong only in provider settings. A real Google consent
+roundtrip and account/profile session check are required before claiming
+provider readiness.
 
 Protected-page routing also selects the foundation account context when the
 compiled backend is `foundation`. It forwards refreshed cookies downstream and

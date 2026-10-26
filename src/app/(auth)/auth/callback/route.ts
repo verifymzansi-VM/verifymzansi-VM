@@ -118,7 +118,11 @@ export async function GET(request: Request) {
   if (searchParams.get("backend") === "foundation")
     return handleFoundationConfirmation(
       request,
-      searchParams.get("recovery") === "1" ? "recovery" : "signup"
+      searchParams.get("recovery") === "1"
+        ? "recovery"
+        : searchParams.get("oauth") === "google"
+          ? "google"
+          : "signup"
     );
   if (getDataBackend() === "foundation")
     return foundationAuthPrivateResponse(

@@ -40,28 +40,45 @@ export async function FoundationMarketplace({
   area,
   searchParams,
 }: {
-  area: Area;
+  area?: Area;
   searchParams?: Promise<Query>;
 }) {
   const query = (await searchParams) ?? {};
+  const areaAliases: Record<string, Area> = {
+    listings: "market",
+    businesses: "business",
+    promotions: "tourism_events",
+    market: "market",
+    business: "business",
+    tourism_events: "tourism_events",
+  };
+  const selectedArea =
+    area ?? Object.entries(areaAliases).find(([key]) => key === single(query.area))?.[1];
   const api = foundationServerPublicApi();
   const reference = await readFoundationReferenceCatalogue(api);
   const category = single(query.category);
-  const province = single(query.province);
+  const provinceQuery = single(query.province);
+  const province = reference.provinces.find(
+    (row) => row.id === provinceQuery || row.label === provinceQuery
+  )?.id;
   const input = {
-    area,
+    ...(selectedArea ? { area: selectedArea } : {}),
     limit: 24,
     ...(single(query.q) ? { q: single(query.q) } : {}),
-    ...(reference.categories.some((row) => row.area === area && row.key === category)
+    ...(reference.categories.some(
+      (row) => (!selectedArea || row.area === selectedArea) && row.key === category
+    )
       ? { category }
       : {}),
     ...(reference.provinces.some((row) => row.id === province) ? { province } : {}),
     ...(single(query.cursor) ? { cursor: single(query.cursor) } : {}),
   };
   const page = await searchFoundationCards(api, input);
-  const section = sections[area];
+  const section = area
+    ? sections[area]
+    : { title: "Search VerifyMzansi", path: "/search", create: "/post/create" };
   const next = new URLSearchParams();
-  for (const name of ["q", "category", "province"]) {
+  for (const name of ["q", "category", "province", ...(!area ? ["area"] : [])]) {
     const value = single(query[name]);
     if (value) next.set(name, value);
   }
@@ -83,6 +100,23 @@ export async function FoundationMarketplace({
         </Link>
       </header>
       <form method="get" className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-4">
+        {!area && (
+          <label className="text-sm">
+            Section
+            <select
+              name="area"
+              defaultValue={selectedArea ?? ""}
+              className="mt-1 h-11 w-full rounded-lg border bg-background px-3"
+            >
+              <option value="">All sections</option>
+              {Object.entries(sections).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="text-sm">
           Search
           <input
@@ -101,7 +135,7 @@ export async function FoundationMarketplace({
           >
             <option value="">All categories</option>
             {reference.categories
-              .filter((row) => row.area === area)
+              .filter((row) => !selectedArea || row.area === selectedArea)
               .map((row) => (
                 <option key={row.key} value={row.key}>
                   {row.label}

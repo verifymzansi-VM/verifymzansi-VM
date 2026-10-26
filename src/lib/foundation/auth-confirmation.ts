@@ -34,7 +34,7 @@ export async function confirmFoundationAccount(
   input: unknown,
   cookies: FoundationAuthCookies,
   fetcher: typeof fetch = createTimeoutFetch(),
-  purpose: "signup" | "recovery" = "signup"
+  purpose: "signup" | "recovery" | "google" = "signup"
 ): Promise<void> {
   const parsed = exchange.safeParse(input);
   if (!parsed.success) throw new FoundationConfirmationError(401);
@@ -58,6 +58,12 @@ export async function confirmFoundationAccount(
       throw new FoundationConfirmationError(401);
     const caller = await createFoundationRequestCaller(config, cookies, fetcher);
     if (caller.accountId !== data.user.id) throw new FoundationConfirmationError(401);
+    if (
+      purpose === "google" &&
+      (caller.recovery ||
+        !caller.user.identities?.some((identity) => identity.provider === "google"))
+    )
+      throw new FoundationConfirmationError(401);
     if (purpose === "recovery") {
       if (!caller.recovery) throw new FoundationConfirmationError(401);
       await readFoundationAccountProfile(caller.api);

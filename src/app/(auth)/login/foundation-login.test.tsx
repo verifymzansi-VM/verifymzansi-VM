@@ -66,7 +66,7 @@ it("sends native sign-in to the new route and clears stale account data before t
     credentials: "same-origin",
     redirect: "error",
   });
-  expect(screen.queryByText("Google sign in")).not.toBeInTheDocument();
+  expect(screen.getByText("Google sign in")).toBeInTheDocument();
 });
 it.each(["Unavailable CAPTCHA", "Development CAPTCHA"])(
   "blocks native Auth for %s",

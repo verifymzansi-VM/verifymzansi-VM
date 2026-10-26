@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
-import { AuthPageHeader, authInputClassName } from "./auth-ui";
+import { AuthDivider, AuthPageHeader, authInputClassName } from "./auth-ui";
+import { GoogleOAuthButton } from "@/components/ui/google-oauth-button";
 import { foundationRegistrationSchema } from "@/lib/foundation/registration-input";
 import { foundationCaptchaToken } from "@/lib/foundation/auth-input";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
@@ -101,6 +102,8 @@ export function FoundationRegisterForm() {
         title="Create your account"
         description="Start with your email. You can add and verify your contact details afterwards."
       />
+      <GoogleOAuthButton mode="register" />
+      <AuthDivider>or</AuthDivider>
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="foundation-name">Display name</Label>

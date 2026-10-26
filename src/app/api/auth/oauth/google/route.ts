@@ -8,10 +8,13 @@ import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
 import { enforceCsrfToken } from "@/lib/utils/csrf";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationGoogleOAuth } from "@/app/api/foundation/auth/_lib/google-oauth";
 
 const log = createLogger("GoogleOAuthInit");
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationGoogleOAuth(request);
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) {
