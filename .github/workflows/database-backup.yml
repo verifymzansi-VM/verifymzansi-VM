@@ -83,7 +83,7 @@ jobs:
           done
           grep -Eq 'CREATE TABLE (IF NOT EXISTS )?"?private"?\."?profiles"?' schema.sql \
             || { echo "::error::schema.sql is missing private.profiles"; exit 1; }
-          grep -Eq 'CREATE FUNCTION "?api"?\."?get_my_billing"?\(' schema.sql \
+          grep -Eq 'CREATE (OR REPLACE )?FUNCTION "?api"?\."?get_my_billing"?\(' schema.sql \
             || { echo "::error::schema.sql is missing the foundation runtime API"; exit 1; }
           {
             echo "project: ${SUPABASE_PROJECT_REF}"
