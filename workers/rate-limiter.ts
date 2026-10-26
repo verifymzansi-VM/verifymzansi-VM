@@ -52,6 +52,9 @@ interface Env {
   OTP_RATE_LIMITS: KVNamespace;
   RATE_LIMITER_DO: DurableObjectNamespace;
   WORKER_API_KEY: string;
+  /** Optional, short overlap while the app and this Worker rotate separately. */
+  WORKER_API_KEY_NEXT?: string;
+  WORKER_API_KEY_NEXT_EXPIRES_AT?: string;
 }
 
 interface RateCheck {
@@ -561,7 +564,19 @@ const worker = {
     // Authenticate caller via shared secret (constant-time comparison)
     const authHeader = request.headers.get("Authorization");
     const expectedAuthHeader = env.WORKER_API_KEY ? `Bearer ${env.WORKER_API_KEY}` : "";
-    if (!expectedAuthHeader || !timingSafeEqual(authHeader ?? "", expectedAuthHeader)) {
+    const now = Date.now();
+    const overlapExpiry = Date.parse(env.WORKER_API_KEY_NEXT_EXPIRES_AT ?? "");
+    const overlapAllowed =
+      !!expectedAuthHeader &&
+      (env.WORKER_API_KEY_NEXT?.length ?? 0) >= 32 &&
+      overlapExpiry > now &&
+      overlapExpiry <= now + 2 * 60 * 60 * 1000;
+    const currentMatches = timingSafeEqual(authHeader ?? "", expectedAuthHeader);
+    const overlapMatches = timingSafeEqual(
+      authHeader ?? "",
+      overlapAllowed ? `Bearer ${env.WORKER_API_KEY_NEXT}` : ""
+    );
+    if (!expectedAuthHeader || !(currentMatches || (overlapAllowed && overlapMatches))) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },

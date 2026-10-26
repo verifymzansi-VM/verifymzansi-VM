@@ -87,7 +87,10 @@ describe("sms service", () => {
     it("handles array of recipients", async () => {
       globalThis.fetch = mockFetchResponse({
         SMSMessageData: {
-          Recipients: [{ statusCode: 101, messageId: "sms-456" }],
+          Recipients: [
+            { number: "+27821234567", statusCode: 101, messageId: "sms-456" },
+            { number: "+27829876543", statusCode: 102, messageId: "sms-457" },
+          ],
         },
       });
 
@@ -117,7 +120,7 @@ describe("sms service", () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Insufficient balance");
+      expect(result.error).toBe("SMS provider rejected one or more recipients");
     });
 
     it("returns failure when no recipient data", async () => {
@@ -130,6 +133,31 @@ describe("sms service", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("No recipient data in response");
+    });
+
+    it.each([
+      [],
+      [{ statusCode: 0, messageId: "invalid" }],
+      [{ statusCode: 199, messageId: "invalid" }],
+      [{ statusCode: 101 }],
+      [{ statusCode: 101, messageId: "", number: "+27821234567" }],
+      [{ statusCode: 101, messageId: "wrong", number: "+27829876543" }],
+    ])("refuses ambiguous or unrecognized recipient receipts (%#)", async (...receipts) => {
+      globalThis.fetch = mockFetchResponse({ SMSMessageData: { Recipients: receipts } });
+      const result = await sendOtpSms("+27821234567", "123456", { retry: false });
+      expect(result.success).toBe(false);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses a partial bulk receipt", async () => {
+      globalThis.fetch = mockFetchResponse({
+        SMSMessageData: {
+          Recipients: [{ number: "+27821234567", statusCode: 101, messageId: "partial" }],
+        },
+      });
+      const result = await sendSms({ to: ["+27821234567", "+27829876543"], message: "Test" });
+      expect(result.success).toBe(false);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
 
     it("retries without sender ID when Africa's Talking rejects the configured sender ID", async () => {

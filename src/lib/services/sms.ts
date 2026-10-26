@@ -21,7 +21,7 @@ function maskRecipientNumber(number: string | undefined): string {
 const SmsParamsSchema = z.object({
   to: z.union([
     z.string().regex(/^\+27\d{9}$/, "Must be a valid SA phone number starting with +27"),
-    z.array(z.string().regex(/^\+27\d{9}$/)),
+    z.array(z.string().regex(/^\+27\d{9}$/)).min(1),
   ]),
   message: z.string().min(1, "Message cannot be empty"),
 });
@@ -46,17 +46,37 @@ interface SenderIdValidationResult {
 }
 
 /** Africa's Talking REST API response shape */
-interface ATSmsResponse {
-  SMSMessageData: {
-    Message: string;
-    Recipients: Array<{
-      number: string;
-      status: string;
-      statusCode: number;
-      messageId: string;
-      cost: string;
-    }>;
-  };
+const atResponse = z.object({
+  SMSMessageData: z
+    .object({
+      Message: z.string().optional(),
+      Recipients: z
+        .array(
+          z.object({
+            number: z.string().optional(),
+            status: z.string().optional(),
+            statusCode: z.number().int(),
+            messageId: z.string().optional(),
+            cost: z.string().optional(),
+          })
+        )
+        .optional(),
+    })
+    .optional(),
+});
+type ATSmsResponse = z.infer<typeof atResponse>;
+
+/** Acceptance is not handset delivery. Require a receipt for every intended
+ * recipient and only the provider's documented acceptance codes. */
+function acceptedRecipients(result: ATSmsResponse, intended: string[]): boolean {
+  const receipts = result.SMSMessageData?.Recipients;
+  if (!receipts?.length || receipts.length !== intended.length) return false;
+  if (receipts.some((r) => ![100, 101, 102].includes(r.statusCode) || !r.messageId?.trim()))
+    return false;
+  if (intended.length === 1)
+    return receipts[0].number === undefined || receipts[0].number === intended[0];
+  const numbers = new Set(receipts.map((r) => r.number));
+  return numbers.size === intended.length && intended.every((number) => numbers.has(number));
 }
 
 function validateAfricaTalkingSenderId(senderId: string | undefined): SenderIdValidationResult {
@@ -196,10 +216,9 @@ export async function sendSms(
 
       let result: ATSmsResponse;
       try {
-        result = JSON.parse(rawBody);
-      } catch (parseErr) {
+        result = atResponse.parse(JSON.parse(rawBody));
+      } catch {
         log.error("Africa's Talking JSON parse error", {
-          error: parseErr instanceof Error ? parseErr.message : "Unknown parse error",
           includeSenderId,
         });
         // AT returned 200 OK but body isn't valid JSON — do not assume success
@@ -232,27 +251,25 @@ export async function sendSms(
             normalizedProviderMessage.includes("invalid sender")
           ) {
             log.warn("AT rejected sender ID", {
-              providerMessage,
               includeSenderId,
             });
             return {
               success: false,
-              error: providerMessage || "SMS provider rejected the configured sender ID",
+              error: "SMS provider rejected the configured sender ID",
               invalidSenderIdRejected: true,
             };
           }
 
-          // AT can accept the message before per-recipient details are available.
+          // An ambiguous acceptance must not release an OTP challenge as sent.
           log.warn("AT returned 200 OK with empty Recipients array", {
             recipientCount: 0,
             includeSenderId,
           });
-          return { success: true, messageId: "at-accepted-empty-recipients" };
+          return { success: false, error: "SMS provider did not confirm recipient acceptance" };
         }
 
         // AT success codes: 100 (Processed), 101 (Sent), 102 (Queued)
-        // Anything under 200 is a non-failure state per AT docs
-        const failed = atRecipients.filter((r) => r.statusCode >= 200);
+        const failed = atRecipients.filter((r) => ![100, 101, 102].includes(r.statusCode));
         if (failed.length > 0) {
           log.warn("AT recipients with non-success status", {
             failed: failed.map((f) => ({
@@ -264,11 +281,12 @@ export async function sendSms(
           });
           return {
             success: false,
-            error:
-              failed[0].status || `${failed.length} of ${atRecipients.length} recipients failed`,
+            error: "SMS provider rejected one or more recipients",
           };
         }
 
+        if (!acceptedRecipients(result, recipients))
+          return { success: false, error: "SMS provider did not confirm recipient acceptance" };
         return {
           success: true,
           messageId: atRecipients[0].messageId,
@@ -363,11 +381,16 @@ export async function sendSms(
             signal: AbortSignal.timeout(10_000),
           });
           if (resp.ok) {
-            const body: ATSmsResponse = await resp.json();
+            const parsed = atResponse.safeParse(await resp.json().catch(() => null));
+            if (!parsed.success)
+              return { success: false, error: "Unexpected response format from SMS provider" };
+            const body = parsed.data;
             const r = body.SMSMessageData?.Recipients?.[0];
-            if (r && r.statusCode < 200) {
+            if (r && acceptedRecipients(body, retryRecipients)) {
               return { success: true, messageId: r.messageId };
             }
+            // A 200 with an incomplete receipt is ambiguous. Do not resend it.
+            return { success: false, error: "SMS provider did not confirm recipient acceptance" };
           }
         } catch {
           // continue to next retry

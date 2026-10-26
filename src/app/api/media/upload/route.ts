@@ -18,6 +18,7 @@ import {
   type ReencodableImageType,
 } from "@/lib/utils/image-reencode";
 import { scrubVideoLocationMetadata } from "@/lib/utils/isobmff-metadata";
+import { scrubWebmMetadata } from "@/lib/utils/webm-metadata";
 import { scanForMalware } from "@/lib/utils/malware-scan";
 import { generateImageVariants } from "@/lib/services/image-variants";
 import { parseAndValidateFormData } from "@/lib/utils/api";
@@ -317,11 +318,15 @@ export async function POST(request: NextRequest) {
         let uploadFile: File | Blob = file;
         if (reencodedBytes) {
           uploadFile = new Blob([toArrayBuffer(reencodedBytes)], { type: file.type });
-        } else if (file.type === "video/mp4") {
-          // Blank ©xyz / Apple ISO6709 location values in place (same length,
-          // so chunk offsets stay valid). fileBuffer is this request's own
-          // copy; mutate it rather than duplicating up to 50 MB in memory.
-          if (scrubVideoLocationMetadata(fileBuffer) > 0) {
+        } else if (file.type === "video/mp4" || file.type === "video/webm") {
+          // Scrub MP4 location fields or WebM container metadata in place,
+          // preserving packet offsets. fileBuffer is this request's own
+          // copy; avoid duplicating up to 50 MB until replacement is needed.
+          const changed =
+            file.type === "video/webm"
+              ? scrubWebmMetadata(fileBuffer)
+              : scrubVideoLocationMetadata(fileBuffer);
+          if (changed > 0) {
             uploadFile = new Blob([fileBuffer], { type: file.type });
           }
         }

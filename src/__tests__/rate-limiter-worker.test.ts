@@ -388,4 +388,52 @@ describe("rate-limiter worker", () => {
       expect(res.status).toBe(401);
     }
   });
+
+  it("accepts either credential during a bounded rotation without changing read-only counters", async () => {
+    const { env, kvStore } = createWorkerEnv({ useDurableObject: false });
+    const next = "rotation-fixture-".repeat(3);
+    const rotating = {
+      ...env,
+      WORKER_API_KEY_NEXT: next,
+      WORKER_API_KEY_NEXT_EXPIRES_AT: new Date(Date.now() + 60_000).toISOString(),
+    };
+    for (const key of [env.WORKER_API_KEY, next]) {
+      const request = new Request("https://worker.example", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "auth:login", key: "rotation-probe", readOnly: true }),
+      });
+      expect((await rateLimiterWorker.fetch(request, rotating as never)).status).toBe(200);
+    }
+    expect(kvStore.size).toBe(0);
+  });
+
+  it("refuses unbounded, expired, malformed and incomplete rotation settings", async () => {
+    const { env } = createWorkerEnv();
+    const next = "rotation-fixture-".repeat(3);
+    for (const settings of [
+      {},
+      { WORKER_API_KEY_NEXT_EXPIRES_AT: "not-a-date" },
+      { WORKER_API_KEY_NEXT_EXPIRES_AT: new Date(Date.now() - 1).toISOString() },
+      { WORKER_API_KEY_NEXT_EXPIRES_AT: new Date(Date.now() + 3 * 3_600_000).toISOString() },
+      {
+        WORKER_API_KEY: "",
+        WORKER_API_KEY_NEXT_EXPIRES_AT: new Date(Date.now() + 60_000).toISOString(),
+      },
+      {
+        WORKER_API_KEY_NEXT: "short",
+        WORKER_API_KEY_NEXT_EXPIRES_AT: new Date(Date.now() + 60_000).toISOString(),
+      },
+    ]) {
+      const response = await rateLimiterWorker.fetch(
+        new Request("https://worker.example", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${settings.WORKER_API_KEY_NEXT ?? next}` },
+          body: "{}",
+        }),
+        { ...env, WORKER_API_KEY_NEXT: next, ...settings } as never
+      );
+      expect(response.status).toBe(401);
+    }
+  });
 });

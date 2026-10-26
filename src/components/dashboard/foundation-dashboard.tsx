@@ -91,7 +91,7 @@ export async function FoundationDashboard() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Recent posts</h2>
-            <Link className="underline" href="/post">
+            <Link className="underline" href="/post/create">
               Create a post
             </Link>
           </div>

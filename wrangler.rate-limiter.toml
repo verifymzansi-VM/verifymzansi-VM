@@ -31,3 +31,7 @@ new_classes = ["RateLimiterDO"]
 # WORKER_API_KEY — shared secret this worker hard-requires on every POST.
 #   It MUST equal the main app's RATE_LIMITER_API_KEY (see wrangler.toml):
 #   pnpm wrangler secret put WORKER_API_KEY -c wrangler.rate-limiter.toml
+# Optional coordinated rotation: WORKER_API_KEY_NEXT (at least 32 characters)
+# and WORKER_API_KEY_NEXT_EXPIRES_AT (UTC expiry, at most two hours ahead).
+# Keep the primary key until the app changes, then replace it and clear both
+# overlap bindings. Missing/expired/invalid overlap settings never authorize.

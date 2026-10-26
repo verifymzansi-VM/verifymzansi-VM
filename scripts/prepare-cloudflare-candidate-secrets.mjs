@@ -2,8 +2,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 // Additive scoped secrets only. Omitted provider, encryption, HMAC, R2 and
-// rate-limiter secrets must be inherited from the current Worker version.
-// In particular, do not rotate the live limiter before coordinated rollout.
+// provider secrets must be inherited from the current Worker version. Activate
+// the limiter's bounded overlap before directing requests to this new key.
 if (process.env.GITHUB_ACTIONS !== "true" || !process.env.RUNNER_TEMP)
   throw new Error("Candidate secret preparation requires an isolated Actions runner");
 const names = [
@@ -15,6 +15,7 @@ const names = [
   "KYC_WEBHOOK_SECRET",
   "TURNSTILE_SECRET_KEY",
   "HEALTH_DIAGNOSTIC_TOKEN",
+  "RATE_LIMITER_API_KEY",
 ];
 const values = {};
 for (const name of names) {

@@ -10,6 +10,7 @@ import { scanForMalware } from "../utils/malware-scan";
 import { isReencodableImageType, reencodeImage } from "../utils/image-reencode";
 import { getImageDimensions } from "../utils/image-dimensions";
 import { scrubVideoLocationMetadata } from "../utils/isobmff-metadata";
+import { scrubWebmMetadata } from "../utils/webm-metadata";
 
 const intent = z.strictObject({
   object_id: z.uuid(),
@@ -74,7 +75,14 @@ export async function uploadFoundationMedia(
     throw new FoundationMediaError(400);
   if (isReencodableImageType(file.type))
     bytes = new Uint8Array(await reencodeImage(bytes, file.type));
-  else scrubVideoLocationMetadata(bytes);
+  else {
+    try {
+      if (file.type === "video/webm") scrubWebmMetadata(bytes);
+      else scrubVideoLocationMetadata(bytes);
+    } catch {
+      throw new FoundationMediaError(400);
+    }
+  }
   const dimensions = kind === "image" ? getImageDimensions(bytes) : null;
   if (
     bytes.length > maximum ||
