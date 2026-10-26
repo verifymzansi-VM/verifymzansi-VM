@@ -105,7 +105,7 @@ it("uses the real SSR/SDK transport, consuming the token in one GoTrue password 
     method: "POST",
     credentials: "omit",
     cache: "no-store",
-    redirect: "error",
+    redirect: "manual",
   });
   expect(init?.signal).toBeInstanceOf(AbortSignal);
   const headers = new Headers(init?.headers);

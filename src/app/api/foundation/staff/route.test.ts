@@ -56,6 +56,7 @@ beforeEach(() => {
   });
   vi.mocked(createFoundationRouteContext).mockReturnValue({
     authenticate,
+    authenticateCaller: async () => ({ api: await authenticate(), accountId: id }),
     respond,
   } as unknown as ReturnType<typeof createFoundationRouteContext>);
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
@@ -268,6 +269,28 @@ it("records partner changes and external payout references without trusting acto
       )
     ).status
   ).toBe(400);
+});
+
+it("binds mutation acknowledgments to the verified caller rather than the target account", async () => {
+  const target = "00000000-0000-4000-8000-000000000002";
+  rpc.mockResolvedValueOnce({
+    data: { id, code: "TARGET01", status: "pending", commission_bps: null, revision: 1 },
+    error: null,
+  });
+  const response = await savePartner(
+    request("partners", "POST", {
+      account_id: target,
+      action: "create",
+      code: "TARGET01",
+      reason: "Reviewed referral partner",
+    })
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).account_id).toBe(id);
+  expect(rpc).toHaveBeenCalledWith(
+    "staff_save_partner",
+    expect.objectContaining({ p_account: target })
+  );
 });
 
 it("rejects cross-site writes before authentication and never retries uncertain mutations", async () => {

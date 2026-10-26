@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationPartnersPage } from "@/components/admin/home/foundation-partners-page";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
 import { PageHeader } from "@/components/layout/page-header";
@@ -12,6 +14,7 @@ export const metadata = { title: "Partners & Commission" };
 export const dynamic = "force-dynamic";
 
 export default async function PartnersAdminPage() {
+  if (getDataBackend() === "foundation") return <FoundationPartnersPage />;
   await requireStaff("partners:manage");
 
   const admin = createAdminClient();

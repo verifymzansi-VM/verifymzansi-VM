@@ -80,7 +80,7 @@ it("completes the new phone journey without any legacy table access or submitted
   expect(fetcher.mock.calls[0][1]).toMatchObject({
     credentials: "same-origin",
     cache: "no-store",
-    redirect: "error",
+    redirect: "manual",
   });
   fetcher.mockResolvedValueOnce(Response.json({ verified: true }));
   fireEvent.change(input, { target: { value: "123456" } });

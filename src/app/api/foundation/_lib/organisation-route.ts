@@ -40,7 +40,8 @@ export function handleOrganisationRoute<T>(
     | "organisation:invite"
     | "partner:attribution",
   mutate: boolean,
-  command: (api: FoundationAuthenticatedApi, input: unknown) => Promise<T>
+  command: (api: FoundationAuthenticatedApi, input: unknown) => Promise<T>,
+  includeAccountId = false
 ) {
   return handleFoundationOwnerRoute({
     request,
@@ -51,6 +52,7 @@ export function handleOrganisationRoute<T>(
     signInMessage: "Sign in to continue",
     command,
     refusal: organisationRefusal,
+    includeAccountId,
   });
 }
 

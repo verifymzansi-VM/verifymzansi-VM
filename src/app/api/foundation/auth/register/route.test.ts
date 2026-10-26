@@ -97,7 +97,7 @@ it("uses native CAPTCHA and PKCE in one signup call, without a legacy profile wr
   expect(Object.keys(body.data)).toEqual(["display_name"]);
   expect(body.code_challenge).toMatch(/^[A-Za-z0-9_-]{43}$/);
   expect(new Headers(options?.headers).get("apikey")).toBe(publicKey);
-  expect(options).toMatchObject({ cache: "no-store", credentials: "omit", redirect: "error" });
+  expect(options).toMatchObject({ cache: "no-store", credentials: "omit", redirect: "manual" });
   const cookies = response.cookies.getAll();
   expect(cookies.length).toBeGreaterThan(0);
   expect(

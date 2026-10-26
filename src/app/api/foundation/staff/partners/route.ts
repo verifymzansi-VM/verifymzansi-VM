@@ -8,5 +8,5 @@ export function GET(request: NextRequest) {
 }
 
 export function POST(request: NextRequest) {
-  return handleOrganisationRoute(request, "organisation:manage", true, saveFoundationPartner);
+  return handleOrganisationRoute(request, "organisation:manage", true, saveFoundationPartner, true);
 }

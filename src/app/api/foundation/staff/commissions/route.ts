@@ -14,5 +14,11 @@ export function GET(request: NextRequest) {
 }
 
 export function POST(request: NextRequest) {
-  return handleOrganisationRoute(request, "organisation:manage", true, decideFoundationCommission);
+  return handleOrganisationRoute(
+    request,
+    "organisation:manage",
+    true,
+    decideFoundationCommission,
+    true
+  );
 }

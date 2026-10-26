@@ -45,7 +45,7 @@ it("submits the native bounded payload without account selectors and clears cred
     method: "POST",
     credentials: "same-origin",
     cache: "no-store",
-    redirect: "error",
+    redirect: "manual",
   });
   expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toEqual({
     currentPassword: "synthetic-current",
