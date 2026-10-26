@@ -53,6 +53,7 @@ export function handleOrganisationRoute<T>(
     command,
     refusal: organisationRefusal,
     includeAccountId,
+    maxBytes: action === "organisation:manage" ? 32768 : 8192,
   });
 }
 

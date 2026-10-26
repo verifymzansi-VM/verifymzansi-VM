@@ -42,6 +42,8 @@ const organisationType = z.enum([
   "university_tvet",
   "other",
 ]);
+export const foundationOrganisationTypes = organisationType.options;
+export const foundationOrganisationStatuses = programmeStatus.options;
 export const text = (min: number, max: number, multiline: boolean) =>
   z
     .string()

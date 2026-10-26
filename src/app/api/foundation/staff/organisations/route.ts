@@ -17,6 +17,7 @@ export function POST(request: NextRequest) {
     request,
     "organisation:manage",
     true,
-    createFoundationOrganisation
+    createFoundationOrganisation,
+    true
   );
 }

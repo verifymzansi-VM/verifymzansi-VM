@@ -1,4 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationOrganisationDetail } from "@/components/admin/home/foundation-organisation-detail";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,6 +49,7 @@ export default async function OrganisationAdminDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (getDataBackend() === "foundation") return <FoundationOrganisationDetail id={id} />;
   const { user } = await requireStaff("organisations:manage");
 
   const admin = createAdminClient();

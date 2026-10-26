@@ -293,6 +293,26 @@ it("binds mutation acknowledgments to the verified caller rather than the target
   );
 });
 
+it("accepts a bounded multilingual organisation profile rather than truncating a valid form", async () => {
+  const description = "é".repeat(1200);
+  rpc.mockResolvedValueOnce({ data: { id, slug: "example-org", revision: 2 }, error: null });
+  const response = await updateOrganisation(
+    request(`organisations/${id}`, "PATCH", {
+      expected_revision: 1,
+      patch: { description, programme_description: description },
+      reason: "Reviewed programme descriptions",
+    }),
+    context
+  );
+  expect(response.status).toBe(200);
+  expect(rpc).toHaveBeenCalledWith(
+    "update_organisation",
+    expect.objectContaining({
+      p_patch: { description, programme_description: description },
+    })
+  );
+});
+
 it("rejects cross-site writes before authentication and never retries uncertain mutations", async () => {
   const body = { account_id: id, action: "suspend", reason: "Reviewed suspension" };
   expect(
