@@ -85,6 +85,20 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile --prod=false
+      - name: Match all public build settings to production bindings
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse } from 'smol-toml';
+          const vars = parse(fs.readFileSync('wrangler.toml', 'utf8')).env.production.vars;
+          const entries = Object.entries(vars).filter(([name]) => name.startsWith('NEXT_PUBLIC_'));
+          for (const [name, value] of entries) {
+            if (typeof value !== 'string' || /[\r\n]/.test(value)) throw new Error('Invalid public binding: ' + name);
+            if (process.env[name] && process.env[name] !== value) throw new Error('Build/binding mismatch: ' + name);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, entries.map(([name, value]) => name + '=' + value).join('\n') + '\n');
+          console.log('Approved public build binding names: ' + entries.map(([name]) => name).join(', '));
+          NODE
       - name: Require successful CI for this exact main commit
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -115,6 +129,17 @@ jobs:
           pnpm exec opennextjs-cloudflare upload --env production
           --secrets-file "$RUNNER_TEMP/cloudflare-candidate-secrets.json"
           --tag "$DEPLOY_TARGET_SHA" --message inactive-main-candidate
+      - name: Reject an upload that rebuilt the verified artifact
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const proof = JSON.parse(fs.readFileSync('tmp/cloudflare-runtime/latest.json', 'utf8'));
+          const built = JSON.parse(fs.readFileSync('.open-next/build-fingerprint.json', 'utf8'));
+          if (proof.status !== 'PASS' || proof.fingerprint.fingerprint !== built.fingerprint) {
+            throw new Error('Uploaded artifact differs from the Worker runtime proof');
+          }
+          console.log('Uploaded build fingerprint matches the verified Worker artifact.');
+          NODE
       - name: Remove temporary binding file
         if: always()
         run: rm -f -- "$RUNNER_TEMP/cloudflare-candidate-secrets.json"
