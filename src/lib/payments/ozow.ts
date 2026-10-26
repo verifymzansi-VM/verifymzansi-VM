@@ -3,6 +3,7 @@ import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
 const log = createLogger("Ozow");
 
@@ -320,7 +321,7 @@ async function fetchOzowAccessToken(normalizedScope: string): Promise<string> {
     });
   }
 
-  const response = await fetch(`${baseUrl}/v1/token`, {
+  const response = await fetchWithoutRedirects(`${baseUrl}/v1/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -474,7 +475,7 @@ export async function createOzowHostedPayment(
     };
 
     const createPaymentRequest = async (token: string) =>
-      fetch(`${baseUrl}/v1/payments`, {
+      fetchWithoutRedirects(`${baseUrl}/v1/payments`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -580,14 +581,13 @@ async function ozowRequest(path: string, method = "GET"): Promise<Response> {
   const idempotencyKey = crypto.randomUUID();
   const correlationId = crypto.randomUUID();
   const send = async (forceRefresh: boolean) =>
-    fetch(url, {
+    fetchWithoutRedirects(url, {
       method,
       headers: {
         Authorization: `Bearer ${await getOzowAccessToken(scope, forceRefresh)}`,
         "X-Correlation-ID": correlationId,
         ...(method === "POST" ? { "Idempotency-Key": idempotencyKey } : {}),
       },
-      redirect: "error",
       signal: AbortSignal.timeout(10_000),
     });
   let response = await send(false);

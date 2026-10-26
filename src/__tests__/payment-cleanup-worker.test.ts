@@ -31,7 +31,7 @@ describe("payment cleanup worker", () => {
       if (url.includes("/api/internal/payments/reconcile")) {
         expect(init).toMatchObject({
           method: "POST",
-          redirect: "error",
+          redirect: "manual",
           headers: { Authorization: "Bearer worker-key" },
         });
         return { ok: false, status: 503 } as Response;

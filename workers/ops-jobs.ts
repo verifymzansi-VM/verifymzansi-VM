@@ -7,6 +7,8 @@
  * the run on a schedule.
  */
 
+import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects";
+
 interface ScheduledEvent {
   cron: string;
   scheduledTime: number;
@@ -26,11 +28,14 @@ const RUN_TIMEOUT_MS = 50_000;
 
 async function trigger(env: Env): Promise<void> {
   try {
-    const response = await fetch(`${env.APP_URL.replace(/\/$/, "")}/api/webhooks/ops-jobs`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${env.OPS_JOBS_SECRET}` },
-      signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
-    });
+    const response = await fetchWithoutRedirects(
+      `${env.APP_URL.replace(/\/$/, "")}/api/webhooks/ops-jobs`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.OPS_JOBS_SECRET}` },
+        signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
+      }
+    );
     if (!response.ok) {
       // Logged by Workers observability; the jobs stay queued for the next run.
       console.error(`ops-jobs run failed with status ${response.status}`);

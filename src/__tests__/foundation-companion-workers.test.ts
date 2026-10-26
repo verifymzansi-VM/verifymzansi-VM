@@ -22,7 +22,7 @@ for (const [worker, path] of [
       new URL(path, env.APP_URL),
       expect.objectContaining({
         method: "POST",
-        redirect: "error",
+        redirect: "manual",
         headers: { Authorization: `Bearer ${key}` },
         signal: expect.any(AbortSignal),
       })

@@ -1,3 +1,5 @@
+import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects";
+
 export interface FoundationJobEnv {
   DATA_BACKEND: "foundation";
   APP_URL: string;
@@ -21,10 +23,9 @@ export async function triggerFoundationJob(
     env.WORKER_API_KEY.length < 32
   )
     throw new Error("Invalid job configuration");
-  const response = await fetch(new URL(path, app), {
+  const response = await fetchWithoutRedirects(new URL(path, app), {
     method: "POST",
     headers: { Authorization: `Bearer ${env.WORKER_API_KEY}` },
-    redirect: "error",
     signal: AbortSignal.timeout(45000),
   });
   if (!response.ok) throw new Error(`Foundation job returned HTTP ${response.status}`);

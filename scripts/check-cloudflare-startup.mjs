@@ -36,6 +36,47 @@ const server = createTestHarness({
   ],
 });
 try {
+  const transport = createTestHarness({
+    root: sandbox,
+    workers: [
+      {
+        config: {
+          name: "vm-transport-check",
+          main: path.resolve(root, "scripts/fixtures/cloudflare-redirect-worker.ts"),
+          compatibility_date: config.compatibility_date,
+          compatibility_flags: config.compatibility_flags,
+          services: [{ binding: "TARGET", service: "vm-transport-target" }],
+        },
+      },
+      {
+        config: {
+          name: "vm-transport-target",
+          main: path.resolve(root, "scripts/fixtures/cloudflare-redirect-worker.ts"),
+          compatibility_date: config.compatibility_date,
+          compatibility_flags: config.compatibility_flags,
+        },
+      },
+    ],
+  });
+  try {
+    await transport.listen();
+    const allowed = await transport.fetch("https://transport-check.invalid/probe");
+    assert.equal(
+      allowed.status,
+      200,
+      "Credentialed fetch must use a supported workerd redirect mode"
+    );
+    assert.equal((await allowed.json()).ok, true);
+    const refused = await transport.fetch("https://transport-check.invalid/probe-redirect");
+    assert.equal(refused.status, 409);
+    assert.equal(
+      (await refused.json()).refused,
+      true,
+      "Redirects must fail without forwarding credentials"
+    );
+  } finally {
+    await transport.close();
+  }
   await server.listen();
   const health = await server.fetch("https://runtime-check.invalid/api/health");
   assert.equal(health.status, 200, "Built Worker must start and serve its dynamic health route");
@@ -111,6 +152,7 @@ try {
           entry: await hash("workers/open-next-entry.mjs"),
           handler: await hash(".open-next/server-functions/default/handler.mjs"),
           verifier: await hash("scripts/check-cloudflare-startup.mjs"),
+          fetchPolicy: await hash("src/lib/utils/fetch-without-redirects.ts"),
         },
         controls: {
           workerdStartup: true,
@@ -120,6 +162,7 @@ try {
           compiledPublicConfiguration: true,
           syntheticPrivateBindings: true,
           mismatchedBindingDenied: true,
+          cloudflareFetchRedirectPolicy: true,
         },
         scope:
           "Actual built OpenNext artifact in isolated workerd; public build settings and synthetic runtime secrets only. No provider delivery or production mutation.",

@@ -1,3 +1,5 @@
+import { fetchWithoutRedirects } from "../utils/fetch-without-redirects";
+
 /**
  * Deadline for each server-side supabase-js HTTP request (PostgREST, GoTrue,
  * Storage list/remove). Server code never streams large bodies through
@@ -50,9 +52,13 @@ function combineSignals(
 export function createTimeoutFetch(timeoutMs: number = SUPABASE_FETCH_TIMEOUT_MS): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const callerSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    const redirect = init?.redirect ?? (input instanceof Request ? input.redirect : undefined);
     const combined = combineSignals(AbortSignal.timeout(timeoutMs), callerSignal);
     try {
-      return await globalThis.fetch(input, { ...init, signal: combined.signal });
+      const options = { ...init, signal: combined.signal };
+      return redirect === "error"
+        ? await fetchWithoutRedirects(input, options)
+        : await globalThis.fetch(input, options);
     } finally {
       combined.cleanup();
     }

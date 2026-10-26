@@ -1,4 +1,5 @@
 import { runAuthorizedWorkerTrigger } from "./manual-trigger";
+import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects";
 
 /**
  * Cloudflare Worker — Data Retention R2 Cleanup
@@ -107,7 +108,7 @@ function isPrivateBucket(bucket: string): boolean {
 const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
 
 function fetchWithTimeout(input: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(input, {
+  return fetchWithoutRedirects(input, {
     ...init,
     signal: init.signal ?? AbortSignal.timeout(SUPABASE_REQUEST_TIMEOUT_MS),
   });

@@ -1,4 +1,5 @@
 import { runAuthorizedWorkerTrigger } from "./manual-trigger";
+import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects";
 import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
 
 import { supabaseServiceHeaders } from "./supabase-headers";
@@ -45,7 +46,7 @@ const PENDING_PAYMENT_FALLBACK_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
 
 function fetchWithTimeout(input: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(input, {
+  return fetchWithoutRedirects(input, {
     ...init,
     signal: init.signal ?? AbortSignal.timeout(SUPABASE_REQUEST_TIMEOUT_MS),
   });
@@ -172,7 +173,6 @@ const worker: ScheduledWorker<Env | FoundationJobEnv> = {
           {
             method: "POST",
             headers: { Authorization: `Bearer ${env.WORKER_API_KEY}` },
-            redirect: "error",
             signal: AbortSignal.timeout(60_000),
           }
         );
