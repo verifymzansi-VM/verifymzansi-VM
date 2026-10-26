@@ -2,6 +2,12 @@ name: Cloudflare Candidate
 
 on:
   workflow_dispatch:
+    inputs:
+      source_commit:
+        description: "Optional full SHA of a tested commit on main; blank uses current main"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -19,6 +25,7 @@ jobs:
       contents: read
       actions: read
     env:
+      DEPLOY_TARGET_SHA: ${{ inputs.source_commit || github.sha }}
       NODE_ENV: production
       WRANGLER_SEND_ERROR_REPORTS: "false"
       NEXT_PUBLIC_DATA_BACKEND: foundation
@@ -60,17 +67,25 @@ jobs:
       HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.HEALTH_DIAGNOSTIC_TOKEN }}
       RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
     steps:
+      - name: Validate the requested source selector
+        run: '[[ "$DEPLOY_TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEPLOY_TARGET_SHA }}
+          fetch-depth: 0
+      - name: Require the exact source commit on main
+        run: |
+          test "$(git rev-parse HEAD)" = "$DEPLOY_TARGET_SHA"
+          git merge-base --is-ancestor "$DEPLOY_TARGET_SHA" origin/main
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prod=false
       - name: Require successful CI for this exact main commit
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          DEPLOY_TARGET_SHA: ${{ github.sha }}
         run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Verify hosted connection and candidate contracts
         run: pnpm exec tsx scripts/check-foundation-candidate.ts
@@ -80,6 +95,12 @@ jobs:
         run: |
           pnpm run build:cloudflare
           pnpm test:cloudflare:startup
+      # The runtime verifier records the workflow event SHA. When a previous
+      # green main commit is selected, preserve both revisions explicitly.
+      - name: Record checked out source and workflow revisions
+        run: |
+          git rev-parse HEAD > tmp/cloudflare-runtime/source-commit.txt
+          printf '%s\n' "$GITHUB_SHA" > tmp/cloudflare-runtime/workflow-commit.txt
       - name: Prepare additive scoped bindings
         run: node scripts/prepare-cloudflare-candidate-secrets.mjs
       # Upload only: no deploy, route, trigger or traffic-allocation command.
@@ -91,7 +112,7 @@ jobs:
         run: >-
           pnpm exec opennextjs-cloudflare upload --env production
           --secrets-file "$RUNNER_TEMP/cloudflare-candidate-secrets.json"
-          --tag "$GITHUB_SHA" --message "Inactive acceptance candidate from main"
+          --tag "$DEPLOY_TARGET_SHA" --message inactive-main-candidate
       - name: Remove temporary binding file
         if: always()
         run: rm -f -- "$RUNNER_TEMP/cloudflare-candidate-secrets.json"
@@ -103,5 +124,7 @@ jobs:
           include-hidden-files: true
           path: |
             tmp/cloudflare-runtime/latest.json
+            tmp/cloudflare-runtime/source-commit.txt
+            tmp/cloudflare-runtime/workflow-commit.txt
             .open-next/build-fingerprint.json
           if-no-files-found: warn

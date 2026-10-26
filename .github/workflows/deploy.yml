@@ -74,7 +74,7 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --prod=false
       - name: Require successful CI for the exact deployment commit
         env:
           GITHUB_TOKEN: ${{ github.token }}
