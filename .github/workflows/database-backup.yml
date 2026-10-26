@@ -75,14 +75,14 @@ jobs:
           done
           # The foundation keeps application rows in private, including empty
           # tables. Auth must be explicitly included rather than silently omitted.
-          for table in 'auth"?\."?users' 'private"?\."?account_profiles' 'private"?\."?posts' 'private"?\."?payments' 'private"?\."?evidence_cases'; do
+          for table in 'auth"?\."?users' 'private"?\."?profiles' 'private"?\."?posts' 'private"?\."?payments' 'private"?\."?evidence_cases'; do
             if ! grep -Eq "^COPY \"?${table}\"? " data.sql; then
               echo "::error::data.sql has no data section for ${table}"
               exit 1
             fi
           done
-          grep -Eq 'CREATE TABLE (IF NOT EXISTS )?"?private"?\."?account_profiles"?' schema.sql \
-            || { echo "::error::schema.sql is missing private.account_profiles"; exit 1; }
+          grep -Eq 'CREATE TABLE (IF NOT EXISTS )?"?private"?\."?profiles"?' schema.sql \
+            || { echo "::error::schema.sql is missing private.profiles"; exit 1; }
           grep -Eq 'CREATE FUNCTION "?api"?\."?get_my_billing"?\(' schema.sql \
             || { echo "::error::schema.sql is missing the foundation runtime API"; exit 1; }
           {
