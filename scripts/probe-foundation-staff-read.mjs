@@ -76,11 +76,17 @@ try {
   const createUser = async (label) => {
     const email = `staff-read-${label}-${randomUUID()}@example.invalid`,
       password = randomBytes(24).toString("base64url");
-    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    assert.equal(created.error, null);
-    const id = created.data.user.id;
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    // Track ownership immediately so an assertion failure still cleans up.
+    if (data.user?.id) users.push(data.user.id);
+    assert.equal(error, null);
+    assert.ok(data.user);
+    const id = data.user.id;
     assert.match(id, /^[a-f0-9-]{36}$/);
-    users.push(id);
     const member = createClient(status.API_URL, status.PUBLISHABLE_KEY, options);
     clients.push(member);
     const login = await member.auth.signInWithPassword({ email, password });

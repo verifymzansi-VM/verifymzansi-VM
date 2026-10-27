@@ -7,7 +7,7 @@ const instant = z
   .regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}T/)
   .pipe(z.iso.datetime({ offset: true }));
 const auditId = z.string().regex(/^[a-z_]+:[a-zA-Z0-9-]{1,40}$/);
-export const foundationAuditRequest = z
+const foundationAuditRequest = z
   .strictObject({
     limit: z.number().int().min(1).max(100).optional(),
     before_at: instant.optional(),
@@ -52,9 +52,8 @@ export const foundationAuditPage = z
       )
   );
 export type FoundationAuditPage = z.infer<typeof foundationAuditPage>;
-export type FoundationAuditRequest = z.infer<typeof foundationAuditRequest>;
 
-export const foundationDecisionRequest = z
+const foundationDecisionRequest = z
   .strictObject({
     limit: z.number().int().min(1).max(100).optional(),
     status: z.enum(["proposed", "approved", "withdrawn", "all"]).optional(),
@@ -97,7 +96,7 @@ const decision = z
         value.withdrawn_at === null &&
         value.withdrawal_reason === null
   );
-export const foundationDecisionPage = z
+const foundationDecisionPage = z
   .strictObject({
     version: z.literal(1),
     caller_id: z.uuid(),
@@ -124,7 +123,6 @@ export const foundationDecisionPage = z
         value.items.at(-1)?.proposed_at === value.next_cursor.before_at
       )
   );
-export type FoundationDecisionPage = z.infer<typeof foundationDecisionPage>;
 
 export class FoundationStaffReadError extends Error {
   constructor(

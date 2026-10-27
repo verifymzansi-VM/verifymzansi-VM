@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { loadEnvConfig } from "@next/env";
+import { loadWorkspaceEnv } from "./lib/workspace-env";
+import {
+  assertSourceDatabaseTool,
+  isSourceSchemaOperation,
+  readLinkedProject,
+} from "./lib/source-database-tools.mjs";
 
 type Args = {
   envFile: string | null;
@@ -62,52 +66,15 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-async function loadEnvFile(envFile: string | null): Promise<void> {
-  loadEnvConfig(process.cwd());
-
-  const candidateFiles = envFile ? [envFile] : [".env.local", ".env"];
-
-  for (const candidateFile of candidateFiles) {
-    const resolvedPath = path.isAbsolute(candidateFile)
-      ? candidateFile
-      : path.join(process.cwd(), candidateFile);
-
-    let content: string;
-    try {
-      content = await readFile(resolvedPath, "utf8");
-    } catch (error) {
-      if (
-        !envFile &&
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "ENOENT"
-      ) {
-        continue;
-      }
-
-      throw error;
-    }
-
-    for (const rawLine of content.split(/\r?\n/u)) {
-      const line = rawLine.trim();
-      if (!line || line.startsWith("#")) {
-        continue;
-      }
-
-      const separatorIndex = line.indexOf("=");
-      if (separatorIndex < 0) {
-        continue;
-      }
-
-      const key = line.slice(0, separatorIndex).trim();
-      const value = line.slice(separatorIndex + 1).trim();
-      process.env[key] = value;
-    }
-  }
-}
-
 function validateCredentials(args: string[]): void {
+  if (
+    args.includes("--help") ||
+    args.includes("-h") ||
+    args.includes("--version") ||
+    args.includes("--local")
+  )
+    return;
+  if (args[0] === "migration" && args[1] === "new") return;
   const requiresRemoteAuth = args.some((arg) =>
     ["migration", "db", "link", "push", "pull", "repair"].includes(arg)
   );
@@ -133,16 +100,24 @@ function validateCredentials(args: string[]): void {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  await loadEnvFile(args.envFile);
+  await loadWorkspaceEnv(args.envFile);
+  if (isSourceSchemaOperation(args.supabaseArgs)) {
+    assertSourceDatabaseTool("Root Supabase CLI schema operation", process.env, [
+      ...args.supabaseArgs,
+      await readLinkedProject(),
+    ]);
+  }
   validateCredentials(args.supabaseArgs);
 
-  const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const command = `${pnpmCmd} exec supabase ${args.supabaseArgs.join(" ")}`;
-  const child = spawn(command, {
-    shell: true,
-    stdio: "inherit",
-    env: process.env,
-  });
+  const child = spawn(
+    process.execPath,
+    [path.resolve("node_modules/supabase/dist/supabase.js"), ...args.supabaseArgs],
+    {
+      shell: false,
+      stdio: "inherit",
+      env: process.env,
+    }
+  );
 
   await new Promise<void>((resolve, reject) => {
     child.on("error", reject);

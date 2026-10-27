@@ -787,7 +787,8 @@ export async function testTrustedIdentity({
   );
   assert.equal(reverseProposal.status, 200);
   const reverseBarrier = controlledSql(
-    `begin;select pg_advisory_xact_lock(hashtextextended('${reverseOwner.id}',2408));select 'EVIDENCE_LOCK_HELD';select pg_sleep(3);commit;`
+    `begin;select pg_advisory_xact_lock(hashtextextended('${reverseOwner.id}',2408));select 'EVIDENCE_LOCK_HELD:'||pg_backend_pid();`,
+    { hold: true }
   );
   try {
     await reverseBarrier.barrier;
@@ -803,6 +804,7 @@ export async function testTrustedIdentity({
       reverseOwner.token
     );
     await awaitQueuedRpc("begin_evidence_upload");
+    reverseBarrier.release();
     assert.equal(await reverseBarrier.done, 0);
     assert.equal((await approval).status, 200);
     assert.equal((await upload).status, 403);
@@ -823,7 +825,8 @@ export async function testTrustedIdentity({
   );
   assert.equal(closeProposal.status, 200);
   const closeBarrier = controlledSql(
-    `begin;select pg_advisory_xact_lock(hashtextextended('${closeOwner.id}',2408));select 'EVIDENCE_LOCK_HELD';select pg_sleep(3);commit;`
+    `begin;select pg_advisory_xact_lock(hashtextextended('${closeOwner.id}',2408));select 'EVIDENCE_LOCK_HELD:'||pg_backend_pid();`,
+    { hold: true }
   );
   try {
     await closeBarrier.barrier;
@@ -835,6 +838,7 @@ export async function testTrustedIdentity({
       staff.governorC.token
     );
     await awaitQueuedRpc("approve_decision");
+    closeBarrier.release();
     assert.equal(await closeBarrier.done, 0);
     assert.equal((await closure).status, 200);
     assert.equal((await approval).status, 200);

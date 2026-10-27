@@ -1,7 +1,6 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { loadEnvConfig } from "@next/env";
+import { loadWorkspaceEnv, requireWorkspaceEnv } from "./lib/workspace-env";
 import { createClient } from "@supabase/supabase-js";
+import { assertSourceDatabaseTool } from "./lib/source-database-tools.mjs";
 
 type OperatorRole = "admin" | "governance_controller" | "moderator";
 
@@ -162,48 +161,12 @@ function parseArgs(argv: string[]): Args {
   return args;
 }
 
-async function loadEnvFile(envFile: string | null): Promise<void> {
-  loadEnvConfig(process.cwd());
-
-  if (!envFile) {
-    return;
-  }
-
-  const resolvedPath = path.isAbsolute(envFile) ? envFile : path.join(process.cwd(), envFile);
-  const content = await readFile(resolvedPath, "utf8");
-
-  for (const rawLine of content.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex < 0) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-    process.env[key] = value;
-  }
-}
-
 function requireArg(name: string, value: string | null): string {
   if (!value || value.trim().length === 0) {
     throw new Error(`Missing required argument: ${name}`);
   }
 
   return value.trim();
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
 }
 
 function getProjectRef(supabaseUrl: string): string {
@@ -264,7 +227,8 @@ async function upsertAccountProfile(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  await loadEnvFile(args.envFile);
+  await loadWorkspaceEnv(args.envFile);
+  assertSourceDatabaseTool("Legacy operator bootstrap");
 
   const email = requireArg("--email", args.email).toLowerCase();
   const password = requireArg("--password", args.password);
@@ -273,8 +237,8 @@ async function main(): Promise<void> {
   if (reason.length < 10) {
     throw new Error("--reason must explain the provisioning in at least 10 characters.");
   }
-  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = requireWorkspaceEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = requireWorkspaceEnv("SUPABASE_SERVICE_ROLE_KEY");
   const projectRef = getProjectRef(supabaseUrl);
 
   if (args.confirmProject !== projectRef) {

@@ -1,7 +1,8 @@
+import { loadWorkspaceEnv, requireWorkspaceEnv } from "./lib/workspace-env";
 import { pathToFileURL } from "node:url";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { loadEnvConfig } from "@next/env";
+import { assertSourceDatabaseTool } from "./lib/source-database-tools.mjs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type ScriptMode = "inventory" | "wipe";
@@ -239,42 +240,6 @@ export function parseArgs(argv: string[]): Args {
   return args;
 }
 
-async function loadEnvFile(envFile: string | null): Promise<void> {
-  loadEnvConfig(process.cwd());
-
-  if (!envFile) {
-    return;
-  }
-
-  const resolvedPath = path.isAbsolute(envFile) ? envFile : path.join(process.cwd(), envFile);
-  const content = await readFile(resolvedPath, "utf8");
-
-  for (const rawLine of content.split(/\r?\n/u)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex < 0) {
-      continue;
-    }
-
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line.slice(separatorIndex + 1).trim();
-    process.env[key] = value;
-  }
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
-}
-
 function getProjectRef(supabaseUrl: string): string {
   const host = new URL(supabaseUrl).hostname;
   const [projectRef] = host.split(".");
@@ -287,8 +252,8 @@ function getProjectRef(supabaseUrl: string): string {
 }
 
 function createAdminClient(): SupabaseClient {
-  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseUrl = requireWorkspaceEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = requireWorkspaceEnv("SUPABASE_SERVICE_ROLE_KEY");
 
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
@@ -453,7 +418,7 @@ async function buildSnapshot(
   mode: ScriptMode,
   sourceEnvFile: string | null
 ): Promise<LaunchResetSnapshot> {
-  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseUrl = requireWorkspaceEnv("NEXT_PUBLIC_SUPABASE_URL");
   const [authUsers, legalHoldUserIds, tableCounts] = await Promise.all([
     listAllUsers(supabase),
     getLegalHoldUserIds(supabase),
@@ -608,9 +573,10 @@ async function runWipe(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  await loadEnvFile(args.envFile);
+  await loadWorkspaceEnv(args.envFile);
+  assertSourceDatabaseTool("Legacy launch data reset");
 
-  const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseUrl = requireWorkspaceEnv("NEXT_PUBLIC_SUPABASE_URL");
   const projectRef = getProjectRef(supabaseUrl);
 
   if (args.mode === "wipe" && args.confirmProject !== projectRef) {

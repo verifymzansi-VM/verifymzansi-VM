@@ -3,6 +3,7 @@ import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { exportSupabaseTable } from "./lib/export-supabase-table";
 import { supabaseServiceHeaders } from "../workers/supabase-headers";
+import { assertSourceDatabaseTool } from "./lib/source-database-tools.mjs";
 
 const workspaceRoot = process.cwd();
 const timestamp = new Date().toISOString().replace(/[:.]/gu, "-");
@@ -54,6 +55,7 @@ async function copyMigrations(destination: string): Promise<string[]> {
 
 async function main(): Promise<void> {
   loadEnvConfig(workspaceRoot);
+  assertSourceDatabaseTool("Legacy REST export");
   requireBackupCredentials();
 
   await mkdir(backupDirectory, { recursive: true });

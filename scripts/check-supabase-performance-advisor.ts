@@ -1,6 +1,8 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { loadEnvConfig } from "@next/env";
+import {
+  loadWorkspaceEnv,
+  requireWorkspaceEnv,
+  resolveWorkspaceProjectRef,
+} from "./lib/workspace-env";
 import { fetchManagementApi } from "./lib/supabase-management";
 import {
   classifyLint,
@@ -96,89 +98,6 @@ function parseArgs(argv: string[]): Args {
   }
 
   return args;
-}
-
-async function loadEnvFile(envFile: string | null): Promise<void> {
-  loadEnvConfig(process.cwd());
-
-  const candidateFiles = envFile ? [envFile] : [".env.local", ".env"];
-
-  for (const candidateFile of candidateFiles) {
-    const resolvedPath = path.isAbsolute(candidateFile)
-      ? candidateFile
-      : path.join(process.cwd(), candidateFile);
-
-    let content: string;
-    try {
-      content = await readFile(resolvedPath, "utf8");
-    } catch (error) {
-      if (
-        !envFile &&
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === "ENOENT"
-      ) {
-        continue;
-      }
-
-      throw error;
-    }
-
-    for (const rawLine of content.split(/\r?\n/u)) {
-      const line = rawLine.trim();
-      if (!line || line.startsWith("#")) {
-        continue;
-      }
-
-      const separatorIndex = line.indexOf("=");
-      if (separatorIndex < 0) {
-        continue;
-      }
-
-      const key = line.slice(0, separatorIndex).trim();
-      const value = line.slice(separatorIndex + 1).trim();
-      process.env[key] = value;
-    }
-  }
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
-}
-
-function resolveProjectRef(explicitRef: string | null): string {
-  if (explicitRef) {
-    return explicitRef;
-  }
-
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || process.env.SUPABASE_URL?.trim() || "";
-
-  if (!supabaseUrl) {
-    throw new Error(
-      "Missing Supabase project reference. Set NEXT_PUBLIC_SUPABASE_URL or pass --project-ref=<ref>."
-    );
-  }
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(supabaseUrl);
-  } catch {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL must be a valid http(s) URL.");
-  }
-
-  const ref = parsedUrl.hostname.split(".")[0]?.trim();
-  if (!ref) {
-    throw new Error("Could not derive project ref from NEXT_PUBLIC_SUPABASE_URL.");
-  }
-
-  return ref;
 }
 
 async function fetchIndexMetadata(
@@ -277,10 +196,10 @@ async function fetchIndexMetadata(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  await loadEnvFile(args.envFile);
+  await loadWorkspaceEnv(args.envFile);
 
-  const accessToken = requireEnv("SUPABASE_ACCESS_TOKEN");
-  const projectRef = resolveProjectRef(args.projectRef);
+  const accessToken = requireWorkspaceEnv("SUPABASE_ACCESS_TOKEN", true);
+  const projectRef = resolveWorkspaceProjectRef(args.projectRef);
 
   const [project, performanceAdvisor, indexMetadata] = await Promise.all([
     fetchManagementApi<ProjectResponse>(accessToken, `/projects/${projectRef}`),

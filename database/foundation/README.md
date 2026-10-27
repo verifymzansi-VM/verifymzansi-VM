@@ -1,5 +1,20 @@
 # Guarded clean backend candidate
 
+The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
+export belong to the retired source schema. Their wrappers refuse foundation
+targets. Do not replay that tree into the new project. Use reviewed additive
+foundation migrations; keep this clean baseline guarded until acceptance. The
+`Database Backup` workflow dumps the private/API/internal/auth schemas and
+encrypts the backup; a public REST export cannot replace it.
+
+The first foundation administrator must already have a confirmed active account
+and a verified authenticator app. An owner SQL session can then call
+`internal.bootstrap_first_administrator(email)` for the explicitly selected
+operator. No browser or service API role can execute it. It refuses once any
+staff role exists. Subsequent grants use the native staff governance commands.
+Do not create legacy metadata roles or reset an existing user's password to
+bootstrap the new project.
+
 This separate target baseline records its function inventory in `assembly.json`
 and its API commands and audiences in `api-manifest.json`. It preserves the
 reviewed domain transactions while excluding six test-only functions and
