@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { useAuthStore } from "@/stores/auth-store";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
@@ -37,8 +37,28 @@ async function fetchReviewQueue() {
   return queueSchema.parse(data);
 }
 export function FoundationVerificationReview() {
-  const user = useAuthStore((state) => state.user);
-  const [queue, setQueue] = useState<z.infer<typeof queueSchema>>([]);
+  const current = useAuthStore((state) => state.foundationContext);
+  const userId = useAuthStore((state) => state.user?.id);
+  const loading = useAuthStore((state) => state.isLoading);
+  if (loading) return <p role="status">Loading your reviewer account…</p>;
+  const assigned = current?.staff?.assigned_capabilities ?? [];
+  if (
+    !current ||
+    current.account_id !== userId ||
+    !current.staff?.can_access ||
+    !assigned.includes("case:claim") ||
+    !assigned.includes("evidence:view")
+  )
+    return (
+      <p role="alert">A current reviewer assignment and authenticator verification are required.</p>
+    );
+  // Losing the current assignment unmounts the private viewer and revokes all
+  // object URLs, even if the presentation role still says admin or governor.
+  return <FoundationVerificationViewer key={current.account_id} viewerId={current.account_id} />;
+}
+
+function FoundationVerificationViewer({ viewerId }: { viewerId: string }) {
+  const [queue, setQueue] = useState<z.infer<typeof queueSchema> | null>(null);
   const [lease, setLease] = useState<z.infer<typeof claimSchema> | null>(null);
   const [context, setContext] = useState<Context | null>(null);
   const [documents, setDocuments] = useState<{ id: string; url: string; mime: string }[]>([]);
@@ -47,8 +67,36 @@ export function FoundationVerificationReview() {
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const mounted = useRef(true);
+  const objectUrls = useRef(new Set<string>());
+  function clearEvidence() {
+    for (const url of objectUrls.current) URL.revokeObjectURL(url);
+    objectUrls.current.clear();
+    setDocuments([]);
+  }
+  function clearReview() {
+    setContext(null);
+    setLease(null);
+    clearEvidence();
+    setNumberMatches(false);
+    setSelfieMatches(false);
+    setReason("");
+  }
   async function refresh() {
+    setQueue(null);
     setQueue(await fetchReviewQueue());
+  }
+  async function refreshAfterUpdate(receipt: string) {
+    if (!mounted.current) return;
+    setMessage(receipt);
+    try {
+      await refresh();
+    } catch {
+      if (mounted.current)
+        setMessage(
+          `${receipt} The queue could not be reloaded; refresh it before doing more work.`
+        );
+    }
   }
   useEffect(() => {
     fetchReviewQueue()
@@ -57,35 +105,53 @@ export function FoundationVerificationReview() {
         setMessage(error instanceof Error ? error.message : "The queue could not be loaded")
       );
   }, []);
-  useEffect(
-    () => () => documents.forEach((document) => URL.revokeObjectURL(document.url)),
-    [documents]
-  );
+  useEffect(() => {
+    mounted.current = true;
+    const urls = objectUrls.current;
+    return () => {
+      mounted.current = false;
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
   async function command(body: object) {
-    await ensureCsrfTokenReady();
+    if (!(await ensureCsrfTokenReady()))
+      throw new Error("Refresh the security check before continuing.");
+    if (!mounted.current) throw new Error("Review closed");
     const response = await fetch("/api/foundation/verification/review", {
       method: "POST",
+      credentials: "same-origin",
+      redirect: "error",
       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
       cache: "no-store",
     });
     const data = await response.json();
-    if (!response.ok)
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        setContext(null);
+        clearEvidence();
+        setNumberMatches(false);
+        setSelfieMatches(false);
+      }
       throw new Error(
         typeof data.error === "string" ? data.error : "The case could not be updated"
       );
+    }
     return data;
   }
   async function open(caseId: string) {
+    if (!mounted.current || busy) return;
     setBusy(true);
     setMessage("");
     setContext(null);
-    setDocuments([]);
+    clearEvidence();
     setNumberMatches(false);
     setSelfieMatches(false);
     const created: typeof documents = [];
     try {
       const claimed = claimSchema.parse(await command({ action: "claim", case_id: caseId }));
+      if (!mounted.current) throw new Error("Review closed");
       setLease(claimed);
       const keys = {
         case_id: claimed.case_id,
@@ -93,11 +159,14 @@ export function FoundationVerificationReview() {
         claim_nonce: claimed.claim_nonce,
       };
       const data: Context = await command({ action: "context", ...keys });
+      if (!mounted.current) throw new Error("Review closed");
       if (data.case_id !== caseId || !/^\d{13}$/.test(data.claimed_number))
         throw new Error("Review context could not be verified");
       for (const artifact of [data.id_artifact_id, data.selfie_artifact_id]) {
         const response = await fetch("/api/foundation/verification/evidence", {
           method: "POST",
+          credentials: "same-origin",
+          redirect: "error",
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ ...keys, artifact_id: artifact }),
           cache: "no-store",
@@ -105,15 +174,22 @@ export function FoundationVerificationReview() {
         if (!response.ok)
           throw new Error("A document could not be opened. The claim may have expired.");
         const blob = await response.blob();
+        if (!mounted.current) throw new Error("Review closed");
         if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(blob.type))
           throw new Error("Unsupported evidence type");
-        created.push({ id: artifact, url: URL.createObjectURL(blob), mime: blob.type });
+        const url = URL.createObjectURL(blob);
+        objectUrls.current.add(url);
+        created.push({ id: artifact, url, mime: blob.type });
       }
       setDocuments(created);
       setContext(data);
     } catch (error) {
-      created.forEach((document) => URL.revokeObjectURL(document.url));
-      setMessage(error instanceof Error ? error.message : "Evidence could not be opened");
+      for (const document of created) {
+        URL.revokeObjectURL(document.url);
+        objectUrls.current.delete(document.url);
+      }
+      if (mounted.current)
+        setMessage(error instanceof Error ? error.message : "Evidence could not be opened");
     } finally {
       setBusy(false);
     }
@@ -140,24 +216,38 @@ export function FoundationVerificationReview() {
             }
           : { action, ...keys, reason }
       );
-      setMessage(
+      const receipt =
         result.status === "awaiting_second_reviewer"
           ? "Your review is recorded. An independent reviewer must approve this higher-risk case."
           : action === "return"
             ? "The member has been asked to resubmit."
-            : "Identity review completed."
-      );
-      setContext(null);
-      setLease(null);
-      setDocuments([]);
-      setReason("");
-      await refresh();
+            : "Identity review completed.";
+      clearReview();
+      await refreshAfterUpdate(receipt);
     } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
           : "The decision could not be confirmed. Refresh the queue before trying again."
       );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function releaseCase() {
+    if (!lease || busy) return;
+    setBusy(true);
+    try {
+      await command({
+        action: "release",
+        case_id: lease.case_id,
+        claim_generation: lease.claim_generation,
+        claim_nonce: lease.claim_nonce,
+      });
+      clearReview();
+      await refreshAfterUpdate("Claim released.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The claim could not be released");
     } finally {
       setBusy(false);
     }
@@ -283,38 +373,32 @@ export function FoundationVerificationReview() {
           <button
             disabled={busy}
             className="rounded-lg border px-4 py-3"
-            onClick={async () => {
-              setBusy(true);
-              try {
-                await command({
-                  action: "release",
-                  case_id: lease.case_id,
-                  claim_generation: lease.claim_generation,
-                  claim_nonce: lease.claim_nonce,
-                });
-                setContext(null);
-                setLease(null);
-                setDocuments([]);
-              } catch (error) {
-                setMessage(
-                  error instanceof Error ? error.message : "The claim could not be released"
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onClick={() => void releaseCase()}
+          >
+            Release case
+          </button>
+        </section>
+      )}
+      {lease && !context && (
+        <section className="space-y-3 rounded-lg border p-4">
+          <p>A case is claimed, but its evidence is not open.</p>
+          <button
+            disabled={busy}
+            onClick={() => void releaseCase()}
+            className="rounded-lg border px-4 py-3"
           >
             Release case
           </button>
         </section>
       )}
       <div className="space-y-3">
-        {queue.length === 0 && (
+        {queue === null && !message && <p role="status">Loading the review queue…</p>}
+        {queue?.length === 0 && (
           <p className="rounded-xl border p-6 text-muted-foreground">
             No identity submissions are waiting for review.
           </p>
         )}
-        {queue.map((item) => (
+        {(queue ?? []).map((item) => (
           <article
             key={item.case_id}
             className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-4"
@@ -338,7 +422,7 @@ export function FoundationVerificationReview() {
                 <button
                   disabled={
                     busy ||
-                    item.proposed_by === user?.id ||
+                    item.proposed_by === viewerId ||
                     context?.case_id !== item.case_id ||
                     !lease ||
                     !numberMatches ||
@@ -360,8 +444,8 @@ export function FoundationVerificationReview() {
                         number_matches: numberMatches,
                         selfie_matches: selfieMatches,
                       });
-                      setMessage("Independent review approved.");
-                      await refresh();
+                      clearReview();
+                      await refreshAfterUpdate("Independent review approved.");
                     } catch (error) {
                       setMessage(
                         error instanceof Error

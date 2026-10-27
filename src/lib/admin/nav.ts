@@ -67,6 +67,8 @@ export interface NavItem {
   section: NavSectionId;
   /** The page guard's capability; null means any active staff member. */
   capability: Capability | null;
+  /** Canonical SQL capability for the foundation backend, when its name differs. */
+  nativeCapability?: string;
   badge?: NavBadge;
   /** Shown only while this feature flag is on. */
   flag?: "kyc_evidence_desk";
@@ -106,6 +108,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "shield",
     section: "queues",
     capability: "queue:view",
+    nativeCapability: "case:claim",
     badge: "kyc",
   },
   {
@@ -114,6 +117,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "eye",
     section: "queues",
     capability: "queue:view",
+    nativeCapability: "evidence:view",
     flag: "kyc_evidence_desk",
   },
   {
@@ -122,6 +126,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "building",
     section: "queues",
     capability: "queue:view",
+    nativeCapability: "case:claim",
     badge: "business_kyc",
   },
   {
@@ -130,6 +135,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "clock",
     section: "queues",
     capability: "queue:view",
+    nativeCapability: "queue:claim",
     badge: "content",
   },
   {
@@ -138,6 +144,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "flag",
     section: "queues",
     capability: "queue:view",
+    nativeCapability: "report:resolve",
     badge: "reports",
   },
   {
@@ -146,6 +153,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "inbox",
     section: "queues",
     capability: null,
+    nativeCapability: "queue:view",
     badge: "support",
   },
 
@@ -155,6 +163,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "shopping",
     section: "areas",
     capability: "queue:view",
+    nativeCapability: "queue:claim",
   },
   {
     href: "/admin/businesses",
@@ -162,6 +171,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "building",
     section: "areas",
     capability: "queue:view",
+    nativeCapability: "queue:claim",
   },
   {
     href: "/admin/tourism-events",
@@ -169,6 +179,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "palm",
     section: "areas",
     capability: "queue:view",
+    nativeCapability: "queue:claim",
   },
 
   {
@@ -261,6 +272,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "landmark",
     section: "commercial",
     capability: "organisations:manage",
+    nativeCapability: "organisation:manage",
   },
   {
     href: "/admin/partners",
@@ -268,6 +280,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "handshake",
     section: "commercial",
     capability: "partners:manage",
+    nativeCapability: "partner:manage",
   },
   {
     href: "/admin/payments",
@@ -318,6 +331,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     icon: "clock",
     section: "intelligence",
     capability: "bi:view",
+    nativeCapability: "queue:view",
   },
 
   {
@@ -353,11 +367,17 @@ function canSeeNavItem(role: StaffRole, item: NavItem): boolean {
 /** The sidebar for a role: the pages its capabilities open, grouped and ordered. */
 export function navFor(
   role: StaffRole,
-  flags: { kyc_evidence_desk?: boolean } = {}
+  flags: { kyc_evidence_desk?: boolean } = {},
+  assignedNativeCapabilities?: readonly string[]
 ): NavSectionView[] {
-  const visible = ADMIN_NAV.filter(
-    (item) => canSeeNavItem(role, item) && (!item.flag || flags[item.flag] === true)
-  );
+  const native = assignedNativeCapabilities ? new Set(assignedNativeCapabilities) : null;
+  const visible = ADMIN_NAV.filter((item) => {
+    const capability = item.nativeCapability ?? item.capability;
+    const allowed = native
+      ? capability === null || native.has(capability)
+      : canSeeNavItem(role, item);
+    return allowed && (!item.flag || flags[item.flag] === true);
+  });
   return SECTION_ORDER.map((id) => ({
     id,
     label: NAV_SECTION_LABELS[id],

@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
   "schema": "api",
-  "candidateHash": "ZG2_-vSuNWH7Jl5kG9lUK0j0aPWTpKz-btwG4SFmDHg",
+  "candidateHash": "ZuO6sntHaHexYtTlCOhT1LCgA8bkbn2OpErjfz2bkXM",
   "generator": {
     "tool": "Supabase CLI",
     "version": "2.120.0",
     "schema": "api",
     "source": "fresh owned local baseline database; no Auth data"
   },
-  "generatedTypesHash": "SoXtwV-iJx4LuJEsZkilTIFOT1QADAL9XgfiLKRcUm4",
-  "roleTypesHash": "k5WSk-eQljZAPrjpTG9wYJEYx8drqSjnJR8os7aiQoQ",
+  "generatedTypesHash": "02ycQOtFKq8z1GDd9mbjuO0FcA8nIfCrY-ZEK7IyZDs",
+  "roleTypesHash": "_fOeC-WAYmv9OietkFpBD-zLITg4alVsp4JCvI_JEiY",
   "semanticContractStatus": "INCOMPLETE: audience, current authority, resource scope, strict DTO, audit, cache, job and retry semantics require individual adapter review",
   "authorityScope": "SQL EXECUTE eligibility only; current caller/session/capability/ownership checks remain in function bodies. Generated Json is not runtime DTO validation.",
   "releaseReady": false,
@@ -4176,6 +4176,30 @@
       }
     },
     {
+      "name": "staff_audit_page",
+      "signature": "p_request jsonb",
+      "argumentsWithDefaults": "p_request jsonb DEFAULT '{}'::jsonb",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
       "name": "staff_cost_overview",
       "signature": "",
       "argumentsWithDefaults": "",
@@ -4223,6 +4247,30 @@
         {
           "name": "p_reference",
           "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      }
+    },
+    {
+      "name": "staff_decision_page",
+      "signature": "p_request jsonb",
+      "argumentsWithDefaults": "p_request jsonb DEFAULT '{}'::jsonb",
+      "returns": "jsonb",
+      "volatility": "s",
+      "securityDefiner": false,
+      "owner": "postgres",
+      "searchPath": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
           "optional": true
         }
       ],

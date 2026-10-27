@@ -1,6 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import { getDataBackend } from "@/lib/data-backend";
-import { FoundationVerificationReview } from "@/components/foundation/verification-review";
+import { FoundationVerificationDesk } from "@/components/foundation/verification-desk";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
 import { QueueClaimBar, QueueClaimsProvider } from "@/components/admin/queue-claims";
@@ -19,7 +19,7 @@ export const metadata = {
 const SHOWN_LIMIT = 100;
 
 export default async function AdminVerificationPage() {
-  if (getDataBackend() === "foundation") return <FoundationVerificationReview />;
+  if (getDataBackend() === "foundation") return <FoundationVerificationDesk />;
   const { user, role } = await requireStaff("queue:view");
 
   const myClaimed = await getMyClaimedItems(user.id, "kyc");

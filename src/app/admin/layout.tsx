@@ -39,7 +39,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       : getStaffNavCounts(staff.user.id),
     foundation ? Promise.resolve(true) : isFeatureEnabled("kyc_evidence_desk"),
   ]);
-  const sections = navFor(staff.role, { kyc_evidence_desk: evidenceDeskEnabled });
+  const sections = navFor(
+    staff.role,
+    { kyc_evidence_desk: evidenceDeskEnabled },
+    foundation ? (staff.assignedCapabilities ?? []) : undefined
+  );
 
   const content = (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-slate-50 dark:bg-slate-950">

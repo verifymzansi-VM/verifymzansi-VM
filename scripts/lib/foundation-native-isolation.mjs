@@ -79,6 +79,8 @@ export const FIXTURE_MIGRATIONS = {
     "docs/backend-foundation/prototypes/media-evidence-runtime.sql",
   "20261025000539_foundation_staff_runtime.sql":
     "docs/backend-foundation/prototypes/staff-dashboard-runtime.sql",
+  "20261027003252_foundation_staff_read_surfaces.sql":
+    "docs/backend-foundation/prototypes/staff-read-surfaces.sql",
 };
 export const nativeDigest = (file) =>
   createHash("sha256").update(readFileSync(file)).digest("base64url");

@@ -458,11 +458,13 @@ export type Database = {
         Returns: Json;
       };
       sponsor_business: { Args: { p_affiliation: string; p_reason: string }; Returns: Json };
+      staff_audit_page: { Args: { p_request?: Json }; Returns: Json };
       staff_cost_overview: { Args: Record<PropertyKey, never>; Returns: Json };
       staff_decide_commission: {
         Args: { p_action: string; p_commission: string; p_reason: string; p_reference?: string };
         Returns: Json;
       };
+      staff_decision_page: { Args: { p_request?: Json }; Returns: Json };
       staff_evidence_metadata: {
         Args: {
           p_case_id: string;

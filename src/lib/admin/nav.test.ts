@@ -104,6 +104,27 @@ describe("admin navigation registry", () => {
     expect(hrefs.sort()).toEqual(ADMIN_NAV.map((i) => i.href).sort());
   });
 
+  it("uses native assignments instead of expanding the admin presentation role", () => {
+    const hrefs = navFor("admin", { kyc_evidence_desk: true }, []).flatMap((section) =>
+      section.items.map((item) => item.href)
+    );
+    expect(hrefs).toEqual(["/admin"]);
+  });
+  it("maps native reviewer and organisation capabilities without source role aliases", () => {
+    const hrefs = navFor("moderator", { kyc_evidence_desk: true }, [
+      "audit:view",
+      "organisation:manage",
+      "partner:manage",
+      "evidence:view",
+    ]).flatMap((section) => section.items.map((item) => item.href));
+    expect(hrefs).toContain("/admin/audit-log");
+    expect(hrefs).toContain("/admin/organisations");
+    expect(hrefs).toContain("/admin/partners");
+    expect(hrefs).toContain("/admin/verification/evidence");
+    expect(hrefs).not.toContain("/admin/verification");
+    expect(hrefs).not.toContain("/admin/moderation");
+  });
+
   it("hides the evidence desk while its flag is off", () => {
     const hrefs = navFor("admin").flatMap((s) => s.items.map((i) => i.href));
     expect(hrefs).not.toContain("/admin/verification/evidence");

@@ -1,9 +1,10 @@
 # Guarded clean backend candidate
 
-This separate target baseline contains 398 functions and 134 API commands. It
-preserves the reviewed domain transactions while excluding six test-only
-functions and synthetic category compatibility. Browser roles have no base-table
-access. API execution eligibility remains distinct from business authorization.
+This separate target baseline records its function inventory in `assembly.json`
+and its API commands and audiences in `api-manifest.json`. It preserves the
+reviewed domain transactions while excluding six test-only functions and
+synthetic category compatibility. Browser roles have no base-table access. API
+execution eligibility remains distinct from business authorization.
 
 The single CLI-created migration deliberately raises an exception. The candidate
 is not a deployable migration, and this checkout must not be linked to the

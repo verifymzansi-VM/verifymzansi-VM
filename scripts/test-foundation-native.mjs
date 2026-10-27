@@ -62,6 +62,8 @@ async function runFixture({ workdir, config, env, cliPath, dockerArgs }, release
       "scripts/lib/foundation-account-profile-native.mjs",
       "scripts/lib/foundation-account-profile-fixture.mjs",
       "src/lib/foundation/account-profile.ts",
+      "src/lib/foundation/staff-read.ts",
+      "scripts/probe-foundation-staff-read.mjs",
       "src/lib/foundation/person-name.ts",
       "src/lib/foundation/person-name-ranges.json",
       "docs/backend-foundation/prototypes/person-name-rule.sql",
