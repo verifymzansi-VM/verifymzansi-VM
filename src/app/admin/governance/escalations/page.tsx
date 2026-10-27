@@ -5,13 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Gavel, AlertTriangle, Clock, Scale } from "lucide-react";
 import Link from "next/link";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationStaffDecisionsPage } from "@/components/foundation/staff-decisions-page";
 
 export const metadata = {
   title: "Escalations — Governance",
   description: "Review escalated decisions requiring governance approval.",
 };
 
-export default async function GovernanceEscalationsPage() {
+export default async function GovernanceEscalationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  if (getDataBackend() === "foundation")
+    return <FoundationStaffDecisionsPage searchParams={searchParams} />;
   await requireStaff("decision:approve");
 
   const pendingDecisions = await getPendingDecisions(50);

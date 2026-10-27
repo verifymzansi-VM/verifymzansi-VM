@@ -45,6 +45,9 @@ import {
   formatPlanPrice,
 } from "@/lib/constants/pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationBillingCatalogue } from "@/lib/foundation/billing-catalogue";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
 import { cn } from "@/lib/utils";
 
@@ -428,6 +431,47 @@ const FAQ = [
 ] as const;
 
 export default async function AdvertisePage() {
+  if (getDataBackend() === "foundation") {
+    const catalogue = await readFoundationBillingCatalogue(foundationServerPublicApi());
+    const planSheet = (multiple: boolean): PriceSheetData => ({
+      caption: multiple
+        ? "Multi-listing price (total for the term)"
+        : "Individual plans (one live slot)",
+      columns: ["Plan and section", "Places", "Term", "Price"],
+      rows: catalogue.plans
+        .filter((plan) => plan.slot_capacity > 1 === multiple)
+        .map((plan) => ({
+          label: `${plan.label} — ${plan.area === "market" ? "Mzansi Market" : plan.area === "business" ? "Mzansi Business" : plan.area === "tourism_events" ? "Tourism & Events" : "All sections"}`,
+          cells: [
+            String(plan.slot_capacity),
+            `${plan.duration_days} days`,
+            formatPlanPrice(Number(plan.price_cents)),
+          ],
+        })),
+      footnote:
+        "Prepaid plans do not renew automatically. Event posts are free. Check your eligible introductory allowance in your account.",
+    });
+    const details = { urgent: EXTRAS[0], boost: EXTRAS[1], featured: EXTRAS[2] };
+    return (
+      <AdvertiseContent
+        sheets={{
+          individual: planSheet(false),
+          "multi-listing": planSheet(true),
+          programmes: {
+            caption: "Sponsor fee (total for the term)",
+            columns: ["Programme", "Price"],
+            rows: [{ label: "Business Sponsor", cells: ["Written proposal"] }],
+            footnote: "Capacity, term and services are agreed in your written proposal.",
+          },
+        }}
+        extras={catalogue.addons.map((addon) => ({
+          ...details[addon.kind],
+          price: `${formatPlanPrice(Number(addon.price_cents))} for ${addon.days} days`,
+        }))}
+        native
+      />
+    );
+  }
   const catalog = await getCommercialCatalog();
   const retail = [...catalog.retail].sort((a, b) => a.durationDays - b.durationDays);
   const slotSizes = [...new Set(catalog.enterprise.map((plan) => plan.slots))].sort(
@@ -481,6 +525,52 @@ export default async function AdvertisePage() {
     },
   };
 
+  return <AdvertiseContent sheets={sheets} extras={EXTRAS} />;
+}
+
+function AdvertiseContent({
+  sheets,
+  extras,
+  native = false,
+}: {
+  sheets: Record<PackageDetail["id"], PriceSheetData>;
+  extras: ReadonlyArray<{ icon: LucideIcon; name: string; price: string; body: string }>;
+  native?: boolean;
+}) {
+  const packages = native
+    ? PACKAGES.map((pkg): PackageDetail => ({
+        ...pkg,
+        pricesHref: pkg.id === "programmes" ? PROPOSAL_HREF : pkg.pricesHref,
+        ...(pkg.id === "individual"
+          ? {
+              includes: [
+                "One live posting place in the section shown in your plan",
+                "Photos and video within your plan’s allowance",
+                "Direct calls and WhatsApp, with no commission",
+                "Identity and post review before publication",
+                "An eligible introductory allowance is shown in your account",
+              ],
+            }
+          : pkg.id === "multi-listing"
+            ? {
+                lede: "Manage several posts with a prepaid plan. Choose the live places, section and term that fit your stock.",
+                includes: [
+                  "The live posting places and term shown in the current catalogue",
+                  "Named administrators can help manage an eligible plan",
+                  "Every poster ID reviewed and every post reviewed before it goes live",
+                  "Photos and video within your plan’s allowance",
+                  "A fixed end date with no automatic renewal",
+                ],
+              }
+            : {
+                includes: [
+                  "A programme for affiliated businesses",
+                  "A “Supported by” label for participating businesses",
+                  "Capacity, term, administrators and services agreed in your written proposal",
+                ],
+              }),
+      }))
+    : PACKAGES;
   return (
     <>
       <Header />
@@ -640,7 +730,7 @@ export default async function AdvertisePage() {
             </p>
             <Reveal>
               <ul className="mt-8 grid gap-4 lg:grid-cols-3">
-                {PACKAGES.map(({ id, icon: Icon, name, who }) => (
+                {packages.map(({ id, icon: Icon, name, who }) => (
                   <SpotlightCard
                     as="li"
                     key={id}
@@ -665,9 +755,9 @@ export default async function AdvertisePage() {
         </section>
 
         {/* 4 ── The three packages in full ──────────────────── */}
-        {PACKAGES.map((pkg, index) => (
+        {packages.map((pkg, index) => (
           <PackageSection key={pkg.id} pkg={pkg} sheet={sheets[pkg.id]} shaded={index % 2 === 1}>
-            {pkg.id === "programmes" ? (
+            {pkg.id === "programmes" && !native ? (
               <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4 text-sm">
                 <p className="font-semibold text-foreground">Founding pilots</p>
                 <p className="mt-1 text-muted-foreground">
@@ -779,7 +869,7 @@ export default async function AdvertisePage() {
             </p>
             <Reveal>
               <ul className="mt-7 grid gap-4 sm:grid-cols-3">
-                {EXTRAS.map(({ icon: Icon, name, price, body }) => (
+                {extras.map(({ icon: Icon, name, price, body }) => (
                   <SpotlightCard
                     as="li"
                     key={name}
@@ -861,7 +951,11 @@ export default async function AdvertisePage() {
                   <h3 className="font-body text-base font-bold text-foreground sm:mt-4">
                     {step.title}
                   </h3>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">{step.body}</p>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {native && step.title === "Pick a plan"
+                      ? "Choose the places and term shown in the current catalogue. No automatic renewal."
+                      : step.body}
+                  </p>
                 </div>
               </SpotlightCard>
             ))}
@@ -900,8 +994,10 @@ export default async function AdvertisePage() {
                 Ready when you are.
               </h2>
               <p className="mt-2 text-white/75">
-                Your first post is free once your ID is reviewed: 7 days, or 30 days while launch
-                spaces last. Organisations can email{" "}
+                {native
+                  ? "Check your eligible introductory allowance in your account. "
+                  : "Your first post is free once your ID is reviewed: 7 days, or 30 days while launch spaces last. "}
+                Organisations can email{" "}
                 <a
                   className="font-semibold text-brand-gold-300 underline-offset-4 hover:underline"
                   href={`mailto:${HELLO_CONTACT_EMAIL}`}

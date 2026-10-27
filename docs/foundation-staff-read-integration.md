@@ -22,6 +22,12 @@ decision page. Action hints in a response do not replace the native commands'
 live authority, version, independent-reviewer and claim checks. Identity review
 continues through the dedicated evidence/identity review protocol.
 
+Native escalation list/detail pages read this metadata with the verified
+caller's API client. They distinguish an unavailable read from an empty history
+and retain exact cursors across filters. Review links require assigned
+case/evidence capabilities; the pages do not provide a generic identity-approval
+shortcut.
+
 The staff navigation uses assigned native capabilities rather than expanding a
 presentation role through the source role hierarchy. The native evidence desk
 requires the reviewer assignment and discards its private viewer when that

@@ -32,15 +32,71 @@ vi.mock("@/components/brand", async (importOriginal) => ({
   VerificationEmblem: () => null,
 }));
 
+const native = vi.hoisted(() => ({ mode: "source", read: vi.fn(), legacy: vi.fn() }));
+vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => native.mode }));
+vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: () => ({}) }));
+vi.mock("@/lib/foundation/billing-catalogue", () => ({
+  readFoundationBillingCatalogue: native.read,
+}));
 const catalog = vi.hoisted(() => ({ retail: [] as unknown[], enterprise: [] as unknown[] }));
 vi.mock("@/lib/commercial/plans", () => ({
-  getCommercialCatalog: async () => ({ ...catalog, source: "database" }),
+  getCommercialCatalog: async () => {
+    native.legacy();
+    return { ...catalog, source: "database" };
+  },
 }));
 
 describe("AdvertisePage", () => {
   beforeEach(() => {
+    native.mode = "source";
+    native.read.mockReset();
+    native.legacy.mockClear();
     catalog.retail = RETAIL_OFFERS.map((offer) => ({ ...offer, planIds: {} }));
     catalog.enterprise = ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null }));
+  });
+
+  it("uses section-specific canonical prices, arbitrary terms and current add-ons without legacy defaults", async () => {
+    native.mode = "foundation";
+    const plan = {
+      id: "synthetic",
+      label: "Current offer",
+      slot_capacity: 1,
+      duration_days: 45,
+      price_cents: "12345",
+    };
+    native.read.mockResolvedValue({
+      plans: [
+        { ...plan, area: "market" },
+        { ...plan, area: "business", price_cents: "23456" },
+        { ...plan, area: null, label: "Team offer", slot_capacity: 7, duration_days: 60 },
+      ],
+      addons: [{ kind: "urgent", days: 9, price_cents: "34567" }],
+    });
+    const { container } = render(await AdvertisePage());
+    expect(native.legacy).not.toHaveBeenCalled();
+    expect(native.read).toHaveBeenCalledOnce();
+    expect(screen.getByText("Current offer — Mzansi Market")).toBeInTheDocument();
+    expect(screen.getByText("Current offer — Mzansi Business")).toBeInTheDocument();
+    expect(container.textContent).toMatch(/R123[.,]45/);
+    expect(container.textContent).toMatch(/R234[.,]56/);
+    expect(container.textContent).toMatch(/R345[.,]67 for 9 days/);
+    expect(screen.getAllByText("45 days")).toHaveLength(2);
+    expect(screen.getByText("60 days")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(
+      /same price in every section|R15\s000|30 days while launch spaces last|2 approved edits/i
+    );
+    expect(screen.queryByRole("heading", { name: "Boost" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See sponsor fees" })).toHaveAttribute(
+      "href",
+      "/contact?topic=organisation_proposal"
+    );
+  });
+
+  it("propagates a native catalogue outage instead of advertising default prices", async () => {
+    native.mode = "foundation";
+    native.read.mockRejectedValue(new Error("Catalogue unavailable"));
+    await expect(AdvertisePage()).rejects.toThrow("Catalogue unavailable");
+    expect(native.legacy).not.toHaveBeenCalled();
   });
 
   it("explains the three packages and links each to its full details", async () => {

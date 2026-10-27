@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { redirect } from "next/navigation";
 import { getDataBackend } from "@/lib/data-backend";
 import { FoundationModerationQueue } from "@/components/foundation/moderation-queue";
 import { roleHasCapability } from "@/lib/auth/admin-access";
@@ -21,8 +22,17 @@ const OPEN_LIMIT = 200;
 const RECENT_CLOSED_LIMIT = 50;
 
 export default async function AdminReportsPage() {
-  if (getDataBackend() === "foundation") return <FoundationModerationQueue mode="reports" />;
-  const { user, role } = await requireStaff("queue:view");
+  const staff = await requireStaff("queue:view");
+  const { user, role } = staff;
+  if (getDataBackend() === "foundation") {
+    if (
+      !["queue:claim", "report:resolve"].every((capability) =>
+        staff.assignedCapabilities?.includes(capability)
+      )
+    )
+      redirect("/admin");
+    return <FoundationModerationQueue mode="reports" />;
+  }
   const admin = createAdminClient();
 
   // Every open report stays reachable: open ones are loaded first (highest

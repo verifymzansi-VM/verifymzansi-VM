@@ -5,6 +5,7 @@ import Link from "next/link";
 import { z } from "zod";
 import { getFoundationBrowserClient } from "@/lib/foundation/browser-client";
 import { foundationMediaUrl } from "@/lib/foundation/public-cards";
+import { useAuthStore } from "@/stores/auth-store";
 const claimSchema = z.looseObject({
   subject: z.enum(["post", "report"]),
   id: z.uuid(),
@@ -71,6 +72,28 @@ async function readHeldClaims(mode: "content" | "reports") {
 }
 type Claim = z.infer<typeof claimSchema>;
 export function FoundationModerationQueue({ mode }: { mode: "content" | "reports" }) {
+  const context = useAuthStore((state) => state.foundationContext);
+  const userId = useAuthStore((state) => state.user?.id);
+  const loading = useAuthStore((state) => state.isLoading);
+  if (loading) return <p role="status">Loading your moderation account…</p>;
+  const assigned = context?.staff?.assigned_capabilities ?? [];
+  const reviewCapability = mode === "content" ? "post:moderate" : "report:resolve";
+  if (
+    !context ||
+    context.account_id !== userId ||
+    !context.staff?.can_access ||
+    !assigned.includes("queue:claim") ||
+    !assigned.includes(reviewCapability)
+  )
+    return (
+      <p role="alert">
+        A current moderation assignment and authenticator verification are required.
+      </p>
+    );
+  return <FoundationModerationViewer key={`${context.account_id}:${mode}`} mode={mode} />;
+}
+
+function FoundationModerationViewer({ mode }: { mode: "content" | "reports" }) {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [current, setCurrent] = useState<Claim>();
   const [post, setPost] = useState<z.infer<typeof postSchema> | null>(null);

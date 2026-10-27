@@ -97,7 +97,7 @@ function FoundationBillingAccount({
     }
   }
   return (
-    <div className="space-y-9">
+    <div id="plans" className="space-y-9">
       <header>
         <h1 className="font-display text-3xl font-bold">Plans &amp; billing</h1>
         <p className="mt-3 max-w-3xl text-muted-foreground">
@@ -197,7 +197,11 @@ function FoundationBillingAccount({
         const plans = catalogue.plans.filter((plan) => plan.area === area);
         return (
           plans.length > 0 && (
-            <section key={area ?? "all"} className="space-y-4">
+            <section
+              key={area ?? "all"}
+              id={area === null ? "multi-listing-prices" : undefined}
+              className="space-y-4"
+            >
               <h2 className="text-xl font-semibold">
                 {area === "market"
                   ? "Mzansi Market"

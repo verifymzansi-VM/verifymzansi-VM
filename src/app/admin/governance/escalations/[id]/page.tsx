@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, FileText, User } from "lucide-react";
 import { DecisionActionButtons } from "./decision-action-buttons";
 import { formatDateTime } from "@/lib/utils/format";
+import { getDataBackend } from "@/lib/data-backend";
+import { FoundationStaffDecisionsPage } from "@/components/foundation/staff-decisions-page";
 
 export const metadata = {
   title: "Decision Detail — Governance",
@@ -18,6 +20,7 @@ interface Props {
 
 export default async function DecisionDetailPage({ params }: Props) {
   const { id } = await params;
+  if (getDataBackend() === "foundation") return <FoundationStaffDecisionsPage id={id} />;
 
   const { user, role } = await requireStaff("decision:approve");
 
