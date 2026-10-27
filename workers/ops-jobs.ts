@@ -7,7 +7,8 @@
  * the run on a schedule.
  */
 
-import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects";
+import { triggerBoundAppJob } from "./app-job-trigger";
+import type { FoundationCompanionBindings } from "./companion-bindings";
 
 interface ScheduledEvent {
   cron: string;
@@ -19,27 +20,13 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
-interface Env {
-  APP_URL: string;
+type Env = Pick<FoundationCompanionBindings, "APP" | "APP_URL"> & {
   OPS_JOBS_SECRET: string;
-}
-
-const RUN_TIMEOUT_MS = 50_000;
+};
 
 async function trigger(env: Env): Promise<void> {
   try {
-    const response = await fetchWithoutRedirects(
-      `${env.APP_URL.replace(/\/$/, "")}/api/webhooks/ops-jobs`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${env.OPS_JOBS_SECRET}` },
-        signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
-      }
-    );
-    if (!response.ok) {
-      // Logged by Workers observability; the jobs stay queued for the next run.
-      console.error(`ops-jobs run failed with status ${response.status}`);
-    }
+    await triggerBoundAppJob(env, "/api/webhooks/ops-jobs", env.OPS_JOBS_SECRET);
   } catch (error) {
     console.error(
       `ops-jobs run failed: ${error instanceof Error ? error.message : "unknown error"}`

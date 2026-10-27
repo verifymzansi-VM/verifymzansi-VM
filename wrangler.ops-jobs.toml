@@ -15,5 +15,9 @@ enabled = true
 ENVIRONMENT = "production"
 APP_URL = "https://verifymzansi.com"
 
+[[services]]
+binding = "APP"
+service = "verifymzansi"
+
 [triggers]
 crons = ["* * * * *"]

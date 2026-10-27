@@ -12,6 +12,10 @@ ENVIRONMENT = "production"
 DATA_BACKEND = "foundation"
 APP_URL = "https://verifymzansi.com"
 
+[[services]]
+binding = "APP"
+service = "verifymzansi"
+
 [triggers]
 crons = ["0 * * * *"]
 

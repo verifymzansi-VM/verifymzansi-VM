@@ -560,18 +560,33 @@ pnpm exec wrangler versions list
 pnpm exec wrangler rollback
 ```
 
-If the failure is tied to the recent Next.js upgrade path, prefer rolling back
-to the validated `16.1.5` baseline before attempting a deeper migration to the
-older `src/proxy.ts` convention.
+Select a rollback version whose compiled Supabase project and API contracts
+match the current database. A Worker rollback does not roll back database
+migrations. Versions compiled against the deleted Supabase project cannot serve
+as a working recovery target for the foundation release.
 
 ### Worker Deployment
 
+The foundation payment, retention and operations workers call the main
+`verifymzansi` Worker through the `APP` service binding. The internal requests
+retain their scoped credentials and redirect refusal without traversing public
+website bot challenges. `WORKER_API_KEY` on payment/retention matches the app's
+`INTERNAL_JOBS_SECRET`; operations uses the shared `OPS_JOBS_SECRET`.
+
+After editing companion configuration, run `pnpm cloudflare:types:companions`,
+then `pnpm cloudflare:types:companions:check` and
+`pnpm test:cloudflare:companions`. The latter executes all three scheduled
+handlers in isolated workerd with a local app fixture and synthetic credentials.
+Worker health URLs prove process liveness; app deep readiness and recorded job
+outcomes establish integration health.
+
 ```bash
 # Deploy individual workers
-npx wrangler deploy --config wrangler.kyc-encryptor.toml
-npx wrangler deploy --config wrangler.rate-limiter.toml
-npx wrangler deploy --config wrangler.retention-cleanup.toml
-npx wrangler deploy --config wrangler.payment-cleanup.toml
+pnpm exec wrangler deploy --config wrangler.kyc-encryptor.toml
+pnpm exec wrangler deploy --config wrangler.rate-limiter.toml
+pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
+pnpm exec wrangler deploy --config wrangler.payment-cleanup.toml
+pnpm exec wrangler deploy --config wrangler.ops-jobs.toml
 
 # Check worker health
 curl https://verifymzansi-kyc-encryptor.verifymzansi.workers.dev/
