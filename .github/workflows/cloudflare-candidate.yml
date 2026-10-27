@@ -86,19 +86,7 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile --prod=false
       - name: Match all public build settings to production bindings
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import { parse } from 'smol-toml';
-          const vars = parse(fs.readFileSync('wrangler.toml', 'utf8')).env.production.vars;
-          const entries = Object.entries(vars).filter(([name]) => name.startsWith('NEXT_PUBLIC_'));
-          for (const [name, value] of entries) {
-            if (typeof value !== 'string' || /[\r\n]/.test(value)) throw new Error('Invalid public binding: ' + name);
-            if (process.env[name] && process.env[name] !== value) throw new Error('Build/binding mismatch: ' + name);
-          }
-          fs.appendFileSync(process.env.GITHUB_ENV, entries.map(([name, value]) => name + '=' + value).join('\n') + '\n');
-          console.log('Approved public build binding names: ' + entries.map(([name]) => name).join(', '));
-          NODE
+        run: node scripts/export-cloudflare-public-env.mjs
       - name: Require successful CI for this exact main commit
         env:
           GITHUB_TOKEN: ${{ github.token }}

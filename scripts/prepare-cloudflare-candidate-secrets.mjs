@@ -6,6 +6,9 @@ import path from "node:path";
 // the limiter's bounded overlap before directing requests to this new key.
 if (process.env.GITHUB_ACTIONS !== "true" || !process.env.RUNNER_TEMP)
   throw new Error("Candidate secret preparation requires an isolated Actions runner");
+const args = process.argv.slice(2);
+if (args.length > 1 || args.some((arg) => arg !== "--include-workers"))
+  throw new Error("Unsupported secret preparation argument");
 const names = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "FOUNDATION_SUPABASE_SECRET_KEY",
@@ -33,4 +36,27 @@ await writeFile(
   JSON.stringify(values),
   { mode: 0o600, flag: "wx" }
 );
+if (args.includes("--include-workers")) {
+  for (const name of ["INTERNAL_JOBS_SECRET", "RATE_LIMITER_API_KEY", "OPS_JOBS_SECRET"])
+    if (values[name].length < 32) throw new Error("Worker shared credential is too short");
+  for (const [file, secrets] of [
+    [
+      "cloudflare-cleanup-secrets.json",
+      {
+        WORKER_API_KEY: values.INTERNAL_JOBS_SECRET, // secret-scan: allow runtime reference, no credential literal
+      },
+    ],
+    [
+      "cloudflare-limiter-secrets.json",
+      {
+        WORKER_API_KEY: values.RATE_LIMITER_API_KEY, // secret-scan: allow runtime reference, no credential literal
+      },
+    ],
+    ["cloudflare-ops-secrets.json", { OPS_JOBS_SECRET: values.OPS_JOBS_SECRET }],
+  ])
+    await writeFile(path.join(process.env.RUNNER_TEMP, file), JSON.stringify(secrets), {
+      mode: 0o600,
+      flag: "wx",
+    });
+}
 console.log("Scoped candidate bindings prepared outside the checkout. No master keys changed.");

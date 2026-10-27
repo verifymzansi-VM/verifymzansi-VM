@@ -301,7 +301,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/install-browsers
       - run: pnpm exec playwright test --grep "@smoke" --project "$BROWSER_PROJECT"
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
@@ -324,7 +324,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/install-browsers
       - name: Isolated payment, KYC and DSAR browser verification
         run: pnpm safety:release -- --checks=browser
       - name: Upload isolated browser diagnostics
@@ -341,8 +341,6 @@ jobs:
 
   e2e-full-matrix:
     runs-on: ubuntu-latest
-    # A stalled browser install once held this job for 4h+ (run 37674601509).
-    timeout-minutes: 45
     needs:
       [e2e-smoke, launch-flows-bundle, db-rls, payment-kyc-regressions, audit-tooling-platforms]
     strategy:
@@ -367,15 +365,9 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: |
-          if [ "$BROWSER_PROJECT" = "firefox" ]; then
-            npx playwright install --with-deps chromium firefox
-          else
-            npx playwright install --with-deps chromium
-          fi
-        env:
-          BROWSER_PROJECT: ${{ matrix.project }}
-        timeout-minutes: 10
+      - uses: ./.github/actions/install-browsers
+        with:
+          browsers: ${{ matrix.project == 'firefox' && 'chromium firefox' || 'chromium' }}
       - run: pnpm exec playwright test --project "$BROWSER_PROJECT"
         env:
           BROWSER_PROJECT: ${{ matrix.project }}

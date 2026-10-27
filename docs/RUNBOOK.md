@@ -481,6 +481,17 @@ LIMIT 48;
 
 ### Standard Deployment
 
+Successful push CI on the current `main` commit starts the Deploy workflow.
+Manual dispatch remains available. Pull requests, forks, failed CI and older
+queued commits cannot publish production. Both paths retain the foundation
+release-acceptance preflight; an unreleased assembly blocks activation.
+
+The production build takes its public settings from `wrangler.toml`, then
+installs the app's scoped secrets with the same atomic code deployment. The
+limiter, cleanup and operations Workers receive their matching shared keys. The
+live deployment is tagged with the Git commit for traceability. Candidate
+uploads remain manual and inactive; their successful upload is not a release.
+
 For the 30 September 2026 audit changes, run `pnpm test:kyc:db`,
 `pnpm test:staff-roles:db` and `pnpm test:commercial:db`, then apply the pending
 migrations through `pnpm supabase:db:push:safe` before deploying the

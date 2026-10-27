@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 
 import nextEnv from "@next/env";
-import { activeVersionIds, inspectSecretBindings } from "./lib/cloudflare-deployment-bindings.mjs";
+import { readFile } from "node:fs/promises";
+import {
+  activeVersionIds,
+  inspectSecretBindings,
+  withPendingSecretBindings,
+} from "./lib/cloudflare-deployment-bindings.mjs";
 import { runWranglerJson } from "./lib/cloudflare-wrangler.mjs";
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
 
-const args = process.argv.slice(2);
+const args = process.argv.slice(2).filter((arg) => arg !== "--");
 const envArg = args.find((arg) => arg.startsWith("--env="));
 const workerArg = args.find((arg) => arg.startsWith("--name="));
+const pendingArg = args.find((arg) => arg.startsWith("--pending-secrets-file="));
+if (args.some((arg) => !/^(--env=|--name=|--pending-secrets-file=)/.test(arg)))
+  throw new Error("Unsupported secret-check argument");
 
 const targetEnv = envArg ? envArg.slice("--env=".length) : "";
 // Let Wrangler resolve the configured environment's name unless explicitly overridden.
@@ -81,6 +89,16 @@ const forbiddenProductionSecrets = [
 async function main() {
   assertCloudflareApiToken();
   const selectors = { workerName, targetEnv };
+  let pending = null;
+  if (pendingArg) {
+    try {
+      pending = JSON.parse(
+        await readFile(pendingArg.slice("--pending-secrets-file=".length), "utf8")
+      );
+    } catch {
+      throw new Error("Unable to read the pending secret bindings file");
+    }
+  }
   const deployments = await runWranglerJson(["deployments", "list"], selectors);
   const versionIds = activeVersionIds(deployments);
   let failed = false;
@@ -90,11 +108,15 @@ async function main() {
   for (const versionId of versionIds) {
     const version = await runWranglerJson(["versions", "view", versionId], selectors);
     const result = inspectSecretBindings(
-      version?.resources?.bindings,
+      pending
+        ? withPendingSecretBindings(version?.resources?.bindings, pending)
+        : version?.resources?.bindings,
       requiredSecrets,
       forbiddenProductionSecrets
     );
-    console.log(`Active deployed version: ${versionId}`);
+    console.log(
+      `Active deployed version: ${versionId}${pending ? " (including validated secrets for the pending atomic deploy)" : ""}`
+    );
     for (const [kind, names] of Object.entries(result)) {
       if (names.length) {
         failed = true;

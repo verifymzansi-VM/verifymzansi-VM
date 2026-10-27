@@ -43,6 +43,33 @@ export function inspectSecretBindings(bindings, required, forbidden) {
   };
 }
 
+/** Validate additive secrets planned for the same atomic deploy. Return only
+ * binding metadata: never retain values in diagnostics or provider reports.
+ * @param {Array<{name: string, type: string}>} bindings
+ * @param {unknown} pending
+ */
+export function withPendingSecretBindings(bindings, pending) {
+  if (!Array.isArray(bindings) || !pending || typeof pending !== "object" || Array.isArray(pending))
+    throw new Error("Invalid pending secret bindings");
+  const entries = Object.entries(pending);
+  if (
+    !entries.length ||
+    entries.some(
+      ([name, value]) =>
+        !/^[A-Z][A-Z0-9_]{0,127}$/.test(name) ||
+        typeof value !== "string" ||
+        value.length < 20 ||
+        value !== value.trim()
+    )
+  )
+    throw new Error("Invalid pending secret bindings");
+  const names = new Set(entries.map(([name]) => name));
+  return [
+    ...bindings.filter((binding) => !names.has(binding.name)),
+    ...entries.map(([name]) => ({ name, type: "secret_text" })),
+  ];
+}
+
 /** Compare public configuration only. Return names, never supplied values/keys.
  * Secret bindings are write-only; their presence cannot prove value equality. */
 export function inspectPublicBindings(bindings, expected) {

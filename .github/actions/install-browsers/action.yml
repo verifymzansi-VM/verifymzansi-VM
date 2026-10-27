@@ -1,0 +1,34 @@
+name: Install locked Playwright browsers
+description: Install browser dependencies through Ubuntu's standard HTTPS archive.
+inputs:
+  browsers:
+    description: Browser binaries needed by this job
+    default: chromium
+runs:
+  using: composite
+  steps:
+    - name: Use Ubuntu HTTPS package mirrors
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          for mirror_file in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
+            if [ -f "$mirror_file" ]; then
+              sudo sed -i \
+                -e 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+                -e 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
+                -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
+                "$mirror_file"
+            fi
+          done
+        fi
+    - name: Install browsers from the project lockfile
+      shell: bash
+      env:
+        BROWSERS: ${{ inputs.browsers }}
+      run: |
+        case "$BROWSERS" in
+          chromium|"chromium firefox") ;;
+          *) echo "Unsupported browser selection"; exit 1 ;;
+        esac
+        read -r -a selected_browsers <<< "$BROWSERS"
+        pnpm exec playwright install --with-deps "${selected_browsers[@]}"
