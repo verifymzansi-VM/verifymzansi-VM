@@ -17,3 +17,4 @@ patches/*.patch text eol=lf
 /src/lib/utils/sa-id-validation.ts text eol=lf
 /src/lib/constants/verification.ts text eol=lf
 /src/types/enums.ts text eol=lf
+/workers/companion-bindings.d.ts text eol=lf

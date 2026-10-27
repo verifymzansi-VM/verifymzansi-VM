@@ -70,7 +70,11 @@ try {
     "\nexport type { FoundationCompanionBindings };\n";
   source = await format(source, { ...(await resolveConfig(output)), filepath: output });
   if (checking)
-    assert.equal(await readFile(output, "utf8"), source, "Regenerate companion bindings");
+    assert.equal(
+      (await readFile(output, "utf8")).replaceAll("\r\n", "\n"),
+      source,
+      "Regenerate companion bindings"
+    );
   else await writeFile(output, source);
   console.log(`Companion binding types ${checking ? "verified" : "generated"}.`);
 } finally {
