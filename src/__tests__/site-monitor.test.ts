@@ -67,17 +67,16 @@ it("rejects arbitrary paths and malformed version selectors", async () => {
   ).toBe(400);
   expect(env.APP.fetch).not.toHaveBeenCalled();
 });
-it("only forwards a validated candidate selector on the bound app request", async () => {
+it("cannot be redirected to an inactive app version", async () => {
   const version = "00000000-0000-4000-8000-000000000001";
   const response = await worker.fetch(request({ "x-monitor-worker-version": version }), env);
-  expect(response.status).toBe(200);
-  expect(
-    env.APP.fetch.mock.calls.every(
-      ([, init]) =>
-        new Headers(init.headers).get("Cloudflare-Workers-Version-Overrides") ===
-        `verifymzansi="${version}"`
-    )
-  ).toBe(true);
+  expect(response.status).toBe(400);
+  const forged = await worker.fetch(
+    request({ "Cloudflare-Workers-Version-Overrides": `verifymzansi="${version}"` }),
+    env
+  );
+  expect(forged.status).toBe(400);
+  expect(env.APP.fetch).not.toHaveBeenCalled();
 });
 it("pins the monitor credential to its exact owned endpoint", async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json({ status: "ok" }));

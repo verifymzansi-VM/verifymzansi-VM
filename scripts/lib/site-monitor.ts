@@ -9,9 +9,7 @@ export function siteMonitorTransport(
   const key = env.SITE_MONITOR_API_KEY;
   if (!key || key.length < 32 || key !== key.trim() || configured !== SITE_MONITOR_URL)
     throw new Error("Site monitor configuration is missing or invalid");
-  const version = env.SITE_MONITOR_WORKER_VERSION;
-  if (version && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(version))
-    throw new Error("Invalid site monitor version");
+  if (env.SITE_MONITOR_WORKER_VERSION) throw new Error("Monitor verifies live traffic only");
   const fetcher: typeof fetch = (input, init) => {
     const url = new URL(
       typeof input === "string" ? input : input instanceof URL ? input.href : input.url
@@ -25,7 +23,6 @@ export function siteMonitorTransport(
       throw new Error("Refusing monitor credential destination");
     const headers = new Headers(init?.headers);
     headers.set("Authorization", `Bearer ${key}`);
-    if (version) headers.set("x-monitor-worker-version", version);
     return fetchImpl(input, { ...init, headers, redirect: "error" });
   };
   return { url: new URL(configured), fetcher };

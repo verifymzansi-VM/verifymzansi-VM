@@ -26,13 +26,11 @@ async function boundedText(response: Awaited<ReturnType<Env["APP"]["fetch"]>>) {
     reader.releaseLock();
   }
 }
-async function probe(env: Env, check: SmokeCheck, override: string | null) {
+async function probe(env: Env, check: SmokeCheck) {
   let httpStatus = 0;
   try {
     const requestHeaders = new Headers(check.headers);
     // Authentication and cookies from the caller never reach the application.
-    if (override)
-      requestHeaders.set("Cloudflare-Workers-Version-Overrides", `verifymzansi="${override}"`);
     const response = await env.APP.fetch(env.APP_URL + check.path, {
       method: check.method ?? "GET",
       redirect: "manual",
@@ -84,9 +82,14 @@ const worker = {
     const url = new URL(request.url);
     if (request.method !== "GET" || url.pathname !== "/")
       return Response.json({ error: "Unsupported probe" }, { status: 400, headers });
-    const version = request.headers.get("x-monitor-worker-version");
-    if (version && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/.test(version))
-      return Response.json({ error: "Invalid version" }, { status: 400, headers });
+    if (
+      request.headers.has("x-monitor-worker-version") ||
+      request.headers.has("Cloudflare-Workers-Version-Overrides")
+    )
+      return Response.json(
+        { error: "Monitor verifies live traffic only" },
+        { status: 400, headers }
+      );
     if (env.APP_URL !== "https://verifymzansi.com" || !env.APP)
       return Response.json({ status: "degraded", readiness: "degraded" }, { status: 503, headers });
     const outcomes = await Promise.all(
@@ -98,14 +101,14 @@ const worker = {
           expectStatuses: [200],
           validateJsonStatusKey: true,
         },
-      ].map((check) => probe(env, check, version))
+      ].map((check) => probe(env, check))
     );
     const ok = outcomes.every((check) => check.status === "PASS");
     return Response.json(
       {
         status: ok ? "ok" : "degraded",
         readiness: ok ? "ok" : "degraded",
-        scope: version ? "candidate-service-smoke" : "live-service-smoke",
+        scope: "live-service-smoke",
         checks: outcomes,
       },
       { status: ok ? 200 : 503, headers }
