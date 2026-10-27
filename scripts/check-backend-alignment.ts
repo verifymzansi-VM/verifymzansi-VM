@@ -10,6 +10,7 @@ import {
   inspectSecretBindings,
 } from "./lib/cloudflare-deployment-bindings.mjs";
 import { checkDeploymentHealth, readinessUrl } from "./lib/deployment-health";
+import { siteMonitorTransport } from "./lib/site-monitor";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 
 loadEnvConfig(process.cwd());
@@ -76,6 +77,9 @@ async function main() {
       ["wrangler.toml", true],
       ["wrangler.payment-cleanup.toml", false],
       ["wrangler.retention-cleanup.toml", false],
+      ["wrangler.rate-limiter.toml", false],
+      ["wrangler.ops-jobs.toml", false],
+      ["wrangler.site-monitor.toml", false],
     ] as const) {
       const config = parse(await readFile(file, "utf8"));
       const name = config.name;
@@ -96,11 +100,20 @@ async function main() {
               `/accounts/${account}/workers/scripts/${name}/versions/${id}`
             );
             const bindings = version.resources?.bindings;
+            if (
+              process.env.DEPLOY_TARGET_SHA &&
+              version.annotations?.["workers/tag"] !== process.env.DEPLOY_TARGET_SHA
+            )
+              throw new Error("Deployed source revision differs");
             const invalid = inspectPublicBindings(
               bindings,
               mainApp
                 ? expected
-                : { DATA_BACKEND: "foundation", APP_URL: "https://verifymzansi.com" }
+                : Object.fromEntries(
+                    Object.entries(config.vars ?? {}).filter(([name]) =>
+                      ["DATA_BACKEND", "APP_URL", "ENVIRONMENT"].includes(name)
+                    )
+                  )
             );
             const secretNames = mainApp
               ? [
@@ -109,9 +122,27 @@ async function main() {
                   "FOUNDATION_PHONE_OTP_KEY",
                   "INTERNAL_JOBS_SECRET",
                 ]
-              : ["WORKER_API_KEY"];
+              : [
+                  file === "wrangler.ops-jobs.toml"
+                    ? "OPS_JOBS_SECRET"
+                    : file === "wrangler.site-monitor.toml"
+                      ? "MONITOR_API_KEY"
+                      : "WORKER_API_KEY",
+                ];
             const secrets = inspectSecretBindings(bindings, secretNames, []);
             const problems = [...invalid, ...secrets.missing, ...secrets.unsafe];
+            if (
+              !mainApp &&
+              file !== "wrangler.rate-limiter.toml" &&
+              (!Array.isArray(bindings) ||
+                !bindings.some(
+                  (binding: { name?: unknown; type?: unknown; service?: unknown }) =>
+                    binding.name === "APP" &&
+                    binding.type === "service" &&
+                    binding.service === "verifymzansi"
+                ))
+            )
+              problems.push("APP");
             if (problems.length) {
               results.push({
                 check: `${name}: ${id}`,
@@ -151,7 +182,11 @@ async function main() {
   await check(
     "Live deep readiness",
     async () => {
-      await checkDeploymentHealth(readinessUrl("https://verifymzansi.com"));
+      const monitor = process.env.SITE_MONITOR_API_KEY ? siteMonitorTransport(process.env) : null;
+      await checkDeploymentHealth(
+        monitor?.url ?? readinessUrl("https://verifymzansi.com"),
+        monitor?.fetcher
+      );
     },
     "Live deep readiness is degraded, unavailable or not valid JSON."
   );

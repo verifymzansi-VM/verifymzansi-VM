@@ -9,7 +9,7 @@ import { parse } from "smol-toml";
 const checking = process.argv.length === 3 && process.argv[2] === "--check";
 assert.ok(process.argv.length === 2 || checking, "Only --check is supported");
 const output = "workers/companion-bindings.d.ts";
-for (const name of ["payment-cleanup", "retention-cleanup", "ops-jobs"]) {
+for (const name of ["payment-cleanup", "retention-cleanup", "ops-jobs", "site-monitor"]) {
   const config = parse(await readFile(`wrangler.${name}.toml`, "utf8"));
   assert.equal(config.services?.length, 1);
   assert.deepEqual(Object.keys(config.services[0]).sort(), ["binding", "service"]);
@@ -17,7 +17,8 @@ for (const name of ["payment-cleanup", "retention-cleanup", "ops-jobs"]) {
   assert.equal(config.services[0].service, "verifymzansi");
   assert.equal(config.vars.APP_URL, "https://verifymzansi.com");
   assert.equal(config.vars.ENVIRONMENT, "production");
-  if (name !== "ops-jobs") assert.equal(config.vars.DATA_BACKEND, "foundation");
+  if (["payment-cleanup", "retention-cleanup"].includes(name))
+    assert.equal(config.vars.DATA_BACKEND, "foundation");
 }
 const temporary = await mkdtemp(path.join(tmpdir(), "vm-companion-types-"));
 const emptyEnv = path.join(temporary, "empty.env");

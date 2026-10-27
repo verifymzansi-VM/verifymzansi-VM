@@ -1,0 +1,17 @@
+name = "verifymzansi-site-monitor"
+main = "workers/site-monitor.ts"
+compatibility_date = "2026-10-13"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[vars]
+APP_URL = "https://verifymzansi.com"
+ENVIRONMENT = "production"
+
+[[services]]
+binding = "APP"
+service = "verifymzansi"
+
+# MONITOR_API_KEY is scoped to these fixed anonymous smoke checks only.

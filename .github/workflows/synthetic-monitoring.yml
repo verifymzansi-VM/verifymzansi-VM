@@ -33,17 +33,18 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
         if: steps.check-url.outputs.skip != 'true'
-      - name: Run synthetic smoke checks
-        if: steps.check-url.outputs.skip != 'true'
-        env:
-          SMOKE_BASE_URL: ${{ secrets.PRODUCTION_APP_URL }}
-        run: pnpm run test:smoke
-
-      - name: Check production dependency readiness
+      - name: Check public edge delivery
         if: steps.check-url.outputs.skip != 'true'
         env:
           APP_URL: ${{ secrets.PRODUCTION_APP_URL }}
-        run: pnpm exec tsx scripts/check-deployment-health.ts
+        run: pnpm exec tsx scripts/check-public-edge.ts
+
+      - name: Check authenticated app smoke and production dependencies
+        if: steps.check-url.outputs.skip != 'true'
+        env:
+          APP_URL: ${{ secrets.PRODUCTION_APP_URL }}
+          SITE_MONITOR_API_KEY: ${{ secrets.SITE_MONITOR_API_KEY }}
+        run: pnpm exec tsx scripts/check-site-monitor.ts
 
   worker-health:
     runs-on: ubuntu-latest

@@ -4,12 +4,17 @@ import {
   verifyFoundationDeploymentConnection,
   verifyFoundationReleaseArtifact,
   FoundationReleasePending,
+  verifyFoundationArtifactIntegrity,
 } from "./lib/foundation-deployment";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 import { verifyFoundationGateway } from "../src/lib/foundation/gateway-readiness";
 
 loadEnvConfig(process.cwd());
 async function main() {
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+  if (args.length > 1 || (args.length === 1 && args[0] !== "--provisioned-runtime"))
+    throw new Error("Unsupported foundation preflight argument");
+  const runtimeOnly = args[0] === "--provisioned-runtime";
   verifyFoundationDeploymentConnection(process.env);
   const [assembly, candidate, api] = await Promise.all([
     readFile("database/foundation/assembly.json", "utf8"),
@@ -17,14 +22,17 @@ async function main() {
     readFile("database/foundation/api-manifest.json", "utf8"),
   ]);
   const manifest = JSON.parse(assembly);
-  verifyFoundationReleaseArtifact(manifest, candidate);
+  if (runtimeOnly) verifyFoundationArtifactIntegrity(manifest, candidate);
+  else verifyFoundationReleaseArtifact(manifest, candidate);
   const apiManifest = JSON.parse(api);
   if (apiManifest.candidateHash !== manifest.candidateHash)
     throw new Error("Foundation API contract is stale");
   const { serviceOpenapi } = await verifyFoundationGateway(process.env);
   verifyRoleOpenapi(serviceOpenapi, apiManifest, "service_role");
   console.log(
-    "Foundation public read, service API contract and schema isolation verified; authenticated grants, provider and recovery acceptance remain separate checks."
+    runtimeOnly
+      ? "Provisioned London application runtime verified: SQL digest, public read, service API contract and schema isolation. No database migration was executed; clean baseline acceptance remains separate."
+      : "Foundation public read, service API contract and schema isolation verified; authenticated grants, provider and recovery acceptance remain separate checks."
   );
 }
 main().catch((error) => {

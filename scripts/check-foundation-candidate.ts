@@ -10,7 +10,8 @@ import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 
 // An inactive upload permits hosted acceptance without declaring a release.
 // This entry point never deploys or changes traffic. Production still uses
-// preflight-foundation.ts and requires releaseReady=true.
+// preflight-foundation.ts with explicit provisioned-runtime checks. Installing
+// a clean database still requires releaseReady=true.
 loadEnvConfig(process.cwd());
 async function main() {
   if (process.argv.length !== 2) throw new Error("Unsupported candidate argument");

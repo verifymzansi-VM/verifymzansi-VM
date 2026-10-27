@@ -37,7 +37,7 @@ describe("production deployment wiring", () => {
       steps.find(
         (step: { name?: string }) => step.name === "Verify London release and API contracts"
       ).run
-    ).toBe("pnpm run preflight:foundation");
+    ).toBe("pnpm run preflight:foundation -- --provisioned-runtime");
   });
   it("uses additive secrets atomically and tags the actual deployed source", () => {
     const step = workflow.jobs.deploy.steps.find(
@@ -115,8 +115,9 @@ describe("pending deployment secret validation", () => {
       "TURNSTILE_SECRET_KEY",
       "HEALTH_DIAGNOSTIC_TOKEN",
       "RATE_LIMITER_API_KEY",
+      "SITE_MONITOR_API_KEY",
     ];
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       GITHUB_ACTIONS: "true",
       RUNNER_TEMP: dir,
@@ -143,6 +144,10 @@ describe("pending deployment secret validation", () => {
         WORKER_API_KEY: app.RATE_LIMITER_API_KEY, // secret-scan: allow synthetic runtime reference
       });
       expect(read("cloudflare-ops-secrets.json")).toEqual({ OPS_JOBS_SECRET: app.OPS_JOBS_SECRET });
+      expect(read("cloudflare-monitor-secrets.json")).toEqual({
+        MONITOR_API_KEY: env.SITE_MONITOR_API_KEY,
+      });
+      expect(app).not.toHaveProperty("SITE_MONITOR_API_KEY");
       expect(result.stdout).not.toContain(marker);
       expect(existsSync(path.join(process.cwd(), "cloudflare-candidate-secrets.json"))).toBe(false);
     } finally {

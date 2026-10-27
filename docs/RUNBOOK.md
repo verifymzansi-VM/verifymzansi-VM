@@ -567,6 +567,20 @@ as a working recovery target for the foundation release.
 
 ### Worker Deployment
 
+Application deployment uses the provisioned-runtime preflight for the existing
+London database. The draft clean-database installer remains guarded separately;
+app deployment does not run its migrations or declare full feature acceptance.
+CI, environment validation, workerd startup and post-deployment readiness remain
+required.
+
+`verifymzansi-site-monitor` authenticates CI with its dedicated monitor secret
+and runs the shared anonymous smoke scenarios plus deep readiness through an app
+service binding. It forwards no caller cookies or authentication to the app.
+Public-edge delivery is checked separately. A specifically identified Cloudflare
+automation challenge is reported as unverified edge delivery; it cannot make a
+failed service smoke or readiness check pass. A regular 403/503 remains a
+failure.
+
 The foundation payment, retention and operations workers call the main
 `verifymzansi` Worker through the `APP` service binding. The internal requests
 retain their scoped credentials and redirect refusal without traversing public

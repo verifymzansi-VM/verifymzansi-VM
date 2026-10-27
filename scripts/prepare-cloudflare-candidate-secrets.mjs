@@ -37,6 +37,9 @@ await writeFile(
   { mode: 0o600, flag: "wx" }
 );
 if (args.includes("--include-workers")) {
+  const monitorKey = process.env.SITE_MONITOR_API_KEY;
+  if (!monitorKey || monitorKey.length < 32 || monitorKey !== monitorKey.trim())
+    throw new Error("Site monitor credential is missing or malformed");
   for (const name of ["INTERNAL_JOBS_SECRET", "RATE_LIMITER_API_KEY", "OPS_JOBS_SECRET"])
     if (values[name].length < 32) throw new Error("Worker shared credential is too short");
   for (const [file, secrets] of [
@@ -53,6 +56,7 @@ if (args.includes("--include-workers")) {
       },
     ],
     ["cloudflare-ops-secrets.json", { OPS_JOBS_SECRET: values.OPS_JOBS_SECRET }],
+    ["cloudflare-monitor-secrets.json", { MONITOR_API_KEY: monitorKey }],
   ])
     await writeFile(path.join(process.env.RUNNER_TEMP, file), JSON.stringify(secrets), {
       mode: 0o600,

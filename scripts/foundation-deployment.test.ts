@@ -7,6 +7,7 @@ import {
   verifyFoundationDeploymentConnection,
   verifyFoundationReleaseArtifact,
   FoundationReleasePending,
+  verifyFoundationArtifactIntegrity,
 } from "./lib/foundation-deployment";
 
 const env = {
@@ -72,15 +73,35 @@ test("an intact but unreleased foundation assembly remains blocked", () => {
     verifyFoundationReleaseArtifact({ ...manifest, releaseReady: true }, candidate + "modified")
   );
 });
+
+test("provisioned app updates validate the SQL digest without declaring a database release", () => {
+  const candidate = "synthetic provisioned runtime";
+  const manifest = {
+    schemaVersion: 1,
+    candidateHash: createHash("sha256").update(candidate).digest("base64url"),
+    releaseReady: false,
+  };
+  assert.doesNotThrow(() => verifyFoundationArtifactIntegrity(manifest, candidate));
+  assert.throws(() => verifyFoundationArtifactIntegrity(manifest, candidate + "stale"));
+  assert.throws(() =>
+    verifyFoundationArtifactIntegrity({ ...manifest, schemaVersion: 2 }, candidate)
+  );
+  assert.throws(
+    () => verifyFoundationReleaseArtifact(manifest, candidate),
+    FoundationReleasePending
+  );
+  assert.equal(manifest.releaseReady, false);
+});
 test("deployment and runtime configuration never select the deleted database", () => {
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-  assert.ok(pkg.scripts.deploy.startsWith("pnpm preflight:foundation &&"));
+  assert.ok(pkg.scripts.deploy.startsWith("pnpm preflight:foundation --provisioned-runtime &&"));
   const config = readFileSync("wrangler.toml", "utf8");
   assert.equal(config.includes("tnygdgormnofpgjknlhr"), false);
   const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
   assert.ok(workflow.includes("NEXT_PUBLIC_DATA_BACKEND: foundation"));
   assert.ok(workflow.includes("secrets.FOUNDATION_SUPABASE_SECRET_KEY"));
   assert.ok(workflow.includes("pnpm run preflight:foundation"));
+  assert.ok(workflow.includes("preflight:foundation -- --provisioned-runtime"));
   assert.ok(workflow.includes("pnpm run backend:verify:live"));
   assert.equal(workflow.includes("run: pnpm run db:verify-schema"), false);
   assert.equal(workflow.includes("run: pnpm run preflight:prod"), false);

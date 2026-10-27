@@ -1,5 +1,11 @@
 # Guarded clean backend candidate
 
+Application updates to the already-provisioned London project use
+`pnpm preflight:foundation --provisioned-runtime`: this checks the SQL reference
+digest, live public/service API contracts, credentials and hidden schemas. It
+never installs or changes the database. The default preflight still refuses an
+unreleased clean assembly, and its SQL installation guard remains intact.
+
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
 export belong to the retired source schema. Their wrappers refuse foundation
 targets. Do not replay that tree into the new project. Use reviewed additive

@@ -34,7 +34,7 @@
     "preview:cloudflare": "pnpm build:cloudflare && pnpm exec wrangler dev",
     "test:cloudflare:startup": "node scripts/check-cloudflare-startup.mjs",
     "test:cloudflare:runtime": "pnpm build:cloudflare && pnpm test:cloudflare:startup",
-    "deploy": "pnpm preflight:foundation && pnpm validate:launch-env && pnpm build:cloudflare && pnpm exec opennextjs-cloudflare deploy --env production",
+    "deploy": "pnpm preflight:foundation --provisioned-runtime && pnpm validate:launch-env && pnpm build:cloudflare && pnpm exec opennextjs-cloudflare deploy --env production",
     "start": "node ./node_modules/next/dist/bin/next start",
     "lint": "tsx scripts/check-quality.ts lint",
     "typecheck": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.typecheck.json",
@@ -111,7 +111,7 @@
     "generate:api-types": "pnpm exec openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts && pnpm exec prettier --write src/lib/api/v1.d.ts",
     "quality:openapi-drift": "tsx scripts/check-openapi-drift.ts",
     "quality:lighthouse": "node scripts/run-lighthouse.mjs",
-    "test:tooling": "node --import tsx --test scripts/audit-tooling.test.ts scripts/run-lighthouse.test.mjs scripts/cloudflare-security.test.mjs scripts/checker-fixtures.test.ts scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs docs/backend-foundation/tools/post-field-proposals.test.mjs scripts/foundation-native-lock.test.mjs scripts/foundation-api-contracts.test.mjs scripts/foundation-baseline-http.test.mjs scripts/foundation-baseline-guard.test.mjs scripts/foundation-api-openapi.test.mjs scripts/foundation-native-sql-barrier.test.mjs scripts/lint-staged-scope.test.mjs scripts/sentry-worker-runtime.test.mjs scripts/body-parser-runtime.test.mjs scripts/data-backend-config.test.mjs scripts/foundation-deployment.test.ts scripts/cloudflare-build-fingerprint.test.mjs scripts/source-database-tools.test.mjs && pnpm cloudflare:types:companions:check && pnpm test:cloudflare:companions",
+    "test:tooling": "node --import tsx --test scripts/audit-tooling.test.ts scripts/run-lighthouse.test.mjs scripts/cloudflare-security.test.mjs scripts/checker-fixtures.test.ts scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs docs/backend-foundation/tools/post-field-proposals.test.mjs scripts/foundation-native-lock.test.mjs scripts/foundation-api-contracts.test.mjs scripts/foundation-baseline-http.test.mjs scripts/foundation-baseline-guard.test.mjs scripts/foundation-api-openapi.test.mjs scripts/foundation-native-sql-barrier.test.mjs scripts/lint-staged-scope.test.mjs scripts/sentry-worker-runtime.test.mjs scripts/body-parser-runtime.test.mjs scripts/data-backend-config.test.mjs scripts/foundation-deployment.test.ts scripts/cloudflare-build-fingerprint.test.mjs scripts/source-database-tools.test.mjs && pnpm cloudflare:types:companions:check && pnpm test:cloudflare:companions && pnpm test:site-monitor:runtime",
     "test:foundation:local": "node --test scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs && node scripts/test-foundation-transport.mjs",
     "test:foundation:native": "node --import tsx scripts/test-foundation-native.mjs && node --import tsx scripts/probe-foundation-staff-read.mjs",
     "foundation:native:start": "node scripts/start-foundation-native.mjs",
@@ -145,7 +145,10 @@
     "foundation:baseline:replay": "node scripts/replay-foundation-baseline.mjs",
     "cloudflare:types:companions": "node scripts/generate-companion-types.mjs",
     "cloudflare:types:companions:check": "node scripts/generate-companion-types.mjs --check",
-    "test:cloudflare:companions": "node scripts/check-companion-runtime.mjs"
+    "test:cloudflare:companions": "node scripts/check-companion-runtime.mjs",
+    "test:site-monitor:runtime": "node scripts/check-site-monitor-runtime.mjs",
+    "test:site-monitor": "tsx scripts/check-site-monitor.ts",
+    "test:public-edge": "tsx scripts/check-public-edge.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",

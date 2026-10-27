@@ -1,10 +1,13 @@
 import { readinessUrl, waitForDeploymentHealth } from "./lib/deployment-health";
+import { siteMonitorTransport } from "./lib/site-monitor";
 
 async function main() {
   const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
   if (!baseUrl) throw new Error("APP_URL or NEXT_PUBLIC_APP_URL is required");
-  const url = readinessUrl(baseUrl, process.env.DEPLOY_HEALTHCHECK_URL);
+  const monitor = process.env.SITE_MONITOR_API_KEY ? siteMonitorTransport(process.env) : null;
+  const url = monitor?.url ?? readinessUrl(baseUrl, process.env.DEPLOY_HEALTHCHECK_URL);
   const attempt = await waitForDeploymentHealth(url, {
+    fetchImpl: monitor?.fetcher,
     onRetry: (failedAttempt, error) =>
       console.warn(
         `Readiness attempt ${failedAttempt} failed: ${
