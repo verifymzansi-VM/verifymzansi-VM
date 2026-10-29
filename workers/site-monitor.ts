@@ -28,6 +28,7 @@ async function boundedText(response: Awaited<ReturnType<Env["APP"]["fetch"]>>) {
 }
 async function probe(env: Env, check: SmokeCheck) {
   let httpStatus = 0;
+  let projectHosts: string[] | undefined;
   try {
     const requestHeaders = new Headers(check.headers);
     // Authentication and cookies from the caller never reach the application.
@@ -48,13 +49,14 @@ async function probe(env: Env, check: SmokeCheck) {
     let ok = check.expectStatuses.includes(httpStatus);
     if (check.validateJsonStatusKey || check.path === "/") {
       const text = await boundedText(response);
-      if (check.path === "/")
+      if (check.path === "/") {
+        projectHosts = [...new Set(text.match(/[a-z]{20}\.supabase\.co/g) ?? [])];
         ok =
           ok &&
           response.headers.get("content-type")?.includes("text/html") === true &&
-          text.includes("gntzjtuncsyefujajmjy") &&
-          !text.includes("tnygdgormnofpgjknlhr");
-      else {
+          projectHosts.length === 1 &&
+          projectHosts[0] === "gntzjtuncsyefujajmjy.supabase.co";
+      } else {
         const body: unknown = JSON.parse(text);
         ok =
           ok &&
@@ -68,7 +70,12 @@ async function probe(env: Env, check: SmokeCheck) {
           );
       }
     } else await response.body?.cancel().catch(() => {});
-    return { name: check.name, status: ok ? "PASS" : "FAIL", httpStatus };
+    return {
+      name: check.name,
+      status: ok ? "PASS" : "FAIL",
+      httpStatus,
+      ...(projectHosts ? { projectHosts } : {}),
+    };
   } catch {
     return { name: check.name, status: "FAIL", httpStatus };
   }

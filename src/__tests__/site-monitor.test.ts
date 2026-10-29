@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import worker from "../../workers/site-monitor";
 import { isCloudflareChallenge } from "../../scripts/lib/public-edge";
-import { siteMonitorTransport } from "../../scripts/lib/site-monitor";
+import { checkSiteMonitorHomepage, siteMonitorTransport } from "../../scripts/lib/site-monitor";
 
 const key = "synthetic-site-monitor-credential-only-".repeat(2);
 const monitorUrl = "https://verifymzansi-site-monitor.verifymzansi.workers.dev/";
@@ -18,9 +18,12 @@ beforeEach(() => {
     const path = new URL(url).pathname;
     if (path === "/api/health") return Response.json({ status: "ok", readiness: "ok" });
     if (init.method === "POST") return new Response("PRIVATE_UPSTREAM_BODY", { status: 401 });
-    return new Response("<html>gntzjtuncsyefujajmjy PRIVATE_UPSTREAM_BODY</html>", {
-      headers: { "content-type": "text/html" },
-    });
+    return new Response(
+      "<html>https://gntzjtuncsyefujajmjy.supabase.co PRIVATE_UPSTREAM_BODY</html>",
+      {
+        headers: { "content-type": "text/html" },
+      }
+    );
   });
 });
 const request = (headers: Record<string, string> = {}) =>
@@ -52,6 +55,77 @@ it("cannot turn a degraded or retired backend into a healthy monitor", async () 
   const response = await worker.fetch(request(), env);
   expect(response.status).toBe(503);
   expect(await response.json()).toMatchObject({ status: "degraded", readiness: "degraded" });
+});
+it.each([
+  "<html>No backend configuration</html>",
+  "<html>https://tnygdgormnofpgjknlhr.supabase.co</html>",
+  "<html>https://gntzjtuncsyefujajmjy.supabase.co https://abcdefghijklmnopqrst.supabase.co</html>",
+])("rejects missing, retired and mixed HTML backend references: %s", async (html) => {
+  env.APP.fetch.mockResolvedValueOnce(
+    new Response(html, { headers: { "content-type": "text/html" } })
+  );
+  const response = await worker.fetch(request(), env);
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    checks: expect.arrayContaining([
+      { name: "Homepage", status: "FAIL", httpStatus: 200, projectHosts: expect.any(Array) },
+    ]),
+  });
+});
+it("verifies live origin HTML through the pinned authenticated monitor", async () => {
+  const fetcher = vi.fn<typeof fetch>(async () => worker.fetch(request(), env));
+  await expect(
+    checkSiteMonitorHomepage(
+      { SITE_MONITOR_API_KEY: key },
+      "gntzjtuncsyefujajmjy.supabase.co",
+      fetcher
+    )
+  ).resolves.toBeUndefined();
+  expect(String(fetcher.mock.calls[0][0])).toBe(monitorUrl);
+});
+it.each([
+  [],
+  [{ name: "Homepage", status: "PASS", httpStatus: 200 }],
+  [
+    {
+      name: "Homepage",
+      status: "FAIL",
+      httpStatus: 200,
+      projectHosts: ["gntzjtuncsyefujajmjy.supabase.co"],
+    },
+  ],
+  [
+    {
+      name: "Homepage",
+      status: "PASS",
+      httpStatus: 200,
+      projectHosts: ["tnygdgormnofpgjknlhr.supabase.co"],
+    },
+  ],
+  [
+    {
+      name: "Homepage",
+      status: "PASS",
+      httpStatus: 200,
+      projectHosts: ["gntzjtuncsyefujajmjy.supabase.co", "abcdefghijklmnopqrst.supabase.co"],
+    },
+  ],
+])("refuses incomplete or mismatched origin proof %#", async (...items) => {
+  const fetcher = vi.fn(async () =>
+    Response.json({
+      status: "ok",
+      readiness: "ok",
+      scope: "live-service-smoke",
+      checks: items,
+    })
+  );
+  await expect(
+    checkSiteMonitorHomepage(
+      { SITE_MONITOR_API_KEY: key },
+      "gntzjtuncsyefujajmjy.supabase.co",
+      fetcher
+    )
+  ).rejects.toThrow();
 });
 it("rejects arbitrary paths and malformed version selectors", async () => {
   expect(

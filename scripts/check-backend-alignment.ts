@@ -10,7 +10,7 @@ import {
   inspectSecretBindings,
 } from "./lib/cloudflare-deployment-bindings.mjs";
 import { checkDeploymentHealth, readinessUrl } from "./lib/deployment-health";
-import { siteMonitorTransport } from "./lib/site-monitor";
+import { checkSiteMonitorHomepage, siteMonitorTransport } from "./lib/site-monitor";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 
 loadEnvConfig(process.cwd());
@@ -226,6 +226,10 @@ async function main() {
   await check(
     "Live HTML project references",
     async () => {
+      if (process.env.SITE_MONITOR_API_KEY) {
+        await checkSiteMonitorHomepage(process.env, new URL(connection.url).hostname);
+        return;
+      }
       const response = await fetch("https://verifymzansi.com", {
         redirect: "error",
         cache: "no-store",
@@ -237,7 +241,7 @@ async function main() {
       const hosts = [...new Set(html.match(/[a-z]{20}\.supabase\.co/g) ?? [])];
       if (hosts.length !== 1 || hosts[0] !== new URL(connection.url).hostname) throw new Error();
     },
-    "The served HTML does not identify only the approved Supabase project; rebuild and deploy the correct browser configuration."
+    "Live HTML could not be verified against the approved Supabase project. Check authenticated monitor diagnostics and browser build settings."
   );
   const report = {
     checkedAt: new Date().toISOString(),

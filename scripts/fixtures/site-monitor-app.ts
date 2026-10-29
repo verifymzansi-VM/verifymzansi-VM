@@ -13,9 +13,12 @@ const worker = {
     if (!check || request.method !== (check.method ?? "GET"))
       return new Response("Unexpected request", { status: 500 });
     if (request.method === "POST") return new Response("PRIVATE_UPSTREAM_BODY", { status: 401 });
-    return new Response("<html>gntzjtuncsyefujajmjy PRIVATE_UPSTREAM_BODY</html>", {
-      headers: { "content-type": "text/html" },
-    });
+    return new Response(
+      "<html>https://gntzjtuncsyefujajmjy.supabase.co PRIVATE_UPSTREAM_BODY</html>",
+      {
+        headers: { "content-type": "text/html" },
+      }
+    );
   },
 };
 export default worker;
