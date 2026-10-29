@@ -7,6 +7,7 @@ import {
   type PaymentStatusTone,
 } from "@/components/billing/payment-status-result";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
+import { paymentExceptionCopy } from "@/lib/payments/exception-copy";
 
 const PAYMENT_POLL_INTERVAL_MS = 4000;
 const PAYMENT_POLL_MAX_MS = 30 * 60 * 1000;
@@ -18,6 +19,8 @@ function getCopy(status: PaymentStatusView): {
   tone: PaymentStatusTone;
   nextSteps?: readonly string[];
 } {
+  const exception = paymentExceptionCopy(status);
+  if (exception) return { ...exception, icon: <AlertCircle aria-hidden="true" /> };
   switch (status) {
     case "complete":
       return {
@@ -217,12 +220,14 @@ export default function PaymentStatusPanel({
               href: `/login?returnUrl=${encodeURIComponent(`/billing/success?payment=${encodeURIComponent(paymentId ?? "")}`)}`,
               label: "Sign in",
             }
-          : status === "complete" || status === "pending"
-            ? { href: "/dashboard", label: "Go to dashboard" }
-            : { href: "/billing", label: "Back to billing" }
+          : status === "needs_reconciliation"
+            ? { href: "/contact?topic=billing", label: "Contact support" }
+            : status === "complete" || status === "pending"
+              ? { href: "/dashboard", label: "Go to dashboard" }
+              : { href: "/billing", label: "Back to billing" }
       }
       secondaryAction={
-        status === "complete" || status === "pending"
+        status === "complete" || status === "pending" || status === "needs_reconciliation"
           ? { href: "/billing", label: "View billing" }
           : { href: "/dashboard", label: "Go to dashboard" }
       }

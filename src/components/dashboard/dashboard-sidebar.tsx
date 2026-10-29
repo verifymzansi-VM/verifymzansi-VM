@@ -14,11 +14,9 @@ import {
   Bell,
   CreditCard,
   UserRound,
-  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { getDataBackend } from "@/lib/data-backend";
 
 export interface DashboardNavItem {
   href: string;
@@ -47,9 +45,6 @@ export const DASHBOARD_ACCOUNT_NAV: DashboardNavItem[] = [
     label: "Profile and settings",
     alsoActiveFor: ["/dashboard/settings", "/dashboard/complete-profile"],
   },
-  ...(getDataBackend() === "foundation"
-    ? [{ href: "/dashboard/security", icon: ShieldCheck, label: "Account security" }]
-    : []),
   { href: "/dashboard/communication", icon: Bell, label: "Notifications" },
   { href: "/billing", icon: CreditCard, label: "Plans and billing" },
   {

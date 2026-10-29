@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationMarketplace } from "@/components/foundation/public-marketplace";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { SponsorStrip } from "@/components/organisations/sponsor-strip";
 import { mzansiBusinessShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
@@ -45,11 +43,7 @@ export const metadata: Metadata = {
 /** Revalidate every 60 seconds (ISR) */
 export const revalidate = 60;
 
-export default async function MzansiBusinessPage(props: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  if (getDataBackend() === "foundation")
-    return <FoundationMarketplace area="business" searchParams={props?.searchParams} />;
+export default async function MzansiBusinessPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",

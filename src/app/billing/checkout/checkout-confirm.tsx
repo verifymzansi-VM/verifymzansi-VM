@@ -21,6 +21,7 @@ export interface CheckoutSummary {
   monthlyActivationLimit: number | null;
   /** Named administrators included (multi-listing plans only). */
   administrators?: number | null;
+  expiryNotice?: string;
 }
 
 interface PendingPayment {
@@ -230,7 +231,10 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
                 <SummaryRow label="Renewal" value="Does not renew automatically" />
                 <SummaryRow
                   label="After expiry"
-                  value="Posts become inactive and stay saved in your dashboard for reactivation"
+                  value={
+                    summary.expiryNotice ??
+                    "Posts become inactive and stay saved in your dashboard for reactivation"
+                  }
                 />
               </dl>
             </section>

@@ -381,7 +381,7 @@ export function EvidenceDeskClient({
                           className="gap-1 text-xs"
                         >
                           <Columns2 className="h-3 w-3" />
-                          Compare ID &amp; Selfie
+                          Compare ID & Selfie
                         </Button>
                       )}
                     </CardContent>

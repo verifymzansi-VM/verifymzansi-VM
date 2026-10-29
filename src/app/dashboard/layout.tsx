@@ -13,18 +13,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { signOutBrowserSession } from "@/hooks/use-auth";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationDashboardShell } from "@/components/dashboard/foundation-dashboard-shell";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return getDataBackend() === "foundation" ? (
-    <FoundationDashboardShell>{children}</FoundationDashboardShell>
-  ) : (
-    <LegacyDashboardLayout>{children}</LegacyDashboardLayout>
-  );
-}
-
-function LegacyDashboardLayout({ children }: { children: React.ReactNode }) {
   const [badges, setBadges] = useState<DashboardSidebarBadges>({});
   const { unreadCount: unreadLeads } = useLeadsUnread();
   const sidebarBadges = useMemo(

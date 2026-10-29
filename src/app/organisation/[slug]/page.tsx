@@ -1,8 +1,4 @@
 import type { Metadata } from "next";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationPublicOrganisationPage } from "@/components/foundation/organisation-public";
-import { readFoundationPublicOrganisation } from "@/lib/foundation/organisations";
-import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Globe, Mail, MapPin, Phone, Users } from "lucide-react";
@@ -111,19 +107,6 @@ async function minimumLive(): Promise<number> {
 }
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
-  if (getDataBackend() === "foundation") {
-    const slug = (await params).slug;
-    if (!SLUG.test(slug)) return { title: "Organisation not found", robots: { index: false } };
-    const org = await readFoundationPublicOrganisation(foundationServerPublicApi(), { slug });
-    return org
-      ? {
-          title: org.name,
-          description: org.programme_description?.slice(0, 155) ?? org.description?.slice(0, 155),
-          alternates: { canonical: `/organisation/${org.slug}` },
-          ...(org.live_businesses < 3 ? { robots: { index: false, follow: true } } : {}),
-        }
-      : { title: "Organisation not found", robots: { index: false } };
-  }
   const org = await loadOrganisation((await params).slug);
   if (!org) return { title: "Organisation not found", robots: { index: false } };
   const description =
@@ -154,7 +137,6 @@ export default async function OrganisationPage({
   searchParams: Promise<Search>;
 }) {
   const { slug } = await params;
-  if (getDataBackend() === "foundation") return <FoundationPublicOrganisationPage slug={slug} />;
   const org = await loadOrganisation(slug);
   if (!org) notFound();
 

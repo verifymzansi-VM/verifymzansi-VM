@@ -1,6 +1,4 @@
 "use client";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationPostRoute } from "@/components/foundation/post-editor";
 import { PostSelect } from "@/components/post/post-select";
 
 import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
@@ -234,7 +232,7 @@ const INITIAL_UPLOAD_STATUSES: UploadStatuses = {
   saving: "idle",
 };
 
-function CreateListingPage() {
+export default function CreateListingPage() {
   const { user, profile, isLoading } = useAuth();
   const categoryAnswers = useRef<Record<string, Record<string, string | boolean | string[]>>>({});
   const [step, setStep] = useState(0);
@@ -1542,9 +1540,3 @@ function CreateListingPage() {
     </div>
   );
 }
-
-function FoundationPage() {
-  return <FoundationPostRoute kind="listing" area="market" />;
-}
-const SelectedPage = getDataBackend() === "foundation" ? FoundationPage : CreateListingPage;
-export default SelectedPage;

@@ -54,6 +54,8 @@ export interface AccountProfile {
   legal_first_name: string | null;
   legal_last_name: string | null;
   legal_name_locked_at: string | null;
+  /** Canonical foundation lock flag when no historical lock timestamp is exposed. */
+  legal_name_locked?: boolean;
   contact_last_phone_change_at: string | null;
   contact_last_email_change_at: string | null;
   location_province: string | null;

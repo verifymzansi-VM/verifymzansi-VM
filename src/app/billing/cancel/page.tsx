@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { resolveCurrentUserPaymentStatus } from "@/lib/payments/resolve-payment-status";
 import type { PaymentStatusView } from "@/lib/payments/status-view";
+import { paymentExceptionCopy } from "@/lib/payments/exception-copy";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 
 export const metadata = {
@@ -21,6 +22,8 @@ function getCopy(status: PaymentStatusView): {
   description: string;
   tone: PaymentStatusTone;
 } {
+  const exception = paymentExceptionCopy(status);
+  if (exception) return { ...exception, icon: <AlertCircle aria-hidden="true" /> };
   switch (status) {
     case "complete":
       return {
@@ -85,12 +88,14 @@ export default async function BillingCancelPage({
           description={copy.description}
           tone={copy.tone}
           primaryAction={
-            status === "complete"
-              ? { href: "/dashboard", label: "Go to dashboard" }
-              : { href: "/billing", label: "View plans" }
+            status === "needs_reconciliation"
+              ? { href: "/contact?topic=billing", label: "Contact support" }
+              : status === "complete"
+                ? { href: "/dashboard", label: "Go to dashboard" }
+                : { href: "/billing", label: "View plans" }
           }
           secondaryAction={
-            status === "complete"
+            status === "complete" || status === "needs_reconciliation"
               ? { href: "/billing", label: "View billing" }
               : { href: "/dashboard", label: "Back to dashboard" }
           }

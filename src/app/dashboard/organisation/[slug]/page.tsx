@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationOrganisationManager } from "@/components/foundation/organisation-manager";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -63,7 +61,6 @@ export default async function OrganisationDashboardPage({
 }) {
   const { slug } = await params;
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) notFound();
-  if (getDataBackend() === "foundation") return <FoundationOrganisationManager slug={slug} />;
 
   const supabase = await createClient();
   const {

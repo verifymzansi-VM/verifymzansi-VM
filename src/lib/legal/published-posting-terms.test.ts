@@ -3,6 +3,15 @@ import { getPublishedPostingTerms, assertPublishedPostingTerms } from "./publish
 import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
 
+it("prepares corrected expiry terms without changing historical acceptance or activating them", () => {
+  expect(manifest.active_version).toBe("posting-v1");
+  const next = getPublishedPostingTerms("posting-v2")!;
+  expect(next.sections.flatMap((section) => section.content).join("\n")).toContain(
+    "scheduled for deletion after 30 days"
+  );
+  expect(next.document_hash).not.toBe(manifest.versions["posting-v1"]);
+});
+
 it("pins the archived document hash and rejects unknown versions", () => {
   for (const version of Object.keys(manifest.versions))
     expect(getPublishedPostingTerms(version)).not.toBeNull();

@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import { getDataBackend } from "@/lib/data-backend";
-import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 
 type Step =
   | { kind: "loading" }
@@ -27,13 +25,7 @@ function svgDataUriToBlobUrl(dataUri: string): string | null {
   return URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
 }
 
-export function StaffTwoStepClient({
-  next,
-  friendlyName = "VerifyMzansi staff",
-}: {
-  next: string;
-  friendlyName?: string;
-}) {
+export function StaffTwoStepClient({ next }: { next: string }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: "loading" });
   const [code, setCode] = useState("");
@@ -53,11 +45,6 @@ export function StaffTwoStepClient({
         }
         const verified = data?.totp.find((factor) => factor.status === "verified");
         setStep(verified ? { kind: "verify", factorId: verified.id } : { kind: "enrol" });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("Your authenticator settings could not be loaded. Refresh to try again.");
-        setStep({ kind: "enrol" });
       });
     return () => {
       cancelled = true;
@@ -73,25 +60,18 @@ export function StaffTwoStepClient({
   async function startEnrolment() {
     setBusy(true);
     setError(null);
+    const supabase = createClient();
     try {
-      const supabase = createClient();
       // Remove any half-finished setup so enrolment can start cleanly.
-      const { data: factors, error: factorError } = await supabase.auth.mfa.listFactors();
-      if (factorError) throw factorError;
-      const existing = factors?.totp.find((factor) => factor.status === "verified");
-      if (existing) {
-        setStep({ kind: "verify", factorId: existing.id });
-        return;
-      }
+      const { data: factors } = await supabase.auth.mfa.listFactors();
       for (const factor of factors?.all ?? []) {
         if (factor.factor_type === "totp" && factor.status === "unverified") {
-          const { error: removalError } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
-          if (removalError) throw removalError;
+          await supabase.auth.mfa.unenroll({ factorId: factor.id });
         }
       }
       const { data, error: enrolError } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName,
+        friendlyName: "VerifyMzansi staff",
       });
       if (enrolError || !data) throw enrolError ?? new Error("No enrolment data");
       setStep({
@@ -112,24 +92,18 @@ export function StaffTwoStepClient({
     if (step.kind !== "scan" && step.kind !== "verify") return;
     setBusy(true);
     setError(null);
-    try {
-      const { error: verifyError } = await createClient().auth.mfa.challengeAndVerify({
-        factorId: step.factorId,
-        code,
-      });
-      if (verifyError) throw verifyError;
-      if (getDataBackend() === "foundation") {
-        window.location.assign(sanitizeReturnUrl(next));
-        return;
-      }
-      router.replace(next);
-      router.refresh();
-    } catch {
+    const { error: verifyError } = await createClient().auth.mfa.challengeAndVerify({
+      factorId: step.factorId,
+      code,
+    });
+    if (verifyError) {
+      setBusy(false);
       setCode("");
       setError("That code did not work. Enter the current code from your app.");
-    } finally {
-      setBusy(false);
+      return;
     }
+    router.replace(next);
+    router.refresh();
   }
 
   if (step.kind === "loading") {

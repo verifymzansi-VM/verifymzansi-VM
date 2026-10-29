@@ -786,7 +786,7 @@ function BusinessModerationPreview({ item }: ModerationPreviewPanelProps) {
           <>
             <Separator />
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold">Contact &amp; links</h4>
+              <h4 className="text-sm font-semibold">Contact & links</h4>
               <div className="grid gap-2">
                 {item.phone && (
                   <BusinessInfoCard

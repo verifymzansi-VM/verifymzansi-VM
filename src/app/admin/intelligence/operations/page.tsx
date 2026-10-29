@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DecisionPanel, HorizontalBarPanel } from "@/components/admin/intelligence-panels";
 import { Clock, Flag, Activity } from "lucide-react";
 import { countsOrThrow } from "@/lib/admin/counts";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationOperations } from "@/components/admin/home/foundation-operations";
 
 export const metadata = {
   title: "Operations summary — Intelligence",
@@ -15,7 +13,6 @@ export const metadata = {
 };
 
 export default async function IntelligenceOperationsPage() {
-  if (getDataBackend() === "foundation") return <FoundationOperations />;
   await requireStaff("bi:view");
 
   const admin = createAdminClient();

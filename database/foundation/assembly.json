@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "status": "DRAFT assembly only; not replayed or deployable",
   "releaseReady": false,
-  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-27T08-00-08.561Z/results.json",
-  "evidenceHash": "81F5EAkUemdc5-W8Riqx0M84wx-5BzBquWwMwMsuqKw",
+  "sourceEvidence": "docs/backend-foundation/evidence/native-2026-10-28T21-17-23.938Z/results.json",
+  "evidenceHash": "s5Zuzqg4ZjQv3URzoa9klf0YRtwoTTt5EKid6ecgSgc",
   "sourceHashes": {
     "docs/backend-foundation/prototypes/transport.sql": "LxUWxdc6XPYO4hw1RMVzi-nnL3H75brIjKHmMg-bCJM",
     "docs/backend-foundation/prototypes/listing-price-drafts.sql": "4SVbZLY-0lnbct9ZKlFXgsRCrpkFv4ou6FEQOoTZ-X8",
@@ -12,7 +12,7 @@
     "docs/backend-foundation/prototypes/taxonomy-reference.sql": "sQVB6BvTVBh-CcUTxu4i2fESk4DggwDxF7CVSHSpToE",
     "docs/backend-foundation/prototypes/taxonomy-reference-seed.sql": "P5o1FJfkS7FrVyKreFB9XvkRXBjDxvS2rZ3_zNnsUmo",
     "docs/backend-foundation/prototypes/post-search.sql": "WHZjq1qdouNlGamaumNotoxlmKrztjtmKLiTG2q0IrA",
-    "docs/backend-foundation/prototypes/entitlements.sql": "vJCZabXsB6KoBtneRyyigiaCzj3VKgjDE1cN_MEBjrw",
+    "docs/backend-foundation/prototypes/entitlements.sql": "ly5IPe0UPoUkeJXfmPdYglc-Ed_Mh3sZuEZavYlSLBk",
     "docs/backend-foundation/prototypes/listing-attributes.sql": "YHzTiY9y4wh43RRrhQTSxld_KXBgohTRCDTj1qgt3p8",
     "docs/backend-foundation/prototypes/trust-governance.sql": "rozNXyhl9F9HUo5m7K2H4JOrGBW3kYIdvx3XZs_d4aE",
     "docs/backend-foundation/prototypes/publication.sql": "uU-b091vw6yBLw9_q2_Ct7q6NiaW0OgxMZaZeLB48sY",
@@ -43,7 +43,7 @@
     "docs/backend-foundation/prototypes/account-session-context.sql": "WMHkOx1sGuZ2CzL0D3FZ8dMm9aPw4A7O0TLxb__NWRw",
     "docs/backend-foundation/prototypes/application-runtime.sql": "bCzLmXci8KUjCZPmu4iDGq64FlxoXMBaa5JjBSak2cM",
     "docs/backend-foundation/prototypes/billing-runtime.sql": "jgS3Dql8PLlYQtYVmxDFno32x3rRKBOXda-LI6LcMl4",
-    "docs/backend-foundation/prototypes/media-evidence-runtime.sql": "3oEsTDr6dZDbAcaV8gGKxZXshjJa5RdAGgJfcXYujME",
+    "docs/backend-foundation/prototypes/media-evidence-runtime.sql": "aFoN6x05BlbsCCyZ2R6yfPaVObuLO1elnMVodrZU0e8",
     "docs/backend-foundation/prototypes/staff-dashboard-runtime.sql": "xVx_lxmX6EzTd3euaKIvWN8FC0MXm6LYyUoC5rS4jgs",
     "docs/backend-foundation/prototypes/staff-read-surfaces.sql": "N2VVLGSKBQkRA5JFhr3a4gHUuzcplzpd7VW-dw5ZhSM"
   },
@@ -53,15 +53,20 @@
       {
         "version": "posting-v1",
         "document_hash": "RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q"
+      },
+      {
+        "version": "posting-v2",
+        "document_hash": "8u2aqpG0a6dIMsDJjNqoNiMEMCvmWRNgXRVyCV4967Y"
       }
     ],
     "sourceHashes": {
-      "src/lib/legal/terms-documents/catalogue.json": "IhK627IeYewv12-ukSyvr86DZQricHbI2YkQB_muKog",
-      "src/lib/legal/terms-documents/posting-v1.json": "9Yf01q8ebu_bKebT-0TbMJ5mdW6cNtOnq6TnscWbpis"
+      "src/lib/legal/terms-documents/catalogue.json": "5MDlRaWAyUjzTBXKVfgFzAgz2Y76SHgSQxZpH7bDnBA",
+      "src/lib/legal/terms-documents/posting-v1.json": "9Yf01q8ebu_bKebT-0TbMJ5mdW6cNtOnq6TnscWbpis",
+      "src/lib/legal/terms-documents/posting-v2.json": "hf34_12mOMzSL_AyBQSuehb9iDjOYdvH1BjfOvPAy9o"
     },
-    "sql": "insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');\ninsert into private.posting_terms_current(version) values('posting-v1');\n"
+    "sql": "insert into private.posting_terms_versions(version,document_hash) values('posting-v1','RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q');\ninsert into private.posting_terms_versions(version,document_hash) values('posting-v2','8u2aqpG0a6dIMsDJjNqoNiMEMCvmWRNgXRVyCV4967Y');\ninsert into private.posting_terms_current(version) values('posting-v1');\n"
   },
-  "candidateHash": "ZuO6sntHaHexYtTlCOhT1LCgA8bkbn2OpErjfz2bkXM",
+  "candidateHash": "_Of2SBVVY_gftYOOEy4_XdU-PWEVKC7Z_IMvf98S-t8",
   "catalogueSeedIdentities": {
     "schemaVersion": 1,
     "purpose": "Fixed new-foundation catalogue identifiers, independent of disposable source rows and local prototype random UUIDs. Preserve across target replays; a new commercial version gets a new reviewed identifier.",

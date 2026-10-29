@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { POST as foundationLogin } from "@/app/api/foundation/auth/login/route";
 import { loginSchema } from "@/lib/validations/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getTurnstileConfigStatus, verifyTurnstileToken } from "@/lib/utils/turnstile";
@@ -56,6 +58,7 @@ function isEmailNotConfirmedError(error: { message?: string; code?: unknown }): 
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return foundationLogin(request);
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;

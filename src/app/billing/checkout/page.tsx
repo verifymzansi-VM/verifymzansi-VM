@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
 import { CheckoutConfirm, type CheckoutSummary } from "./checkout-confirm";
 import { resolveBillingPlanSelection } from "@/lib/billing/plan-resolver";
 import {
@@ -8,6 +7,8 @@ import {
   isLegacyPlanTier,
 } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationCheckoutSummary } from "@/lib/foundation/checkout-summary";
 
 export const metadata = { title: "Checkout", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ const AREA_LABELS: Record<string, string> = {
 };
 
 async function loadSummary(planId: string): Promise<CheckoutSummary | null> {
+  if (getDataBackend() === "foundation") return readFoundationCheckoutSummary(planId);
   const { plan } = await resolveBillingPlanSelection(createAdminClient() as never, planId, {
     requireActive: true,
   });
@@ -49,7 +51,6 @@ export default async function CheckoutPage({
   searchParams: Promise<{ plan?: string }>;
 }) {
   const { plan: planId } = await searchParams;
-  if (getDataBackend() === "foundation") redirect("/billing");
   if (!planId) redirect("/pricing");
   const summary = UUID.test(planId) ? await loadSummary(planId).catch(() => null) : null;
   return <CheckoutConfirm summary={summary} />;

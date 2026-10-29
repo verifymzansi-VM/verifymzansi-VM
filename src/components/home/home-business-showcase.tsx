@@ -1,5 +1,3 @@
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationHomeShowcase } from "@/components/foundation/home-showcase";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
@@ -25,7 +23,6 @@ function provinceCode(name: string): string {
 }
 
 export async function HomeBusinessShowcase() {
-  if (getDataBackend() === "foundation") return <FoundationHomeShowcase area="business" />;
   const cookieStore = await getOptionalCookieStore();
   const hideFixtures = shouldHidePlaywrightFixtures(
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)

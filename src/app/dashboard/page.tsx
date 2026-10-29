@@ -37,8 +37,6 @@ import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-l
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { RecentLeads, type RecentLead } from "@/components/dashboard/recent-leads";
 import { VerificationStatusCard } from "@/components/dashboard/verification-status-card";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationDashboard } from "@/components/dashboard/foundation-dashboard";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -75,7 +73,6 @@ export const metadata = {
 };
 
 export default async function DashboardPage() {
-  if (getDataBackend() === "foundation") return <FoundationDashboard />;
   const supabase = await createClient();
 
   const {

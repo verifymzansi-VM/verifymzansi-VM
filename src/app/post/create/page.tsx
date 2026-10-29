@@ -9,8 +9,6 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { PostCreateClient } from "./post-create-client";
 import { FoundationPostingTermsGate } from "@/components/posting/foundation-posting-terms-gate";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationPostChooser } from "@/components/foundation/post-chooser";
 
 // How a post goes live, shown beside the headline on wide screens.
 const STEPS = ["Choose a section", "Fill in the form", "We review it, then it goes live"] as const;
@@ -21,7 +19,6 @@ export const metadata = {
 };
 
 export default async function PostCreatePage() {
-  if (getDataBackend() === "foundation") return <FoundationPostChooser />;
   const supabase = await createClient();
   const {
     data: { user },

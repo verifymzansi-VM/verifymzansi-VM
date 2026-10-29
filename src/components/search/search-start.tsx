@@ -80,7 +80,7 @@ export function SearchStart({ filters }: { filters: SearchFilters }) {
           id="search-help-title"
           className="font-display text-base font-bold tracking-tight text-foreground sm:text-lg"
         >
-          Help &amp; safety
+          Help & safety
         </h2>
         <ul className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:mt-3 sm:flex-wrap sm:px-0 lg:flex-col lg:gap-0.5">
           {HELP_SHORTCUTS.map((link) => {

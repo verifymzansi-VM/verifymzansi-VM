@@ -11,6 +11,8 @@ import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit"
 import { createLogger } from "../utils/logger";
 import { createFoundationPublicApi } from "./public-api";
 import { readFoundationBillingCatalogue } from "./billing-catalogue";
+import { selectFoundationBillingPlan } from "./billing-plan-selection";
+import { toFoundationPaymentStatusView } from "../payments/status-view";
 import {
   cancelFoundationPendingPayment,
   FoundationBillingError,
@@ -135,9 +137,7 @@ export async function handleFoundationBillingRoute(
           /* Preserve the stored state during a provider outage. */
         }
       }
-      const status = ["cancelled", "refunded", "chargeback"].includes(pay.status)
-        ? "failed"
-        : pay.status;
+      const status = toFoundationPaymentStatusView(pay);
       return context.respond(
         NextResponse.json({ status, terminal: status !== "pending", expired: status === "expired" })
       );
@@ -170,7 +170,7 @@ export async function handleFoundationBillingRoute(
           area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).optional(),
         })
         .parse(input);
-      const product = catalogue.plans.find((entry) => entry.id === value.planId);
+      const product = selectFoundationBillingPlan(catalogue, value.planId);
       if (!product || (value.area && product.area !== null && product.area !== areaMap[value.area]))
         throw new FoundationBillingError(400, "This plan is not available in the selected section");
       productId = product.id;

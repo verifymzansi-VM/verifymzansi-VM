@@ -1,4 +1,6 @@
 import { after, type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationRegistration } from "@/lib/foundation/registration-route";
 import { recordAcquisitionFromCookie } from "@/lib/analytics/record-acquisition";
 import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { registerSchema } from "@/lib/validations/auth";
@@ -95,6 +97,7 @@ async function isRegistrationContactAlreadyClaimed(
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationRegistration(request, true);
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;

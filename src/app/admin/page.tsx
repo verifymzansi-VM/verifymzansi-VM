@@ -21,8 +21,6 @@ import { TrafficPanel, TrafficPanelSkeleton } from "@/components/admin/home/traf
 import { ShowroomFairnessPanel } from "@/components/admin/home/showroom-fairness-panel";
 import { attentionItems } from "@/components/admin/home/attention";
 import { HomeBanner } from "@/components/admin/home/home-banner";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationStaffHome } from "@/components/admin/home/foundation-staff-home";
 
 export const metadata = {
   title: "Admin",
@@ -37,10 +35,6 @@ const DESCRIPTIONS = {
 } as const;
 
 export default async function AdminHomePage() {
-  if (getDataBackend() === "foundation") {
-    await requireStaff();
-    return <FoundationStaffHome />;
-  }
   const { user, role } = await requireStaff();
   const dashboard = await getStaffDashboard(user.id);
   const hasSideColumn = role === "admin" || (dashboard !== null && "oversight" in dashboard);

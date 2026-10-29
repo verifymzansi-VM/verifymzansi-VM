@@ -7,7 +7,11 @@ import {
 import { readFoundationPayment } from "@/lib/foundation/billing-runtime";
 
 import { createClient } from "@/lib/supabase/server";
-import { toPaymentStatusView, type PaymentStatusView } from "@/lib/payments/status-view";
+import {
+  toPaymentStatusView,
+  toFoundationPaymentStatusView,
+  type PaymentStatusView,
+} from "@/lib/payments/status-view";
 
 export async function resolveCurrentUserPaymentStatus(
   paymentId?: string
@@ -20,13 +24,7 @@ export async function resolveCurrentUserPaymentStatus(
     try {
       const current = await readFoundationServerSession();
       const payment = await readFoundationPayment(current.api, paymentId);
-      return toPaymentStatusView(
-        payment?.status === "cancelled" ||
-          payment?.status === "refunded" ||
-          payment?.status === "chargeback"
-          ? "failed"
-          : payment?.status
-      );
+      return toFoundationPaymentStatusView(payment);
     } catch (error) {
       return error instanceof FoundationServerSessionError && error.status === 401
         ? "missing"

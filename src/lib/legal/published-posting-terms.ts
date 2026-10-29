@@ -1,11 +1,13 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import first from "./terms-documents/posting-v1.json";
+import second from "./terms-documents/posting-v2.json";
 import manifest from "./terms-documents/catalogue.json";
 import type { FoundationPostingTerms } from "@/lib/foundation/posting-terms";
 
 const catalogue = {
   "posting-v1": { document: first, document_hash: manifest.versions["posting-v1"] },
+  "posting-v2": { document: second, document_hash: manifest.versions["posting-v2"] },
 } as const;
 
 /** Archived versions are pinned independently of the current Terms page.

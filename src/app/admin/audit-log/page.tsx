@@ -9,8 +9,6 @@ import { ScrollText } from "lucide-react";
 import { createLogger } from "@/lib/utils/logger";
 import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationStaffAuditPage } from "@/components/foundation/staff-audit-page";
 
 export const metadata = {
   title: "Audit log — Admin",
@@ -29,8 +27,6 @@ type AuditFilters = {
   to?: string;
   q?: string;
   page?: string;
-  before_at?: string;
-  before_id?: string;
 };
 
 function clean(value: string | undefined, max = 80): string | undefined {
@@ -43,8 +39,6 @@ export default async function AdminAuditLogPage({
 }: {
   searchParams: Promise<AuditFilters>;
 }) {
-  if (getDataBackend() === "foundation")
-    return <FoundationStaffAuditPage searchParams={searchParams} />;
   const raw = await searchParams;
   const filters = {
     action: clean(raw.action)?.replace(/[^a-z0-9_]/gi, ""),

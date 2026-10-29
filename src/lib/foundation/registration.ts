@@ -37,7 +37,8 @@ export async function registerFoundationAccount(
   input: unknown,
   redirectTo: string,
   cookies: FoundationAuthCookies,
-  fetcher: typeof fetch = createTimeoutFetch()
+  fetcher: typeof fetch = createTimeoutFetch(),
+  registrationHints?: { first_name: string; last_name: string; phone: string }
 ): Promise<void> {
   const parsed = foundationRegistrationSchema.safeParse(input);
   if (!parsed.success) throw new FoundationRegistrationError(400);
@@ -67,7 +68,7 @@ export async function registerFoundationAccount(
       email,
       password,
       options: {
-        data: { display_name: displayName },
+        data: { ...registrationHints, display_name: displayName },
         emailRedirectTo: redirectTo,
         captchaToken: turnstileToken,
       },

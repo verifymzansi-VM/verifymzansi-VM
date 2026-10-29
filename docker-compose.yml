@@ -18,6 +18,8 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      # Keep Linux dev output separate from Windows builds and compiler caches.
+      - /app/.next
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_APP_URL: http://localhost:3000

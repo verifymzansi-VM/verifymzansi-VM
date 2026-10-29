@@ -3,8 +3,6 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { SiteSearch, type SearchAreaKey } from "@/components/search/site-search";
 import { normalizeProvinceName, resolveCityName } from "@/lib/constants/sa-provinces";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationSiteSearch } from "@/components/foundation/site-search";
 
 const AREAS: readonly SearchAreaKey[] = ["listings", "businesses", "promotions", "pages"];
 
@@ -54,18 +52,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <div className="flex min-h-screen flex-col">
       <Header />
       <main id="main-content" className="flex-1">
-        {getDataBackend() === "foundation" ? (
-          <FoundationSiteSearch searchParams={searchParams} />
-        ) : (
-          <SiteSearch
-            key={`${query}:${province}:${city}:${org}`}
-            query={query}
-            province={province ?? ""}
-            city={city}
-            org={org}
-            area={area}
-          />
-        )}
+        <SiteSearch
+          key={`${query}:${province}:${city}:${org}`}
+          query={query}
+          province={province ?? ""}
+          city={city}
+          org={org}
+          area={area}
+        />
       </main>
       <Footer />
     </div>

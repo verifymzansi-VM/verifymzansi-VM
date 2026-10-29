@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
-import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 import {
   Dialog,
   DialogContent,
@@ -80,7 +80,6 @@ export function ReportDialog({
 
     setSubmitting(true);
     try {
-      await ensureCsrfTokenReady();
       const res = await fetch("/api/reports", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),

@@ -1,5 +1,11 @@
 # VerifyMzansi
 
+The frontend has been restored to the owner's selected Cloudflare deployment
+`6356f78f-e39a-496f-900d-7a1829c59bf6`. The current backend implementation is
+retained for integration work. Start with
+[FRONTEND-RESTORE.md](FRONTEND-RESTORE.md) before following the setup or
+deployment instructions below.
+
 South African marketplace built on Next.js, Supabase, and Cloudflare. The
 platform has exactly three marketplace areas: `Mzansi Market`,
 `Mzansi Business`, and `Tourism & Events`. Legacy `business-ads`, `mall-shops`,
@@ -88,6 +94,16 @@ Open `http://localhost:3000`. The app container uses the configured Supabase
 project directly; the Compose setup does not create a standalone PostgreSQL
 database because that would not provide Supabase Auth or its HTTP API. Stop the
 app with `docker compose down`.
+
+After dependency or `.env.local` changes, rebuild and recreate the app so its
+dependency volume and environment match the checkout:
+
+```bash
+docker compose up -d --build --force-recreate --renew-anon-volumes --no-deps app
+```
+
+Docker keeps `node_modules` and `.next` in separate container volumes so Linux
+dependencies and compiler caches are not mixed with native Windows builds.
 
 Production deployment is currently manual through the Deploy workflow. Pushing
 `main` runs CI only. Review the security assessment and apply the required

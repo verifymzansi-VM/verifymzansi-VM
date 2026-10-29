@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationAffiliations } from "@/components/foundation/affiliations";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,7 +22,6 @@ export default async function AffiliationsPage({
   searchParams: Promise<{ org?: string }>;
 }) {
   const { org: orgParam } = await searchParams;
-  if (getDataBackend() === "foundation") return <FoundationAffiliations preselected={orgParam} />;
   const orgSlug = orgParam && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(orgParam) ? orgParam : null;
   const supabase = await createClient();
   const {

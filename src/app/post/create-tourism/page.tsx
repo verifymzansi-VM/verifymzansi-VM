@@ -1,6 +1,4 @@
 "use client";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationPostRoute } from "@/components/foundation/post-editor";
 import { PostSelect } from "@/components/post/post-select";
 import { EventDateFields } from "@/components/post/event-date-fields";
 import { eventTimeToIso } from "@/lib/forms/event-time";
@@ -302,7 +300,7 @@ function getStepForServerErrors(errors: Record<string, string>): number {
   return keys.reduce((targetStep, key) => Math.min(targetStep, getStepForFieldKey(key)), 3);
 }
 
-function CreateTourismPage() {
+export default function CreateTourismPage() {
   return (
     <Suspense
       fallback={
@@ -3673,9 +3671,3 @@ function CreateTourismContent() {
     </div>
   );
 }
-
-function FoundationPage() {
-  return <FoundationPostRoute kind="event" area="tourism_events" />;
-}
-const SelectedPage = getDataBackend() === "foundation" ? FoundationPage : CreateTourismPage;
-export default SelectedPage;

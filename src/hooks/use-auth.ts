@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import { useAuthStore } from "@/stores/auth-store";
+import { getDataBackend } from "@/lib/data-backend";
 import {
   ACCOUNT_PROFILE_WRITE_TABLE,
   normalizeUserRole,
@@ -12,8 +13,6 @@ import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { toast } from "@/hooks/use-toast";
 import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
-import { getDataBackend } from "@/lib/data-backend";
-import { hasFoundationBrowserSession } from "@/lib/foundation/browser-session-cookie";
 
 const log = createLogger("useAuth");
 const PROFILE_FETCH_RETRY_DELAYS_MS = [150, 400] as const;
@@ -30,10 +29,6 @@ let supabaseClientPromise: Promise<SupabaseClient> | null = null;
 let authRequestVersion = 0;
 
 function getSupabaseClient(): Promise<SupabaseClient> {
-  if (getDataBackend() === "foundation")
-    return import("@/lib/foundation/browser-client").then(
-      (module) => module.getFoundationBrowserClient() as unknown as SupabaseClient
-    );
   if (!supabaseClientPromise) {
     supabaseClientPromise = import("@/lib/supabase/client")
       .then((mod) => mod.createClient())
@@ -56,13 +51,6 @@ function getSupabaseClient(): Promise<SupabaseClient> {
  * on every navigation.
  */
 export function hasBrowserAuthSession(): boolean {
-  if (getDataBackend() === "foundation") {
-    try {
-      return hasFoundationBrowserSession();
-    } catch {
-      return false;
-    }
-  }
   if (typeof document === "undefined") {
     return true;
   }
@@ -82,10 +70,7 @@ export function hasBrowserAuthSession(): boolean {
 export async function signOutBrowserSession(): Promise<boolean> {
   try {
     const supabase = await getSupabaseClient();
-    const { error } =
-      getDataBackend() === "foundation"
-        ? await supabase.auth.signOut({ scope: "local" })
-        : await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
     if (error) throw error;
   } catch (err) {
     log.error("Sign-out failed", { error: err instanceof Error ? err.message : String(err) });
@@ -125,17 +110,8 @@ export async function clearClientAccountState(): Promise<void> {
  * Automatically syncs with Supabase auth state.
  */
 export function useAuth() {
-  const {
-    user,
-    profile,
-    trustLevel,
-    isLoading,
-    foundationContext,
-    setUser,
-    setProfile,
-    setLoading,
-    reset,
-  } = useAuthStore();
+  const { user, profile, trustLevel, isLoading, setUser, setProfile, setLoading, reset } =
+    useAuthStore();
 
   const fetchedRef = useRef(false);
 
@@ -229,17 +205,6 @@ export function useAuth() {
       // The Zustand store is shared, so other useAuth() consumers see the
       // same data without triggering duplicate Supabase round-trips.
       if (fetchedRef.current && !options?.force) return;
-      const loaded = useAuthStore.getState();
-      if (
-        getDataBackend() === "foundation" &&
-        !options?.force &&
-        !loaded.isLoading &&
-        loaded.user &&
-        loaded.foundationContext?.account_id === loaded.user.id
-      ) {
-        fetchedRef.current = true;
-        return;
-      }
       fetchedRef.current = true;
       const requestVersion = ++authRequestVersion;
       const isCurrentRequest = () => requestVersion === authRequestVersion;
@@ -254,23 +219,6 @@ export function useAuth() {
 
       setLoading(true);
       try {
-        if (getDataBackend() === "foundation") {
-          // Account switches and failed refreshes must never retain another
-          // account's source profile or phone/role hints while loading.
-          useAuthStore.setState({
-            user: null,
-            profile: null,
-            foundationContext: null,
-            trustLevel: 0,
-          });
-          const { fetchFoundationAccountSession } =
-            await import("@/lib/foundation/account-session-client");
-          if (!isCurrentRequest()) return;
-          const account = await fetchFoundationAccountSession();
-          if (!isCurrentRequest()) return;
-          useAuthStore.getState().applyFoundationContext(account);
-          return;
-        }
         const supabase = await getSupabaseClient();
         if (!isCurrentRequest()) return;
         const {
@@ -280,6 +228,41 @@ export function useAuth() {
 
         if (!authUser) {
           reset();
+          return;
+        }
+
+        if (getDataBackend() === "foundation") {
+          const [
+            { fetchFoundationAccountSession },
+            { restoredAccountProfile },
+            { readFoundationVerificationStatus },
+          ] = await Promise.all([
+            import("@/lib/foundation/account-session-client"),
+            import("@/lib/foundation/restored-profile"),
+            import("@/lib/foundation/verification-runtime-client"),
+          ]);
+          const [account, verification] = await Promise.all([
+            fetchFoundationAccountSession(),
+            readFoundationVerificationStatus(supabase),
+          ]);
+          if (!isCurrentRequest()) return;
+          if (!account || account.account_id !== authUser.id) {
+            reset();
+            return;
+          }
+          const nextProfile = restoredAccountProfile(account, authUser, verification);
+          useAuthStore.getState().setTrustLevel(0);
+          setUser({
+            id: account.account_id,
+            email: account.email ?? "",
+            displayName: nextProfile.display_name,
+            role: account.staff?.can_access
+              ? account.staff.role === "governor"
+                ? "governance_controller"
+                : account.staff.role
+              : "user",
+          });
+          setProfile(nextProfile);
           return;
         }
 
@@ -342,7 +325,6 @@ export function useAuth() {
         if (cancelled) return;
         const { data } = supabase.auth.onAuthStateChange(
           (event: AuthChangeEvent, session: Session | null) => {
-            if (getDataBackend() === "foundation" && event === "INITIAL_SESSION") return;
             if (session?.user) {
               void fetchUser({ force: true });
             } else {
@@ -375,19 +357,12 @@ export function useAuth() {
 
   const isAuthenticated = !!user;
   const isAdmin = user?.role === "admin";
-  const isModerator =
-    user?.role === "moderator" ||
-    isAdmin ||
-    (getDataBackend() === "foundation" && user?.role === "governor");
-  const isVerified =
-    getDataBackend() === "foundation"
-      ? foundationContext?.profile.identity_verified === true
-      : readAccountVerificationStatus(profile) === "verified";
+  const isModerator = user?.role === "moderator" || isAdmin;
+  const isVerified = readAccountVerificationStatus(profile) === "verified";
 
   return {
     user,
     profile,
-    foundationContext,
     trustLevel,
     isLoading,
     isAuthenticated,

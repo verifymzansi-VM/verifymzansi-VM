@@ -78,7 +78,7 @@ export default async function IntelligenceMarketplacePage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Live Tourism &amp; Events posts</CardTitle>
+            <CardTitle className="text-sm font-medium">Live Tourism & Events posts</CardTitle>
             <TrendingUp className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>

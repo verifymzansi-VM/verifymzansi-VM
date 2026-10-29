@@ -65,6 +65,8 @@ docs/*
 !docs/openapi.json
 *.md
 !README.md
+!AGENTS.md
+!FRONTEND-RESTORE.md
 !CONTRIBUTING.md
 !CHANGELOG.md
 !LAUNCH-CHECKLIST.md

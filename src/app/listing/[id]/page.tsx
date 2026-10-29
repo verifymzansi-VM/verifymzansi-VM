@@ -1,9 +1,4 @@
 import { publicPersonName } from "@/lib/account/public-name";
-import { getDataBackend } from "@/lib/data-backend";
-import {
-  FoundationPublicDetail,
-  foundationPublicMetadata,
-} from "@/components/foundation/public-marketplace";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { createClient } from "@/lib/supabase/server";
@@ -46,8 +41,6 @@ interface ListingDetailPageProps {
 }
 
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
-  if (getDataBackend() === "foundation")
-    return foundationPublicMetadata((await params).id, "market");
   const { id } = await params;
   const supabase = await createClient();
   const { data: listing } = await applyVisibleExpiryFilter(
@@ -76,14 +69,6 @@ export async function generateMetadata({ params }: ListingDetailPageProps): Prom
 }
 
 export default async function ListingDetailPage({ params }: ListingDetailPageProps) {
-  if (getDataBackend() === "foundation")
-    return (
-      <div className="flex min-h-screen flex-col">
-        <Header />
-        <FoundationPublicDetail id={(await params).id} area="market" />
-        <Footer />
-      </div>
-    );
   const { id } = await params;
   const cookieStore = await getOptionalCookieStore();
   const supabase = await createClient();

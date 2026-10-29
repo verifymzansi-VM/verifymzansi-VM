@@ -1,5 +1,3 @@
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationProgrammeShowcase } from "@/components/foundation/home-showcase";
 import Link from "next/link";
 import { Landmark } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -37,8 +35,6 @@ export async function HomeProgrammeShowcase({
 }: {
   placement?: "home" | "business" | "tourism" | "market";
 }) {
-  if (getDataBackend() === "foundation")
-    return <FoundationProgrammeShowcase placement={placement} />;
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
   const [{ data: showcases }, { data: settingsRows }] = await Promise.all([

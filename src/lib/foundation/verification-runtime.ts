@@ -91,7 +91,9 @@ async function persistEvidence(
   if (
     target.artifact_id !== artifact.artifact_id ||
     target.case_id !== caseId ||
-    target.object_key !== `evidence/${caseId}/${artifact.artifact_id}` ||
+    // SQL owns the opaque object identifier; it need not equal the artifact id.
+    // The service lookup binds this key to the caller, case, artifact and purpose.
+    !target.object_key.startsWith(`evidence/${caseId}/`) ||
     target.purpose !== purpose
   )
     throw new FoundationVerificationError(503);
@@ -110,15 +112,20 @@ async function persistEvidence(
     p_content_sha256: hash,
     p_size: encrypted.length,
   });
+  const completion = z
+    .object({
+      artifact_id: z.uuid(),
+      state: z.literal("clean"),
+      case_version: z.number().int().positive(),
+    })
+    .safeParse(completed.data);
   if (
     completed.error ||
-    !completed.data ||
-    typeof completed.data !== "object" ||
-    !("state" in completed.data) ||
-    completed.data.state !== "clean"
+    !completion.success ||
+    completion.data.artifact_id !== artifact.artifact_id
   )
     throw new FoundationVerificationError(503);
-  return { id: artifact.artifact_id, hash };
+  return { id: artifact.artifact_id, hash, caseVersion: completion.data.case_version };
 }
 /** Only the GoTrue-verified caller supplies the owner. Typed numbers, risk,
  * receipts, encryption metadata and object paths are never accepted from JSON. */
@@ -180,7 +187,9 @@ export async function submitFoundationIdentity(
   const receipt = randomUUID();
   const submitted = await service.rpc("register_identity_submission", {
     p_case: current.case_id,
-    p_expected_version: current.version,
+    // Completion returns the version under the same database lock as the last
+    // upload transition. Later changes must still conflict at registration.
+    p_expected_version: face.caseVersion,
     p_id_artifact: id.id,
     p_selfie_artifact: face.id,
     p_fingerprint: fingerprint,
@@ -201,7 +210,7 @@ export async function submitFoundationIdentity(
       reused: z.boolean(),
     })
     .parse(submitted.data);
-  if (accepted.case_version !== current.version + 1)
+  if (accepted.case_version !== face.caseVersion + 1)
     throw new FoundationVerificationError(
       409,
       "The submission changed. Refresh your verification status before trying again."
@@ -259,7 +268,7 @@ export async function readFoundationReviewContext(
     number = artifact.encrypted_number;
   if (
     artifact.artifact_id !== context.id_artifact_id ||
-    artifact.object_key !== `evidence/${input.case_id}/${context.id_artifact_id}`
+    !artifact.object_key.startsWith(`evidence/${input.case_id}/`)
   )
     throw new FoundationVerificationError(503);
   const decipher = createDecipheriv(
@@ -300,7 +309,7 @@ export async function readFoundationEvidenceBytes(
   const artifact = objectInfo.parse(lookup.data);
   if (
     artifact.artifact_id !== artifactId ||
-    artifact.object_key !== `evidence/${input.case_id}/${artifactId}`
+    !artifact.object_key.startsWith(`evidence/${input.case_id}/`)
   )
     throw new FoundationVerificationError(503);
   const stored = await getR2ObjectBytes(

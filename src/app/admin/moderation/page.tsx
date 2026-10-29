@@ -1,7 +1,4 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationModerationQueue } from "@/components/foundation/moderation-queue";
 import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
@@ -53,17 +50,7 @@ function daysAgoIso(days: number): string {
 }
 
 export default async function AdminModerationPage() {
-  const staff = await requireStaff("queue:view");
-  const { user, role } = staff;
-  if (getDataBackend() === "foundation") {
-    if (
-      !["queue:claim", "post:moderate"].every((capability) =>
-        staff.assignedCapabilities?.includes(capability)
-      )
-    )
-      redirect("/admin");
-    return <FoundationModerationQueue mode="content" />;
-  }
+  const { user, role } = await requireStaff("queue:view");
 
   const admin = createAdminClient();
 

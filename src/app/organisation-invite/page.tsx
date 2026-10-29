@@ -8,13 +8,6 @@ import { Button } from "@/components/ui/button";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteButton } from "./accept-invite-button";
-import { getDataBackend } from "@/lib/data-backend";
-import { foundationServerPublicApi } from "@/lib/foundation/server-public";
-import { previewFoundationOrganisationInvite } from "@/lib/foundation/organisations";
-import {
-  readFoundationServerSession,
-  FoundationServerSessionError,
-} from "@/lib/foundation/server-session";
 
 export const metadata: Metadata = {
   title: "Programme administrator invitation",
@@ -26,6 +19,7 @@ export const dynamic = "force-dynamic";
 
 type Preview = {
   organisationName: string;
+  organisationSlug: string;
   email: string;
   expiresAt: string;
   status: "open" | "used" | "revoked" | "expired" | "inactive";
@@ -44,65 +38,6 @@ const date = new Intl.DateTimeFormat("en-ZA", {
   timeZone: "Africa/Johannesburg",
 });
 
-async function foundationInviteState(token: string | undefined) {
-  if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token))
-    return { preview: null, user: null, verified: false, emailMatches: true };
-  const data = await previewFoundationOrganisationInvite(foundationServerPublicApi(), { token });
-  const preview: Preview | null = data
-    ? {
-        organisationName: data.organisation_name,
-        email: data.email,
-        expiresAt: data.expires_at,
-        status: data.status,
-      }
-    : null;
-  if (!preview || preview.status !== "open")
-    return { preview, user: null, verified: false, emailMatches: true };
-  try {
-    const { account } = await readFoundationServerSession();
-    // The public preview deliberately masks the invited address. Only the
-    // authenticated SQL command compares the verified caller's exact email.
-    return {
-      preview,
-      user: { email: account.email },
-      verified: account.profile.identity_verified,
-      emailMatches: true,
-    };
-  } catch (error) {
-    if (error instanceof FoundationServerSessionError && error.status === 401)
-      return { preview, user: null, verified: false, emailMatches: true };
-    throw error;
-  }
-}
-
-async function legacyInviteState(token: string | undefined) {
-  const valid = typeof token === "string" && /^[A-Za-z0-9_-]{20,200}$/.test(token);
-  const preview = valid
-    ? ((
-        await createAdminClient().rpc("organisation_invite_preview", {
-          p_token_hash: createHash("sha256").update(token).digest("hex"),
-        })
-      ).data as Preview | null)
-    : null;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = user
-    ? await supabase
-        .from("account_profiles")
-        .select("account_verification_status")
-        .eq("user_id", user.id)
-        .maybeSingle()
-    : { data: null };
-  return {
-    preview,
-    user,
-    verified: profile?.account_verification_status === "verified",
-    emailMatches: Boolean(user?.email && preview && user.email.toLowerCase() === preview.email),
-  };
-}
-
 /**
  * Landing page for a sponsor administrator invitation. Opening the link only
  * shows what is being offered; acceptance needs a signed-in, identity-reviewed
@@ -114,11 +49,31 @@ export default async function OrganisationInvitePage({
   searchParams: Promise<{ token?: string }>;
 }) {
   const { token } = await searchParams;
-  const foundation = getDataBackend() === "foundation";
-  const { preview, user, verified, emailMatches } = await (foundation
-    ? foundationInviteState(token)
-    : legacyInviteState(token));
+  const valid = typeof token === "string" && /^[A-Za-z0-9_-]{20,200}$/.test(token);
+  const preview = valid
+    ? ((
+        await createAdminClient().rpc("organisation_invite_preview", {
+          p_token_hash: createHash("sha256").update(token).digest("hex"),
+        })
+      ).data as Preview | null)
+    : null;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase
+        .from("account_profiles")
+        .select("account_verification_status")
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
   const returnUrl = encodeURIComponent(`/organisation-invite?token=${token ?? ""}`);
+  const emailMatches = Boolean(
+    user?.email && preview && user.email.toLowerCase() === preview.email
+  );
+  const verified = profile?.account_verification_status === "verified";
 
   let body: React.ReactNode;
   if (!preview) {
@@ -168,11 +123,7 @@ export default async function OrganisationInvitePage({
     );
   } else {
     body = (
-      <AcceptInviteButton
-        token={token as string}
-        organisationName={preview.organisationName}
-        foundation={foundation}
-      />
+      <AcceptInviteButton token={token as string} organisationName={preview.organisationName} />
     );
   }
 

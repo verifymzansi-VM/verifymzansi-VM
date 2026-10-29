@@ -3,51 +3,36 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 export function AcceptInviteButton({
   token,
   organisationName,
-  foundation = false,
 }: {
   token: string;
   organisationName: string;
-  foundation?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function accept() {
-    if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      if (!(await ensureCsrfTokenReady())) throw new Error("Security check unavailable");
-      const res = await fetch(
-        foundation
-          ? "/api/foundation/organisations/invites/accept"
-          : "/api/organisations/invites/accept",
-        {
-          method: "POST",
-          credentials: "same-origin",
-          cache: "no-store",
-          redirect: "error",
-          headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ token }),
-        }
-      );
+      const res = await fetch("/api/organisations/invites/accept", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ token }),
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error ?? "The invitation could not be accepted. Please try again.");
         return;
       }
-      const slug = foundation ? body.organisation_slug : body.data?.organisationSlug;
-      if (typeof slug !== "string" || slug.length > 120 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug))
-        throw new Error("Invalid organisation destination");
-      router.push(`/dashboard/organisation/${encodeURIComponent(slug)}`);
+      router.push(`/dashboard/organisation/${body.data?.organisationSlug ?? ""}`);
     } catch {
-      setError("We could not confirm the response. Reload the invitation or open your dashboard.");
+      setError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }

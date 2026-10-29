@@ -1,6 +1,4 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationOrganisationsPage } from "@/components/admin/home/foundation-organisations-page";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +14,6 @@ const date = new Intl.DateTimeFormat("en-ZA", {
 });
 
 export default async function OrganisationsAdminPage() {
-  if (getDataBackend() === "foundation") return <FoundationOrganisationsPage />;
   await requireStaff("organisations:manage");
 
   const admin = createAdminClient();

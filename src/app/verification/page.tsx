@@ -1,6 +1,4 @@
 "use client";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationVerificationPage } from "@/components/foundation/verification-page";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
@@ -510,7 +508,7 @@ function buildOtpSupportMessage(
   return `SMS delivery can take up to 60 seconds. If nothing arrives, confirm ${formattedPhone} and resend once the timer ends.`;
 }
 
-function VerificationPage() {
+export default function VerificationPage() {
   const [step, setStep] = useState<WizardStep>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -2164,7 +2162,7 @@ function VerificationPage() {
                           ) : (
                             <MapPin className="h-4 w-4" aria-hidden="true" />
                           )}
-                          Save location &amp; finish
+                          Save location & finish
                         </Button>
                       )}
                     </StepActions>
@@ -2396,7 +2394,3 @@ function ReviewRow({
     </li>
   );
 }
-
-const SelectedVerificationPage =
-  getDataBackend() === "foundation" ? FoundationVerificationPage : VerificationPage;
-export default SelectedVerificationPage;

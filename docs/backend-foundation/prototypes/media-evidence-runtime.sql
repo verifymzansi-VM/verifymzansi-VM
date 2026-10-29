@@ -60,12 +60,18 @@ grant execute on function api.evidence_upload_target(uuid,uuid) to service_role;
 
 create function internal.complete_evidence_upload(p_artifact uuid,p_stored_sha256 text,p_content_sha256 text,p_size integer)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare completed jsonb;
 begin
   if p_content_sha256 is null or p_content_sha256 !~ '^[a-f0-9]{64}$' then raise exception 'content receipt required' using errcode='22023'; end if;
   perform internal.advance_evidence_artifact(p_artifact,'uploaded',p_stored_sha256,p_size);
   update private.evidence_artifacts set content_sha256=p_content_sha256 where id=p_artifact and (content_sha256 is null or content_sha256=p_content_sha256);
   if not found then raise exception 'content receipt changed' using errcode='PT409'; end if;
-  return internal.advance_evidence_artifact(p_artifact,'clean',p_stored_sha256,p_size);
+  completed:=internal.advance_evidence_artifact(p_artifact,'clean',p_stored_sha256,p_size);
+  -- The artifact transitions increment the case revision. Return the revision
+  -- while their subject/case locks are still held; never reuse the pre-upload one.
+  return completed||jsonb_build_object('case_version',(
+    select c.version from private.evidence_cases c join private.evidence_artifacts a on a.case_id=c.id
+    where a.id=p_artifact));
 end;
 $$;
 revoke all on function internal.complete_evidence_upload(uuid,text,text,integer) from public,anon,authenticated,service_role;
@@ -207,9 +213,13 @@ declare rows jsonb:='[]'::jsonb; candidate record; art private.evidence_artifact
 begin
   if p_limit is null or p_limit not between 1 and 100 then raise exception 'limit 1 to 100' using errcode='22023'; end if;
   for candidate in select a.id,a.owner_id,a.case_id from private.evidence_artifacts a
-    where (a.state='intent' and a.created_at<statement_timestamp()-interval '1 hour')
-      or (a.state in('uploaded','clean','rejected') and a.retain_until<=statement_timestamp())
-      or (a.state='cleanup_required' and coalesce(a.cleanup_lease_until,'-infinity'::timestamptz)<=statement_timestamp())
+    where ((a.state='intent' and a.created_at<statement_timestamp()-interval '1 hour')
+      or (a.state in('uploaded','clean','rejected') and coalesce(a.retain_until,a.created_at+interval '90 days')<=statement_timestamp())
+      or (a.state='cleanup_required' and coalesce(a.cleanup_lease_until,'-infinity'::timestamptz)<=statement_timestamp()))
+      -- Filter holds before the batch limit, and check them again under locks.
+      -- Otherwise a held prefix can starve every later unheld artifact forever.
+      and not exists(select 1 from private.legal_holds h where h.subject_id=a.owner_id and h.released_at is null)
+      and not internal.evidence_fraud_held(a.case_id)
     order by a.owner_id,a.case_id,a.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(candidate.owner_id::text,2408)) then continue; end if;
@@ -220,7 +230,7 @@ begin
     if exists(select 1 from private.legal_holds h where h.subject_id=art.owner_id and h.released_at is null)
       or internal.evidence_fraud_held(art.case_id) then continue; end if;
     if not ((art.state='intent' and art.created_at<statement_timestamp()-interval '1 hour')
-      or (art.state in('uploaded','clean','rejected') and art.retain_until<=statement_timestamp())
+      or (art.state in('uploaded','clean','rejected') and coalesce(art.retain_until,art.created_at+interval '90 days')<=statement_timestamp())
       or (art.state='cleanup_required' and coalesce(art.cleanup_lease_until,'-infinity'::timestamptz)<=statement_timestamp())) then continue; end if;
     token:=pg_catalog.gen_random_uuid();
     update private.evidence_artifacts set state='cleanup_required',cleanup_token=token,cleanup_lease_until=statement_timestamp()+interval '5 minutes' where id=art.id;

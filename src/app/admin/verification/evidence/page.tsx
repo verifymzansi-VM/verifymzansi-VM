@@ -3,8 +3,6 @@ import { redirect } from "next/navigation";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { PageHeader } from "@/components/layout/page-header";
 import { EvidenceDeskClient } from "@/components/admin/evidence-desk";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationVerificationDesk } from "@/components/foundation/verification-desk";
 
 export const metadata = {
   title: "Evidence desk — Admin",
@@ -16,7 +14,6 @@ export default async function EvidenceDeskPage({
 }: {
   searchParams: Promise<{ stepId?: string; userId?: string }>;
 }) {
-  if (getDataBackend() === "foundation") return <FoundationVerificationDesk />;
   await requireStaff("queue:view");
 
   // Feature flag check

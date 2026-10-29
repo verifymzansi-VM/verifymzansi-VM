@@ -9,8 +9,6 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationOwnerPostList } from "@/components/foundation/owner-post-list";
 import {
   CheckCircle2,
   Eye,
@@ -329,21 +327,9 @@ function applyDashboardExpiryStatus(item: DashboardItem, now = new Date()): Dash
 export default async function ListingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    area?: string;
-    created?: string;
-    updated?: string;
-    review?: string;
-    offset?: string;
-  }>;
+  searchParams: Promise<{ area?: string; created?: string; updated?: string; review?: string }>;
 }) {
-  const { area: areaParam, created, updated, review, offset } = await searchParams;
-  if (getDataBackend() === "foundation")
-    return (
-      <FoundationOwnerPostList
-        offset={offset && /^\d{1,6}$/.test(offset) ? Math.min(Number(offset), 100000) : 0}
-      />
-    );
+  const { area: areaParam, created, updated, review } = await searchParams;
   const areaFilter =
     areaParam && ["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"].includes(areaParam)
       ? (areaParam as MarketplaceArea)

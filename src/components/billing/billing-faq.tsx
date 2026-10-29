@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { getDataBackend } from "@/lib/data-backend";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { DEFAULT_COMMERCIAL_SETTINGS, type CommercialSettings } from "@/lib/commercial/settings";
@@ -77,8 +78,9 @@ export function BillingFaq({
 
         <FaqItem question="What happens when my plan ends?">
           <p>
-            Your posts are hidden from the public but stay saved in your dashboard. Choose a plan
-            again at any time to reactivate them. You won&apos;t need to start from scratch.
+            {getDataBackend() === "foundation"
+              ? "Your posts are hidden from the public. Expired, sold and archived posts are kept for 30 days before deletion, with their media removed through scheduled cleanup. Renew before that deadline if you want to keep a post."
+              : "Your posts are hidden from the public but stay saved in your dashboard. Choose a plan again at any time to reactivate them. You won't need to start from scratch."}
           </p>
         </FaqItem>
 

@@ -42,7 +42,8 @@ beforeEach(() => {
   artifact = {
     owner_id: id("9"),
     artifact_id: context.id_artifact_id,
-    object_key: `evidence/${input.case_id}/${context.id_artifact_id}`,
+    // Object identity is opaque and deliberately differs from the artifact id.
+    object_key: `evidence/${input.case_id}/${id("77")}`,
     sha256: createHash("sha256").update(stored).digest("hex"),
     size_bytes: stored.length,
     encrypted_number: {

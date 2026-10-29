@@ -21,7 +21,7 @@ vi.mock("@/components/showrooms/streamed-showroom", async (importOriginal) => ({
 
 /** Renders the page, then the showroom it streams in after its shell. */
 async function renderPage() {
-  render(await MzansiMarketPage({}));
+  render(await MzansiMarketPage());
   const [showroomProps] = streamedShowroomSpy.mock.calls.at(-1) as [StreamedShowroomProps];
   render(await ShowroomWithData(showroomProps));
 }

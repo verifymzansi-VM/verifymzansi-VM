@@ -19,13 +19,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validations/auth";
 import { useToast } from "@/hooks/use-toast";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
-import { getDataBackend } from "@/lib/data-backend";
-import {
-  foundationPasswordResetSchema,
-  foundationRecoveryBindingSchema,
-} from "@/lib/foundation/password-update-input";
-import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
-import { clearClientAccountState } from "@/hooks/use-auth";
 
 /**
  * - checking: request in flight
@@ -34,38 +27,20 @@ import { clearClientAccountState } from "@/hooks/use-auth";
  * - unavailable: the check itself failed (offline, timeout, 5xx) — retryable
  */
 type RecoverySessionState = "checking" | "valid" | "invalid" | "unavailable";
-type RecoveryBinding = { recoverySessionId: string; accountId: string };
-const nativeRecovery = () => getDataBackend() === "foundation";
-const endpoint = () =>
-  nativeRecovery() ? "/api/foundation/auth/recovery/reset" : "/api/auth/reset-password";
 
 const SESSION_CHECK_FAILED_MESSAGE =
   "We couldn't check your reset link. Check your connection and try again.";
 const SUBMIT_NETWORK_FAILED_MESSAGE =
   "We couldn't save your new password. Check your connection and try again.";
 
-async function fetchRecoverySessionState(
-  capture?: (binding: RecoveryBinding | null) => void
-): Promise<Exclude<RecoverySessionState, "checking">> {
+async function fetchRecoverySessionState(): Promise<Exclude<RecoverySessionState, "checking">> {
   try {
-    capture?.(null);
-    const res = await (nativeRecovery() ? createTimeoutFetch() : fetch)(endpoint(), {
-      cache: "no-store",
-      ...(nativeRecovery()
-        ? { credentials: "same-origin" as const, redirect: "error" as const }
-        : {}),
-    });
+    const res = await fetch("/api/auth/reset-password", { cache: "no-store" });
     // A rejected session is an auth answer, not an outage.
     if (res.status === 401 || res.status === 403) return "invalid";
     if (!res.ok) return "unavailable";
     const data: unknown = await res.json();
     if (!data || typeof data !== "object" || !("valid" in data)) return "unavailable";
-    if (nativeRecovery() && data.valid === true) {
-      const parsed = foundationRecoveryBindingSchema.safeParse(data);
-      if (!parsed.success) return "unavailable";
-      capture?.(parsed.data);
-      return "valid";
-    }
     return (data as { valid: unknown }).valid === true ? "valid" : "invalid";
   } catch {
     return "unavailable";
@@ -73,29 +48,23 @@ async function fetchRecoverySessionState(
 }
 
 export default function ResetPasswordPage() {
-  const native = nativeRecovery();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [sessionState, setSessionState] = useState<RecoverySessionState>("checking");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
-  const [binding, setBinding] = useState<RecoveryBinding | null>(null);
-  const [passwordSaved, setPasswordSaved] = useState(false);
-  const [signOutBusy, setSignOutBusy] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
   const checkSession = useCallback(async () => {
     setSessionState("checking");
-    setSessionState(await fetchRecoverySessionState(setBinding));
+    setSessionState(await fetchRecoverySessionState());
   }, []);
 
   // Check if the user has a valid recovery session (set by the reset link)
   useEffect(() => {
     let cancelled = false;
-    void fetchRecoverySessionState((value) => {
-      if (!cancelled) setBinding(value);
-    }).then((state) => {
+    void fetchRecoverySessionState().then((state) => {
       if (!cancelled) setSessionState(state);
     });
     void ensureCsrfTokenReady();
@@ -109,43 +78,16 @@ export default function ResetPasswordPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
     control,
-    reset,
   } = useForm<ResetPasswordInput>({
-    resolver: zodResolver(native ? foundationPasswordResetSchema : resetPasswordSchema),
+    resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
   });
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
   const requirements = getPasswordRequirements(password);
 
-  async function finishNativeSignOut(alreadyComplete = false) {
-    setSignOutBusy(true);
-    setSubmitError(null);
-    try {
-      if (!alreadyComplete) {
-        const { getFoundationBrowserClient } = await import("@/lib/foundation/browser-client");
-        const { error } = await getFoundationBrowserClient().auth.signOut({ scope: "global" });
-        if (error) throw error;
-      }
-      await clearClientAccountState();
-      // Discard the recovery SDK instance and every cached private route after global sign-out.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign("/login?reset=success");
-    } catch {
-      setSubmitError(
-        "Your password was updated, but sign-out could not be confirmed. Retry sign-out before continuing."
-      );
-    } finally {
-      setSignOutBusy(false);
-    }
-  }
-
   async function onSubmit(data: ResetPasswordInput) {
     setSubmitError(null);
-    if (native && !binding) {
-      setSessionState("invalid");
-      return;
-    }
     try {
       const csrfToken = await ensureCsrfTokenReady();
       if (!csrfToken) {
@@ -156,20 +98,12 @@ export default function ResetPasswordPage() {
         });
         return;
       }
-      const res = await (native ? createTimeoutFetch(20000) : fetch)(endpoint(), {
+      const res = await fetch("/api/auth/reset-password", {
         method: "POST",
-        ...(native
-          ? {
-              credentials: "same-origin" as const,
-              cache: "no-store" as const,
-              redirect: "error" as const,
-            }
-          : {}),
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           password: data.password,
           confirmPassword: data.confirmPassword,
-          ...(native ? { recoverySessionId: binding!.recoverySessionId } : {}),
         }),
       });
 
@@ -192,14 +126,6 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      if (native) {
-        if (result.success !== true) throw new Error();
-        setPasswordSaved(true);
-        reset();
-        await finishNativeSignOut(result.signOutComplete === true);
-        return;
-      }
-
       toast({
         title: "Password updated!",
         description: "You can now sign in with your new password.",
@@ -212,20 +138,6 @@ export default function ResetPasswordPage() {
       setSubmitError(SUBMIT_NETWORK_FAILED_MESSAGE);
     }
   }
-
-  if (passwordSaved)
-    return (
-      <div className="space-y-4">
-        <AuthPageHeader
-          title="Password updated"
-          description="Finish signing out before continuing."
-        />
-        {submitError ? <p role="alert">{submitError}</p> : null}
-        <Button onClick={() => void finishNativeSignOut()} disabled={signOutBusy}>
-          {signOutBusy ? "Signing out…" : "Retry sign-out"}
-        </Button>
-      </div>
-    );
 
   // Loading state while checking the recovery session
   if (sessionState === "checking") {
@@ -361,14 +273,7 @@ export default function ResetPasswordPage() {
           toggleLabel={{ show: "Show confirm password", hide: "Hide confirm password" }}
         />
 
-        {mfaRequired && (
-          <PasswordMfaChallenge
-            onVerified={() => {
-              setMfaRequired(false);
-              if (native) void checkSession();
-            }}
-          />
-        )}
+        {mfaRequired && <PasswordMfaChallenge onVerified={() => setMfaRequired(false)} />}
         {submitError && (
           <p
             role="alert"

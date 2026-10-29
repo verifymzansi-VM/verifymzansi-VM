@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationMarketplace } from "@/components/foundation/public-marketplace";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { Suspense } from "react";
 import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
@@ -33,11 +31,7 @@ export const metadata: Metadata = {
 
 export const revalidate = 60;
 
-export default async function PromotionsPage(props: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  if (getDataBackend() === "foundation")
-    return <FoundationMarketplace area="tourism_events" searchParams={props?.searchParams} />;
+export default async function PromotionsPage() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",

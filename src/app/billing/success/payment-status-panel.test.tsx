@@ -9,6 +9,17 @@ vi.mock("next/link", () => ({
 }));
 
 describe("PaymentStatusPanel", () => {
+  it.each([
+    ["needs_reconciliation", "Payment received — activation needs review"],
+    ["refunded", "Payment refunded"],
+    ["chargeback", "Payment reversed"],
+    ["cancelled", "Checkout cancelled"],
+  ] as const)("renders %s without claiming activation or a failed charge", (status, title) => {
+    render(<PaymentStatusPanel initialStatus={status} paymentId="synthetic" />);
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.queryByText(/paid features are now active/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/payment did not complete/i)).not.toBeInTheDocument();
+  });
   afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     vi.useRealTimers();

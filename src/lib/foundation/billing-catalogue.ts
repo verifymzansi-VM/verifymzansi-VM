@@ -22,6 +22,8 @@ const plan = z.strictObject({
   price_cents: cents(100000000),
   currency: z.literal("ZAR"),
   duration_days: z.number().int().min(1).max(366),
+  activation_period_days: z.number().int().min(1).max(366).optional(),
+  activations_per_period: z.number().int().positive().nullable().optional(),
   slot_capacity: z.number().int().min(1).max(1000),
   max_photos: z.number().int().min(1).max(50),
   max_videos: z.number().int().min(0).max(10),

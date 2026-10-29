@@ -1,5 +1,3 @@
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationBillingPage } from "@/components/foundation/billing-page";
 import Link from "next/link";
 import { ArrowRight, LockKeyhole, ReceiptText, Users } from "lucide-react";
 import { BrandSurface } from "@/components/brand";
@@ -52,7 +50,6 @@ async function loadCheckoutEnabled() {
  * pricing and advertise pages: buy a multi-listing plan directly.
  */
 export default async function MultiListingPage() {
-  if (getDataBackend() === "foundation") return <FoundationBillingPage />;
   const [catalog, checkoutEnabled] = await Promise.all([
     getCommercialCatalog(),
     loadCheckoutEnabled(),
@@ -88,7 +85,7 @@ export default async function MultiListingPage() {
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-white/75 sm:text-lg sm:leading-8">
               10 to {ENTERPRISE_QUOTE_ABOVE_SLOTS} posts live at the same time in Mzansi Market,
-              Mzansi Business or Tourism &amp; Events, for 90 or 180 days
+              Mzansi Business or Tourism & Events, for 90 or 180 days
               {cheapestPerPost !== null
                 ? `, from ${formatPlanPrice(cheapestPerPost)} per post per 30 days`
                 : ""}

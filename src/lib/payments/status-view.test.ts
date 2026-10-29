@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isTerminalPaymentStatusView,
   toPaymentStatusView,
+  toFoundationPaymentStatusView,
   type PaymentStatusView,
 } from "./status-view";
 
@@ -24,6 +25,17 @@ describe("toPaymentStatusView", () => {
   it.each(cases)("maps $input to $expected", ({ input, expected }) => {
     expect(toPaymentStatusView(input)).toBe(expected);
   });
+});
+
+it.each([
+  ["complete", "fulfilled", "complete"],
+  ["complete", "needs_reconciliation", "needs_reconciliation"],
+  ["complete", "unfulfilled", "needs_reconciliation"],
+  ["refunded", "reversed", "refunded"],
+  ["chargeback", "reversed", "chargeback"],
+  ["cancelled", "unfulfilled", "cancelled"],
+])("preserves payment and fulfillment meaning: %s / %s", (status, fulfillment_status, expected) => {
+  expect(toFoundationPaymentStatusView({ status, fulfillment_status })).toBe(expected);
 });
 
 describe("isTerminalPaymentStatusView", () => {

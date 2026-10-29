@@ -15,8 +15,6 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useRealtime } from "@/hooks/use-realtime";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, formatSaLongDate } from "@/lib/utils/format";
-import { getDataBackend } from "@/lib/data-backend";
-import { FoundationNotificationBell } from "@/components/notifications/foundation-notification-bell";
 
 const NOTIFICATION_REFRESH_INTERVAL_MS = 10_000;
 
@@ -69,14 +67,6 @@ async function syncNotificationMutation(
  * fallback keeps the badge current if the realtime socket is unavailable.
  */
 export function NotificationBell({ userId }: { userId?: string }) {
-  return getDataBackend() === "foundation" ? (
-    <FoundationNotificationBell />
-  ) : (
-    <LegacyNotificationBell userId={userId} />
-  );
-}
-
-function LegacyNotificationBell({ userId }: { userId?: string }) {
   const {
     notifications,
     unreadCount,
