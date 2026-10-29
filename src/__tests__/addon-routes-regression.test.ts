@@ -1,3 +1,4 @@
+import type * as Pricing from "@/lib/constants/pricing";
 vi.mock("@/lib/billing/trial-addon-access", () => ({
   getTrialAddonBlock: vi.fn().mockResolvedValue(null),
 }));
@@ -60,12 +61,16 @@ vi.mock("@/lib/services/entitlements", () => ({
 vi.mock("@/lib/services/plan-tier", () => ({
   getActivePlanTierForArea: vi.fn().mockResolvedValue("pro"),
 }));
-vi.mock("@/lib/constants/pricing", () => ({
-  ADDON_PRICES: { boost: 1500, featured: 2500, urgent: 1000 },
-  BOOST_DURATION_DAYS: 7,
-  FEATURED_DURATION_DAYS: 7,
-  URGENT_DURATION_DAYS: 7,
-}));
+vi.mock("@/lib/constants/pricing", async (importOriginal) => {
+  const actual = await importOriginal<typeof Pricing>();
+  return {
+    ...actual,
+    ADDON_PRICES: { boost: 1500, featured: 2500, urgent: 1000 },
+    BOOST_DURATION_DAYS: 7,
+    FEATURED_DURATION_DAYS: 7,
+    URGENT_DURATION_DAYS: 7,
+  };
+});
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkLocalRateLimit: mockCheckLocalRateLimit,
 }));

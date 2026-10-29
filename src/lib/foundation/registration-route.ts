@@ -4,7 +4,7 @@ import { normalizeSaPhone } from "../utils/phone";
 import { buildAuthCallbackUrl } from "../utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
 import { FoundationRegistrationError, registerFoundationAccount } from "./registration";
-import { handleFoundationAuthAttempt } from "@/app/api/foundation/auth/_lib/attempt-route";
+import { handleFoundationAuthAttempt } from "./auth-attempt-route";
 
 /** Adapt the selected registration form without creating legacy profile rows.
  * Contact/name hints are unverified Auth metadata, never account authority. */

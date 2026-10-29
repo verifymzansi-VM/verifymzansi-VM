@@ -338,7 +338,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               </a>{" "}
               or open{" "}
               <a href="/trust-safety" className="text-brand-green underline">
-                Trust & Safety
+                Trust &amp; Safety
               </a>
               ,{" "}
               <a href="/privacy" className="text-brand-green underline">

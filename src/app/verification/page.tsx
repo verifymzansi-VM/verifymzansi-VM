@@ -2162,7 +2162,7 @@ export default function VerificationPage() {
                           ) : (
                             <MapPin className="h-4 w-4" aria-hidden="true" />
                           )}
-                          Save location & finish
+                          Save location &amp; finish
                         </Button>
                       )}
                     </StepActions>

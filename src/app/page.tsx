@@ -120,7 +120,7 @@ export default async function HomePage() {
 
         <main id="main-content" className="flex-1 scroll-mt-24">
           <h1 className="sr-only">
-            VerifyMzansi: Mzansi Market, Mzansi Business, Tourism & Events
+            VerifyMzansi: Mzansi Market, Mzansi Business, Tourism &amp; Events
           </h1>
 
           {/* ═══ Showroom: our clients' posts, first thing on the page ═══ */}
