@@ -294,13 +294,28 @@ for (const [path, label] of [
   ["/mzansi-business", "Open business filters"],
   ["/tourism-events", "Open tourism and events filters"],
 ] as const) {
-  test(`filters sit on the right wall and open from there on ${path}`, async ({ page }) => {
+  test(`filters stay centered above navigation and open on ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(path);
     const tab = page.getByRole("button", { name: new RegExp(`^${label}`) });
     await expect(tab).toBeVisible();
+    await expect(tab).toBeEnabled();
+    await expect(tab).toHaveAttribute("aria-haspopup", "dialog");
+    await expect
+      .poll(async () => {
+        const box = await tab.boundingBox();
+        return box ? Math.round(box.x + box.width / 2) : null;
+      })
+      .toBe(195);
     const box = await tab.boundingBox();
-    expect(Math.round((box?.x ?? 0) + (box?.width ?? 0))).toBe(390);
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    const nav = page.getByRole("navigation", { name: "Main", exact: true });
+    await expect(nav).toBeVisible();
+    const navBox = await nav.boundingBox();
+    expect(navBox).not.toBeNull();
+    expect(box!.y + box!.height).toBeLessThanOrEqual(navBox!.y);
     await tab.click();
     await expect(page.getByRole("dialog")).toBeVisible();
   });

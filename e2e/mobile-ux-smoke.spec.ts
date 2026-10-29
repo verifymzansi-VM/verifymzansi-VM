@@ -195,7 +195,7 @@ test.describe("Mobile UX smoke", () => {
       path: "/tourism-events",
       createLink: /list a stay or place|list an event/i,
       buttonLabel: "Open tourism and events filters",
-      drawerHeading: { name: "Filters" as string | RegExp },
+      drawerHeading: { name: "Filter Tourism & Events" as string | RegExp },
     },
   ]) {
     test(`${filterCheck.name} filter pill is touch-friendly, clear of the tab bar and opens the drawer`, async ({
@@ -212,7 +212,7 @@ test.describe("Mobile UX smoke", () => {
         expect(createBox!.height).toBeGreaterThanOrEqual(44);
       }
 
-      // The filters drop on the right wall: named for screen readers, titled for touch.
+      // The selected frontend uses centered round buttons with accessible names.
       const pill = page.locator(`button[aria-label^="${filterCheck.buttonLabel}"]:visible`).last();
       await expect(pill).toBeVisible();
       await expect(pill).toBeEnabled();

@@ -59,7 +59,9 @@ test.describe("Promotions showroom", () => {
     }
 
     await expect(page.getByRole("link", { name: /list an event/i }).first()).toBeVisible();
-    await expect(page.getByRole("status")).toContainText(/event|loading events/i);
+    await expect(
+      page.getByRole("status").filter({ hasText: /event|loading events/i })
+    ).toBeVisible();
 
     expect(
       consoleErrors.filter((message) => /hydration|runtime|typeerror|referenceerror/i.test(message))
