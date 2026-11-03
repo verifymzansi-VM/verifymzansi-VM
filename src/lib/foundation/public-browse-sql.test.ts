@@ -16,12 +16,9 @@ const update = readFileSync(
 function definition(name: string) {
   const matches = [
     ...baseline.matchAll(
-      new RegExp(
-        `create(?: or replace)? function ${name.replaceAll(".", "\\.")}\\([^$]*?as \\$\\$[\\s\\S]*?\\$\\$;`,
-        "g"
-      )
+      /create(?: or replace)? function ((?:internal|api)\.[a-z_][a-z0-9_]*)\([^$]*?as \$\$[\s\S]*?\$\$;/g
     ),
-  ];
+  ].filter((match) => match[1] === name);
   if (!matches.length) throw new Error(`Missing baseline function ${name}`);
   return matches.at(-1)![0];
 }
