@@ -20,6 +20,7 @@ type StubUser = {
 type StoreTableRow = Record<string, unknown>;
 
 type PlaywrightFixtureStore = {
+  identifiers: Map<string, string>;
   sessions: Map<string, string>;
   users: Map<string, StubUser>;
   tables: Map<string, StoreTableRow[]>;
@@ -46,11 +47,13 @@ function cloneValue<T>(value: T): T {
 }
 
 function stableUuid(input: string): string {
-  const hash = crypto.createHash("sha256").update(input).digest("hex");
-  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(
-    16,
-    20
-  )}-${hash.slice(20, 32)}`;
+  const store = getPlaywrightFixtureStore();
+  store.identifiers ??= new Map<string, string>();
+  const existing = store.identifiers.get(input);
+  if (existing) return existing;
+  const identifier = crypto.randomUUID();
+  store.identifiers.set(input, identifier);
+  return identifier;
 }
 
 function playwrightUserId(persona: string): string {
@@ -99,6 +102,7 @@ function createEmptyStore(): PlaywrightFixtureStore {
   );
 
   return {
+    identifiers: new Map<string, string>(),
     sessions: new Map<string, string>(),
     users: new Map<string, StubUser>(),
     tables,
