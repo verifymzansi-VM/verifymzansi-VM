@@ -111,6 +111,11 @@ in the README. The anonymous dependency volume also needs renewal to load new
 packages. This follow-up did not change the selected frontend or hosted
 services.
 
+On 3 November, the obsolete `.next/dev-before-local-fix-20261027201755` cache
+was preserved intact at `tmp/historical-next-dev-20261027201755`. Its old
+generated dependency links are no longer inside the active build artifact
+directory. The strict secret scanner remains unchanged and scans current builds.
+
 ## Recovery
 
 - Recovery branch: `codex/recovery-before-frontend-restore-20261027`, pointing

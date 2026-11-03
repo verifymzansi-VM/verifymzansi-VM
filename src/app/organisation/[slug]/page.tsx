@@ -1,4 +1,10 @@
 import type { Metadata } from "next";
+import { cache } from "react";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
+import { readFoundationPublicOrganisation } from "@/lib/foundation/organisations";
+import { foundationMediaUrl } from "@/lib/foundation/public-cards";
+import { readRestoredCollection, publicProvinceLabel } from "@/lib/foundation/marketplace-read";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight, Globe, Mail, MapPin, Phone, Users } from "lucide-react";
@@ -15,7 +21,11 @@ import {
 } from "@/components/listings/business-card-grid-item";
 import { SponsorLogo } from "@/components/organisations/sponsor-logo";
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
-import { getCommercialSettings, organisationsPublicEnabled } from "@/lib/commercial/settings";
+import {
+  DEFAULT_COMMERCIAL_SETTINGS,
+  getCommercialSettings,
+  organisationsPublicEnabled,
+} from "@/lib/commercial/settings";
 import { createClient } from "@/lib/supabase/server";
 import { ALL_BUSINESS_CATEGORIES, BUSINESS_CATEGORIES } from "@/lib/constants/categories";
 import { getProvinceNames } from "@/lib/constants/sa-provinces";
@@ -66,6 +76,8 @@ interface PublicOrganisation {
   affiliation_wording: string;
   sponsorship_wording: string;
   accepting_applications: boolean;
+  live_businesses?: number;
+  programmes?: { id: string; name: string }[];
 }
 
 interface DirectoryRow {
@@ -73,8 +85,20 @@ interface DirectoryRow {
   total_count: number;
 }
 
-async function loadOrganisation(slug: string): Promise<PublicOrganisation | null> {
+const loadOrganisation = cache(async (slug: string): Promise<PublicOrganisation | null> => {
   if (!SLUG.test(slug)) return null;
+  if (getDataBackend() === "foundation") {
+    const org = await readFoundationPublicOrganisation(foundationServerPublicApi(), { slug });
+    return org
+      ? {
+          ...org,
+          province: org.province ? publicProvinceLabel(org.province) : null,
+          logo_url: foundationMediaUrl(org.logo_object_key),
+          logo_permission_at: null,
+          sponsorship_wording: "Supported by",
+        }
+      : null;
+  }
   const supabase = await createClient();
   if (!(await organisationsPublicEnabled(supabase as never))) return null;
   const { data } = await supabase
@@ -93,15 +117,17 @@ async function loadOrganisation(slug: string): Promise<PublicOrganisation | null
     return null;
   }
   return data as PublicOrganisation;
-}
+});
 
-async function liveCount(orgId: string): Promise<number> {
+async function liveCount(org: PublicOrganisation): Promise<number> {
+  if (getDataBackend() === "foundation") return org.live_businesses ?? 0;
   const supabase = await createClient();
-  const { data } = await supabase.rpc("organisation_public_stats", { p_org: orgId });
+  const { data } = await supabase.rpc("organisation_public_stats", { p_org: org.id });
   return Number((data as { affiliatedCount?: number } | null)?.affiliatedCount ?? 0);
 }
 
 async function minimumLive(): Promise<number> {
+  if (getDataBackend() === "foundation") return DEFAULT_COMMERCIAL_SETTINGS.sponsors.stripMinLive;
   const supabase = await createClient();
   return (await getCommercialSettings(supabase as never)).sponsors.stripMinLive;
 }
@@ -114,7 +140,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     org.description?.slice(0, 155) ??
     `Local businesses supported by ${org.name} on VerifyMzansi.`;
   // Kept out of search engines until the showcase has real content.
-  const [live, minimum] = await Promise.all([liveCount(org.id), minimumLive()]);
+  const [live, minimum] = await Promise.all([liveCount(org), minimumLive()]);
   return {
     title: `Businesses supported by ${org.name}`,
     description,
@@ -158,33 +184,62 @@ export default async function OrganisationPage({
   const filtered = Object.values(filters).some((value) => value !== undefined);
 
   const supabase = await createClient();
+  const foundation = getDataBackend() === "foundation";
+  const directoryParams = new URLSearchParams({
+    org: org.slug,
+    limit: String(PAGE_SIZE),
+    page: String(page),
+  });
+  for (const key of ["q", "category", "subcategory", "province", "city"] as const)
+    if (filters[key]) directoryParams.set(key, filters[key]);
+  if (filters.sponsored) directoryParams.set("sponsored", "1");
+  if (filters.programme && foundation) {
+    const programme = org.programmes?.find((row) => row.id === filters.programme);
+    if (programme) directoryParams.set("programme_name", programme.name);
+  }
+  const publicDirectory = foundation
+    ? filters.programme && !org.programmes?.some((row) => row.id === filters.programme)
+      ? { rows: [], total: 0, page, limit: PAGE_SIZE }
+      : await readRestoredCollection(foundationServerPublicApi(), "businesses", directoryParams)
+    : null;
   const [directory, live, sponsors, programmes] = await Promise.all([
-    supabase.rpc("organisation_directory", {
-      p_org: org.id,
-      p_search: filters.q ?? null,
-      p_category: filters.category ?? null,
-      p_subcategory: filters.subcategory ?? null,
-      p_province: filters.province ?? null,
-      p_city: filters.city ?? null,
-      p_programme: filters.programme ?? null,
-      p_sponsored: filters.sponsored ?? null,
-      p_limit: PAGE_SIZE,
-      p_offset: (page - 1) * PAGE_SIZE,
-    }),
-    liveCount(org.id),
+    publicDirectory
+      ? Promise.resolve({
+          data: publicDirectory.rows.map((row) => ({
+            business_id: row.id,
+            total_count: publicDirectory.total,
+          })),
+        })
+      : supabase.rpc("organisation_directory", {
+          p_org: org.id,
+          p_search: filters.q ?? null,
+          p_category: filters.category ?? null,
+          p_subcategory: filters.subcategory ?? null,
+          p_province: filters.province ?? null,
+          p_city: filters.city ?? null,
+          p_programme: filters.programme ?? null,
+          p_sponsored: filters.sponsored ?? null,
+          p_limit: PAGE_SIZE,
+          p_offset: (page - 1) * PAGE_SIZE,
+        }),
+    liveCount(org),
     getPublicSponsors(),
-    supabase
-      .from("organisation_programmes")
-      .select("id, name")
-      .eq("organisation_id", org.id)
-      .eq("active", true),
+    foundation
+      ? Promise.resolve({ data: org.programmes ?? [] })
+      : supabase
+          .from("organisation_programmes")
+          .select("id, name")
+          .eq("organisation_id", org.id)
+          .eq("active", true),
   ]);
   const rows = (directory.data ?? []) as DirectoryRow[];
-  const total = Number(rows[0]?.total_count ?? 0);
+  const total = publicDirectory?.total ?? Number(rows[0]?.total_count ?? 0);
   const ids = rows.map((row) => row.business_id);
-  const { data: businessRows } = ids.length
-    ? await supabase.from("businesses").select(ORG_CARD_COLUMNS).in("id", ids)
-    : { data: [] as BusinessCardGridRow[] };
+  const { data: businessRows } = publicDirectory
+    ? { data: publicDirectory.rows as unknown as BusinessCardGridRow[] }
+    : ids.length
+      ? await supabase.from("businesses").select(ORG_CARD_COLUMNS).in("id", ids)
+      : { data: [] as BusinessCardGridRow[] };
   // Keep the directory order (the RPC sorts and filters).
   const businesses = ids
     .map((id) => (businessRows ?? []).find((row) => row.id === id))
@@ -197,8 +252,8 @@ export default async function OrganisationPage({
   // Below the minimum the page stays out of search engines (generateMetadata);
   // businesses that are live are always shown — only an empty grid is replaced.
   const onboarding = live === 0;
-  const placesAvailable = sponsor ? sponsor.places_available : true;
-  const logo = org.logo_permission_at ? org.logo_url : null;
+  const placesAvailable = sponsor?.places_available ?? true;
+  const logo = foundation ? org.logo_url : org.logo_permission_at ? org.logo_url : null;
   const area = sponsorArea(org);
   const pageHref = (next: number) => {
     const params = new URLSearchParams();

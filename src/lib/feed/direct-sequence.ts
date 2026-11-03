@@ -1,4 +1,6 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationDirectSequence } from "@/lib/foundation/feed-read";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -131,6 +133,7 @@ export async function buildDirectSequence(
   ref: FeedRef,
   province: string | null
 ): Promise<DirectSequence | null> {
+  if (getDataBackend() === "foundation") return foundationDirectSequence(ref);
   const current = await resolveCurrent(supabase, ref);
   if (!current) return null;
 

@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage, { metadata } from "./page";
 
 vi.mock("next/link", () => ({
@@ -59,7 +59,9 @@ vi.mock("@/components/home/home-promotions-showcase", () => ({
 describe("HomePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   it("leads with the showroom, then the three areas and their showcase rails", async () => {
     const ui = await HomePage();

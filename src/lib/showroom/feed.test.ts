@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockRpc } = vi.hoisted(() => ({ mockRpc: vi.fn() }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/foundation/server-public", () => ({
+  foundationServerPublicApi: () => ({ rpc: mockRpc }),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: mockRpc }) }));
 vi.mock("@/lib/utils/logger", () => ({ createLogger: () => ({ warn: vi.fn(), error: vi.fn() }) }));
 vi.mock("@/lib/utils/media-url", () => ({ normalizeMediaUrl: (value: string) => value }));
@@ -52,6 +55,17 @@ describe("loadShowroomItems", () => {
     clearShowroomOrderCacheForTests();
     // Keep the ranked leader first so order assertions are exact.
     vi.spyOn(Math, "random").mockReturnValue(0);
+  });
+
+  it("keeps a failed replacement-backend showroom from crashing the page", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    try {
+      mockRpc.mockResolvedValue({ data: null, error: { message: "Synthetic timeout" } });
+      await expect(loadShowroomItems("home", { province: null })).resolves.toEqual([]);
+      expect(mockRpc).toHaveBeenCalledWith("search_post_cards", { p_request: { limit: 15 } });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("keeps the database's fair order and mixes local posts first", async () => {

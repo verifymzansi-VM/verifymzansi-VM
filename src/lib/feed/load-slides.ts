@@ -1,4 +1,6 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationFeedSlides } from "@/lib/foundation/feed-read";
 
 import { withPublicName } from "@/lib/account/public-name";
 
@@ -275,6 +277,7 @@ export async function loadFeedSlides(
   context: SlideLoadContext,
   refs: FeedRef[]
 ): Promise<Map<string, FeedSlide | null>> {
+  if (getDataBackend() === "foundation") return foundationFeedSlides(refs);
   const ids = (kind: FeedRef["kind"]) =>
     refs.filter((ref) => ref.kind === kind).map((ref) => ref.id);
   const tourismIds = ids("t");

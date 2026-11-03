@@ -3,6 +3,8 @@ import { TreePalm } from "lucide-react";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { BusinessPreviewCard } from "@/components/home/business-preview-card";
 import { createClient } from "@/lib/supabase/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
@@ -73,20 +75,26 @@ export async function HomePromotionsShowcase() {
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
-  const engagementAdmin = tryCreateAdminClient();
+  const engagementAdmin = getDataBackend() === "foundation" ? null : tryCreateAdminClient();
   const now = new Date().toISOString();
 
-  const [{ data: eventData }, { data: tourismData }] = await Promise.all([
-    buildPublicEventPromotionsQuery(
-      supabase,
-      now,
-      "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
-    ).limit(8),
-    buildPublicTourismBusinessesQuery(
-      supabase,
-      "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
-    ).limit(8),
-  ]);
+  const [{ data: eventData }, { data: tourismData }] =
+    getDataBackend() === "foundation"
+      ? await Promise.all([
+          restoredHomeCollection("promotions"),
+          restoredHomeCollection("businesses", true),
+        ])
+      : await Promise.all([
+          buildPublicEventPromotionsQuery(
+            supabase,
+            now,
+            "id, title, price_cents, price_negotiable, photos, videos, video_thumbnail, category, category_key, location_province, location_city, promotion_type, view_count, boost_until, featured_until, media_width, media_height, start_date, end_date, created_at, business_id"
+          ).limit(8),
+          buildPublicTourismBusinessesQuery(
+            supabase,
+            "id, business_name, business_type, cover_photo, cover_video, video_thumbnail, logo_url, location_province, location_city, boost_until, featured_until, focal_x, focal_y, media_width, media_height"
+          ).limit(8),
+        ]);
 
   const eventRows = (eventData || []) as unknown as PromotionRow[];
 

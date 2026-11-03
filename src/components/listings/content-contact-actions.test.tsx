@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
@@ -14,6 +14,39 @@ vi.mock("@/lib/utils/csrf", () => ({ withCsrfHeaders: (headers: unknown) => head
 
 describe("seller contact actions", () => {
   beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.unstubAllEnvs());
+  it("requests a fresh challenge before revealing private foundation contact numbers", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ phone: "+27821234567", whatsapp: "+27821234567" }))
+      );
+    const view = render(
+      <ListingContactActions
+        listingId="aaaaaaaa-aaaa-4aaa-8aaa-000000000001"
+        revealable={{ phone: true, whatsapp: true }}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show contact number" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Complete CAPTCHA" }));
+    await waitFor(() =>
+      expect(screen.getByRole("link", { name: /Call/ })).toHaveAttribute("href", "tel:+27821234567")
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)).toMatchObject({
+      targetType: "listing",
+      turnstileToken: "token",
+    });
+    view.rerender(
+      <ListingContactActions
+        listingId="aaaaaaaa-aaaa-4aaa-8aaa-000000000002"
+        revealable={{ phone: true, whatsapp: true }}
+      />
+    );
+    expect(screen.queryByRole("link", { name: /Call/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show contact number" })).toBeInTheDocument();
+  });
   it("makes WhatsApp available without a phone reveal and attaches listing context", () => {
     render(
       <ListingContactActions

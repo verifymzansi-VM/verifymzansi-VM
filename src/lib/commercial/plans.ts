@@ -1,4 +1,10 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
+import {
+  readFoundationBillingCatalogue,
+  type FoundationBillingCatalogue,
+} from "@/lib/foundation/billing-catalogue";
 
 import { getStablePlanId } from "@/lib/constants/plan-ids";
 import {
@@ -102,8 +108,53 @@ export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCata
   };
 }
 
+export function buildFoundationCommercialCatalog(
+  catalogue: FoundationBillingCatalogue
+): CommercialCatalog {
+  const areas = {
+    market: "MZANSI_MARKET",
+    business: "MZANSI_BUSINESS",
+    tourism_events: "PROMOTIONS_EVENTS",
+  } as const;
+  return buildCommercialCatalog(
+    catalogue.plans.flatMap((plan): PlanRow[] => {
+      const retail =
+        plan.slot_capacity === 1 &&
+        plan.area &&
+        RETAIL_OFFERS.find((offer) => offer.durationDays === plan.duration_days);
+      const enterprise =
+        plan.slot_capacity > 1 &&
+        ENTERPRISE_PLANS.find(
+          (offer) => offer.slots === plan.slot_capacity && offer.durationDays === plan.duration_days
+        );
+      if (!retail && !enterprise) return [];
+      return [
+        {
+          id: plan.id,
+          area: plan.area ? areas[plan.area] : null,
+          tier: retail ? retail.tier : "enterprise",
+          name: plan.label,
+          price_cents: Number(plan.price_cents),
+          plan_code: enterprise ? enterprise.planCode : retail ? retail.planCode : null,
+          duration_days: plan.duration_days,
+          slot_capacity: plan.slot_capacity,
+          monthly_activation_limit: plan.activations_per_period ?? null,
+          promo_label: retail ? retail.promoLabel : null,
+          compare_at_cents: null,
+          public: true,
+          active: true,
+        },
+      ];
+    })
+  );
+}
+
 export async function getCommercialCatalog(): Promise<CommercialCatalog> {
   try {
+    if (getDataBackend() === "foundation")
+      return buildFoundationCommercialCatalog(
+        await readFoundationBillingCatalogue(foundationServerPublicApi())
+      );
     const { data, error } = await createAdminClient()
       .from("plans")
       .select(

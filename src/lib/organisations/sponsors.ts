@@ -1,4 +1,8 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredOrganisationDirectory } from "@/lib/foundation/marketplace-server";
+import { foundationMediaUrl } from "@/lib/foundation/public-cards";
+import { publicProvinceLabel } from "@/lib/foundation/marketplace-read";
 
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
@@ -22,7 +26,7 @@ export interface PublicSponsor {
   programme_status: "founding_trial" | "active_paid";
   live_businesses: number;
   accepting_applications: boolean;
-  places_available: boolean;
+  places_available: boolean | null;
   on_strip: boolean;
   on_home: boolean;
 }
@@ -35,6 +39,21 @@ export interface PublicSponsor {
  */
 export async function getPublicSponsors(): Promise<PublicSponsor[]> {
   try {
+    if (getDataBackend() === "foundation") {
+      const entries = await restoredOrganisationDirectory();
+      const sponsors = entries.map((entry): PublicSponsor | null => {
+        if (entry.programme_status !== "founding_trial" && entry.programme_status !== "active_paid")
+          return null;
+        return {
+          ...entry,
+          programme_status: entry.programme_status,
+          logo_url: foundationMediaUrl(entry.logo_object_key),
+          province: entry.province ? publicProvinceLabel(entry.province) : null,
+          places_available: null,
+        };
+      });
+      return sponsors.filter((row): row is PublicSponsor => row !== null);
+    }
     const supabase = tryCreateAdminClient();
     if (!supabase) return [];
     const { data, error } = await supabase.rpc("public_sponsor_directory");

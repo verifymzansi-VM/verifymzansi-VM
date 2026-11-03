@@ -13,6 +13,34 @@ function getRule(name: string) {
 
 describe("secret scan allowlisting", () => {
   const fakeHash = "f".repeat(64);
+  it("recognizes the exact public minimatch compatibility-patch fingerprint only", () => {
+    const hash = "e3c7f6ba399c094c400cce8cadcdab66eabe8dbf1f16ee1d960cef096095c239"; // secret-scan: allow public patch integrity
+    const ruleName = "64-char hex string (potential encryption key)";
+    for (const prefix of [
+      "  minimatch@11.0.1",
+      "      minimatch: 11.0.1",
+      "        version: 11.0.1",
+    ]) {
+      const line = `${prefix}(patch_hash=${hash}):`;
+      expect(shouldIgnoreSecretFinding({ filePath: "pnpm-lock.yaml", line, ruleName })).toBe(true);
+      for (const unsafe of [
+        line.replace(hash, fakeHash),
+        `${line} ${fakeHash}`,
+        line.replace("11.0.1", "11.0.2"),
+      ])
+        expect(
+          shouldIgnoreSecretFinding({ filePath: "pnpm-lock.yaml", line: unsafe, ruleName })
+        ).toBe(false);
+      expect(shouldIgnoreSecretFinding({ filePath: "notes.txt", line, ruleName })).toBe(false);
+      expect(
+        shouldIgnoreSecretFinding({
+          filePath: "pnpm-lock.yaml",
+          line,
+          ruleName: "Supabase secret key",
+        })
+      ).toBe(false);
+    }
+  });
   it("recognizes only the reviewed Sentry lockfile fingerprint and keeps other secrets blocking", () => {
     const hash = "fde48f895c304800de59be37296068150b1b441eb0f818aa88e479810a34c75a"; // secret-scan: allow public patch integrity
     const ruleName = "64-char hex string (potential encryption key)";

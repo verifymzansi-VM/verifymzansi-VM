@@ -95,6 +95,19 @@ still verifies the actual generated route types.
 
 ## Verification boundaries
 
+The November public-page repair pins `glob` 14.0.2 and `minimatch` 11.0.1 for
+[GHSA-3g3m-2fjr-6pw4](https://github.com/isaacs/node-glob/security/advisories/GHSA-3g3m-2fjr-6pw4)
+and
+[GHSA-g3hv-75wg-m249](https://github.com/isaacs/minimatch/security/advisories/GHSA-g3hv-75wg-m249).
+The minimatch patch adds legacy callable CommonJS and default ESM exports for
+the existing lint/OpenAPI consumers; it does not replace or modify the fixed
+upstream matching algorithm. Named exports remain available. Tooling tests check
+both interfaces, glob's synchronous/asynchronous APIs, and the lockfile's patch
+fingerprint. The existing linter, generated API declarations and security rules
+remain in place. The seven-day release-age guard remains enabled, with exact
+security-release exceptions documented in `.npmrc`. No advisory is suppressed by
+this compatibility patch.
+
 PGlite tests execute selected schema/functions and supplement static migration
 checks. `test:db:isolated` starts a uniquely named local Supabase stack, applies
 the complete migration history and checks final RPC grants, PostgREST RLS and

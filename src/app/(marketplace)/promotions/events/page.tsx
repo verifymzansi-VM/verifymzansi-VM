@@ -1,4 +1,7 @@
 import { publicPersonName } from "@/lib/account/public-name";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
+import { readRestoredCollection } from "@/lib/foundation/marketplace-read";
 import { createClient } from "@/lib/supabase/server";
 import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { Calendar } from "lucide-react";
@@ -87,52 +90,73 @@ function isPlaceholderEvent(event: { title: string | null; description?: string 
 
 export default async function EventsPage() {
   const admin = await createClient();
-  const engagementAdmin = tryCreateAdminClient();
-  const promotionOwnerColumn = await getOwnerColumn(admin, "promotions");
+  const foundation = getDataBackend() === "foundation";
+  const engagementAdmin = foundation ? null : tryCreateAdminClient();
+  const promotionOwnerColumn = foundation ? "owner_id" : await getOwnerColumn(admin, "promotions");
   const now = new Date().toISOString();
 
   // Fetch event promotions — prioritise upcoming (end_date in the future), boosted first
-  const { data: events } = await applyVisibleExpiryFilter(
-    admin
-      .from("promotions")
-      .select(
-        withOwnerColumn(
-          `id, owner_id, business_id, title, description, promotion_type, category,
+  const { data: events } = foundation
+    ? {
+        data: (
+          await readRestoredCollection(
+            foundationServerPublicApi(),
+            "promotions",
+            new URLSearchParams({ limit: "48", event_order: "start_asc" })
+          )
+        ).rows.sort((a, b) => Date.parse(a.start_date!) - Date.parse(b.start_date!)),
+      }
+    : await applyVisibleExpiryFilter(
+        admin
+          .from("promotions")
+          .select(
+            withOwnerColumn(
+              `id, owner_id, business_id, title, description, promotion_type, category,
        photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, boost_until, featured_until, view_count, created_at`,
-          promotionOwnerColumn
-        )
+              promotionOwnerColumn
+            )
+          )
+          .eq("status", "live")
+          .eq("promotion_type", "event")
+          .or(`end_date.is.null,end_date.gte.${now}`),
+        now
       )
-      .eq("status", "live")
-      .eq("promotion_type", "event")
-      .or(`end_date.is.null,end_date.gte.${now}`),
-    now
-  )
-    .order("active_boost_until", { ascending: false, nullsFirst: false })
-    .order("active_featured_until", { ascending: false, nullsFirst: false })
-    .order("start_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(48);
+        .order("active_boost_until", { ascending: false, nullsFirst: false })
+        .order("active_featured_until", { ascending: false, nullsFirst: false })
+        .order("start_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(48);
 
   // Also fetch past events
-  const { data: pastEvents } = await applyVisibleExpiryFilter(
-    admin
-      .from("promotions")
-      .select(
-        withOwnerColumn(
-          `id, owner_id, business_id, title, promotion_type,
+  const { data: pastEvents } = foundation
+    ? {
+        data: (
+          await readRestoredCollection(
+            foundationServerPublicApi(),
+            "promotions",
+            new URLSearchParams({ limit: "24", event_state: "ended", event_order: "end_desc" })
+          )
+        ).rows.sort((a, b) => Date.parse(b.end_date!) - Date.parse(a.end_date!)),
+      }
+    : await applyVisibleExpiryFilter(
+        admin
+          .from("promotions")
+          .select(
+            withOwnerColumn(
+              `id, owner_id, business_id, title, promotion_type,
        photos, videos, video_thumbnail, focal_x, focal_y, media_width, media_height, logo_url, price_cents, price_negotiable, location_province, location_city,
        start_date, end_date, view_count, created_at`,
-          promotionOwnerColumn
-        )
+              promotionOwnerColumn
+            )
+          )
+          .eq("status", "live")
+          .eq("promotion_type", "event")
+          .lt("end_date", now),
+        now
       )
-      .eq("status", "live")
-      .eq("promotion_type", "event")
-      .lt("end_date", now),
-    now
-  )
-    .order("end_date", { ascending: false })
-    .limit(24);
+        .order("end_date", { ascending: false })
+        .limit(24);
 
   // Gather unique account IDs for trust levels
   const upcoming = normalizeOwnerRecords((events ?? []) as unknown as EventRow[]).filter(

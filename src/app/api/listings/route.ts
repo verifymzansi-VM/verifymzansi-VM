@@ -1,4 +1,6 @@
 import { publicPersonName } from "@/lib/account/public-name";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredMarketplaceResponse } from "@/lib/foundation/marketplace-route";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
@@ -119,6 +121,7 @@ const listingsQuerySchema = z.object({
  * `listing-create-route.test.ts` aligned with this boundary.
  */
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation") return restoredMarketplaceResponse(request, "listings");
   try {
     const hideFixtures = shouldHidePlaywrightFixtures(
       request.cookies?.get?.(PLAYWRIGHT_HIDE_FIXTURES_COOKIE)?.value

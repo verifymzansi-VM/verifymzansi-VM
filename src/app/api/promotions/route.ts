@@ -1,4 +1,6 @@
 import { publicPersonName } from "@/lib/account/public-name";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredMarketplaceResponse } from "@/lib/foundation/marketplace-route";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
@@ -636,6 +638,7 @@ export async function POST(request: NextRequest) {
  * Public endpoint — no auth required.
  */
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation") return restoredMarketplaceResponse(request, "promotions");
   try {
     /**
      * SERVICE_ROLE_PUBLIC_READ_CHECKLIST:

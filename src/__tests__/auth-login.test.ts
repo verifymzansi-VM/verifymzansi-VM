@@ -159,6 +159,7 @@ function mockAuth(result: {
 
 describe("POST /api/auth/login", () => {
   beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     vi.clearAllMocks();
     delete process.env.TURNSTILE_SECRET_KEY;
     delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;

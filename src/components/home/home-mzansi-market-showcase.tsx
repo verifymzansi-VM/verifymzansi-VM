@@ -1,5 +1,7 @@
 import { AnalyticsImpressions } from "@/components/analytics/analytics-impressions";
 import { createClient } from "@/lib/supabase/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
 import { MarketPreviewCard } from "./market-preview-card";
 import { AutoScrollRail } from "./auto-scroll-rail";
 import { HomeShowcaseShell } from "./home-showcase-shell";
@@ -28,20 +30,23 @@ export async function HomeMzansiMarketShowcase() {
     readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
   );
   const supabase = await createClient();
-  const { data: listings, error } = await applyVisibleExpiryFilter(
-    supabase
-      .from("listings")
-      // Card fields only; the street address isn't publicly readable.
-      .select(
-        "id, owner_id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, boost_until, focal_x, focal_y, media_width, media_height"
-      )
-      .eq("status", "live")
-      .eq("area", "MZANSI_MARKET")
-  )
-    // Fair rotation: new posts first for 72 hours, then everyone takes turns.
-    .order("fair_rotation_key", { ascending: true })
-    .order("id", { ascending: true })
-    .limit(16);
+  const { data: listings, error } =
+    getDataBackend() === "foundation"
+      ? await restoredHomeCollection("listings")
+      : await applyVisibleExpiryFilter(
+          supabase
+            .from("listings")
+            // Card fields only; the street address isn't publicly readable.
+            .select(
+              "id, owner_id, title, description, price_cents, photos, videos, video_thumbnail, logo_url, location_city, location_province, boost_until, focal_x, focal_y, media_width, media_height"
+            )
+            .eq("status", "live")
+            .eq("area", "MZANSI_MARKET")
+        )
+          // Fair rotation: new posts first for 72 hours, then everyone takes turns.
+          .order("fair_rotation_key", { ascending: true })
+          .order("id", { ascending: true })
+          .limit(16);
 
   if (error) {
     log.warn("Failed to load home Mzansi Market showcase", { error: error.message });

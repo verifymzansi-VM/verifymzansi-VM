@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { foundationEventWindowSchema } from "./event-window-dto";
 import type { FoundationPublicApi } from "./public-api";
+import { storedPostContactSelectionSchema } from "../domains/posts/contact-channels";
 import {
   foundationInstant,
   publicPostCoreSchema,
@@ -74,4 +75,18 @@ export async function readFoundationPublicPost(
   if (result !== null && result.id !== parsed.data.id)
     throw new Error("Invalid foundation public post");
   return result;
+}
+
+/** Availability only. Numbers remain behind CAPTCHA, rate limits and the service RPC. */
+export async function readFoundationPublicContactChannels(
+  api: FoundationPublicApi,
+  input: unknown
+) {
+  const parsed = request.safeParse(input);
+  if (!parsed.success) throw new Error("Invalid public contact request");
+  const { data, error } = await api.rpc("get_public_contact_channels", {
+    p_post_id: parsed.data.id,
+  });
+  if (error) throw new Error("Public contact options unavailable");
+  return data === null ? [] : storedPostContactSelectionSchema.parse(data);
 }

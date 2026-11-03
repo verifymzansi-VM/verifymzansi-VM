@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCreateClient,
@@ -36,6 +36,7 @@ import { verifyRecoveryProof } from "@/lib/auth/password-recovery";
 describe("GET /auth/callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
     mockCreateClient.mockResolvedValue({
       from: mockFrom,
       auth: {
@@ -87,6 +88,8 @@ describe("GET /auth/callback", () => {
       return {};
     });
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it("redirects confirmed signups to login with a success flag", async () => {
     mockExchangeCodeForSession.mockResolvedValue({ error: null });

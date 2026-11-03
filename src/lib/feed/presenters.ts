@@ -162,8 +162,8 @@ export function presentListingSlide(
   // A private seller's number never enters a slide; any visitor reveals the
   // ones the seller chose (call / WhatsApp) on tap.
   const revealable = {
-    phone: methods.includes("call") && Boolean(seller?.phone),
-    whatsapp: methods.includes("whatsapp") && Boolean(seller?.phone),
+    phone: methods.includes("call") && Boolean(seller?.phone || seller?.has_phone),
+    whatsapp: methods.includes("whatsapp") && Boolean(seller?.phone || seller?.has_phone),
   };
   const facts = buildListingFacts(listing);
   const price = describeListingPrice(listing);

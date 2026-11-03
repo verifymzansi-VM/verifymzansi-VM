@@ -1,4 +1,6 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationBrowseSequence } from "@/lib/foundation/feed-read";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FeedBrowse } from "@/lib/feed/browse";
@@ -85,6 +87,7 @@ export async function buildBrowseSequence(
   browse: FeedBrowse,
   visitorProvince: string | null
 ): Promise<BrowseSequence> {
+  if (getDataBackend() === "foundation") return foundationBrowseSequence(browse);
   const queries = queriesFor(browse);
   const lists = await Promise.all(
     queries.map((query) => fetchCandidates(supabase, query, BROWSE_LIMIT + 1))

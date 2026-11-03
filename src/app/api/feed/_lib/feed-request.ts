@@ -1,4 +1,5 @@
 import "server-only";
+import { getDataBackend } from "@/lib/data-backend";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
@@ -29,7 +30,7 @@ export async function openFeedRequest(request: NextRequest, action: string, maxP
   return {
     response: null,
     supabase,
-    admin: tryCreateAdminClient(),
+    admin: getDataBackend() === "foundation" ? null : tryCreateAdminClient(),
     viewerKey: buildViewerKey(viewerId, user?.id),
   } as const;
 }

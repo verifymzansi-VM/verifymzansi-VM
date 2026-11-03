@@ -257,25 +257,33 @@ export async function loadShowroomItems(
   }
 ): Promise<CarouselItem[]> {
   if (getDataBackend() === "foundation") {
-    const page = await searchFoundationCards(foundationServerPublicApi(), {
-      limit: SHOWROOM_LIMITS[surface],
-      ...(surface === "home" ? {} : { area: surface === "tourism" ? "tourism_events" : surface }),
-    });
-    return page.items.map((post) => ({
-      id: post.id,
-      type: post.kind === "event" ? "promotion" : post.kind,
-      href: `${post.kind === "listing" ? "/listing" : post.area === "business" ? "/mzansi-business" : "/tourism-events"}/${post.id}`,
-      title: post.title,
-      description: post.summary,
-      location: post.locality,
-      mediaUrl:
-        foundationMediaUrl(post.preview.video_key) ??
-        foundationMediaUrl(post.preview.image_key) ??
-        undefined,
-      mediaKind: post.preview.video_key ? "video" : "image",
-      posterUrl: foundationMediaUrl(post.preview.image_key) ?? undefined,
-      price: post.price_cents === null ? null : Number(post.price_cents) / 100,
-    }));
+    try {
+      const page = await searchFoundationCards(foundationServerPublicApi(), {
+        limit: SHOWROOM_LIMITS[surface],
+        ...(surface === "home" ? {} : { area: surface === "tourism" ? "tourism_events" : surface }),
+      });
+      return page.items.map((post) => ({
+        id: post.id,
+        type: post.kind === "event" ? "promotion" : post.kind,
+        href: `${post.kind === "listing" ? "/listing" : post.area === "business" ? "/mzansi-business" : "/tourism-events"}/${post.id}`,
+        title: post.title,
+        description: post.summary,
+        location: post.locality,
+        mediaUrl:
+          foundationMediaUrl(post.preview.video_key) ??
+          foundationMediaUrl(post.preview.image_key) ??
+          undefined,
+        mediaKind: post.preview.video_key ? "video" : "image",
+        posterUrl: foundationMediaUrl(post.preview.image_key) ?? undefined,
+        price: post.price_cents === null ? null : Number(post.price_cents) / 100,
+      }));
+    } catch (error) {
+      log.warn("Showroom feed unavailable", {
+        surface,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return [];
+    }
   }
   const limit = SHOWROOM_LIMITS[surface];
   const supabase = options.client ?? publicClient();

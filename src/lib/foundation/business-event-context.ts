@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { postEventInstantSchema } from "../domains/posts/identity";
+import { foundationBusinessTypeSchema } from "./business-type";
 
 const activity = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
 const window = z
@@ -24,6 +25,7 @@ const request = z.strictObject({
   patch: z.strictObject({
     activity_key: activity.nullable().optional(),
     event_window: window.optional(),
+    business_type: foundationBusinessTypeSchema.nullable().optional(),
   }),
 });
 const acknowledgement = z.strictObject({

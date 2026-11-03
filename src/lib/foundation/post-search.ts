@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { publicPostCoreSchema, validPublicPostCore } from "./public-post-contract";
 import type { FoundationPublicApi } from "./public-api";
+import { foundationBusinessTypeSchema } from "./business-type";
 
 const key = z.string().regex(/^[a-z][a-z0-9_]{0,79}$/);
 const area = z.enum(["market", "business", "tourism_events"]);
@@ -17,7 +18,7 @@ const range = z
 const request = z
   .strictObject({
     q: z.string().max(200).optional(),
-    sort: z.enum(["newest", "relevance"]).optional(),
+    sort: z.enum(["newest", "relevance", "price_asc", "price_desc"]).optional(),
     area: area.optional(),
     category: key.optional(),
     activity: key.optional(),
@@ -30,7 +31,18 @@ const request = z
     attributes: z.record(key, z.union([z.boolean(), z.string().max(200), range])).optional(),
     cursor: cursor.optional(),
     limit: z.number().int().min(1).max(48).optional(),
+    offset: z.number().int().min(0).max(500000).optional(),
+    post_id: z.uuid().optional(),
+    business_type: foundationBusinessTypeSchema.optional(),
+    event_state: z.enum(["active", "upcoming", "ongoing", "ended", "all"]).optional(),
+    event_order: z.enum(["start_asc", "end_desc"]).optional(),
   })
+  .refine((value) => value.offset === undefined || !value.cursor)
+  .refine(
+    (value) =>
+      (!value.event_order && value.sort !== "price_asc" && value.sort !== "price_desc") ||
+      value.offset !== undefined
+  )
   .refine((value) => !value.activity || Boolean(value.category))
   .refine((value) => !value.city || Boolean(value.province))
   .refine(
@@ -64,7 +76,7 @@ const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const page = z
   .strictObject({
     items: z.array(item).max(48),
-    sort: z.enum(["newest", "relevance"]),
+    sort: z.enum(["newest", "relevance", "price_asc", "price_desc"]),
     total: count,
     facets: z.strictObject({ categories: z.record(key, count) }),
     next_cursor: cursor.nullable(),

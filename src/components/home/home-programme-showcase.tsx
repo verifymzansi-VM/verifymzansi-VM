@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredProgrammeShowcases } from "@/lib/foundation/marketplace-server";
+import { foundationMediaUrl } from "@/lib/foundation/public-cards";
 import { Landmark } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCommercialSettings } from "@/lib/commercial/settings";
@@ -35,46 +38,65 @@ export async function HomeProgrammeShowcase({
 }: {
   placement?: "home" | "business" | "tourism" | "market";
 }) {
-  const supabase = await createClient();
-  const nowIso = new Date().toISOString();
-  const [{ data: showcases }, { data: settingsRows }] = await Promise.all([
-    supabase
-      .from("programme_showcases")
-      .select("id, title, max_cards, province, city, sponsored_only, organisations(id, slug, name)")
-      .eq("enabled", true)
-      .eq("placement", placement)
-      .lte("starts_at", nowIso)
-      .gt("ends_at", nowIso)
-      .order("display_order")
-      .limit(2),
-    supabase.from("commercial_settings").select("key, value").in("key", ["showroom", "features"]),
-  ]);
-  if (!showcases?.length) return null;
-  const settings = resolveCommercialSettings(settingsRows);
-  if (!settings.features.organisationsPublic) return null;
-  const minItems = settings.showroom.programmeMinItems;
+  async function loadSourceSections() {
+    const supabase = await createClient();
+    const nowIso = new Date().toISOString();
+    const [{ data: showcases }, { data: settingsRows }] = await Promise.all([
+      supabase
+        .from("programme_showcases")
+        .select(
+          "id, title, max_cards, province, city, sponsored_only, organisations(id, slug, name)"
+        )
+        .eq("enabled", true)
+        .eq("placement", placement)
+        .lte("starts_at", nowIso)
+        .gt("ends_at", nowIso)
+        .order("display_order")
+        .limit(2),
+      supabase.from("commercial_settings").select("key, value").in("key", ["showroom", "features"]),
+    ]);
+    if (!showcases?.length) return [];
+    const settings = resolveCommercialSettings(settingsRows);
+    if (!settings.features.organisationsPublic) return [];
+    const minItems = settings.showroom.programmeMinItems;
 
-  const sections = await Promise.all(
-    (showcases as unknown as Showcase[]).map(async (showcase) => {
-      if (!showcase.organisations) return null;
-      const { data } = await supabase.rpc("organisation_directory", {
-        p_org: showcase.organisations.id,
-        p_city: showcase.city,
-        p_province: showcase.province,
-        p_sponsored: showcase.sponsored_only ? true : null,
-        p_limit: Math.min(showcase.max_cards, settings.showroom.programmeMaxCards),
-        p_offset: 0,
-      });
-      const rows = ((data ?? []) as DirectoryRow[]).filter(
-        (row) => row.cover_image || row.logo_url
-      );
-      return rows.length >= minItems ? { showcase, rows } : null;
-    })
-  );
+    const sections = await Promise.all(
+      (showcases as unknown as Showcase[]).map(async (showcase) => {
+        if (!showcase.organisations) return null;
+        const { data } = await supabase.rpc("organisation_directory", {
+          p_org: showcase.organisations.id,
+          p_city: showcase.city,
+          p_province: showcase.province,
+          p_sponsored: showcase.sponsored_only ? true : null,
+          p_limit: Math.min(showcase.max_cards, settings.showroom.programmeMaxCards),
+          p_offset: 0,
+        });
+        const rows = ((data ?? []) as DirectoryRow[]).filter(
+          (row) => row.cover_image || row.logo_url
+        );
+        return rows.length >= minItems ? { showcase, rows } : null;
+      })
+    );
 
-  const visible = sections.filter(
-    (section): section is NonNullable<typeof section> => section !== null
-  );
+    return sections.filter((section): section is NonNullable<typeof section> => section !== null);
+  }
+  const visible =
+    getDataBackend() === "foundation"
+      ? (await restoredProgrammeShowcases(placement)).map((section) => ({
+          showcase: {
+            id: section.id,
+            title: section.title,
+            organisations: { slug: section.organisation_slug, name: section.organisation_name },
+          },
+          rows: section.cards.map((card) => ({
+            business_id: card.post_id,
+            business_name: card.title ?? "Business",
+            city: card.city,
+            cover_image: foundationMediaUrl(card.cover_object_key),
+            logo_url: null,
+          })),
+        }))
+      : await loadSourceSections();
   if (visible.length === 0) return null;
 
   return (

@@ -1,4 +1,6 @@
 import { withPublicName } from "@/lib/account/public-name";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredBusinessDetail } from "@/lib/foundation/marketplace-server";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import type { Metadata } from "next";
 import { cache } from "react";
@@ -70,6 +72,7 @@ const BUSINESS_PROMOTION_SELECT =
 const loadBusinessDetail = cache(async function loadBusinessDetail(
   id: string
 ): Promise<LoadedBusinessDetail | null> {
+  if (getDataBackend() === "foundation") return restoredBusinessDetail(id);
   const supabase = await createClient();
   const ownerColumn = await getOwnerColumn(supabase, "businesses");
   const { data: rawBusiness, error } = await selectBusinessWithFallback<Record<string, unknown>>(
@@ -257,7 +260,7 @@ export async function BusinessDetailPageContent({
   } = await supabase.auth.getUser();
   const viewerId = readCookieValue(cookieStore, ENGAGEMENT_VIEWER_COOKIE) ?? null;
   const viewerKey = buildViewerKey(viewerId, user?.id);
-  const engagementAdmin = tryCreateAdminClient();
+  const engagementAdmin = getDataBackend() === "foundation" ? null : tryCreateAdminClient();
   const promotionIds = promotions.map((promotion) => promotion.id);
   const [businessViewSummary, promotionViewSummary, promotionLikeSummary, businessLikeSummary] =
     await Promise.all([

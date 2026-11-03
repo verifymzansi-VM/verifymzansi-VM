@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { getDataBackend } from "@/lib/data-backend";
+import { revealFoundationContact } from "@/lib/foundation/contact-reveal-route";
 
 import { readAccountVerificationStatus } from "@/lib/account/compat";
 import { isVisibleByExpiry } from "@/lib/posting/visibility";
@@ -38,6 +40,7 @@ const TABLES = { listing: "listings", business: "businesses", promotion: "promot
  * methods the poster chose on a live post.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return revealFoundationContact(request);
   try {
     const blocked = enforceMutationRequest(request, log);
     if (blocked) return blocked;

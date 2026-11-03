@@ -20,6 +20,7 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { ContentEnquiryAction } from "./content-enquiry-action";
 import { shareContent } from "@/lib/sharing/share-content";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getDataBackend } from "@/lib/data-backend";
 
 import type { ContactActionConfig } from "./contact-action-types";
 
@@ -39,7 +40,16 @@ type ContentContactActionsProps = {
   revealable?: { phone: boolean; whatsapp: boolean } | null;
 };
 
-export function ContentContactActions({
+export function ContentContactActions(props: ContentContactActionsProps) {
+  return (
+    <ContactActionsForTarget
+      key={`${props.config.reportTargetType}:${props.config.targetId}`}
+      {...props}
+    />
+  );
+}
+
+function ContactActionsForTarget({
   phone,
   whatsapp,
   showPhoneButton,
@@ -55,6 +65,7 @@ export function ContentContactActions({
   } | null>(null);
   const [revealing, setRevealing] = useState(false);
   const [revealError, setRevealError] = useState<string | null>(null);
+  const [revealChallenge, setRevealChallenge] = useState(false);
   if (revealed) {
     phone = revealed.phone;
     whatsapp = revealed.whatsapp;
@@ -62,14 +73,18 @@ export function ContentContactActions({
   const canReveal =
     !revealed && !phone && !whatsapp && Boolean(revealable?.phone || revealable?.whatsapp);
 
-  async function reveal() {
+  async function reveal(turnstileToken?: string) {
     setRevealing(true);
     setRevealError(null);
     try {
       const res = await fetch("/api/contact/reveal", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ targetType: config.reportTargetType, targetId: config.targetId }),
+        body: JSON.stringify({
+          targetType: config.reportTargetType,
+          targetId: config.targetId,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         phone?: string | null;
@@ -183,7 +198,17 @@ export function ContentContactActions({
     <>
       <div className="space-y-2">
         {canReveal && (
-          <Button className="w-full gap-2" size="lg" onClick={reveal} disabled={revealing}>
+          <Button
+            className="w-full gap-2"
+            size="lg"
+            onClick={() => {
+              if (getDataBackend() === "foundation") {
+                setRevealError(null);
+                setRevealChallenge(true);
+              } else void reveal();
+            }}
+            disabled={revealing || revealChallenge}
+          >
             {revealing ? (
               <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
             ) : (
@@ -191,6 +216,26 @@ export function ContentContactActions({
             )}
             Show contact number
           </Button>
+        )}
+        {canReveal && revealChallenge && (
+          <TurnstileWidget
+            onSuccess={(token) => {
+              setRevealChallenge(false);
+              void reveal(token);
+            }}
+            onExpire={() => {
+              setRevealChallenge(false);
+              setRevealError("Please retry the contact challenge.");
+            }}
+            onError={(message) => {
+              setRevealChallenge(false);
+              setRevealError(message);
+            }}
+            onUnavailable={(message) => {
+              setRevealChallenge(false);
+              setRevealError(message);
+            }}
+          />
         )}
         {revealError && (
           <p role="alert" className="text-sm text-destructive">

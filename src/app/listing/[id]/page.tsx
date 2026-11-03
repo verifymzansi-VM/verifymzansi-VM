@@ -1,4 +1,8 @@
 import { publicPersonName } from "@/lib/account/public-name";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredListingDetail, restoredPublicDetail } from "@/lib/foundation/marketplace-server";
+import { readRestoredCollection } from "@/lib/foundation/marketplace-read";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
 import { createClient } from "@/lib/supabase/server";
@@ -43,15 +47,18 @@ interface ListingDetailPageProps {
 export async function generateMetadata({ params }: ListingDetailPageProps): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: listing } = await applyVisibleExpiryFilter(
-    supabase
-      .from("listings")
-      .select(
-        "title, description, photos, videos, video_thumbnail, media_width, media_height, location_city, location_province"
-      )
-      .eq("id", id)
-      .eq("status", "live")
-  ).single();
+  const { data: listing } =
+    getDataBackend() === "foundation"
+      ? { data: await restoredListingDetail(id) }
+      : await applyVisibleExpiryFilter(
+          supabase
+            .from("listings")
+            .select(
+              "title, description, photos, videos, video_thumbnail, media_width, media_height, location_city, location_province"
+            )
+            .eq("id", id)
+            .eq("status", "live")
+        ).single();
 
   if (!listing) {
     return { title: "Listing Not Found" };
@@ -72,8 +79,9 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   const { id } = await params;
   const cookieStore = await getOptionalCookieStore();
   const supabase = await createClient();
-  const engagementAdmin = tryCreateAdminClient();
-  const listingOwnerColumn = await getOwnerColumn(supabase, "listings");
+  const foundation = getDataBackend() === "foundation";
+  const engagementAdmin = foundation ? null : tryCreateAdminClient();
+  const listingOwnerColumn = foundation ? "owner_id" : await getOwnerColumn(supabase, "listings");
 
   // Check if visitor is authenticated
   const {
@@ -81,9 +89,11 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
   } = await supabase.auth.getUser();
 
   // Fetch listing
-  const { data: rawListing } = await applyVisibleExpiryFilter(
-    supabase.from("listings").select(LISTING_DETAIL_SELECT).eq("id", id).eq("status", "live")
-  ).single();
+  const { data: rawListing } = foundation
+    ? { data: await restoredListingDetail(id) }
+    : await applyVisibleExpiryFilter(
+        supabase.from("listings").select(LISTING_DETAIL_SELECT).eq("id", id).eq("status", "live")
+      ).single();
 
   const listing = rawListing ? normalizeOwnerRecord(rawListing) : null;
 
@@ -91,13 +101,23 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
 
   // Fetch listing owner profile (maybeSingle — the account may have been deleted)
   const listingOwnerId = readOwnerId(listing);
-  const { data: seller } = listingOwnerId
-    ? await (engagementAdmin ?? supabase)
-        .from(ACCOUNT_PROFILE_TABLE)
-        .select("id, display_name, account_verification_status, phone")
-        .eq("user_id", listingOwnerId)
-        .maybeSingle()
-    : { data: null };
+  const publicPost = foundation ? await restoredPublicDetail(id) : null;
+  const { data: seller } = publicPost
+    ? {
+        data: {
+          id: null,
+          display_name: publicPost.seller.public_name,
+          account_verification_status: publicPost.seller.identity_verified ? "verified" : null,
+          phone: null,
+        },
+      }
+    : listingOwnerId
+      ? await (engagementAdmin ?? supabase)
+          .from(ACCOUNT_PROFILE_TABLE)
+          .select("id, display_name, account_verification_status, phone")
+          .eq("user_id", listingOwnerId)
+          .maybeSingle()
+      : { data: null };
 
   // Publish phone only when the poster explicitly selected a phone contact method.
   const publishesPhone = listing.contact_methods?.some((method: string) =>
@@ -111,7 +131,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
         ...seller,
         display_name: publicPersonName(seller.display_name),
         phone: publishesPhone && viewerIsSeller ? seller.phone : null,
-        has_phone: Boolean(publishesPhone && seller.phone),
+        has_phone: foundation ? Boolean(publishesPhone) : Boolean(publishesPhone && seller.phone),
         masked_phone_public: null,
         // Use the location selected for this post, never a private account location.
         location_city: listing.location_city,
@@ -120,22 +140,34 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     : null;
 
   // Fetch similar listings (same category, excluding current)
-  const { data: similarListings } = await applyVisibleExpiryFilter(
-    supabase
-      .from("listings")
-      .select(
-        withOwnerColumn(
-          "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, featured_until, owner_id",
-          listingOwnerColumn
-        )
+  const { data: similarListings } = foundation
+    ? {
+        data: (
+          await readRestoredCollection(
+            foundationServerPublicApi(),
+            "listings",
+            new URLSearchParams({ category: listing.category ?? "", limit: "5" })
+          )
+        ).rows
+          .filter((row) => row.id !== id)
+          .slice(0, 4),
+      }
+    : await applyVisibleExpiryFilter(
+        supabase
+          .from("listings")
+          .select(
+            withOwnerColumn(
+              "id, title, price_cents, price_negotiable, condition, photos, videos, video_thumbnail, media_width, media_height, focal_x, focal_y, logo_url, location_province, location_city, category, attributes, created_at, boost_until, featured, featured_until, owner_id",
+              listingOwnerColumn
+            )
+          )
+          .eq("status", "live")
+          .eq("area", "MZANSI_MARKET")
+          .eq("category", listing.category)
+          .neq("id", listing.id)
       )
-      .eq("status", "live")
-      .eq("area", "MZANSI_MARKET")
-      .eq("category", listing.category)
-      .neq("id", listing.id)
-  )
-    .order("created_at", { ascending: false })
-    .limit(4);
+        .order("created_at", { ascending: false })
+        .limit(4);
 
   // Fetch owner profiles for similar listings
   const similarItems = (
@@ -154,7 +186,7 @@ export default async function ListingDetailPage({ params }: ListingDetailPagePro
     featured: Boolean(featured_until && new Date(featured_until) > new Date()),
   })) as SimilarListingRow[];
   let similarSellers = new Map<string, SimilarSellerRow>();
-  if (similarItems.length > 0) {
+  if (similarItems.length > 0 && !foundation) {
     const ownerIds = Array.from(
       new Set(
         similarItems.map((item) => readOwnerId(item)).filter((id): id is string => Boolean(id))

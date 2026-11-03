@@ -1,4 +1,6 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredMarketplaceResponse } from "@/lib/foundation/marketplace-route";
 import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
 import { businessCategoryFilterValues } from "@/lib/constants/categories";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
@@ -481,6 +483,7 @@ export async function POST(request: NextRequest) {
  * Supports ?categories_only=true to return just category counts for auto-hide.
  */
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation") return restoredMarketplaceResponse(request, "businesses");
   try {
     /**
      * SERVICE_ROLE_PUBLIC_READ_CHECKLIST:

@@ -1,0 +1,61 @@
+diff --git a/dist/commonjs/compat.d.ts b/dist/commonjs/compat.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..86d967e5ff25be2d8b40b08624786d4763c7d50b
+--- /dev/null
++++ b/dist/commonjs/compat.d.ts
+@@ -0,0 +1,2 @@
++export * from "./index.js";
++export { minimatch as default } from "./index.js";
+diff --git a/dist/commonjs/compat.js b/dist/commonjs/compat.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2140de7842308dde1ca0c8f0b687c502d2732d4b
+--- /dev/null
++++ b/dist/commonjs/compat.js
+@@ -0,0 +1,2 @@
++const core = require("./index.js");
++module.exports = Object.assign(core.minimatch, core);
+diff --git a/dist/esm/compat.d.ts b/dist/esm/compat.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..86d967e5ff25be2d8b40b08624786d4763c7d50b
+--- /dev/null
++++ b/dist/esm/compat.d.ts
+@@ -0,0 +1,2 @@
++export * from "./index.js";
++export { minimatch as default } from "./index.js";
+diff --git a/dist/esm/compat.js b/dist/esm/compat.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..86d967e5ff25be2d8b40b08624786d4763c7d50b
+--- /dev/null
++++ b/dist/esm/compat.js
+@@ -0,0 +1,2 @@
++export * from "./index.js";
++export { minimatch as default } from "./index.js";
+diff --git a/package.json b/package.json
+index f3061da0eacbad8e5035dad55b2644c37ccdfd45..573d30a074323f1e48b673007d04a1b0dbeb37fc 100644
+--- a/package.json
++++ b/package.json
+@@ -7,18 +7,18 @@
+     "type": "git",
+     "url": "git@github.com:isaacs/minimatch"
+   },
+-  "main": "./dist/commonjs/index.js",
+-  "types": "./dist/commonjs/index.d.ts",
++  "main": "./dist/commonjs/compat.js",
++  "types": "./dist/commonjs/compat.d.ts",
+   "exports": {
+     "./package.json": "./package.json",
+     ".": {
+       "import": {
+-        "types": "./dist/esm/index.d.ts",
+-        "default": "./dist/esm/index.js"
++        "types": "./dist/esm/compat.d.ts",
++        "default": "./dist/esm/compat.js"
+       },
+       "require": {
+-        "types": "./dist/commonjs/index.d.ts",
+-        "default": "./dist/commonjs/index.js"
++        "types": "./dist/commonjs/compat.d.ts",
++        "default": "./dist/commonjs/compat.js"
+       }
+     }
+   },

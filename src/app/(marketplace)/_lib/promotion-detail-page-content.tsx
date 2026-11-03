@@ -1,4 +1,6 @@
 import { publicPersonName } from "@/lib/account/public-name";
+import { getDataBackend } from "@/lib/data-backend";
+import { restoredEventDetail, restoredPublicDetail } from "@/lib/foundation/marketplace-server";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
@@ -24,13 +26,18 @@ import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verif
 
 export async function generatePromotionDetailMetadata(id: string): Promise<Metadata> {
   const supabase = await createClient();
-  const { data: promotion } = await applyVisibleExpiryFilter(
-    supabase
-      .from("promotions")
-      .select("title, description, photos, videos, video_thumbnail, media_width, media_height")
-      .eq("id", id)
-      .eq("status", "live")
-  ).single();
+  const { data: promotion } =
+    getDataBackend() === "foundation"
+      ? { data: await restoredEventDetail(id) }
+      : await applyVisibleExpiryFilter(
+          supabase
+            .from("promotions")
+            .select(
+              "title, description, photos, videos, video_thumbnail, media_width, media_height"
+            )
+            .eq("id", id)
+            .eq("status", "live")
+        ).single();
 
   if (!promotion) {
     return { title: "Tourism & Events Listing Not Found" };
@@ -49,10 +56,17 @@ export async function generatePromotionDetailMetadata(id: string): Promise<Metad
 
 export async function PromotionDetailPageContent({ id }: { id: string }) {
   const supabase = await createClient();
-  const engagementAdmin = tryCreateAdminClient();
-  const { data: rawPromotion } = await applyVisibleExpiryFilter(
-    supabase.from("promotions").select(PROMOTION_DETAIL_SELECT).eq("id", id).eq("status", "live")
-  ).single();
+  const foundation = getDataBackend() === "foundation";
+  const engagementAdmin = foundation ? null : tryCreateAdminClient();
+  const { data: rawPromotion } = foundation
+    ? { data: await restoredEventDetail(id) }
+    : await applyVisibleExpiryFilter(
+        supabase
+          .from("promotions")
+          .select(PROMOTION_DETAIL_SELECT)
+          .eq("id", id)
+          .eq("status", "live")
+      ).single();
 
   const promotion = rawPromotion ? normalizeOwnerRecord(rawPromotion) : null;
 
@@ -61,13 +75,22 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
   }
 
   const promotionOwnerId = readOwnerId(promotion);
-  const { data: advertiserProfile } = promotionOwnerId
-    ? await (engagementAdmin ?? supabase)
-        .from(ACCOUNT_PROFILE_TABLE)
-        .select("display_name, account_verification_status, phone")
-        .eq("user_id", promotionOwnerId)
-        .maybeSingle()
-    : { data: null };
+  const publicPost = foundation ? await restoredPublicDetail(id) : null;
+  const { data: advertiserProfile } = publicPost
+    ? {
+        data: {
+          display_name: publicPost.seller.public_name,
+          account_verification_status: publicPost.seller.identity_verified ? "verified" : null,
+          phone: null,
+        },
+      }
+    : promotionOwnerId
+      ? await (engagementAdmin ?? supabase)
+          .from(ACCOUNT_PROFILE_TABLE)
+          .select("display_name, account_verification_status, phone")
+          .eq("user_id", promotionOwnerId)
+          .maybeSingle()
+      : { data: null };
 
   const linkedBusinessRow = promotion.business_id
     ? (
@@ -135,7 +158,7 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
         ...advertiserProfile,
         display_name: publicPersonName(advertiserProfile.display_name),
         phone: publishesPhone && viewerIsAdvertiser ? advertiserProfile.phone : null,
-        has_phone: publishesPhone && Boolean(advertiserProfile.phone),
+        has_phone: foundation ? publishesPhone : publishesPhone && Boolean(advertiserProfile.phone),
         masked_phone_public: null,
       }
     : null;
