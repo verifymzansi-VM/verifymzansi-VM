@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredProfileUpdate } from "@/lib/foundation/restored-profile-route";
 import {
   isAvatarStorageUrl,
   isReservedDisplayName,
@@ -40,6 +42,7 @@ function isMissingPolicyColumnError(error: {
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredProfileUpdate(request);
   try {
     const prelude = await enforceAuthenticatedMutationRequest({
       request,

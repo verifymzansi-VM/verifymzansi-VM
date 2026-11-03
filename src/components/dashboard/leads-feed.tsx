@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
+import { getDataBackend } from "@/lib/data-backend";
 import Link from "next/link";
 import { MailCheck, MailQuestion, MessageSquare } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,6 +25,7 @@ export interface LeadRow {
   id: string;
   target_id: string;
   target_type: string;
+  target_href?: string;
   message: string;
   status: string;
   buyer_name: string | null;
@@ -53,7 +55,26 @@ function humanStatus(status: string): string {
 export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps) {
   const [leads, setLeads] = useState<LeadRow[]>(initialLeads);
   const [statusError, setStatusError] = useState("");
+  const reloadVersion = useRef(0);
   const supabase = useMemo(() => createClient(), []);
+  async function reloadNativeLeads() {
+    const version = ++reloadVersion.current;
+    const response = await fetch("/api/leads?limit=50", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (
+      version !== reloadVersion.current ||
+      data.accountId !== ownerId ||
+      !Array.isArray(data.leads)
+    )
+      return null;
+    const rows = data.leads as LeadRow[];
+    setLeads(rows);
+    return rows;
+  }
 
   async function hydrateLeadTitle(leadId: string, targetId: string, targetType: string) {
     const relationTable = targetType === "promotion" ? "promotions" : "listings";
@@ -81,6 +102,12 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
     enabled: Boolean(ownerId),
     onEvent: (payload) => {
       const eventType = payload.eventType as string | undefined;
+      if (getDataBackend() === "foundation" && eventType === "REVALIDATE") {
+        void reloadNativeLeads().catch(() => {
+          /* Keep the current list until a fresh authorised read succeeds. */
+        });
+        return;
+      }
       const nextRow = (payload.new ?? null) as Partial<LeadRow> | null;
       const oldRow = (payload.old ?? null) as Partial<LeadRow> | null;
 
@@ -155,6 +182,17 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
 
       if (!response.ok) throw new Error("Unable to update enquiry");
     } catch {
+      if (getDataBackend() === "foundation") {
+        setStatusError("Could not confirm this enquiry update. Reload to check its status.");
+        try {
+          const fresh = await reloadNativeLeads();
+          if (fresh?.some((row) => row.id === leadId && row.status === nextStatus))
+            setStatusError("");
+        } catch {
+          /* An uncertain mutation is never replayed or used to undo newer server data. */
+        }
+        return;
+      }
       setStatusError("Could not update this enquiry. Please try again.");
       setLeads((prev) =>
         prev.map((lead) => (lead.id === leadId ? { ...lead, status: previousLead.status } : lead))
@@ -195,7 +233,9 @@ export function LeadsFeed({ initialLeads, ownerColumn, ownerId }: LeadsFeedProps
       <ul className="space-y-3">
         {leads.map((lead) => {
           const title = lead.listings?.title || "your post";
-          const postPath = `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`;
+          const postPath =
+            lead.target_href ??
+            `/${lead.target_type === "promotion" ? "tourism-events" : "listing"}/${lead.target_id}`;
           const whatsappHref = whatsappLink(
             lead.buyer_phone,
             lead.listings?.title || "your enquiry",

@@ -1,8 +1,24 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require("@sentry/nextjs/config");
-const dataBackend = process.env.NEXT_PUBLIC_DATA_BACKEND || "source";
+const dataBackend = process.env.NEXT_PUBLIC_DATA_BACKEND || "foundation";
 if (!["source", "foundation"].includes(dataBackend))
   throw new Error("Invalid NEXT_PUBLIC_DATA_BACKEND");
+if (dataBackend === "source") {
+  let isolatedApp = false;
+  try {
+    const app = new URL(process.env.NEXT_PUBLIC_APP_URL || "invalid");
+    isolatedApp = app.protocol === "http:" && ["127.0.0.1", "localhost"].includes(app.hostname);
+  } catch {}
+  if (
+    !isolatedApp ||
+    process.env.ENVIRONMENT !== "test" ||
+    process.env.VERIFYMZANSI_RUNTIME_MODE !== "e2e" ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://playwright.supabase.stub" ||
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE !== "1" ||
+    process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE !== "stub"
+  )
+    throw new Error("The retired backend is restricted to isolated browser fixtures");
+}
 if (dataBackend === "foundation") {
   let targetUrl;
   try {

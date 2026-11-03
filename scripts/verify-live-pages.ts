@@ -120,10 +120,10 @@ const PUBLIC_ROUTE_TARGETS: RouteTarget[] = [
     readySelectors: [
       '[data-testid="mzansi-market-grid-ready"]',
       '[data-testid="mzansi-market-grid-empty"]',
-      'h1:has-text("Browse Listings")',
+      'h1:has-text("Mzansi Market")',
     ],
     titleIncludes: ["Mzansi Market"],
-    bodyIncludes: ["Browse Listings"],
+    bodyIncludes: ["Mzansi Market"],
   },
   {
     name: "mzansi-market-mobile",
@@ -133,7 +133,7 @@ const PUBLIC_ROUTE_TARGETS: RouteTarget[] = [
     readySelectors: [
       '[data-testid="mzansi-market-grid-ready"]',
       '[data-testid="mzansi-market-grid-empty"]',
-      'h1:has-text("Browse Listings")',
+      'h1:has-text("Mzansi Market")',
     ],
     titleIncludes: ["Mzansi Market"],
     customChecks: ["mobile-footer"],
@@ -191,21 +191,17 @@ const PUBLIC_ROUTE_TARGETS: RouteTarget[] = [
     name: "advertise-desktop",
     path: "/advertise",
     scope: "public",
-    readySelectors: ["main", 'h1:has-text("Advertise on VerifyMzansi")'],
+    readySelectors: ["#advertise-title"],
     titleIncludes: ["Advertise"],
-    bodyIncludes: ["Advertise on VerifyMzansi", "Why advertise here"],
+    bodyIncludes: ["Get seen by local buyers", "know who they are dealing with"],
   },
   {
     name: "pricing-desktop",
     path: "/pricing",
     scope: "public",
-    readySelectors: ["main", 'h1:has-text("Pricing")'],
+    readySelectors: ["#pricing-title"],
     titleIncludes: ["Pricing"],
-    bodyIncludesAny: [
-      "Start free, compare each surface clearly",
-      "2 free posts per area every 7 days",
-      "Mzansi Market Basic",
-    ],
+    bodyIncludes: ["Start free.", "Then one simple price."],
   },
   {
     name: "contact-desktop",

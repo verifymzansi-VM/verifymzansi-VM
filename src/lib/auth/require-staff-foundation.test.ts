@@ -85,6 +85,21 @@ it("an empty native assignment cannot fall back to the legacy admin capability s
   read.mockResolvedValue(session("admin", true, []));
   await expect(requireStaff("role:assign")).rejects.toThrow("redirect:/admin");
 });
+it("maps exact renamed native management capabilities without adding unrelated grants", async () => {
+  read.mockResolvedValue(
+    session("admin", true, ["organisation:manage", "partner:manage", "role:manage"])
+  );
+  for (const capability of [
+    "organisations:manage",
+    "partners:manage",
+    "role:review",
+    "role:assign",
+    "role:revoke",
+  ] as const)
+    await expect(requireStaff(capability)).resolves.toMatchObject({ role: "admin" });
+  await expect(requireStaff("payments:refund")).rejects.toThrow("redirect:/admin");
+  await expect(requireStaff("decision:approve")).rejects.toThrow("redirect:/admin");
+});
 it("requires a fresh native factor for staff, while allowing the factor page itself", async () => {
   read.mockResolvedValue(session("moderator", false));
   await expect(requireStaff()).rejects.toThrow("redirect:/staff/two-step");

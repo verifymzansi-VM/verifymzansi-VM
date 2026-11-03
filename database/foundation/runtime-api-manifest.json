@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "schema": "api",
+  "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
+  "functions": [
+    {
+      "name": "get_my_dashboard",
+      "updates": [
+        "updates/20261103180512_restored_owner_dashboard.sql",
+        "updates/20261103183017_repair_dashboard_identity_lookup.sql"
+      ],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current confirmed active member and live matching session; subject is auth.uid(), with no caller-selected account"
+    },
+    {
+      "name": "save_my_frontend_profile",
+      "updates": [
+        "updates/20261103182231_restored_profile_update.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_display_name",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_bio",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_province",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_city",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current confirmed active member and live matching session; revision-fenced native profile/locality commands in one transaction"
+    },
+    {
+      "name": "list_my_frontend_enquiries",
+      "updates": [
+        "updates/20261103192835_restored_enquiry_post_area.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_status",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_before_created",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        },
+        {
+          "name": "p_before_id",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Native self-only inbox with canonical owned post kind/area for accurate reply links; no caller-selected subject or base-table grants"
+    },
+    {
+      "name": "list_my_frontend_notifications",
+      "updates": [
+        "updates/20261103231355_owner_notification_dismissals.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_unread",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_before",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active member and live matching session; notification ownership derived from auth.uid(), no direct table grants"
+    },
+    {
+      "name": "dismiss_my_notifications",
+      "updates": [
+        "updates/20261103231355_owner_notification_dismissals.sql"
+      ],
+      "arguments": [
+        {
+          "name": "p_ids",
+          "sqlType": "uuid[]",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active member and live matching session; notification ownership derived from auth.uid(), no direct table grants"
+    }
+  ]
+}

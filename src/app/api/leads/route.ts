@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredInbox } from "@/lib/foundation/restored-inbox-route";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createLogger } from "@/lib/utils/logger";
@@ -41,6 +43,7 @@ const leadMutationSchema = z.object({
  * Fetch the authenticated user's leads and unread lead count.
  */
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredInbox(request, false);
   try {
     const supabase = await createClient();
     const {
@@ -125,6 +128,7 @@ export async function GET(request: NextRequest) {
  * Update a lead status for the authenticated owner.
  */
 export async function PATCH(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredInbox(request, true);
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

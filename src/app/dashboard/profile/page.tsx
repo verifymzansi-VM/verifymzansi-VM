@@ -3,6 +3,7 @@
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { PasswordMfaChallenge } from "@/components/auth/password-mfa-challenge";
 import { useState, useEffect, useRef } from "react";
+import { getDataBackend } from "@/lib/data-backend";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -94,6 +95,7 @@ export default function ProfilePage() {
   const [legalFirstName, setLegalFirstName] = useState("");
   const [legalLastName, setLegalLastName] = useState("");
   const [bio, setBio] = useState("");
+  const [profileRevision, setProfileRevision] = useState<number | null>(null);
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
@@ -177,7 +179,7 @@ export default function ProfilePage() {
         supabase
           .from(ACCOUNT_PROFILE_TABLE)
           .select(
-            "display_name, legal_first_name, legal_last_name, bio, location_province, location_city, phone, account_verification_status, avatar_url, legal_name_locked_at, location_verified_at, contact_last_phone_change_at, contact_last_email_change_at"
+            "display_name, legal_first_name, legal_last_name, bio, location_province, location_city, phone, account_verification_status, avatar_url, legal_name_locked_at, location_verified_at, contact_last_phone_change_at, contact_last_email_change_at, revision"
           )
           .eq("user_id", user.id)
           .maybeSingle(),
@@ -205,6 +207,7 @@ export default function ProfilePage() {
         setEmail(user.email ?? "");
         setIsPasswordAccount(hasPasswordProvider(user));
         if (profile) {
+          setProfileRevision(typeof profile.revision === "number" ? profile.revision : null);
           setDisplayName(profile.display_name || "");
           setLegalFirstName(profile.legal_first_name || "");
           setLegalLastName(profile.legal_last_name || "");
@@ -261,6 +264,8 @@ export default function ProfilePage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (getDataBackend() === "foundation" && profileRevision !== null)
+        formData.append("expectedRevision", String(profileRevision));
 
       const res = await fetch("/api/profile/avatar", {
         method: "POST",
@@ -279,6 +284,7 @@ export default function ProfilePage() {
       }
 
       setAvatarUrl(data.avatarUrl + "?v=" + Date.now());
+      if (typeof data.revision === "number") setProfileRevision(data.revision);
       toast({ title: "Avatar updated!", variant: "success" });
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
@@ -292,7 +298,12 @@ export default function ProfilePage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
 
-    const result = profileUpdateSchema.safeParse({
+    const nativeProfile = getDataBackend() === "foundation";
+    const result = (
+      nativeProfile && isNameLocked
+        ? profileUpdateSchema.omit({ displayName: true })
+        : profileUpdateSchema
+    ).safeParse({
       displayName,
       bio: bio || undefined,
       phone: phone || undefined,
@@ -314,7 +325,10 @@ export default function ProfilePage() {
       const res = await fetch("/api/profile/update", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(result.data),
+        body: JSON.stringify({
+          ...result.data,
+          ...(nativeProfile ? { expectedRevision: profileRevision } : {}),
+        }),
       });
 
       const data = await res.json();
@@ -355,6 +369,7 @@ export default function ProfilePage() {
       if (data.profile?.phone) {
         setPhone(sanitizeSaPhoneInput(data.profile.phone));
       }
+      if (typeof data.profile?.revision === "number") setProfileRevision(data.profile.revision);
 
       toast({ title: "Profile updated!", variant: "success" });
     } catch {

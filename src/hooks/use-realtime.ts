@@ -4,6 +4,8 @@ import { useEffect, useRef, useCallback, useId } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { getDataBackend } from "@/lib/data-backend";
+import { subscribeFoundationOwnerInbox } from "@/lib/foundation/owner-inbox-realtime";
 
 const log = createLogger("useRealtime");
 
@@ -49,6 +51,7 @@ export function useRealtime({
   enabled = true,
 }: UseRealtimeOptions) {
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const privateCleanupRef = useRef<(() => void) | null>(null);
   const channelInstanceId = useId().replace(/:/g, "_");
   const callbackRef = useRef(onEvent);
   useEffect(() => {
@@ -56,6 +59,8 @@ export function useRealtime({
   });
 
   const cleanup = useCallback(() => {
+    privateCleanupRef.current?.();
+    privateCleanupRef.current = null;
     if (channelRef.current) {
       // Use the same singleton client that created the subscription
       const supabase = createClient();
@@ -70,6 +75,35 @@ export function useRealtime({
     }
 
     const supabase = createClient();
+    if (getDataBackend() === "foundation" && (table === "leads" || table === "notifications")) {
+      if (!filterValue) return cleanup;
+      let cancelled = false;
+      void supabase.auth
+        .getSession()
+        .then(async ({ data }) => {
+          // A token candidate only: the private channel's database policy checks
+          // the signed subject and live session before delivering any signal.
+          if (cancelled || !data.session?.access_token || data.session.user.id !== filterValue)
+            return;
+          const stop = await subscribeFoundationOwnerInbox(
+            supabase,
+            filterValue,
+            data.session.access_token,
+            () => {
+              if (!cancelled) callbackRef.current({ eventType: "REVALIDATE" });
+            }
+          );
+          if (cancelled) stop();
+          else privateCleanupRef.current = stop;
+        })
+        .catch(() => {
+          if (!cancelled) log.warn("Inbox realtime is unavailable");
+        });
+      return () => {
+        cancelled = true;
+        cleanup();
+      };
+    }
 
     let filter: string | undefined;
     if (filterColumn && filterValue) {

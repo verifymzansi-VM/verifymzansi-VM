@@ -5,6 +5,7 @@ import { buildAuthCallbackUrl } from "../utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
 import { FoundationRegistrationError, registerFoundationAccount } from "./registration";
 import { handleFoundationAuthAttempt } from "./auth-attempt-route";
+import { registrationDisplayName } from "./registration-display-name";
 
 /** Adapt the selected registration form without creating legacy profile rows.
  * Contact/name hints are unverified Auth metadata, never account authority. */
@@ -28,7 +29,7 @@ export function handleFoundationRegistration(request: NextRequest, legacyForm = 
           phone: normalizeSaPhone(value.phone),
         };
         input = {
-          displayName: `${value.firstName} ${value.lastName}`,
+          displayName: registrationDisplayName(value.firstName, value.lastName),
           email: value.email,
           password: value.password,
           confirmPassword: value.confirmPassword,

@@ -15,15 +15,20 @@ const credentialsSchema = z.strictObject({
 });
 
 export class FoundationPasswordAuthError extends Error {
-  constructor(readonly status: 400 | 401 | 429 | 503) {
+  constructor(
+    readonly status: 400 | 401 | 429 | 503,
+    readonly code?: "email_not_confirmed"
+  ) {
     super(
-      status === 400
-        ? "Check the sign-in details and complete the CAPTCHA"
-        : status === 401
-          ? "Unable to sign in with these details"
-          : status === 429
-            ? "Too many attempts; try again shortly"
-            : "Sign-in is temporarily unavailable"
+      code === "email_not_confirmed"
+        ? "Confirm your email before signing in"
+        : status === 400
+          ? "Check the sign-in details and complete the CAPTCHA"
+          : status === 401
+            ? "Unable to sign in with these details"
+            : status === 429
+              ? "Too many attempts; try again shortly"
+              : "Sign-in is temporarily unavailable"
     );
   }
 }
@@ -55,6 +60,8 @@ export async function signInFoundationPassword(
       options: { captchaToken: turnstileToken },
     });
     if (attempt.cookieAccessFailed()) throw new FoundationPasswordAuthError(503);
+    if (error?.code === "email_not_confirmed")
+      throw new FoundationPasswordAuthError(401, "email_not_confirmed");
     if (error)
       throw new FoundationPasswordAuthError(
         error.status === 429 ? 429 : [400, 401, 403, 422].includes(error.status ?? 0) ? 401 : 503

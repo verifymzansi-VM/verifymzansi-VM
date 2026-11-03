@@ -10,6 +10,7 @@ import { readStaffAccessFromDb, roleHasCapability } from "@/lib/auth/admin-acces
 import { evaluateStaffMfa, STAFF_MFA_PATH, type StaffMfaState } from "@/lib/auth/staff-mfa";
 import type { StaffRole } from "@/types/enums";
 import { getDataBackend } from "@/lib/data-backend";
+import { nativeCapabilityFor } from "./native-capabilities";
 
 export type StaffSession =
   | { status: "anonymous" }
@@ -92,7 +93,7 @@ export async function requireStaff(
   if (
     capability &&
     !(session.assignedCapabilities
-      ? session.assignedCapabilities.includes(capability)
+      ? session.assignedCapabilities.includes(nativeCapabilityFor(capability))
       : roleHasCapability(session.role, capability))
   ) {
     redirect("/admin");

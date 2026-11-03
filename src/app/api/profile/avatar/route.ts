@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredAvatarUpload } from "@/lib/foundation/restored-avatar-route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
@@ -22,6 +24,7 @@ const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
 const BUCKET = "avatars";
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredAvatarUpload(request);
   const sameOriginFailure = enforceSameOriginMutation(request, log);
   if (sameOriginFailure) {
     return sameOriginFailure;

@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationPhoneRoute } from "@/app/api/foundation/phone/_lib/handle";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -106,6 +108,7 @@ async function hashOtp(otp: string): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationPhoneRoute(request, "send", true);
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) {

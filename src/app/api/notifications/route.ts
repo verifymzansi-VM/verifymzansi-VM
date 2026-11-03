@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredNotifications } from "@/lib/foundation/restored-notifications-route";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
@@ -103,6 +105,7 @@ async function prepareNotificationMutation(
  * Query params: ?unread=true (filter to unread only), ?limit=25 (pagination)
  */
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredNotifications(request, "GET");
   try {
     const supabase = await createClient();
     const {
@@ -203,6 +206,7 @@ export async function GET(request: NextRequest) {
  * Body: { all: true } — mark all notifications read
  */
 export async function PATCH(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredNotifications(request, "PATCH");
   try {
     const mutation = await prepareNotificationMutation(request, {
       rateLimitKey: "notifications:update",
@@ -262,6 +266,7 @@ export async function PATCH(request: NextRequest) {
  * Body: { all: true } — delete all
  */
 export async function DELETE(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredNotifications(request, "DELETE");
   try {
     const mutation = await prepareNotificationMutation(request, {
       rateLimitKey: "notifications:delete",

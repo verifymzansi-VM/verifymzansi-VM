@@ -226,7 +226,7 @@ it("does not publish Google callback sessions without a verified Google identity
   const jar = new Map([["vm_csrf", csrf]]);
   const callback = await beginGoogle(jar);
   const response = await GET(new NextRequest(callback, { headers: headers(jar) }));
-  expect(response.headers.get("location")).toContain("confirmation_failed");
+  expect(response.headers.get("location")).toContain("auth_callback_failed");
   expect(response.cookies.get(baseCookie)).toBeUndefined();
 });
 
@@ -316,7 +316,7 @@ it("cannot borrow another flow's verifier when a supplied flow id is unknown", a
   const response = await GET(
     new NextRequest(link({ ...flow, id: "unknown_flow_id" }), { headers: headers(jar) })
   );
-  expect(response.headers.get("location")).toContain("confirmation_failed");
+  expect(response.headers.get("location")).toContain("auth_callback_failed");
   expect(response.cookies.get(baseCookie)).toBeUndefined();
   expect(fetcher).not.toHaveBeenCalled();
 });
@@ -328,7 +328,7 @@ it("does not publish a session when a consumed code is replayed", async () => {
   ).toContain("/dashboard/complete-profile");
   fetcher.mockClear();
   const response = await GET(new NextRequest(link(flow), { headers: headers(jar) }));
-  expect(response.headers.get("location")).toContain("confirmation_failed");
+  expect(response.headers.get("location")).toContain("auth_callback_failed");
   expect(response.cookies.get(baseCookie)).toBeUndefined();
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(response.cookies.get(`${baseCookie}-flow-${flow.id}-code-verifier`)).toMatchObject({
@@ -346,7 +346,7 @@ it("a caller-editable recovery marker never grants a password-recovery session",
     "base64-" + Buffer.from(JSON.stringify(verifier + "/recovery")).toString("base64url")
   );
   const response = await GET(new NextRequest(link(flow), { headers: headers(jar) }));
-  expect(response.headers.get("location")).toContain("confirmation_failed");
+  expect(response.headers.get("location")).toContain("auth_callback_failed");
   expect(response.cookies.get(baseCookie)).toBeUndefined();
   expect(response.cookies.get("vm_password_recovery")).toBeUndefined();
 });
@@ -360,7 +360,7 @@ it.each(["missing-flow", "duplicate-code", "token-hash"])(
     if (kind === "duplicate-code") url.searchParams.append("code", "second_code");
     if (kind === "token-hash") url.searchParams.set("token_hash", "synthetic_hash");
     const response = await GET(new NextRequest(url));
-    expect(response.headers.get("location")).toContain("confirmation_failed");
+    expect(response.headers.get("location")).toContain("auth_callback_failed");
     expect(fetcher).not.toHaveBeenCalled();
     expect(legacyClient).not.toHaveBeenCalled();
   }
@@ -372,7 +372,7 @@ it("stays closed without the callback flag and blocks degraded shared protection
   vi.stubEnv("FOUNDATION_AUTH_CALLBACK_ENABLED", "");
   expect(
     (await GET(new NextRequest(link(flow), { headers: headers(jar) }))).headers.get("location")
-  ).toContain("confirmation_failed");
+  ).toContain("auth_callback_failed");
   expect(fetcher).not.toHaveBeenCalled();
   vi.stubEnv("FOUNDATION_AUTH_CALLBACK_ENABLED", "true");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, degraded: true, retryAfter: 90 });

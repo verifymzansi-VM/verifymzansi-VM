@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { FoundationAuthenticatedDatabase } from "../../../database/foundation/api-role-types";
+import type { FoundationRuntimeAuthenticatedDatabase as FoundationAuthenticatedDatabase } from "../../../database/foundation/runtime-api-types";
 import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 

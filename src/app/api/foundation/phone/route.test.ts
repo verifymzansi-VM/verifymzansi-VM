@@ -3,6 +3,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST as send } from "./send/route";
 import { POST as verify } from "./verify/route";
+import { POST as restoredSend } from "@/app/api/otp/send/route";
+import { POST as restoredVerify } from "@/app/api/otp/verify/route";
+import { FOUNDATION_PHONE_CHALLENGE_COOKIE } from "@/lib/foundation/phone-challenge-cookie";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 const { authenticate, readAccount, service, issue, prove, limit, context } = vi.hoisted(() => ({
@@ -66,6 +69,56 @@ function request(body: unknown, origin = "https://verifymzansi.com", csrf = true
     body: JSON.stringify(body),
   });
 }
+
+it("connects the preserved phone form to a signed, owner-bound native challenge", async () => {
+  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+  vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
+  issue.mockResolvedValue({
+    challenge_id: challenge,
+    expires_at: new Date(Date.now() + 300_000).toISOString(),
+  });
+  const sent = await restoredSend(request({ phone: "082 000 0000" }));
+  expect(sent.status).toBe(200);
+  expect(await sent.json()).toEqual({ success: true });
+  const cookie = sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)!;
+  expect(cookie.httpOnly).toBe(true);
+  expect(cookie.secure).toBe(true);
+  expect(cookie.path).toBe("/api/otp");
+  expect(cookie.value).not.toContain("082");
+  const incoming = request({ phone: "0820000000", otp: "123456" });
+  incoming.cookies.set(FOUNDATION_PHONE_CHALLENGE_COOKIE, cookie.value);
+  const verified = await restoredVerify(incoming);
+  expect(verified.status).toBe(200);
+  expect(prove).toHaveBeenCalledWith(serviceApi, owner, {
+    challenge_id: challenge,
+    code: "123456",
+  });
+  expect(verified.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)?.maxAge).toBe(0);
+});
+
+it("does not verify a restored OTP against a different number, owner or altered challenge", async () => {
+  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+  vi.stubEnv("FOUNDATION_PHONE_OTP_KEY", "0123456789abcdef".repeat(4));
+  issue.mockResolvedValue({
+    challenge_id: challenge,
+    expires_at: new Date(Date.now() + 300_000).toISOString(),
+  });
+  const sent = await restoredSend(request({ phone: "0820000000" }));
+  const cookie = sent.cookies.get(FOUNDATION_PHONE_CHALLENGE_COOKIE)!.value;
+  for (const [phone, proof] of [
+    ["0830000000", cookie],
+    ["0820000000", cookie + "bad"],
+  ]) {
+    const incoming = request({ phone, otp: "123456" });
+    incoming.cookies.set(FOUNDATION_PHONE_CHALLENGE_COOKIE, proof);
+    expect((await restoredVerify(incoming)).status).toBe(400);
+  }
+  readAccount.mockResolvedValue({ account_id: challenge });
+  const incoming = request({ phone: "0820000000", otp: "123456" });
+  incoming.cookies.set(FOUNDATION_PHONE_CHALLENGE_COOKIE, cookie);
+  expect((await restoredVerify(incoming)).status).toBe(400);
+  expect(prove).not.toHaveBeenCalled();
+});
 it("stays disabled until the native phone deployment is enabled", async () => {
   vi.stubEnv("FOUNDATION_PHONE_VERIFICATION_ENABLED", "");
   const response = await send(request({ phone: "+27820000000" }));

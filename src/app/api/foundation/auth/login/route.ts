@@ -5,7 +5,7 @@ import {
 } from "@/lib/foundation/password-auth";
 import { handleFoundationAuthAttempt } from "../_lib/attempt-route";
 
-/** Disabled until target-native CAPTCHA and the foundation browser flow are ready. */
+/** Native Auth consumes the challenge once and stages the resulting session. */
 export function POST(request: NextRequest) {
   return handleFoundationAuthAttempt({
     request,
@@ -17,7 +17,7 @@ export function POST(request: NextRequest) {
     },
     refusal: (error) =>
       error instanceof FoundationPasswordAuthError
-        ? { status: error.status, error: error.message }
+        ? { status: error.status, error: error.message, code: error.code }
         : null,
   });
 }

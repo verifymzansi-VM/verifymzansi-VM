@@ -32,7 +32,7 @@ export async function handleFoundationAuthAttempt<T>({
   refusal,
 }: {
   request: NextRequest;
-  action: "auth:login" | "auth:register" | "auth:forgot-password";
+  action: "auth:login" | "auth:register" | "auth:forgot-password" | "auth:resend-confirmation";
   enabled?: boolean;
   unavailableMessage: string;
   operation: (
@@ -40,7 +40,7 @@ export async function handleFoundationAuthAttempt<T>({
     input: unknown,
     cookies: FoundationAuthCookies
   ) => Promise<T>;
-  refusal: (error: unknown) => { status: number; error: string } | null;
+  refusal: (error: unknown) => { status: number; error: string; code?: string } | null;
 }) {
   const unavailable = () =>
     foundationAuthPrivateResponse(
@@ -83,7 +83,7 @@ export async function handleFoundationAuthAttempt<T>({
     return known
       ? foundationAuthPrivateResponse(
           NextResponse.json(
-            { error: known.error },
+            { error: known.error, ...(known.code ? { code: known.code } : {}) },
             {
               status: known.status,
               headers: known.status === 429 ? { "Retry-After": "60" } : undefined,

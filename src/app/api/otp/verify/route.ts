@@ -1,5 +1,7 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationPhoneRoute } from "@/app/api/foundation/phone/_lib/handle";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -159,6 +161,7 @@ async function announcePhoneChange(userId: string, email: string | null, phone: 
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationPhoneRoute(request, "verify", true);
   try {
     const sameOriginFailure = enforceSameOriginMutation(request, log);
     if (sameOriginFailure) {

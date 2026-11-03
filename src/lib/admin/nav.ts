@@ -1,5 +1,6 @@
 import { hasCapability, type Capability } from "@/lib/auth/roles";
 import type { StaffRole } from "@/types/enums";
+import { nativeCapabilityFor } from "@/lib/auth/native-capabilities";
 
 /**
  * The admin navigation registry: every admin page, the capability its page
@@ -372,7 +373,8 @@ export function navFor(
 ): NavSectionView[] {
   const native = assignedNativeCapabilities ? new Set(assignedNativeCapabilities) : null;
   const visible = ADMIN_NAV.filter((item) => {
-    const capability = item.nativeCapability ?? item.capability;
+    const capability =
+      item.nativeCapability ?? (item.capability ? nativeCapabilityFor(item.capability) : null);
     const allowed = native
       ? capability === null || native.has(capability)
       : canSeeNavItem(role, item);

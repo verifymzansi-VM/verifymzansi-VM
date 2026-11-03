@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import type { NavBadge } from "@/lib/admin/nav";
 import type { StaffRole } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationStaffDashboard } from "@/lib/foundation/staff-dashboard";
 
 /**
  * The staff home and sidebar counts (20260929120000_staff_dashboard.sql).
@@ -83,6 +85,25 @@ export type StaffNavCounts = Partial<Record<NavBadge, number>>;
 
 /** The viewer's role home, or null if it could not be read at all. Deduplicated per request. */
 export const getStaffDashboard = cache(async (actorId: string): Promise<StaffDashboard | null> => {
+  if (getDataBackend() === "foundation") {
+    try {
+      const current = await readFoundationStaffDashboard(actorId);
+      if (!current.restored_queues) throw new Error("Staff presentation contract unavailable");
+      return {
+        role: current.role === "governor" ? "governance_controller" : current.role,
+        generated_at: current.generated_at,
+        queues: current.restored_queues,
+        // These source-only summaries have no canonical equivalent yet.
+        // The preserved cards already render null as Unavailable.
+        shift: null,
+        ...(current.role === "moderator" ? {} : { decisions: null }),
+        ...(current.role === "admin" ? { platform: null } : {}),
+      };
+    } catch {
+      log.error("Staff dashboard read failed");
+      return null;
+    }
+  }
   const { data, error } = await createAdminClient().rpc("staff_dashboard", { p_actor: actorId });
   if (error || !data) {
     log.error("Staff dashboard read failed", { error: error?.message ?? "no data" });
@@ -136,6 +157,21 @@ async function businessKycQueue(): Promise<StaffDashboard["queues"]["business_ky
 
 /** Sidebar badge counts; an empty object (no badges) if they cannot be read. */
 export const getStaffNavCounts = cache(async (actorId: string): Promise<StaffNavCounts> => {
+  if (getDataBackend() === "foundation") {
+    try {
+      const current = await readFoundationStaffDashboard(actorId);
+      return {
+        reports: current.counts.reports,
+        kyc: current.counts.kyc,
+        content: current.counts.content,
+        business_kyc: current.counts.business_kyc,
+        ...(current.role === "moderator" ? {} : { decisions: current.counts.decisions }),
+      };
+    } catch {
+      log.warn("Staff navigation counts unavailable");
+      return {};
+    }
+  }
   const { data, error } = await createAdminClient().rpc("staff_nav_counts", { p_actor: actorId });
   if (error || !data) {
     log.warn("Staff navigation counts unavailable", { error: error?.message ?? "no data" });

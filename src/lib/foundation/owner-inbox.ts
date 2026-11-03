@@ -165,22 +165,42 @@ const pageInput = z.strictObject({
   status: enquiryStatus.optional(),
   cursor: cursor.optional(),
 });
+function enquiryPageCommand(input: unknown) {
+  const parsed = pageInput.safeParse(input);
+  if (!parsed.success) throw new FoundationInboxError("invalid");
+  const { limit, status, cursor: after } = parsed.data;
+  return {
+    p_limit: limit,
+    ...(status === undefined ? {} : { p_status: status }),
+    ...(after === undefined
+      ? {}
+      : { p_before_created: after.before_created, p_before_id: after.before_id }),
+  };
+}
 export async function readFoundationEnquiries(
   api: FoundationAuthenticatedApi,
   input: unknown = {}
 ) {
-  const parsed = pageInput.safeParse(input);
-  if (!parsed.success) throw new FoundationInboxError("invalid");
-  const { limit, status, cursor: after } = parsed.data;
+  return settle(api.rpc("list_my_enquiries", enquiryPageCommand(input)), enquiryPage);
+}
+const presentedEnquiry = enquiry
+  .extend({ post_area: z.enum(["market", "business", "tourism_events"]) })
+  .refine((row) =>
+    row.post_kind === "listing"
+      ? row.post_area === "market"
+      : row.post_kind === "event"
+        ? row.post_area === "tourism_events"
+        : row.post_area !== "market"
+  );
+const presentedEnquiryPage = enquiryPage.extend({ items: z.array(presentedEnquiry).max(50) });
+/** Explicit extended DTO; old RPCs and their response contracts stay intact. */
+export async function readFoundationPresentedEnquiries(
+  api: FoundationAuthenticatedApi,
+  input: unknown = {}
+) {
   return settle(
-    api.rpc("list_my_enquiries", {
-      p_limit: limit,
-      ...(status === undefined ? {} : { p_status: status }),
-      ...(after === undefined
-        ? {}
-        : { p_before_created: after.before_created, p_before_id: after.before_id }),
-    }),
-    enquiryPage
+    api.rpc("list_my_frontend_enquiries", enquiryPageCommand(input)),
+    presentedEnquiryPage
   );
 }
 

@@ -23,9 +23,38 @@ const foundation = {
   NEXT_PUBLIC_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_build_synthetic",
 };
-test("the backend selector is always embedded in the build, including the source default", () => {
-  assert.equal(buildConfig({}).env.NEXT_PUBLIC_DATA_BACKEND, "source");
+test("the backend defaults to the approved foundation and refuses missing credentials", () => {
+  assert.equal(
+    buildConfig({ ...foundation, NEXT_PUBLIC_DATA_BACKEND: undefined }).env
+      .NEXT_PUBLIC_DATA_BACKEND,
+    "foundation"
+  );
+  assert.throws(() => buildConfig({}), /approved public connection/);
   assert.equal(buildConfig(foundation).env.NEXT_PUBLIC_DATA_BACKEND, "foundation");
+});
+test("the retired backend cannot be selected for a hosted deployment", () => {
+  for (const ENVIRONMENT of [undefined, "production", "staging", "test"]) {
+    assert.throws(
+      () => buildConfig({ ...foundation, ENVIRONMENT, NEXT_PUBLIC_DATA_BACKEND: "source" }),
+      /retired backend/
+    );
+  }
+});
+test("source contracts remain available only to an explicit isolated browser fixture", () => {
+  const fixture = {
+    NEXT_PUBLIC_DATA_BACKEND: "source",
+    ENVIRONMENT: "test",
+    VERIFYMZANSI_RUNTIME_MODE: "e2e",
+    NEXT_PUBLIC_SUPABASE_URL: "https://playwright.supabase.stub",
+    NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3100",
+    NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "1",
+    NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE: "stub",
+  };
+  assert.equal(buildConfig(fixture).env.NEXT_PUBLIC_DATA_BACKEND, "source");
+  assert.throws(
+    () => buildConfig({ ...fixture, NEXT_PUBLIC_APP_URL: "https://verifymzansi.com" }),
+    /retired backend/
+  );
 });
 for (const [label, change] of [
   ["source project", { NEXT_PUBLIC_SUPABASE_URL: "https://tnygdgormnofpgjknlhr.supabase.co" }],

@@ -12,6 +12,7 @@ import {
 import { checkDeploymentHealth, readinessUrl } from "./lib/deployment-health";
 import { checkSiteMonitorHomepage, siteMonitorTransport } from "./lib/site-monitor";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
+import { verifyFoundationRuntimeApi } from "./lib/foundation-runtime-api.mjs";
 
 loadEnvConfig(process.cwd());
 
@@ -42,6 +43,7 @@ async function main() {
     FOUNDATION_REGISTRATION_ENABLED: "true",
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
     FOUNDATION_RECOVERY_ENABLED: "true",
+    FOUNDATION_PHONE_VERIFICATION_ENABLED: "true",
   };
   await check(
     "Local production configuration",
@@ -165,6 +167,13 @@ async function main() {
       verifyRoleOpenapi(serviceOpenapi, manifest, "service_role");
     },
     "Public API read, service credential, function contract or hidden-schema check failed. Review Supabase exposure and key pairing."
+  );
+  await check(
+    "Supabase runtime extension presence and anonymous refusal",
+    async () => {
+      await verifyFoundationRuntimeApi(connection);
+    },
+    "An authenticated runtime RPC is missing, publicly callable, or unavailable. Review the ordered runtime updates and authentication boundary."
   );
   await check(
     "Supabase Google sign-in provider",

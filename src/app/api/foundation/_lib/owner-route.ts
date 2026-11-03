@@ -18,7 +18,7 @@ export const foundationNoStore = {
 };
 
 /** A known command refusal: HTTP status, user-facing message and stable reason. */
-export type FoundationRefusal = { status: number; error: string; reason: string };
+export type FoundationRefusal = { status: number; error: string; reason: string; code?: string };
 
 /** Owner route on the foundation project: same-origin and CSRF for writes,
  * per-client rate limit (blocking when the limiter is degraded), a
@@ -65,7 +65,7 @@ export async function handleFoundationOwnerRoute<T>({
       action,
       degradedMode: "block",
     });
-    if (limit.limited)
+    if (limit.degraded || limit.limited)
       return context.respond(
         NextResponse.json(
           {
@@ -114,7 +114,10 @@ export async function handleFoundationOwnerRoute<T>({
       });
     if (known)
       return context.respond(
-        NextResponse.json({ error: known.error, reason: known.reason }, { status: known.status })
+        NextResponse.json(
+          { error: known.error, reason: known.reason, ...(known.code ? { code: known.code } : {}) },
+          { status: known.status }
+        )
       );
     log.error("Foundation owner request failed");
     return context.respond(unavailable());

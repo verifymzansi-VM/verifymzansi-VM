@@ -13,9 +13,10 @@ const mockSignOut = vi.fn();
 const mockSignInWithPassword = vi.fn();
 const mockFrom = vi.fn();
 const mockToast = vi.fn();
+const mockRouter = { push: mockPush, refresh: mockRefresh };
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush, refresh: mockRefresh }),
+  useRouter: () => mockRouter,
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -118,6 +119,71 @@ describe("ProfilePage", () => {
         }),
       };
     });
+  });
+
+  it("saves a bio with the loaded native revision even when the locked legal name exceeds the editable-name limit", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    const originalFrom = mockFrom.getMockImplementation()!;
+    const legalName = `${"A".repeat(50)} ${"B".repeat(50)}`;
+    mockFrom.mockImplementation((table: string) =>
+      table !== "account_profiles"
+        ? originalFrom(table)
+        : {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: {
+                    display_name: legalName,
+                    bio: "",
+                    phone: "+27821234567",
+                    legal_name_locked_at: "2026-11-03T12:00:00Z",
+                    revision: 7,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+    );
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, profile: { revision: 8 } }),
+    } as Response);
+    try {
+      render(<ProfilePage />);
+      await screen.findByDisplayValue(legalName);
+      fireEvent.change(screen.getByLabelText("Bio"), { target: { value: "Updated bio" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+      await waitFor(() =>
+        expect(global.fetch).toHaveBeenCalledWith("/api/profile/update", expect.anything())
+      );
+      const first = vi
+        .mocked(global.fetch)
+        .mock.calls.find(([url]) => url === "/api/profile/update")!;
+      expect(JSON.parse(String(first[1]?.body))).toMatchObject({
+        bio: "Updated bio",
+        expectedRevision: 7,
+      });
+      expect(JSON.parse(String(first[1]?.body))).not.toHaveProperty("displayName");
+      await waitFor(() =>
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.objectContaining({ title: "Profile updated!" })
+        )
+      );
+      fireEvent.change(screen.getByLabelText("Bio"), { target: { value: "Second bio" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+      await waitFor(() =>
+        expect(
+          vi.mocked(global.fetch).mock.calls.filter(([url]) => url === "/api/profile/update")
+        ).toHaveLength(2)
+      );
+      const second = vi
+        .mocked(global.fetch)
+        .mock.calls.filter(([url]) => url === "/api/profile/update")[1];
+      expect(JSON.parse(String(second[1]?.body)).expectedRevision).toBe(8);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("shows locked legal first name and surname fields when present", async () => {

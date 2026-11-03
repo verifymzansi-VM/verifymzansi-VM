@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountVerificationStatus, UserRole } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
 
 export const ACCOUNT_PROFILE_TABLE = "account_profiles";
 export const ACCOUNT_PROFILE_WRITE_TABLE = ACCOUNT_PROFILE_TABLE;
@@ -141,6 +142,7 @@ export async function getOwnerColumn(
   table: OwnerCompatibleTable,
   options: { useCache?: boolean } = {}
 ): Promise<OwnerColumn> {
+  if (getDataBackend() === "foundation") return "owner_id";
   const useCache = options.useCache ?? true;
 
   if (!useCache) {

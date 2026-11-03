@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import DashboardPage from "./page";
 import { createClient } from "@/lib/supabase/server";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
+vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -158,6 +161,95 @@ describe("DashboardPage", () => {
     vi.mocked(createClient).mockResolvedValue(
       mockSupabase as unknown as Awaited<ReturnType<typeof createClient>>
     );
+  });
+
+  it("renders canonical owner data without querying retired tables or fabricating view counts", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    const owner = "11111111-1111-4111-8111-111111111111";
+    const at = "2026-11-03T12:00:00Z";
+    const user = {
+      id: owner,
+      created_at: at,
+      email_confirmed_at: at,
+      user_metadata: { display_name: "Metadata Name" },
+    };
+    const profile = {
+      display_name: "Canonical Member",
+      public_name: "Canonical Member",
+      bio: null,
+      avatar_object_id: null,
+      legal_first_name: null,
+      legal_last_name: null,
+      legal_name_locked: false,
+      identity_verified: false,
+      revision: 1,
+      updated_at: at,
+    };
+    const snapshot = {
+      version: 1,
+      account_id: owner,
+      generated_at: at,
+      verification: {
+        case_id: null,
+        version: null,
+        verified: false,
+        phone_verified: true,
+        locality_confirmed: false,
+        submission_pending: false,
+        return_reason: null,
+      },
+      profile_facts: {
+        legal_name_locked_at: null,
+        phone_changed_at: null,
+        phone_verified_at: at,
+        identity_reviewed_at: null,
+        location_province: null,
+        location_city: null,
+        location_confirmed_at: null,
+      },
+      counts: {
+        active_listings: 2,
+        active_events: 5,
+        rejected_listings: 0,
+        pending_listings: 0,
+        expiring_listings: 0,
+        expiring_events: 0,
+        businesses: 3,
+        tourism_businesses: 4,
+      },
+      unread_leads: 0,
+      unread_notifications: 0,
+      organisation_admin_count: 0,
+      posts: [1, 2].map((n) => ({
+        id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12, "0")}`,
+        title: `Native ${n}`,
+        status: "live",
+        created_at: at,
+        updated_at: at,
+        expires_at: "2026-12-03T12:00:00Z",
+        area: "MZANSI_MARKET",
+        cover_object_key: null,
+      })),
+      recent_leads: [],
+      paid_plans: [],
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: snapshot, error: null });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user } });
+    vi.mocked(readFoundationServerSession).mockResolvedValue({
+      user,
+      account: { account_id: owner, phone: "+27820000000", profile, staff: null },
+      api: { rpc },
+    } as unknown as Awaited<ReturnType<typeof readFoundationServerSession>>);
+    try {
+      render(await DashboardPage());
+      expect(screen.getByText("Canonical", { exact: false })).toBeInTheDocument();
+      expect(screen.getByText("stats:2:3:9")).toBeInTheDocument();
+      expect(mockSupabase.from).not.toHaveBeenCalled();
+      expect(getOptionalContentViewCountMap).not.toHaveBeenCalled();
+      expect(rpc).toHaveBeenCalledWith("get_my_dashboard", {}, { get: false });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   function stubDashboardQueries({

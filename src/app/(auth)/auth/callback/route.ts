@@ -127,7 +127,7 @@ export async function GET(request: Request) {
   if (getDataBackend() === "foundation")
     return foundationAuthPrivateResponse(
       NextResponse.redirect(
-        new URL("/login?error=confirmation_failed", resolveAppOrigin(request)),
+        new URL("/login?error=auth_callback_failed", resolveAppOrigin(request)),
         303
       )
     );

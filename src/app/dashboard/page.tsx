@@ -37,6 +37,11 @@ import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-l
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { RecentLeads, type RecentLead } from "@/components/dashboard/recent-leads";
 import { VerificationStatusCard } from "@/components/dashboard/verification-status-card";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  readRestoredOwnerDashboard,
+  restoredDashboardResults,
+} from "@/lib/foundation/owner-dashboard-server";
 
 /** Safely resolve owner column — fall back to "owner_id" on error. */
 async function safeGetOwnerColumn(
@@ -81,163 +86,179 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
+  const foundationDashboard =
+    getDataBackend() === "foundation" ? await readRestoredOwnerDashboard(user.id) : null;
+
   const nowDate = new Date();
   const now = nowDate.toISOString();
   const sevenDaysFromNow = new Date(nowDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const fortyEightHoursFromNow = new Date(nowDate.getTime() + 48 * 60 * 60 * 1000).toISOString();
 
   const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn, promotionsOwnerColumn] =
-    await Promise.all([
-      safeGetOwnerColumn(supabase, "listings"),
-      safeGetOwnerColumn(supabase, "businesses"),
-      safeGetOwnerColumn(supabase, "leads"),
-      safeGetOwnerColumn(supabase, "promotions"),
-    ]);
+    foundationDashboard
+      ? (["owner_id", "owner_id", "owner_id", "owner_id"] as const)
+      : await Promise.all([
+          safeGetOwnerColumn(supabase, "listings"),
+          safeGetOwnerColumn(supabase, "businesses"),
+          safeGetOwnerColumn(supabase, "leads"),
+          safeGetOwnerColumn(supabase, "promotions"),
+        ]);
 
   // Fetch dashboard data in parallel — allSettled for resilience on slow connections
-  const results = await Promise.allSettled([
-    /* 0 */ supabase.from(ACCOUNT_PROFILE_TABLE).select("*").eq("user_id", user.id).maybeSingle(),
-    /* 1 */ supabase
-      .from("verification_steps")
-      .select("step_type, status, reviewed_at")
-      .eq("user_id", user.id),
-    /* 2 — recent listings (broader fetch: 10 items with all statuses for mini-manager) */
-    applyOwnerFilter(
-      supabase
-        .from("listings")
-        .select("id, title, status, area, photos, view_count, expires_at, created_at, updated_at")
-        .order("updated_at", { ascending: false })
-        .limit(10),
-      listingOwnerColumn,
-      user.id
-    ),
-    /* 3 */ applyOwnerFilter(
-      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
-      leadsOwnerColumn,
-      user.id
-    ),
-    /* 4 — active listings count */
-    applyOwnerFilter(
-      applyVisibleExpiryFilter(
-        supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "live"),
-        now
-      ),
-      listingOwnerColumn,
-      user.id
-    ),
-    /* 5 — active promotions count */
-    applyOwnerFilter(
-      applyVisibleExpiryFilter(
+  const results = foundationDashboard
+    ? restoredDashboardResults(foundationDashboard)
+    : await Promise.allSettled([
+        /* 0 */ supabase
+          .from(ACCOUNT_PROFILE_TABLE)
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        /* 1 */ supabase
+          .from("verification_steps")
+          .select("step_type, status, reviewed_at")
+          .eq("user_id", user.id),
+        /* 2 — recent listings (broader fetch: 10 items with all statuses for mini-manager) */
+        applyOwnerFilter(
+          supabase
+            .from("listings")
+            .select(
+              "id, title, status, area, photos, view_count, expires_at, created_at, updated_at"
+            )
+            .order("updated_at", { ascending: false })
+            .limit(10),
+          listingOwnerColumn,
+          user.id
+        ),
+        /* 3 */ applyOwnerFilter(
+          supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+          leadsOwnerColumn,
+          user.id
+        ),
+        /* 4 — active listings count */
+        applyOwnerFilter(
+          applyVisibleExpiryFilter(
+            supabase
+              .from("listings")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "live"),
+            now
+          ),
+          listingOwnerColumn,
+          user.id
+        ),
+        /* 5 — active promotions count */
+        applyOwnerFilter(
+          applyVisibleExpiryFilter(
+            supabase
+              .from("promotions")
+              .select("id", { count: "exact", head: true })
+              .eq("status", "live")
+              .eq("promotion_type", "event")
+              .or(`end_date.is.null,end_date.gte.${now}`),
+            now
+          ),
+          promotionsOwnerColumn,
+          user.id
+        ),
+        /* 6 — rejected listings count */
+        applyOwnerFilter(
+          supabase
+            .from("listings")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "rejected"),
+          listingOwnerColumn,
+          user.id
+        ),
+        /* 7 — pending moderation count */
+        applyOwnerFilter(
+          supabase
+            .from("listings")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["pending_moderation", "flagged_for_review"]),
+          listingOwnerColumn,
+          user.id
+        ),
+        /* 8 — expiring listings */
+        applyOwnerFilter(
+          supabase
+            .from("listings")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "live")
+            .lt("expires_at", sevenDaysFromNow)
+            .gt("expires_at", now),
+          listingOwnerColumn,
+          user.id
+        ),
+        /* 9 — expiring promotions */
+        applyOwnerFilter(
+          supabase
+            .from("promotions")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "live")
+            .eq("promotion_type", "event")
+            .gt("end_date", now)
+            .lt("end_date", fortyEightHoursFromNow),
+          promotionsOwnerColumn,
+          user.id
+        ),
+        /* 10 — business count */
+        applyOwnerFilter(
+          supabase
+            .from("businesses")
+            .select("id", { count: "exact", head: true })
+            .neq("category", "tourism_hospitality")
+            .or("area.is.null,area.neq.PROMOTIONS_EVENTS"),
+          businessOwnerColumn,
+          user.id
+        ),
+        /* 11 — tourism business count */
+        applyOwnerFilter(
+          supabase
+            .from("businesses")
+            .select("id", { count: "exact", head: true })
+            .or("area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"),
+          businessOwnerColumn,
+          user.id
+        ),
+        /* 12 — active entitlements (for plan label on quick links) */
         supabase
-          .from("promotions")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "live")
-          .eq("promotion_type", "event")
-          .or(`end_date.is.null,end_date.gte.${now}`),
-        now
-      ),
-      promotionsOwnerColumn,
-      user.id
-    ),
-    /* 6 — rejected listings count */
-    applyOwnerFilter(
-      supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "rejected"),
-      listingOwnerColumn,
-      user.id
-    ),
-    /* 7 — pending moderation count */
-    applyOwnerFilter(
-      supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["pending_moderation", "flagged_for_review"]),
-      listingOwnerColumn,
-      user.id
-    ),
-    /* 8 — expiring listings */
-    applyOwnerFilter(
-      supabase
-        .from("listings")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "live")
-        .lt("expires_at", sevenDaysFromNow)
-        .gt("expires_at", now),
-      listingOwnerColumn,
-      user.id
-    ),
-    /* 9 — expiring promotions */
-    applyOwnerFilter(
-      supabase
-        .from("promotions")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "live")
-        .eq("promotion_type", "event")
-        .gt("end_date", now)
-        .lt("end_date", fortyEightHoursFromNow),
-      promotionsOwnerColumn,
-      user.id
-    ),
-    /* 10 — business count */
-    applyOwnerFilter(
-      supabase
-        .from("businesses")
-        .select("id", { count: "exact", head: true })
-        .neq("category", "tourism_hospitality")
-        .or("area.is.null,area.neq.PROMOTIONS_EVENTS"),
-      businessOwnerColumn,
-      user.id
-    ),
-    /* 11 — tourism business count */
-    applyOwnerFilter(
-      supabase
-        .from("businesses")
-        .select("id", { count: "exact", head: true })
-        .or("area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"),
-      businessOwnerColumn,
-      user.id
-    ),
-    /* 12 — active entitlements (for plan label on quick links) */
-    supabase
-      .from("entitlements")
-      .select("area, tier, status")
-      .eq("user_id", user.id)
-      .eq("status", "active")
-      .gt("expires_at", now),
-    /* 13 — organisation administrator (verification representative level) */
-    supabase
-      .from("organisation_admins")
-      .select("organisation_id", { count: "exact", head: true })
-      .eq("user_id", user.id),
-    /* 14 — latest enquiries for the recent leads card */
-    applyOwnerFilter(
-      supabase
-        .from("leads")
-        .select("id, target_id, target_type, message, status, buyer_name, created_at")
-        .order("created_at", { ascending: false })
-        .limit(3),
-      leadsOwnerColumn,
-      user.id
-    ),
-    /* 15 — live Mzansi Business profiles without a CIPC or Seen sticker */
-    applyOwnerFilter(
-      applyVisibleExpiryFilter(
+          .from("entitlements")
+          .select("area, tier, status")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .gt("expires_at", now),
+        /* 13 — organisation administrator (verification representative level) */
         supabase
-          .from("businesses")
-          .select("id")
-          .eq("status", "live")
-          .neq("category", "tourism_hospitality")
-          .or("area.is.null,area.neq.PROMOTIONS_EVENTS")
-          .is("cipc_verified_at", null)
-          .is("seen_verified_at", null)
-          .limit(50)
-      ),
-      businessOwnerColumn,
-      user.id
-    ),
-  ]);
+          .from("organisation_admins")
+          .select("organisation_id", { count: "exact", head: true })
+          .eq("user_id", user.id),
+        /* 14 — latest enquiries for the recent leads card */
+        applyOwnerFilter(
+          supabase
+            .from("leads")
+            .select("id, target_id, target_type, message, status, buyer_name, created_at")
+            .order("created_at", { ascending: false })
+            .limit(3),
+          leadsOwnerColumn,
+          user.id
+        ),
+        /* 15 — live Mzansi Business profiles without a CIPC or Seen sticker */
+        applyOwnerFilter(
+          applyVisibleExpiryFilter(
+            supabase
+              .from("businesses")
+              .select("id")
+              .eq("status", "live")
+              .neq("category", "tourism_hospitality")
+              .or("area.is.null,area.neq.PROMOTIONS_EVENTS")
+              .is("cipc_verified_at", null)
+              .is("seen_verified_at", null)
+              .limit(50)
+          ),
+          businessOwnerColumn,
+          user.id
+        ),
+      ]);
 
   const profileResult = settled(results[0], EMPTY_OK);
   const verificationStepsResult = settled(results[1], EMPTY_LIST_OK);
@@ -301,7 +322,7 @@ export default async function DashboardPage() {
   const listingRows = ownerListingsResult.data ?? [];
   const listingIds = listingRows.map((listing: { id: string }) => listing.id);
   const listingViewCounts =
-    listingIds.length > 0
+    !foundationDashboard && listingIds.length > 0
       ? await getOptionalContentViewCountMap(tryCreateAdminClient(), "listing", listingIds)
       : { data: new Map<string, number>() };
 
@@ -350,9 +371,11 @@ export default async function DashboardPage() {
           return current > bestRank ? (ent.tier ?? best) : best;
         }, activeEntitlements[0]?.tier ?? "basic")
       : null;
-  const planLabel = topTier
-    ? `${PLAN_TIER_LABELS[topTier as PlanTier] ?? topTier} plan`
-    : undefined;
+  const planLabel = foundationDashboard
+    ? (foundationDashboard.snapshot.paid_plans[0]?.label ?? undefined)
+    : topTier
+      ? `${PLAN_TIER_LABELS[topTier as PlanTier] ?? topTier} plan`
+      : undefined;
 
   // Verification chip helpers
   const isVerified = trustLevel >= 3;
@@ -378,27 +401,33 @@ export default async function DashboardPage() {
     >
   ).slice(0, 3);
   const leadTitles = new Map<string, string>();
-  await Promise.all(
-    (["listing", "promotion"] as const).map(async (type) => {
-      const ids = [
-        ...new Set(
-          recentLeadRows.filter((row) => row.target_type === type).map((row) => row.target_id)
-        ),
-      ];
-      if (ids.length === 0) return;
-      try {
-        const { data } = await supabase
-          .from(type === "promotion" ? "promotions" : "listings")
-          .select("id, title")
-          .in("id", ids);
-        for (const item of (data ?? []) as Array<{ id: string; title: string | null }>) {
-          if (item.title) leadTitles.set(`${type}:${item.id}`, item.title);
+  if (foundationDashboard) {
+    for (const row of foundationDashboard.snapshot.recent_leads) {
+      if (row.title) leadTitles.set(`${row.target_type}:${row.target_id}`, row.title);
+    }
+  }
+  if (!foundationDashboard)
+    await Promise.all(
+      (["listing", "promotion"] as const).map(async (type) => {
+        const ids = [
+          ...new Set(
+            recentLeadRows.filter((row) => row.target_type === type).map((row) => row.target_id)
+          ),
+        ];
+        if (ids.length === 0) return;
+        try {
+          const { data } = await supabase
+            .from(type === "promotion" ? "promotions" : "listings")
+            .select("id, title")
+            .in("id", ids);
+          for (const item of (data ?? []) as Array<{ id: string; title: string | null }>) {
+            if (item.title) leadTitles.set(`${type}:${item.id}`, item.title);
+          }
+        } catch {
+          // Titles are a nicety; the card still works without them.
         }
-      } catch {
-        // Titles are a nicety; the card still works without them.
-      }
-    })
-  );
+      })
+    );
   const recentLeads: RecentLead[] = recentLeadRows.map((row) => ({
     ...row,
     title: leadTitles.get(`${row.target_type}:${row.target_id}`) ?? null,
@@ -407,7 +436,7 @@ export default async function DashboardPage() {
   // Free-access extension offers (Document 08 §6): shown next to the posts.
   let extensionOffers: ExtensionOffer[] = [];
   try {
-    extensionOffers = await getOpenOffersForUser(user.id);
+    if (!foundationDashboard) extensionOffers = await getOpenOffersForUser(user.id);
   } catch {
     // Offers are also notified and emailed; the dashboard still works without them.
   }

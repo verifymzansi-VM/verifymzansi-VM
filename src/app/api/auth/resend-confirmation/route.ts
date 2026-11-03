@@ -1,4 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationResendConfirmation } from "@/lib/foundation/resend-confirmation-route";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
@@ -26,6 +28,7 @@ const resendSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationResendConfirmation(request);
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

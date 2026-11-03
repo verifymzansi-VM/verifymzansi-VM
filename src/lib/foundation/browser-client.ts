@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import type { FoundationAuthenticatedDatabase } from "../../../database/foundation/api-role-types";
+import type { FoundationRuntimeAuthenticatedDatabase as FoundationAuthenticatedDatabase } from "../../../database/foundation/runtime-api-types";
 import { getPublicRuntimeConfig } from "../public-runtime-config";
 import { parseFoundationConnection } from "./connection";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";

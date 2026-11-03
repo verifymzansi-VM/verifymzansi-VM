@@ -7,6 +7,7 @@ import {
   verifyFoundationArtifactIntegrity,
 } from "./lib/foundation-deployment";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
+import { verifyFoundationRuntimeApi } from "./lib/foundation-runtime-api.mjs";
 import { verifyFoundationGateway } from "../src/lib/foundation/gateway-readiness";
 import { createFoundationPublicApi } from "../src/lib/foundation/public-api";
 import { searchFoundationPresentedCards } from "../src/lib/foundation/public-cards";
@@ -31,6 +32,7 @@ async function main() {
     throw new Error("Foundation API contract is stale");
   const { serviceOpenapi } = await verifyFoundationGateway(process.env);
   verifyRoleOpenapi(serviceOpenapi, apiManifest, "service_role");
+  await verifyFoundationRuntimeApi(connection);
   const publicApi = createFoundationPublicApi(connection);
   await searchFoundationPresentedCards(publicApi, {
     area: "tourism_events",
@@ -47,7 +49,7 @@ async function main() {
   });
   console.log(
     runtimeOnly
-      ? "Provisioned London application runtime verified: SQL digest, public read, service API contract and schema isolation. No database migration was executed; clean baseline acceptance remains separate."
+      ? "Provisioned London application runtime verified: SQL digest, public read, service API contract, runtime extension presence/anonymous refusal and schema isolation. No database migration was executed; authenticated DTOs and clean baseline acceptance remain separate."
       : "Foundation public read, service API contract and schema isolation verified; authenticated grants, provider and recovery acceptance remain separate checks."
   );
 }

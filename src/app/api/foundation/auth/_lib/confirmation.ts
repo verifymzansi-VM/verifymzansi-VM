@@ -93,7 +93,7 @@ export async function handleFoundationConfirmation(
               : FOUNDATION_POST_SIGNUP_PATH
           : purpose === "recovery"
             ? "/forgot-password?error=recovery_failed"
-            : "/login?error=confirmation_failed",
+            : "/login?error=auth_callback_failed",
         origin
       ),
       303

@@ -84,6 +84,26 @@ function createWorkerRequest(action: string, key: string): Request {
 
 describe("rate-limiter worker", () => {
   it.each([true, false])(
+    "applies the established owner upload/read policies (Durable Object: %s)",
+    async (useDurableObject) => {
+      const { env } = createWorkerEnv({ useDurableObject });
+      for (const [action, limit] of [
+        ["profile:avatar", 5],
+        ["inbox:read", 60],
+        ["inbox:update", 30],
+      ] as const) {
+        for (let n = 0; n < limit; n++)
+          expect(
+            (await rateLimiterWorker.fetch(createWorkerRequest(action, action), env as never))
+              .status
+          ).toBe(200);
+        expect(
+          (await rateLimiterWorker.fetch(createWorkerRequest(action, action), env as never)).status
+        ).toBe(429);
+      }
+    }
+  );
+  it.each([true, false])(
     "limits governance mutations to ten per minute (Durable Object: %s)",
     async (useDurableObject) => {
       const { env } = createWorkerEnv({ useDurableObject });

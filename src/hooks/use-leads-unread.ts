@@ -39,7 +39,11 @@ export function useLeadsUnread(): UseLeadsUnreadResult {
       return;
     }
 
-    const payload = (await response.json().catch(() => null)) as { unreadCount?: number } | null;
+    const payload = (await response.json().catch(() => null)) as {
+      unreadCount?: number;
+      accountId?: string;
+    } | null;
+    if (payload?.accountId && payload.accountId !== userId) return;
     if (typeof payload?.unreadCount === "number") {
       setUnreadCount(payload.unreadCount);
     }
@@ -77,7 +81,9 @@ export function useLeadsUnread(): UseLeadsUnreadResult {
 
         const payload = (await response.json().catch(() => null)) as {
           unreadCount?: number;
+          accountId?: string;
         } | null;
+        if (payload?.accountId && payload.accountId !== userId) return;
 
         if (!cancelled) {
           setUnreadCount(typeof payload?.unreadCount === "number" ? payload.unreadCount : 0);

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST as register } from "./register/route";
 import { POST as login } from "./login/route";
+import { POST as resend } from "./resend-confirmation/route";
 import { isPwnedPassword } from "@/lib/security/pwned-passwords";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -91,6 +92,17 @@ it("maps the preserved registration form and forwards the CAPTCHA only to native
   expect(sent.data).not.toHaveProperty("phone_verified");
   expect(sent.data).not.toHaveProperty("role");
 });
+it("accepts both full-length name fields without violating the new display-name limit", async () => {
+  const firstName = "A".repeat(50);
+  const lastName = "B".repeat(50);
+  const response = await register(request("register", { ...body, firstName, lastName }));
+  expect(response.status).toBe(200);
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body)).data).toMatchObject({
+    display_name: firstName,
+    first_name: firstName,
+    last_name: lastName,
+  });
+});
 it("retains CSRF enforcement on the preserved registration URL", async () => {
   expect((await register(request("register", body, false))).status).toBe(403);
   expect(fetcher).not.toHaveBeenCalled();
@@ -111,3 +123,79 @@ it("keeps native sign-in protection active on the preserved login URL", async ()
   expect(fetcher).not.toHaveBeenCalled();
   expect(createAdminClient).not.toHaveBeenCalled();
 });
+
+it("preserves the selected login form's confirmation recovery prompt", async () => {
+  fetcher.mockResolvedValue(
+    Response.json(
+      { code: "email_not_confirmed", msg: "Email not confirmed" },
+      { status: 400, headers: { "x-supabase-api-version": "2024-01-01" } }
+    )
+  );
+  const response = await login(
+    request("login", {
+      email: body.email,
+      password: body.password,
+      turnstileToken: body.turnstileToken,
+    })
+  );
+  expect(response.status).toBe(401);
+  expect(await response.json()).toMatchObject({ code: "email_not_confirmed" });
+  expect(response.headers.get("set-cookie")).toBeNull();
+});
+
+it("resends through native CAPTCHA once and persists the matching confirmation verifier", async () => {
+  fetcher.mockResolvedValue(Response.json({}));
+  const response = await resend(
+    request("resend-confirmation", {
+      email: body.email,
+      turnstileToken: body.turnstileToken,
+    })
+  );
+  expect(response.status).toBe(200);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const [url, init] = fetcher.mock.calls[0];
+  const callback = new URL(new URL(String(url)).searchParams.get("redirect_to")!);
+  expect(String(url)).toContain("/auth/v1/resend");
+  expect(callback.searchParams.get("backend")).toBe("foundation");
+  expect(callback.searchParams.get("next")).toBe("/dashboard/complete-profile");
+  expect(callback.searchParams.get("sb_flow_id")).toBeTruthy();
+  expect(JSON.parse(String(init?.body))).toMatchObject({
+    gotrue_meta_security: { captcha_token: body.turnstileToken },
+    code_challenge_method: "s256",
+  });
+  expect(response.headers.get("set-cookie")).toContain("code-verifier");
+  expect(response.headers.get("cache-control")).toContain("no-store");
+  expect(createAdminClient).not.toHaveBeenCalled();
+});
+
+it("refuses confirmation resend when shared protection is degraded or CSRF is absent", async () => {
+  expect((await resend(request("resend-confirmation", {}, false))).status).toBe(403);
+  vi.mocked(checkRateLimit).mockResolvedValue({ limited: false, degraded: true });
+  expect(
+    (
+      await resend(
+        request("resend-confirmation", { email: body.email, turnstileToken: body.turnstileToken })
+      )
+    ).status
+  ).toBe(503);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+it.each(["email_exists", "user_already_exists", "email_not_found", "user_not_found"])(
+  "does not expose confirmation account state for %s",
+  async (code) => {
+    fetcher.mockResolvedValue(
+      Response.json(
+        { code, msg: "Provider account state" },
+        { status: 400, headers: { "x-supabase-api-version": "2024-01-01" } }
+      )
+    );
+    const response = await resend(
+      request("resend-confirmation", { email: body.email, turnstileToken: body.turnstileToken })
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true });
+    expect(response.headers.get("set-cookie")).toContain("code-verifier");
+    expect(response.headers.get("set-cookie")).not.toContain("Max-Age=0");
+    expect(createAdminClient).not.toHaveBeenCalled();
+  }
+);
