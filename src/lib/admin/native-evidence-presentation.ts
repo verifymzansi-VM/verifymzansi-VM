@@ -6,6 +6,12 @@ export type NativeEvidenceFields = {
   review_risk_score?: number;
   review_risk_level?: "low" | "high";
 };
+export function formatEvidenceBytes(bytes: number | null): string {
+  if (bytes === null) return "Not yet loaded";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 export function nativeEvidenceBody(artifact: { id: string } & NativeEvidenceFields) {
   if (getDataBackend() !== "foundation") return { artifactId: artifact.id };
   return {

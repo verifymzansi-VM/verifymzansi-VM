@@ -20,6 +20,7 @@ import {
   dashboardVerificationSteps,
 } from "../src/lib/foundation/owner-dashboard.ts";
 import { readFrontendStaffVerificationQueue } from "../src/lib/foundation/staff-verification-queue.ts";
+import { readRestoredGovernance } from "../src/lib/foundation/governance.ts";
 import { validateSaIdChecksum } from "../src/lib/utils/sa-id-validation.ts";
 import {
   parseRestoredOwnerPost,
@@ -250,6 +251,7 @@ try {
     "database/foundation/updates/20261104155022_restored_staff_claim_controls.sql",
     "database/foundation/updates/20261104162910_preserved_identity_review_workflow.sql",
     "database/foundation/updates/20261104214751_preserve_reviewed_identity_status.sql",
+    "database/foundation/updates/20261104214932_restored_governance_decisions.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -269,6 +271,7 @@ try {
     create temporary table restored_identity_context_probe(value jsonb);
     create temporary table restored_identity_queue_probe(value jsonb);
     create temporary table restored_owner_identity_probe(kind text,value jsonb);
+    create temporary table restored_governance_probe(value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -555,11 +558,44 @@ try {
       proof:=api.approve_frontend_identity_step((i->>'case_id')::uuid,move_request,(face->>'artifact_id')::uuid,rev,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,null,'supporting_evidence');
       if proof->>'status'<>'awaiting_second_reviewer' or exists(select 1 from private.accepted_identity_facts where owner_id='${unverified.id}') then raise exception 'high-risk step approvals bypassed independent review';end if;
       begin perform api.approve_decision((proof->>'decision_id')::uuid);raise exception 'proposer approved own high-risk decision';exception when insufficient_privilege then null;end;
+      begin perform api.decide_frontend_governance((proof->>'decision_id')::uuid,(i->>'case_id')::uuid,rev,rev,'approve','Synthetic self approval');raise exception 'frontend proposer approved own high-risk decision';exception when insufficient_privilege then null;end;
+      perform api.decide_frontend_governance((proof->>'decision_id')::uuid,(i->>'case_id')::uuid,rev,rev,'escalate','Synthetic escalation to an independent reviewer');
       ${claims(governor)}
+      begin perform api.decide_frontend_governance((proof->>'decision_id')::uuid,(i->>'case_id')::uuid,rev,rev,'approve','Synthetic independent approval');raise exception 'unheld independent identity approval accepted';exception when insufficient_privilege then null;end;
       perform api.reassign_frontend_staff_claim('verification_step',(i->>'case_id')::uuid,'${governor.id}','Synthetic independent evidence review');
       c:=api.get_frontend_staff_identity_context('${unverified.id}',null);
-      perform api.approve_decision((proof->>'decision_id')::uuid);
+      insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',proof->>'decision_id','status','all')));
+      begin perform api.decide_frontend_governance((proof->>'decision_id')::uuid,(i->>'case_id')::uuid,rev+1,rev,'approve','Synthetic independent approval');raise exception 'changed represented version approved';exception when sqlstate 'PT409' then null;end;
+      answer:=api.decide_frontend_governance((proof->>'decision_id')::uuid,(i->>'case_id')::uuid,rev,rev,'approve','Synthetic independent approval');
+      if answer->>'status'<>'approved' then raise exception 'governance approval missing';end if;
+      answer:=api.decide_frontend_governance((proof->>'decision_id')::uuid,(i->>'case_id')::uuid,rev,rev,'approve','Synthetic independent approval');
+      if answer->>'reused'<>'true' then raise exception 'governance acknowledgement was not retry-safe';end if;
+      insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',proof->>'decision_id','status','all')));
       if (select count(*) from private.accepted_identity_facts where owner_id='${unverified.id}' and second_reviewer='${governor.id}')<>1 then raise exception 'independent high-risk approval missing';end if;
+      -- Non-granting rejection closes the retained proposal only. An authored
+      -- withdrawal still uses the canonical withdrawal authority.
+      insert into private.evidence_cases(subject_id,kind) values('${owner.id}','restriction') returning id into move_request;
+      ${claims(administrator)}
+      case_lease:=api.propose_decision(move_request,1,'restrict_account','{}');
+      ${claims(owner)}
+      begin perform api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Synthetic subject rejection');raise exception 'subject decided own restriction';exception when insufficient_privilege then null;end;
+      ${claims(reviewer)}
+      begin perform api.get_frontend_governance_page();raise exception 'moderator read governance';exception when insufficient_privilege then null;end;
+      begin perform api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Synthetic unauthorized rejection');raise exception 'moderator decided governance';exception when insufficient_privilege then null;end;
+      ${claims(governor)}
+      answer:=api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Synthetic independent rejection');
+      if answer->>'status'<>'rejected' or not exists(select 1 from private.current_account_access where id='${owner.id}') then raise exception 'rejection applied proposed restriction';end if;
+      answer:=api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Synthetic independent rejection');
+      if answer->>'reused'<>'true' then raise exception 'rejection acknowledgement not retry-safe';end if;
+      begin perform api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Different rejection rationale');raise exception 'rejection audit mutated';exception when sqlstate 'PT409' then null;end;
+      begin perform api.approve_decision((case_lease->>'decision_id')::uuid);raise exception 'rejected proposal approved later';exception when invalid_parameter_value then null;end;
+      insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',case_lease->>'decision_id','status','all')));
+      ${claims(administrator)}
+      case_lease:=api.propose_decision(move_request,1,'restrict_account','{}');
+      answer:=api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Synthetic authored withdrawal');
+      if answer->>'status'<>'withdrawn' then raise exception 'authored rejection did not remain withdrawal';end if;
+      ${claims(governor)}
+      insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',case_lease->>'decision_id','status','all')));
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
       -- their terminal-state and verification-invalidation rules.
@@ -581,6 +617,7 @@ try {
     select 'IDENTITY_CONTEXT:'||value::text from restored_identity_context_probe;
     select 'IDENTITY_QUEUE:'||value::text from restored_identity_queue_probe;
     select 'OWNER_IDENTITY:'||jsonb_build_object('kind',kind,'value',value)::text from restored_owner_identity_probe;
+    select 'GOVERNANCE:'||value::text from restored_governance_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -672,6 +709,22 @@ try {
   const restored = parseRestoredOwnerPost(
     JSON.parse(outcome.split("\n").find((line) => line.startsWith("{")))
   );
+  const governanceProbes = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("GOVERNANCE:"))
+    .map((line) => JSON.parse(line.slice(11)));
+  assert.equal(governanceProbes.length, 4);
+  for (const [index, probe] of governanceProbes.entries()) {
+    const rows = await readRestoredGovernance(
+      { rpc: async () => ({ data: probe, error: null }) },
+      governor.id,
+      { status: "all" }
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].status, ["escalated", "approved", "rejected", "withdrawn"][index]);
+    assert.equal(rows[0].approval_rationale, index === 1 ? "Synthetic independent approval" : null);
+    assert.equal(rows[0].timeline.length, index === 1 ? 3 : 2);
+  }
   assert.equal(
     restoredOwnerPostRow(restored, owner.id).location_address,
     "Updated fixture address"
@@ -685,6 +738,7 @@ try {
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",
     "accepted ID remains a completed step before location; rejected retake receipts do not resurrect; high-risk approval still requires another real staff actor",
     "retention retires accepted evidence without losing owner verification; explicitly revoked identity remains unverified",
+    "preserved governance queue/detail DTOs, represented independent approval, rejection without restriction, authored withdrawal and exact audit-bound acknowledgement retries",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

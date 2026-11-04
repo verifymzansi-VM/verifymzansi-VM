@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredGovernanceDecision } from "@/lib/foundation/restored-governance-route";
 import { z } from "zod";
 import {
   approveDecision,
@@ -58,6 +60,8 @@ const governanceDecideSchema = z.discriminatedUnion("action", [
  * record whether it succeeded; a failure stays visible and retryable.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredGovernanceDecision(request as NextRequest);
   try {
     const guard = await enforceAdminMutationGuard({
       request,

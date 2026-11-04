@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "./audit";
 import { createLogger } from "@/lib/utils/logger";
 import type { DecisionStatus, StaffRole } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
 
 const log = createLogger("DecisionLedger");
 
@@ -227,6 +228,10 @@ export async function escalateDecision(params: EscalateDecisionParams) {
  * Get pending decisions awaiting governance approval.
  */
 export async function getPendingDecisions(limit = 50) {
+  if (getDataBackend() === "foundation") {
+    const { readRestoredGovernancePage } = await import("@/lib/foundation/governance-server");
+    return readRestoredGovernancePage(limit);
+  }
   const supabase = createAdminClient();
 
   const { data, error } = await supabase

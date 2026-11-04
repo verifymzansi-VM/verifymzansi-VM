@@ -102,6 +102,20 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof createFoundationRouteContext>);
   rpc.mockImplementation(async (name: string) => {
     if (name === "get_my_frontend_verification_uploads") return { data: [], error: null };
+    if (name === "get_my_frontend_identity_state")
+      return {
+        data: {
+          account_id: owner,
+          case_id: null,
+          case_version: null,
+          reason: null,
+          decision: null,
+          identity_reviewed_at: null,
+          id_document_uploaded_at: null,
+          selfie_uploaded_at: null,
+        },
+        error: null,
+      };
     if (name === "confirm_verification_locality") {
       confirmed = true;
       return {
@@ -115,7 +129,8 @@ beforeEach(() => {
         error: null,
       };
     }
-    return { data: snapshot(), error: null };
+    if (name === "get_my_dashboard") return { data: snapshot(), error: null };
+    throw new Error(`Unexpected native verification command: ${name}`);
   });
 });
 afterEach(() => vi.unstubAllEnvs());

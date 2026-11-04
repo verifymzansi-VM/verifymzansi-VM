@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchLatestKycArtifact } from "@/lib/auth/kyc-metadata-fetch";
 import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -180,30 +181,14 @@ export function KycInlinePreview({
         let evidenceResult = await fetchEvidenceByArtifactId(match);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
-          const retryMetaRes = await fetchStaffEvidence(
-            `/api/admin/verification/evidence/metadata`,
-            {
-              method: "POST",
-              signal: controller.signal,
-              headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ userId }),
-            }
+          const latestForStep = await fetchLatestKycArtifact<Artifact>(
+            userId,
+            stepType,
+            controller.signal
           );
-
-          if (retryMetaRes.ok) {
-            const retryMeta = await retryMetaRes.json();
-            const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
-            const latestForStep = retryArtifacts
-              .filter((a: Artifact) => a.step_type === stepType)
-              .sort(
-                (a: Artifact, b: Artifact) =>
-                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-              )[0];
-
-            if (latestForStep && latestForStep.id !== match.id) {
-              resolvedArtifact = latestForStep;
-              evidenceResult = await fetchEvidenceByArtifactId(latestForStep);
-            }
+          if (latestForStep && latestForStep.id !== match.id) {
+            resolvedArtifact = latestForStep;
+            evidenceResult = await fetchEvidenceByArtifactId(latestForStep);
           }
         }
 

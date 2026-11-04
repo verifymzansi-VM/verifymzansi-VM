@@ -1,4 +1,5 @@
 "use client";
+import { formatEvidenceBytes } from "@/lib/admin/native-evidence-presentation";
 
 import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,7 +102,7 @@ export function EvidenceMetadataPanel({
             <Row label="Step type" value={artifact.step_type.replace("_", " ")} />
             <Row label="Kind" value={artifact.artifact_kind} />
             <Row label="MIME" value={artifact.content_type} />
-            <Row label="Size" value={formatBytes(artifact.file_size_bytes)} />
+            <Row label="Size" value={formatEvidenceBytes(artifact.file_size_bytes)} />
             <Row label="Status" value={artifact.status} />
             <Row
               label="Uploaded"
@@ -233,11 +234,4 @@ function Row({
       </span>
     </div>
   );
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "Not yet loaded";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

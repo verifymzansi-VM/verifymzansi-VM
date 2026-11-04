@@ -96,7 +96,7 @@ const decision = z
         value.withdrawn_at === null &&
         value.withdrawal_reason === null
   );
-const foundationDecisionPage = z
+export const foundationDecisionPage = z
   .strictObject({
     version: z.literal(1),
     caller_id: z.uuid(),

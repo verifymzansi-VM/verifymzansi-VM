@@ -1,7 +1,7 @@
 "use client";
 
 import { BrandShieldAlert as ShieldAlert } from "@/components/shared/brand-shield";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle, Loader2, RotateCw, XCircle } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import type { GovernanceScope } from "@/lib/foundation/governance";
 
 interface DecisionActionButtonsProps {
   decisionId: string;
@@ -21,6 +22,7 @@ interface DecisionActionButtonsProps {
   mode?: "decide" | "withdraw" | "retry";
   /** Shown instead of the buttons when this viewer cannot decide. */
   blockedReason?: string | null;
+  foundation?: GovernanceScope;
 }
 
 type Action = "approve" | "reject" | "escalate" | "retry_execution";
@@ -30,19 +32,23 @@ export function DecisionActionButtons({
   payloadVersion,
   mode = "decide",
   blockedReason = null,
+  foundation,
 }: DecisionActionButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [submitting, setSubmitting] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rationale, setRationale] = useState("");
+  const sending = useRef(false);
 
   async function send(action: Action) {
+    if (sending.current) return;
     setError(null);
     if (action !== "retry_execution" && !rationale.trim()) {
       setError("Write a short rationale for the audit trail.");
       return;
     }
+    sending.current = true;
     setSubmitting(action);
     try {
       const body =
@@ -54,7 +60,7 @@ export function DecisionActionButtons({
       const res = await fetch("/api/admin/governance/decide", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ...(foundation ? { foundation } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -70,6 +76,7 @@ export function DecisionActionButtons({
     } catch (err) {
       setError(err instanceof Error ? err.message : "The decision could not be saved. Try again.");
     } finally {
+      sending.current = false;
       setSubmitting(null);
     }
   }

@@ -4,6 +4,69 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "decide_frontend_governance",
+      "updates": ["updates/20261104214932_restored_governance_decisions.sql"],
+      "arguments": [
+        {
+          "name": "p_decision",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_version",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_proposal_version",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent native governance reviewer and fresh TOTP; immutable represented proposal/case versions and evidence snapshot. Native approval effects remain atomic; identity approval requires its own held/recently inspected pair. Rejection closes only the proposal. Same-actor exact acknowledgement retries never repeat effects."
+    },
+    {
+      "name": "get_frontend_governance_page",
+      "updates": ["updates/20261104214932_restored_governance_decisions.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native decision reviewer and recent TOTP; existing bounded native decision projection with matching, bounded rationale/escalation audit facts. No proposal payload or evidence storage keys."
+    },
+    {
       "name": "get_frontend_staff_verification_queue",
       "updates": ["updates/20261104162910_preserved_identity_review_workflow.sql"],
       "arguments": [

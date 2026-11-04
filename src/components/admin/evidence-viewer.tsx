@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { formatDate } from "@/lib/utils/format";
 import {
+  formatEvidenceBytes,
   nativeEvidenceBody,
   inspectedEvidenceArtifact,
   type NativeEvidenceFields,
@@ -25,13 +26,6 @@ interface Artifact extends NativeEvidenceFields {
   created_at: string;
   purge_after: string | null;
   sha256: string | null;
-}
-
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "Not yet loaded";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 async function fetchEvidenceBlob(
@@ -158,7 +152,7 @@ export function EvidenceViewer({
             <span>
               {artifact.step_type} — {artifact.artifact_kind}
             </span>
-            <span>({formatBytes(inspectedArtifact.file_size_bytes)})</span>
+            <span>({formatEvidenceBytes(inspectedArtifact.file_size_bytes)})</span>
           </div>
         </div>
       </CardHeader>

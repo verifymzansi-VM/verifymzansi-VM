@@ -1,6 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notFound } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { readGovernanceRecord } from "@/lib/services/governance-record";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,26 +21,8 @@ export default async function DecisionDetailPage({ params }: Props) {
 
   const { user, role } = await requireStaff("decision:approve");
 
-  const admin = createAdminClient();
-
-  const { data: decision, error } = await admin
-    .from("decision_records")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  // A failed read is an error page with a retry, never a misleading "not found".
-  if (error) throw new Error(`Decision could not be loaded: ${error.message}`);
+  const { decision, timelineEvents } = await readGovernanceRecord(id);
   if (!decision) notFound();
-
-  const { data: timelineEvents, error: timelineError } = await admin
-    .from("decision_record_events")
-    .select("*")
-    .eq("decision_id", id)
-    .order("created_at", { ascending: true });
-  if (timelineError) {
-    throw new Error(`Decision timeline could not be loaded: ${timelineError.message}`);
-  }
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -148,9 +130,12 @@ export default async function DecisionDetailPage({ params }: Props) {
           </CardHeader>
           <CardContent>
             <DecisionActionButtons
+              key={`${user.id}:${decision.id}:${decision.payload_version}`}
               decisionId={decision.id}
               payloadVersion={decision.payload_version ?? 1}
               mode={decision.recommender_id === user.id ? "withdraw" : "decide"}
+              foundation={decision.foundation}
+              blockedReason={decision.blockedReason}
             />
           </CardContent>
         </Card>
@@ -191,7 +176,7 @@ export default async function DecisionDetailPage({ params }: Props) {
             <p className="text-sm text-muted-foreground">No timeline events recorded.</p>
           ) : (
             <div className="space-y-3">
-              {timelineEvents.map((event: Record<string, unknown>) => (
+              {timelineEvents.map((event) => (
                 <div
                   key={event.id as string}
                   className="flex items-start gap-3 border-l-2 pl-4 py-2"

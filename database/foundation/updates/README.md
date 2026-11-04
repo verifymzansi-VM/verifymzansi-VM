@@ -5,6 +5,34 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Preserved governance decisions, 5 November 2026
+
+`20261104214932_restored_governance_decisions.sql` is applied. The existing
+escalation list, decision detail, rationale, approval, rejection, withdrawal and
+escalation controls now use caller-bound native decision records. Their layouts
+and controls are preserved. The extra private events record the rationale and
+escalation; proposal payloads and private evidence keys are not returned.
+
+Approvals keep the canonical transactional effects, independent actor checks,
+snapshot binding and recent authenticator requirements. Identity approval also
+requires the second reviewer's current evidence claim and a recent context
+inspection of the represented pair. Rejection closes the proposal using native
+withdrawal audit fields; it does not apply a proposed restriction or grant an
+identity. The proposal's author uses the existing native withdrawal command. An
+exact same-actor acknowledgement retry cannot repeat an effect or change its
+recorded rationale. Stale versions, self-review and moderator governance calls
+are refused. The application never calls the retired application-side effect
+executor on this path.
+
+The real local GoTrue/TOTP fixture exercises these commands and validates the
+actual JSON using the same strict page adapter, including approval, rejection,
+escalation and authored withdrawal. HTTP tests verify represented scope, CSRF,
+MFA refusal and contradictory acknowledgements. Existing governance source
+fixtures still pass. Hosted checks verified the two API audiences, RLS, no
+browser access to event rows and no seeded events. These are not complete
+authenticated browser or deployment acceptance. The remaining restored pages
+must be integrated before the main deployment is released.
+
 ## Preserved identity review, 4 November 2026
 
 `20261104162910_preserved_identity_review_workflow.sql` and its follow-up

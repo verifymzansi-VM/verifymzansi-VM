@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchLatestKycArtifact } from "@/lib/auth/kyc-metadata-fetch";
 import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
@@ -285,50 +286,34 @@ export function KycComparisonViewer({
                 const firstErrorData = await evidenceRes.json().catch(() => null);
 
                 if (firstErrorData?.code === "not_found") {
-                  const retryMetaRes = await fetchStaffEvidence(
-                    `/api/admin/verification/evidence/metadata`,
-                    {
+                  const replacement = await fetchLatestKycArtifact<Artifact>(
+                    userId,
+                    artifact.step_type,
+                    controller.signal
+                  );
+                  if (replacement && replacement.id !== artifact.id) {
+                    resolvedArtifact = replacement;
+                    const replacementCachedBlob = getCachedKycArtifactBlob(replacement.id);
+
+                    if (replacementCachedBlob) {
+                      const objectUrl = makeObjectUrl(replacementCachedBlob);
+                      return {
+                        requestedId: artifact.id,
+                        resolvedArtifact: inspectedEvidenceArtifact(
+                          resolvedArtifact,
+                          replacementCachedBlob
+                        ),
+                        objectUrl,
+                        error: null as string | null,
+                      };
+                    }
+
+                    evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
                       method: "POST",
                       signal: controller.signal,
                       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                      body: JSON.stringify({ userId }),
-                    }
-                  );
-
-                  if (retryMetaRes.ok) {
-                    const retryMeta = await retryMetaRes.json();
-                    const retryArtifacts: Artifact[] = retryMeta.artifacts || [];
-                    const replacement = retryArtifacts
-                      .filter((a: Artifact) => a.step_type === artifact.step_type)
-                      .sort(
-                        (a: Artifact, b: Artifact) =>
-                          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                      )[0];
-
-                    if (replacement && replacement.id !== artifact.id) {
-                      resolvedArtifact = replacement;
-                      const replacementCachedBlob = getCachedKycArtifactBlob(replacement.id);
-
-                      if (replacementCachedBlob) {
-                        const objectUrl = makeObjectUrl(replacementCachedBlob);
-                        return {
-                          requestedId: artifact.id,
-                          resolvedArtifact: inspectedEvidenceArtifact(
-                            resolvedArtifact,
-                            replacementCachedBlob
-                          ),
-                          objectUrl,
-                          error: null as string | null,
-                        };
-                      }
-
-                      evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
-                        method: "POST",
-                        signal: controller.signal,
-                        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                        body: JSON.stringify(nativeEvidenceBody(replacement)),
-                      });
-                    }
+                      body: JSON.stringify(nativeEvidenceBody(replacement)),
+                    });
                   }
                 } else {
                   return {
