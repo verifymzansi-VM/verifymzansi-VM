@@ -26,6 +26,7 @@ export type FoundationRefusal = {
   issues?: Array<{ path: string; message: string }>;
   details?: Record<string, string>;
   redirectUrl?: string;
+  upgradeUrl?: string;
 };
 
 /** Owner route on the foundation project: same-origin and CSRF for writes,
@@ -130,6 +131,7 @@ export async function handleFoundationOwnerRoute<T>({
             ...(known.issues ? { issues: known.issues } : {}),
             ...(known.details ? { details: known.details } : {}),
             ...(known.redirectUrl ? { redirectUrl: known.redirectUrl } : {}),
+            ...(known.upgradeUrl ? { upgradeUrl: known.upgradeUrl } : {}),
           },
           { status: known.status }
         )

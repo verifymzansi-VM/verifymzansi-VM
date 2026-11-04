@@ -1,5 +1,7 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredPostAction } from "@/lib/foundation/restored-post-actions";
 import { z } from "zod";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
@@ -79,6 +81,8 @@ async function wasEditedAfterRejection(
  * Allows the account holder to resubmit rejected content for moderation after editing.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostAction(new NextRequest(request), "resubmit");
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

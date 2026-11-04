@@ -84,6 +84,7 @@ export const metadata = {
 };
 
 type DashboardItem = {
+  revision?: number;
   id: string;
   status: string;
   title: string;
@@ -109,6 +110,7 @@ type DashboardItem = {
 };
 
 type BusinessDashboardRow = {
+  revision?: number;
   id: string;
   business_name?: string | null;
   status: string;
@@ -527,6 +529,7 @@ export default async function ListingsPage({
       : []
     ).map((business) => ({
       id: business.id,
+      revision: business.revision,
       title: business.business_name || "Untitled business",
       status: business.status,
       category: business.category,
@@ -882,8 +885,18 @@ function RejectedListingList({ listings }: { listings: DashboardItem[] }) {
                       Edit
                     </Link>
                   </Button>
-                  <ResubmitButton itemId={listing.id} area={listing.area} />
-                  <DeletePostButton itemId={listing.id} area={listing.area} />
+                  <ResubmitButton
+                    itemId={listing.id}
+                    area={listing.area}
+                    expectedRevision={listing.revision}
+                    contentType={listing.source}
+                  />
+                  <DeletePostButton
+                    itemId={listing.id}
+                    area={listing.area}
+                    expectedRevision={listing.revision}
+                    contentType={listing.source}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -1035,7 +1048,12 @@ function ListingList({
                       }
                     />
                   </div>
-                  <DeletePostButton itemId={listing.id} area={listing.area} />
+                  <DeletePostButton
+                    itemId={listing.id}
+                    area={listing.area}
+                    expectedRevision={listing.revision}
+                    contentType={listing.source}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -1089,6 +1107,8 @@ function LifecycleActions({ item }: { item: DashboardItem }) {
         contentType={item.source}
         id={item.id}
         action={item.source === "listing" ? "mark_sold" : "deactivate"}
+        expectedRevision={item.revision}
+        area={item.area}
       />
     );
   }
@@ -1098,7 +1118,13 @@ function LifecycleActions({ item }: { item: DashboardItem }) {
       item.status === "sold" ||
       (item.status === "hidden" && item.status_reason === OWNER_DEACTIVATED_REASON));
   return canReactivate ? (
-    <ContentLifecycleButton contentType={item.source} id={item.id} action="reactivate" />
+    <ContentLifecycleButton
+      contentType={item.source}
+      id={item.id}
+      action="reactivate"
+      expectedRevision={item.revision}
+      area={item.area}
+    />
   ) : null;
 }
 

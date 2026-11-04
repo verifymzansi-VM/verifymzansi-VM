@@ -209,6 +209,9 @@ try {
     "database/foundation/updates/20261104044439_preserve_post_contact_privacy.sql",
     "database/foundation/updates/20261104045254_align_frontend_receipt_retention.sql",
     "database/foundation/updates/20261104052154_repeatable_frontend_media_uploads.sql",
+    "database/foundation/updates/20261104101932_restored_owner_post_actions.sql",
+    "database/foundation/updates/20261104105223_preserve_nonlive_edit_flow.sql",
+    "database/foundation/updates/20261104105449_enforce_nonlive_review_budget.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -237,7 +240,7 @@ try {
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
-      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;
+      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;
     begin
       ${claims(owner)}
       perform api.save_my_legal_name((api.get_my_profile()->>'revision')::integer,'Fixture','Owner');
@@ -305,7 +308,20 @@ try {
       again:=api.search_post_cards(jsonb_build_object('post_id',answer->>'id','offset',0,'limit',1,'presentation',true,'frontend_presentation',true));
       if again->'items'->0->'presentation'->'frontend'->'data' ? 'location_address' then raise exception 'private seller street address leaked'; end if;
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
-      perform api.set_post_state((answer->>'id')::uuid,rev,'pause');
+      move_request:=gen_random_uuid();
+      edited:=api.execute_my_frontend_post_action(move_request,(answer->>'id')::uuid,rev,'deactivate','listing','market');
+      if edited<>api.execute_my_frontend_post_action(move_request,(answer->>'id')::uuid,rev,'deactivate','listing','market') then raise exception 'deactivation receipt changed';end if;
+      rev:=(edited->>'revision')::integer;move_request:=gen_random_uuid();
+      edited:=api.execute_my_frontend_post_action(move_request,(answer->>'id')::uuid,rev,'reactivate','listing','market');
+      if edited->>'status'<>'live' or edited<>api.execute_my_frontend_post_action(move_request,(answer->>'id')::uuid,rev,'reactivate','listing','market') then raise exception 'unchanged approved reactivation failed';end if;
+      rev:=(edited->>'revision')::integer;
+      perform api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,rev,'deactivate','listing','market');
+      select revision into rev from private.posts where id=(answer->>'id')::uuid;
+      input:=input||jsonb_build_object('request_id',gen_random_uuid(),'expected_revision',rev);
+      input:=jsonb_set(input,'{content,title}','"Saved inactive content awaiting explicit resubmission"');
+      perform api.stage_frontend_post_command('${owner.id}',(input->>'request_id')::uuid,repeat('9',64),input);
+      edited:=api.consume_frontend_post_command((input->>'request_id')::uuid);
+      if edited->>'status'<>'paused' then raise exception 'saving inactive content implicitly resubmitted it';end if;
       again:=api.search_post_cards(jsonb_build_object('post_id',answer->>'id','offset',0,'limit',1,'presentation',true,'frontend_presentation',true));
       if jsonb_array_length(again->'items')<>0 then raise exception 'paused post leaked public presentation'; end if;
       business_input:=jsonb_set(business_input,'{media,0,object_key}',picture->'object_key');
@@ -314,6 +330,7 @@ try {
       perform api.stage_frontend_post_command('${owner.id}','${businessRequest}',repeat('b',64),business_input);
       again:=api.consume_frontend_post_command('${businessRequest}');
       if again->>'status'<>'pending_moderation' or api.get_my_frontend_post((again->>'id')::uuid)->'frontend'->'data'->'services_offered'->>0<>'Example service' then raise exception 'business form data lost'; end if;
+      proof:=again;
       event_input:=jsonb_set(event_input,'{media,0,object_key}',picture->'object_key');
       event_input:=pg_temp.bind_frontend_media(event_input);
       event_input:=jsonb_set(event_input,'{presentation,business_id}',again->'id');
@@ -321,9 +338,45 @@ try {
       again:=api.consume_frontend_post_command('${eventRequest}');
       if again->>'status'<>'pending_moderation' or api.get_my_frontend_post((again->>'id')::uuid)->'frontend'->'data'->'event_details'->>'venue_name'<>'Fixture venue' then raise exception 'event form data lost'; end if;
       c:=api.get_my_frontend_post_manager();
-      if c->>'account_id'<>'${owner.id}' or c->'slot_usage'->0->>'activeUsage'<>'1' or c->'slot_usage'->0->>'activationCount'<>'2' then raise exception 'native manager allowance facts changed'; end if;
+      if c->>'account_id'<>'${owner.id}' or c->'slot_usage'->0->>'activeUsage'<>'1' or c->'slot_usage'->0->>'activationCount'<>'3' then raise exception 'native manager allowance facts changed'; end if;
       if api.get_my_frontend_post((again->>'id')::uuid)->>'expires_at' is null then raise exception 'pending event lost actual end time'; end if;
+      move_request:=gen_random_uuid();
+      c:=api.execute_my_frontend_post_action(move_request,(proof->>'id')::uuid,(proof->>'revision')::integer,'delete','business','business');
+      if c->>'status'<>'deleted' or c<>api.execute_my_frontend_post_action(move_request,(proof->>'id')::uuid,(proof->>'revision')::integer,'delete','business','business') then raise exception 'delete retry lost its receipt';end if;
+      begin perform api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,1,'deactivate','listing','market');raise exception 'stale owner action accepted';exception when sqlstate 'PT409' then null;end;
+      select revision into rev from private.posts where id=(answer->>'id')::uuid;
+      c:=api.save_post_content((answer->>'id')::uuid,rev,jsonb_build_object('title','Changed content requiring independent review'));
+      c:=api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,(c->>'revision')::integer,'reactivate','listing','market');
+      if c->>'status'<>'pending_moderation' then raise exception 'changed content was published without review';end if;
+      ${claims(reviewer)}
+      lease:=api.claim_queue_item('post',(answer->>'id')::uuid);
+      perform api.moderate_post((answer->>'id')::uuid,(c->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
+      if internal.approved_edit_count((answer->>'id')::uuid)<>2 then raise exception 'offline content edit escaped the approved edit count';end if;
+      ${claims(owner)}
+      select revision into rev from private.posts where id=(answer->>'id')::uuid;
+      c:=api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,rev,'deactivate','listing','market');
+      c:=api.save_post_content((answer->>'id')::uuid,(c->>'revision')::integer,jsonb_build_object('title','One change beyond the approved edit allowance'));
+      c:=api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,(c->>'revision')::integer,'reactivate','listing','market');
+      ${claims(reviewer)}
+      lease:=api.claim_queue_item('post',(answer->>'id')::uuid);
+      begin perform api.moderate_post((answer->>'id')::uuid,(c->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
+        raise exception 'offline review bypassed the edit allowance';exception when sqlstate 'PT409' then null;end;
+      perform api.moderate_post((answer->>'id')::uuid,(c->>'revision')::integer,'reject',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,'Synthetic rejected over-budget edit');
+      ${claims(owner)}
+      select revision into rev from private.posts where id=(answer->>'id')::uuid;
+      input:=input||jsonb_build_object('request_id',gen_random_uuid(),'expected_revision',rev);
+      input:=jsonb_set(input,'{content,title}','"Changed content requiring independent review"');
+      input:=jsonb_set(input,'{listing_terms,price}',jsonb_build_object('mode','amount','amount_cents',13000));
+      perform api.stage_frontend_post_command('${owner.id}',(input->>'request_id')::uuid,repeat('8',64),input);
+      c:=api.consume_frontend_post_command((input->>'request_id')::uuid);
+      if c->>'status'<>'rejected' then raise exception 'editing a rejected post implicitly resubmitted it';end if;
+      c:=api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,(c->>'revision')::integer,'resubmit','listing','market');
+      ${claims(reviewer)}
+      lease:=api.claim_queue_item('post',(answer->>'id')::uuid);
+      perform api.moderate_post((answer->>'id')::uuid,(c->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
+      if internal.approved_edit_count((answer->>'id')::uuid)<>2 or not internal.recent_price_change((answer->>'id')::uuid) then raise exception 'offline price-only policy drift';end if;
       ${claims(unverified)}
+      begin perform api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,1,'delete','listing','market');raise exception 'foreign owner action accepted';exception when insufficient_privilege then null;end;
       begin perform api.resolve_my_frontend_media(array[picture->>'object_key'],null);raise exception 'foreign upload key resolved';exception when invalid_parameter_value then null;end;
       if api.get_my_frontend_post((answer->>'id')::uuid) is not null or api.list_my_frontend_posts('listing')->>'total'<>'0' then raise exception 'foreign owner posts leaked'; end if;
       begin perform api.consume_frontend_post_command('${request}');raise exception 'foreign command accepted'; exception when insufficient_privilege then null;end;
@@ -375,6 +428,9 @@ try {
     "native independent moderation",
     "live edit isolation and presentation merge",
     "presentation edit consumes edit budget",
+    "non-live save waits for explicit resubmission",
+    "non-live approval cannot bypass approved edit allowance",
+    "price-only approval retains separate daily limit",
     "public visibility applied before presentation",
     "self-only owner form/list restoration",
     "foreign/unverified command refusal",

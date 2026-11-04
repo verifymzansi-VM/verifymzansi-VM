@@ -5,6 +5,33 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Owner post controls, 4 November 2026
+
+`20261104101932_restored_owner_post_actions.sql` is applied. Delete, resubmit,
+deactivate, sold and reactivate commands bind the represented revision, kind and
+program to a live owner and an action receipt. A lost deletion reply can be
+resolved without touching another record or repeating the deletion. Held content
+remains protected, and receipt retention respects subject holds.
+
+The existing Reactivate control publishes unchanged, previously approved content
+after current native verification, consent and funding validation. Approval
+snapshots are captured from actual native moderation logs; changed content goes
+through review. Neither an owner-provided flag nor a guessed public media URL
+can create an approval. The native fixture exercises direct reactivation,
+duplicate receipts, stale revisions, foreign-owner refusal, deletion retry and
+changed-content review gating. Hidden command props add no rendered controls or
+styling to the selected buttons.
+
+`20261104105223_preserve_nonlive_edit_flow.sql` and
+`20261104105449_enforce_nonlive_review_budget.sql` are also applied. Non-live
+edits save without consuming a trial or implicitly submitting; the existing
+Resubmit/Reactivate controls perform submission. Pending expiry reflects current
+funding. Actual approvals of changed non-live originals count against the same
+edit allowance as live review copies. Listing price-only changes retain their
+separate daily limit. Native transaction tests cover save-then-resubmit,
+exhausted edit-budget refusal, and a permitted price-only approval without
+consuming another structural edit. Hosted checks confirmed both repairs.
+
 ## Retry-safe public media, 4 November 2026
 
 `20261104052154_repeatable_frontend_media_uploads.sql` is applied. An inspected

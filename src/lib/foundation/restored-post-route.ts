@@ -174,7 +174,7 @@ export function handleRestoredPostMutation(
       const result = z
         .strictObject({
           id: z.uuid(),
-          status: z.literal("pending_moderation"),
+          status: z.enum(["pending_moderation", "draft", "rejected", "paused", "expired", "sold"]),
           revision: z.number().int().positive(),
           original_id: z.uuid(),
           edit_of: z.uuid().nullable(),
@@ -183,6 +183,7 @@ export function handleRestoredPostMutation(
       if (target && result.original_id !== target) throw new Error("Post command changed");
       return {
         success: true,
+        pendingReview: result.status === "pending_moderation",
         id: result.original_id,
         status: result.status,
         revision: result.revision,

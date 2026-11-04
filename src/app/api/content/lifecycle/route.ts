@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredPostAction } from "@/lib/foundation/restored-post-actions";
 import { z } from "zod";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createClient } from "@/lib/supabase/server";
@@ -31,6 +33,8 @@ const lifecycleSchema = z.object({
  * straight back live). All rules run in the `owner_content_action` RPC.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostAction(new NextRequest(request), "lifecycle");
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

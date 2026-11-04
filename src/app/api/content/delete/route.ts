@@ -1,5 +1,7 @@
 import { deleteOwnedContent } from "@/lib/content/delete-owned";
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredPostAction } from "@/lib/foundation/restored-post-actions";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -103,6 +105,8 @@ function getDeleteSelectColumns(table: string, ownerColumn: OwnerColumn): string
  * Allows the account holder to permanently delete their own content.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostAction(new NextRequest(request), "delete");
   try {
     const mutationBlock = enforceMutationRequest(request, log);
     if (mutationBlock) return mutationBlock;

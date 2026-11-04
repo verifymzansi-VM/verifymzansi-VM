@@ -6,15 +6,25 @@ import { Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { MarketplaceArea } from "@/types/enums";
+import { usePostActionFields } from "@/hooks/use-post-action-fields";
 
 interface DeletePostButtonProps {
   itemId: string;
   area: MarketplaceArea;
+  expectedRevision?: number;
+  contentType?: "listing" | "business" | "promotion";
   /** Optional label override (default: "Delete") */
   label?: string;
 }
 
-export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostButtonProps) {
+export function DeletePostButton({
+  itemId,
+  area,
+  expectedRevision,
+  contentType,
+  label = "Delete",
+}: DeletePostButtonProps) {
+  const actionFields = usePostActionFields();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -28,7 +38,11 @@ export function DeletePostButton({ itemId, area, label = "Delete" }: DeletePostB
       const res = await fetch("/api/content/delete", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ itemId, area }),
+        body: JSON.stringify({
+          itemId,
+          area,
+          ...actionFields(itemId, expectedRevision, "delete", area, contentType),
+        }),
       });
 
       if (!res.ok) {

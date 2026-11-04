@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, PauseCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { usePostActionFields } from "@/hooks/use-post-action-fields";
+import type { MarketplaceArea } from "@/types/enums";
 
 type LifecycleAction = "mark_sold" | "deactivate" | "reactivate";
 
@@ -34,11 +36,16 @@ export function ContentLifecycleButton({
   contentType,
   id,
   action,
+  expectedRevision,
+  area,
 }: {
   contentType: "listing" | "business" | "promotion";
   id: string;
   action: LifecycleAction;
+  expectedRevision?: number;
+  area?: MarketplaceArea;
 }) {
+  const actionFields = usePostActionFields();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<{ message: string; upgradeUrl?: string } | null>(null);
   const router = useRouter();
@@ -53,7 +60,12 @@ export function ContentLifecycleButton({
       const res = await fetch("/api/content/lifecycle", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ contentType, id, action }),
+        body: JSON.stringify({
+          contentType,
+          id,
+          action,
+          ...actionFields(id, expectedRevision, action, area, contentType),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

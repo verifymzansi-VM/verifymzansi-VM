@@ -4,6 +4,22 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "execute_my_frontend_post_action",
+      "updates": ["updates/20261104101932_restored_owner_post_actions.sql"],
+      "arguments": [
+        { "name": "p_request", "sqlType": "uuid", "optional": false },
+        { "name": "p_post", "sqlType": "uuid", "optional": false },
+        { "name": "p_expected_revision", "sqlType": "integer", "optional": false },
+        { "name": "p_action", "sqlType": "text", "optional": false },
+        { "name": "p_kind", "sqlType": "text", "optional": false },
+        { "name": "p_area", "sqlType": "text", "optional": false }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current live owner; represented revision/program/kind and persisted action receipt. Current verification, consent and funding remain native; unchanged prior approved content may reactivate, changed content requires review"
+    },
+    {
       "name": "reserve_frontend_media_upload",
       "updates": ["updates/20261104052154_repeatable_frontend_media_uploads.sql"],
       "arguments": [
@@ -55,7 +71,10 @@
     },
     {
       "name": "get_my_frontend_post",
-      "updates": ["updates/20261104002445_restored_post_commands.sql"],
+      "updates": [
+        "updates/20261104002445_restored_post_commands.sql",
+        "updates/20261104105223_preserve_nonlive_edit_flow.sql"
+      ],
       "arguments": [{ "name": "p_id", "sqlType": "uuid", "optional": false }],
       "returns": "jsonb",
       "volatility": "v",
@@ -64,7 +83,10 @@
     },
     {
       "name": "list_my_frontend_posts",
-      "updates": ["updates/20261104002445_restored_post_commands.sql"],
+      "updates": [
+        "updates/20261104002445_restored_post_commands.sql",
+        "updates/20261104105223_preserve_nonlive_edit_flow.sql"
+      ],
       "arguments": [
         { "name": "p_kind", "sqlType": "text", "optional": false },
         { "name": "p_area", "sqlType": "text", "optional": true },
@@ -80,7 +102,9 @@
       "name": "consume_frontend_post_command",
       "updates": [
         "updates/20261104002445_restored_post_commands.sql",
-        "updates/20261104042501_preserve_existing_edit_consent.sql"
+        "updates/20261104042501_preserve_existing_edit_consent.sql",
+        "updates/20261104105223_preserve_nonlive_edit_flow.sql",
+        "updates/20261104105449_enforce_nonlive_review_budget.sql"
       ],
       "arguments": [{ "name": "p_request", "sqlType": "uuid", "optional": false }],
       "returns": "jsonb",
