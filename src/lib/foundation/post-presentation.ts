@@ -40,6 +40,21 @@ export const frontendPostPresentationSchema = z.strictObject({
     .max(12),
 });
 export type FrontendPostPresentation = z.infer<typeof frontendPostPresentationSchema>;
+/** Bounded owner layout hints for video; never replace inspected image facts. */
+export function presentedVideoLayout(frontend: FrontendPostPresentation | undefined) {
+  const width = frontend?.data.layout_width ?? frontend?.data.media_width,
+    height = frontend?.data.layout_height ?? frontend?.data.media_height;
+  return typeof width === "number" &&
+    typeof height === "number" &&
+    Number.isInteger(width) &&
+    Number.isInteger(height) &&
+    width > 0 &&
+    height > 0 &&
+    width <= 20000 &&
+    height <= 20000
+    ? { width, height }
+    : null;
+}
 export function presentedFormFields(
   frontend: FrontendPostPresentation | undefined,
   business = false

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -80,6 +81,11 @@ async function cleanupRejectedUpload({
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation")
+    return NextResponse.json(
+      { error: "This upload method is no longer available", code: "upload_method_retired" },
+      { status: 410, headers: { "Cache-Control": "private, no-store" } }
+    );
   const traceId = crypto.randomUUID();
   try {
     const originBlock = enforceSameOriginMutation(request, log);

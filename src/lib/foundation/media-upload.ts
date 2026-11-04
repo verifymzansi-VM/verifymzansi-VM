@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
-import { uploadToR2 } from "../services/storage";
+import { putImmutableR2Bytes, type uploadToR2 } from "../services/storage";
 import { detectMimeFromMagicBytes } from "../utils/file-validation";
 import { scanForMalware } from "../utils/malware-scan";
 import { isReencodableImageType, reencodeImage } from "../utils/image-reencode";
@@ -16,6 +16,13 @@ const intent = z.strictObject({
   object_id: z.uuid(),
   object_key: z.string().regex(/^media\/[0-9a-f-]{36}$/),
   max_bytes: z.number().int().positive(),
+  state: z.enum(["intent", "ready"]),
+  kind: z.enum(["image", "video"]),
+  width: z.number().int().positive().nullable(),
+  height: z.number().int().positive().nullable(),
+  sha256: z.string().nullable(),
+  size_bytes: z.number().int().positive().nullable(),
+  mime: z.string().nullable(),
 });
 const finalized = z.strictObject({ object_id: z.uuid(), state: z.enum(["ready", "rejected"]) });
 export const foundationUploadedMediaSchema = z.strictObject({
@@ -57,7 +64,7 @@ export async function uploadFoundationMedia(
   api: FoundationAuthenticatedApi,
   service: FoundationServiceApi,
   file: File,
-  write = uploadToR2,
+  write: typeof uploadToR2 | undefined = undefined,
   environment = process.env
 ): Promise<FoundationUploadedMedia> {
   const kind = isReencodableImageType(file.type)
@@ -70,7 +77,7 @@ export async function uploadFoundationMedia(
   let bytes = new Uint8Array(await file.arrayBuffer());
   if (
     detectMimeFromMagicBytes(bytes) !== file.type ||
-    !scanForMalware(Buffer.from(bytes), file.type).safe
+    !scanForMalware(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), file.type).safe
   )
     throw new FoundationMediaError(400);
   if (isReencodableImageType(file.type))
@@ -89,35 +96,66 @@ export async function uploadFoundationMedia(
     (kind === "image" && (!dimensions || dimensions.width > 20000 || dimensions.height > 20000))
   )
     throw new FoundationMediaError(400);
-  const started = await api.rpc("begin_media_upload", { p_kind: kind, p_bytes: bytes.length });
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  const started = await api.rpc("reserve_frontend_media_upload", {
+    p_kind: kind,
+    p_bytes: bytes.length,
+    p_digest: digest,
+  });
   if (started.error) refused(started.error);
   const reserved = intent.parse(started.data);
-  if (reserved.max_bytes < bytes.length) throw new FoundationMediaError(503);
+  if (reserved.max_bytes < bytes.length || reserved.kind !== kind)
+    throw new FoundationMediaError(503);
+  const publicUrl = `${(environment.NEXT_PUBLIC_MEDIA_URL || environment.R2_PUBLIC_URL || "https://media.verifymzansi.com").replace(/\/$/, "")}/${reserved.object_key}`;
+  if (reserved.state === "ready") {
+    if (
+      reserved.sha256 !== digest ||
+      reserved.size_bytes !== bytes.length ||
+      reserved.mime !== file.type ||
+      reserved.width !== (dimensions?.width ?? null) ||
+      reserved.height !== (dimensions?.height ?? null)
+    )
+      throw new FoundationMediaError(409);
+    return foundationUploadedMediaSchema.parse({
+      object_id: reserved.object_id,
+      url: publicUrl,
+      kind,
+      width: reserved.width,
+      height: reserved.height,
+    });
+  }
   let stored: Awaited<ReturnType<typeof uploadToR2>>;
   try {
-    stored = await write({
-      bucket: environment.R2_PUBLIC_BUCKET || "verifymzansi-public",
-      key: reserved.object_key,
-      file: new Blob([arrayBuffer(bytes)], { type: file.type }),
-      contentType: file.type,
-    });
+    if (write)
+      stored = await write({
+        bucket: environment.R2_PUBLIC_BUCKET || "verifymzansi-public",
+        key: reserved.object_key,
+        file: new Blob([arrayBuffer(bytes)], { type: file.type }),
+        contentType: file.type,
+      });
+    else {
+      const actual = await putImmutableR2Bytes(
+        environment.R2_PUBLIC_BUCKET || "verifymzansi-public",
+        reserved.object_key,
+        Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+        { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" }
+      );
+      if (
+        actual.length !== bytes.length ||
+        createHash("sha256").update(actual).digest("hex") !== digest
+      )
+        throw new FoundationMediaError(409);
+      stored = { key: reserved.object_key, url: publicUrl };
+    }
   } catch {
-    // A failed/ambiguous transfer must never become a ready object. Do not
-    // discard the reservation: its rejection/intent can be swept safely later.
-    await Promise.resolve(
-      service.rpc("finalize_media", {
-        p_object_id: reserved.object_id,
-        p_size: 0,
-        p_sha256: createHash("sha256").update(bytes).digest("hex"),
-        p_mime: file.type,
-      })
-    ).catch(() => {});
+    // A lost transfer reply can follow a stored object. Keep the digest-bound
+    // intent so the explicit retry resolves the immutable winner safely.
     throw new FoundationMediaError(503);
   }
-  const completed = await service.rpc("finalize_media", {
+  const completed = await service.rpc("complete_frontend_media_upload", {
     p_object_id: reserved.object_id,
     p_size: bytes.length,
-    p_sha256: createHash("sha256").update(bytes).digest("hex"),
+    p_sha256: digest,
     p_mime: file.type,
     ...(dimensions ? { p_width: dimensions.width, p_height: dimensions.height } : {}),
   });

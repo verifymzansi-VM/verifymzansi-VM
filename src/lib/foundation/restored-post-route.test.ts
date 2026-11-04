@@ -24,6 +24,11 @@ const owner = "11111111-1111-4111-8111-111111111111",
   csrf = "c".repeat(64),
   rpc = vi.fn(),
   serviceRpc = vi.fn();
+const mediaObject = "44444444-4444-4444-8444-444444444444";
+const resolved = () => ({
+  data: [{ object_id: mediaObject, object_key: `media/${post}`, kind: "image", state: "ready" }],
+  error: null,
+});
 function body(extra = {}) {
   return {
     postRequestId: receipt,
@@ -69,10 +74,20 @@ beforeEach(() => {
     rpc: serviceRpc,
   } as unknown as ReturnType<typeof createFoundationServiceApi>);
   serviceRpc.mockResolvedValue({ data: true, error: null });
-  rpc.mockResolvedValue({
-    data: { id: post, status: "pending_moderation", revision: 6, original_id: post, edit_of: null },
-    error: null,
-  });
+  rpc.mockImplementation(async (name) =>
+    name === "resolve_my_frontend_media"
+      ? resolved()
+      : {
+          data: {
+            id: post,
+            status: "pending_moderation",
+            revision: 6,
+            original_id: post,
+            edit_of: null,
+          },
+          error: null,
+        }
+  );
 });
 afterEach(() => vi.unstubAllEnvs());
 it("binds validated form data to the verified owner and consumes one receipt once", async () => {
@@ -88,21 +103,27 @@ it("binds validated form data to the verified owner and consumes one receipt onc
   expect(staged.p_digest).toMatch(/^[a-f0-9]{64}$/);
   expect(staged.p_payload).not.toHaveProperty("owner_id");
   expect(staged.p_payload).not.toHaveProperty("role");
-  expect(rpc).toHaveBeenCalledExactlyOnceWith(
+  expect(staged.p_payload.media[0]).toMatchObject({ object_id: mediaObject });
+  expect(staged.p_payload.media[0]).not.toHaveProperty("object_key");
+  expect(rpc).toHaveBeenCalledWith(
     "consume_frontend_post_command",
     { p_request: receipt },
     { get: false }
   );
 });
 it("preserves the native verification refusal and performs no blind command retry", async () => {
-  rpc.mockResolvedValue({
-    data: null,
-    error: { code: "42501", details: "posting_verification_required" },
-  });
+  rpc.mockImplementation(async (name) =>
+    name === "resolve_my_frontend_media"
+      ? resolved()
+      : {
+          data: null,
+          error: { code: "42501", details: "posting_verification_required" },
+        }
+  );
   const response = await handleRestoredPostMutation(request(body()), "listings");
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({ code: "verification_required" });
-  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(rpc.mock.calls.filter((c) => c[0] === "consume_frontend_post_command")).toHaveLength(1);
 });
 it("validates fields and CSRF before staging a command", async () => {
   expect((await handleRestoredPostMutation(request(body(), false), "listings")).status).toBe(403);
@@ -130,8 +151,11 @@ it("requires a loaded revision for an edit and stages the route's target only", 
   });
 });
 it("returns an uncertain outcome without replaying either mutation", async () => {
-  rpc.mockRejectedValue(new Error("response lost"));
+  rpc.mockImplementation(async (name) => {
+    if (name === "resolve_my_frontend_media") return resolved();
+    throw new Error("response lost");
+  });
   expect((await handleRestoredPostMutation(request(body()), "listings")).status).toBe(503);
   expect(serviceRpc).toHaveBeenCalledTimes(1);
-  expect(rpc).toHaveBeenCalledTimes(1);
+  expect(rpc.mock.calls.filter((c) => c[0] === "consume_frontend_post_command")).toHaveLength(1);
 });

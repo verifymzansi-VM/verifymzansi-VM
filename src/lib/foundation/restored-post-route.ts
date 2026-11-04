@@ -11,6 +11,7 @@ import { readFoundationOwnerDashboard } from "./owner-dashboard";
 import { createFoundationServiceApi } from "./service-api";
 import { buildRestoredPostInput, RestoredPostInputError } from "./restored-post-input";
 import { LocalityInputError } from "./restored-locality";
+import { resolveOwnedMedia, OwnedMediaError } from "./owned-media";
 import { readRestoredOwnerPost, restoredOwnerPostRow } from "./restored-owner-posts";
 import { restoredPublicDetail } from "./marketplace-server";
 import { restoredPublicRow, type PublicCollection } from "./marketplace-read";
@@ -80,6 +81,8 @@ function fail(
   throw new Error("Post command unavailable");
 }
 function refusal(error: unknown): FoundationRefusal | null {
+  if (error instanceof OwnedMediaError)
+    return { status: error.status, error: error.message, reason: "media_unavailable" };
   if (error instanceof PostRefusal) return error.refusal;
   if (error instanceof z.ZodError)
     return {
@@ -130,8 +133,26 @@ export function handleRestoredPostMutation(
         if (province && city) fallback = { province, city };
       }
       const normalized = buildRestoredPostInput(collection, input, fallback, !!id);
+      const references = await resolveOwnedMedia(api, {
+        keys: [...normalized.media, ...normalized.presentation_media].map((m) => m.object_key),
+      });
+      const byKey = new Map(references.map((m) => [m.object_key, m]));
+      const bind = <T extends { object_key: string; purpose: string }>(items: T[]) =>
+        items.map(({ object_key, ...item }) => {
+          const found = byKey.get(object_key);
+          if (!found || (item.purpose === "video") !== (found.kind === "video"))
+            throw new RestoredPostInputError(
+              "Use your own finished uploads of the correct media type"
+            );
+          return { ...item, object_id: found.object_id };
+        });
       const target = id?.toLowerCase();
-      const payload = { ...normalized, ...(target ? { target_id: target } : {}) };
+      const payload = {
+        ...normalized,
+        media: bind(normalized.media),
+        presentation_media: bind(normalized.presentation_media),
+        ...(target ? { target_id: target } : {}),
+      };
       const digest = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
       const service = createFoundationServiceApi();
       const staged = await service.rpc("stage_frontend_post_command", {

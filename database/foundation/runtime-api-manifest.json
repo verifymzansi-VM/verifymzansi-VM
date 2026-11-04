@@ -4,6 +4,47 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "reserve_frontend_media_upload",
+      "updates": ["updates/20261104052154_repeatable_frontend_media_uploads.sql"],
+      "arguments": [
+        { "name": "p_kind", "sqlType": "text", "optional": false },
+        { "name": "p_bytes", "sqlType": "integer", "optional": false },
+        { "name": "p_digest", "sqlType": "text", "optional": false }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Live current member reserves or resolves its own normalized content digest without consuming quota twice; native storage allowance and final session checks remain enforced"
+    },
+    {
+      "name": "complete_frontend_media_upload",
+      "updates": ["updates/20261104052154_repeatable_frontend_media_uploads.sql"],
+      "arguments": [
+        { "name": "p_object_id", "sqlType": "uuid", "optional": false },
+        { "name": "p_size", "sqlType": "integer", "optional": false },
+        { "name": "p_sha256", "sqlType": "text", "optional": false },
+        { "name": "p_mime", "sqlType": "text", "optional": false },
+        { "name": "p_width", "sqlType": "integer", "optional": true },
+        { "name": "p_height", "sqlType": "integer", "optional": true }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": false, "service_role": true },
+      "authority": "Trusted scanner/object writer only; exact content receipt, current active owner and immutable completion metadata; repeated acknowledgement returns the same ready object"
+    },
+    {
+      "name": "resolve_my_frontend_media",
+      "updates": ["updates/20261104052154_repeatable_frontend_media_uploads.sql"],
+      "arguments": [
+        { "name": "p_keys", "sqlType": "text[]", "optional": true },
+        { "name": "p_ids", "sqlType": "uuid[]", "optional": true }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Live current member resolves only its own ready media; public keys and object IDs remain independent opaque identifiers; bounded request with no caller-selected owner"
+    },
+    {
       "name": "get_my_frontend_post_manager",
       "updates": ["updates/20261104043441_restored_post_manager.sql"],
       "arguments": [],

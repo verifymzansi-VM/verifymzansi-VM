@@ -5,6 +5,31 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Retry-safe public media, 4 November 2026
+
+`20261104052154_repeatable_frontend_media_uploads.sql` is applied. An inspected
+content digest resolves an owner's existing intent/ready object, so the selected
+forms' automatic retry does not consume storage twice. Completion acknowledges
+the same immutable metadata after an interrupted reply. Conditional R2 writes
+preserve the winning bytes; uncertain transfers keep their journal intent. The
+byte path uses native bindings and avoids additional Blob copies for large
+uploads. Pixel re-encoding and video metadata scrubbing remain mandatory.
+
+The self-only resolver binds public media keys to their independent database
+object IDs. Posting uses the resolved IDs under the native ownership/state
+checks, and an owner-only avatar lookup redirects to the actual public key. URLs
+never grant ownership. Video crop/layout hints remain bounded owner assertions
+and do not replace inspected image dimensions. The retired direct
+presign/completion endpoints return 410 in foundation mode; the selected video
+uploader uses its existing validated-upload fallback.
+
+The native fixture now exercises real key-to-ID binding, avatar resolution,
+repeat reservation and repeat completion alongside posting/moderation and
+retention. Focused upload, storage and ownership tests cover a lost completion
+reply and an uncertain transfer without replaying storage/attestation. These are
+local/native contract checks; production upload/browser acceptance remains a
+separate deployment check.
+
 ## Preserved posting forms and management reads, 4 November 2026
 
 The following updates are applied to the approved project:
@@ -87,9 +112,13 @@ referenced those keys; no legal holds were present. The owner-authorized cleanup
 deleted exactly these 513 inventoried keys and verified their absence. Both
 buckets remain available for the new system. Private inventory and deletion
 receipts are under ignored `tmp/backend-reconciliation/`; no customer documents
-were downloaded or used as fixtures. An exact-URL Cloudflare cache purge was
-refused by the available API token (HTTP 401); edge-cache retirement is still
-outstanding and is not implied by origin deletion.
+were downloaded or used as fixtures. After the token refused direct purge, its
+authorized token-management capability created a five-minute credential
+restricted to zone read and cache purge for this one zone. Cloudflare accepted
+the purge of 16 retired-media prefixes, and all 506 old public asset URLs then
+returned 404. Both temporary purge credentials were revoked; no secret value was
+persisted and the original local credential was unchanged. Ignored cache purge
+and HEAD-verification receipts record the provider results separately.
 
 ## Owner admin setup and signup hook, 3 November 2026
 

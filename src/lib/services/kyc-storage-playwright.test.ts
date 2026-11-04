@@ -52,7 +52,7 @@ describe("isolated KYC encrypted storage lifecycle", () => {
   });
   it("cannot enable local disk writes in production by setting test flags", async () => {
     vi.stubEnv("ENVIRONMENT", "production");
-    const bucket = { put: vi.fn(async () => {}), get: vi.fn(), delete: vi.fn() };
+    const bucket = { put: vi.fn(async () => {}), get: vi.fn(), head: vi.fn(), delete: vi.fn() };
     (globalThis as Record<PropertyKey, unknown>)[contextSymbol] = {
       env: { PRIVATE_BUCKET: bucket },
     };

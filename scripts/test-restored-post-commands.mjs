@@ -208,6 +208,7 @@ try {
     "database/foundation/updates/20261104043441_restored_post_manager.sql",
     "database/foundation/updates/20261104044439_preserve_post_contact_privacy.sql",
     "database/foundation/updates/20261104045254_align_frontend_receipt_retention.sql",
+    "database/foundation/updates/20261104052154_repeatable_frontend_media_uploads.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -219,6 +220,19 @@ try {
     insert into private.posting_terms_current(version) values('${policy.version}');
     insert into private.staff_roles(user_id,role,granted_by) values('${reviewer.id}','moderator','${owner.id}');
     create temporary table restored_owner_form_probe(value jsonb);
+    create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
+    declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
+      select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
+        from jsonb_array_elements((p_input->'media')||(p_input->'presentation_media')) i(value);
+      resolved:=api.resolve_my_frontend_media(keys,null);
+      select coalesce(jsonb_agg((i.value-'object_key')||jsonb_build_object('object_id',
+        (select m.value->'object_id' from jsonb_array_elements(resolved)m(value) where m.value->>'object_key'=i.value->>'object_key'))),'[]'::jsonb)
+        into images from jsonb_array_elements(p_input->'media')i(value);
+      select coalesce(jsonb_agg((i.value-'object_key')||jsonb_build_object('object_id',
+        (select m.value->'object_id' from jsonb_array_elements(resolved)m(value) where m.value->>'object_key'=i.value->>'object_key'))),'[]'::jsonb)
+        into extras from jsonb_array_elements(p_input->'presentation_media')i(value);
+      return p_input||jsonb_build_object('media',images,'presentation_media',extras);
+    end$$;
     do $fixture$ declare c jsonb; i jsonb; face jsonb; lease jsonb; submission jsonb; proof jsonb; picture jsonb; logo jsonb; poster jsonb;
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
@@ -247,13 +261,20 @@ try {
       perform api.finalize_verification_phone('${owner.id}',(proof->>'challenge_id')::uuid,repeat('e',64));
       perform api.confirm_verification_locality('gp','gp_johannesburg');
       if internal.current_verified_identity('${owner.id}') is null then raise exception 'native publication facts missing'; end if;
-      picture:=api.begin_media_upload('image',128);logo:=api.begin_media_upload('image',128);poster:=api.begin_media_upload('image',128);
-      perform api.finalize_media((picture->>'object_id')::uuid,128,repeat('a',64),'image/jpeg',800,600);
-      perform api.finalize_media((logo->>'object_id')::uuid,128,repeat('b',64),'image/jpeg',800,600);
-      perform api.finalize_media((poster->>'object_id')::uuid,128,repeat('c',64),'image/jpeg',800,600);
-      input:=jsonb_set(input,'{media,0,object_id}',picture->'object_id');
-      input:=jsonb_set(input,'{presentation_media,0,object_id}',logo->'object_id');
-      input:=jsonb_set(input,'{presentation_media,1,object_id}',poster->'object_id');
+      picture:=api.reserve_frontend_media_upload('image',128,repeat('a',64));logo:=api.reserve_frontend_media_upload('image',128,repeat('b',64));poster:=api.reserve_frontend_media_upload('image',128,repeat('c',64));
+      if api.reserve_frontend_media_upload('image',128,repeat('a',64))->>'object_id'<>picture->>'object_id' then raise exception 'media retry reserved storage twice';end if;
+      perform api.complete_frontend_media_upload((picture->>'object_id')::uuid,128,repeat('a',64),'image/jpeg',800,600);
+      perform api.complete_frontend_media_upload((picture->>'object_id')::uuid,128,repeat('a',64),'image/jpeg',800,600);
+      perform api.complete_frontend_media_upload((logo->>'object_id')::uuid,128,repeat('b',64),'image/jpeg',800,600);
+      perform api.complete_frontend_media_upload((poster->>'object_id')::uuid,128,repeat('c',64),'image/jpeg',800,600);
+      if api.reserve_frontend_media_upload('image',128,repeat('a',64))->>'state'<>'ready' then raise exception 'completed upload retry lost receipt';end if;
+      perform api.set_my_avatar((api.get_my_profile()->>'revision')::integer,(picture->>'object_id')::uuid);
+      c:=api.resolve_my_frontend_media(null,array[(picture->>'object_id')::uuid]);
+      if c->0->>'object_key'<>picture->>'object_key' then raise exception 'avatar ID/key binding failed';end if;
+      input:=jsonb_set(input,'{media,0,object_key}',picture->'object_key');
+      input:=jsonb_set(input,'{presentation_media,0,object_key}',logo->'object_key');
+      input:=jsonb_set(input,'{presentation_media,1,object_key}',poster->'object_key');
+      input:=pg_temp.bind_frontend_media(input);
       perform api.stage_frontend_post_command('${owner.id}','${request}',repeat('d',64),input);
       begin perform api.stage_frontend_post_command('${owner.id}','${request}',repeat('e',64),input);raise exception 'changed request accepted';exception when sqlstate 'PT409' then null;end;
       answer:=api.consume_frontend_post_command('${request}');again:=api.consume_frontend_post_command('${request}');
@@ -287,12 +308,14 @@ try {
       perform api.set_post_state((answer->>'id')::uuid,rev,'pause');
       again:=api.search_post_cards(jsonb_build_object('post_id',answer->>'id','offset',0,'limit',1,'presentation',true,'frontend_presentation',true));
       if jsonb_array_length(again->'items')<>0 then raise exception 'paused post leaked public presentation'; end if;
-      business_input:=jsonb_set(business_input,'{media,0,object_id}',picture->'object_id');
-      business_input:=jsonb_set(business_input,'{presentation_media,0,object_id}',logo->'object_id');
+      business_input:=jsonb_set(business_input,'{media,0,object_key}',picture->'object_key');
+      business_input:=jsonb_set(business_input,'{presentation_media,0,object_key}',logo->'object_key');
+      business_input:=pg_temp.bind_frontend_media(business_input);
       perform api.stage_frontend_post_command('${owner.id}','${businessRequest}',repeat('b',64),business_input);
       again:=api.consume_frontend_post_command('${businessRequest}');
       if again->>'status'<>'pending_moderation' or api.get_my_frontend_post((again->>'id')::uuid)->'frontend'->'data'->'services_offered'->>0<>'Example service' then raise exception 'business form data lost'; end if;
-      event_input:=jsonb_set(event_input,'{media,0,object_id}',picture->'object_id');
+      event_input:=jsonb_set(event_input,'{media,0,object_key}',picture->'object_key');
+      event_input:=pg_temp.bind_frontend_media(event_input);
       event_input:=jsonb_set(event_input,'{presentation,business_id}',again->'id');
       perform api.stage_frontend_post_command('${owner.id}','${eventRequest}',repeat('c',64),event_input);
       again:=api.consume_frontend_post_command('${eventRequest}');
@@ -301,6 +324,7 @@ try {
       if c->>'account_id'<>'${owner.id}' or c->'slot_usage'->0->>'activeUsage'<>'1' or c->'slot_usage'->0->>'activationCount'<>'2' then raise exception 'native manager allowance facts changed'; end if;
       if api.get_my_frontend_post((again->>'id')::uuid)->>'expires_at' is null then raise exception 'pending event lost actual end time'; end if;
       ${claims(unverified)}
+      begin perform api.resolve_my_frontend_media(array[picture->>'object_key'],null);raise exception 'foreign upload key resolved';exception when invalid_parameter_value then null;end;
       if api.get_my_frontend_post((answer->>'id')::uuid) is not null or api.list_my_frontend_posts('listing')->>'total'<>'0' then raise exception 'foreign owner posts leaked'; end if;
       begin perform api.consume_frontend_post_command('${request}');raise exception 'foreign command accepted'; exception when insufficient_privilege then null;end;
       input:=jsonb_set(input-'target_id'-'expected_revision','{request_id}',to_jsonb('${otherRequest}'::text));

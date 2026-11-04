@@ -74,7 +74,7 @@ describe("storage service", () => {
     it("supports ordinary encrypted uploads with a native binding and no S3 credentials", async () => {
       const put = vi.fn().mockResolvedValue({ etag: "fixture" });
       (globalThis as Record<string, unknown>).__env__ = {
-        PRIVATE_BUCKET: { put, get: vi.fn(), delete: vi.fn() },
+        PRIVATE_BUCKET: { put, get: vi.fn(), head: vi.fn(), delete: vi.fn() },
       };
       const result = await uploadToR2({
         bucket: "verifymzansi-private",
@@ -94,7 +94,7 @@ describe("storage service", () => {
     it("uses the native conditional write and returns its winning ciphertext", async () => {
       const put = vi.fn().mockResolvedValue({ etag: "fixture" });
       (globalThis as Record<string, unknown>).__env__ = {
-        PRIVATE_BUCKET: { put, get: vi.fn(), delete: vi.fn() },
+        PRIVATE_BUCKET: { put, get: vi.fn(), head: vi.fn(), delete: vi.fn() },
       };
       const bytes = Buffer.from("first ciphertext");
       expect(
@@ -118,7 +118,7 @@ describe("storage service", () => {
       const put = vi.fn().mockResolvedValue(null),
         get = vi.fn().mockResolvedValue({ arrayBuffer: async () => new Uint8Array(old).buffer });
       (globalThis as Record<string, unknown>).__env__ = {
-        PRIVATE_BUCKET: { put, get, delete: vi.fn() },
+        PRIVATE_BUCKET: { put, get, head: vi.fn(), delete: vi.fn() },
       };
       expect(
         await putImmutableR2Bytes(
@@ -290,6 +290,7 @@ describe("storage service", () => {
           put,
           get,
           delete: del,
+          head: vi.fn(),
         },
       };
 
@@ -309,6 +310,7 @@ describe("storage service", () => {
           put: vi.fn(),
           get: vi.fn(),
           delete: vi.fn(),
+          head: vi.fn(),
         },
       };
 
@@ -402,6 +404,7 @@ describe("storage service", () => {
           put: vi.fn(),
           get,
           delete: vi.fn(),
+          head: vi.fn(),
         },
       };
 

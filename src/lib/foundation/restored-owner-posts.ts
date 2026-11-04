@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
-import { frontendPostPresentationSchema, presentedFormFields } from "./post-presentation";
+import {
+  frontendPostPresentationSchema,
+  presentedFormFields,
+  presentedVideoLayout,
+} from "./post-presentation";
 import { foundationMediaUrl } from "./public-media-url";
 import reference from "../domains/taxonomy/reference.json";
 import { OWNER_DEACTIVATED_REASON } from "../posting/content-status";
@@ -111,6 +115,7 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
     "";
   const province = reference.provinces.find((p) => p.id === post.content.province_id)?.label ?? "";
   const photos = images.map((m) => foundationMediaUrl(m.object_key)!);
+  const videoLayout = videos.length ? presentedVideoLayout(post.frontend) : null;
   const categoryDetails = post.frontend.data.category_details;
   const businessChannels =
     categoryDetails && typeof categoryDetails === "object" && !Array.isArray(categoryDetails)
@@ -171,10 +176,10 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
       post.media.find((m) => m.purpose === "logo" && m.state === "ready")?.object_key
     ),
     video_thumbnail: photos[0] ?? null,
-    media_width: images[0]?.width ?? videos[0]?.width ?? null,
-    media_height: images[0]?.height ?? videos[0]?.height ?? null,
-    focal_x: images[0]?.focal_x ?? 0.5,
-    focal_y: images[0]?.focal_y ?? 0.5,
+    media_width: videoLayout?.width ?? images[0]?.width ?? videos[0]?.width ?? null,
+    media_height: videoLayout?.height ?? images[0]?.height ?? videos[0]?.height ?? null,
+    focal_x: videos[0]?.focal_x ?? images[0]?.focal_x ?? 0.5,
+    focal_y: videos[0]?.focal_y ?? images[0]?.focal_y ?? 0.5,
     contact_methods: post.contact_channels ?? businessChannels,
     phone: post.contacts.phone ?? null,
     whatsapp: post.contacts.whatsapp ?? null,

@@ -28,7 +28,7 @@ export function restoredAccountProfile(
     phone: context.phone,
     pending_phone: pendingPhone,
     pending_email: null,
-    avatar_url: p.avatar_object_id ? `/api/media/serve/media/${p.avatar_object_id}` : null,
+    avatar_url: p.avatar_object_id ? `/api/profile/avatar/${p.avatar_object_id}` : null,
     masked_phone_public: null,
     legal_first_name: p.legal_first_name,
     legal_last_name: p.legal_last_name,

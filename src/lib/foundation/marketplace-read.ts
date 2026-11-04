@@ -10,7 +10,11 @@ import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
 import { readFoundationPostAffiliations } from "./organisations";
 import { readFoundationPostSponsorships } from "./organisation-sponsorships";
-import { presentedFormFields, type FrontendPostPresentation } from "./post-presentation";
+import {
+  presentedFormFields,
+  presentedVideoLayout,
+  type FrontendPostPresentation,
+} from "./post-presentation";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
 export class MarketplaceQueryError extends Error {}
@@ -51,6 +55,8 @@ export function restoredPublicRow(
   const eventWindow = detail?.event_window ?? presentation?.event_window;
   const frontend = detail?.frontend ?? presentation?.frontend;
   const formFields = presentedFormFields(frontend, post.kind === "business");
+  const videoLayout = videos.length ? presentedVideoLayout(frontend) : null;
+  const firstVideo = media.find((row) => row.kind === "video" && row.position === 0);
   if (post.kind === "listing") delete formFields.location_address;
   const ticketPrice =
     post.kind === "event" &&
@@ -100,10 +106,10 @@ export function restoredPublicRow(
     cover_video: videos[0] ?? null,
     gallery_photos: photos,
     logo_url: foundationMediaUrl(media.find((row) => row.purpose === "logo")?.object_key),
-    focal_x: cover?.focal_x ?? null,
-    focal_y: cover?.focal_y ?? null,
-    media_width: cover?.width ?? null,
-    media_height: cover?.height ?? null,
+    focal_x: firstVideo?.focal_x ?? cover?.focal_x ?? null,
+    focal_y: firstVideo?.focal_y ?? cover?.focal_y ?? null,
+    media_width: videoLayout?.width ?? cover?.width ?? null,
+    media_height: videoLayout?.height ?? cover?.height ?? null,
     boost_until: null,
     featured_until: null,
     featured: false,

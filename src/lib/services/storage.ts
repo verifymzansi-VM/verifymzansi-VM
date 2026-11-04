@@ -6,6 +6,7 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import type { R2Bucket } from "@cloudflare/workers-types";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import { createLogger } from "@/lib/utils/logger";
 import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
@@ -39,31 +40,7 @@ async function playwrightStoragePath(bucket: string, key: string): Promise<strin
  * and verification documents.
  */
 
-/**
- * Minimal R2Bucket interface matching the Cloudflare Workers R2 binding API.
- * Full types are in @cloudflare/workers-types but that package is not installed.
- */
-interface R2BucketBinding {
-  put(
-    key: string,
-    value: ArrayBuffer | ArrayBufferView | ReadableStream | Blob | string | null,
-    options?: {
-      customMetadata?: Record<string, string>;
-      httpMetadata?: { contentType?: string; cacheControl?: string };
-      onlyIf?: { etagDoesNotMatch: string };
-    }
-  ): Promise<unknown>;
-  delete(keys: string | string[]): Promise<void>;
-  head(key: string): Promise<{ size: number } | null>;
-  get(
-    key: string,
-    options?: Record<string, unknown>
-  ): Promise<{
-    arrayBuffer(): Promise<ArrayBuffer>;
-    size?: number;
-    httpMetadata?: { contentType?: string };
-  } | null>;
-}
+type R2BucketBinding = Pick<R2Bucket, "put" | "get" | "head" | "delete">;
 
 type CloudflareContextLike = {
   env?: Record<string, unknown>;
@@ -80,6 +57,7 @@ function isR2BucketBinding(value: unknown): value is R2BucketBinding {
   return (
     typeof candidate.put === "function" &&
     typeof candidate.get === "function" &&
+    typeof candidate.head === "function" &&
     typeof candidate.delete === "function"
   );
 }
@@ -406,7 +384,8 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
 export async function putImmutableR2Bytes(
   bucket: string,
   key: string,
-  bytes: Buffer
+  bytes: Buffer,
+  metadata: { contentType?: string; cacheControl?: string } = {}
 ): Promise<Buffer> {
   assertSafeStorageKey(key);
   const fixture = await playwrightStoragePath(bucket, key);
@@ -423,10 +402,17 @@ export async function putImmutableR2Bytes(
   }
   const binding = await getR2BucketBinding(bucket);
   if (binding) {
-    const written = await binding.put(key, new Uint8Array(bytes), {
-      onlyIf: { etagDoesNotMatch: "*" },
-      httpMetadata: { contentType: "application/octet-stream", cacheControl: "private, no-store" },
-    });
+    const written = await binding.put(
+      key,
+      new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+      {
+        onlyIf: { etagDoesNotMatch: "*" },
+        httpMetadata: {
+          contentType: metadata.contentType ?? "application/octet-stream",
+          cacheControl: metadata.cacheControl ?? "private, no-store",
+        },
+      }
+    );
     if (written) return bytes;
   } else {
     try {
@@ -435,8 +421,8 @@ export async function putImmutableR2Bytes(
           Bucket: bucket,
           Key: key,
           Body: bytes,
-          ContentType: "application/octet-stream",
-          CacheControl: "private, no-store",
+          ContentType: metadata.contentType ?? "application/octet-stream",
+          CacheControl: metadata.cacheControl ?? "private, no-store",
           IfNoneMatch: "*",
         }),
         r2SendOptions(R2_TRANSFER_TIMEOUT_MS)
@@ -449,7 +435,7 @@ export async function putImmutableR2Bytes(
   }
   const existing = await getR2ObjectBytes(bucket, key);
   if (!existing) throw new Error("Immutable object is unavailable");
-  return Buffer.from(existing.bytes);
+  return Buffer.from(existing.bytes.buffer, existing.bytes.byteOffset, existing.bytes.byteLength);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { buildRestoredPostInput, restoredMediaObjectId } from "./restored-post-input";
+import { buildRestoredPostInput, restoredMediaKey } from "./restored-post-input";
 const id = "11111111-1111-4111-8111-111111111111",
   photo = `https://media.verifymzansi.com/media/${id}`;
 const transport = {
@@ -35,7 +35,7 @@ it("maps canonical cents and attributes while retaining the selected form's addr
     attributes: { levy_cents: 1234, rates_taxes_cents: 987 },
     detail: { contact_channels: ["form"] },
     presentation: { location_address: "Example address", location_town: "Example suburb" },
-    media: [{ object_id: id, purpose: "cover", focal_x: 0.5, focal_y: 0.5 }],
+    media: [{ object_key: `media/${id}`, purpose: "cover", focal_x: 0.5, focal_y: 0.5 }],
   });
 });
 it("distinguishes salary not provided from a free item and keeps salary assertions", () => {
@@ -57,10 +57,10 @@ it("distinguishes salary not provided from a free item and keeps salary assertio
   });
 });
 it("does not accept an older unjournalled URL, forged cross-host media or absent explicit consent", () => {
-  expect(() =>
-    restoredMediaObjectId("https://media.verifymzansi.com/media/listing/old.jpg")
-  ).toThrow("older upload");
-  expect(() => restoredMediaObjectId(`https://untrusted.example/media/${id}`)).toThrow(
+  expect(() => restoredMediaKey("https://media.verifymzansi.com/media/listing/old.jpg")).toThrow(
+    "older upload"
+  );
+  expect(() => restoredMediaKey(`https://untrusted.example/media/${id}`)).toThrow(
     "Upload the media"
   );
   expect(() => buildRestoredPostInput("listings", { ...listing, termsAccepted: false })).toThrow(
@@ -87,8 +87,8 @@ it("keeps logo and video poster references separate from gallery allowance", () 
     videoThumbnail: photo,
   });
   expect(command.presentation_media).toEqual([
-    { object_id: id, purpose: "logo", position: 0 },
-    { object_id: id, purpose: "poster", position: 0 },
+    { object_key: `media/${id}`, purpose: "logo", position: 0 },
+    { object_key: `media/${id}`, purpose: "poster", position: 0 },
   ]);
 });
 it("uses the confirmed locality only as an online business's administrative locality and preserves the empty public address", () => {

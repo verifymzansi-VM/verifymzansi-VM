@@ -20,24 +20,24 @@ const envelope = z.looseObject({
   expectedRevision: z.number().int().min(1).max(2147483646).optional(),
 });
 export class RestoredPostInputError extends Error {}
-export function restoredMediaObjectId(value: string) {
+export function restoredMediaKey(value: string) {
   if (!isTrustedPlatformMediaUrl(value))
     throw new RestoredPostInputError("Upload the media through this form before submitting");
   const path = new URL(value).pathname.replace(/^\/api\/media\/serve\//, "/");
   const match = /^\/media\/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$/.exec(path);
   if (!match)
     throw new RestoredPostInputError("An older upload cannot be used. Upload the file again.");
-  return match[1]!;
+  return `media/${match[1]!}`;
 }
 type MediaItem = {
-  object_id: string;
+  object_key: string;
   purpose: "cover" | "gallery" | "video";
   position: number;
   focal_x?: number;
   focal_y?: number;
 };
 type PresentationMedia = {
-  object_id: string;
+  object_key: string;
   purpose: "logo" | "poster" | "venue";
   position: number;
 };
@@ -52,25 +52,25 @@ function media(
 ) {
   const photos = [...new Set(images.filter(Boolean))];
   const items: MediaItem[] = photos.map((url, index) => ({
-    object_id: restoredMediaObjectId(url),
+    object_key: restoredMediaKey(url),
     purpose: index === 0 ? "cover" : "gallery",
     position: index === 0 ? 0 : index - 1,
     ...(index === 0 ? { focal_x: focalX ?? 0.5, focal_y: focalY ?? 0.5 } : {}),
   }));
   items.push(
     ...[...new Set(videos.filter(Boolean))].map((url, index) => ({
-      object_id: restoredMediaObjectId(url),
+      object_key: restoredMediaKey(url),
       purpose: "video" as const,
       position: index,
+      ...(index === 0 ? { focal_x: focalX ?? 0.5, focal_y: focalY ?? 0.5 } : {}),
     }))
   );
   const extra: PresentationMedia[] = [];
-  if (logo) extra.push({ object_id: restoredMediaObjectId(logo), purpose: "logo", position: 0 });
-  if (poster)
-    extra.push({ object_id: restoredMediaObjectId(poster), purpose: "poster", position: 0 });
+  if (logo) extra.push({ object_key: restoredMediaKey(logo), purpose: "logo", position: 0 });
+  if (poster) extra.push({ object_key: restoredMediaKey(poster), purpose: "poster", position: 0 });
   extra.push(
     ...[...new Set(venue)].map((url, index) => ({
-      object_id: restoredMediaObjectId(url),
+      object_key: restoredMediaKey(url),
       purpose: "venue" as const,
       position: index,
     }))
@@ -159,6 +159,8 @@ export function buildRestoredPostInput(
         location_town: data.town || null,
         location_address: data.address || null,
         source_attributes: sourceAttrs,
+        layout_width: data.videos.length ? (data.media_width ?? null) : null,
+        layout_height: data.videos.length ? (data.media_height ?? null) : null,
       },
     };
   }
@@ -268,6 +270,8 @@ export function buildRestoredPostInput(
       business_id: data.business_id ?? null,
       ticket_price_cents:
         data.price_zar === undefined ? null : parseAttributeMoney(String(data.price_zar)),
+      layout_width: data.videos.length ? (data.media_width ?? null) : null,
+      layout_height: data.videos.length ? (data.media_height ?? null) : null,
     },
   };
 }
