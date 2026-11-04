@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { afterEach, expect, it, vi } from "vitest";
+import { publicPostCoreSchema } from "./public-post-contract";
 const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock("./server-public", () => ({ foundationServerPublicApi: () => ({ rpc }) }));
 import {
@@ -98,15 +99,41 @@ it("preserves selected public contact methods without putting a phone number in 
     media: [],
     seller: { public_name: "Tester T.", avatar_object_key: null, identity_verified: true },
   };
-  rpc.mockImplementation(async (name: string) => ({
-    data: name === "get_public_post" ? post : ["call", "whatsapp"],
-    error: null,
-  }));
+  rpc.mockImplementation(async (name: string) => {
+    if (name === "get_public_post") return { data: post, error: null };
+    if (name === "get_public_contact_channels") return { data: ["call", "whatsapp"], error: null };
+    if (name === "search_post_cards")
+      return {
+        data: {
+          items: [
+            {
+              ...publicPostCoreSchema.strip().parse(post),
+              summary: "",
+              score: null,
+              preview: { image_key: null, video_key: null },
+              presentation: {
+                business_type: null,
+                event_window: null,
+                frontend: { data: {}, media: [] },
+              },
+            },
+          ],
+          total: 1,
+          next_cursor: null,
+          sort: "newest",
+          facets: { categories: {} },
+          presentation_contract: "restored-public-v1",
+        },
+        error: null,
+      };
+    throw new Error(`Unexpected public read ${name}`);
+  });
   const row = await restoredListingDetail(id);
   expect(row?.contact_methods).toEqual(["call", "whatsapp"]);
   expect(rpc.mock.calls.map(([name]) => name)).toEqual([
     "get_public_post",
     "get_public_contact_channels",
+    "search_post_cards",
   ]);
   expect(JSON.stringify(row)).not.toContain("+27");
 });

@@ -12,6 +12,7 @@ import {
   postingAllowanceSchema,
   restoredPostingPlanInfo,
 } from "../src/lib/foundation/posting-allowance.ts";
+import { parseStaffModerationQueue } from "../src/lib/foundation/staff-moderation-queue.ts";
 import {
   parseRestoredOwnerPost,
   restoredOwnerPostRow,
@@ -98,25 +99,30 @@ try {
   stage = "real local Auth sessions";
   const owner = await user("owner"),
     reviewer = await user("reviewer"),
-    unverified = await user("unverified");
+    unverified = await user("unverified"),
+    governor = await user("governor");
   stage = "real local reviewer TOTP";
-  const enrolled = await reviewer.client.auth.mfa.enroll({ factorType: "totp" });
-  assert.equal(enrolled.error, null);
-  const challenge = await reviewer.client.auth.mfa.challenge({ factorId: enrolled.data.id });
-  assert.equal(challenge.error, null);
-  const verified = await reviewer.client.auth.mfa.verify({
-    factorId: enrolled.data.id,
-    challengeId: challenge.data.id,
-    code: nativeTotp(enrolled.data.totp.secret),
-  });
-  assert.equal(verified.error, null);
-  reviewer.claims = JSON.parse(
-    Buffer.from(
-      (await reviewer.client.auth.getSession()).data.session.access_token.split(".")[1],
-      "base64url"
-    )
-  );
-  assert.equal(reviewer.claims.aal, "aal2");
+  async function verifyTotp(account) {
+    const enrolled = await account.client.auth.mfa.enroll({ factorType: "totp" });
+    assert.equal(enrolled.error, null);
+    const challenge = await account.client.auth.mfa.challenge({ factorId: enrolled.data.id });
+    assert.equal(challenge.error, null);
+    const verified = await account.client.auth.mfa.verify({
+      factorId: enrolled.data.id,
+      challengeId: challenge.data.id,
+      code: nativeTotp(enrolled.data.totp.secret),
+    });
+    assert.equal(verified.error, null);
+    account.claims = JSON.parse(
+      Buffer.from(
+        (await account.client.auth.getSession()).data.session.access_token.split(".")[1],
+        "base64url"
+      )
+    );
+    assert.equal(account.claims.aal, "aal2");
+  }
+  await verifyTotp(reviewer);
+  await verifyTotp(governor);
   const claims = (account) =>
     `perform set_config('request.jwt.claims','${JSON.stringify(account.claims)}',true);`;
   const request = randomUUID(),
@@ -217,6 +223,8 @@ try {
     "database/foundation/updates/20261104105223_preserve_nonlive_edit_flow.sql",
     "database/foundation/updates/20261104105449_enforce_nonlive_review_budget.sql",
     "database/foundation/updates/20261104110442_restored_posting_allowance.sql",
+    "database/foundation/updates/20261104111941_restored_staff_moderation_queue.sql",
+    "database/foundation/updates/20261104155022_restored_staff_claim_controls.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -227,8 +235,10 @@ try {
     insert into private.posting_terms_versions(version,document_hash) values('${policy.version}','${policy.document_hash}');
     insert into private.posting_terms_current(version) values('${policy.version}');
     insert into private.staff_roles(user_id,role,granted_by) values('${reviewer.id}','moderator','${owner.id}');
+    insert into private.staff_roles(user_id,role,granted_by) values('${governor.id}','governor','${owner.id}');
     create temporary table restored_owner_form_probe(value jsonb);
     create temporary table restored_allowance_probe(value jsonb);
+    create temporary table restored_staff_queue_probe(value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -246,9 +256,10 @@ try {
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
-      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;
+      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;
     begin
       ${claims(owner)}
+      begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
       c:=api.get_my_frontend_posting_allowance('market');
       if c->>'capacity'<>'0' or c->'trial_offer'->>'eligible'<>'true' or c->>'trial_used'<>'false' then raise exception 'initial trial allowance drift';end if;
       insert into restored_allowance_probe values(c);
@@ -298,7 +309,39 @@ try {
       if not internal.media_object_in_use((logo->>'object_id')::uuid) or not internal.media_object_in_use((poster->>'object_id')::uuid) then raise exception 'supplemental media omitted from retention'; end if;
       if (select payload from private.frontend_post_commands where request_id='${request}') is not null then raise exception 'redundant command payload retained'; end if;
       ${claims(reviewer)}
+      c:=api.get_frontend_staff_moderation_queue();
+      if c->>'total'<>'1' or c->'items'->0->'review'<>'null'::jsonb or c->'items'->0->'owner_id'<>'null'::jsonb then raise exception 'unclaimed submitted body exposed';end if;
+      insert into restored_staff_queue_probe values(c);
       lease:=api.claim_queue_item('post',(answer->>'id')::uuid);
+      ${claims(unverified)}
+      queue_case:=api.open_verification_case();
+      ${claims(reviewer)}
+      case_lease:=api.claim_evidence_case((queue_case->>'case_id')::uuid);
+      c:=api.get_frontend_staff_claims();
+      if c->>'own_count'<>'2' or jsonb_array_length(c->'items')<>2 then raise exception 'mixed own claim snapshot drift';end if;
+      begin perform api.get_frontend_staff_claims('[{"type":null,"id":"${request}"}]'::jsonb);raise exception 'null claim type accepted';exception when invalid_parameter_value then null;end;
+      ${claims(governor)}
+      c:=api.get_frontend_staff_claims(jsonb_build_array(jsonb_build_object('type','listing','id',answer->>'id'),jsonb_build_object('type','verification_step','id',queue_case->>'case_id')));
+      if c->>'own_count'<>'0' or jsonb_array_length(c->'items')<>2 or exists(select 1 from jsonb_array_elements(c->'items')x where x->'generation'<>'null'::jsonb or x->'nonce'<>'null'::jsonb or x->>'mine'<>'false') then raise exception 'foreign lease secret exposed';end if;
+      perform api.reassign_frontend_staff_claim('verification_step',(queue_case->>'case_id')::uuid,null,'Synthetic queue handoff');
+      if (select count(*) from private.frontend_evidence_claim_events where case_id=(queue_case->>'case_id')::uuid)<>1 then raise exception 'evidence handoff unaudited';end if;
+      ${claims(reviewer)}
+      begin perform api.renew_evidence_claim((queue_case->>'case_id')::uuid,case_lease->>'claim_generation',(case_lease->>'claim_nonce')::uuid);raise exception 'released lease renewed';exception when insufficient_privilege then null;end;
+      case_lease:=api.claim_evidence_case((queue_case->>'case_id')::uuid);
+      ${claims(governor)}
+      begin perform api.reassign_frontend_staff_claim('verification_step',(queue_case->>'case_id')::uuid,'${unverified.id}','Synthetic self review');raise exception 'case assigned to its subject';exception when insufficient_privilege then null;end;
+      perform api.reassign_frontend_staff_claim('verification_step',(queue_case->>'case_id')::uuid,'${governor.id}','Synthetic independent assignment');
+      perform api.reassign_frontend_staff_claim('verification_step',(queue_case->>'case_id')::uuid,'${reviewer.id}','Synthetic independent handback');
+      ${claims(reviewer)}
+      if api.control_my_frontend_staff_claims('renew')->>'renewed'<>'2' then raise exception 'mixed renewal failed';end if;
+      if api.control_my_frontend_staff_claims('release')->>'released'<>'2' or api.get_frontend_staff_claims()->>'own_count'<>'0' then raise exception 'mixed release failed';end if;
+      c:=api.claim_frontend_staff_items('content',10);lease:=c->'items'->0;
+      if c->>'lease_minutes'<>'15' or jsonb_array_length(c->'items')<>1 then raise exception 'native content batch claim drift';end if;
+      c:=api.claim_frontend_staff_items('kyc',10);
+      if jsonb_array_length(c->'items')<>0 or c->>'lease_minutes'<>'30' then raise exception 'unsubmitted evidence case entered review queue';end if;
+      c:=api.get_frontend_staff_moderation_queue();
+      if c->>'my_claims'<>'1' or c->'items'->0->'review'->>'id'<>answer->>'id' or c->'items'->0->'claim'->>'nonce'<>lease->>'claim_nonce' then raise exception 'claimed moderation context drift';end if;
+      insert into restored_staff_queue_probe values(c);
       perform api.moderate_post((answer->>'id')::uuid,(answer->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       ${claims(owner)}
@@ -424,6 +467,7 @@ try {
     end $fixture$;
     select value from restored_owner_form_probe;
     select 'ALLOWANCE:'||value::text from restored_allowance_probe;
+    select 'STAFF_QUEUE:'||value::text from restored_staff_queue_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -436,6 +480,15 @@ try {
   assert.equal(restoredPostingPlanInfo(allowances[0]).freePostAvailable, true);
   assert.equal(restoredPostingPlanInfo(allowances[1]).freePostAvailable, false);
   assert.equal(restoredPostingPlanInfo(allowances[1]).currentCount, 1);
+  const queues = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("STAFF_QUEUE:"))
+    .map((line) => parseStaffModerationQueue(JSON.parse(line.slice(12)), reviewer.id));
+  assert.equal(queues.length, 2);
+  assert.equal(queues[0].allItems[0].description, undefined);
+  assert.equal(queues[0].allItems[0].foundation, undefined);
+  assert.ok(queues[1].allItems[0].description);
+  assert.ok(queues[1].allItems[0].foundation.claimNonce);
   const restored = parseRestoredOwnerPost(
     JSON.parse(outcome.split("\n").find((line) => line.startsWith("{")))
   );
@@ -447,6 +500,8 @@ try {
   report.checks.push(
     "listing/business/event form commands",
     "self-only native posting gate, trial claim and current capacity DTOs",
+    "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
+    "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",
     "native independent moderation",

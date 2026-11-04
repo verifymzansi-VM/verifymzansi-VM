@@ -64,8 +64,8 @@ export async function searchFoundationPresentedCards(api: FoundationPublicApi, i
     plain.items.some((item, index) => {
       const fields = enriched.items[index]!.presentation;
       return (
-        ((item.kind === "business" || fields.frontend?.business_contacts === undefined) &&
-          (item.kind === "event") !== (fields.event_window !== null)) ||
+        (item.kind !== "business" && fields.frontend?.business_contacts !== undefined) ||
+        (item.kind === "event") !== (fields.event_window !== null) ||
         (item.kind !== "business" && fields.business_type !== null)
       );
     })

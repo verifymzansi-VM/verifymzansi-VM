@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import type { NativeContentReview } from "@/lib/admin/native-content-review";
+import { getDataBackend } from "@/lib/data-backend";
 
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
 export type ContentDecision = "approve" | "reject";
 
-export function useContentDecision<T extends { id: string }>({
+export function useContentDecision<T extends { id: string; foundation?: NativeContentReview }>({
   getArea,
   getContentType,
   getEndpoint = () => "/api/admin/content/decide",
@@ -27,8 +29,11 @@ export function useContentDecision<T extends { id: string }>({
   const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const inFlight = useRef(false);
+  const reviewVersion = useRef(0);
 
   function openReview(item: T, nextDecision: ContentDecision, initialRejectReason = "") {
+    ++reviewVersion.current;
     setSelectedItem(item);
     setDecision(nextDecision);
     setRejectReason(initialRejectReason);
@@ -36,6 +41,7 @@ export function useContentDecision<T extends { id: string }>({
   }
 
   function closeDialog() {
+    ++reviewVersion.current;
     setSelectedItem(null);
     setDecision(null);
     setRejectReason("");
@@ -43,13 +49,19 @@ export function useContentDecision<T extends { id: string }>({
   }
 
   async function submitDecision() {
-    if (!selectedItem || !decision) return;
+    if (!selectedItem || !decision || inFlight.current) return;
 
     if (decision === "reject" && !rejectReason.trim()) {
       setError(rejectReasonRequiredMessage);
       return;
     }
 
+    if (getDataBackend() === "foundation" && !selectedItem.foundation) {
+      setError("Claim this item and reload the queue before deciding it.");
+      return;
+    }
+    inFlight.current = true;
+    const submittedVersion = reviewVersion.current;
     setLoading(true);
     setError("");
 
@@ -70,6 +82,7 @@ export function useContentDecision<T extends { id: string }>({
               }),
           decision,
           reason: decision === "reject" ? rejectReason : undefined,
+          ...(getDataBackend() === "foundation" ? selectedItem.foundation : {}),
         }),
       });
 
@@ -78,11 +91,14 @@ export function useContentDecision<T extends { id: string }>({
         throw new Error(data.error || "Failed to submit decision");
       }
 
+      if (submittedVersion !== reviewVersion.current) return;
       closeDialog();
       onDecisionComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      if (submittedVersion === reviewVersion.current)
+        setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   }

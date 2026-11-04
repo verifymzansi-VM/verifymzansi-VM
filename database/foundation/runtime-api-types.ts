@@ -9,6 +9,17 @@ export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
       get_my_dashboard: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_frontend_staff_claims: { Args: { p_items?: Json }; Returns: Json };
+      control_my_frontend_staff_claims: { Args: { p_action: string }; Returns: Json };
+      claim_frontend_staff_items: { Args: { p_queue: string; p_limit: number }; Returns: Json };
+      reassign_frontend_staff_claim: {
+        Args: { p_type: string; p_id: string; p_to: string | null; p_reason: string };
+        Returns: Json;
+      };
+      get_frontend_staff_moderation_queue: {
+        Args: { p_area?: string; p_limit?: number };
+        Returns: Json;
+      };
       get_my_frontend_posting_allowance: { Args: { p_area: string }; Returns: Json };
       execute_my_frontend_post_action: {
         Args: {

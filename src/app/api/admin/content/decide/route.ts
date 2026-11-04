@@ -1,5 +1,7 @@
 import { trialErrorMessage } from "@/lib/billing/trial-errors";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredModerationDecision } from "@/lib/foundation/restored-moderation-route";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -19,6 +21,8 @@ const log = createLogger("AdminContentDecide");
  * Approve or reject content pending moderation.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredModerationDecision(new NextRequest(request), false);
   try {
     const guard = await enforceAdminMutationGuard({
       request,

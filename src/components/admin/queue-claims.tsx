@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getDataBackend } from "@/lib/data-backend";
 import type { ClaimItemType, ClaimQueue, ClaimView } from "@/lib/services/queue-claims";
 
 /**
@@ -39,7 +40,7 @@ export function useQueueClaim(type: ClaimItemType, id: string) {
   const { claims, mustClaim } = useContext(QueueClaimsContext);
   const claim = claims[`${type}:${id}`];
   const heldByOther = Boolean(claim && !claim.mine);
-  const blocked = heldByOther || (mustClaim && !claim?.mine);
+  const blocked = heldByOther || ((mustClaim || getDataBackend() === "foundation") && !claim?.mine);
   const blockedReason = heldByOther
     ? `${claim?.holderName ?? "Another moderator"} is working on this`
     : blocked
@@ -134,6 +135,8 @@ export function QueueClaimBar({
   const [, startTransition] = useTransition();
 
   if (!canClaim) return null;
+  const claimMinutes =
+    getDataBackend() === "foundation" && (queue === "kyc" || queue === "business_kyc") ? 30 : 15;
 
   async function run(action: string, body: Record<string, unknown>) {
     setBusy(action);
@@ -153,7 +156,7 @@ export function QueueClaimBar({
     <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3 text-sm">
       <p className="mr-auto">
         {myClaims === 0
-          ? "Claim items to start. Claims last 15 minutes."
+          ? `Claim items to start. Claims last ${claimMinutes} minutes.`
           : `You hold ${myClaims} ${myClaims === 1 ? "item" : "items"} in this queue.`}
       </p>
       <Button

@@ -1,4 +1,9 @@
 import { requireStaff } from "@/lib/auth/require-staff";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readStaffModerationQueue } from "@/lib/foundation/staff-moderation-queue";
+import { FoundationStaffReadError } from "@/lib/foundation/staff-read";
+import { redirect } from "next/navigation";
 import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
@@ -49,14 +54,12 @@ function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString();
 }
 
-export default async function AdminModerationPage() {
-  const { user, role } = await requireStaff("queue:view");
-
+async function loadLegacyModerationQueue(userId: string) {
   const admin = createAdminClient();
 
   // The oldest waiting items of each kind with their true totals, plus the
   // items the viewer holds, even beyond the limit.
-  const myClaimed = await getMyClaimedItems(user.id, "content");
+  const myClaimed = await getMyClaimedItems(userId, "content");
   const mine = (type: string) => myClaimed.filter((c) => c.type === type).map((c) => c.id);
   /** No extra query when the viewer holds nothing of this kind. */
   const NONE = Promise.resolve({ data: [] as never[], error: null });
@@ -196,14 +199,35 @@ export default async function AdminModerationPage() {
     ...editItems,
   ]);
 
-  const shownCount = allItems.length;
   const [claims, myClaims] = await Promise.all([
     getClaimsForItems(
-      user.id,
+      userId,
       allItems.map((item) => ({ type: claimTypeOf(item), id: item.id }))
     ),
-    countMyClaims(user.id, "content"),
+    countMyClaims(userId, "content"),
   ]);
+
+  return { allItems, totalWaiting, claims, myClaims, failedAreas };
+}
+
+export default async function AdminModerationPage() {
+  const { user, role } = await requireStaff("queue:view");
+  const result =
+    getDataBackend() === "foundation"
+      ? await (async () => {
+          const current = await readFoundationServerSession();
+          if (current.user.id !== user.id) throw new FoundationStaffReadError(503);
+          try {
+            return await readStaffModerationQueue(current.api, user.id);
+          } catch (error) {
+            if (error instanceof FoundationStaffReadError && error.status === 403)
+              redirect("/staff/two-step");
+            throw error;
+          }
+        })()
+      : await loadLegacyModerationQueue(user.id);
+  const { allItems, totalWaiting, claims, myClaims, failedAreas } = result;
+  const shownCount = allItems.length;
 
   return (
     <div className="min-w-0 w-full max-w-full space-y-6 overflow-x-hidden">

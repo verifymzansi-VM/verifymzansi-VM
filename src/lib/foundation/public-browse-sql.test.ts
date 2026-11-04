@@ -13,6 +13,25 @@ const update = readFileSync(
   "database/foundation/updates/20261029191349_restore_public_browse_contract.sql",
   "utf8"
 );
+const postingUpdate = readFileSync(
+  "database/foundation/updates/20261104002445_restored_post_commands.sql",
+  "utf8"
+);
+// Execute the actual public-projection sections of the later update. Owner,
+// moderation and receipt commands are covered by the native fixture separately.
+const publicCardPatchStart = postingUpdate.indexOf(
+  "  select prosrc into body from pg_proc where oid='internal.search_post_cards(jsonb)'::regprocedure;"
+);
+const publicCardPatchEnd = postingUpdate.indexOf(
+  "  select prosrc into body from pg_proc where oid='internal.run_retention(integer)'::regprocedure;",
+  publicCardPatchStart
+);
+if (publicCardPatchStart < 0 || publicCardPatchEnd < publicCardPatchStart)
+  throw new Error("Public presentation patch missing");
+const publicPresentation = postingUpdate.match(
+  /create function internal\.frontend_post_presentation\(p_post uuid\)[\s\S]*?\$\$;/
+)?.[0];
+if (!publicPresentation) throw new Error("Public presentation function missing");
 function definition(name: string) {
   const matches = [
     ...baseline.matchAll(
@@ -64,7 +83,7 @@ beforeAll(async () => {
     create table private.cities(id text,province_id text); insert into private.cities values ('gp_johannesburg','gp');
     create table private.category_fields(category_key text,key text,facet_kind text,validation jsonb);
     create table private.post_search_documents(post_id uuid primary key,kind text,area text,category_key text,activity_key text,province_id text,city_id text,locality_label text,title text,summary text,price_mode text,price_cents bigint,price_negotiable boolean default false,published_at timestamptz,visible_until timestamptz,is_visible boolean,facets jsonb default '{}',search_text text,document tsvector);
-    create table private.media_objects(id uuid,state text,kind text,object_key text);
+    create table private.media_objects(id uuid primary key,owner_id uuid,state text,kind text,object_key text,width integer,height integer);
     create table private.post_media(post_id uuid,object_id uuid,purpose text,position int);
     create function internal.price_draft_actor() returns uuid language sql stable as $$select current_setting('test.actor')::uuid$$;
     create function internal.assert_post_revision(revision integer) returns void language plpgsql as $$begin if revision is null or revision<1 then raise exception 'invalid revision'; end if; end$$;
@@ -78,6 +97,18 @@ beforeAll(async () => {
   `);
   await db.exec(update);
   await db.exec(update); // reviewed re-application is safe, with unchanged grants.
+  for (const table of ["post_presentations", "post_presentation_media"]) {
+    const ddl = postingUpdate.match(
+      new RegExp(`create table private\\.${table}\\([\\s\\S]*?\\n\\);`)
+    )?.[0];
+    if (!ddl) throw new Error(`Presentation DDL missing: ${table}`);
+    await db.exec(
+      `${ddl} alter table private.${table} enable row level security; revoke all on private.${table} from public,anon,authenticated,service_role;`
+    );
+  }
+  await db.exec(`${publicPresentation}
+    revoke all on function internal.frontend_post_presentation(uuid) from public,anon,authenticated,service_role;
+    do $$declare before text;body text;begin ${postingUpdate.slice(publicCardPatchStart, publicCardPatchEnd)} end$$;`);
   for (let n = 1; n <= 100; n++) {
     await db.query(
       "insert into private.posts(id,owner_id,kind,area,category_key,activity_key) values($1,$2,'event','tourism_events','events','market_expo')",

@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredModerationDecision } from "@/lib/foundation/restored-moderation-route";
 import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -182,6 +184,8 @@ async function releaseApprovalClaim({
 }
 
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredModerationDecision(new NextRequest(request), true);
   // Set once this request holds the approval claim, so an unexpected error
   // releases it instead of leaving the edit stuck in "processing".
   let heldClaim: { requestId: string; reviewerId: string } | null = null;

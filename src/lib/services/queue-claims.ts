@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import type { FrontendClaimType } from "@/lib/foundation/staff-claims";
 
 const log = createLogger("QueueClaims");
 
@@ -13,14 +15,7 @@ const log = createLogger("QueueClaims");
  */
 
 export type ClaimQueue = "reports" | "kyc" | "content" | "business_kyc";
-export type ClaimItemType =
-  | "report"
-  | "verification_step"
-  | "listing"
-  | "business"
-  | "promotion"
-  | "content_edit"
-  | "business_verification";
+export type ClaimItemType = FrontendClaimType;
 
 export interface ClaimedItem {
   item_type: ClaimItemType;
@@ -142,6 +137,10 @@ export async function getClaimsForItems(
   items: Array<{ type: ClaimItemType; id: string }>
 ): Promise<Record<string, ClaimView>> {
   if (items.length === 0) return {};
+  if (getDataBackend() === "foundation") {
+    const { readFrontendStaffClaimViews } = await import("@/lib/foundation/staff-claims-server");
+    return readFrontendStaffClaimViews(viewerId, items);
+  }
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("queue_claims")
@@ -181,6 +180,12 @@ export async function getMyClaimedItems(
   viewerId: string,
   queue: ClaimQueue
 ): Promise<Array<{ type: ClaimItemType; id: string }>> {
+  if (getDataBackend() === "foundation") {
+    const { readMyFrontendStaffClaims } = await import("@/lib/foundation/staff-claims-server");
+    return (await readMyFrontendStaffClaims(viewerId)).items
+      .filter((i) => i.mine && i.queue === queue)
+      .map((i) => ({ type: i.item_type, id: i.id }));
+  }
   const { data, error } = await createAdminClient()
     .from("queue_claims")
     .select("item_type, item_id")
@@ -196,6 +201,12 @@ export async function getMyClaimedItems(
 
 /** How many live claims the viewer holds in a queue. */
 export async function countMyClaims(viewerId: string, queue: ClaimQueue): Promise<number> {
+  if (getDataBackend() === "foundation") {
+    const { readMyFrontendStaffClaims } = await import("@/lib/foundation/staff-claims-server");
+    return (await readMyFrontendStaffClaims(viewerId)).items.filter(
+      (i) => i.mine && i.queue === queue
+    ).length;
+  }
   const { count } = await createAdminClient()
     .from("queue_claims")
     .select("item_id", { count: "exact", head: true })

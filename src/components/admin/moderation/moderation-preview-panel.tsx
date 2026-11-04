@@ -1,4 +1,5 @@
 "use client";
+import type { NativeContentReview } from "@/lib/admin/native-content-review";
 
 import { BrandShield as ShieldCheck } from "@/components/shared/brand-shield";
 import { scoreListingQuality } from "@/lib/quality/score-listing";
@@ -43,6 +44,7 @@ import {
 } from "@/types/enums";
 
 export interface ModerationItem {
+  foundation?: NativeContentReview;
   /** The version the moderator reviewed; approval must match it. */
   updated_at?: string | null;
   id: string;

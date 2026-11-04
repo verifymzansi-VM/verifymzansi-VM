@@ -5,6 +5,40 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Preserved staff moderation and claims, 4 November 2026
+
+`20261104111941_restored_staff_moderation_queue.sql` and
+`20261104155022_restored_staff_claim_controls.sql` are applied. The selected
+moderation page receives bounded independent waiting summaries, exact totals and
+the holder's own review data. A submitted body, private presentation or review
+fence is returned only after the existing native claim-scoped read checks. All
+native reviewers require a claim before deciding. The original controls, preview
+panels and layouts remain in place.
+
+Claim, keep, release and governance handoff controls use caller-bound native
+commands. Foreign claim generations and nonces remain private. Keep/release-all
+is one transaction over the current holder's exact leases; a refusal rolls back
+the batch. Evidence handoffs require the native reassignment capability and
+recent authenticator proof, reject the subject as operator or replacement, and
+rotate the lease on assignment. Their private audit rows follow case-history
+retention/holds and anonymize deleted staff references. Content/report leases
+remain 15 minutes and evidence leases 30; the selected text reports that fact.
+
+Decisions carry the reviewed revision and claim tuple, preserve native
+independence, funding and edit-budget checks, and accept the actual original or
+merged-edit acknowledgements. An uncertain reply is not replayed. Immediate
+double clicks send one request, and an old response cannot close a newly opened
+review. The native fixture uses real local moderator and governor TOTP sessions
+to exercise mixed claims, foreign lease secrecy, atomic renewal/release, audited
+handoffs, self-assignment refusal and lease invalidation. All fixture changes
+roll back and local Auth accounts are removed. Focused HTTP/hook tests passed;
+hosted checks confirmed exact execute audiences, private audit RLS and no audit
+seed rows. These are contract checks, not real-account browser acceptance.
+
+The new staff adapters are local until the complete integration is released. The
+remaining staff and owner screens still require their own migration and
+acceptance checks; this update does not claim all pages are integrated.
+
 ## Owner post controls, 4 November 2026
 
 `20261104110442_restored_posting_allowance.sql` is applied. The selected posting

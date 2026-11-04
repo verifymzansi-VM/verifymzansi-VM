@@ -10,6 +10,9 @@ import {
 } from "@/lib/constants/verification-email-confirmation";
 
 const mockToast = vi.fn();
+// Camera failure telemetry is an external side effect of the genuine fallback
+// UI. Do not compile or initialize the provider SDK for these form tests.
+vi.mock("@sentry/nextjs", () => ({ captureMessage: vi.fn(), addBreadcrumb: vi.fn() }));
 const OriginalURL = global.URL;
 const VERIFICATION_TEMPORARILY_UNAVAILABLE_DESCRIPTION =
   "Verification is temporarily unavailable right now. Please try again later.";

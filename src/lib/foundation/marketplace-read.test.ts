@@ -52,6 +52,30 @@ function apiWith(rpc: ReturnType<typeof vi.fn>) {
 }
 
 describe("restored marketplace reads", () => {
+  it("refuses business contacts on other kinds and inconsistent event metadata", async () => {
+    for (const presentation of [
+      {
+        business_type: null,
+        event_window: null,
+        frontend: { data: {}, media: [], business_contacts: { phone: "+27700000123" } },
+      },
+      {
+        business_type: null,
+        event_window: {
+          starts_at: "2026-11-01T10:00:00.000Z",
+          ends_at: "2026-11-01T11:00:00.000Z",
+          timezone: "Africa/Johannesburg",
+        },
+      },
+    ]) {
+      const rpc = vi
+        .fn()
+        .mockResolvedValue({ data: page([{ ...card(), presentation }]), error: null });
+      await expect(readRestoredCollection(apiWith(rpc), "listings")).rejects.toThrow(
+        "Invalid public card presentation"
+      );
+    }
+  });
   it("uses approved public card RPCs and maps the original cards without private fields or fabricated badges", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: page([card()]), error: null });
     const result = await readRestoredCollection(apiWith(rpc), "listings");

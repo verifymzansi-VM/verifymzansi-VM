@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredQueueAction } from "@/lib/foundation/restored-queue-route";
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -52,6 +54,7 @@ const schema = z.discriminatedUnion("action", [
  * a governor or admin) free or reassign someone else's claim.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") return handleRestoredQueueAction(new NextRequest(request));
   try {
     const guard = await enforceAdminMutationGuard({
       request,

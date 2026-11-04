@@ -3,6 +3,10 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { validateLaunchConfiguration, type EnvSource } from "../lib/config/launch-validation";
 
+// This suite exercises startup guards, not SDK initialization. Keep the cold
+// telemetry bundle out of its dynamic imports; telemetry has separate tests.
+vi.mock("@sentry/nextjs", () => ({ init: vi.fn(), captureRequestError: vi.fn() }));
+
 const { mockValidateEnv, mockError, mockWarn } = vi.hoisted(() => ({
   mockValidateEnv: vi.fn(),
   mockError: vi.fn(),
