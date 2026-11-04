@@ -5,7 +5,7 @@ import { ScrollText } from "lucide-react";
 
 interface AuditEntry {
   id: string;
-  actor_id: string;
+  actor_id: string | null;
   action: string;
   target_type: string | null;
   target_id: string | null;
@@ -87,7 +87,8 @@ export function ActivityFeed({ entries, emptyMessage }: ActivityFeedProps) {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {entry.actor_id.slice(0, 8)}... &middot; {formatRelativeTime(entry.created_at)}
+              {entry.actor_id ? `${entry.actor_id.slice(0, 8)}...` : "System"} &middot;{" "}
+              {formatRelativeTime(entry.created_at)}
             </p>
           </div>
         </div>

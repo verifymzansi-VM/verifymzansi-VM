@@ -5,6 +5,29 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Preserved audit history, 5 November 2026
+
+`20261104221219_restored_staff_audit_page.sql` is applied. The selected search
+form, cards, numbered pagination and unavailable/empty states use a private,
+closed native event projection. The existing native cursor reader is unchanged.
+The restored page also includes recorded governance rationales, feature-setting
+changes and evidence handoffs. Action names use the selected underscore naming;
+action prefixes, target types, actors, target IDs and reason searches are
+literal selectors. Calendar-day filters use South African boundaries. Exact
+totals and page rows come from one database statement; a
+failed/foreign/inconsistent read is unavailable rather than empty history. No
+raw proposal payload, document key or identity-number field is selected. Indexes
+cover the identity-step audit's artifact and reviewer foreign keys.
+
+The native GoTrue/TOTP fixture records 61 synthetic setting changes and verifies
+both pages, duplicate-free IDs, filters, day boundaries, inaccessible private
+views and moderator refusal. The same runtime adapter validates actual SQL JSON.
+Service/page tests cover name mapping, unavailable reads, invalid selectors and
+the return to audit filters after authenticator confirmation. All fixture data
+rolls back. Hosted checks verified exact API audiences, no browser/service view
+access, both indexes and the unchanged native reader body. Complete application
+deployment and authenticated browser acceptance remain separate work.
+
 ## Supported runtime controls and oversight, 5 November 2026
 
 `20261104220316_restored_runtime_controls.sql` is applied. The existing flag

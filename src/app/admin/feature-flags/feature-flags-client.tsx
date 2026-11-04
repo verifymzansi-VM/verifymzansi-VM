@@ -53,6 +53,69 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
   const { toast } = useToast();
   const sending = useRef(new Set<string>());
 
+  type Change =
+    | { enabled: boolean }
+    | { mode: FlagMode; percent?: number; allowlist_roles?: string[]; reason: string };
+  async function saveFlagChange(
+    key: string,
+    change: Change,
+    success: { title: string; description: string }
+  ) {
+    if (sending.current.has(key)) return;
+    sending.current.add(key);
+    setToggling(key);
+    const expectedRevision = flags.find((f) => f.key === key)?.revision;
+    try {
+      const response = await fetchStaffEvidence("/api/admin/feature-flags/toggle", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          key,
+          ...change,
+          ...(getDataBackend() === "foundation" ? { expectedRevision } : {}),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to update flag");
+      const nativeFlag =
+        getDataBackend() === "foundation"
+          ? parseFrontendFlagAcknowledgement(data, key, expectedRevision)
+          : null;
+      setFlags((previous) =>
+        previous.map((flag) => {
+          if (flag.key !== key) return flag;
+          if (nativeFlag) return nativeFlag;
+          if ("enabled" in change)
+            return {
+              ...flag,
+              enabled: change.enabled,
+              mode: change.enabled ? "on" : "off",
+              updated_at: new Date().toISOString(),
+            };
+          return {
+            ...flag,
+            mode: change.mode,
+            enabled: change.mode === "on",
+            rollout_percent: change.percent ?? flag.rollout_percent,
+            allowlist_roles: change.allowlist_roles ?? flag.allowlist_roles,
+            updated_at: new Date().toISOString(),
+            updated_reason: change.reason,
+          };
+        })
+      );
+      toast({ ...success, variant: "success" });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update flag",
+        variant: "destructive",
+      });
+    } finally {
+      sending.current.delete(key);
+      setToggling(null);
+    }
+  }
   const handleModeChange = async (
     key: string,
     mode: FlagMode,
@@ -68,127 +131,26 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
       });
       return;
     }
-
-    if (sending.current.has(key)) return;
-    sending.current.add(key);
-    setToggling(key);
-    const expectedRevision = flags.find((f) => f.key === key)?.revision;
-
-    try {
-      const response = await fetchStaffEvidence("/api/admin/feature-flags/toggle", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          key,
-          mode,
-          percent: mode === "percent" ? percent : undefined,
-          allowlist_roles: mode === "allowlist" ? allowlistRoles : undefined,
-          reason,
-          ...(getDataBackend() === "foundation" ? { expectedRevision } : {}),
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to update flag");
-      }
-
-      const nativeFlag =
-        getDataBackend() === "foundation"
-          ? parseFrontendFlagAcknowledgement(data, key, expectedRevision)
-          : null;
-      setFlags((prev) =>
-        prev.map((f) =>
-          f.key === key
-            ? (nativeFlag ?? {
-                ...f,
-                mode,
-                enabled: mode === "on",
-                rollout_percent: percent ?? f.rollout_percent,
-                allowlist_roles: allowlistRoles ?? f.allowlist_roles,
-                updated_at: new Date().toISOString(),
-                updated_reason: reason ?? null,
-              })
-            : f
-        )
-      );
-
-      toast({
-        title: "Flag updated",
-        description: `"${key}" set to ${MODE_LABELS[mode]}.`,
-        variant: "success",
-      });
-
-      router.refresh();
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to update flag",
-        variant: "destructive",
-      });
-    } finally {
-      sending.current.delete(key);
-      setToggling(null);
-    }
+    await saveFlagChange(
+      key,
+      {
+        mode,
+        percent: mode === "percent" ? percent : undefined,
+        allowlist_roles: mode === "allowlist" ? allowlistRoles : undefined,
+        reason,
+      },
+      { title: "Flag updated", description: '"' + key + '" set to ' + MODE_LABELS[mode] + "." }
+    );
   };
-
-  // Legacy toggle for quick on/off
   const handleQuickToggle = async (key: string, enabled: boolean) => {
-    if (sending.current.has(key)) return;
-    sending.current.add(key);
-    setToggling(key);
-    const expectedRevision = flags.find((f) => f.key === key)?.revision;
-
-    try {
-      const response = await fetchStaffEvidence("/api/admin/feature-flags/toggle", {
-        method: "POST",
-        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({
-          key,
-          enabled,
-          ...(getDataBackend() === "foundation" ? { expectedRevision } : {}),
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to toggle flag");
+    await saveFlagChange(
+      key,
+      { enabled },
+      {
+        title: enabled ? "Flag enabled" : "Flag disabled",
+        description: '"' + key + '" is now ' + (enabled ? "ON" : "OFF") + ".",
       }
-
-      const nativeFlag =
-        getDataBackend() === "foundation"
-          ? parseFrontendFlagAcknowledgement(data, key, expectedRevision)
-          : null;
-      setFlags((prev) =>
-        prev.map((f) =>
-          f.key === key
-            ? (nativeFlag ?? {
-                ...f,
-                enabled,
-                mode: enabled ? "on" : "off",
-                updated_at: new Date().toISOString(),
-              })
-            : f
-        )
-      );
-
-      toast({
-        title: `Flag ${enabled ? "enabled" : "disabled"}`,
-        description: `"${key}" is now ${enabled ? "ON" : "OFF"}.`,
-        variant: "success",
-      });
-
-      router.refresh();
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : "Failed to toggle flag",
-        variant: "destructive",
-      });
-    } finally {
-      sending.current.delete(key);
-      setToggling(null);
-    }
+    );
   };
 
   if (flags.length === 0) {

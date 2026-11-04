@@ -21,6 +21,7 @@ import {
 } from "../src/lib/foundation/owner-dashboard.ts";
 import { readFrontendStaffVerificationQueue } from "../src/lib/foundation/staff-verification-queue.ts";
 import { readRestoredGovernance } from "../src/lib/foundation/governance.ts";
+import { readRestoredStaffAudit } from "../src/lib/foundation/restored-staff-audit.ts";
 import {
   readFrontendFeatureFlags,
   readFrontendFeatureConfig,
@@ -258,6 +259,7 @@ try {
     "database/foundation/updates/20261104214751_preserve_reviewed_identity_status.sql",
     "database/foundation/updates/20261104214932_restored_governance_decisions.sql",
     "database/foundation/updates/20261104220316_restored_runtime_controls.sql",
+    "database/foundation/updates/20261104221219_restored_staff_audit_page.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -279,6 +281,7 @@ try {
     create temporary table restored_owner_identity_probe(kind text,value jsonb);
     create temporary table restored_governance_probe(value jsonb);
     create temporary table restored_controls_probe(kind text,value jsonb);
+    create temporary table restored_audit_probe(kind text,value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -617,6 +620,37 @@ try {
       ${claims(governor)}
       insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',case_lease->>'decision_id','status','all')));
       insert into restored_controls_probe values('metrics',api.get_frontend_governance_metrics());
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('action','feature_flag_','type','feature_flag'));
+      if c->>'total'<>'1' or c->'items'->0->>'reason'<>'Synthetic reviewer canary' then raise exception 'audited settings event absent from preserved filters';end if;
+      insert into restored_audit_probe values('flag',c);
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('action','governance_'));
+      if c->>'total'<>'4' then raise exception 'governance audit annotations absent';end if;
+      insert into restored_audit_probe values('governance',c);
+      begin perform api.get_frontend_staff_audit_page('{"target":null}');raise exception 'null audit filter accepted';exception when invalid_parameter_value then null;end;
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('action','governance_','actor','${governor.id}','target',move_request));
+      if c->>'total'<>'1' or c->'items'->0->>'action'<>'governance_reject' then raise exception 'actor/target audit filters drift';end if;
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('q','Synthetic independent approval'));
+      if c->>'total'<>'1' then raise exception 'audit reason search drift';end if;
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('action','feature_flag_','from',((statement_timestamp() at time zone 'Africa/Johannesburg')::date)::text,'to',((statement_timestamp() at time zone 'Africa/Johannesburg')::date)::text));
+      if c->>'total'<>'1' then raise exception 'South African audit day boundary drift';end if;
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('page',100000));
+      if jsonb_array_length(c->'items')<>0 then raise exception 'out-of-range audit page not empty';end if;
+      insert into restored_audit_probe values('last',c);
+      begin perform api.get_frontend_staff_audit_page('{"actorId":"${administrator.id}"}');raise exception 'audit accepted caller authority';exception when invalid_parameter_value then null;end;
+      ${claims(reviewer)}
+      begin perform api.get_frontend_staff_audit_page();raise exception 'moderator read governance audit';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      for total in 1..60 loop
+        perform api.set_frontend_feature_flag('kyc_evidence_desk',total+1,case when total%2=0 then 'on' else 'off' end,0,'{}','Synthetic audit pagination '||total);
+      end loop;
+      ${claims(governor)}
+      c:=api.get_frontend_staff_audit_page('{"type":"feature_flag","page":1}');
+      if c->>'total'<>'61' or jsonb_array_length(c->'items')<>50 then raise exception 'audit first page count drift';end if;
+      insert into restored_audit_probe values('first',c);
+      c:=api.get_frontend_staff_audit_page('{"type":"feature_flag","page":2}');
+      if c->>'total'<>'61' or jsonb_array_length(c->'items')<>11 then raise exception 'audit second page count drift';end if;
+      insert into restored_audit_probe values('second',c);
+      if has_table_privilege('authenticated','private.frontend_staff_audit_events','select') or has_table_privilege('service_role','private.frontend_staff_audit_events','select') then raise exception 'private audit view directly exposed';end if;
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
       -- their terminal-state and verification-invalidation rules.
@@ -640,6 +674,7 @@ try {
     select 'OWNER_IDENTITY:'||jsonb_build_object('kind',kind,'value',value)::text from restored_owner_identity_probe;
     select 'GOVERNANCE:'||value::text from restored_governance_probe;
     select 'CONTROLS:'||jsonb_build_object('kind',kind,'value',value)::text from restored_controls_probe;
+    select 'AUDIT:'||jsonb_build_object('kind',kind,'value',value)::text from restored_audit_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -758,6 +793,21 @@ try {
   assert.equal(metrics.rejected, 1);
   assert.equal(metrics.overridden, 1);
   assert.equal(metrics.total, 3);
+  const auditProbes = Object.fromEntries(
+    outcome
+      .split("\n")
+      .filter((line) => line.startsWith("AUDIT:"))
+      .map((line) => {
+        const row = JSON.parse(line.slice(6));
+        return [row.kind, row.value];
+      })
+  );
+  for (const probe of Object.values(auditProbes))
+    await readRestoredStaffAudit({ rpc: async () => ({ data: probe, error: null }) }, governor.id, {
+      page: probe.page,
+    });
+  const pageIds = [...auditProbes.first.items, ...auditProbes.second.items].map((e) => e.id);
+  assert.equal(new Set(pageIds).size, 61);
   const governanceProbes = outcome
     .split("\n")
     .filter((line) => line.startsWith("GOVERNANCE:"))
@@ -788,6 +838,8 @@ try {
     "accepted ID remains a completed step before location; rejected retake receipts do not resurrect; high-risk approval still requires another real staff actor",
     "retention retires accepted evidence without losing owner verification; explicitly revoked identity remains unverified",
     "preserved governance queue/detail DTOs, represented independent approval, rejection without restriction, authored withdrawal and exact audit-bound acknowledgement retries",
+    "admin-only revision-fenced display controls, retry audit deduplication, supported-key enforcement and actual governance metrics",
+    "preserved audit pagination, literal action/type/actor/target/reason filters, South African date boundaries and private projection isolation",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

@@ -4,6 +4,25 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_staff_audit_page",
+      "updates": ["updates/20261104221219_restored_staff_audit_page.sql"],
+      "arguments": [
+        {
+          "name": "p_request",
+          "sqlType": "jsonb",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native audit reviewer and recent TOTP; closed native event metadata and safe actor names. Bounded numbered pages, exact totals and literal filters with South African date boundaries. No caller-selected authority, proposal payload, identity number or evidence keys."
+    },
+    {
       "name": "get_frontend_governance_metrics",
       "updates": ["updates/20261104220316_restored_runtime_controls.sql"],
       "arguments": [],

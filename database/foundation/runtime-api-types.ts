@@ -8,6 +8,7 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_frontend_staff_audit_page: { Args: { p_request?: Json }; Returns: Json };
       get_frontend_feature_flags: { Args: Record<PropertyKey, never>; Returns: Json };
       get_frontend_governance_metrics: { Args: Record<PropertyKey, never>; Returns: Json };
       set_frontend_feature_flag: {

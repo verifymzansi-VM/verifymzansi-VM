@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
+import { auditSubjectFilters } from "./audit-filters";
 
 // Preserve Postgres microseconds in cursors; Date is for display only.
 const instant = z
@@ -17,11 +18,7 @@ const foundationAuditRequest = z
       .max(100)
       .regex(/^[a-z_]+(:[a-z_]+)?$/)
       .optional(),
-    actor: z.uuid().optional(),
-    target: z.uuid().optional(),
-    from: z.iso.date().optional(),
-    to: z.iso.date().optional(),
-    q: z.string().trim().min(1).max(100).optional(),
+    ...auditSubjectFilters,
   })
   .refine((value) => Boolean(value.before_at) === Boolean(value.before_id))
   .refine((value) => !value.from || !value.to || value.from <= value.to);

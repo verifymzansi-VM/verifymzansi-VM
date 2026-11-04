@@ -1,13 +1,11 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { readStaffAuditPage } from "@/lib/services/staff-audit-page";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils/format";
 import Link from "next/link";
 import { ScrollText } from "lucide-react";
-import { createLogger } from "@/lib/utils/logger";
-import { ACCOUNT_PROFILE_TABLE } from "@/lib/account/compat";
 import type { AuditLogEntry } from "@/lib/utils/admin-queries";
 
 export const metadata = {
@@ -41,7 +39,7 @@ export default async function AdminAuditLogPage({
 }) {
   const raw = await searchParams;
   const filters = {
-    action: clean(raw.action)?.replace(/[^a-z0-9_]/gi, ""),
+    action: clean(raw.action)?.replace(/[^a-z0-9_:]/gi, ""),
     target: clean(raw.target),
     actor: clean(raw.actor),
     type: clean(raw.type)?.replace(/[^a-z0-9_]/gi, ""),
@@ -60,36 +58,7 @@ export default async function AdminAuditLogPage({
     filters.actor && !UUID.test(filters.actor) ? "Staff / actor ID" : null,
   ].filter((v): v is string => Boolean(v));
 
-  const admin = createAdminClient();
-
-  // Newest first, a page at a time, so every entry stays reachable. Counting
-  // the whole table exactly is slow, so an unfiltered total is an estimate.
-  let query = admin
-    .from("audit_logs")
-    .select("*", { count: filtered ? "exact" : "estimated" })
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false });
-  // "_" is a LIKE wildcard; action names use it literally (e.g. "dsar_").
-  if (filters.action) query = query.ilike("action", `${filters.action.replace(/_/g, "\\_")}%`);
-  if (filters.target && UUID.test(filters.target)) query = query.eq("target_id", filters.target);
-  if (filters.actor && UUID.test(filters.actor)) query = query.eq("actor_id", filters.actor);
-  if (filters.type) query = query.eq("target_type", filters.type);
-  if (filters.from && /^\d{4}-\d{2}-\d{2}$/.test(filters.from))
-    query = query.gte("created_at", filters.from);
-  if (filters.to && /^\d{4}-\d{2}-\d{2}$/.test(filters.to))
-    query = query.lt("created_at", new Date(Date.parse(filters.to) + 86_400_000).toISOString());
-  if (filters.q) query = query.ilike("reason", `%${filters.q}%`);
-  const {
-    data: logs,
-    error,
-    count,
-  } = await query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-  if (error) {
-    createLogger("AdminAuditLog").error("Audit log read failed", { error: error.message });
-  }
-  const total = count ?? logs?.length ?? 0;
-  // An estimated total can be low, so a full page always offers older entries.
-  const hasOlder = logs?.length === PAGE_SIZE && (!filtered || page * PAGE_SIZE < total);
+  const { logs, error, total, hasOlder, actorMap } = await readStaffAuditPage(filters, page);
   const hrefFor = (nextPage: number) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
@@ -97,19 +66,6 @@ export default async function AdminAuditLogPage({
     const query = params.toString();
     return query ? `/admin/audit-log?${query}` : "/admin/audit-log";
   };
-
-  // Resolve actor display names
-  const actorIds = [...new Set((logs ?? []).map((e: AuditLogEntry) => e.actor_id).filter(Boolean))];
-  const actorMap = new Map<string, string>();
-  if (actorIds.length > 0) {
-    const { data: profiles } = await admin
-      .from(ACCOUNT_PROFILE_TABLE)
-      .select("user_id, display_name")
-      .in("user_id", actorIds);
-    for (const p of profiles ?? []) {
-      if (p.display_name) actorMap.set(p.user_id, p.display_name);
-    }
-  }
 
   return (
     <div className="space-y-6">

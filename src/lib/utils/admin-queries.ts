@@ -57,7 +57,7 @@ export interface PendingVerificationGroup {
 
 export interface AuditLogEntry {
   id: string;
-  actor_id: string;
+  actor_id: string | null;
   action: string;
   target_type: string | null;
   target_id: string | null;
