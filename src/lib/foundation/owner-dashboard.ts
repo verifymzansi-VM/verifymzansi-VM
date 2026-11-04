@@ -19,6 +19,8 @@ const snapshot = z
       phone_changed_at: instant.nullable(),
       phone_verified_at: instant.nullable(),
       identity_reviewed_at: instant.nullable(),
+      id_document_uploaded_at: instant.nullable().optional(),
+      selfie_uploaded_at: instant.nullable().optional(),
       location_province: z.string().nullable(),
       location_city: z.string().nullable(),
       location_confirmed_at: instant.nullable(),
@@ -89,7 +91,7 @@ const snapshot = z
       .max(1000),
   })
   .refine(
-    (value) => value.verification.verified === Boolean(value.profile_facts.identity_reviewed_at)
+    (value) => !value.verification.verified || Boolean(value.profile_facts.identity_reviewed_at)
   )
   .refine(
     (value) => value.verification.phone_verified === Boolean(value.profile_facts.phone_verified_at)
@@ -112,16 +114,59 @@ export async function readFoundationOwnerDashboard(
   api: FoundationAuthenticatedApi,
   accountId: string
 ) {
-  const { data, error } = await api.rpc("get_my_dashboard", {}, { get: false });
+  const [{ data, error }, identity] = await Promise.all([
+    api.rpc("get_my_dashboard", {}, { get: false }),
+    api.rpc("get_my_frontend_identity_state", {}, { get: false }),
+  ]);
   if (error)
     throw new FoundationAccountContextError(error.code === "42501" ? "forbidden" : "unavailable");
-  return parseOwnerDashboard(data, accountId);
+  const parsed = parseOwnerDashboard(data, accountId);
+  if (identity.error) throw new FoundationAccountContextError("unavailable");
+  const current = z
+    .strictObject({
+      account_id: z.uuid(),
+      case_id: z.uuid().nullable(),
+      case_version: z.number().int().positive().nullable(),
+      reason: z.string().nullable(),
+      decision: z.enum(["rejected", "needs_resubmission"]).nullable(),
+      identity_reviewed_at: instant.nullable(),
+      id_document_uploaded_at: instant.nullable(),
+      selfie_uploaded_at: instant.nullable(),
+    })
+    .parse(identity.data);
+  if (
+    current.account_id !== accountId ||
+    current.case_id !== parsed.verification.case_id ||
+    current.case_version !== parsed.verification.version ||
+    current.reason !== parsed.verification.return_reason ||
+    Boolean(current.reason) !== Boolean(current.decision) ||
+    (parsed.verification.verified && !current.identity_reviewed_at)
+  )
+    throw new FoundationAccountContextError("unavailable");
+  return {
+    ...parsed,
+    profile_facts: {
+      ...parsed.profile_facts,
+      identity_reviewed_at: current.identity_reviewed_at,
+      id_document_uploaded_at: current.id_document_uploaded_at,
+      selfie_uploaded_at: current.selfie_uploaded_at,
+    },
+    verification: {
+      ...parsed.verification,
+      ...(current.decision ? { return_decision: current.decision } : {}),
+    },
+  };
 }
 
 /** Only canonical facts become verification status. Pending/review history has
  * no manufactured timestamp and user-editable Auth metadata grants no badge. */
 export function dashboardVerificationSteps(value: FoundationOwnerDashboard) {
-  const rows: Array<{ step_type: string; status: string; reviewed_at: string | null }> = [];
+  const rows: Array<{
+    step_type: string;
+    status: string;
+    reviewed_at: string | null;
+    submitted_at?: string | null;
+  }> = [];
   const facts = value.profile_facts;
   if (value.verification.phone_verified)
     rows.push({ step_type: "phone", status: "approved", reviewed_at: facts.phone_verified_at });
@@ -134,7 +179,7 @@ export function dashboardVerificationSteps(value: FoundationOwnerDashboard) {
   const identity = facts.identity_reviewed_at
     ? "approved"
     : value.verification.return_reason
-      ? "needs_resubmission"
+      ? (value.verification.return_decision ?? "needs_resubmission")
       : value.verification.submission_pending
         ? "pending"
         : null;
@@ -144,6 +189,8 @@ export function dashboardVerificationSteps(value: FoundationOwnerDashboard) {
         step_type,
         status: identity,
         reviewed_at: identity === "approved" ? facts.identity_reviewed_at : null,
+        submitted_at:
+          step_type === "id_doc" ? facts.id_document_uploaded_at : facts.selfie_uploaded_at,
       });
   return rows;
 }

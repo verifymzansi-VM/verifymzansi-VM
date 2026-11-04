@@ -13,10 +13,22 @@ describe("kyc-artifact-blob-cache", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it("returns null for uncached artifact", () => {
     expect(getCachedKycArtifactBlob("missing-id")).toBeNull();
+  });
+  it("never reuses an artifact-only cache in the native claim-bound workflow", () => {
+    const blob = new Blob(["private fixture"], { type: "image/jpeg" });
+    setCachedKycArtifactBlob("old-artifact", blob);
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    expect(getCachedKycArtifactBlob("old-artifact")).toBeNull();
+    setCachedKycArtifactBlob("new-artifact", blob);
+    expect(getCachedKycArtifactBlob("new-artifact")).toBeNull();
+    vi.unstubAllEnvs();
+    expect(getCachedKycArtifactBlob("old-artifact")).toBeNull();
+    expect(getCachedKycArtifactBlob("new-artifact")).toBeNull();
   });
 
   it("caches and retrieves a blob", () => {

@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredIdentityDecision } from "@/lib/foundation/restored-identity-decision-route";
 import {
   parseAndValidateJsonRequest,
   unauthorizedResponse,
@@ -48,6 +50,8 @@ const NO_STORE = { "Cache-Control": "no-store, no-cache, must-revalidate" };
  * escalations page. Nobody decides their own verification.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredIdentityDecision(new NextRequest(request));
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;

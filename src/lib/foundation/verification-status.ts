@@ -7,4 +7,5 @@ export const foundationVerificationStatusSchema = z.strictObject({
   locality_confirmed: z.boolean(),
   submission_pending: z.boolean(),
   return_reason: z.string().nullable(),
+  return_decision: z.enum(["rejected", "needs_resubmission"]).optional(),
 });

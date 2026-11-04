@@ -56,7 +56,24 @@ beforeEach(() => {
   };
   vi.mocked(readStaffIdentityContext).mockResolvedValue(context);
   rpc.mockResolvedValue({
-    data: { artifacts: [{ id: context.id_artifact_id }, { id: context.selfie_artifact_id }] },
+    data: {
+      case_id: context.case_id,
+      version: context.case_version,
+      artifacts: [
+        {
+          artifact_id: context.id_artifact_id,
+          purpose: "id_front",
+          size_bytes: stored.length,
+          uploaded_at: "2026-11-04T10:00:00Z",
+        },
+        {
+          artifact_id: context.selfie_artifact_id,
+          purpose: "selfie",
+          size_bytes: stored.length,
+          uploaded_at: "2026-11-04T10:00:00Z",
+        },
+      ],
+    },
     error: null,
   });
   machine.mockImplementation(async () => ({ data: artifact, error: null }));
@@ -89,6 +106,30 @@ it("refuses number access before machine lookup if audited staff authority is re
   });
   expect(machine).not.toHaveBeenCalled();
 });
+it.each(["case", "version"])(
+  "refuses metadata for a different %s before any private machine lookup",
+  async (changed) => {
+    rpc.mockResolvedValueOnce({
+      data: {
+        case_id: changed === "case" ? id("99") : context.case_id,
+        version: changed === "version" ? context.case_version + 1 : context.case_version,
+        artifacts: [
+          {
+            artifact_id: context.id_artifact_id,
+            purpose: "id_front",
+            size_bytes: stored.length,
+            uploaded_at: "2026-11-04T10:00:00Z",
+          },
+        ],
+      },
+      error: null,
+    });
+    await expect(readFoundationReviewContext(api, service, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(machine).not.toHaveBeenCalled();
+  }
+);
 it("rejects a shortened GCM authentication tag before returning a number", async () => {
   const number = artifact.encrypted_number as { tag: string };
   number.tag = number.tag.slice(0, 8);

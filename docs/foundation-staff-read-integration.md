@@ -40,3 +40,32 @@ stale verification, role revocation, logout and private-table isolation. These
 are local protocol checks, not proof of hosted provider delivery or full release
 acceptance. Hosted SQL must be applied and verified before the corresponding UI
 is activated. The unreleased clean baseline remains guarded.
+
+## Preserved ID and selfie review
+
+The additive `20261104162910_preserved_identity_review_workflow.sql` update
+connects the selected frontend's separate ID and selfie decisions to the native
+identity-pair command. A partial approval belongs to one reviewer, submission,
+case version and current claim. Both explicit match attestations are required
+before native acceptance; high-risk submissions still require an independent
+decision. Exact final acknowledgements can be retried only within the original
+lease. Rejection and retake requests invalidate older wizard upload receipts.
+
+Private metadata and bytes use protected POSTs. Their responses identify the
+reviewer, and the browser checks the current Auth account before displaying
+them. Media type and size come from the inspected stream; an opaque evidence
+object identifier is never presented as a storage key. Existing comparison,
+lightbox and evidence-desk controls pass the viewed submission/version/claim
+back to the decision route. Blob caching by artifact alone is disabled for this
+backend. The owner dashboard distinguishes accepted identity from completion of
+phone and locality verification.
+
+The native posting fixture now exercises these commands with disposable local
+GoTrue accounts and TOTP, including rejected resubmission and independent
+high-risk approval. HTTP handler and viewer tests separately cover contract
+binding, stream presentation and account changes. These synthetic checks do not
+attest a real customer's document, hosted SMS delivery, or complete
+authenticated browser acceptance. The update was applied to the connected London
+project on 4 November; exact API grants, private-table isolation and the
+provisioned-runtime preflight were then verified. Deployment remains dependent
+on the remaining restored-page integrations.

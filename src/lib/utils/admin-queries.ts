@@ -20,10 +20,14 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import type { MarketplaceArea } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
+import type { NativeIdentityScope } from "@/lib/admin/native-identity-review";
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface PendingVerification {
+  claim_case_id?: string;
+  foundation?: NativeIdentityScope;
   id: string;
   user_id: string;
   step_type: string;
@@ -213,6 +217,11 @@ export async function getPendingVerifications(
 
 /** How many identity checks are waiting in total, whatever is shown. */
 export async function countPendingVerifications(): Promise<number> {
+  if (getDataBackend() === "foundation") {
+    const { readRestoredStaffVerificationQueue } =
+      await import("@/lib/foundation/staff-verification-server");
+    return (await readRestoredStaffVerificationQueue()).total;
+  }
   const { count, error } = await createAdminClient()
     .from("verification_steps")
     .select("id", { count: "exact", head: true })
@@ -289,6 +298,16 @@ export async function getPendingVerificationGroups(
   limit = 50,
   options: { includeIds?: string[] } = {}
 ): Promise<PendingVerificationGroup[]> {
+  if (getDataBackend() === "foundation") {
+    const { readRestoredStaffVerificationQueue } =
+      await import("@/lib/foundation/staff-verification-server");
+    return (
+      await readRestoredStaffVerificationQueue(
+        Math.min(limit, 100),
+        JSON.stringify(options.includeIds ?? [])
+      )
+    ).groups;
+  }
   const pendingSteps = await getPendingVerifications(limit, options);
 
   if (pendingSteps.length === 0) {

@@ -14,6 +14,7 @@ import {
   calculateAgeFromDob,
 } from "../utils/sa-id-validation";
 import { readStaffIdentityContext } from "./staff-identity";
+import { foundationEvidenceMetadataSchema } from "./evidence-metadata";
 import { foundationVerificationStatusSchema } from "./verification-status";
 import { processIdentityNumber } from "../domains/verification/identity-processing";
 
@@ -222,7 +223,28 @@ const reviewRequest = z.strictObject({
   case_id: z.uuid(),
   claim_generation: z.string().regex(/^[1-9]\d{0,18}$/),
   claim_nonce: z.uuid(),
+  expected_case_version: z.number().int().positive().optional(),
+  expected_submission_id: z.uuid().optional(),
 });
+function readRepresentedIdentityContext(
+  api: FoundationAuthenticatedApi,
+  input: z.infer<typeof reviewRequest>
+) {
+  return readStaffIdentityContext(api, {
+    case_id: input.case_id,
+    claim_generation: input.claim_generation,
+    claim_nonce: input.claim_nonce,
+  }).then((context) => {
+    if (
+      (input.expected_case_version !== undefined &&
+        input.expected_case_version !== context.case_version) ||
+      (input.expected_submission_id !== undefined &&
+        input.expected_submission_id !== context.submission_id)
+    )
+      throw new FoundationVerificationError(409, "The reviewed submission changed");
+    return context;
+  });
+}
 const objectInfo = z.object({
   owner_id: z.uuid(),
   artifact_id: z.uuid(),
@@ -238,7 +260,8 @@ const objectInfo = z.object({
 async function authorisedMetadata(
   api: FoundationAuthenticatedApi,
   input: z.infer<typeof reviewRequest>,
-  artifactId: string
+  artifactId: string,
+  expectedVersion: number
 ) {
   const { data, error } = await api.rpc("staff_evidence_metadata", {
     p_case_id: input.case_id,
@@ -247,9 +270,14 @@ async function authorisedMetadata(
     p_purpose: "routine_review",
   });
   if (error)
-    throw new FoundationVerificationError(403, "Your evidence claim expired or permission changed");
-  const metadata = z.object({ artifacts: z.array(z.object({ id: z.uuid() })) }).parse(data);
-  if (!metadata.artifacts.some((item) => item.id === artifactId))
+    throw new FoundationVerificationError(
+      error.code === "42501" ? 403 : error.code === "PT409" ? 409 : 503,
+      "Your evidence claim is unavailable or changed"
+    );
+  const metadata = foundationEvidenceMetadataSchema.parse(data);
+  if (metadata.case_id !== input.case_id || metadata.version !== expectedVersion)
+    throw new FoundationVerificationError(409);
+  if (!metadata.artifacts.some((item) => item.artifact_id === artifactId))
     throw new FoundationVerificationError(403);
 }
 export async function readFoundationReviewContext(
@@ -258,8 +286,8 @@ export async function readFoundationReviewContext(
   value: unknown
 ) {
   const input = reviewRequest.parse(value);
-  const context = await readStaffIdentityContext(api, input);
-  await authorisedMetadata(api, input, context.id_artifact_id);
+  const context = await readRepresentedIdentityContext(api, input);
+  await authorisedMetadata(api, input, context.id_artifact_id, context.case_version);
   const lookup = await service.rpc("evidence_review_object", {
     p_case: input.case_id,
     p_artifact: context.id_artifact_id,
@@ -285,10 +313,10 @@ export async function readFoundationReviewContext(
     decipher.final(),
   ]).toString("utf8");
   if (!/^\d{13}$/.test(claimedNumber)) throw new FoundationVerificationError(503);
-  const fresh = await readStaffIdentityContext(api, input);
+  const fresh = await readRepresentedIdentityContext(api, input);
   if (fresh.case_version !== context.case_version || fresh.submission_id !== context.submission_id)
     throw new FoundationVerificationError(409);
-  await authorisedMetadata(api, input, context.id_artifact_id);
+  await authorisedMetadata(api, input, context.id_artifact_id, context.case_version);
   return { ...context, claimed_number: claimedNumber, claimed_names: artifact.claimed_names };
 }
 export async function readFoundationEvidenceBytes(
@@ -299,7 +327,7 @@ export async function readFoundationEvidenceBytes(
 ) {
   const input = reviewRequest.parse(value);
   z.uuid().parse(artifactId);
-  const context = await readStaffIdentityContext(api, input);
+  const context = await readRepresentedIdentityContext(api, input);
   if (![context.id_artifact_id, context.selfie_artifact_id].includes(artifactId))
     throw new FoundationVerificationError(403);
   const lookup = await service.rpc("evidence_review_object", {
@@ -327,8 +355,10 @@ export async function readFoundationEvidenceBytes(
   const mime = detectMimeFromMagicBytes(bytes);
   if (!mime || !(isReencodableImageType(mime) || mime === "application/pdf"))
     throw new FoundationVerificationError(503);
-  await authorisedMetadata(api, input, artifactId);
-  const fresh = await readStaffIdentityContext(api, input);
+  if (artifactId === context.selfie_artifact_id && mime === "application/pdf")
+    throw new FoundationVerificationError(503);
+  await authorisedMetadata(api, input, artifactId, context.case_version);
+  const fresh = await readRepresentedIdentityContext(api, input);
   if (fresh.case_version !== context.case_version || fresh.submission_id !== context.submission_id)
     throw new FoundationVerificationError(409);
   return { bytes: new Uint8Array(bytes).buffer, mime };

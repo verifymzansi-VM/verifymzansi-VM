@@ -11,14 +11,21 @@ import {
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getDataBackend } from "@/lib/data-backend";
+import type { NativeIdentityScope } from "@/lib/admin/native-identity-review";
+import {
+  nativeEvidenceBody,
+  inspectedEvidenceArtifact,
+  type NativeEvidenceFields,
+} from "@/lib/admin/native-evidence-presentation";
 
-interface Artifact {
+interface Artifact extends NativeEvidenceFields {
   id: string;
   step_type: string;
   artifact_kind: string;
-  r2_key: string;
+  r2_key: string | null;
   content_type: string;
-  file_size_bytes: number;
+  file_size_bytes: number | null;
   status: string;
   created_at: string;
   purge_after: string | null;
@@ -26,6 +33,7 @@ interface Artifact {
 }
 
 interface KycInlinePreviewProps {
+  reviewScope?: NativeIdentityScope;
   stepId: string;
   userId: string;
   stepType: string;
@@ -40,6 +48,7 @@ interface KycInlinePreviewProps {
  * then loads the decrypted blob via the evidence proxy.
  */
 export function KycInlinePreview({
+  reviewScope,
   stepId,
   userId,
   stepType,
@@ -52,6 +61,7 @@ export function KycInlinePreview({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const allowedToLoad = getDataBackend() !== "foundation" || Boolean(reviewScope);
 
   // IntersectionObserver — trigger load when card scrolls into viewport
   useEffect(() => {
@@ -80,9 +90,10 @@ export function KycInlinePreview({
 
   // Fetch artifact metadata + blob once visible
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || !allowedToLoad) return;
 
     let cancelled = false;
+    const createdUrls: string[] = [];
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
 
@@ -92,12 +103,12 @@ export function KycInlinePreview({
       setArtifact(null);
       setBlobUrl(null);
 
-      async function fetchEvidenceByArtifactId(targetArtifactId: string) {
+      async function fetchEvidenceByArtifactId(target: Artifact) {
         const evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
           method: "POST",
           signal: controller.signal,
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify({ artifactId: targetArtifactId }),
+          body: JSON.stringify(nativeEvidenceBody(target)),
         });
 
         if (evidenceRes.ok) {
@@ -155,7 +166,9 @@ export function KycInlinePreview({
         const cachedBlob = retryCount === 0 ? getCachedKycArtifactBlob(match.id) : null;
         if (cachedBlob) {
           if (!cancelled) {
+            setArtifact(inspectedEvidenceArtifact(match, cachedBlob));
             const cachedUrl = URL.createObjectURL(cachedBlob);
+            createdUrls.push(cachedUrl);
             setBlobUrl(cachedUrl);
             setLoading(false);
           }
@@ -164,7 +177,7 @@ export function KycInlinePreview({
 
         // 2. Fetch decrypted blob. If artifact ID is stale, refresh metadata and retry once.
         let resolvedArtifact = match;
-        let evidenceResult = await fetchEvidenceByArtifactId(match.id);
+        let evidenceResult = await fetchEvidenceByArtifactId(match);
 
         if (!evidenceResult.ok && evidenceResult.code === "not_found") {
           const retryMetaRes = await fetchStaffEvidence(
@@ -189,7 +202,7 @@ export function KycInlinePreview({
 
             if (latestForStep && latestForStep.id !== match.id) {
               resolvedArtifact = latestForStep;
-              evidenceResult = await fetchEvidenceByArtifactId(latestForStep.id);
+              evidenceResult = await fetchEvidenceByArtifactId(latestForStep);
             }
           }
         }
@@ -200,9 +213,10 @@ export function KycInlinePreview({
 
         const blob = evidenceResult.blob;
         if (!cancelled) {
-          setArtifact(resolvedArtifact);
+          setArtifact(inspectedEvidenceArtifact(resolvedArtifact, blob));
           setCachedKycArtifactBlob(resolvedArtifact.id, blob);
           const url = URL.createObjectURL(blob);
+          createdUrls.push(url);
           setBlobUrl(url);
         }
       } catch (err) {
@@ -227,8 +241,23 @@ export function KycInlinePreview({
       cancelled = true;
       clearTimeout(timeout);
       controller.abort();
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+      setBlobUrl(null);
+      setArtifact(null);
+      setLoading(false);
     };
-  }, [isVisible, stepId, userId, stepType, retryCount]);
+  }, [
+    isVisible,
+    stepId,
+    userId,
+    stepType,
+    retryCount,
+    allowedToLoad,
+    reviewScope?.caseVersion,
+    reviewScope?.submissionId,
+    reviewScope?.claimGeneration,
+    reviewScope?.claimNonce,
+  ]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {

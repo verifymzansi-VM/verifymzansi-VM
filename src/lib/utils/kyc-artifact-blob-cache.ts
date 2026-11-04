@@ -1,3 +1,4 @@
+import { getDataBackend } from "../data-backend";
 type CacheEntry = {
   blob: Blob;
   cachedAt: number;
@@ -39,6 +40,12 @@ function enforceMaxEntries(): void {
 }
 
 export function getCachedKycArtifactBlob(artifactId: string): Blob | null {
+  // Native reads require the currently represented claim and account. A shared
+  // artifact-only cache cannot establish either boundary after auth changes.
+  if (getDataBackend() === "foundation") {
+    artifactBlobCache.clear();
+    return null;
+  }
   const entry = artifactBlobCache.get(artifactId);
   if (!entry) {
     return null;
@@ -53,6 +60,10 @@ export function getCachedKycArtifactBlob(artifactId: string): Blob | null {
 }
 
 export function setCachedKycArtifactBlob(artifactId: string, blob: Blob): void {
+  if (getDataBackend() === "foundation") {
+    artifactBlobCache.clear();
+    return;
+  }
   pruneExpiredEntries();
   artifactBlobCache.set(artifactId, {
     blob,

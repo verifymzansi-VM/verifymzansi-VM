@@ -60,6 +60,7 @@ export async function verifyFoundationRuntimeApi(
       assert.match(arg.name, /^p_[a-z][a-z0-9_]{0,79}$/);
       if (arg.optional) continue;
       if (arg.sqlType === "integer") args[arg.name] = 1;
+      else if (arg.sqlType === "boolean") args[arg.name] = true;
       else if (arg.sqlType === "uuid") args[arg.name] = "00000000-0000-4000-8000-000000000001";
       else if (arg.sqlType === "text") args[arg.name] = "anonymous-runtime-presence-probe";
       else if (arg.sqlType === "jsonb") args[arg.name] = {};

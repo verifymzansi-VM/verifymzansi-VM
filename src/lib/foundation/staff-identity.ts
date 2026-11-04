@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
+import { FoundationStaffCommandError } from "./staff-command";
 
 // Keep the exact Postgres timestamp string: converting through Date discards
 // microseconds and can skip/repeat history rows at a keyset boundary.
@@ -107,7 +108,12 @@ export async function readStaffIdentityHistory(api: FoundationAuthenticatedApi, 
 export async function readStaffIdentityContext(api: FoundationAuthenticatedApi, input: unknown) {
   const command = buildStaffIdentityContextCommand(input);
   const { data, error } = await api.rpc("staff_identity_review_context", command, { get: false });
-  if (error) throw new Error("Foundation identity review unavailable");
+  if (error)
+    throw new FoundationStaffCommandError(
+      error.code === "42501" ? 403 : error.code === "PT409" ? 409 : 503,
+      "Foundation identity review unavailable",
+      error.code === "42501" && /second.factor|authenticator app/.test(error.message ?? "")
+    );
   const result = parseStaffIdentityContext(data);
   if (result.case_id !== command.p_case)
     throw new Error("Invalid foundation identity review context");

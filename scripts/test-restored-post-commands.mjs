@@ -13,6 +13,14 @@ import {
   restoredPostingPlanInfo,
 } from "../src/lib/foundation/posting-allowance.ts";
 import { parseStaffModerationQueue } from "../src/lib/foundation/staff-moderation-queue.ts";
+import { foundationEvidenceMetadataSchema } from "../src/lib/foundation/evidence-metadata.ts";
+import { frontendIdentityContextSchema } from "../src/lib/foundation/identity-review-contract.ts";
+import {
+  readFoundationOwnerDashboard,
+  dashboardVerificationSteps,
+} from "../src/lib/foundation/owner-dashboard.ts";
+import { readFrontendStaffVerificationQueue } from "../src/lib/foundation/staff-verification-queue.ts";
+import { validateSaIdChecksum } from "../src/lib/utils/sa-id-validation.ts";
 import {
   parseRestoredOwnerPost,
   restoredOwnerPostRow,
@@ -100,7 +108,8 @@ try {
   const owner = await user("owner"),
     reviewer = await user("reviewer"),
     unverified = await user("unverified"),
-    governor = await user("governor");
+    governor = await user("governor"),
+    administrator = await user("administrator");
   stage = "real local reviewer TOTP";
   async function verifyTotp(account) {
     const enrolled = await account.client.auth.mfa.enroll({ factorType: "totp" });
@@ -123,6 +132,7 @@ try {
   }
   await verifyTotp(reviewer);
   await verifyTotp(governor);
+  await verifyTotp(administrator);
   const claims = (account) =>
     `perform set_config('request.jwt.claims','${JSON.stringify(account.claims)}',true);`;
   const request = randomUUID(),
@@ -200,12 +210,22 @@ try {
       tickets_url: "https://example.com/tickets",
     },
   });
-  const identity = processIdentityNumber(owner.id, "8001015009087", {
+  const identityKeys = {
     identityMatchKey: randomBytes(32).toString("hex"),
     numberEncryptionKey: randomBytes(32).toString("hex"),
     identityKeyId: "identity-match-v1",
     encryptionKeyId: "identity-number-v1",
-  });
+  };
+  const identity = processIdentityNumber(owner.id, "8001015009087", identityKeys);
+  const secondNumber = Array.from({ length: 10 }, (_, n) => `900101500908${n}`).find(
+    validateSaIdChecksum
+  );
+  assert.ok(secondNumber);
+  const otherIdentity = processIdentityNumber(unverified.id, secondNumber, identityKeys);
+  const otherIdentityReceipt = {
+    fingerprint: otherIdentity.fingerprint,
+    encrypted_number: otherIdentity.encryptedNumber,
+  };
   const overlay = (file) =>
     readFileSync(file, "utf8")
       .replace(/^begin;\s*$/gm, "")
@@ -213,6 +233,9 @@ try {
   const files = [
     "database/foundation/updates/20261029191349_restore_public_browse_contract.sql",
     "database/foundation/updates/20261104000046_restored_verification_transport.sql",
+    "database/foundation/updates/20261104001222_restore_full_admin_capabilities.sql",
+    "database/foundation/updates/20261103180512_restored_owner_dashboard.sql",
+    "database/foundation/updates/20261103183017_repair_dashboard_identity_lookup.sql",
     "database/foundation/updates/20261104002445_restored_post_commands.sql",
     "database/foundation/updates/20261104042501_preserve_existing_edit_consent.sql",
     "database/foundation/updates/20261104043441_restored_post_manager.sql",
@@ -225,6 +248,7 @@ try {
     "database/foundation/updates/20261104110442_restored_posting_allowance.sql",
     "database/foundation/updates/20261104111941_restored_staff_moderation_queue.sql",
     "database/foundation/updates/20261104155022_restored_staff_claim_controls.sql",
+    "database/foundation/updates/20261104162910_preserved_identity_review_workflow.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -236,9 +260,14 @@ try {
     insert into private.posting_terms_current(version) values('${policy.version}');
     insert into private.staff_roles(user_id,role,granted_by) values('${reviewer.id}','moderator','${owner.id}');
     insert into private.staff_roles(user_id,role,granted_by) values('${governor.id}','governor','${owner.id}');
+    insert into private.staff_roles(user_id,role,granted_by) values('${administrator.id}','admin','${owner.id}');
     create temporary table restored_owner_form_probe(value jsonb);
     create temporary table restored_allowance_probe(value jsonb);
     create temporary table restored_staff_queue_probe(value jsonb);
+    create temporary table restored_evidence_metadata_probe(value jsonb);
+    create temporary table restored_identity_context_probe(value jsonb);
+    create temporary table restored_identity_queue_probe(value jsonb);
+    create temporary table restored_owner_identity_probe(kind text,value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -256,7 +285,7 @@ try {
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
-      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;
+      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -277,9 +306,30 @@ try {
         '${identity.fingerprint}','identity-match-v1','${JSON.stringify(identity.encryptedNumber)}',gen_random_uuid(),10);
       ${claims(reviewer)}
       lease:=api.claim_evidence_case((c->>'case_id')::uuid);
-      proof:=api.review_identity_submission((submission->>'submission_id')::uuid,(submission->>'case_version')::integer,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,true);
+      insert into restored_evidence_metadata_probe values(api.staff_evidence_metadata((c->>'case_id')::uuid,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,'routine_review'));
+      proof:=api.get_frontend_staff_verification_queue();
+      if proof->>'total_steps'<>'2' or jsonb_array_length(proof->'groups'->0->'steps')<>2 then raise exception 'native identity queue lost paired review steps';end if;
+      insert into restored_identity_queue_probe values(proof);
+      proof:=api.get_frontend_staff_identity_context('${owner.id}',null);
+      if proof->>'submission_id'<>submission->>'submission_id' then raise exception 'identity context resolved another submission';end if;
+      insert into restored_identity_context_probe values(proof);
+      begin perform api.approve_frontend_identity_step((c->>'case_id')::uuid,(submission->>'submission_id')::uuid,(i->>'artifact_id')::uuid,(submission->>'case_version')::integer,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,false);raise exception 'implicit document match accepted';exception when invalid_parameter_value then null;end;
+      proof:=api.approve_frontend_identity_step((c->>'case_id')::uuid,(submission->>'submission_id')::uuid,(i->>'artifact_id')::uuid,(submission->>'case_version')::integer,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true);
+      if proof->>'status'<>'step_approved' or exists(select 1 from private.accepted_identity_facts where owner_id='${owner.id}') or internal.current_verified_identity('${owner.id}') is not null then raise exception 'one step approval granted verified identity';end if;
+      proof:=api.get_frontend_staff_verification_queue();
+      if proof->>'total_steps'<>'1' or proof->'groups'->0->'steps'->0->>'step_type'<>'selfie' then raise exception 'identity queue did not preserve separate approvals';end if;
+      insert into restored_identity_queue_probe values(proof);
+      ${claims(governor)}
+      begin perform api.get_frontend_staff_identity_context('${owner.id}',null);raise exception 'unheld private identity context exposed';exception when insufficient_privilege then null;end;
+      ${claims(reviewer)}
+      proof:=api.approve_frontend_identity_step((c->>'case_id')::uuid,(submission->>'submission_id')::uuid,(face->>'artifact_id')::uuid,(submission->>'case_version')::integer,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true);
       if proof->>'status'<>'accepted' then raise exception 'native review did not accept synthetic evidence'; end if;
+      proof:=api.approve_frontend_identity_step((c->>'case_id')::uuid,(submission->>'submission_id')::uuid,(face->>'artifact_id')::uuid,(submission->>'case_version')::integer,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true);
+      if proof->>'reused'<>'true' or (select count(*) from private.accepted_identity_facts where owner_id='${owner.id}')<>1 then raise exception 'identity approval reply replayed a mutation';end if;
+      begin perform api.approve_frontend_identity_step((c->>'case_id')::uuid,(submission->>'submission_id')::uuid,(face->>'artifact_id')::uuid,(submission->>'case_version')::integer,lease->>'claim_generation',gen_random_uuid(),true);raise exception 'approval acknowledgement accepted another nonce';exception when insufficient_privilege then null;end;
       ${claims(owner)}
+      if api.get_my_frontend_identity_state()->>'identity_reviewed_at' is null or api.get_my_verification_case()->>'verified'<>'false' then raise exception 'accepted identity depends on later phone/locality steps';end if;
+      insert into restored_owner_identity_probe values('dashboard',api.get_my_dashboard()),('identity',api.get_my_frontend_identity_state());
       proof:=api.create_verification_phone_challenge('${owner.id}','+27700000123',repeat('e',64));
       perform api.claim_verification_phone_attempt('${owner.id}',(proof->>'challenge_id')::uuid);
       perform api.finalize_verification_phone('${owner.id}',(proof->>'challenge_id')::uuid,repeat('e',64));
@@ -464,10 +514,59 @@ try {
       if exists(select 1 from pg_constraint where conrelid='private.frontend_verification_uploads'::regclass and contype='f' and confrelid<>'auth.users'::regclass and confdeltype<>'c') then raise exception 'transport receipts block native history retention'; end if;
       delete from private.post_presentation_media where object_id=(poster->>'object_id')::uuid;
       if (select unlinked_at from private.media_objects where id=(poster->>'object_id')::uuid) is null then raise exception 'presentation media grace period missing'; end if;
+
+      -- A returned wizard pair cannot reuse an old selfie after a new ID bumps
+      -- the case version. All receipts below remain explicitly synthetic.
+      ${claims(unverified)}
+      perform api.save_my_legal_name((api.get_my_profile()->>'revision')::integer,'Fixture','Member');
+      id_request:=gen_random_uuid();selfie_request:=gen_random_uuid();
+      i:=api.reserve_frontend_verification_upload(id_request,'id_front',repeat('1',64),'Fixture','Member');
+      c:=api.frontend_verification_upload_context('${unverified.id}',id_request);i:=i||jsonb_build_object('case_id',c->'case_id');
+      perform api.complete_frontend_verification_upload('${unverified.id}',id_request,repeat('1',64),repeat('2',64),128,'${JSON.stringify(otherIdentityReceipt)}'::jsonb,0);
+      face:=api.reserve_frontend_verification_upload(selfie_request,'selfie',repeat('3',64));
+      perform api.complete_frontend_verification_upload('${unverified.id}',selfie_request,repeat('3',64),repeat('4',64),128,null,0);
+      select v.submission_id into move_request from private.verification_current_submissions v where v.case_id=(i->>'case_id')::uuid;
+      select s.case_version into rev from private.verification_identity_submissions s where s.id=move_request;
+      ${claims(reviewer)}
+      lease:=api.claim_evidence_case((i->>'case_id')::uuid);
+      proof:=api.return_frontend_identity_step((i->>'case_id')::uuid,move_request,(i->>'artifact_id')::uuid,rev,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,'rejected','Synthetic ID rejection: retake the complete pair');
+      ${claims(unverified)}
+      if api.get_my_frontend_identity_state()->>'decision'<>'rejected' or jsonb_array_length(api.get_my_frontend_verification_uploads())<>0 then raise exception 'rejected wizard receipts still completed';end if;
+      begin perform api.reserve_frontend_verification_upload(selfie_request,'selfie',repeat('3',64));raise exception 'returned upload receipt reused';exception when sqlstate 'PT409' then null;end;
+      id_request:=gen_random_uuid();
+      i:=api.reserve_frontend_verification_upload(id_request,'id_front',repeat('5',64),'Fixture','Member');
+      c:=api.frontend_verification_upload_context('${unverified.id}',id_request);i:=i||jsonb_build_object('case_id',c->'case_id');
+      perform api.complete_frontend_verification_upload('${unverified.id}',id_request,repeat('5',64),repeat('6',64),128,'${JSON.stringify(otherIdentityReceipt)}'::jsonb,0);
+      c:=api.get_my_frontend_verification_uploads();
+      if jsonb_array_length(c)<>1 or c->0->>'purpose'<>'id_front' then raise exception 'old selfie reappeared after new ID';end if;
+      selfie_request:=gen_random_uuid();face:=api.reserve_frontend_verification_upload(selfie_request,'selfie',repeat('7',64));
+      perform api.complete_frontend_verification_upload('${unverified.id}',selfie_request,repeat('7',64),repeat('8',64),128,null,75);
+      select v.submission_id into move_request from private.verification_current_submissions v where v.case_id=(i->>'case_id')::uuid;
+      select s.case_version into rev from private.verification_identity_submissions s where s.id=move_request;
+      ${claims(reviewer)}
+      lease:=api.claim_evidence_case((i->>'case_id')::uuid);
+      begin perform api.approve_frontend_identity_step((i->>'case_id')::uuid,move_request,(i->>'artifact_id')::uuid,rev,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,null,'supporting_evidence');raise exception 'routine-only role proposed high-risk override';exception when insufficient_privilege then null;end;
+      perform api.release_evidence_claim((i->>'case_id')::uuid,lease->>'claim_generation',(lease->>'claim_nonce')::uuid);
+      ${claims(administrator)}
+      lease:=api.claim_evidence_case((i->>'case_id')::uuid);
+      begin perform api.approve_frontend_identity_step((i->>'case_id')::uuid,move_request,(i->>'artifact_id')::uuid,rev,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true);raise exception 'high-risk justification omitted';exception when invalid_parameter_value then null;end;
+      perform api.approve_frontend_identity_step((i->>'case_id')::uuid,move_request,(i->>'artifact_id')::uuid,rev,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,null,'supporting_evidence');
+      proof:=api.approve_frontend_identity_step((i->>'case_id')::uuid,move_request,(face->>'artifact_id')::uuid,rev,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,null,'supporting_evidence');
+      if proof->>'status'<>'awaiting_second_reviewer' or exists(select 1 from private.accepted_identity_facts where owner_id='${unverified.id}') then raise exception 'high-risk step approvals bypassed independent review';end if;
+      begin perform api.approve_decision((proof->>'decision_id')::uuid);raise exception 'proposer approved own high-risk decision';exception when insufficient_privilege then null;end;
+      ${claims(governor)}
+      perform api.reassign_frontend_staff_claim('verification_step',(i->>'case_id')::uuid,'${governor.id}','Synthetic independent evidence review');
+      c:=api.get_frontend_staff_identity_context('${unverified.id}',null);
+      perform api.approve_decision((proof->>'decision_id')::uuid);
+      if (select count(*) from private.accepted_identity_facts where owner_id='${unverified.id}' and second_reviewer='${governor.id}')<>1 then raise exception 'independent high-risk approval missing';end if;
     end $fixture$;
     select value from restored_owner_form_probe;
     select 'ALLOWANCE:'||value::text from restored_allowance_probe;
     select 'STAFF_QUEUE:'||value::text from restored_staff_queue_probe;
+    select 'EVIDENCE_METADATA:'||value::text from restored_evidence_metadata_probe;
+    select 'IDENTITY_CONTEXT:'||value::text from restored_identity_context_probe;
+    select 'IDENTITY_QUEUE:'||value::text from restored_identity_queue_probe;
+    select 'OWNER_IDENTITY:'||jsonb_build_object('kind',kind,'value',value)::text from restored_owner_identity_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -489,6 +588,56 @@ try {
   assert.equal(queues[0].allItems[0].foundation, undefined);
   assert.ok(queues[1].allItems[0].description);
   assert.ok(queues[1].allItems[0].foundation.claimNonce);
+  const evidenceMetadata = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("EVIDENCE_METADATA:"))
+    .map((line) => foundationEvidenceMetadataSchema.parse(JSON.parse(line.slice(18))));
+  assert.equal(evidenceMetadata.length, 1);
+  assert.equal(evidenceMetadata[0].artifacts.length, 2);
+  const identityContexts = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("IDENTITY_CONTEXT:"))
+    .map((line) => frontendIdentityContextSchema.parse(JSON.parse(line.slice(17))));
+  assert.equal(identityContexts.length, 1);
+  assert.equal(identityContexts[0].reviewer_id, reviewer.id);
+  assert.ok(identityContexts[0].access_log.length);
+  const identityQueues = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("IDENTITY_QUEUE:"))
+    .map((line) => JSON.parse(line.slice(15)));
+  assert.equal(identityQueues.length, 2);
+  for (const [at, data] of identityQueues.entries()) {
+    const view = await readFrontendStaffVerificationQueue(
+      { rpc: async () => ({ data, error: null }) },
+      reviewer.id
+    );
+    assert.equal(view.total, 2 - at);
+    assert.equal(view.groups[0].steps.length, 2 - at);
+    assert.ok(view.groups[0].steps[0].foundation.claimNonce);
+  }
+  const ownerIdentity = Object.fromEntries(
+    outcome
+      .split("\n")
+      .filter((line) => line.startsWith("OWNER_IDENTITY:"))
+      .map((line) => {
+        const row = JSON.parse(line.slice(15));
+        return [row.kind, row.value];
+      })
+  );
+  const ownerSnapshot = await readFoundationOwnerDashboard(
+    {
+      rpc: async (name) => ({
+        data: name === "get_my_dashboard" ? ownerIdentity.dashboard : ownerIdentity.identity,
+        error: null,
+      }),
+    },
+    owner.id
+  );
+  assert.equal(ownerSnapshot.verification.verified, false);
+  assert.equal(
+    dashboardVerificationSteps(ownerSnapshot).filter((r) => r.status === "approved").length,
+    2
+  );
   const restored = parseRestoredOwnerPost(
     JSON.parse(outcome.split("\n").find((line) => line.startsWith("{")))
   );
@@ -501,6 +650,9 @@ try {
     "listing/business/event form commands",
     "self-only native posting gate, trial claim and current capacity DTOs",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
+    "actual native evidence metadata contract used by private authorization",
+    "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",
+    "accepted ID remains a completed step before location; rejected retake receipts do not resurrect; high-risk approval still requires another real staff actor",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",
@@ -523,6 +675,9 @@ try {
   report.status = "FAIL";
   report.stage = stage;
   report.sqlState = String(error.stderr ?? "").match(/ERROR:\s+([A-Z0-9]{5}):/)?.[1] ?? null;
+  report.contexts = [...String(error.stderr ?? "").matchAll(/PL\/pgSQL function [^\r\n]+/g)]
+    .map((m) => m[0].slice(0, 200))
+    .slice(0, 8);
   report.diagnostic =
     String(error.stderr ?? error.message)
       .split("\n")

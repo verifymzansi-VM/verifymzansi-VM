@@ -59,6 +59,6 @@ export function staffCommandRefusal(error: unknown): FoundationRefusal | null {
     status: error.status,
     error: error.message,
     reason: error.mfaRequired ? "staff_mfa_required" : "staff_command_refused",
-    ...(error.mfaRequired ? { redirectUrl: "/staff/two-step" } : {}),
+    ...(error.mfaRequired ? { redirectUrl: "/staff/two-step", code: "step_up_required" } : {}),
   };
 }

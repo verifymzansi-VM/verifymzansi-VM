@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
@@ -62,6 +62,10 @@ vi.mock("lucide-react", () => ({
 }));
 
 const mockFetch = vi.fn();
+const { getNativeUser } = vi.hoisted(() => ({ getNativeUser: vi.fn() }));
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({ auth: { getUser: getNativeUser } }),
+}));
 vi.stubGlobal("fetch", mockFetch);
 
 const mockCreateObjectURL = vi.fn((blob: Blob) => `blob:${blob.size}`);
@@ -79,11 +83,95 @@ Object.defineProperty(OriginalURL, "revokeObjectURL", {
 const { KycComparisonViewer } = await import("@/components/admin/kyc-comparison-viewer");
 
 describe("KycComparisonViewer", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     // Fully reset the fetch mock queue so mockResolvedValueOnce chains from a
     // previous test cannot leak into the next one.
     mockFetch.mockReset();
+  });
+
+  it("renders an inspected native PDF and sends the viewed scope only after all review checks", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    const uuid = (n: number) => `11111111-1111-4111-8111-${String(n).padStart(12, "0")}`;
+    const actor = uuid(9),
+      owner = uuid(8),
+      foundation = {
+        caseId: uuid(1),
+        caseVersion: 7,
+        submissionId: uuid(2),
+        claimGeneration: "4",
+        claimNonce: uuid(3),
+      };
+    getNativeUser.mockResolvedValue({ data: { user: { id: actor } }, error: null });
+    const artifacts = ["id_doc", "selfie"].map((step_type, n) => ({
+      id: uuid(n + 4),
+      step_type,
+      artifact_kind: step_type,
+      r2_key: null,
+      content_type: "application/octet-stream",
+      file_size_bytes: null,
+      status: "clean",
+      created_at: "2026-11-04T10:00:00Z",
+      purge_after: null,
+      sha256: null,
+      foundation,
+      review_subject_label: "Fixture Member · ID 8001015009087",
+      review_risk_score: 10,
+      review_risk_level: "low",
+    }));
+    mockFetch.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith("/metadata"))
+        return Response.json(
+          {
+            artifacts,
+            providerResults: [],
+            riskSignals: [],
+            review_subject_label: "Fixture Member · ID 8001015009087",
+          },
+          { headers: { "X-VerifyMzansi-Actor": actor } }
+        );
+      const body = JSON.parse(String(init.body));
+      return new Response(body.artifactId === uuid(4) ? "%PDF-1.4\n" : "synthetic image", {
+        headers: {
+          "Content-Type": body.artifactId === uuid(4) ? "application/pdf" : "image/png",
+          "X-VerifyMzansi-Actor": actor,
+        },
+      });
+    });
+    const review = vi.fn();
+    render(
+      <KycComparisonViewer
+        isOpen
+        userId={owner}
+        displayName="Fixture Member"
+        onClose={vi.fn()}
+        onReviewStep={review}
+        reviewableSteps={["id_doc", "selfie"]}
+      />
+    );
+    await waitFor(() => expect(screen.getByTitle("ID Document").tagName).toBe("IFRAME"));
+    expect(mockCreateObjectURL).toHaveBeenCalledTimes(2);
+    expect(screen.getByAltText("Selfie")).toBeInTheDocument();
+    expect(screen.getByText(/ID 8001015009087/)).toBeInTheDocument();
+    const approve = screen.getByRole("button", { name: "Approve ID" });
+    expect(approve).toBeDisabled();
+    screen.getAllByRole("checkbox").forEach((checkbox) => fireEvent.click(checkbox));
+    expect(
+      screen.getAllByRole("checkbox").map((checkbox) => (checkbox as HTMLInputElement).checked)
+    ).toEqual([true, true, true]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Approve ID" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Approve ID" }));
+    expect(review).toHaveBeenCalledExactlyOnceWith(
+      "id_doc",
+      "approved",
+      expect.objectContaining({ artifactId: uuid(4), foundation })
+    );
+    const streams = mockFetch.mock.calls.filter(
+      ([url]) => url === "/api/admin/verification/evidence"
+    );
+    expect(streams).toHaveLength(2);
+    expect(JSON.parse(streams[0][1].body)).toMatchObject({ foundation });
   });
 
   it("loads the newest artifact first when duplicate step types exist", async () => {

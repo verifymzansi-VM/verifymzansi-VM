@@ -44,6 +44,7 @@ export async function handleFoundationOwnerRoute<T>({
   refusal,
   includeAccountId = false,
   maxBytes = 4096,
+  responseHeaders,
 }: {
   request: NextRequest;
   log: Logger;
@@ -55,6 +56,7 @@ export async function handleFoundationOwnerRoute<T>({
   refusal: (error: unknown) => FoundationRefusal | null;
   includeAccountId?: boolean;
   maxBytes?: number;
+  responseHeaders?: (data: T) => Record<string, string>;
 }) {
   const unavailable = () =>
     NextResponse.json({ error: unavailableMessage }, { status: 503, headers: foundationNoStore });
@@ -111,7 +113,9 @@ export async function handleFoundationOwnerRoute<T>({
     }
     const data = await command(api, input);
     return context.respond(
-      NextResponse.json(includeAccountId ? { account_id: accountId, data } : data)
+      NextResponse.json(includeAccountId ? { account_id: accountId, data } : data, {
+        headers: responseHeaders?.(data),
+      })
     );
   } catch (error) {
     const known = refusal(error);

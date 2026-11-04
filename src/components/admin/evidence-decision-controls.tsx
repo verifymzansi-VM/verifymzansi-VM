@@ -13,8 +13,14 @@ import {
   DECISION_NOTE_TEMPLATES,
 } from "@/lib/constants/verification";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
+import {
+  confirmedIdentityDecisionFields,
+  identityApprovalMessage,
+  type NativeEvidenceFields,
+} from "@/lib/admin/native-evidence-presentation";
 
-interface EvidenceStep {
+interface EvidenceStep extends NativeEvidenceFields {
   id: string;
   step_type: string;
   status: string;
@@ -79,16 +85,17 @@ export function EvidenceDecisionControls({
 
     setSubmitting(true);
     try {
-      const body: Record<string, string> = {
+      const body: Record<string, unknown> = {
         stepId: step.id,
         ...(step.updated_at ? { expectedUpdatedAt: step.updated_at } : {}),
         decision,
+        ...confirmedIdentityDecisionFields(step, decision),
       };
       if (reasonCode) body.reasonCode = reasonCode;
       if (reasonNote) body.reasonNote = reasonNote;
       if (overrideReasonCode) body.overrideReasonCode = overrideReasonCode;
 
-      const res = await fetch("/api/admin/verification/decide", {
+      const res = await fetchStaffEvidence("/api/admin/verification/decide", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(body),
@@ -256,6 +263,9 @@ export function EvidenceDecisionControls({
         {decision && (
           <Button
             onClick={handleSubmit}
+            title={
+              step.foundation && decision === "approved" ? identityApprovalMessage(step) : undefined
+            }
             disabled={submitting}
             variant={
               decision === "approved"
@@ -273,7 +283,11 @@ export function EvidenceDecisionControls({
             )}
             Confirm{" "}
             {decision === "approved"
-              ? "Approval"
+              ? step.foundation
+                ? step.step_type === "id_doc"
+                  ? "ID number and name match"
+                  : "Selfie matches ID portrait"
+                : "Approval"
               : decision === "rejected"
                 ? "Rejection"
                 : "Resubmission Request"}

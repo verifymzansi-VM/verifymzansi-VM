@@ -80,6 +80,22 @@ export function EvidenceDeskClient({
   const [selectedStep, setSelectedStep] = useState<EvidenceStep | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [comparisonMode, setComparisonMode] = useState(false);
+  const recordInspectedArtifact = useCallback((inspected: Artifact) => {
+    const merge = (current: Artifact) =>
+      current.id === inspected.id &&
+      (current.content_type !== inspected.content_type ||
+        current.file_size_bytes !== inspected.file_size_bytes)
+        ? {
+            ...current,
+            content_type: inspected.content_type,
+            file_size_bytes: inspected.file_size_bytes,
+          }
+        : current;
+    setMetadata((current) =>
+      current ? { ...current, artifacts: current.artifacts.map(merge) } : current
+    );
+    setSelectedArtifact((current) => (current ? merge(current) : current));
+  }, []);
   const accountProfile = metadata?.accountProfile ?? metadata?.sellerProfile ?? null;
   const verificationStatus =
     accountProfile?.account_verification_status ?? accountProfile?.account_verification_status;
@@ -397,15 +413,18 @@ export function EvidenceDeskClient({
 
                 return idArtifact && selfieArtifact ? (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <EvidenceViewer artifact={idArtifact} />
-                    <EvidenceViewer artifact={selfieArtifact} />
+                    <EvidenceViewer artifact={idArtifact} onInspected={recordInspectedArtifact} />
+                    <EvidenceViewer
+                      artifact={selfieArtifact}
+                      onInspected={recordInspectedArtifact}
+                    />
                   </div>
                 ) : null;
               })()}
 
             {!comparisonMode &&
               (selectedArtifact ? (
-                <EvidenceViewer artifact={selectedArtifact} />
+                <EvidenceViewer artifact={selectedArtifact} onInspected={recordInspectedArtifact} />
               ) : (
                 <Card className="border-warm-200/70 dark:border-warm-700/70">
                   <CardContent className="flex flex-col items-center justify-center py-6 text-center">

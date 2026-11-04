@@ -2,40 +2,51 @@
 
 import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useEffectEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Eye, FileText, ImageIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ensureCsrfTokenReady, withCsrfHeaders } from "@/lib/utils/csrf";
 import { formatDate } from "@/lib/utils/format";
+import {
+  nativeEvidenceBody,
+  inspectedEvidenceArtifact,
+  type NativeEvidenceFields,
+} from "@/lib/admin/native-evidence-presentation";
 
-interface Artifact {
+interface Artifact extends NativeEvidenceFields {
   id: string;
   step_type: string;
   artifact_kind: string;
-  r2_key: string;
+  r2_key: string | null;
   content_type: string;
-  file_size_bytes: number;
+  file_size_bytes: number | null;
   status: string;
   created_at: string;
   purge_after: string | null;
   sha256: string | null;
 }
 
-function formatBytes(bytes: number): string {
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "Not yet loaded";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function fetchEvidenceBlob(artifactId: string): Promise<Blob> {
+async function fetchEvidenceBlob(
+  id: string,
+  foundation: NativeEvidenceFields["foundation"],
+  signal?: AbortSignal
+): Promise<Blob> {
   if (!(await ensureCsrfTokenReady())) {
     throw new Error("Security check failed. Please refresh the page and try again.");
   }
   const res = await fetchStaffEvidence("/api/admin/verification/evidence", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ artifactId }),
+    body: JSON.stringify(nativeEvidenceBody({ id, foundation })),
+    signal,
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -45,14 +56,32 @@ async function fetchEvidenceBlob(artifactId: string): Promise<Blob> {
   return res.blob();
 }
 
-export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
+export function EvidenceViewer({
+  artifact,
+  onInspected,
+}: {
+  artifact: Artifact;
+  onInspected?: (artifact: Artifact) => void;
+}) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inspectedArtifact, setInspectedArtifact] = useState(artifact);
+  const [retryEpoch, setRetryEpoch] = useState(0);
+  const reviewScope = artifact.foundation;
+  // A completed download updates presentation metadata and the latest callback.
+  // Only the artifact and represented lease subscribe the network effect.
+  const receiveInspected = useEffectEvent((blob: Blob) => {
+    const inspected = inspectedEvidenceArtifact(artifact, blob);
+    setInspectedArtifact(inspected);
+    onInspected?.(inspected);
+  });
 
   // Fetch decrypted evidence via server proxy
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    let createdUrl: string | null = null;
 
     async function loadEvidence() {
       setLoading(true);
@@ -60,9 +89,11 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
       setBlobUrl(null);
 
       try {
-        const blob = await fetchEvidenceBlob(artifact.id);
+        const blob = await fetchEvidenceBlob(artifact.id, reviewScope, controller.signal);
         if (!cancelled) {
+          receiveInspected(blob);
           const url = URL.createObjectURL(blob);
+          createdUrl = url;
           setBlobUrl((prev) => {
             if (prev) URL.revokeObjectURL(prev);
             return url;
@@ -81,16 +112,18 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
 
     return () => {
       cancelled = true;
+      controller.abort();
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
       // Revoke previous blob URL
       setBlobUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
     };
-  }, [artifact.id]);
+  }, [artifact.id, reviewScope, retryEpoch]);
 
-  const isImage = artifact.content_type.startsWith("image/");
-  const isPdf = artifact.content_type === "application/pdf";
+  const isImage = inspectedArtifact.content_type.startsWith("image/");
+  const isPdf = inspectedArtifact.content_type === "application/pdf";
 
   // Prevent right-click context menu on evidence content
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -125,7 +158,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
             <span>
               {artifact.step_type} — {artifact.artifact_kind}
             </span>
-            <span>({formatBytes(artifact.file_size_bytes)})</span>
+            <span>({formatBytes(inspectedArtifact.file_size_bytes)})</span>
           </div>
         </div>
       </CardHeader>
@@ -147,26 +180,7 @@ export function EvidenceViewer({ artifact }: { artifact: Artifact }) {
               variant="outline"
               size="sm"
               className="mt-3"
-              onClick={() => {
-                // Revoke old blob URL if any to prevent leak
-                if (blobUrl) {
-                  URL.revokeObjectURL(blobUrl);
-                  setBlobUrl(null);
-                }
-                // Trigger re-fetch
-                setLoading(true);
-                setError(null);
-                fetchEvidenceBlob(artifact.id)
-                  .then((blob) => {
-                    const url = URL.createObjectURL(blob);
-                    setBlobUrl(url);
-                    setLoading(false);
-                  })
-                  .catch((err) => {
-                    setError(err instanceof Error ? err.message : "Retry failed");
-                    setLoading(false);
-                  });
-              }}
+              onClick={() => setRetryEpoch((n) => n + 1)}
             >
               Retry
             </Button>

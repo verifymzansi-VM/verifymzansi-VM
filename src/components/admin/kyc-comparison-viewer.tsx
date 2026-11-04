@@ -41,14 +41,20 @@ import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getKycZoomWidthClass } from "./kyc-review-constants";
 import { LIVENESS_THRESHOLD } from "@/lib/constants/verification";
 import { formatDateTime } from "@/lib/utils/format";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  nativeEvidenceBody,
+  inspectedEvidenceArtifact,
+  type NativeEvidenceFields,
+} from "@/lib/admin/native-evidence-presentation";
 
-interface Artifact {
+interface Artifact extends NativeEvidenceFields {
   id: string;
   step_type: string;
   artifact_kind: string;
-  r2_key: string;
+  r2_key: string | null;
   content_type: string;
-  file_size_bytes: number;
+  file_size_bytes: number | null;
   status: string;
   created_at: string;
   purge_after: string | null;
@@ -113,7 +119,8 @@ interface DocumentViewerProps {
   isLoading?: boolean;
   onReviewStep?: (
     stepType: "id_doc" | "selfie",
-    decision: "approved" | "rejected" | "needs_resubmission"
+    decision: "approved" | "rejected" | "needs_resubmission",
+    review?: NativeEvidenceFields & { artifactId: string }
   ) => void;
   reviewableSteps?: string[];
 }
@@ -137,6 +144,7 @@ export function KycComparisonViewer({
 }: DocumentViewerProps) {
   const [viewMode, setViewMode] = useState("compare");
   const [reviewChecks, setReviewChecks] = useState<string[]>([]);
+  const [reviewSubjectLabel, setReviewSubjectLabel] = useState(displayName);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [artifactErrors, setArtifactErrors] = useState<Record<string, string>>({});
@@ -166,7 +174,14 @@ export function KycComparisonViewer({
     if (!isOpen || !userId) return;
 
     let cancelled = false;
+    const controller = new AbortController();
     const createdUrls: string[] = [];
+    const makeObjectUrl = (blob: Blob) => {
+      if (cancelled) return null;
+      const url = URL.createObjectURL(blob);
+      createdUrls.push(url);
+      return url;
+    };
 
     async function loadArtifacts() {
       setLoading(true);
@@ -178,11 +193,13 @@ export function KycComparisonViewer({
       setProviderResults([]);
       setPanelZoom({ id_doc: 1, selfie: 1 });
       setReviewChecks([]);
+      setReviewSubjectLabel(displayName);
       setViewMode("compare");
 
       try {
         const metaRes = await fetchStaffEvidence(`/api/admin/verification/evidence/metadata`, {
           method: "POST",
+          signal: controller.signal,
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({ userId }),
         });
@@ -201,6 +218,10 @@ export function KycComparisonViewer({
         }
 
         const meta = await metaRes.json();
+        if (!cancelled)
+          setReviewSubjectLabel(
+            typeof meta.review_subject_label === "string" ? meta.review_subject_label : displayName
+          );
         const loadedArtifacts: Artifact[] = (meta.artifacts || []).filter(
           (artifact: Artifact) => artifact.step_type === "id_doc" || artifact.step_type === "selfie"
         );
@@ -244,11 +265,10 @@ export function KycComparisonViewer({
 
               const initialCachedBlob = getCachedKycArtifactBlob(artifact.id);
               if (initialCachedBlob) {
-                const objectUrl = URL.createObjectURL(initialCachedBlob);
-                createdUrls.push(objectUrl);
+                const objectUrl = makeObjectUrl(initialCachedBlob);
                 return {
                   requestedId: artifact.id,
-                  resolvedArtifact,
+                  resolvedArtifact: inspectedEvidenceArtifact(resolvedArtifact, initialCachedBlob),
                   objectUrl,
                   error: null as string | null,
                 };
@@ -256,8 +276,9 @@ export function KycComparisonViewer({
 
               let evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
                 method: "POST",
+                signal: controller.signal,
                 headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({ artifactId: artifact.id }),
+                body: JSON.stringify(nativeEvidenceBody(artifact)),
               });
 
               if (!evidenceRes.ok) {
@@ -268,6 +289,7 @@ export function KycComparisonViewer({
                     `/api/admin/verification/evidence/metadata`,
                     {
                       method: "POST",
+                      signal: controller.signal,
                       headers: withCsrfHeaders({ "Content-Type": "application/json" }),
                       body: JSON.stringify({ userId }),
                     }
@@ -288,11 +310,13 @@ export function KycComparisonViewer({
                       const replacementCachedBlob = getCachedKycArtifactBlob(replacement.id);
 
                       if (replacementCachedBlob) {
-                        const objectUrl = URL.createObjectURL(replacementCachedBlob);
-                        createdUrls.push(objectUrl);
+                        const objectUrl = makeObjectUrl(replacementCachedBlob);
                         return {
                           requestedId: artifact.id,
-                          resolvedArtifact,
+                          resolvedArtifact: inspectedEvidenceArtifact(
+                            resolvedArtifact,
+                            replacementCachedBlob
+                          ),
                           objectUrl,
                           error: null as string | null,
                         };
@@ -300,8 +324,9 @@ export function KycComparisonViewer({
 
                       evidenceRes = await fetchStaffEvidence(`/api/admin/verification/evidence`, {
                         method: "POST",
+                        signal: controller.signal,
                         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                        body: JSON.stringify({ artifactId: replacement.id }),
+                        body: JSON.stringify(nativeEvidenceBody(replacement)),
                       });
                     }
                   }
@@ -320,9 +345,9 @@ export function KycComparisonViewer({
 
               if (evidenceRes.ok) {
                 const blob = await evidenceRes.blob();
+                resolvedArtifact = inspectedEvidenceArtifact(resolvedArtifact, blob);
                 setCachedKycArtifactBlob(resolvedArtifact.id, blob);
-                const objectUrl = URL.createObjectURL(blob);
-                createdUrls.push(objectUrl);
+                const objectUrl = makeObjectUrl(blob);
                 return {
                   requestedId: artifact.id,
                   resolvedArtifact,
@@ -363,7 +388,7 @@ export function KycComparisonViewer({
           if (result.error) {
             nextArtifactErrors[result.resolvedArtifact.id] = result.error;
           }
-          if (result.resolvedArtifact.id !== result.requestedId) {
+          if (!result.error) {
             replacementByRequestedId.set(result.requestedId, result.resolvedArtifact);
           }
         }
@@ -381,9 +406,9 @@ export function KycComparisonViewer({
           );
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load documents");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load documents");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -391,10 +416,41 @@ export function KycComparisonViewer({
 
     return () => {
       cancelled = true;
+      controller.abort();
       // Cleanup blob URLs
       createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [isOpen, userId, retryToken]);
+  }, [isOpen, userId, retryToken, displayName]);
+
+  function reviewArtifact(
+    artifact: Artifact,
+    nextDecision: "approved" | "rejected" | "needs_resubmission"
+  ) {
+    if (artifact.step_type !== "id_doc" && artifact.step_type !== "selfie") return;
+    if (getDataBackend() === "foundation") {
+      if (!artifact.foundation) {
+        setArtifactErrors((previous) => ({
+          ...previous,
+          [artifact.id]: "Reload the claimed evidence before deciding it.",
+        }));
+        return;
+      }
+      onReviewStep?.(artifact.step_type, nextDecision, {
+        artifactId: artifact.id,
+        foundation: artifact.foundation,
+        review_subject_label: artifact.review_subject_label,
+        review_risk_score: artifact.review_risk_score,
+        review_risk_level: artifact.review_risk_level,
+      });
+    } else onReviewStep?.(artifact.step_type, nextDecision);
+  }
+  const reviewCheckLabels = [
+    getDataBackend() === "foundation"
+      ? "The ID number and legal name match the submitted details shown above, and the South African document is clear."
+      : "ID photo and personal details are clear and the document is South African.",
+    "The selfie and ID portrait appear to show the same person.",
+    "I reviewed the liveness status and risk signals; the evidence is sufficient.",
+  ];
 
   const idArtifact = artifacts.find((artifact) => artifact.step_type === "id_doc") ?? null;
   const selfieArtifact = artifacts.find((artifact) => artifact.step_type === "selfie") ?? null;
@@ -568,7 +624,9 @@ export function KycComparisonViewer({
             </div>
             <div className="flex flex-wrap items-center gap-1">
               <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
-                {(artifact.file_size_bytes / 1024).toFixed(1)} KB
+                {artifact.file_size_bytes === null
+                  ? "Size available after loading"
+                  : `${(artifact.file_size_bytes / 1024).toFixed(1)} KB`}
               </Badge>
               <Button
                 variant="ghost"
@@ -641,6 +699,12 @@ export function KycComparisonViewer({
                     />
                   </div>
                 </div>
+              ) : artifact.content_type === "application/pdf" ? (
+                <iframe
+                  src={blobUrl}
+                  title={getStepLabel(artifact.step_type)}
+                  className="h-full w-full border-0"
+                />
               ) : (
                 <div className="flex flex-col items-center justify-center p-8 text-center">
                   <FileText className="mb-2 h-12 w-12 text-muted-foreground" />
@@ -662,9 +726,7 @@ export function KycComparisonViewer({
               size="sm"
               variant="outline"
               disabled={isLoading || disableActions}
-              onClick={() =>
-                onReviewStep(artifact.step_type as "id_doc" | "selfie", "needs_resubmission")
-              }
+              onClick={() => reviewArtifact(artifact, "needs_resubmission")}
             >
               Request retake
             </Button>
@@ -672,7 +734,7 @@ export function KycComparisonViewer({
               size="sm"
               variant="destructive"
               disabled={isLoading || disableActions}
-              onClick={() => onReviewStep(artifact.step_type as "id_doc" | "selfie", "rejected")}
+              onClick={() => reviewArtifact(artifact, "rejected")}
             >
               Reject
             </Button>
@@ -686,7 +748,7 @@ export function KycComparisonViewer({
                 !selfieArtifact ||
                 comparisonArtifacts.some((a) => !blobUrls[a.id] || artifactErrors[a.id])
               }
-              onClick={() => onReviewStep(artifact.step_type as "id_doc" | "selfie", "approved")}
+              onClick={() => reviewArtifact(artifact, "approved")}
             >
               Approve {artifact.step_type === "selfie" ? "selfie" : "ID"}
             </Button>
@@ -703,7 +765,7 @@ export function KycComparisonViewer({
           <div className="flex items-center justify-between w-full gap-4">
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold">
-                Identity Comparison: {displayName}
+                Identity Comparison: {reviewSubjectLabel}
               </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground">
                 Compare the selfie against the ID document to verify the same person.
@@ -847,11 +909,7 @@ export function KycComparisonViewer({
               {(onApprove || onReviewStep) && (
                 <fieldset className="space-y-3 rounded-lg border p-4">
                   <legend className="px-1 text-sm font-semibold">Review before approving</legend>
-                  {[
-                    "ID photo and personal details are clear and the document is South African.",
-                    "The selfie and ID portrait appear to show the same person.",
-                    "I reviewed the liveness status and risk signals; the evidence is sufficient.",
-                  ].map((label) => (
+                  {reviewCheckLabels.map((label) => (
                     <label key={label} className="flex items-start gap-3 text-sm">
                       <input
                         type="checkbox"

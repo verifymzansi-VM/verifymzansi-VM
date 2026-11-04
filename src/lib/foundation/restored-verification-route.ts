@@ -64,7 +64,7 @@ function presentedVerification(
           metadata: { location_assurance: "self_declared" },
         }
       : {}),
-    ...(step.status === "needs_resubmission"
+    ...(["needs_resubmission", "rejected"].includes(step.status)
       ? { rejection_reason: value.verification.return_reason }
       : {}),
   }));
@@ -175,7 +175,7 @@ export function handleRestoredVerificationSession(request: NextRequest) {
           .map((s) => s.step_type),
         pendingSteps: presented.steps.filter((s) => s.status === "pending").map((s) => s.step_type),
         rejectedSteps: presented.steps
-          .filter((s) => s.status === "needs_resubmission")
+          .filter((s) => ["needs_resubmission", "rejected"].includes(s.status))
           .map((s) => s.step_type),
         expiresAt: uploads.map((u) => u.expires_at).sort()[0] ?? null,
         phoneVerifiedAt: snapshot.profile_facts.phone_verified_at,

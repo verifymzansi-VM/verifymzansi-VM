@@ -1,4 +1,5 @@
-export interface EvidenceStep {
+import type { NativeEvidenceFields } from "@/lib/admin/native-evidence-presentation";
+export interface EvidenceStep extends NativeEvidenceFields {
   id: string;
   step_type: string;
   status: string;
@@ -20,13 +21,13 @@ export interface EvidenceStep {
   last_name: string | null;
 }
 
-export interface Artifact {
+export interface Artifact extends NativeEvidenceFields {
   id: string;
   step_type: string;
   artifact_kind: string;
-  r2_key: string;
+  r2_key: string | null;
   content_type: string;
-  file_size_bytes: number;
+  file_size_bytes: number | null;
   status: string;
   created_at: string;
   purge_after: string | null;
@@ -68,7 +69,7 @@ export interface AccountProfile {
   display_name: string;
   account_verification_status?: string | null;
   account_status: string;
-  strikes: number;
+  strikes: number | null;
   legal_hold: boolean;
   location_province: string | null;
   location_city: string | null;

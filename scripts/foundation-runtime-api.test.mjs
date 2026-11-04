@@ -57,6 +57,30 @@ test("refuses missing, accidentally public, unavailable or malformed endpoints",
     );
   }
 });
+
+test("step-match probes carry a typed boolean while still refusing anonymous authority", async () => {
+  const input = {
+    ...manifest,
+    functions: [
+      {
+        ...manifest.functions[0],
+        arguments: [{ name: "p_matches", sqlType: "boolean", optional: false }],
+      },
+    ],
+  };
+  assert.equal(
+    await verifyFoundationRuntimeApi(
+      connection,
+      async (_url, init) => {
+        assert.deepEqual(JSON.parse(init.body), { p_matches: true });
+        assert.equal(init.headers.Authorization, undefined);
+        return Response.json({ code: "42501" }, { status: 401 });
+      },
+      input
+    ),
+    1
+  );
+});
 test("an extension cannot silently widen the approved audience", async () => {
   const widened = {
     ...manifest,

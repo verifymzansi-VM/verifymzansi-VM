@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import type { NativeContentReview } from "@/lib/admin/native-content-review";
 import { getDataBackend } from "@/lib/data-backend";
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 
@@ -68,7 +69,7 @@ export function useContentDecision<T extends { id: string; foundation?: NativeCo
     try {
       const itemId = getItemId(selectedItem);
       const isContentEdit = getEndpoint(selectedItem).includes("/content-edits/");
-      const res = await fetch(getEndpoint(selectedItem), {
+      const res = await fetchStaffEvidence(getEndpoint(selectedItem), {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({

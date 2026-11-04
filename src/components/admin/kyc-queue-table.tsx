@@ -39,8 +39,13 @@ import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { ClaimBadge, ClaimGate } from "./queue-claims";
+import {
+  confirmedIdentityDecisionFields,
+  type NativeEvidenceFields,
+} from "@/lib/admin/native-evidence-presentation";
 
-interface VerificationStep {
+interface VerificationStep extends NativeEvidenceFields {
+  claim_case_id?: string;
   id: string;
   user_id: string;
   step_type: string;
@@ -53,13 +58,13 @@ interface VerificationStep {
   risk_level?: string | null;
 }
 
-interface Artifact {
+interface Artifact extends NativeEvidenceFields {
   id: string;
   step_type: string;
   artifact_kind: string;
-  r2_key: string;
+  r2_key: string | null;
   content_type: string;
-  file_size_bytes: number;
+  file_size_bytes: number | null;
   status: string;
   created_at: string;
   purge_after: string | null;
@@ -215,7 +220,7 @@ export function KycQueueTable({
     setError("");
 
     try {
-      const res = await fetch("/api/admin/verification/decide", {
+      const res = await fetchStaffEvidence("/api/admin/verification/decide", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
@@ -225,6 +230,7 @@ export function KycQueueTable({
           reasonCode: decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,
           overrideReasonCode: overrideReasonCode || undefined,
+          ...confirmedIdentityDecisionFields(selectedStep, decision),
         }),
       });
 
@@ -349,6 +355,7 @@ export function KycQueueTable({
                             <div className="flex items-center gap-3 min-w-0">
                               {step.step_type === "selfie" && (
                                 <KycInlinePreview
+                                  reviewScope={step.foundation}
                                   key={step.updated_at ?? step.created_at}
                                   stepId={step.id}
                                   userId={step.user_id}
@@ -388,10 +395,13 @@ export function KycQueueTable({
                                 </p>
                               </div>
                             </div>
-                            <ClaimGate type="verification_step" id={step.id}>
+                            <ClaimGate type="verification_step" id={step.claim_case_id ?? step.id}>
                               {(claim) => (
                                 <div className="flex flex-col items-end gap-1">
-                                  <ClaimBadge type="verification_step" id={step.id} />
+                                  <ClaimBadge
+                                    type="verification_step"
+                                    id={step.claim_case_id ?? step.id}
+                                  />
                                   <div className="flex gap-1 flex-shrink-0 flex-wrap">
                                     {canViewStep && (
                                       <Button
@@ -490,13 +500,24 @@ export function KycQueueTable({
               .find((group) => group.user_id === comparisonUserId)
               ?.steps.map((step) => step.step_type) ?? []
           }
-          onReviewStep={(stepType, nextDecision) => {
+          onReviewStep={(stepType, nextDecision, review) => {
             const group = groups.find((item) => item.user_id === comparisonUserId);
             const target = group?.steps.find((item) => item.step_type === stepType);
             if (!target) return;
             setComparisonViewerOpen(false);
             openReview(
-              { ...target, account_display_name: group?.account_display_name },
+              {
+                ...target,
+                ...(review
+                  ? {
+                      id: review.artifactId,
+                      foundation: review.foundation,
+                      review_subject_label: review.review_subject_label,
+                      ...(review.review_risk_level ? { risk_level: review.review_risk_level } : {}),
+                    }
+                  : {}),
+                account_display_name: group?.account_display_name,
+              },
               nextDecision
             );
           }}
@@ -531,8 +552,9 @@ export function KycQueueTable({
           {decision === "approved" ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                This will mark the step as approved. If all verification steps are now approved, the
-                account will be marked as verified.
+                {selectedStep?.foundation
+                  ? `${selectedStep.step_type === "id_doc" ? "Confirm that the ID number and name match the submitted details" : "Confirm that the selfie matches the ID portrait"}${selectedStep.review_subject_label ? `: ${selectedStep.review_subject_label}` : "."} Both step approvals are required; high-risk submissions need an independent second reviewer.`
+                  : "This will mark the step as approved. If all verification steps are now approved, the account will be marked as verified."}
               </p>
               {selectedStep?.reviewed_at && selectedStep?.status === "pending" && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-700 dark:text-amber-400">

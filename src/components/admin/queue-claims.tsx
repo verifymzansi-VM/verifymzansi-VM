@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getDataBackend } from "@/lib/data-backend";
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 import type { ClaimItemType, ClaimQueue, ClaimView } from "@/lib/services/queue-claims";
 
 /**
@@ -64,7 +65,7 @@ export function ClaimGate({
 }
 
 export async function postQueue(body: Record<string, unknown>) {
-  const res = await fetch("/api/admin/queue", {
+  const res = await fetchStaffEvidence("/api/admin/queue", {
     method: "POST",
     headers: withCsrfHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),

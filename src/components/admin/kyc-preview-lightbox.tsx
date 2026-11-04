@@ -1,9 +1,10 @@
 "use client";
-import { handleStaffEvidenceResponse } from "@/lib/auth/staff-evidence-fetch";
+import { handleStaffEvidenceResponse, fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 import {
   useState,
   useEffect,
+  useEffectEvent,
   useCallback,
   useRef,
   type MouseEvent as ReactMouseEvent,
@@ -40,6 +41,13 @@ import {
   setCachedKycArtifactBlob,
 } from "@/lib/utils/kyc-artifact-blob-cache";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import {
+  nativeEvidenceBody,
+  inspectedEvidenceArtifact,
+  confirmedIdentityDecisionFields,
+  identityApprovalMessage,
+  type NativeEvidenceFields,
+} from "@/lib/admin/native-evidence-presentation";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { getKycZoomWidthClass, KYC_REVIEW_REASON_CODES } from "./kyc-review-constants";
 import { OVERRIDE_REASON_CODES } from "@/lib/constants/verification";
@@ -49,20 +57,20 @@ import { formatDate } from "@/lib/utils/format";
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-interface Artifact {
+interface Artifact extends NativeEvidenceFields {
   id: string;
   step_type: string;
   artifact_kind: string;
-  r2_key: string;
+  r2_key: string | null;
   content_type: string;
-  file_size_bytes: number;
+  file_size_bytes: number | null;
   status: string;
   created_at: string;
   purge_after: string | null;
   sha256: string | null;
 }
 
-interface VerificationStep {
+interface VerificationStep extends NativeEvidenceFields {
   id: string;
   user_id: string;
   step_type: string;
@@ -102,7 +110,8 @@ const STEP_LABELS: Record<string, string> = {
 export const EVIDENCE_FETCH_TIMEOUT_MS = 15_000;
 const EVIDENCE_FETCH_RETRIES = 1;
 
-function formatBytes(bytes: number): string {
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "Available after loading";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -144,11 +153,19 @@ export function KycPreviewLightbox({
   const [overrideReasonCode, setOverrideReasonCode] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const displayName = step.account_display_name || step.user_id.slice(0, 8) + "...";
+  const displayName =
+    artifact.review_subject_label || step.account_display_name || step.user_id.slice(0, 8) + "...";
+  const [inspectedArtifact, setInspectedArtifact] = useState(artifact);
+  const reviewScope = artifact.foundation;
+  const receiveInspected = useEffectEvent((blob: Blob) =>
+    setInspectedArtifact(inspectedEvidenceArtifact(artifact, blob))
+  );
 
-  const isImage = artifact.content_type.startsWith("image/");
-  const isPdf = artifact.content_type === "application/pdf";
-  const isHighRisk = step.risk_level === "high" || step.risk_level === "critical";
+  const isImage = inspectedArtifact.content_type.startsWith("image/");
+  const isPdf = inspectedArtifact.content_type === "application/pdf";
+  const isHighRisk = artifact.review_risk_level
+    ? artifact.review_risk_level === "high"
+    : step.risk_level === "high" || step.risk_level === "critical";
 
   // Fetch decrypted blob when lightbox opens
   useEffect(() => {
@@ -177,6 +194,7 @@ export function KycPreviewLightbox({
         const cachedBlob = getCachedKycArtifactBlob(artifact.id);
         if (cachedBlob) {
           if (!cancelled) {
+            receiveInspected(cachedBlob);
             const cachedUrl = URL.createObjectURL(cachedBlob);
             setBlobUrl((prev) => {
               if (prev) URL.revokeObjectURL(prev);
@@ -193,12 +211,15 @@ export function KycPreviewLightbox({
               {
                 method: "POST",
                 headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-                body: JSON.stringify({ artifactId: targetArtifactId }),
+                body: JSON.stringify(
+                  nativeEvidenceBody({ id: targetArtifactId, foundation: reviewScope })
+                ),
                 signal: controller.signal,
               },
               EVIDENCE_FETCH_RETRIES,
               EVIDENCE_FETCH_TIMEOUT_MS
-            )
+            ),
+            true
           );
 
           if (res.ok) {
@@ -232,7 +253,8 @@ export function KycPreviewLightbox({
               },
               EVIDENCE_FETCH_RETRIES,
               EVIDENCE_FETCH_TIMEOUT_MS
-            )
+            ),
+            true
           );
 
           if (retryMetaRes.ok) {
@@ -265,6 +287,7 @@ export function KycPreviewLightbox({
 
         const blob = evidenceResult.blob;
         if (!cancelled) {
+          receiveInspected(blob);
           const url = URL.createObjectURL(blob);
           setBlobUrl((prev) => {
             if (prev) URL.revokeObjectURL(prev);
@@ -290,7 +313,7 @@ export function KycPreviewLightbox({
       cancelled = true;
       controller.abort();
     };
-  }, [open, artifact.id, artifact.step_type, step.user_id, visibilityReloadToken]);
+  }, [open, artifact.id, artifact.step_type, reviewScope, step.user_id, visibilityReloadToken]);
 
   // Revoke blob when lightbox closes
   useEffect(() => {
@@ -391,7 +414,7 @@ export function KycPreviewLightbox({
     setDecisionError("");
 
     try {
-      const res = await fetch("/api/admin/verification/decide", {
+      const res = await fetchStaffEvidence("/api/admin/verification/decide", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
@@ -401,6 +424,7 @@ export function KycPreviewLightbox({
           reasonCode: decision !== "approved" ? reasonCode : undefined,
           reasonNote: reasonNote || undefined,
           overrideReasonCode: decision === "approved" ? overrideReasonCode || undefined : undefined,
+          ...confirmedIdentityDecisionFields({ ...step, ...artifact }, decision),
         }),
       });
 
@@ -440,7 +464,7 @@ export function KycPreviewLightbox({
                   {STEP_LABELS[step.step_type] || step.step_type}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {formatBytes(artifact.file_size_bytes)}
+                  {formatBytes(inspectedArtifact.file_size_bytes)}
                 </span>
               </DialogDescription>
             </div>
@@ -653,8 +677,7 @@ export function KycPreviewLightbox({
             {decision === "approved" ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  This will mark the step as approved. If all verification steps are approved, the
-                  account will be verified.
+                  {identityApprovalMessage({ ...step, ...artifact })}
                 </p>
                 {isHighRisk && (
                   <div className="space-y-2">

@@ -44,7 +44,10 @@ export default async function AdminVerificationPage() {
   const claims = await getClaimsForItems(
     user.id,
     pendingGroups.flatMap((group) =>
-      group.steps.map((step) => ({ type: "verification_step" as const, id: step.id }))
+      group.steps.map((step) => ({
+        type: "verification_step" as const,
+        id: step.claim_case_id ?? step.id,
+      }))
     )
   );
 
@@ -78,7 +81,11 @@ export default async function AdminVerificationPage() {
         mustClaim={role === "moderator"}
         canFree={roleHasCapability(role, "decision:approve")}
       >
-        <KycQueueClient initialGroups={pendingGroups} evidenceDeskEnabled={evidenceDeskEnabled} />
+        <KycQueueClient
+          key={user.id}
+          initialGroups={pendingGroups}
+          evidenceDeskEnabled={evidenceDeskEnabled}
+        />
       </QueueClaimsProvider>
     </div>
   );

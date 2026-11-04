@@ -116,7 +116,7 @@ export function EvidenceMetadataPanel({
               />
             )}
             {artifact.sha256 && <Row label="SHA-256" value={artifact.sha256} mono />}
-            <Row label="R2 Key" value={artifact.r2_key} mono />
+            <Row label="R2 Key" value={artifact.r2_key ?? "Not returned"} mono />
           </CardContent>
         </Card>
       )}
@@ -235,7 +235,8 @@ function Row({
   );
 }
 
-function formatBytes(bytes: number): string {
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "Not yet loaded";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

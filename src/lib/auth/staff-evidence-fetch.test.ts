@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchStaffEvidence } from "./staff-evidence-fetch";
+const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
+vi.mock("../supabase/client", () => ({ createClient: () => ({ auth: { getUser } }) }));
 describe("staff evidence re-verification", () => {
   afterEach(() => vi.unstubAllGlobals());
   it.each(["mfa_required", "step_up_required"])(
@@ -49,4 +51,46 @@ describe("staff evidence re-verification", () => {
       expect(await original.text()).toBe("synthetic result");
     }
   );
+});
+
+describe("native private evidence actor fence", () => {
+  const actor = "11111111-1111-4111-8111-111111111111";
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    getUser.mockResolvedValue({ data: { user: { id: actor } }, error: null });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+  it("checks the current user before releasing a private response to a viewer", async () => {
+    const response = new Response("private fixture", {
+      headers: { "X-VerifyMzansi-Actor": actor },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    expect(await fetchStaffEvidence("/api/admin/verification/evidence", { method: "POST" })).toBe(
+      response
+    );
+    expect(getUser).toHaveBeenCalledTimes(1);
+  });
+  it("rejects a missing actor receipt or an account switch during the request", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("private fixture"))
+      .mockResolvedValueOnce(
+        new Response("private fixture", { headers: { "X-VerifyMzansi-Actor": actor } })
+      );
+    vi.stubGlobal("fetch", fetcher);
+    await expect(
+      fetchStaffEvidence("/api/admin/verification/evidence", { method: "POST" })
+    ).rejects.toThrow("authorization could not be confirmed");
+    getUser.mockResolvedValue({
+      data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+      error: null,
+    });
+    await expect(
+      fetchStaffEvidence("/api/admin/verification/evidence/metadata", { method: "POST" })
+    ).rejects.toThrow("Staff account changed");
+  });
 });

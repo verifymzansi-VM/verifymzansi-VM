@@ -5,6 +5,9 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredIdentityMetadata } from "@/lib/foundation/restored-identity-metadata-route";
+import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -47,6 +50,11 @@ const evidenceMetadataBodySchema = z
   });
 
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation")
+    return NextResponse.json(
+      { error: "Use the protected metadata POST request" },
+      { status: 405, headers: foundationNoStore }
+    );
   const requestStartedAt = Date.now();
   let authMs = 0;
   let stepLookupMs = 0;
@@ -426,6 +434,7 @@ export async function GET(request: NextRequest) {
  * to prevent sensitive IDs from leaking into server logs and browser history.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredIdentityMetadata(request);
   return forwardEvidencePostBodyToGet({
     request,
     schema: evidenceMetadataBodySchema,

@@ -50,7 +50,10 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
 
   const claimItems: Array<{ type: ClaimItemType; id: string }> = [
     ...pendingVerifications.flatMap((group) =>
-      group.steps.map((step) => ({ type: "verification_step" as const, id: step.id }))
+      group.steps.map((step) => ({
+        type: "verification_step" as const,
+        id: step.claim_case_id ?? step.id,
+      }))
     ),
     ...pendingContent.map((item) => ({ type: claimTypeOf(item), id: item.id })),
     ...reports.map((report: DashboardReport) => ({ type: "report" as const, id: report.id })),
@@ -99,6 +102,7 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
         canFree={roleHasCapability(role, "decision:approve")}
       >
         <AreaAdminTabs
+          key={user.id}
           canEnforceDirectly={roleHasCapability(role, "enforcement:execute")}
           areaLabel={areaLabel}
           pendingVerifications={pendingVerifications}

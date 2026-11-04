@@ -5,6 +5,9 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationEvidenceRead } from "@/lib/foundation/evidence-route";
+import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { downloadKycDocumentWithMetrics } from "@/lib/services/storage";
 import { getLinkedEvidenceArtifactIds } from "@/lib/services/kyc-evidence-access";
@@ -34,6 +37,11 @@ function isMissingArtifactError(error: unknown): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  if (getDataBackend() === "foundation")
+    return NextResponse.json(
+      { error: "Use the protected evidence POST request" },
+      { status: 405, headers: foundationNoStore }
+    );
   const requestStartedAt = Date.now();
   let authMs = 0;
   let dbMs = 0;
@@ -305,6 +313,7 @@ export async function GET(request: NextRequest) {
  * to prevent sensitive IDs from leaking into server logs and browser history.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleFoundationEvidenceRead(request, "restored");
   return forwardEvidencePostBodyToGet({
     request,
     schema: evidenceBodySchema,

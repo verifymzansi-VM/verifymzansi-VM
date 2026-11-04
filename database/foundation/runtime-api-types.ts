@@ -9,6 +9,42 @@ export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
       get_my_dashboard: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_frontend_identity_state: { Args: Record<PropertyKey, never>; Returns: Json };
+      return_frontend_identity_step: {
+        Args: {
+          p_case: string;
+          p_submission: string;
+          p_artifact: string;
+          p_expected_version: number;
+          p_claim_generation: string;
+          p_claim_nonce: string;
+          p_decision: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      get_frontend_staff_verification_queue: {
+        Args: { p_limit?: number; p_include_ids?: string[] };
+        Returns: Json;
+      };
+      get_frontend_staff_identity_context: {
+        Args: { p_owner?: string; p_artifact?: string };
+        Returns: Json;
+      };
+      approve_frontend_identity_step: {
+        Args: {
+          p_case: string;
+          p_submission: string;
+          p_artifact: string;
+          p_expected_version: number;
+          p_claim_generation: string;
+          p_claim_nonce: string;
+          p_matches: boolean;
+          p_note?: string;
+          p_override_reason?: string;
+        };
+        Returns: Json;
+      };
       get_frontend_staff_claims: { Args: { p_items?: Json }; Returns: Json };
       control_my_frontend_staff_claims: { Args: { p_action: string }; Returns: Json };
       claim_frontend_staff_items: { Args: { p_queue: string; p_limit: number }; Returns: Json };

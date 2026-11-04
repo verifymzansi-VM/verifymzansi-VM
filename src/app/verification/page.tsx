@@ -67,7 +67,7 @@ import {
 } from "./verification-ui";
 
 type WizardStep = "phone" | "id_doc" | "selfie" | "location" | "complete";
-type UploadReceipt = { name: string; sizeBytes: number; uploadedAtIso: string };
+type UploadReceipt = { name: string; uploadedAtIso: string | null };
 type StepStatusEntry = {
   step_type: VerificationStepType;
   status: VerificationStatus;
@@ -434,6 +434,10 @@ function formatUploadedTime(isoDate: string): string {
   const minutes = String(sast.getUTCMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
 }
+function uploadTimestampLabel(value: string | null): string {
+  const time = value ? formatUploadedTime(value) : "";
+  return time ? `Uploaded at ${time}` : "Upload time not recorded";
+}
 
 /** Date of birth from the ID digits (a UTC-midnight Date), read in UTC so it never shifts a day. */
 function formatDateOfBirth(date: Date): string {
@@ -732,13 +736,19 @@ export default function VerificationPage() {
         for (const entry of nextSteps) {
           if (
             (entry.step_type === "id_doc" || entry.step_type === "selfie") &&
+            (entry.status === "rejected" || entry.status === "needs_resubmission")
+          ) {
+            delete next[entry.step_type];
+            continue;
+          }
+          if (
+            (entry.step_type === "id_doc" || entry.step_type === "selfie") &&
             (entry.status === "approved" || entry.status === "pending") &&
             !next[entry.step_type]
           ) {
             next[entry.step_type] = {
               name: entry.step_type === "id_doc" ? "ID document" : "Selfie",
-              sizeBytes: 0,
-              uploadedAtIso: entry.submitted_at ?? new Date().toISOString(),
+              uploadedAtIso: entry.submitted_at ?? null,
             };
           }
         }
@@ -1257,7 +1267,6 @@ export default function VerificationPage() {
       ...prev,
       id_doc: {
         name: idFile.name,
-        sizeBytes: idFile.size,
         uploadedAtIso: new Date().toISOString(),
       },
     }));
@@ -1283,7 +1292,6 @@ export default function VerificationPage() {
       ...prev,
       selfie: {
         name: selfieFile.name,
-        sizeBytes: selfieFile.size,
         uploadedAtIso: new Date().toISOString(),
       },
     }));
@@ -2293,7 +2301,7 @@ export default function VerificationPage() {
                         done={Boolean(uploadReceipts.id_doc)}
                         value={
                           uploadReceipts.id_doc
-                            ? `${idDocumentStatus ? `${formatStatusLabel(idDocumentStatus)} - ` : ""}Uploaded at ${formatUploadedTime(uploadReceipts.id_doc.uploadedAtIso)}`
+                            ? `${idDocumentStatus ? `${formatStatusLabel(idDocumentStatus)} - ` : ""}${uploadTimestampLabel(uploadReceipts.id_doc.uploadedAtIso)}`
                             : "Not yet uploaded — go back to the ID step to add your document"
                         }
                         detail={
@@ -2307,7 +2315,7 @@ export default function VerificationPage() {
                         done={Boolean(uploadReceipts.selfie)}
                         value={
                           uploadReceipts.selfie
-                            ? `${selfieStatus ? `${formatStatusLabel(selfieStatus)} - ` : ""}Uploaded at ${formatUploadedTime(uploadReceipts.selfie.uploadedAtIso)}`
+                            ? `${selfieStatus ? `${formatStatusLabel(selfieStatus)} - ` : ""}${uploadTimestampLabel(uploadReceipts.selfie.uploadedAtIso)}`
                             : "Not yet uploaded — go back to the selfie step to take your photo"
                         }
                       />
