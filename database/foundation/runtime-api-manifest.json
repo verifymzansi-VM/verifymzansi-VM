@@ -4,6 +4,37 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name":"reserve_frontend_verification_upload",
+      "updates":["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments":[{"name":"p_request","sqlType":"uuid","optional":false},{"name":"p_purpose","sqlType":"text","optional":false},{"name":"p_digest","sqlType":"text","optional":false},{"name":"p_first_name","sqlType":"text","optional":true},{"name":"p_last_name","sqlType":"text","optional":true}],
+      "returns":"jsonb","volatility":"v",
+      "execute":{"anon":false,"authenticated":true,"service_role":false},
+      "authority":"Current confirmed active member and live matching session; owner derives from auth.uid(), request digest binds immutable native evidence reservation"
+    },
+    {
+      "name":"get_my_frontend_verification_uploads",
+      "updates":["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments":[],"returns":"jsonb","volatility":"v",
+      "execute":{"anon":false,"authenticated":true,"service_role":false},
+      "authority":"Current confirmed active member and live matching session; self-only unexpired clean artifact projection without number, fingerprint or storage path"
+    },
+    {
+      "name":"frontend_verification_upload_context",
+      "updates":["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments":[{"name":"p_owner","sqlType":"uuid","optional":false},{"name":"p_request","sqlType":"uuid","optional":false}],
+      "returns":"jsonb","volatility":"v",
+      "execute":{"anon":false,"authenticated":false,"service_role":true},
+      "authority":"Trusted server only; owner-bound receipt, current account, case revision, captured live session and native artifact checks before completion"
+    },
+    {
+      "name":"complete_frontend_verification_upload",
+      "updates":["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments":[{"name":"p_owner","sqlType":"uuid","optional":false},{"name":"p_request","sqlType":"uuid","optional":false},{"name":"p_stored_sha256","sqlType":"text","optional":false},{"name":"p_content_sha256","sqlType":"text","optional":false},{"name":"p_size","sqlType":"integer","optional":false},{"name":"p_identity","sqlType":"jsonb","optional":true},{"name":"p_risk_score","sqlType":"integer","optional":true}],
+      "returns":"jsonb","volatility":"v",
+      "execute":{"anon":false,"authenticated":false,"service_role":true},
+      "authority":"Trusted scanner and encrypted object writer only; same bound receipt/session/revision checked atomically with native evidence completion and identity pair registration"
+    },
+    {
       "name": "get_my_dashboard",
       "updates": [
         "updates/20261103180512_restored_owner_dashboard.sql",

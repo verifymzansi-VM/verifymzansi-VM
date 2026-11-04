@@ -7,7 +7,10 @@ import {
   verifyFoundationArtifactIntegrity,
 } from "./lib/foundation-deployment";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
-import { verifyFoundationRuntimeApi } from "./lib/foundation-runtime-api.mjs";
+import {
+  verifyFoundationRuntimeApi,
+  provisionedFoundationApiManifest,
+} from "./lib/foundation-runtime-api.mjs";
 import { verifyFoundationGateway } from "../src/lib/foundation/gateway-readiness";
 import { createFoundationPublicApi } from "../src/lib/foundation/public-api";
 import { searchFoundationPresentedCards } from "../src/lib/foundation/public-cards";
@@ -31,7 +34,11 @@ async function main() {
   if (apiManifest.candidateHash !== manifest.candidateHash)
     throw new Error("Foundation API contract is stale");
   const { serviceOpenapi } = await verifyFoundationGateway(process.env);
-  verifyRoleOpenapi(serviceOpenapi, apiManifest, "service_role");
+  verifyRoleOpenapi(
+    serviceOpenapi,
+    runtimeOnly ? provisionedFoundationApiManifest(apiManifest) : apiManifest,
+    "service_role"
+  );
   await verifyFoundationRuntimeApi(connection);
   const publicApi = createFoundationPublicApi(connection);
   await searchFoundationPresentedCards(publicApi, {

@@ -4,6 +4,8 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredVerification } from "@/lib/foundation/restored-verification-route";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
@@ -29,6 +31,7 @@ import { enforceConfirmedVerificationRequest } from "../../_lib/verification-req
 const log = createLogger("ManualLocationVerification");
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredVerification(request, true);
   try {
     const prelude = await enforceConfirmedVerificationRequest(request, log);
     if (!prelude.success) return prelude.response;

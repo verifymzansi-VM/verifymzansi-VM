@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredVerification } from "@/lib/foundation/restored-verification-route";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -7,6 +9,7 @@ import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("VerificationStatus");
 
 export async function GET(_request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredVerification(_request);
   try {
     const supabase = await createClient();
 

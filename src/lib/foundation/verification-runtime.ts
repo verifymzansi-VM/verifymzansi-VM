@@ -31,18 +31,19 @@ export class FoundationVerificationError extends Error {
     super(message);
   }
 }
-function secret(name: "HMAC_SECRET" | "ID_ENCRYPTION_KEY") {
+export function verificationSecret(name: "HMAC_SECRET" | "ID_ENCRYPTION_KEY") {
   const value = process.env[name];
   if (!value || !/^[a-f0-9]{64}$/i.test(value) || new Set(value.toLowerCase()).size < 8)
     throw new FoundationVerificationError(503);
   return Buffer.from(value, "hex");
 }
+const secret = verificationSecret;
 export async function readFoundationVerificationStatus(api: FoundationAuthenticatedApi) {
   const { data, error } = await api.rpc("get_my_verification_case", {});
   if (error) throw new FoundationVerificationError(503);
   return foundationVerificationStatusSchema.parse(data);
 }
-async function cleanEvidence(file: File, selfie: boolean) {
+export async function cleanEvidence(file: File, selfie: boolean) {
   if (!file.size || file.size > 5242880)
     throw new FoundationVerificationError(413, "Choose a file smaller than 5 MB");
   let bytes = Buffer.from(await file.arrayBuffer());

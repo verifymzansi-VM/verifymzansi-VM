@@ -4,6 +4,8 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredVerificationSession } from "@/lib/foundation/restored-verification-route";
 import { isFeatureEnabled } from "@/lib/services/feature-flags";
 import { logAuditEvent } from "@/lib/services/audit";
 import { REQUIRED_VERIFICATION_STEPS } from "@/lib/constants/verification";
@@ -16,6 +18,7 @@ import { enforceConfirmedVerificationRequest } from "../../_lib/verification-req
 const log = createLogger("SessionStart");
 
 export async function POST(_request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredVerificationSession(_request);
   try {
     const request = _request;
     const prelude = await enforceConfirmedVerificationRequest(request, log);

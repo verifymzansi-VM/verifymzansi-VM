@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import type { FoundationServiceDatabase } from "../../../database/foundation/api-role-types";
+import type { FoundationRuntimeServiceDatabase as FoundationServiceDatabase } from "../../../database/foundation/runtime-api-types";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { foundationRpcClientOptions } from "./public-api";

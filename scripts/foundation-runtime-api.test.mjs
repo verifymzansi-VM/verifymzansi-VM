@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { verifyFoundationRuntimeApi } from "./lib/foundation-runtime-api.mjs";
+import {
+  verifyFoundationRuntimeApi,
+  provisionedFoundationApiManifest,
+} from "./lib/foundation-runtime-api.mjs";
+import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 const connection = {
   url: "https://gntzjtuncsyefujajmjy.supabase.co",
   publishableKey: "sb_publishable_synthetic",
@@ -75,4 +79,85 @@ test("an extension cannot silently widen the approved audience", async () => {
     )
   );
   assert.equal(requested, false);
+});
+test("service-only extensions are probed anonymously with synthetic arguments and never a service key", async () => {
+  let calls = 0;
+  const input = {
+    ...manifest,
+    functions: [
+      {
+        name: "frontend_verification_upload_context",
+        arguments: [
+          { name: "p_owner", sqlType: "uuid" },
+          { name: "p_request", sqlType: "uuid" },
+        ],
+        execute: { anon: false, authenticated: false, service_role: true },
+      },
+    ],
+  };
+  assert.equal(
+    await verifyFoundationRuntimeApi(
+      connection,
+      async (_url, init) => {
+        calls++;
+        assert.equal(init.headers.Authorization, undefined);
+        assert.equal(JSON.parse(init.body).p_owner, "00000000-0000-4000-8000-000000000001");
+        return Response.json({ code: "42501" }, { status: 401 });
+      },
+      input
+    ),
+    1
+  );
+  assert.equal(calls, 1);
+  await assert.rejects(
+    verifyFoundationRuntimeApi(
+      connection,
+      async () => {
+        throw Error("must not request");
+      },
+      {
+        ...input,
+        functions: [
+          {
+            ...input.functions[0],
+            execute: { anon: false, authenticated: true, service_role: true },
+          },
+        ],
+      }
+    )
+  );
+});
+test("provisioned OpenAPI includes precisely reviewed extensions without changing baseline contracts", () => {
+  const service = {
+    name: "trusted_command",
+    volatility: "v",
+    arguments: [],
+    execute: { anon: false, authenticated: false, service_role: true },
+  };
+  const base = { functions: [{ ...manifest.functions[0], volatility: "v" }] };
+  const extended = provisionedFoundationApiManifest(base, { ...manifest, functions: [service] });
+  const spec = {
+    swagger: "2.0",
+    definitions: {},
+    paths: {
+      "/rpc/trusted_command": {
+        post: { parameters: [{ in: "body", schema: { type: "object" } }] },
+      },
+    },
+  };
+  assert.equal(verifyRoleOpenapi(spec, extended, "service_role"), 1);
+  assert.equal(base.functions.length, 1);
+  assert.throws(
+    () => provisionedFoundationApiManifest(base, { ...manifest, functions: [base.functions[0]] }),
+    /replace baseline/
+  );
+  assert.throws(
+    () =>
+      verifyRoleOpenapi(
+        { ...spec, paths: { ...spec.paths, "/rpc/unreviewed": { post: {} } } },
+        extended,
+        "service_role"
+      ),
+    /role surface/
+  );
 });

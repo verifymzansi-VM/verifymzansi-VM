@@ -11,7 +11,7 @@ import {
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
 import { handleFoundationOwnerRoute } from "@/app/api/foundation/_lib/owner-route";
 import { createLogger } from "../utils/logger";
-import reference from "../domains/taxonomy/reference.json";
+import { resolveRestoredLocality, LocalityInputError } from "./restored-locality";
 
 const log = createLogger("RestoredProfile");
 const inputSchema = profileUpdateSchema
@@ -32,13 +32,7 @@ class ProfileRefusal extends Error {
 }
 function location(province?: string, city?: string) {
   if (!province && !city) return {};
-  if (!province || !city) throw new ProfileRefusal(400, "Select a province and city together");
-  const p = reference.provinces.find((row) => row.label === province || row.id === province);
-  const matches = reference.cities.filter(
-    (row) => row.province === p?.id && (row.label === city || row.id === city)
-  );
-  if (!p || matches.length !== 1) throw new ProfileRefusal(400, "Select a valid province and city");
-  return { p_province: p.id, p_city: matches[0].id };
+  return resolveRestoredLocality(province ?? "", city ?? "");
 }
 export function handleRestoredProfileUpdate(request: NextRequest) {
   return handleFoundationOwnerRoute({
@@ -106,6 +100,8 @@ export function handleRestoredProfileUpdate(request: NextRequest) {
       };
     },
     refusal: (error) => {
+      if (error instanceof LocalityInputError)
+        return { status: 400, error: error.message, reason: "location_invalid" };
       if (error instanceof ProfileRefusal)
         return {
           status: error.status,

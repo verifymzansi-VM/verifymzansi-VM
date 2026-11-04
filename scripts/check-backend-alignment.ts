@@ -12,7 +12,10 @@ import {
 import { checkDeploymentHealth, readinessUrl } from "./lib/deployment-health";
 import { checkSiteMonitorHomepage, siteMonitorTransport } from "./lib/site-monitor";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
-import { verifyFoundationRuntimeApi } from "./lib/foundation-runtime-api.mjs";
+import {
+  verifyFoundationRuntimeApi,
+  provisionedFoundationApiManifest,
+} from "./lib/foundation-runtime-api.mjs";
 
 loadEnvConfig(process.cwd());
 
@@ -164,7 +167,7 @@ async function main() {
     async () => {
       const { serviceOpenapi } = await verifyFoundationGateway(process.env);
       const manifest = JSON.parse(await readFile("database/foundation/api-manifest.json", "utf8"));
-      verifyRoleOpenapi(serviceOpenapi, manifest, "service_role");
+      verifyRoleOpenapi(serviceOpenapi, provisionedFoundationApiManifest(manifest), "service_role");
     },
     "Public API read, service credential, function contract or hidden-schema check failed. Review Supabase exposure and key pairing."
   );

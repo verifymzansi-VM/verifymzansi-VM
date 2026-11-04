@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredVerificationUpload } from "@/lib/foundation/restored-verification-upload";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadKycDocument, hasR2WriteAccess } from "@/lib/services/storage";
@@ -58,6 +60,7 @@ import { getDefaultDisplayName } from "@/lib/account/ensure-profile";
  * - idDocumentType: (optional) "sa_id"
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredVerificationUpload(request);
   const requestId = crypto.randomUUID();
   const jsonError = (
     body: Record<string, unknown>,

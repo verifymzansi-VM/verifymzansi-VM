@@ -5,6 +5,45 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Verification transport and full administrator role, 4 November 2026
+
+`20261104000046_restored_verification_transport.sql` and
+`20261104001222_restore_full_admin_capabilities.sql` are applied to the approved
+project. The selected verification wizard still sends ID and selfie separately.
+Private receipts now bind each request to its owner, session, content digest,
+native case revision and artifact. Only the server may complete inspected,
+encrypted uploads. The selfie completion registers the actual pair once, using
+the persisted request receipt, with no automatic approval. Redundant encrypted
+number material is cleared after registration and on artifact deletion. A
+hash-guarded repair also stops the status function casting an identity
+fingerprint to UUID.
+
+The administrator matrix now includes the six routine capabilities already
+available to moderators and governors. Existing live-session, authenticator,
+case-claim, self-review and independent-decision requirements remain in their
+native commands. There are two active administrators and zero missing routine
+permissions relative to the lower staff roles.
+
+Isolated SQL and HTTP tests cover separate upload steps, duplicate receipts,
+revoked sessions, changed cases, malformed encrypted metadata, cross-owner
+access and anonymous/service execute boundaries. A hosted transaction exercised
+both steps and a repeated completion, confirmed exactly one pending submission
+and no approval, then rolled back completely. Subsequent counts confirmed zero
+test evidence and transport receipts remained. This is database contract proof,
+not a real-document or browser end-to-end attestation. The application adapter
+is local until the complete integration is released.
+
+The retired object inventory contained 506 public `media/<old-area>/...` objects
+and seven private `kyc/...` objects, all last modified before October 2026.
+Neither canonical posts/media/evidence records nor tracked frontend sources
+referenced those keys; no legal holds were present. The owner-authorized cleanup
+deleted exactly these 513 inventoried keys and verified their absence. Both
+buckets remain available for the new system. Private inventory and deletion
+receipts are under ignored `tmp/backend-reconciliation/`; no customer documents
+were downloaded or used as fixtures. An exact-URL Cloudflare cache purge was
+refused by the available API token (HTTP 401); edge-cache retirement is still
+outstanding and is not implied by origin deletion.
+
 ## Owner admin setup and signup hook, 3 November 2026
 
 The following updates were applied to `gntzjtuncsyefujajmjy` after their actual

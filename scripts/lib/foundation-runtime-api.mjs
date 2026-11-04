@@ -1,6 +1,31 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+export function provisionedFoundationApiManifest(
+  baseline,
+  runtime = JSON.parse(
+    readFileSync(
+      new URL("../../database/foundation/runtime-api-manifest.json", import.meta.url),
+      "utf8"
+    )
+  )
+) {
+  assert.equal(runtime.schemaVersion, 1);
+  assert.equal(runtime.schema, "api");
+  const names = new Set(baseline.functions.map((fn) => fn.name));
+  for (const fn of runtime.functions) {
+    assert.match(fn.name, /^[a-z][a-z0-9_]{0,79}$/);
+    assert.equal(names.has(fn.name), false, "Runtime extensions cannot replace baseline contracts");
+    names.add(fn.name);
+    assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
+    assert.equal(fn.execute.anon, false);
+    assert.equal(typeof fn.execute.authenticated, "boolean");
+    assert.equal(typeof fn.execute.service_role, "boolean");
+    assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
+  }
+  return { ...baseline, functions: [...baseline.functions, ...runtime.functions] };
+}
+
 /** Presence and anonymous-refusal probe for reviewed additive RPCs. This is
  * not proof of authenticated DTOs or exact EXECUTE grants; SQL tests and live
  * authenticated checks provide those separate pieces of evidence. No user
@@ -26,12 +51,18 @@ export async function verifyFoundationRuntimeApi(
   let verified = 0;
   for (const fn of manifest.functions) {
     assert.match(fn.name, /^[a-z][a-z0-9_]{0,79}$/);
-    assert.deepEqual(fn.execute, { anon: false, authenticated: true, service_role: false });
+    assert.equal(fn.execute.anon, false);
+    assert.equal(typeof fn.execute.authenticated, "boolean");
+    assert.equal(typeof fn.execute.service_role, "boolean");
+    assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
     const args = {};
     for (const arg of fn.arguments) {
       assert.match(arg.name, /^p_[a-z][a-z0-9_]{0,79}$/);
       if (arg.optional) continue;
       if (arg.sqlType === "integer") args[arg.name] = 1;
+      else if (arg.sqlType === "uuid") args[arg.name] = "00000000-0000-4000-8000-000000000001";
+      else if (arg.sqlType === "text") args[arg.name] = "anonymous-runtime-presence-probe";
+      else if (arg.sqlType === "jsonb") args[arg.name] = {};
       else throw new Error("Unsupported runtime API probe argument type");
     }
     const response = await fetcher(`${connection.url}/rest/v1/rpc/${fn.name}`, {

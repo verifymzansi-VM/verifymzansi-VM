@@ -1167,11 +1167,15 @@ export default function VerificationPage() {
     buildFormData: () => FormData,
     label: string
   ): Promise<Record<string, unknown>> {
+    // The same transport receipt spans the existing automatic retry.
+    const uploadRequestId = crypto.randomUUID();
     const attempt = async () => {
+      const form = buildFormData();
+      form.append("uploadRequestId", uploadRequestId);
       const res = await fetch("/api/verification/upload", {
         method: "POST",
         headers: withCsrfHeaders(),
-        body: buildFormData(),
+        body: form,
       });
       const payload = (await res.json().catch(() => ({}))) as VerificationApiResponse;
       if (!res.ok) {

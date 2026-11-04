@@ -54,6 +54,7 @@ import {
   hasR2WriteAccess,
   getR2ObjectSize,
   getR2ObjectBytes,
+  putImmutableR2Bytes,
 } from "./storage";
 
 describe("storage service", () => {
@@ -67,6 +68,68 @@ describe("storage service", () => {
     process.env.R2_PRIVATE_BUCKET = "verifymzansi-private";
     delete (globalThis as Record<string, unknown>).env;
     delete (globalThis as Record<string, unknown>).__env__;
+  });
+
+  describe("immutable evidence writes", () => {
+    it("supports ordinary encrypted uploads with a native binding and no S3 credentials", async () => {
+      const put = vi.fn().mockResolvedValue({ etag: "fixture" });
+      (globalThis as Record<string, unknown>).__env__ = {
+        PRIVATE_BUCKET: { put, get: vi.fn(), delete: vi.fn() },
+      };
+      const result = await uploadToR2({
+        bucket: "verifymzansi-private",
+        key: "evidence/fixture/object",
+        file: new Blob(["encrypted"]),
+        contentType: "application/octet-stream",
+      });
+      expect(result.key).toBe("evidence/fixture/object");
+      expect(put).toHaveBeenCalledWith("evidence/fixture/object", expect.any(Uint8Array), {
+        httpMetadata: {
+          contentType: "application/octet-stream",
+          cacheControl: "private, no-store",
+        },
+      });
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+    it("uses the native conditional write and returns its winning ciphertext", async () => {
+      const put = vi.fn().mockResolvedValue({ etag: "fixture" });
+      (globalThis as Record<string, unknown>).__env__ = {
+        PRIVATE_BUCKET: { put, get: vi.fn(), delete: vi.fn() },
+      };
+      const bytes = Buffer.from("first ciphertext");
+      expect(
+        await putImmutableR2Bytes("verifymzansi-private", "evidence/fixture/object", bytes)
+      ).toEqual(bytes);
+      expect(put).toHaveBeenCalledWith(
+        "evidence/fixture/object",
+        expect.any(Uint8Array),
+        expect.objectContaining({
+          onlyIf: { etagDoesNotMatch: "*" },
+          httpMetadata: {
+            contentType: "application/octet-stream",
+            cacheControl: "private, no-store",
+          },
+        })
+      );
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+    it("reads the existing winner on a conditional conflict without overwriting it", async () => {
+      const old = Buffer.from("winning ciphertext");
+      const put = vi.fn().mockResolvedValue(null),
+        get = vi.fn().mockResolvedValue({ arrayBuffer: async () => new Uint8Array(old).buffer });
+      (globalThis as Record<string, unknown>).__env__ = {
+        PRIVATE_BUCKET: { put, get, delete: vi.fn() },
+      };
+      expect(
+        await putImmutableR2Bytes(
+          "verifymzansi-private",
+          "evidence/fixture/object",
+          Buffer.from("loser")
+        )
+      ).toEqual(old);
+      expect(put).toHaveBeenCalledTimes(1);
+      expect(get).toHaveBeenCalledWith("evidence/fixture/object");
+    });
   });
 
   describe("generateStorageKey", () => {

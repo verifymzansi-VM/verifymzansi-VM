@@ -47,7 +47,11 @@ interface R2BucketBinding {
   put(
     key: string,
     value: ArrayBuffer | ArrayBufferView | ReadableStream | Blob | string | null,
-    options?: { customMetadata?: Record<string, string>; httpMetadata?: { contentType?: string } }
+    options?: {
+      customMetadata?: Record<string, string>;
+      httpMetadata?: { contentType?: string; cacheControl?: string };
+      onlyIf?: { etagDoesNotMatch: string };
+    }
   ): Promise<unknown>;
   delete(keys: string | string[]): Promise<void>;
   head(key: string): Promise<{ size: number } | null>;
@@ -346,6 +350,7 @@ function r2SendOptions(timeoutMs: number): { abortSignal: AbortSignal } {
  * This properly signs requests using AWS Sigv4.
  */
 export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
+  assertSafeStorageKey(params.key);
   if (shouldUsePlaywrightStorage()) {
     assertSafeStorageKey(params.key);
     const fs = await import("node:fs/promises");
@@ -365,22 +370,28 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     return { url, key: normalizedKey };
   }
 
-  const client = getR2Client();
   const arrayBuffer = await params.file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-
-  const command = new PutObjectCommand({
-    Bucket: params.bucket,
-    Key: params.key,
-    Body: buffer,
-    ContentType: params.contentType,
-    // Media keys are immutable (timestamp + UUID), so cache them forever.
-    // This header is served by the R2 public custom domain
-    // (media.verifymzansi.com) and lets Cloudflare edge-cache the object.
-    CacheControl: "public, max-age=31536000, immutable",
-  });
-
-  await client.send(command, r2SendOptions(R2_TRANSFER_TIMEOUT_MS));
+  const cacheControl =
+    params.bucket === (process.env.R2_PRIVATE_BUCKET || "verifymzansi-private")
+      ? "private, no-store"
+      : "public, max-age=31536000, immutable";
+  const binding = await getR2BucketBinding(params.bucket);
+  if (binding) {
+    const result = await binding.put(params.key, new Uint8Array(buffer), {
+      httpMetadata: { contentType: params.contentType, cacheControl },
+    });
+    if (result === null) throw new Error("R2 upload was not confirmed");
+  } else {
+    const command = new PutObjectCommand({
+      Bucket: params.bucket,
+      Key: params.key,
+      Body: buffer,
+      ContentType: params.contentType,
+      CacheControl: cacheControl,
+    });
+    await getR2Client().send(command, r2SendOptions(R2_TRANSFER_TIMEOUT_MS));
+  }
 
   // Generate public URL (trim trailing slash from base to avoid double-slash)
   const publicUrl = process.env.R2_PUBLIC_URL
@@ -388,6 +399,57 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     : `https://${params.bucket}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${params.key}`;
 
   return { url: publicUrl, key: params.key };
+}
+
+/** A retried evidence request must never overwrite a previously written
+ * ciphertext. Return the winning bytes so SQL journals their actual digest. */
+export async function putImmutableR2Bytes(
+  bucket: string,
+  key: string,
+  bytes: Buffer
+): Promise<Buffer> {
+  assertSafeStorageKey(key);
+  const fixture = await playwrightStoragePath(bucket, key);
+  if (fixture) {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    await fs.mkdir(path.dirname(fixture), { recursive: true });
+    try {
+      await fs.writeFile(fixture, bytes, { flag: "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    return fs.readFile(fixture);
+  }
+  const binding = await getR2BucketBinding(bucket);
+  if (binding) {
+    const written = await binding.put(key, new Uint8Array(bytes), {
+      onlyIf: { etagDoesNotMatch: "*" },
+      httpMetadata: { contentType: "application/octet-stream", cacheControl: "private, no-store" },
+    });
+    if (written) return bytes;
+  } else {
+    try {
+      await getR2Client().send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: bytes,
+          ContentType: "application/octet-stream",
+          CacheControl: "private, no-store",
+          IfNoneMatch: "*",
+        }),
+        r2SendOptions(R2_TRANSFER_TIMEOUT_MS)
+      );
+      return bytes;
+    } catch (error) {
+      if ((error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode !== 412)
+        throw error;
+    }
+  }
+  const existing = await getR2ObjectBytes(bucket, key);
+  if (!existing) throw new Error("Immutable object is unavailable");
+  return Buffer.from(existing.bytes);
 }
 
 /**
