@@ -233,7 +233,24 @@ describe("DashboardPage", () => {
       recent_leads: [],
       paid_plans: [],
     };
-    const rpc = vi.fn().mockResolvedValue({ data: snapshot, error: null });
+    const rpc = vi.fn().mockImplementation(async (name: string) => {
+      if (name === "get_my_dashboard") return { data: snapshot, error: null };
+      if (name === "get_my_frontend_identity_state")
+        return {
+          data: {
+            account_id: owner,
+            case_id: null,
+            case_version: null,
+            reason: null,
+            decision: null,
+            identity_reviewed_at: null,
+            id_document_uploaded_at: null,
+            selfie_uploaded_at: null,
+          },
+          error: null,
+        };
+      throw new Error(`Unexpected native dashboard command: ${name}`);
+    });
     mockSupabase.auth.getUser.mockResolvedValue({ data: { user } });
     vi.mocked(readFoundationServerSession).mockResolvedValue({
       user,

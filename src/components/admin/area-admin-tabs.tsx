@@ -13,6 +13,7 @@ import { FileCheck, Flag, BarChart3, Clock, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import type { PendingVerificationGroup } from "@/lib/utils/admin-queries";
+import type { ReportItem } from "@/lib/admin/report-item";
 
 interface AreaAdminTabsProps {
   /** Governors and admins may hide content and apply emergency containment. */
@@ -20,17 +21,7 @@ interface AreaAdminTabsProps {
   areaLabel: string;
   pendingVerifications: PendingVerificationGroup[];
   pendingContent: ModerationItem[];
-  reports: Array<{
-    id: string;
-    target_id: string;
-    target_type: string;
-    category: string;
-    severity: "high" | "standard";
-    status: string;
-    description?: string;
-    reporter_user_id?: string;
-    created_at: string;
-  }>;
+  reports: ReportItem[];
   activityEntries: Array<{
     id: string;
     actor_id: string | null;

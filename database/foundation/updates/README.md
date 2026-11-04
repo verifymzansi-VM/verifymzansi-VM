@@ -5,6 +5,36 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Report queues and program activity, 5 November 2026
+
+`20261104224230_restored_staff_report_queue.sql` is applied for reads. The
+selected report/status filters and Market, Business and Tourism & Events panels
+now receive native independent summaries, actual waiting counts and claim
+metadata. A report body and action fence are returned only through the current
+holder's native review check. Foreign nonces, reporter identity and abuse
+fingerprints are excluded. Claimed reports remain in waiting totals. Own held
+items remain reachable beyond the ordinary page limits. Report revisions and the
+original program are derived on database writes, including invalidation when an
+underlying record changes.
+
+Program activity and South African daily counts now use native moderation and
+report-resolution facts. These minimal summaries contain no reviewer rationale,
+report body or evidence payload. Unknown/deleted content is not assigned a
+guessed program. Required authenticator confirmation leaves the combined area
+read before its partial/unavailable rendering; it is not swallowed as an empty
+section. Existing layouts, status controls and error states are retained.
+
+The local GoTrue/TOTP fixture verifies claimant-only bodies, foreign lease
+secrecy, revision/program derivation, complete descriptions, actual action
+counts and the runtime DTOs. Focused source/native service, page and count
+tests, types, lint and duplication checks passed. The three outdated
+dashboard/profile fixtures from the broad unit run now supply the required
+identity-state DTO; their focused regressions pass. Hosted SQL verified exact
+API audiences, RLS, no browser table read and an enabled record guard, with no
+seeded reports. Report enforcement actions are still a separate outstanding
+integration; this read update does not claim that those mutations or the full
+release are ready.
+
 ## Report submission transport, 5 November 2026
 
 `20261104222400_restored_report_workflow.sql` is applied for submission. The

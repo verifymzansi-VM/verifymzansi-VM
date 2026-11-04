@@ -16,6 +16,10 @@ import {
 import { calculateSlaState } from "@/lib/utils/sla";
 import { claimTypeOf } from "@/lib/admin/moderation-items";
 import type { MarketplaceArea } from "@/types/enums";
+import { redirect } from "next/navigation";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { FoundationStaffReadError } from "@/lib/foundation/staff-read";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 interface AreaAdminPageConfig {
   area: MarketplaceArea;
@@ -37,6 +41,22 @@ export async function AreaAdminPage({ area, areaLabel, description }: AreaAdminP
     getRecentActivity(20, area),
     getActionsToday(area),
   ]);
+  if (
+    settled.some(
+      (result) =>
+        result.status === "rejected" &&
+        (result.reason instanceof FoundationStaffCommandError ||
+          result.reason instanceof FoundationStaffReadError) &&
+        result.reason.mfaRequired
+    )
+  ) {
+    const paths = {
+      MZANSI_MARKET: "mzansi-market",
+      MZANSI_BUSINESS: "businesses",
+      PROMOTIONS_EVENTS: "tourism-events",
+    };
+    redirect(staffVerifyHref("/staff/two-step?confirm=1", `/admin/${paths[area]}`));
+  }
 
   const pendingVerifications = fulfilledValue(settled[0], []);
   const pendingContent = fulfilledValue(settled[1], []);

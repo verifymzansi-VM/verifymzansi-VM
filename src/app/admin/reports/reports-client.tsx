@@ -9,10 +9,10 @@ import {
   splitReportsByResolution,
   type ReportStatusFilter,
 } from "@/lib/utils/reports";
-import type { Report } from "@/types/database";
+import type { ReportItem } from "@/lib/admin/report-item";
 
 interface ReportsClientProps {
-  reports: Report[];
+  reports: ReportItem[];
   canEnforceDirectly?: boolean;
 }
 

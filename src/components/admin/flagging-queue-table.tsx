@@ -19,10 +19,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, EyeOff, Ban, XCircle, Flag, Loader2 } from "lucide-react";
 import { calculateSlaState, slaSortPriority } from "@/lib/utils/sla";
-import type { ReportSeverity } from "@/types/enums";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { useToast } from "@/hooks/use-toast";
 import { ClaimBadge, useQueueClaim } from "./queue-claims";
+import type { ReportItem } from "@/lib/admin/report-item";
 
 /** "Take action" for one report, disabled while someone else holds it. */
 function ReportActionButton({ reportId, onOpen }: { reportId: string; onOpen: () => void }) {
@@ -42,18 +42,6 @@ function ReportActionButton({ reportId, onOpen }: { reportId: string; onOpen: ()
       {blockedReason && <p className="text-[11px] text-muted-foreground">{blockedReason}</p>}
     </div>
   );
-}
-
-interface ReportItem {
-  id: string;
-  target_id: string;
-  target_type: string;
-  category: string;
-  severity: ReportSeverity;
-  status: string;
-  description?: string;
-  reporter_user_id?: string | null;
-  created_at: string;
 }
 
 interface FlaggingQueueTableProps {

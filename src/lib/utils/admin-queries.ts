@@ -22,6 +22,7 @@ import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/li
 import type { MarketplaceArea } from "@/types/enums";
 import { getDataBackend } from "@/lib/data-backend";
 import type { NativeIdentityScope } from "@/lib/admin/native-identity-review";
+import type { ReportItem } from "@/lib/admin/report-item";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -366,6 +367,10 @@ export async function getPendingVerificationGroups(
 
 /** Get recent audit log entries */
 export async function getRecentActivity(limit = 20, area?: string): Promise<AuditLogEntry[]> {
+  if (getDataBackend() === "foundation") {
+    const { readNativeAreaActivity } = await import("@/lib/foundation/area-activity-server");
+    return (await readNativeAreaActivity(area, limit)).items;
+  }
   const supabase = createAdminClient();
 
   let query = supabase
@@ -389,6 +394,10 @@ export async function getRecentActivity(limit = 20, area?: string): Promise<Audi
  * area's reports behind a shared limit. Throws when the read fails.
  */
 export async function getAreaReports(area: MarketplaceArea) {
+  if (getDataBackend() === "foundation") {
+    const { readNativeProgramReports } = await import("@/lib/foundation/area-activity-server");
+    return (await readNativeProgramReports(area)).open;
+  }
   const { data, error } = await createAdminClient()
     .from("reports")
     .select("*")
@@ -462,23 +471,16 @@ export async function getPendingContent(area: MarketplaceArea) {
   return oldestFirst([...content, ...(edits.data ?? []).map(toContentEditModerationItem)]);
 }
 
-export interface DashboardReport {
-  id: string;
-  target_id: string;
-  target_type: string;
-  area: string;
-  category: string;
-  severity: "high" | "standard";
-  status: string;
-  description: string | null;
-  reporter_user_id: string | null;
-  created_at: string;
-}
+export type DashboardReport = ReportItem;
 
 // ── Verification funnel & extended platform stats ─────────────
 
 /** Count moderation actions taken today, grouped by action type */
 export async function getActionsToday(area?: string): Promise<Record<string, number>> {
+  if (getDataBackend() === "foundation") {
+    const { readNativeAreaActivity } = await import("@/lib/foundation/area-activity-server");
+    return (await readNativeAreaActivity(area)).today;
+  }
   const supabase = createAdminClient();
   // Midnight in South Africa (UTC+2, no daylight saving), whatever the server's clock zone.
   const saDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(

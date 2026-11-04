@@ -22,6 +22,8 @@ import {
 import { readFrontendStaffVerificationQueue } from "../src/lib/foundation/staff-verification-queue.ts";
 import { readRestoredGovernance } from "../src/lib/foundation/governance.ts";
 import { readRestoredStaffAudit } from "../src/lib/foundation/restored-staff-audit.ts";
+import { readFrontendReportQueue } from "../src/lib/foundation/report-queue.ts";
+import { readFrontendAreaActivity } from "../src/lib/foundation/area-activity.ts";
 import {
   readFrontendFeatureFlags,
   readFrontendFeatureConfig,
@@ -261,6 +263,7 @@ try {
     "database/foundation/updates/20261104220316_restored_runtime_controls.sql",
     "database/foundation/updates/20261104221219_restored_staff_audit_page.sql",
     "database/foundation/updates/20261104222400_restored_report_workflow.sql",
+    "database/foundation/updates/20261104224230_restored_staff_report_queue.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -283,6 +286,8 @@ try {
     create temporary table restored_governance_probe(value jsonb);
     create temporary table restored_controls_probe(kind text,value jsonb);
     create temporary table restored_audit_probe(kind text,value jsonb);
+    create temporary table restored_report_probe(value jsonb);
+    create temporary table restored_activity_probe(value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -300,7 +305,7 @@ try {
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
-      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;
+      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -414,6 +419,23 @@ try {
       if not exists(select 1 from private.reports r where r.id=(c->>'id')::uuid and r.description=repeat('a',2000) and r.frontend_reason='fake_listing' and r.category='misleading_info') then raise exception 'report description or selected reason lost';end if;
       begin perform api.submit_frontend_report((answer->>'id')::uuid,'listing','fake_listing',repeat('a',2000),repeat('x',43),'${unverified.id}');raise exception 'duplicate open report submitted';exception when sqlstate 'PT409' then null;end;
       if has_function_privilege('anon','api.submit_frontend_report(uuid,text,text,text,text,uuid)','execute') or has_function_privilege('authenticated','api.submit_frontend_report(uuid,text,text,text,text,uuid)','execute') or not has_function_privilege('service_role','api.submit_frontend_report(uuid,text,text,text,text,uuid)','execute') then raise exception 'report submission audience widened';end if;
+      reported:=(c->>'id')::uuid;
+      c:=api.get_frontend_report_queue();
+      if c->>'open_total'<>'1' or c->'items'->0->'description'<>'null'::jsonb or c->'items'->0->'foundation'<>'null'::jsonb then raise exception 'unclaimed report body or fence exposed';end if;
+      insert into restored_report_probe values(c);
+      report_lease:=api.claim_queue_item('report',reported);
+      c:=api.get_frontend_report_queue('market');
+      if c->>'open_total'<>'1' or c->>'my_claims'<>'1' or c->'items'->0->>'description'<>repeat('a',2000) or c->'items'->0->'foundation'->>'expectedRevision'<>'2' then raise exception 'held report context missing';end if;
+      insert into restored_report_probe values(c);
+      ${claims(governor)}
+      c:=api.get_frontend_report_queue();
+      if c->>'my_claims'<>'0' or c->'items'->0->'foundation'<>'null'::jsonb or c->'items'->0->'description'<>'null'::jsonb then raise exception 'foreign report body or nonce exposed';end if;
+      insert into restored_report_probe values(c);
+      ${claims(reviewer)}
+      perform api.control_my_frontend_staff_claims('release');
+      c:=api.get_frontend_area_activity('market',20);
+      if c->'today'->>'approve'<>'1' or c->'items'->0->>'action'<>'content_approve' then raise exception 'native program action counts drift';end if;
+      insert into restored_activity_probe values(c);
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       ${claims(owner)}
       input:=jsonb_set(input,'{request_id}',to_jsonb('${editRequest}'::text))||jsonb_build_object('target_id',answer->>'id','expected_revision',rev);
@@ -682,6 +704,8 @@ try {
     select 'GOVERNANCE:'||value::text from restored_governance_probe;
     select 'CONTROLS:'||jsonb_build_object('kind',kind,'value',value)::text from restored_controls_probe;
     select 'AUDIT:'||jsonb_build_object('kind',kind,'value',value)::text from restored_audit_probe;
+    select 'REPORT_QUEUE:'||value::text from restored_report_probe;
+    select 'AREA_ACTIVITY:'||value::text from restored_activity_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -782,6 +806,43 @@ try {
         return [row.kind, row.value];
       })
   );
+  const activityProbe = JSON.parse(
+    outcome
+      .split("\n")
+      .find((line) => line.startsWith("AREA_ACTIVITY:"))
+      .slice(14)
+  );
+  const activity = await readFrontendAreaActivity(
+    { rpc: async () => ({ data: activityProbe, error: null }) },
+    reviewer.id,
+    "market",
+    20
+  );
+  assert.equal(activity.today.approve, 1);
+  assert.equal(activity.items[0].area, "MZANSI_MARKET");
+  assert.equal(activity.items[0].action, "content_approve");
+  const reportProbes = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("REPORT_QUEUE:"))
+    .map((line) => JSON.parse(line.slice(13)));
+  assert.equal(reportProbes.length, 3);
+  for (const [index, probe] of reportProbes.entries()) {
+    const actor = index === 2 ? governor.id : reviewer.id;
+    const view = await readFrontendReportQueue(
+      { rpc: async () => ({ data: probe, error: null }) },
+      actor
+    );
+    assert.equal(view.openTotal, 1);
+    assert.equal(view.reports[0].category, "fake_listing");
+    if (index === 1) {
+      assert.equal(view.myClaims, 1);
+      assert.equal(view.reports[0].description, "a".repeat(2000));
+      assert.equal(view.reports[0].foundation.expectedRevision, 2);
+    } else {
+      assert.equal(view.reports[0].description, undefined);
+      assert.equal(view.reports[0].foundation, undefined);
+    }
+  }
   const flags = await readFrontendFeatureFlags(
     { rpc: async () => ({ data: controls.flags, error: null }) },
     administrator.id
@@ -848,6 +909,8 @@ try {
     "admin-only revision-fenced display controls, retry audit deduplication, supported-key enforcement and actual governance metrics",
     "preserved audit pagination, literal action/type/actor/target/reason filters, South African date boundaries and private projection isolation",
     "report target-kind validation, complete 2000-character descriptions, exact selected reason, self-report and duplicate-report refusal with service-only execution",
+    "native report queue summaries, claimant-only descriptions/revision fences, independent foreign-claim secrecy and waiting counts that include claimed work",
+    "minimal program activity, actual moderation/resolution counts and South African day scope without report bodies or evidence payloads",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

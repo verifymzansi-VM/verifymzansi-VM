@@ -4,6 +4,49 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_area_activity",
+      "updates": ["updates/20261104224230_restored_staff_report_queue.sql"],
+      "arguments": [
+        {
+          "name": "p_area",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native queue reviewer; bounded program moderation/report resolution metadata and exact South African daily action counts. No report body, reviewer rationale, reporter identity, evidence key or role escalation."
+    },
+    {
+      "name": "get_frontend_report_queue",
+      "updates": ["updates/20261104224230_restored_staff_report_queue.sql"],
+      "arguments": [
+        {
+          "name": "p_area",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native queue reviewer; independent bounded report summaries, own held review bodies/fences and private foreign lease secrets. Waiting totals include claimed work; revision and original program are derived from native report writes."
+    },
+    {
       "name": "submit_frontend_report",
       "updates": ["updates/20261104222400_restored_report_workflow.sql"],
       "arguments": [

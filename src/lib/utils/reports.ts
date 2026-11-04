@@ -20,10 +20,10 @@ export function countOpenReports(reports: ReadonlyArray<Pick<Report, "status">>)
   }, 0);
 }
 
-export function filterReportsByStatus(
-  reports: ReadonlyArray<Report>,
+export function filterReportsByStatus<T extends { status: string }>(
+  reports: ReadonlyArray<T>,
   filter: ReportStatusFilter
-): Report[] {
+): T[] {
   if (filter === "all") {
     return [...reports];
   }
@@ -31,12 +31,14 @@ export function filterReportsByStatus(
   return reports.filter((report) => report.status === filter);
 }
 
-export function splitReportsByResolution(reports: ReadonlyArray<Report>): {
-  open: Report[];
-  resolved: Report[];
+export function splitReportsByResolution<T extends { status: string }>(
+  reports: ReadonlyArray<T>
+): {
+  open: T[];
+  resolved: T[];
 } {
-  const open: Report[] = [];
-  const resolved: Report[] = [];
+  const open: T[] = [];
+  const resolved: T[] = [];
 
   for (const report of reports) {
     const status = report.status;

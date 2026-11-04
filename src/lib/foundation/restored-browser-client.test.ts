@@ -46,6 +46,16 @@ const dashboard = {
   recent_leads: [],
   paid_plans: [],
 };
+const identity = {
+  account_id: owner,
+  case_id: null,
+  case_version: null,
+  reason: null,
+  decision: null,
+  identity_reviewed_at: null,
+  id_document_uploaded_at: null,
+  selfie_uploaded_at: null,
+};
 const account = {
   version: 1 as const,
   account_id: owner,
@@ -79,7 +89,11 @@ beforeEach(() => {
     error: null,
   });
   vi.mocked(fetchFoundationAccountSession).mockResolvedValue(account);
-  rpc.mockResolvedValue({ data: dashboard, error: null });
+  rpc.mockImplementation(async (name: string) => {
+    if (name === "get_my_dashboard") return { data: dashboard, error: null };
+    if (name === "get_my_frontend_identity_state") return { data: identity, error: null };
+    throw new Error(`Unexpected native owner command: ${name}`);
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 it("loads the existing onboarding fields through canonical self-only APIs", async () => {
@@ -136,9 +150,13 @@ it("shares only in-flight reads for the current account and supplies canonical s
   ]);
   expect(values.map((v) => v.count)).toEqual([4, 5, 2, 3]);
   expect(getUser).toHaveBeenCalledTimes(1);
-  expect(rpc).toHaveBeenCalledTimes(1);
-  await restoredProfileQuery(client).eq("user_id", owner).maybeSingle();
   expect(rpc).toHaveBeenCalledTimes(2);
+  expect(rpc.mock.calls.filter(([name]) => name === "get_my_dashboard")).toHaveLength(1);
+  expect(rpc.mock.calls.filter(([name]) => name === "get_my_frontend_identity_state")).toHaveLength(
+    1
+  );
+  await restoredProfileQuery(client).eq("user_id", owner).maybeSingle();
+  expect(rpc).toHaveBeenCalledTimes(4);
 });
 it("rejects unsupported/full collection queries instead of presenting a partial list as complete", async () => {
   const list = await restoredProfileQuery(client, "leads").select("*").eq("owner_id", owner);
@@ -151,10 +169,13 @@ it("rejects unsupported/full collection queries instead of presenting a partial 
   expect(filtered.error).toBeTruthy();
 });
 it("refuses inconsistent verification facts instead of manufacturing approved steps", async () => {
-  rpc.mockResolvedValue({
-    data: { ...dashboard, verification: { ...dashboard.verification, verified: true } },
+  rpc.mockImplementation(async (name: string) => ({
+    data:
+      name === "get_my_dashboard"
+        ? { ...dashboard, verification: { ...dashboard.verification, verified: true } }
+        : identity,
     error: null,
-  });
+  }));
   const result = await restoredProfileQuery(client, "verification_steps")
     .select("*")
     .eq("user_id", owner);
