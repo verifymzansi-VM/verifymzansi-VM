@@ -5,6 +5,53 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Preserved posting forms and management reads, 4 November 2026
+
+The following updates are applied to the approved project:
+
+- `20261104002445_restored_post_commands.sql`: a service-only validator stage
+  and authenticated owner consumer compose existing content, attribute, media,
+  terms, funding and moderation commands in one transaction. Request receipts
+  protect explicit retries. Failed submission leaves no partial post or trial.
+  Separate owned image references preserve logos, video posters and venue
+  photos; their foreign keys participate in the native retention guard. Edit
+  copies preserve these fields, approval merges them, and presentation changes
+  count against edit allowances. Public fields require a separate
+  `frontend_presentation: true` opt-in; the existing card contract is unchanged.
+- `20261104042501_preserve_existing_edit_consent.sql`: existing edit forms reuse
+  explicit acceptance already recorded for the current policy. They do not
+  create a new acceptance. Creation requires the form's checkbox and the
+  version/hash loaded for that form. Policy changes refuse stale consent.
+- `20261104043441_restored_post_manager.sql`: current owner slot usage,
+  activations, plan members, sponsorship and paid add-on facts serve the
+  existing management cards. Pending posts use their actual funding/event end
+  time instead of a guessed visibility period.
+- `20261104044439_preserve_post_contact_privacy.sql`: private sellers' street
+  addresses remain owner-only. The selected frontend's chosen business contact
+  channels remain public for businesses, while listing/event phone reveal
+  retains its separate boundary. No account phone or verification proof is
+  inferred from these business assertions.
+- `20261104045254_align_frontend_receipt_retention.sql`: transport receipts
+  cascade with their canonical evidence/case/submission parents, so they cannot
+  block the native verification-history purge. Supplemental image unlinking
+  records the same cleanup grace period as ordinary post media.
+
+`scripts/test-restored-post-commands.mjs` checks these updates on the isolated
+native PostgreSQL fixture, with real local GoTrue owner/reviewer sessions and a
+verified local authenticator. It exercises listing, business and event form
+commands; moderation and edit merges; ownership, duplicate-request, funding and
+consent boundaries; actual owner DTO parsing; private-address/public-visibility
+rules; exact execute audiences; and expired payload scrubbing under legal holds.
+Scanner/provider receipts are explicitly synthetic. No real document, external
+SMS, payment or R2 write is used. All application DDL/data are rolled back and
+the local Auth test accounts removed. This is native database contract evidence,
+not a browser or payment-provider end-to-end claim.
+
+The six preserved create/edit pages now send hidden receipt/policy/revision
+fields to native APIs. Their controls, layout and styling are unchanged. The My
+posts page loads canonical owner records and plan facts. Remaining owner
+actions, billing and staff integration must be completed before deployment.
+
 ## Verification transport and full administrator role, 4 November 2026
 
 `20261104000046_restored_verification_transport.sql` and

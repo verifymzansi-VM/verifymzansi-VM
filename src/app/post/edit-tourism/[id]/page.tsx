@@ -7,6 +7,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
 import { Loader2, X, Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ const selectClass =
 
 export default function EditPromotionPage() {
   const router = useRouter();
+  const { fields: postFields, captureRevision: capturePostRevision } = usePostTransport();
   const params = useParams<{ id: string }>();
   const promotionId = params.id;
 
@@ -147,13 +149,14 @@ export default function EditPromotionPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/promotions/${promotionId}`);
+        const res = await fetch(`/api/promotions/${promotionId}?owner=1`);
         if (!res.ok) {
           setError("Tourism & Events listing not found");
           return;
         }
         const data = await res.json();
         const p = data.promotion;
+        capturePostRevision(p);
 
         setPromotionType("event");
         setTitle(p.title || "");
@@ -226,7 +229,7 @@ export default function EditPromotionPage() {
 
     void load();
     void loadBusinesses();
-  }, [promotionId]);
+  }, [promotionId, capturePostRevision]);
 
   useEffect(
     () => () => {
@@ -529,7 +532,7 @@ export default function EditPromotionPage() {
       const res = await fetch(`/api/promotions/${promotionId}`, {
         method: "PUT",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ...postFields(true) }),
       });
 
       const data = await res.json();

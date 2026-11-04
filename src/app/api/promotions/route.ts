@@ -1,6 +1,7 @@
 import { publicPersonName } from "@/lib/account/public-name";
 import { getDataBackend } from "@/lib/data-backend";
 import { restoredMarketplaceResponse } from "@/lib/foundation/marketplace-route";
+import { handleRestoredPostMutation } from "@/lib/foundation/restored-post-route";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
@@ -250,6 +251,7 @@ function omitPromotionCompatFields<T extends Record<string, unknown>>(
  * Requires an authenticated, verified account with a valid entitlement or free post.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredPostMutation(request, "promotions");
   try {
     const session = await requirePostingMutationSession(request, log);
     if (session.response) return session.response;

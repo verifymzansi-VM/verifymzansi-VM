@@ -1,5 +1,10 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  handleRestoredPostMutation,
+  handleRestoredPostRead,
+} from "@/lib/foundation/restored-post-route";
 import { createClient } from "@/lib/supabase/server";
 import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -77,6 +82,8 @@ type ListingUpdateRow = {
  * address the public can't read. Everyone else gets 404.
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostRead(_request, "listings", (await params).id);
   try {
     const id = uuidSchema.safeParse((await params).id);
     if (!id.success) return NextResponse.json({ error: "Listing not found" }, { status: 404 });
@@ -106,6 +113,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostMutation(request, "listings", (await params).id);
   try {
     // ── CSRF protection ───────────────────────────────────────
     const originBlock = enforceSameOriginMutation(request, log);

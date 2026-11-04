@@ -1,5 +1,10 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  handleRestoredPostMutation,
+  handleRestoredPostRead,
+} from "@/lib/foundation/restored-post-route";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAuditEvent } from "@/lib/services/audit";
@@ -85,6 +90,8 @@ type PromotionOwnerRow = {
  * Increments view_count.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostRead(request, "promotions", (await params).id);
   try {
     const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
       validationErrorMessage: "Invalid Tourism & Events post ID",
@@ -160,6 +167,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  * Update a promotion. Requires authentication and ownership.
  */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostMutation(request, "promotions", (await params).id);
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;

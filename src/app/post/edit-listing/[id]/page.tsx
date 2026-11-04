@@ -5,6 +5,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { usePostTransport } from "@/hooks/use-post-transport";
 import { Loader2, X, Phone, MessageCircle, Inbox, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,6 +101,7 @@ export default function EditListingPage() {
   const [newVideoCoverFile, setNewVideoCoverFile] = useState<File[]>([]);
   const [focalPoint, setFocalPoint] = useState<FocalPoint>({ x: 0.5, y: 0.5 });
   const router = useRouter();
+  const { fields: postFields, captureRevision: capturePostRevision } = usePostTransport();
   const { toast } = useToast();
   const maxPhotos = usePlanMaxPhotos("MZANSI_MARKET");
   const maxVideos = usePlanMaxVideos("MZANSI_MARKET");
@@ -183,6 +185,7 @@ export default function EditListingPage() {
         }
 
         setTitle(data.title || "");
+        capturePostRevision(data);
         setDescription(data.description || "");
         setPrice(data.price_cents ? (data.price_cents / 100).toString() : "");
         setCategory((data.category as ListingCategory) || "");
@@ -254,7 +257,7 @@ export default function EditListingPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, router, toast]);
+  }, [id, router, toast, capturePostRevision]);
 
   useEffect(() => {
     void ensureCsrfTokenReady();
@@ -489,6 +492,7 @@ export default function EditListingPage() {
         method: "PUT",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
+          ...postFields(true),
           title: title.trim(),
           description: description.trim(),
           price_zar: numPrice,

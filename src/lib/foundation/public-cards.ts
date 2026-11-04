@@ -3,6 +3,8 @@ import type { FoundationPublicApi } from "./public-api";
 import { buildFoundationPostSearch, parseFoundationPostSearch } from "./post-search";
 import { foundationBusinessTypeSchema } from "./business-type";
 import { foundationEventWindowSchema } from "./event-window-dto";
+import { frontendPostPresentationSchema } from "./post-presentation";
+export { foundationMediaUrl } from "./public-media-url";
 const key = z
   .string()
   .regex(/^media\/[a-f0-9-]{36}$/)
@@ -37,6 +39,7 @@ function parseCards(data: unknown) {
 const presentation = z.strictObject({
   business_type: foundationBusinessTypeSchema.nullable(),
   event_window: foundationEventWindowSchema.nullable(),
+  frontend: frontendPostPresentationSchema.optional(),
 });
 export type FoundationCardPresentation = z.infer<typeof presentation>;
 const presented = z.object({
@@ -47,7 +50,7 @@ const presented = z.object({
 export async function searchFoundationPresentedCards(api: FoundationPublicApi, input: unknown) {
   const request = buildFoundationPostSearch(input);
   const { data, error } = await api.rpc("search_post_cards", {
-    p_request: { ...request.p_request, presentation: true },
+    p_request: { ...request.p_request, presentation: true, frontend_presentation: true },
   });
   if (error) throw new Error("Posts could not be loaded");
   const enriched = presented.parse(data);
@@ -61,7 +64,8 @@ export async function searchFoundationPresentedCards(api: FoundationPublicApi, i
     plain.items.some((item, index) => {
       const fields = enriched.items[index]!.presentation;
       return (
-        (item.kind === "event") !== (fields.event_window !== null) ||
+        ((item.kind === "business" || fields.frontend?.business_contacts === undefined) &&
+          (item.kind === "event") !== (fields.event_window !== null)) ||
         (item.kind !== "business" && fields.business_type !== null)
       );
     })
@@ -74,8 +78,4 @@ export async function searchFoundationPresentedCards(api: FoundationPublicApi, i
       presentation: enriched.items[index]!.presentation,
     })),
   };
-}
-export function foundationMediaUrl(key: string | null | undefined) {
-  if (!key || !/^media\/[a-f0-9-]{36}$/.test(key)) return null;
-  return `${(process.env.NEXT_PUBLIC_MEDIA_URL || "https://media.verifymzansi.com").replace(/\/$/, "")}/${key}`;
 }

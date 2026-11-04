@@ -10,6 +10,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
 import { Loader2, CreditCard, Truck, Wrench, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,7 @@ const PAYMENT_METHOD_OPTIONS = [
 
 export default function EditBusinessPage() {
   const router = useRouter();
+  const { fields: postFields, captureRevision: capturePostRevision } = usePostTransport();
   const params = useParams<{ id: string }>();
   const businessId = params.id;
   const { toast } = useToast();
@@ -229,13 +231,14 @@ export default function EditBusinessPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/businesses/${businessId}`);
+        const res = await fetch(`/api/businesses/${businessId}?owner=1`);
         if (!res.ok) {
           setError("Business not found");
           return;
         }
         const data = await res.json();
         const b = data.business;
+        capturePostRevision(b);
 
         setListingArea(b.area === "PROMOTIONS_EVENTS" ? "PROMOTIONS_EVENTS" : "MZANSI_BUSINESS");
         hadStoredAccess.current = Boolean(b.category_details?.customer_access);
@@ -332,7 +335,7 @@ export default function EditBusinessPage() {
     }
 
     void load();
-  }, [businessId]);
+  }, [businessId, capturePostRevision]);
 
   useEffect(
     () => () => {
@@ -669,7 +672,7 @@ export default function EditBusinessPage() {
       const res = await fetch(`/api/businesses/${businessId}`, {
         method: "PATCH",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ...postFields(true) }),
       });
 
       const data = await res.json();

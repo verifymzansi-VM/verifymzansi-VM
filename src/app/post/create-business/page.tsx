@@ -19,6 +19,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
 import {
   Building2,
@@ -277,6 +278,7 @@ export default function CreateBusinessPage() {
 
 function CreateBusinessContent() {
   const router = useRouter();
+  const { fields: postFields } = usePostTransport();
   const searchParams = useSearchParams();
   const { user, profile, isLoading } = useAuth();
   const rawType = searchParams.get("type");
@@ -1039,7 +1041,7 @@ function CreateBusinessContent() {
       const res = await fetch("/api/businesses", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ...postFields() }),
       });
       const payload = await res.json().catch(() => null);
       if (!res.ok) {

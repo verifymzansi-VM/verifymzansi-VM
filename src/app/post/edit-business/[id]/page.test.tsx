@@ -456,7 +456,7 @@ describe("EditBusinessPage", () => {
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
     (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (input: RequestInfo | URL) => {
-        if (input === "/api/businesses/business-1") {
+        if (input === "/api/businesses/business-1?owner=1") {
           const existingBusiness = {
             business: {
               id: "business-1",

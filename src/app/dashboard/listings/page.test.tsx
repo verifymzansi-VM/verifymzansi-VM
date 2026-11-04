@@ -2,6 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import ListingsPage from "./page";
 import { createClient } from "@/lib/supabase/server";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readRestoredPostManager } from "@/lib/foundation/post-manager";
+import { tryCreateAdminClient } from "@/lib/supabase/admin";
+vi.mock("@/lib/foundation/server-session", () => ({
+  readFoundationServerSession: vi.fn(),
+  FoundationServerSessionError: class extends Error {},
+}));
+vi.mock("@/lib/foundation/post-manager", () => ({ readRestoredPostManager: vi.fn() }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -144,7 +152,50 @@ describe("Dashboard listings page", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.useRealTimers();
+  });
+
+  it("loads the preserved post manager from the verified native owner without source clients", async () => {
+    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+    const session = {
+      user: { id: "native-owner" },
+      account: { account_id: "native-owner" },
+      api: { rpc: vi.fn() },
+    };
+    vi.mocked(readFoundationServerSession).mockResolvedValue(
+      session as unknown as Awaited<ReturnType<typeof readFoundationServerSession>>
+    );
+    vi.mocked(readRestoredPostManager).mockResolvedValue({
+      responses: [
+        {
+          data: [
+            {
+              id: "native-listing",
+              title: "Native owner listing",
+              status: "live",
+              created_at: "2026-03-04T00:00:00Z",
+              expires_at: "2026-04-04T00:00:00Z",
+              area: "MZANSI_MARKET",
+              photos: [],
+              price_cents: 1000,
+            },
+          ],
+          error: null,
+        },
+        { data: [], error: null },
+        { data: [], error: null },
+      ],
+      sponsoredIds: new Set(),
+      slotUsage: [],
+      planAdmins: [],
+      tiers: { MZANSI_MARKET: "starter", MZANSI_BUSINESS: "starter", PROMOTIONS_EVENTS: "starter" },
+    } as unknown as Awaited<ReturnType<typeof readRestoredPostManager>>);
+    render(await ListingsPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByText("Native owner listing")).toBeInTheDocument();
+    expect(createClient).not.toHaveBeenCalled();
+    expect(tryCreateAdminClient).not.toHaveBeenCalled();
+    expect(readRestoredPostManager).toHaveBeenCalledWith(session.api, "native-owner");
   });
 
   it("aggregates mixed-area content and exposes rejected recovery actions", async () => {

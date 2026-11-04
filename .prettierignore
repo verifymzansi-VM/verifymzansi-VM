@@ -21,6 +21,7 @@ supabase/.temp/
 
 # Machine-generated hash-checked foundation manifests and source snapshots.
 database/foundation/*.json
+!database/foundation/runtime-api-manifest.json
 database/foundation/openapi/
 docs/backend-foundation/evidence/
 docs/backend-foundation/schema-map.json

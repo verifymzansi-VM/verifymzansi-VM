@@ -7,6 +7,7 @@ import { settleMediaUploads } from "@/app/post/_lib/settle-media-uploads";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
 import { Camera, ClipboardList, Eye, MapPin, TreePalm } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -339,6 +340,7 @@ function parseRequestedTourismListingType(value: string | null): TourismListingT
 
 function CreateTourismContent() {
   const router = useRouter();
+  const { fields: postFields } = usePostTransport();
   const searchParams = useSearchParams();
   const requestedListingType = parseRequestedTourismListingType(searchParams.get("type"));
   const { toast } = useToast();
@@ -1229,7 +1231,7 @@ function CreateTourismContent() {
         const res = await fetch("/api/businesses", {
           method: "POST",
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, ...postFields() }),
         });
         const payload = await res.json().catch(() => null);
 
@@ -1382,7 +1384,7 @@ function CreateTourismContent() {
         const res = await fetch("/api/promotions", {
           method: "POST",
           headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, ...postFields() }),
         });
         const payload = await res.json().catch(() => null);
 

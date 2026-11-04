@@ -1,6 +1,7 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { getDataBackend } from "@/lib/data-backend";
 import { restoredMarketplaceResponse } from "@/lib/foundation/marketplace-route";
+import { handleRestoredPostMutation } from "@/lib/foundation/restored-post-route";
 import { CARD_STICKER_COLUMNS, toPublicVerification } from "@/lib/business-verification/public";
 import { businessCategoryFilterValues } from "@/lib/constants/categories";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
@@ -143,6 +144,7 @@ function redactBusinessListContactFields(
  * Requires an authenticated, verified account.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredPostMutation(request, "businesses");
   try {
     const session = await requirePostingMutationSession(request, log);
     if (session.response) return session.response;

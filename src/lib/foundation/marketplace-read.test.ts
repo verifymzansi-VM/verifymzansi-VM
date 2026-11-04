@@ -56,7 +56,13 @@ describe("restored marketplace reads", () => {
     const rpc = vi.fn().mockResolvedValue({ data: page([card()]), error: null });
     const result = await readRestoredCollection(apiWith(rpc), "listings");
     expect(rpc).toHaveBeenCalledWith("search_post_cards", {
-      p_request: { area: "market", limit: 24, offset: 0, presentation: true },
+      p_request: {
+        area: "market",
+        limit: 24,
+        offset: 0,
+        presentation: true,
+        frontend_presentation: true,
+      },
     });
     expect(result.rows[0]).toMatchObject({
       title: "Device 1",

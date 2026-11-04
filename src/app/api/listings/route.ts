@@ -1,6 +1,7 @@
 import { publicPersonName } from "@/lib/account/public-name";
 import { getDataBackend } from "@/lib/data-backend";
 import { restoredMarketplaceResponse } from "@/lib/foundation/marketplace-route";
+import { handleRestoredPostMutation } from "@/lib/foundation/restored-post-route";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { hasStaffPostingLimitBypass } from "@/lib/auth/staff-posting-bypass";
 import { NextResponse, type NextRequest } from "next/server";
@@ -427,6 +428,7 @@ export async function GET(request: NextRequest) {
  * entitlement enforcement, and free-post tracking.
  */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredPostMutation(request, "listings");
   try {
     // ── CSRF protection ───────────────────────────────────────
     const originBlock = enforceSameOriginMutation(request, log);

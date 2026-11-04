@@ -10,6 +10,7 @@ import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
 import { readFoundationPostAffiliations } from "./organisations";
 import { readFoundationPostSponsorships } from "./organisation-sponsorships";
+import { presentedFormFields, type FrontendPostPresentation } from "./post-presentation";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
 export class MarketplaceQueryError extends Error {}
@@ -33,6 +34,7 @@ export function restoredPublicRow(
   detail?: FoundationPublicPostDetail & {
     contact_channels?: string[];
     business_type?: string | null;
+    frontend?: FrontendPostPresentation;
   },
   presentation?: FoundationCardPresentation
 ) {
@@ -47,6 +49,16 @@ export function restoredPublicRow(
   if (!videos.length && post.preview?.video_key)
     videos.push(foundationMediaUrl(post.preview.video_key)!);
   const eventWindow = detail?.event_window ?? presentation?.event_window;
+  const frontend = detail?.frontend ?? presentation?.frontend;
+  const formFields = presentedFormFields(frontend, post.kind === "business");
+  if (post.kind === "listing") delete formFields.location_address;
+  const ticketPrice =
+    post.kind === "event" &&
+    typeof frontend?.data.ticket_price_cents === "number" &&
+    Number.isSafeInteger(frontend.data.ticket_price_cents) &&
+    frontend.data.ticket_price_cents >= 0
+      ? frontend.data.ticket_price_cents
+      : null;
   const photos = images.length
     ? images.map((row) => foundationMediaUrl(row.object_key)!)
     : photo
@@ -57,13 +69,21 @@ export function restoredPublicRow(
     title: post.title,
     business_name: post.title,
     description: detail?.description ?? post.summary ?? "",
-    category: post.category,
+    category:
+      post.kind === "event" && typeof frontend?.data.category_label === "string"
+        ? frontend.data.category_label
+        : post.category,
     category_key: post.kind === "event" ? null : post.category,
     subcategory: post.activity,
     business_type: detail?.business_type ?? presentation?.business_type ?? "",
     promotion_type: "event" as const,
     price_mode: post.price_mode,
-    price_cents: post.price_cents === null ? null : Number(post.price_cents),
+    price_cents:
+      post.kind === "event"
+        ? ticketPrice
+        : post.price_cents === null
+          ? null
+          : Number(post.price_cents),
     price_negotiable: post.price_negotiable,
     condition: post.condition,
     location_province: publicProvinceLabel(post.province),
@@ -113,6 +133,7 @@ export function restoredPublicRow(
     delivery_options: null,
     website: null,
     store_number: null,
+    ...formFields,
   };
 }
 

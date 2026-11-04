@@ -1,5 +1,10 @@
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  handleRestoredPostMutation,
+  handleRestoredPostRead,
+} from "@/lib/foundation/restored-post-route";
 import { getBusinessVenuePhotoUrls } from "@/lib/business/venue-photos";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -94,6 +99,8 @@ type BusinessOwnerRow = {
  * Get a single business by ID. Public for live businesses.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostRead(request, "businesses", (await params).id);
   try {
     const parsedParams = parseAndValidateRouteParams(await params, idRouteParamsSchema, {
       validationErrorMessage: "Invalid business ID",
@@ -199,6 +206,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  * Update a business. Requires authentication and ownership.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleRestoredPostMutation(request, "businesses", (await params).id);
   try {
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;

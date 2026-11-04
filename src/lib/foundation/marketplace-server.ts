@@ -70,12 +70,16 @@ export const restoredPublicDetail = cache(async (id: string) => {
   const post = await readFoundationPublicPost(api, { id });
   if (!post) return null;
   const contact_channels = await readFoundationPublicContactChannels(api, { id });
-  const business_type =
-    post.kind === "business"
-      ? ((await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })).items[0]
-          ?.presentation.business_type ?? null)
-      : null;
-  return { ...post, contact_channels, business_type };
+  const presentation = (
+    await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
+  ).items[0]?.presentation;
+  if (!presentation) return null;
+  return {
+    ...post,
+    contact_channels,
+    business_type: presentation.business_type,
+    frontend: presentation.frontend,
+  };
 });
 
 export const restoredListingDetail = cache(async (id: string) => {

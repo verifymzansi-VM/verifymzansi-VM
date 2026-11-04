@@ -9,6 +9,13 @@ export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
       get_my_dashboard: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_frontend_post_manager: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_frontend_post: { Args: { p_id: string }; Returns: Json };
+      list_my_frontend_posts: {
+        Args: { p_kind: string; p_area?: string; p_limit?: number; p_offset?: number };
+        Returns: Json;
+      };
+      consume_frontend_post_command: { Args: { p_request: string }; Returns: Json };
       reserve_frontend_verification_upload: {
         Args: {
           p_request: string;
@@ -50,6 +57,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      stage_frontend_post_command: {
+        Args: { p_owner: string; p_request: string; p_digest: string; p_payload: Json };
+        Returns: boolean;
+      };
       frontend_verification_upload_context: {
         Args: { p_owner: string; p_request: string };
         Returns: Json;

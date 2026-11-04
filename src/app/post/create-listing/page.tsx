@@ -6,6 +6,7 @@ import { ListingQualityHint } from "@/components/post/listing-quality-hint";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePostTransport } from "@/hooks/use-post-transport";
 import Link from "next/link";
 import { Camera, Check, Eye, FileText, Inbox, MessageCircle, Phone, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -268,6 +269,7 @@ export default function CreateListingPage() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   const router = useRouter();
+  const { fields: postFields } = usePostTransport();
   const { toast } = useToast();
   const {
     save: saveDraft,
@@ -728,6 +730,7 @@ export default function CreateListingPage() {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
+          ...postFields(),
           title: title.trim(),
           description: description.trim(),
           price_zar: price ? parseFloat(price) : 0,

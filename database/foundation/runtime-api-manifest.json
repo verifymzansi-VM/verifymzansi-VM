@@ -4,35 +4,115 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
-      "name":"reserve_frontend_verification_upload",
-      "updates":["updates/20261104000046_restored_verification_transport.sql"],
-      "arguments":[{"name":"p_request","sqlType":"uuid","optional":false},{"name":"p_purpose","sqlType":"text","optional":false},{"name":"p_digest","sqlType":"text","optional":false},{"name":"p_first_name","sqlType":"text","optional":true},{"name":"p_last_name","sqlType":"text","optional":true}],
-      "returns":"jsonb","volatility":"v",
-      "execute":{"anon":false,"authenticated":true,"service_role":false},
-      "authority":"Current confirmed active member and live matching session; owner derives from auth.uid(), request digest binds immutable native evidence reservation"
+      "name": "get_my_frontend_post_manager",
+      "updates": ["updates/20261104043441_restored_post_manager.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current live confirmed member; self-only actual slot usage, purchased multi-plan members, sponsorship and active paid add-on windows"
     },
     {
-      "name":"get_my_frontend_verification_uploads",
-      "updates":["updates/20261104000046_restored_verification_transport.sql"],
-      "arguments":[],"returns":"jsonb","volatility":"v",
-      "execute":{"anon":false,"authenticated":true,"service_role":false},
-      "authority":"Current confirmed active member and live matching session; self-only unexpired clean artifact projection without number, fingerprint or storage path"
+      "name": "get_my_frontend_post",
+      "updates": ["updates/20261104002445_restored_post_commands.sql"],
+      "arguments": [{ "name": "p_id", "sqlType": "uuid", "optional": false }],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Live confirmed active member; self-only complete owner form with no caller-selected owner"
     },
     {
-      "name":"frontend_verification_upload_context",
-      "updates":["updates/20261104000046_restored_verification_transport.sql"],
-      "arguments":[{"name":"p_owner","sqlType":"uuid","optional":false},{"name":"p_request","sqlType":"uuid","optional":false}],
-      "returns":"jsonb","volatility":"v",
-      "execute":{"anon":false,"authenticated":false,"service_role":true},
-      "authority":"Trusted server only; owner-bound receipt, current account, case revision, captured live session and native artifact checks before completion"
+      "name": "list_my_frontend_posts",
+      "updates": ["updates/20261104002445_restored_post_commands.sql"],
+      "arguments": [
+        { "name": "p_kind", "sqlType": "text", "optional": false },
+        { "name": "p_area", "sqlType": "text", "optional": true },
+        { "name": "p_limit", "sqlType": "integer", "optional": true },
+        { "name": "p_offset", "sqlType": "integer", "optional": true }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Live confirmed active member; bounded self-only original-post collection and exact count"
     },
     {
-      "name":"complete_frontend_verification_upload",
-      "updates":["updates/20261104000046_restored_verification_transport.sql"],
-      "arguments":[{"name":"p_owner","sqlType":"uuid","optional":false},{"name":"p_request","sqlType":"uuid","optional":false},{"name":"p_stored_sha256","sqlType":"text","optional":false},{"name":"p_content_sha256","sqlType":"text","optional":false},{"name":"p_size","sqlType":"integer","optional":false},{"name":"p_identity","sqlType":"jsonb","optional":true},{"name":"p_risk_score","sqlType":"integer","optional":true}],
-      "returns":"jsonb","volatility":"v",
-      "execute":{"anon":false,"authenticated":false,"service_role":true},
-      "authority":"Trusted scanner and encrypted object writer only; same bound receipt/session/revision checked atomically with native evidence completion and identity pair registration"
+      "name": "consume_frontend_post_command",
+      "updates": [
+        "updates/20261104002445_restored_post_commands.sql",
+        "updates/20261104042501_preserve_existing_edit_consent.sql"
+      ],
+      "arguments": [{ "name": "p_request", "sqlType": "uuid", "optional": false }],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current live owner consumes a server-attested immutable form receipt; native verification, terms, funding, media and revision checks stay atomic"
+    },
+    {
+      "name": "stage_frontend_post_command",
+      "updates": ["updates/20261104002445_restored_post_commands.sql"],
+      "arguments": [
+        { "name": "p_owner", "sqlType": "uuid", "optional": false },
+        { "name": "p_request", "sqlType": "uuid", "optional": false },
+        { "name": "p_digest", "sqlType": "text", "optional": false },
+        { "name": "p_payload", "sqlType": "jsonb", "optional": false }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": false, "service_role": true },
+      "authority": "Trusted server validator only; current active owner from verified Auth, content-bound request receipt, no public or browser write access"
+    },
+    {
+      "name": "reserve_frontend_verification_upload",
+      "updates": ["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments": [
+        { "name": "p_request", "sqlType": "uuid", "optional": false },
+        { "name": "p_purpose", "sqlType": "text", "optional": false },
+        { "name": "p_digest", "sqlType": "text", "optional": false },
+        { "name": "p_first_name", "sqlType": "text", "optional": true },
+        { "name": "p_last_name", "sqlType": "text", "optional": true }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current confirmed active member and live matching session; owner derives from auth.uid(), request digest binds immutable native evidence reservation"
+    },
+    {
+      "name": "get_my_frontend_verification_uploads",
+      "updates": ["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current confirmed active member and live matching session; self-only unexpired clean artifact projection without number, fingerprint or storage path"
+    },
+    {
+      "name": "frontend_verification_upload_context",
+      "updates": ["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments": [
+        { "name": "p_owner", "sqlType": "uuid", "optional": false },
+        { "name": "p_request", "sqlType": "uuid", "optional": false }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": false, "service_role": true },
+      "authority": "Trusted server only; owner-bound receipt, current account, case revision, captured live session and native artifact checks before completion"
+    },
+    {
+      "name": "complete_frontend_verification_upload",
+      "updates": ["updates/20261104000046_restored_verification_transport.sql"],
+      "arguments": [
+        { "name": "p_owner", "sqlType": "uuid", "optional": false },
+        { "name": "p_request", "sqlType": "uuid", "optional": false },
+        { "name": "p_stored_sha256", "sqlType": "text", "optional": false },
+        { "name": "p_content_sha256", "sqlType": "text", "optional": false },
+        { "name": "p_size", "sqlType": "integer", "optional": false },
+        { "name": "p_identity", "sqlType": "jsonb", "optional": true },
+        { "name": "p_risk_score", "sqlType": "integer", "optional": true }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": false, "service_role": true },
+      "authority": "Trusted scanner and encrypted object writer only; same bound receipt/session/revision checked atomically with native evidence completion and identity pair registration"
     },
     {
       "name": "get_my_dashboard",
@@ -52,9 +132,7 @@
     },
     {
       "name": "save_my_frontend_profile",
-      "updates": [
-        "updates/20261103182231_restored_profile_update.sql"
-      ],
+      "updates": ["updates/20261103182231_restored_profile_update.sql"],
       "arguments": [
         {
           "name": "p_expected_revision",
@@ -93,9 +171,7 @@
     },
     {
       "name": "list_my_frontend_enquiries",
-      "updates": [
-        "updates/20261103192835_restored_enquiry_post_area.sql"
-      ],
+      "updates": ["updates/20261103192835_restored_enquiry_post_area.sql"],
       "arguments": [
         {
           "name": "p_limit",
@@ -129,9 +205,7 @@
     },
     {
       "name": "list_my_frontend_notifications",
-      "updates": [
-        "updates/20261103231355_owner_notification_dismissals.sql"
-      ],
+      "updates": ["updates/20261103231355_owner_notification_dismissals.sql"],
       "arguments": [
         {
           "name": "p_limit",
@@ -160,9 +234,7 @@
     },
     {
       "name": "dismiss_my_notifications",
-      "updates": [
-        "updates/20261103231355_owner_notification_dismissals.sql"
-      ],
+      "updates": ["updates/20261103231355_owner_notification_dismissals.sql"],
       "arguments": [
         {
           "name": "p_ids",
