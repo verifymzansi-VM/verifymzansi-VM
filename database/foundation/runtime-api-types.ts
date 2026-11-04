@@ -8,6 +8,19 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_frontend_feature_flags: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_frontend_governance_metrics: { Args: Record<PropertyKey, never>; Returns: Json };
+      set_frontend_feature_flag: {
+        Args: {
+          p_key: string;
+          p_expected_revision: number;
+          p_mode: string;
+          p_percent: number;
+          p_roles: string[];
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       get_frontend_governance_page: { Args: { p_request?: Json }; Returns: Json };
       decide_frontend_governance: {
         Args: {
@@ -133,6 +146,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      read_frontend_feature_config: { Args: Record<PropertyKey, never>; Returns: Json };
       complete_frontend_media_upload: {
         Args: {
           p_object_id: string;

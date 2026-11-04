@@ -64,7 +64,10 @@ test("step-match probes carry a typed boolean while still refusing anonymous aut
     functions: [
       {
         ...manifest.functions[0],
-        arguments: [{ name: "p_matches", sqlType: "boolean", optional: false }],
+        arguments: [
+          { name: "p_matches", sqlType: "boolean", optional: false },
+          { name: "p_roles", sqlType: "text[]", optional: false },
+        ],
       },
     ],
   };
@@ -72,7 +75,7 @@ test("step-match probes carry a typed boolean while still refusing anonymous aut
     await verifyFoundationRuntimeApi(
       connection,
       async (_url, init) => {
-        assert.deepEqual(JSON.parse(init.body), { p_matches: true });
+        assert.deepEqual(JSON.parse(init.body), { p_matches: true, p_roles: [] });
         assert.equal(init.headers.Authorization, undefined);
         return Response.json({ code: "42501" }, { status: 401 });
       },

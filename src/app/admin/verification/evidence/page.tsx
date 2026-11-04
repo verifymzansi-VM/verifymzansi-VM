@@ -14,10 +14,13 @@ export default async function EvidenceDeskPage({
 }: {
   searchParams: Promise<{ stepId?: string; userId?: string }>;
 }) {
-  await requireStaff("queue:view");
+  const { user, role } = await requireStaff("queue:view");
 
   // Feature flag check
-  const evidenceDeskEnabled = await isFeatureEnabled("kyc_evidence_desk");
+  const evidenceDeskEnabled = await isFeatureEnabled("kyc_evidence_desk", {
+    userId: user.id,
+    role,
+  });
   if (!evidenceDeskEnabled) {
     redirect("/admin/verification");
   }
@@ -36,7 +39,11 @@ export default async function EvidenceDeskPage({
         ]}
       />
 
-      <EvidenceDeskClient initialStepId={params.stepId} initialUserId={params.userId} />
+      <EvidenceDeskClient
+        key={user.id}
+        initialStepId={params.stepId}
+        initialUserId={params.userId}
+      />
     </div>
   );
 }

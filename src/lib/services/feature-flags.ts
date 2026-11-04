@@ -7,6 +7,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import type { FeatureFlagMode } from "@/types/database";
+import { getDataBackend } from "@/lib/data-backend";
 
 const log = createLogger("FeatureFlags");
 
@@ -93,6 +94,16 @@ function evaluateFlag(flag: FlagRow, flagKey: string, context?: FlagContext): bo
  * Results are cached for 60 seconds to minimize DB queries.
  */
 export async function isFeatureEnabled(key: string, context?: FlagContext): Promise<boolean> {
+  if (getDataBackend() === "foundation") {
+    if (key !== "kyc_evidence_desk") return false;
+    try {
+      const { readNativeDisplayFlags } = await import("@/lib/foundation/feature-controls-server");
+      const flag = (await readNativeDisplayFlags()).find((f) => f.key === key);
+      return flag ? evaluateFlag(flag, key, context) : false;
+    } catch {
+      return false;
+    }
+  }
   const now = Date.now();
   const cached = FLAG_CACHE.get(key);
 
@@ -150,6 +161,8 @@ export async function toggleFeatureFlag(
   key: string,
   enabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
+  if (getDataBackend() === "foundation")
+    return { success: false, error: "Use the native audited settings endpoint" };
   try {
     const supabase = createAdminClient();
     const { error, data } = await supabase
@@ -190,6 +203,8 @@ export async function updateFeatureFlagConfig(
     reason?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
+  if (getDataBackend() === "foundation")
+    return { success: false, error: "Use the native audited settings endpoint" };
   try {
     const supabase = createAdminClient();
     const { error, data } = await supabase
@@ -236,8 +251,13 @@ export async function getAllFeatureFlags(): Promise<
     allowlist_roles: string[] | null;
     updated_at: string;
     updated_reason: string | null;
+    revision?: number;
   }>
 > {
+  if (getDataBackend() === "foundation") {
+    const { readNativeAdminFlags } = await import("@/lib/foundation/feature-controls-server");
+    return readNativeAdminFlags();
+  }
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase

@@ -4,6 +4,89 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_governance_metrics",
+      "updates": ["updates/20261104220316_restored_runtime_controls.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native governance decision reviewer and fresh TOTP; exact counts of retained native decisions, actual rejected proposals and approved overrides; no proposal payload or caller-selected actor."
+    },
+    {
+      "name": "set_frontend_feature_flag",
+      "updates": ["updates/20261104220316_restored_runtime_controls.sql"],
+      "arguments": [
+        {
+          "name": "p_key",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_mode",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_percent",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_roles",
+          "sqlType": "text[]",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native administrator and fresh TOTP; allowlisted display keys only, represented revision, bounded modes/roles and recorded reason. One atomic audit write, exact retry acknowledgement. Security enforcement is not a toggle."
+    },
+    {
+      "name": "get_frontend_feature_flags",
+      "updates": ["updates/20261104220316_restored_runtime_controls.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current native administrator feature capability and fresh TOTP; supported display flags with current revisions and recorded reason."
+    },
+    {
+      "name": "read_frontend_feature_config",
+      "updates": ["updates/20261104220316_restored_runtime_controls.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server-only display configuration reader. Contains no account, reason, actor or security-policy control; no browser execution."
+    },
+    {
       "name": "decide_frontend_governance",
       "updates": ["updates/20261104214932_restored_governance_decisions.sql"],
       "arguments": [

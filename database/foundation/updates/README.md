@@ -5,6 +5,34 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Supported runtime controls and oversight, 5 November 2026
+
+`20261104220316_restored_runtime_controls.sql` is applied. The existing flag
+screen manages the supported optional evidence-desk display, starting off. The
+old source-only orchestration and security switches are not imported: native
+staff MFA and verification rules are unconditional database authority. Display
+configuration is a service-only read without account or audit data. Admin reads
+and writes require the assigned native capability and recent authenticator
+proof; settings writes carry the displayed revision and record one reasoned
+event atomically. An exact retry acknowledges the same revision; a stale or
+different update is refused.
+
+The selected toggle/canary controls use the returned native state and
+timestamps. Staff context reaches percent/role evaluation, and account changes
+remount the settings/evidence client. Navigation receives actual assigned
+capabilities. Governance oversight totals now count retained native decisions,
+actual rejected proposals and approved overrides, using the decision-review
+capability. These reads direct staff back to authenticator confirmation when
+required.
+
+The real local GoTrue/TOTP fixture verifies defaults, revision fencing, retry
+audit deduplication, admin/governor separation, refusal to configure MFA as a
+display flag and exact metric DTOs. Focused native/source service, HTTP,
+navigation and page tests passed, along with types, lint and dependency rules.
+Hosted SQL verified API audiences, the unchanged off default, the assigned admin
+capability, no browser table access and no seeded audit events. Application
+deployment and full restored-page/browser acceptance remain outstanding.
+
 ## Preserved governance decisions, 5 November 2026
 
 `20261104214932_restored_governance_decisions.sql` is applied. The existing

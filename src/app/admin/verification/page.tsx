@@ -25,7 +25,7 @@ export default async function AdminVerificationPage() {
     loaded = await Promise.all([
       getPendingVerificationGroups(SHOWN_LIMIT, { includeIds: myClaimed.map((c) => c.id) }),
       countPendingVerifications(),
-      isFeatureEnabled("kyc_evidence_desk"),
+      isFeatureEnabled("kyc_evidence_desk", { userId: user.id, role }),
       countMyClaims(user.id, "kyc"),
     ]);
   } catch (error) {

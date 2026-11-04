@@ -21,6 +21,11 @@ import {
 } from "../src/lib/foundation/owner-dashboard.ts";
 import { readFrontendStaffVerificationQueue } from "../src/lib/foundation/staff-verification-queue.ts";
 import { readRestoredGovernance } from "../src/lib/foundation/governance.ts";
+import {
+  readFrontendFeatureFlags,
+  readFrontendFeatureConfig,
+  readFrontendGovernanceMetrics,
+} from "../src/lib/foundation/feature-controls.ts";
 import { validateSaIdChecksum } from "../src/lib/utils/sa-id-validation.ts";
 import {
   parseRestoredOwnerPost,
@@ -252,6 +257,7 @@ try {
     "database/foundation/updates/20261104162910_preserved_identity_review_workflow.sql",
     "database/foundation/updates/20261104214751_preserve_reviewed_identity_status.sql",
     "database/foundation/updates/20261104214932_restored_governance_decisions.sql",
+    "database/foundation/updates/20261104220316_restored_runtime_controls.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -272,6 +278,7 @@ try {
     create temporary table restored_identity_queue_probe(value jsonb);
     create temporary table restored_owner_identity_probe(kind text,value jsonb);
     create temporary table restored_governance_probe(value jsonb);
+    create temporary table restored_controls_probe(kind text,value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -590,12 +597,26 @@ try {
       begin perform api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Different rejection rationale');raise exception 'rejection audit mutated';exception when sqlstate 'PT409' then null;end;
       begin perform api.approve_decision((case_lease->>'decision_id')::uuid);raise exception 'rejected proposal approved later';exception when invalid_parameter_value then null;end;
       insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',case_lease->>'decision_id','status','all')));
+      insert into restored_controls_probe values('config',api.read_frontend_feature_config());
+      begin perform api.get_frontend_feature_flags();raise exception 'governor managed admin display settings';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      c:=api.get_frontend_feature_flags();
+      if c->'flags'->0->>'mode'<>'off' then raise exception 'optional desk flag changed selected default';end if;
+      begin perform api.set_frontend_feature_flag('staff_mfa_enforced',1,'off',0,'{}','Attempt to disable required MFA');raise exception 'mandatory MFA treated as display flag';exception when invalid_parameter_value then null;end;
+      answer:=api.set_frontend_feature_flag('kyc_evidence_desk',1,'allowlist',0,array['moderator','admin'],'Synthetic reviewer canary');
+      if answer->'flags'->0->>'revision'<>'2' then raise exception 'display flag revision not advanced';end if;
+      if api.set_frontend_feature_flag('kyc_evidence_desk',1,'allowlist',0,array['admin','moderator'],'Synthetic reviewer canary') is distinct from answer then raise exception 'display flag retry acknowledgement changed';end if;
+      if (select count(*) from private.frontend_feature_flag_events)<>1 then raise exception 'display flag audit repeated';end if;
+      begin perform api.set_frontend_feature_flag('kyc_evidence_desk',1,'on',100,'{}','Stale display configuration');raise exception 'stale display update overwrote revision';exception when sqlstate 'PT409' then null;end;
+      insert into restored_controls_probe values('flags',answer);
+      if has_table_privilege('authenticated','private.frontend_feature_flags','select') or has_table_privilege('service_role','private.frontend_feature_flags','update') or has_function_privilege('authenticated','api.read_frontend_feature_config()','execute') or has_function_privilege('service_role','api.set_frontend_feature_flag(text,integer,text,integer,text[],text)','execute') then raise exception 'display controls crossed role boundary';end if;
       ${claims(administrator)}
       case_lease:=api.propose_decision(move_request,1,'restrict_account','{}');
       answer:=api.decide_frontend_governance((case_lease->>'decision_id')::uuid,move_request,1,1,'reject','Synthetic authored withdrawal');
       if answer->>'status'<>'withdrawn' then raise exception 'authored rejection did not remain withdrawal';end if;
       ${claims(governor)}
       insert into restored_governance_probe values(api.get_frontend_governance_page(jsonb_build_object('id',case_lease->>'decision_id','status','all')));
+      insert into restored_controls_probe values('metrics',api.get_frontend_governance_metrics());
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
       -- their terminal-state and verification-invalidation rules.
@@ -618,6 +639,7 @@ try {
     select 'IDENTITY_QUEUE:'||value::text from restored_identity_queue_probe;
     select 'OWNER_IDENTITY:'||jsonb_build_object('kind',kind,'value',value)::text from restored_owner_identity_probe;
     select 'GOVERNANCE:'||value::text from restored_governance_probe;
+    select 'CONTROLS:'||jsonb_build_object('kind',kind,'value',value)::text from restored_controls_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -709,6 +731,33 @@ try {
   const restored = parseRestoredOwnerPost(
     JSON.parse(outcome.split("\n").find((line) => line.startsWith("{")))
   );
+  const controls = Object.fromEntries(
+    outcome
+      .split("\n")
+      .filter((line) => line.startsWith("CONTROLS:"))
+      .map((line) => {
+        const row = JSON.parse(line.slice(9));
+        return [row.kind, row.value];
+      })
+  );
+  const flags = await readFrontendFeatureFlags(
+    { rpc: async () => ({ data: controls.flags, error: null }) },
+    administrator.id
+  );
+  assert.equal(flags[0].mode, "allowlist");
+  assert.deepEqual(flags[0].allowlist_roles, ["admin", "moderator"]);
+  const display = await readFrontendFeatureConfig({
+    rpc: async () => ({ data: controls.config, error: null }),
+  });
+  assert.equal(display[0].enabled, false);
+  const metrics = await readFrontendGovernanceMetrics(
+    { rpc: async () => ({ data: controls.metrics, error: null }) },
+    governor.id
+  );
+  assert.equal(metrics.approved, 1);
+  assert.equal(metrics.rejected, 1);
+  assert.equal(metrics.overridden, 1);
+  assert.equal(metrics.total, 3);
   const governanceProbes = outcome
     .split("\n")
     .filter((line) => line.startsWith("GOVERNANCE:"))

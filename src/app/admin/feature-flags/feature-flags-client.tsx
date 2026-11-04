@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -8,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ToggleLeft } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { getDataBackend } from "@/lib/data-backend";
+import { parseFrontendFlagAcknowledgement } from "@/lib/foundation/feature-controls";
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 type FlagMode = "off" | "on" | "percent" | "allowlist";
 
@@ -21,6 +24,7 @@ interface FeatureFlag {
   allowlist_roles: string[] | null;
   updated_at: string;
   updated_reason: string | null;
+  revision?: number;
 }
 
 interface FeatureFlagsClientProps {
@@ -47,6 +51,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
   const [toggling, setToggling] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const sending = useRef(new Set<string>());
 
   const handleModeChange = async (
     key: string,
@@ -64,10 +69,13 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
       return;
     }
 
+    if (sending.current.has(key)) return;
+    sending.current.add(key);
     setToggling(key);
+    const expectedRevision = flags.find((f) => f.key === key)?.revision;
 
     try {
-      const response = await fetch("/api/admin/feature-flags/toggle", {
+      const response = await fetchStaffEvidence("/api/admin/feature-flags/toggle", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
@@ -76,18 +84,23 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
           percent: mode === "percent" ? percent : undefined,
           allowlist_roles: mode === "allowlist" ? allowlistRoles : undefined,
           reason,
+          ...(getDataBackend() === "foundation" ? { expectedRevision } : {}),
         }),
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const data = await response.json();
         throw new Error(data.error || "Failed to update flag");
       }
 
+      const nativeFlag =
+        getDataBackend() === "foundation"
+          ? parseFrontendFlagAcknowledgement(data, key, expectedRevision)
+          : null;
       setFlags((prev) =>
         prev.map((f) =>
           f.key === key
-            ? {
+            ? (nativeFlag ?? {
                 ...f,
                 mode,
                 enabled: mode === "on",
@@ -95,7 +108,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
                 allowlist_roles: allowlistRoles ?? f.allowlist_roles,
                 updated_at: new Date().toISOString(),
                 updated_reason: reason ?? null,
-              }
+              })
             : f
         )
       );
@@ -114,30 +127,47 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
         variant: "destructive",
       });
     } finally {
+      sending.current.delete(key);
       setToggling(null);
     }
   };
 
   // Legacy toggle for quick on/off
   const handleQuickToggle = async (key: string, enabled: boolean) => {
+    if (sending.current.has(key)) return;
+    sending.current.add(key);
     setToggling(key);
+    const expectedRevision = flags.find((f) => f.key === key)?.revision;
 
     try {
-      const response = await fetch("/api/admin/feature-flags/toggle", {
+      const response = await fetchStaffEvidence("/api/admin/feature-flags/toggle", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ key, enabled }),
+        body: JSON.stringify({
+          key,
+          enabled,
+          ...(getDataBackend() === "foundation" ? { expectedRevision } : {}),
+        }),
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const data = await response.json();
         throw new Error(data.error || "Failed to toggle flag");
       }
 
+      const nativeFlag =
+        getDataBackend() === "foundation"
+          ? parseFrontendFlagAcknowledgement(data, key, expectedRevision)
+          : null;
       setFlags((prev) =>
         prev.map((f) =>
           f.key === key
-            ? { ...f, enabled, mode: enabled ? "on" : "off", updated_at: new Date().toISOString() }
+            ? (nativeFlag ?? {
+                ...f,
+                enabled,
+                mode: enabled ? "on" : "off",
+                updated_at: new Date().toISOString(),
+              })
             : f
         )
       );
@@ -156,6 +186,7 @@ export function FeatureFlagsClient({ initialFlags }: FeatureFlagsClientProps) {
         variant: "destructive",
       });
     } finally {
+      sending.current.delete(key);
       setToggling(null);
     }
   };

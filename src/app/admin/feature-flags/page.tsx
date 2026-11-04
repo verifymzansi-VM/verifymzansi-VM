@@ -9,7 +9,7 @@ export const metadata = {
 };
 
 export default async function FeatureFlagsPage() {
-  await requireStaff("feature_flag:toggle");
+  const { user } = await requireStaff("feature_flag:toggle");
 
   const flags = await getAllFeatureFlags();
 
@@ -21,7 +21,7 @@ export default async function FeatureFlagsPage() {
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Feature flags" }]}
       />
 
-      <FeatureFlagsClient initialFlags={flags} />
+      <FeatureFlagsClient key={user.id} initialFlags={flags} />
     </div>
   );
 }

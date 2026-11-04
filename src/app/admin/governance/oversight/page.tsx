@@ -1,9 +1,8 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { readGovernanceMetrics } from "@/lib/services/governance-metrics";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react";
-import { countsOrThrow } from "@/lib/admin/counts";
 
 export const metadata = {
   title: "Oversight — Governance",
@@ -13,37 +12,7 @@ export const metadata = {
 export default async function GovernanceOversightPage() {
   await requireStaff("oversight:view");
 
-  const admin = createAdminClient();
-
-  // Gather oversight metrics
-  const [
-    { count: totalDecisions },
-    { count: approvedDecisions },
-    { count: rejectedDecisions },
-    { count: overriddenDecisions },
-  ] = countsOrThrow(
-    await Promise.all([
-      admin.from("decision_records").select("*", { count: "exact", head: true }),
-      admin
-        .from("decision_records")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "approved"),
-      admin
-        .from("decision_records")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "rejected"),
-      admin
-        .from("decision_records")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "overridden"),
-    ]),
-    "Oversight figures"
-  );
-
-  const total = totalDecisions ?? 0;
-  const approved = approvedDecisions ?? 0;
-  const rejected = rejectedDecisions ?? 0;
-  const overridden = overriddenDecisions ?? 0;
+  const { total, approved, rejected, overridden } = await readGovernanceMetrics();
   const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
   const overrideRate = total > 0 ? Math.round((overridden / total) * 100) : 0;
 

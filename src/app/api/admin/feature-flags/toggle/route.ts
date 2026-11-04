@@ -14,6 +14,8 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredFeatureFlag } from "@/lib/foundation/restored-feature-flag-route";
 
 const log = createLogger("FeatureFlagsToggle");
 
@@ -33,6 +35,7 @@ const canarySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return handleRestoredFeatureFlag(request);
   try {
     const guard = await enforceAdminMutationGuard({
       request,
