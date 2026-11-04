@@ -5,6 +5,25 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Preserved identity review, 4 November 2026
+
+`20261104162910_preserved_identity_review_workflow.sql` and its follow-up
+`20261104214751_preserve_reviewed_identity_status.sql` are applied. Separate ID
+and selfie approvals now bind the represented native pair, version, independent
+reviewer and current claim; both are required before native acceptance.
+High-risk acceptance still requires a second independent reviewer. Rejected or
+returned receipts cannot reappear as completed uploads after resubmission.
+
+The owner status projection uses the canonical reviewed-evidence predicate after
+acceptance, preserving verification through scheduled file retirement. New
+reviews still require clean, unexpired uploads. Native fixture checks cover
+retention claims, fenced deletion acknowledgements and explicit identity
+revocation: retention preserves acceptance; revocation removes it. SQL and all
+fixture data roll back, with no real objects written or deleted. Exact hosted
+API audiences, private-table isolation and the additive runtime preflight passed
+after application. See the staff integration document for HTTP/viewer coverage
+and remaining browser/deployment limitations.
+
 ## Preserved staff moderation and claims, 4 November 2026
 
 `20261104111941_restored_staff_moderation_queue.sql` and

@@ -29,7 +29,10 @@
     },
     {
       "name": "get_my_frontend_identity_state",
-      "updates": ["updates/20261104162910_preserved_identity_review_workflow.sql"],
+      "updates": [
+        "updates/20261104162910_preserved_identity_review_workflow.sql",
+        "updates/20261104214751_preserve_reviewed_identity_status.sql"
+      ],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",

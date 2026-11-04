@@ -249,6 +249,7 @@ try {
     "database/foundation/updates/20261104111941_restored_staff_moderation_queue.sql",
     "database/foundation/updates/20261104155022_restored_staff_claim_controls.sql",
     "database/foundation/updates/20261104162910_preserved_identity_review_workflow.sql",
+    "database/foundation/updates/20261104214751_preserve_reviewed_identity_status.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -559,6 +560,19 @@ try {
       c:=api.get_frontend_staff_identity_context('${unverified.id}',null);
       perform api.approve_decision((proof->>'decision_id')::uuid);
       if (select count(*) from private.accepted_identity_facts where owner_id='${unverified.id}' and second_reviewer='${governor.id}')<>1 then raise exception 'independent high-risk approval missing';end if;
+      -- Retention changes the files, not the accepted review. These fixtures
+      -- never write actual objects; native state transitions still enforce
+      -- their terminal-state and verification-invalidation rules.
+      update private.evidence_artifacts set retain_until=statement_timestamp()-interval '1 second' where owner_id='${owner.id}' and purpose in('id_front','selfie');
+      proof:=api.claim_evidence_cleanup(100);
+      if (select count(*) from private.evidence_artifacts where owner_id='${owner.id}' and state='cleanup_required')<>2 then raise exception 'retention fixture did not retire both accepted files';end if;
+      ${claims(owner)}
+      if api.get_my_frontend_identity_state()->>'identity_reviewed_at' is null or api.get_my_verification_case()->>'verified'<>'true' then raise exception 'retention revoked accepted identity presentation';end if;
+      perform api.mark_evidence_deleted((a.value->>'artifact_id')::uuid,(a.value->>'claim_token')::uuid) from jsonb_array_elements(proof) a(value);
+      if api.get_my_frontend_identity_state()->>'identity_reviewed_at' is null or api.get_my_verification_case()->>'verified'<>'true' then raise exception 'confirmed retention deletion revoked accepted identity presentation';end if;
+      insert into restored_owner_identity_probe values('retired_dashboard',api.get_my_dashboard()),('retired_identity',api.get_my_frontend_identity_state());
+      update private.accepted_identity_facts set revoked_at=clock_timestamp() where owner_id='${owner.id}' and revoked_at is null;
+      if api.get_my_frontend_identity_state()->>'identity_reviewed_at' is not null or api.get_my_verification_case()->>'verified'<>'false' then raise exception 'revoked identity remained accepted';end if;
     end $fixture$;
     select value from restored_owner_form_probe;
     select 'ALLOWANCE:'||value::text from restored_allowance_probe;
@@ -638,6 +652,23 @@ try {
     dashboardVerificationSteps(ownerSnapshot).filter((r) => r.status === "approved").length,
     2
   );
+  const retiredSnapshot = await readFoundationOwnerDashboard(
+    {
+      rpc: async (name) => ({
+        data:
+          name === "get_my_dashboard"
+            ? ownerIdentity.retired_dashboard
+            : ownerIdentity.retired_identity,
+        error: null,
+      }),
+    },
+    owner.id
+  );
+  assert.equal(retiredSnapshot.verification.verified, true);
+  assert.equal(
+    dashboardVerificationSteps(retiredSnapshot).filter((r) => r.status === "approved").length,
+    4
+  );
   const restored = parseRestoredOwnerPost(
     JSON.parse(outcome.split("\n").find((line) => line.startsWith("{")))
   );
@@ -653,6 +684,7 @@ try {
     "actual native evidence metadata contract used by private authorization",
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",
     "accepted ID remains a completed step before location; rejected retake receipts do not resurrect; high-risk approval still requires another real staff actor",
+    "retention retires accepted evidence without losing owner verification; explicitly revoked identity remains unverified",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",
