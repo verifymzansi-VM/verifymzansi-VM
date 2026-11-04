@@ -5,6 +5,31 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Report submission transport, 5 November 2026
+
+`20261104222400_restored_report_workflow.sql` is applied for submission. The
+selected report dialog sends its existing fields. The trusted command validates
+the represented post kind under its lock, keeps the selected reason separately
+from the native category, and stores the complete validated description. The
+previous adapter's reason prefix and truncation are removed. Native publication,
+self-report, active-reporter and duplicate-report checks remain authoritative.
+Old records keep an unknown frontend reason; nothing is guessed or backfilled.
+
+The route keeps origin/CSRF, CAPTCHA, blocking rate limits, optional verified
+reporter identity and the keyed anonymous fingerprint. Unexpected caller
+authority or unsupported fields are refused. It validates the actual native
+acknowledgement and does not replay a submission after an uncertain response.
+Duplicate reports now have a clear response. This update does not complete the
+staff report/enforcement screens; their native integration remains outstanding.
+
+The native fixture verifies target-kind mismatch, self-report refusal, the exact
+2000-character description and reason, duplicate refusal and service-only
+execution. Native/source HTTP tests verify the real route delegation, anonymous
+versus unavailable Auth, CAPTCHA/CSRF/rate-limit fences and malformed replies.
+Types, lint and dead-code checks passed. Hosted SQL verified execute audiences,
+RLS, no browser insert grant and no seeded reports. No real report, notification
+or external message was submitted during these checks.
+
 ## Preserved audit history, 5 November 2026
 
 `20261104221219_restored_staff_audit_page.sql` is applied. The selected search

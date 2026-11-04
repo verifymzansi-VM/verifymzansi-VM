@@ -11,7 +11,7 @@ const config = z.strictObject({
     .array(z.enum(["admin", "moderator", "governance_controller", "member", "buyer"]))
     .max(5),
 });
-export const frontendFeatureFlagSchema = config
+const frontendFeatureFlagSchema = config
   .extend({
     id: z.uuid(),
     description: z.string().max(500),
@@ -24,7 +24,6 @@ const flagsResponse = z.strictObject({
   account_id: z.uuid(),
   flags: z.array(frontendFeatureFlagSchema).max(1),
 });
-export type FrontendFeatureFlag = z.infer<typeof frontendFeatureFlagSchema>;
 export function parseFrontendFlagAcknowledgement(
   body: unknown,
   key: string,
@@ -55,7 +54,7 @@ export async function readFrontendFeatureConfig(api: FoundationServiceApi) {
     .max(1)
     .parse(response.data);
 }
-export const featureFlagInput = z
+const featureFlagInput = z
   .strictObject({
     key: z.literal("kyc_evidence_desk"),
     expectedRevision: z.number().int().min(1).max(2147483646),

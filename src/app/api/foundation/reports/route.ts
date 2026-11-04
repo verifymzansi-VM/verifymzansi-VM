@@ -12,7 +12,7 @@ import { checkRateLimit, getClientIp, getClientRateLimitIdentity } from "@/lib/u
 import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("FoundationReport");
 const headers = { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" };
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   targetId: z.uuid(),
   targetType: z.enum(["listing", "business", "promotion"]),
   reason: z.enum([
@@ -32,7 +32,7 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const blocked = enforceMutationRequest(request, log);
   if (blocked) return blocked;
-  const input = bodySchema.safeParse(await parseJsonRequest(request, { maxBytes: 8192 }));
+  const input = bodySchema.safeParse(await parseJsonRequest(request, { maxBytes: 12288 }));
   if (!input.success)
     return NextResponse.json(
       { error: "Choose a report reason and describe the issue" },
@@ -40,14 +40,22 @@ export async function POST(request: NextRequest) {
     );
   const captcha = await verifyPublicTurnstile(request, input.data.turnstileToken, log);
   if (captcha) return captcha;
-  const context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
+  let context: ReturnType<typeof createFoundationRouteContext>;
+  try {
+    context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
+  } catch {
+    return NextResponse.json(
+      { error: "Reporting is temporarily unavailable" },
+      { status: 503, headers }
+    );
+  }
   try {
     const limit = await checkRateLimit({
       key: getClientRateLimitIdentity(request).key,
       action: "reports:create",
       degradedMode: "block",
     });
-    if (limit.limited)
+    if (limit.degraded || limit.limited)
       return context.respond(
         NextResponse.json(
           { error: "Report protection unavailable or too many reports" },
@@ -62,16 +70,11 @@ export async function POST(request: NextRequest) {
     }
     const secret = process.env.IP_HASH_SECRET;
     if (!secret || secret.length < 32) throw new Error();
-    const category = ["scam", "prohibited_item", "impersonation", "harassment"].includes(
-      input.data.reason
-    )
-      ? input.data.reason
-      : "misleading_info";
-    const description = `[${input.data.reason}] ${input.data.description}`.slice(0, 2000);
-    const result = await createFoundationServiceApi().rpc("submit_report", {
+    const result = await createFoundationServiceApi().rpc("submit_frontend_report", {
       p_post_id: input.data.targetId,
-      p_category: category,
-      p_description: description,
+      p_kind: input.data.targetType,
+      p_reason: input.data.reason,
+      p_description: input.data.description,
       p_reporter_ip_hmac: createHmac("sha256", secret)
         .update(`report/v1:${getClientIp(request) || "unknown"}`)
         .digest("base64url"),
@@ -82,15 +85,31 @@ export async function POST(request: NextRequest) {
         NextResponse.json(
           {
             error:
-              "This post could not be reported. Check that it is still public and does not belong to you.",
+              result.error.code === "PT409"
+                ? "You have already reported this post. Staff will review it."
+                : "This post could not be reported. Check that it is still public and does not belong to you.",
           },
-          { status: result.error.code === "42501" ? 403 : 400, headers }
+          {
+            status:
+              result.error.code === "42501"
+                ? 403
+                : result.error.code === "PT409"
+                  ? 409
+                  : result.error.code === "22023"
+                    ? 400
+                    : 503,
+            headers,
+          }
         )
       );
+    z.strictObject({ id: z.uuid(), status: z.literal("open") }).parse(result.data);
     return context.respond(NextResponse.json({ success: true }, { headers }));
   } catch {
     return context.respond(
-      NextResponse.json({ error: "Your report could not be submitted" }, { status: 503, headers })
+      NextResponse.json(
+        { error: "Your report could not be confirmed. Please try again shortly." },
+        { status: 503, headers }
+      )
     );
   }
 }

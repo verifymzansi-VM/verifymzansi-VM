@@ -260,6 +260,7 @@ try {
     "database/foundation/updates/20261104214932_restored_governance_decisions.sql",
     "database/foundation/updates/20261104220316_restored_runtime_controls.sql",
     "database/foundation/updates/20261104221219_restored_staff_audit_page.sql",
+    "database/foundation/updates/20261104222400_restored_report_workflow.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -407,6 +408,12 @@ try {
       if c->>'my_claims'<>'1' or c->'items'->0->'review'->>'id'<>answer->>'id' or c->'items'->0->'claim'->>'nonce'<>lease->>'claim_nonce' then raise exception 'claimed moderation context drift';end if;
       insert into restored_staff_queue_probe values(c);
       perform api.moderate_post((answer->>'id')::uuid,(answer->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
+      begin perform api.submit_frontend_report((answer->>'id')::uuid,'business','fake_listing','Synthetic wrong-kind report',repeat('x',43),'${unverified.id}');raise exception 'wrong-kind report submitted';exception when invalid_parameter_value then null;end;
+      begin perform api.submit_frontend_report((answer->>'id')::uuid,'listing','fake_listing','Synthetic self report',repeat('x',43),'${owner.id}');raise exception 'owner reported own post';exception when invalid_parameter_value then null;end;
+      c:=api.submit_frontend_report((answer->>'id')::uuid,'listing','fake_listing',repeat('a',2000),repeat('x',43),'${unverified.id}');
+      if not exists(select 1 from private.reports r where r.id=(c->>'id')::uuid and r.description=repeat('a',2000) and r.frontend_reason='fake_listing' and r.category='misleading_info') then raise exception 'report description or selected reason lost';end if;
+      begin perform api.submit_frontend_report((answer->>'id')::uuid,'listing','fake_listing',repeat('a',2000),repeat('x',43),'${unverified.id}');raise exception 'duplicate open report submitted';exception when sqlstate 'PT409' then null;end;
+      if has_function_privilege('anon','api.submit_frontend_report(uuid,text,text,text,text,uuid)','execute') or has_function_privilege('authenticated','api.submit_frontend_report(uuid,text,text,text,text,uuid)','execute') or not has_function_privilege('service_role','api.submit_frontend_report(uuid,text,text,text,text,uuid)','execute') then raise exception 'report submission audience widened';end if;
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       ${claims(owner)}
       input:=jsonb_set(input,'{request_id}',to_jsonb('${editRequest}'::text))||jsonb_build_object('target_id',answer->>'id','expected_revision',rev);
@@ -840,6 +847,7 @@ try {
     "preserved governance queue/detail DTOs, represented independent approval, rejection without restriction, authored withdrawal and exact audit-bound acknowledgement retries",
     "admin-only revision-fenced display controls, retry audit deduplication, supported-key enforcement and actual governance metrics",
     "preserved audit pagination, literal action/type/actor/target/reason filters, South African date boundaries and private projection isolation",
+    "report target-kind validation, complete 2000-character descriptions, exact selected reason, self-report and duplicate-report refusal with service-only execution",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

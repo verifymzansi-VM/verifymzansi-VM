@@ -147,6 +147,17 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      submit_frontend_report: {
+        Args: {
+          p_post_id: string;
+          p_kind: string;
+          p_reason: string;
+          p_description: string;
+          p_reporter_ip_hmac: string;
+          p_reporter_id?: string;
+        };
+        Returns: Json;
+      };
       read_frontend_feature_config: { Args: Record<PropertyKey, never>; Returns: Json };
       complete_frontend_media_upload: {
         Args: {

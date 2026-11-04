@@ -4,6 +4,50 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "submit_frontend_report",
+      "updates": ["updates/20261104222400_restored_report_workflow.sql"],
+      "arguments": [
+        {
+          "name": "p_post_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_description",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reporter_ip_hmac",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reporter_id",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server after CAPTCHA, origin/CSRF, blocking rate limit and verified optional reporter. Represented immutable post kind and current native publication checks; complete description and selected reason retained without prefixes/truncation. No browser write authority."
+    },
+    {
       "name": "get_frontend_staff_audit_page",
       "updates": ["updates/20261104221219_restored_staff_audit_page.sql"],
       "arguments": [
