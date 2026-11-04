@@ -1,7 +1,7 @@
 import "server-only";
 
 import { FoundationInboxError } from "@/lib/foundation/owner-inbox";
-import type { FoundationRefusal } from "./owner-route";
+import type { FoundationRefusal } from "@/lib/foundation/owner-route";
 
 const refusals: Record<FoundationInboxError["reason"], [number, string]> = {
   invalid: [400, "Check the details and try again"],

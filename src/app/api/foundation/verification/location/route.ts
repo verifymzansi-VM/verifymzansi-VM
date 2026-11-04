@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { z } from "zod";
-import { handleFoundationOwnerRoute } from "../../_lib/owner-route";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("FoundationLocation");
 export function POST(request: NextRequest) {

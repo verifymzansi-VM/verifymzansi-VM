@@ -60,7 +60,7 @@ import {
   slotLimitReason,
 } from "@/app/api/_lib/posting-entitlements";
 import { requirePostingMutationSession } from "@/app/api/_lib/posting-mutation-session";
-import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
 import {
   confirmMediaUploads,
   MediaUploadConfirmationError,

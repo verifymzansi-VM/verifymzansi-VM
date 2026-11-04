@@ -7,7 +7,7 @@ import {
   type FoundationAccountProfile,
 } from "@/lib/foundation/account-profile";
 import { createLogger } from "@/lib/utils/logger";
-import { handleFoundationOwnerRoute, type FoundationRefusal } from "../../_lib/owner-route";
+import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 
 const log = createLogger("FoundationProfile");
 const refusals: Record<FoundationProfileError["reason"], [number, string]> = {

@@ -4,7 +4,7 @@ import {
   FoundationAccountContextError,
 } from "@/lib/foundation/account-context";
 import { readFoundationOwnerDashboard } from "@/lib/foundation/owner-dashboard";
-import { handleFoundationOwnerRoute } from "../_lib/owner-route";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createLogger } from "@/lib/utils/logger";
 const log = createLogger("OwnerDashboard");
 export function GET(request: NextRequest) {

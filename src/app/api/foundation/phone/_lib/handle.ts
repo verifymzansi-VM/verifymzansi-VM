@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { handleFoundationOwnerRoute, foundationNoStore } from "../../_lib/owner-route";
+import { handleFoundationOwnerRoute, foundationNoStore } from "@/lib/foundation/owner-route";
 import {
   readFoundationAccountContext,
   FoundationAccountContextError,

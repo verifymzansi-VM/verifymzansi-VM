@@ -9,8 +9,8 @@ import {
   FoundationInboxError,
 } from "./owner-inbox";
 import { restoredEnquiry } from "./restored-inbox";
-import { handleFoundationOwnerRoute } from "@/app/api/foundation/_lib/owner-route";
-import { inboxRefusal } from "@/app/api/foundation/_lib/inbox-refusal";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { inboxRefusal } from "@/lib/foundation/inbox-refusal";
 import { createBooleanFlagSchema, createBoundedIntegerSchema } from "../validations/shared";
 import { createLogger } from "../utils/logger";
 const log = createLogger("RestoredInbox");

@@ -13,6 +13,7 @@ import { createFoundationPublicApi } from "./public-api";
 import { readFoundationBillingCatalogue } from "./billing-catalogue";
 import { selectFoundationBillingPlan } from "./billing-plan-selection";
 import { toFoundationPaymentStatusView } from "../payments/status-view";
+import { readPostingAllowance } from "./posting-allowance";
 import {
   cancelFoundationPendingPayment,
   FoundationBillingError,
@@ -93,7 +94,12 @@ export async function handleFoundationBillingRoute(
       const area = z
         .enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
         .parse(request.nextUrl.searchParams.get("area"));
-      const billing = await readFoundationBilling(caller.api);
+      const [billing, posting, publicCatalogue] = await Promise.all([
+        readFoundationBilling(caller.api),
+        readPostingAllowance(caller.api, area),
+        readFoundationBillingCatalogue(createFoundationPublicApi(connection)),
+      ]);
+      if (posting.account_id !== caller.accountId) throw new FoundationBillingError(503);
       const entries = billing.entitlements.filter(
         (entry) => entry.area === null || entry.area === areaMap[area]
       );
@@ -101,6 +107,8 @@ export async function handleFoundationBillingRoute(
       const used = entries.reduce((sum, entry) => sum + entry.used, 0);
       return context.respond(
         NextResponse.json({
+          posting,
+          catalogue: publicCatalogue,
           capacity,
           activeUsage: used,
           used,

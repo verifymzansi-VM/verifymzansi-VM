@@ -11,7 +11,7 @@ import {
   foundationNoStore,
   handleFoundationOwnerRoute,
   type FoundationRefusal,
-} from "./owner-route";
+} from "@/lib/foundation/owner-route";
 
 const log = createLogger("FoundationOrganisations");
 const refusals: Record<FoundationOrganisationError["reason"], [number, string]> = {

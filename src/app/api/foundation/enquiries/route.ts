@@ -14,8 +14,8 @@ import { verifyPublicTurnstile } from "@/lib/utils/public-mutation-route";
 import { createLogger } from "@/lib/utils/logger";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
-import { foundationNoStore, handleFoundationOwnerRoute } from "../_lib/owner-route";
-import { inboxPageQuery, inboxRefusal } from "../_lib/inbox-refusal";
+import { foundationNoStore, handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { inboxPageQuery, inboxRefusal } from "@/lib/foundation/inbox-refusal";
 
 const log = createLogger("FoundationEnquiries");
 const unavailable = () =>

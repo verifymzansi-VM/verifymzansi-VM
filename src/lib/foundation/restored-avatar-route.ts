@@ -10,7 +10,7 @@ import { enforceMutationRequest } from "../utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
 import { createLogger } from "../utils/logger";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "../utils/request-body";
-import { foundationNoStore } from "@/app/api/foundation/_lib/owner-route";
+import { foundationNoStore } from "@/lib/foundation/owner-route";
 
 const log = createLogger("RestoredAvatar");
 export async function handleRestoredAvatarUpload(request: NextRequest) {

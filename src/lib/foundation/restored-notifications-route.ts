@@ -7,8 +7,8 @@ import {
   FoundationInboxError,
 } from "./owner-inbox";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
-import { handleFoundationOwnerRoute } from "@/app/api/foundation/_lib/owner-route";
-import { inboxRefusal } from "@/app/api/foundation/_lib/inbox-refusal";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { inboxRefusal } from "@/lib/foundation/inbox-refusal";
 import { createBooleanFlagSchema, createBoundedIntegerSchema } from "../validations/shared";
 import { createLogger } from "../utils/logger";
 const log = createLogger("RestoredNotifications");
@@ -31,7 +31,7 @@ const query = z.object({
   unread: createBooleanFlagSchema(false),
   before: z.iso.datetime({ offset: true }).optional(),
 });
-export function presentedNotification(n: z.infer<typeof row>) {
+function presentedNotification(n: z.infer<typeof row>) {
   const content = {
     enquiry_received: [
       "New enquiry",

@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { readFoundationInboxCounts } from "@/lib/foundation/owner-inbox";
 import { createLogger } from "@/lib/utils/logger";
-import { handleFoundationOwnerRoute } from "../_lib/owner-route";
-import { inboxRefusal } from "../_lib/inbox-refusal";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { inboxRefusal } from "@/lib/foundation/inbox-refusal";
 
 const log = createLogger("FoundationInbox");
 

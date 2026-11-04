@@ -1,7 +1,7 @@
 import "server-only";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { handleFoundationOwnerRoute } from "@/app/api/foundation/_lib/owner-route";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
 import {
   readFoundationOwnerDashboard,
@@ -45,12 +45,12 @@ const uploadRows = z
     })
   )
   .max(2);
-export async function readFrontendVerificationUploads(api: FoundationAuthenticatedApi) {
+async function readFrontendVerificationUploads(api: FoundationAuthenticatedApi) {
   const result = await api.rpc("get_my_frontend_verification_uploads", {}, { get: false });
   if (result.error) throw new Error("Verification uploads unavailable");
   return uploadRows.parse(result.data);
 }
-export function presentedVerification(
+function presentedVerification(
   value: FoundationOwnerDashboard,
   uploads: z.infer<typeof uploadRows> = []
 ) {

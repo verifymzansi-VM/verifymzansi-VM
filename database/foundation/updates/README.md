@@ -7,6 +7,18 @@ establish that a hosted project has received it.
 
 ## Owner post controls, 4 November 2026
 
+`20261104110442_restored_posting_allowance.sql` is applied. The selected posting
+gate now reads actual self-only native capacity, active use, media limits and
+trial eligibility without querying retired profile/entitlement tables. Eligible
+trial choices remain hints; only the existing native command grants a trial
+after verified identity and atomic claim checks. An active shared or trial
+allowance does not advertise another free grant. There is no native launch
+campaign quota, so its availability text reports one trial per verified identity
+without inventing remaining spaces. Retail cards use unambiguous current
+catalogue prices and features. Auth changes and cross-account replies invalidate
+the form read; unavailable reads show the existing failure state. The native
+fixture verifies before/after grant DTOs and exact read audiences.
+
 `20261104101932_restored_owner_post_actions.sql` is applied. Delete, resubmit,
 deactivate, sold and reactivate commands bind the represented revision, kind and
 program to a live owner and an action receipt. A lost deletion reply can be

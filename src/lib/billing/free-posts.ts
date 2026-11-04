@@ -5,7 +5,7 @@ export type IntroTrialOffer = {
   eligible: boolean;
   sevenDayAvailable: boolean;
   thirtyDayAvailable: boolean;
-  remaining: number;
+  remaining: number | null;
   launchEnabled: boolean;
   /** Configured trial lengths (admin setting); 7 / 30 when not reported. */
   shortDays?: number;
@@ -82,6 +82,7 @@ export function releaseRejectedDeletedFreePost(
 }
 export function trialAvailabilityMessage(offer: IntroTrialOffer): string {
   const long = offer.longDays ?? 30;
+  if (offer.remaining === null) return `${long}-day trial available once per verified identity.`;
   if (!offer.launchEnabled) return `The ${long}-day launch offer is currently paused.`;
   if (offer.remaining === 0) return `${long}-day free spaces are currently fully allocated.`;
   if (offer.remaining <= 10) return `Only ${offer.remaining} free ${long}-day spaces remaining.`;

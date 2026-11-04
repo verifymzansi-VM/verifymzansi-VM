@@ -12,6 +12,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { getDataBackend } from "@/lib/data-backend";
+import { fetchPostingAllowance } from "@/lib/foundation/posting-allowance-client";
+import { restoredPostingPlanInfo, restoredPostingPlans } from "@/lib/foundation/posting-allowance";
 import { createLogger } from "@/lib/utils/logger";
 import { isPostingLimitBypassEnabled } from "../../lib/utils/posting-limit-bypass";
 import {
@@ -101,8 +104,9 @@ async function fetchAllowance(area: MarketplaceArea): Promise<AllowanceResponse 
 }
 
 interface PlanInfo {
+  plans?: PlanDefinition[];
   offer?: IntroTrialOffer;
-  tier: PlanTier | "free";
+  tier: PlanTier | "free" | "active";
   isTrial: boolean;
   trialDaysLeft: number;
   freePostAvailable: boolean;
@@ -148,7 +152,7 @@ function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean
   return [
     { text: "1 active posting slot, reusable when an item sells", enabled: true },
     { text: `${f.maxPhotos} photos and ${f.maxVideos ?? 1} video per post`, enabled: true },
-    { text: "Optional Urgent label add-on", enabled: f.boostAllowed },
+    { text: "Optional Urgent label add-on", enabled: f.urgentAllowed },
     { text: "No automatic renewal", enabled: true },
   ];
 }
@@ -331,9 +335,25 @@ export function PlanGate({
     }
 
     let cancelled = false;
+    let readGeneration = 0;
 
     async function checkEntitlements() {
+      const generation = ++readGeneration;
       try {
+        if (getDataBackend() === "foundation") {
+          const facts = await fetchPostingAllowance(area);
+          if (cancelled || generation !== readGeneration) return;
+          if (!facts.profile_exists) {
+            setError("no_profile");
+            return;
+          }
+          setError(null);
+          setPlanInfo({
+            ...restoredPostingPlanInfo(facts),
+            plans: restoredPostingPlans(facts.catalogue, area),
+          });
+          return;
+        }
         const supabase = createClient();
         const {
           data: { user },
@@ -440,10 +460,15 @@ export function PlanGate({
               ? FREE_POST_CONFIG.videoAllowed
               : maxVideos > 0,
         });
-      } catch {
-        setError("failed");
+      } catch (error) {
+        if (!cancelled && generation === readGeneration)
+          setError(
+            error instanceof Error && error.message === "not_authenticated"
+              ? "not_authenticated"
+              : "failed"
+          );
       } finally {
-        setLoading(false);
+        if (!cancelled && generation === readGeneration) setLoading(false);
       }
     }
 
@@ -459,8 +484,25 @@ export function PlanGate({
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    let authAccount: string | null | undefined;
+    const authChanges =
+      getDataBackend() === "foundation"
+        ? createClient().auth.onAuthStateChange((_event, session) => {
+            const next = session?.user.id ?? null;
+            if (authAccount === next) return;
+            authAccount = next;
+            ++readGeneration;
+            queueMicrotask(() => {
+              if (!cancelled) {
+                setLoading(true);
+                void checkEntitlements();
+              }
+            });
+          }).data.subscription
+        : null;
     return () => {
       cancelled = true;
+      authChanges?.unsubscribe();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [area]);
@@ -579,7 +621,7 @@ export function PlanGate({
   }
 
   // Get plans for this area
-  const areaPlans = PLANS.filter((p) => p.area === area);
+  const areaPlans = planInfo.plans ?? PLANS.filter((p) => p.area === area);
 
   // ── No plan and trial expired → must subscribe ──
   if (planInfo.tier === "free" && !planInfo.isTrial) {
@@ -915,6 +957,12 @@ const ENTITLEMENT_CACHE_TTL = 30_000; // 30 s
 const _entitlementCache = new Map<string, { promise: Promise<PlanEntitlementInfo>; ts: number }>();
 
 function fetchSharedEntitlements(area: MarketplaceArea): Promise<PlanEntitlementInfo> {
+  if (getDataBackend() === "foundation")
+    return fetchPostingAllowance(area).then((facts) => ({
+      maxPhotos: facts.max_photos,
+      maxVideos: facts.max_videos,
+      videoAllowed: facts.max_videos > 0,
+    }));
   const now = Date.now();
   const cached = _entitlementCache.get(area);
   if (cached && now - cached.ts < ENTITLEMENT_CACHE_TTL) return cached.promise;
@@ -994,9 +1042,9 @@ function usePlanEntitlements(area: MarketplaceArea): PlanEntitlementInfo {
         });
         if (!cancelled) {
           setInfo({
-            maxPhotos: FREE_POST_CONFIG.maxPhotos,
-            maxVideos: FREE_POST_CONFIG.maxVideos,
-            videoAllowed: FREE_POST_CONFIG.videoAllowed,
+            maxPhotos: getDataBackend() === "foundation" ? 0 : FREE_POST_CONFIG.maxPhotos,
+            maxVideos: getDataBackend() === "foundation" ? 0 : FREE_POST_CONFIG.maxVideos,
+            videoAllowed: getDataBackend() === "foundation" ? false : FREE_POST_CONFIG.videoAllowed,
           });
         }
       });

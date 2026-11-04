@@ -8,7 +8,7 @@ import { storeListingPriceTerms } from "../domains/listings/price-terms";
 import { resolveRestoredLocality } from "./restored-locality";
 import reference from "../domains/taxonomy/reference.json";
 import { isTrustedPlatformMediaUrl } from "../utils/media-url";
-import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
 import { getBusinessVenuePhotoUrls } from "../business/venue-photos";
 
 const envelope = z.looseObject({
@@ -275,4 +275,3 @@ export function buildRestoredPostInput(
     },
   };
 }
-export type RestoredPostCommand = ReturnType<typeof buildRestoredPostInput>;

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { acknowledgeFoundationCostAlarm, FoundationCostError } from "@/lib/foundation/staff-costs";
 import { createLogger } from "@/lib/utils/logger";
-import { handleFoundationOwnerRoute } from "../../_lib/owner-route";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 const log = createLogger("FoundationStaffCosts");
 export function POST(request: NextRequest) {
   return handleFoundationOwnerRoute({

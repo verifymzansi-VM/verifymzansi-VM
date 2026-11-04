@@ -4,8 +4,8 @@ import {
   readFoundationNotifications,
 } from "@/lib/foundation/owner-inbox";
 import { createLogger } from "@/lib/utils/logger";
-import { handleFoundationOwnerRoute } from "../_lib/owner-route";
-import { inboxPageQuery, inboxRefusal } from "../_lib/inbox-refusal";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { inboxPageQuery, inboxRefusal } from "@/lib/foundation/inbox-refusal";
 
 const log = createLogger("FoundationNotifications");
 

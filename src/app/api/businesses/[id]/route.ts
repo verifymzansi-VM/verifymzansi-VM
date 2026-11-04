@@ -44,7 +44,7 @@ import {
   enforcePostingMediaLimits,
   getPostingEntitlementsOrResponse,
 } from "@/app/api/_lib/posting-entitlements";
-import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
 import { idRouteParamsSchema } from "@/app/api/_lib/route-params";
 import type { MarketplaceArea } from "@/types/enums";
 import {

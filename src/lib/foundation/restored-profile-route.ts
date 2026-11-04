@@ -9,7 +9,7 @@ import {
   FoundationProfileError,
 } from "./account-profile";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
-import { handleFoundationOwnerRoute } from "@/app/api/foundation/_lib/owner-route";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
 import { resolveRestoredLocality, LocalityInputError } from "./restored-locality";
 

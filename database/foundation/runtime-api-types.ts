@@ -9,6 +9,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
       get_my_dashboard: { Args: Record<PropertyKey, never>; Returns: Json };
+      get_my_frontend_posting_allowance: { Args: { p_area: string }; Returns: Json };
       execute_my_frontend_post_action: {
         Args: {
           p_request: string;

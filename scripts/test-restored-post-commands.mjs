@@ -9,6 +9,10 @@ import { nativeTotp } from "./lib/foundation-native-totp.mjs";
 import { buildRestoredPostInput } from "../src/lib/foundation/restored-post-input.ts";
 import { processIdentityNumber } from "../src/lib/domains/verification/identity-processing.ts";
 import {
+  postingAllowanceSchema,
+  restoredPostingPlanInfo,
+} from "../src/lib/foundation/posting-allowance.ts";
+import {
   parseRestoredOwnerPost,
   restoredOwnerPostRow,
 } from "../src/lib/foundation/restored-owner-posts.ts";
@@ -212,6 +216,7 @@ try {
     "database/foundation/updates/20261104101932_restored_owner_post_actions.sql",
     "database/foundation/updates/20261104105223_preserve_nonlive_edit_flow.sql",
     "database/foundation/updates/20261104105449_enforce_nonlive_review_budget.sql",
+    "database/foundation/updates/20261104110442_restored_posting_allowance.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -223,6 +228,7 @@ try {
     insert into private.posting_terms_current(version) values('${policy.version}');
     insert into private.staff_roles(user_id,role,granted_by) values('${reviewer.id}','moderator','${owner.id}');
     create temporary table restored_owner_form_probe(value jsonb);
+    create temporary table restored_allowance_probe(value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -243,6 +249,10 @@ try {
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;
     begin
       ${claims(owner)}
+      c:=api.get_my_frontend_posting_allowance('market');
+      if c->>'capacity'<>'0' or c->'trial_offer'->>'eligible'<>'true' or c->>'trial_used'<>'false' then raise exception 'initial trial allowance drift';end if;
+      insert into restored_allowance_probe values(c);
+      begin perform api.get_my_frontend_posting_allowance('project');raise exception 'unsupported program accepted';exception when invalid_parameter_value then null;end;
       perform api.save_my_legal_name((api.get_my_profile()->>'revision')::integer,'Fixture','Owner');
       c:=api.open_verification_case();
       i:=api.begin_evidence_upload((c->>'case_id')::uuid,'id_front');
@@ -282,6 +292,9 @@ try {
       begin perform api.stage_frontend_post_command('${owner.id}','${request}',repeat('e',64),input);raise exception 'changed request accepted';exception when sqlstate 'PT409' then null;end;
       answer:=api.consume_frontend_post_command('${request}');again:=api.consume_frontend_post_command('${request}');
       if answer<>again or answer->>'status'<>'pending_moderation' then raise exception 'owner command idempotence failed'; end if;
+      c:=api.get_my_frontend_posting_allowance('market');
+      if c->>'capacity'<>'1' or c->>'used'<>'1' or c->>'tier'<>'active' or c->>'trial_used'<>'true' or c->'trial_offer'->>'eligible'<>'false' then raise exception 'actual trial capacity drift';end if;
+      insert into restored_allowance_probe values(c);
       if not internal.media_object_in_use((logo->>'object_id')::uuid) or not internal.media_object_in_use((poster->>'object_id')::uuid) then raise exception 'supplemental media omitted from retention'; end if;
       if (select payload from private.frontend_post_commands where request_id='${request}') is not null then raise exception 'redundant command payload retained'; end if;
       ${claims(reviewer)}
@@ -400,6 +413,7 @@ try {
         or has_function_privilege('authenticated','api.stage_frontend_post_command(uuid,uuid,text,jsonb)','execute')
         or has_function_privilege('anon','api.stage_frontend_post_command(uuid,uuid,text,jsonb)','execute')
         or has_table_privilege('authenticated','private.post_presentations','select') then raise exception 'form command audience widened'; end if;
+      if has_function_privilege('anon','api.get_my_frontend_posting_allowance(text)','execute') or has_function_privilege('service_role','api.get_my_frontend_posting_allowance(text)','execute') then raise exception 'posting allowance audience widened';end if;
       c:=api.reserve_frontend_verification_upload(gen_random_uuid(),'id_front',repeat('a',64),'Fixture','Member');
       if not exists(select 1 from private.frontend_verification_uploads where artifact_id=(c->>'artifact_id')::uuid) then raise exception 'transport receipt missing'; end if;
       delete from private.evidence_artifacts where id=(c->>'artifact_id')::uuid;
@@ -409,10 +423,19 @@ try {
       if (select unlinked_at from private.media_objects where id=(poster->>'object_id')::uuid) is null then raise exception 'presentation media grace period missing'; end if;
     end $fixture$;
     select value from restored_owner_form_probe;
+    select 'ALLOWANCE:'||value::text from restored_allowance_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
   assert.ok(outcome.includes("NATIVE_POST_COMMANDS_PASS"));
+  const allowances = outcome
+    .split("\n")
+    .filter((line) => line.startsWith("ALLOWANCE:"))
+    .map((line) => postingAllowanceSchema.parse(JSON.parse(line.slice(10))));
+  assert.equal(allowances.length, 2);
+  assert.equal(restoredPostingPlanInfo(allowances[0]).freePostAvailable, true);
+  assert.equal(restoredPostingPlanInfo(allowances[1]).freePostAvailable, false);
+  assert.equal(restoredPostingPlanInfo(allowances[1]).currentCount, 1);
   const restored = parseRestoredOwnerPost(
     JSON.parse(outcome.split("\n").find((line) => line.startsWith("{")))
   );
@@ -423,6 +446,7 @@ try {
   assert.equal(sql("select to_regclass('private.frontend_post_commands') is null;"), "t");
   report.checks.push(
     "listing/business/event form commands",
+    "self-only native posting gate, trial claim and current capacity DTOs",
     "create/submit/trial once",
     "owned ready logo and poster retained",
     "native independent moderation",

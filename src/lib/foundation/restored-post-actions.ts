@@ -1,10 +1,7 @@
 import "server-only";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import {
-  handleFoundationOwnerRoute,
-  type FoundationRefusal,
-} from "@/app/api/foundation/_lib/owner-route";
+import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
 const log = createLogger("OwnerPostActions");
 const common = {

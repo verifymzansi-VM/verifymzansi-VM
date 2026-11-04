@@ -5,7 +5,7 @@ import {
   legacyAccessFromRecord,
 } from "@/lib/forms/customer-access";
 import { businessSchema } from "@/lib/validations/business-unified";
-import { buildBusinessMutationPayload } from "@/app/api/businesses/_lib/build-business-mutation-payload";
+import { buildBusinessMutationPayload } from "@/lib/forms/business-mutation-payload";
 import {
   BUSINESS_CATEGORIES,
   businessCategoryMatches,

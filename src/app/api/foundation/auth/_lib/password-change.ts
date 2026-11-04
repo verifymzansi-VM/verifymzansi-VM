@@ -16,7 +16,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
-import { foundationNoStore } from "../../_lib/owner-route";
+import { foundationNoStore } from "@/lib/foundation/owner-route";
 
 const log = createLogger("FoundationPasswordChange");
 export async function handleFoundationPasswordChange(request: NextRequest) {

@@ -4,6 +4,15 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_my_frontend_posting_allowance",
+      "updates": ["updates/20261104110442_restored_posting_allowance.sql"],
+      "arguments": [{ "name": "p_area", "sqlType": "text", "optional": false }],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current live member; self-only current paid/shared/trial capacity and claim eligibility display facts. No grant, caller-selected owner, identity fingerprint, fabricated scarcity or metadata-based bypass"
+    },
+    {
       "name": "execute_my_frontend_post_action",
       "updates": ["updates/20261104101932_restored_owner_post_actions.sql"],
       "arguments": [
