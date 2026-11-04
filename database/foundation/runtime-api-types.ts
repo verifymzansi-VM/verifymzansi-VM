@@ -8,6 +8,19 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      execute_frontend_report_action: {
+        Args: {
+          p_report: string;
+          p_expected_revision: number;
+          p_claim_generation: string;
+          p_claim_nonce: string;
+          p_action: string;
+          p_reason: string;
+          p_duration_days?: number;
+          p_emergency?: boolean;
+        };
+        Returns: Json;
+      };
       get_frontend_report_queue: { Args: { p_area?: string }; Returns: Json };
       get_frontend_area_activity: { Args: { p_area?: string; p_limit?: number }; Returns: Json };
       get_frontend_staff_audit_page: { Args: { p_request?: Json }; Returns: Json };

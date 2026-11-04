@@ -1,7 +1,8 @@
 "use client";
 
 import { BrandShield as Shield } from "@/components/shared/brand-shield";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,8 @@ export function FlaggingQueueTable({
   const [duration, setDuration] = useState(7);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const selectionVersion = useRef(0),
+    pendingVersion = useRef<number | null>(null);
 
   // Filter and sort reports
   const filtered = reports
@@ -90,6 +93,8 @@ export function FlaggingQueueTable({
     .sort((a, b) => slaSortPriority(a.sla.state) - slaSortPriority(b.sla.state));
 
   function openAction(report: ReportItem) {
+    selectionVersion.current++;
+    setLoading(false);
     setSelectedReport(report);
     setAction("");
     setReason("");
@@ -99,6 +104,8 @@ export function FlaggingQueueTable({
   }
 
   function closeDialog() {
+    selectionVersion.current++;
+    setLoading(false);
     setSelectedReport(null);
     setAction("");
     setReason("");
@@ -106,6 +113,8 @@ export function FlaggingQueueTable({
   }
 
   async function submitAction() {
+    const version = selectionVersion.current;
+    if (pendingVersion.current === version) return;
     if (!selectedReport || !action) {
       setError("Please select an action.");
       return;
@@ -115,15 +124,17 @@ export function FlaggingQueueTable({
       return;
     }
 
+    pendingVersion.current = version;
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch("/api/admin/flagging/action", {
+      const res = await fetchStaffEvidence("/api/admin/flagging/action", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           reportId: selectedReport.id,
+          ...(selectedReport.foundation ? { foundation: selectedReport.foundation } : {}),
           action,
           reason: reason || undefined,
           durationDays: action === "suspend" ? duration : undefined,
@@ -136,13 +147,19 @@ export function FlaggingQueueTable({
         throw new Error(data.error || "The action could not be saved. Try again.");
       }
 
+      if (version !== selectionVersion.current) {
+        onActionComplete?.();
+        return;
+      }
       toast({ title: data.message ?? "Done." });
       closeDialog();
       onActionComplete?.();
     } catch (err) {
+      if (version !== selectionVersion.current) return;
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
-      setLoading(false);
+      if (pendingVersion.current === version) pendingVersion.current = null;
+      if (version === selectionVersion.current) setLoading(false);
     }
   }
 

@@ -4,6 +4,60 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "execute_frontend_report_action",
+      "updates": ["updates/20261104231625_restored_report_actions.sql"],
+      "arguments": [
+        {
+          "name": "p_report",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_claim_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_claim_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_duration_days",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_emergency",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent native report reviewer and recent TOTP; represented report revision/lease. Native dismissal and one exact bounded retry receipt; unsupported enforcement fails without mutation or successful acknowledgement."
+    },
+    {
       "name": "get_frontend_area_activity",
       "updates": ["updates/20261104224230_restored_staff_report_queue.sql"],
       "arguments": [

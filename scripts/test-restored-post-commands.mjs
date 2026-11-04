@@ -264,6 +264,7 @@ try {
     "database/foundation/updates/20261104221219_restored_staff_audit_page.sql",
     "database/foundation/updates/20261104222400_restored_report_workflow.sql",
     "database/foundation/updates/20261104224230_restored_staff_report_queue.sql",
+    "database/foundation/updates/20261104231625_restored_report_actions.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -433,8 +434,19 @@ try {
       insert into restored_report_probe values(c);
       ${claims(reviewer)}
       perform api.control_my_frontend_staff_claims('release');
+      begin perform api.execute_frontend_report_action(reported,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'dismiss','Synthetic dismissal');raise exception 'released report claim decided';exception when insufficient_privilege then null;end;
+      report_lease:=api.claim_queue_item('report',reported);
+      begin perform api.execute_frontend_report_action(reported,1,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'dismiss','Synthetic dismissal');raise exception 'stale report revision dismissed';exception when sqlstate 'PT409' then null;end;
+      c:=api.execute_frontend_report_action(reported,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'dismiss','Synthetic dismissal');
+      if c->>'status'<>'dismissed' or (select revision from private.reports where id=reported)<>3 then raise exception 'native dismissal outcome missing';end if;
+      c:=api.execute_frontend_report_action(reported,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'dismiss','Synthetic dismissal');
+      if c->>'reused'<>'true' or (select count(*) from private.frontend_report_action_receipts where report_id=reported)<>1 then raise exception 'dismissal acknowledgement repeated its write';end if;
+      begin perform api.execute_frontend_report_action(reported,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'dismiss','Changed dismissal reason');raise exception 'changed dismissal receipt acknowledged';exception when sqlstate 'PT409' then null;end;
+      c:=api.get_frontend_report_queue();
+      if c->>'open_total'<>'0' or c->'items'->0->>'status'<>'dismissed' or c->'items'->0->'foundation'<>'null'::jsonb then raise exception 'closed report still actionable';end if;
+      insert into restored_report_probe values(c);
       c:=api.get_frontend_area_activity('market',20);
-      if c->'today'->>'approve'<>'1' or c->'items'->0->>'action'<>'content_approve' then raise exception 'native program action counts drift';end if;
+      if c->'today'->>'approve'<>'1' or c->'today'->>'dismiss'<>'1' or not exists(select 1 from jsonb_array_elements(c->'items')e where e->>'action'='content_approve') then raise exception 'native program action counts drift';end if;
       insert into restored_activity_probe values(c);
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       ${claims(owner)}
@@ -819,20 +831,20 @@ try {
     20
   );
   assert.equal(activity.today.approve, 1);
-  assert.equal(activity.items[0].area, "MZANSI_MARKET");
-  assert.equal(activity.items[0].action, "content_approve");
+  assert.equal(activity.items.find((e) => e.action === "content_approve").area, "MZANSI_MARKET");
+  assert.equal(activity.today.dismiss, 1);
   const reportProbes = outcome
     .split("\n")
     .filter((line) => line.startsWith("REPORT_QUEUE:"))
     .map((line) => JSON.parse(line.slice(13)));
-  assert.equal(reportProbes.length, 3);
+  assert.equal(reportProbes.length, 4);
   for (const [index, probe] of reportProbes.entries()) {
     const actor = index === 2 ? governor.id : reviewer.id;
     const view = await readFrontendReportQueue(
       { rpc: async () => ({ data: probe, error: null }) },
       actor
     );
-    assert.equal(view.openTotal, 1);
+    assert.equal(view.openTotal, index === 3 ? 0 : 1);
     assert.equal(view.reports[0].category, "fake_listing");
     if (index === 1) {
       assert.equal(view.myClaims, 1);
@@ -911,6 +923,7 @@ try {
     "report target-kind validation, complete 2000-character descriptions, exact selected reason, self-report and duplicate-report refusal with service-only execution",
     "native report queue summaries, claimant-only descriptions/revision fences, independent foreign-claim secrecy and waiting counts that include claimed work",
     "minimal program activity, actual moderation/resolution counts and South African day scope without report bodies or evidence payloads",
+    "represented report dismissal, released/stale lease refusal, exact outcome acknowledgement retry and immutable reason binding",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

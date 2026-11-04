@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleRestoredReportAction } from "@/lib/foundation/restored-report-action-route";
 import { adminFlaggingActionSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
@@ -28,6 +30,7 @@ const SUCCESS_MESSAGES: Record<string, string> = {
  * Nobody acts on a report they filed or one about their own account.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") return handleRestoredReportAction(request as NextRequest);
   try {
     const guard = await enforceAdminMutationGuard({
       request,

@@ -5,6 +5,31 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Represented report dismissal, 5 November 2026
+
+`20261104231625_restored_report_actions.sql` is applied for dismissal. The
+selected action dialog passes the report revision and exact claim tuple. Native
+conflict, current reviewer/MFA and resolution checks still run in one
+transaction. A private receipt binds the actor, reason, claim and outcome; an
+exact retry acknowledges the original closure only within its original lease. A
+different reason, lost claim, stale revision or contradictory reply cannot
+become a successful dismissal. Receipts follow the parent report's retention,
+and have RLS with no browser/service table access.
+
+Immediate duplicate clicks send one request. A delayed response can refresh the
+queue but cannot close or overwrite a newer report dialog. Existing layout,
+controls and status filters are retained. Native warn/hide/suspend/ban effects
+remain outstanding and explicitly fail without a successful acknowledgement;
+this partial mutation integration must not be described as a completed report
+enforcement workflow or released as complete.
+
+Native GoTrue/TOTP fixtures verify closure, revision/claim refusal and one exact
+receipt under retry. HTTP and client regressions cover scope, CSRF, MFA, reply
+validation, double clicks and late responses. Focused native/source checks,
+types, lint and duplication checks passed. Hosted SQL verified API audiences,
+receipt RLS, no browser receipt access and no seed receipts. The provisioned
+runtime preflight passed; real-account browser acceptance remains separate.
+
 ## Report queues and program activity, 5 November 2026
 
 `20261104224230_restored_staff_report_queue.sql` is applied for reads. The
