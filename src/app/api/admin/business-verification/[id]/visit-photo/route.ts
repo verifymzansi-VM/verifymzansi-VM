@@ -5,6 +5,8 @@ import { discardStoredFile, fileRow, storeCaseFile } from "@/lib/business-verifi
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { uploadSeenPhoto } from "@/lib/foundation/seen-media-route";
 
 import { loadOpenSeenCase, readStaffUpload, requireStaffCase } from "../../_lib/staff-guard";
 
@@ -22,6 +24,7 @@ function coordinate(value: FormDataEntryValue | null, limit: number): number | n
  * the photo as evidence. Photos are private and deleted with the case files.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation") return uploadSeenPhoto(request, (await params).id);
   let storedKey: string | null = null;
   try {
     // The assigned verifier works their booked check without re-claiming it

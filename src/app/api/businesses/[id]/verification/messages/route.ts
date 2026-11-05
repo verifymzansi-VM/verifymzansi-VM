@@ -14,6 +14,8 @@ import { compareWithAdminCopy } from "@/lib/cipc/screen";
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { sendSeenOwnerMessage } from "@/lib/foundation/seen-media-route";
 
 import { requireVerificationOwner } from "../_lib/owner-guard";
 import { formFile, formText, readVerificationForm } from "../_lib/read-upload";
@@ -36,6 +38,7 @@ function officeCorrected(checks: unknown): boolean {
  * back to the review queue.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation") return sendSeenOwnerMessage(request, (await params).id);
   let storedKey: string | null = null;
   let discardPendingUpload: (() => Promise<void>) | null = null;
   try {

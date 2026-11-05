@@ -1,12 +1,18 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { CaseReview } from "@/components/admin/business-verification/case-review";
 import { QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { PageHeader } from "@/components/layout/page-header";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { getCaseDetail } from "@/lib/business-verification/admin-queries";
+import { getCaseDetail, type CaseDetail } from "@/lib/business-verification/admin-queries";
 import { getClaimsForItems } from "@/lib/services/queue-claims";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readStaffSeenCase } from "@/lib/foundation/business-seen";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import { suggestNextStep } from "@/lib/cipc/screen";
 
 export const metadata = {
   title: "Business verification case — Admin",
@@ -14,6 +20,45 @@ export const metadata = {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function readNativeDetail(id: string): Promise<CaseDetail> {
+  const { api } = await readFoundationServerSession();
+  let data;
+  try {
+    data = await readStaffSeenCase(api, id);
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", `/admin/business-verification/${id}`));
+    throw error;
+  }
+  if (!data) return null;
+  return {
+    ...data,
+    route: null,
+    registrationNumber: null,
+    docType: null,
+    business: { ...data.business, cipc_verified_at: null, cipc_registration_number: null },
+    owner: { ...data.owner, hasIdHash: false },
+    parsed: {
+      registeredName: null,
+      registrationNumber: null,
+      enterpriseStatus: null,
+      issuedOn: null,
+      registeredOfficeLines: [],
+      directors: [],
+    },
+    ownerMatchOnUpload: null,
+    adminCopy: null,
+    registeredOffice: null,
+    representative: null,
+    checks: null,
+    findings: [],
+    suggestion: suggestNextStep([], false),
+    evidence: null,
+    files: data.files.map((file) => ({ ...file, producer: null, revision_count: null })),
+    accessLog: [],
+  };
+}
 
 export default async function BusinessVerificationCasePage({
   params,
@@ -23,7 +68,10 @@ export default async function BusinessVerificationCasePage({
   const { user, role } = await requireStaff("queue:view");
   const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const detail = await getCaseDetail(id);
+  const detail =
+    getDataBackend() === "foundation"
+      ? await readNativeDetail(id.toLowerCase())
+      : await getCaseDetail(id);
   if (!detail) notFound();
 
   const name = detail.business?.business_name ?? "Business";

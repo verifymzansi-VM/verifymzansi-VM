@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const publicSeen = "get_public_frontend_business_seen";
+function validateRuntimeAudience(fn) {
+  assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
+  assert.equal(typeof fn.execute.authenticated, "boolean");
+  assert.equal(typeof fn.execute.service_role, "boolean");
+  assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
+  if (fn.name === publicSeen) {
+    assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
+    assert.equal(fn.volatility, "s");
+    assert.equal(fn.returns, "jsonb");
+    assert.deepEqual(fn.arguments, [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }]);
+  } else assert.equal(fn.execute.anon, false);
+}
+
 export function provisionedFoundationApiManifest(
   baseline,
   runtime = JSON.parse(
@@ -17,16 +31,12 @@ export function provisionedFoundationApiManifest(
     assert.match(fn.name, /^[a-z][a-z0-9_]{0,79}$/);
     assert.equal(names.has(fn.name), false, "Runtime extensions cannot replace baseline contracts");
     names.add(fn.name);
-    assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
-    assert.equal(fn.execute.anon, false);
-    assert.equal(typeof fn.execute.authenticated, "boolean");
-    assert.equal(typeof fn.execute.service_role, "boolean");
-    assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
+    validateRuntimeAudience(fn);
   }
   return { ...baseline, functions: [...baseline.functions, ...runtime.functions] };
 }
 
-/** Presence and anonymous-refusal probe for reviewed additive RPCs. This is
+/** Presence and audience probe for reviewed additive RPCs. This is
  * not proof of authenticated DTOs or exact EXECUTE grants; SQL tests and live
  * authenticated checks provide those separate pieces of evidence. No user
  * credentials, session tokens, messages or privileged writes are involved. */
@@ -51,17 +61,15 @@ export async function verifyFoundationRuntimeApi(
   let verified = 0;
   for (const fn of manifest.functions) {
     assert.match(fn.name, /^[a-z][a-z0-9_]{0,79}$/);
-    assert.equal(fn.execute.anon, false);
-    assert.equal(typeof fn.execute.authenticated, "boolean");
-    assert.equal(typeof fn.execute.service_role, "boolean");
-    assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
+    validateRuntimeAudience(fn);
     const args = {};
     for (const arg of fn.arguments) {
       assert.match(arg.name, /^p_[a-z][a-z0-9_]{0,79}$/);
       if (arg.optional) continue;
       if (arg.sqlType === "integer") args[arg.name] = 1;
       else if (arg.sqlType === "boolean") args[arg.name] = true;
-      else if (arg.sqlType === "text[]") args[arg.name] = [];
+      else if (["text[]", "uuid[]"].includes(arg.sqlType)) args[arg.name] = [];
+      else if (arg.sqlType === "timestamp with time zone") args[arg.name] = "2000-01-01T00:00:00Z";
       else if (arg.sqlType === "uuid") args[arg.name] = "00000000-0000-4000-8000-000000000001";
       else if (arg.sqlType === "text") args[arg.name] = "anonymous-runtime-presence-probe";
       else if (arg.sqlType === "jsonb") args[arg.name] = {};
@@ -82,7 +90,10 @@ export async function verifyFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    if (![401, 403].includes(response.status) || data?.code !== "42501")
+    if (fn.name === publicSeen) {
+      if (response.status !== 200 || !Array.isArray(data) || data.length !== 0)
+        throw new Error("Reviewed public Seen projection probe failed");
+    } else if (![401, 403].includes(response.status) || data?.code !== "42501")
       throw new Error("Runtime API presence/authentication check failed");
     verified++;
   }

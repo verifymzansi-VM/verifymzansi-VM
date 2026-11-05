@@ -1,4 +1,5 @@
 import type { FoundationPublicApi } from "./public-api";
+import { readPublicBusinessSeen } from "./business-seen";
 import {
   searchFoundationPresentedCards,
   foundationMediaUrl,
@@ -311,7 +312,15 @@ export async function readRestoredCollection(
   }
   if (organisation) total = cards.length;
   const selected = organisation ? cards.slice((page - 1) * limit, page * limit) : cards;
-  const mapped = selected.map((row) => restoredPublicRow(row, undefined, row.presentation));
+  const stickers = await readPublicBusinessSeen(
+    api,
+    selected.filter((row) => row.kind === "business").map((row) => row.id)
+  );
+  const mapped = selected.map((row) => {
+    const view = restoredPublicRow(row, undefined, row.presentation);
+    const sticker = stickers.get(row.id);
+    return sticker ? { ...view, ...sticker } : view;
+  });
   return {
     rows: mapped,
     total,

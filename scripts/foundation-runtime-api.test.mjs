@@ -107,6 +107,39 @@ test("an extension cannot silently widen the approved audience", async () => {
   );
   assert.equal(requested, false);
 });
+test("the reviewed public Seen projection accepts only the empty anonymous probe response", async () => {
+  const input = {
+    ...manifest,
+    functions: [
+      {
+        name: "get_public_frontend_business_seen",
+        arguments: [{ name: "p_post_ids", sqlType: "uuid[]", optional: false }],
+        returns: "jsonb",
+        volatility: "s",
+        execute: { anon: true, authenticated: true, service_role: false },
+      },
+    ],
+  };
+  assert.equal(
+    await verifyFoundationRuntimeApi(
+      connection,
+      async (_url, init) => {
+        assert.deepEqual(JSON.parse(init.body), { p_post_ids: [] });
+        return Response.json([]);
+      },
+      input
+    ),
+    1
+  );
+  await assert.rejects(
+    verifyFoundationRuntimeApi(
+      connection,
+      async () => Response.json([{ city: "unexpected" }]),
+      input
+    ),
+    /projection probe failed/
+  );
+});
 test("service-only extensions are probed anonymously with synthetic arguments and never a service key", async () => {
   let calls = 0;
   const input = {

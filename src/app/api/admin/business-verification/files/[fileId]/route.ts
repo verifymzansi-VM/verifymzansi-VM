@@ -12,6 +12,8 @@ import { downloadKycDocument } from "@/lib/services/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { uuidSchema } from "@/lib/validations/shared";
+import { getDataBackend } from "@/lib/data-backend";
+import { readSeenEvidenceFile } from "@/lib/foundation/seen-media-route";
 
 const log = createLogger("BusinessVerificationEvidence");
 const NO_STORE = "no-store, no-cache, must-revalidate";
@@ -20,6 +22,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  if (getDataBackend() === "foundation")
+    return readSeenEvidenceFile(request, (await params).fileId);
   try {
     const auth = await authorizeEvidenceRequest({ log, rateLimitAction: "admin:evidence:view" });
     if (!auth.success) return auth.response;

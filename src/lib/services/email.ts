@@ -32,6 +32,10 @@ function getResend(): Resend {
 const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
 
 const platformNotices = {
+  business_check_update: [
+    "Business verification update",
+    "There is an update on one of your business checks. Sign in to see the current details.",
+  ],
   account_warning: [
     "Account warning",
     "A staff warning has been recorded on your VerifyMzansi account.",
@@ -117,15 +121,18 @@ export async function sendPlatformNotice(
     "account_banned",
     "appeal_decided",
   ].includes(kind);
-  const path = moderation
-    ? "/appeals"
-    : kind.startsWith("payment_")
-      ? "/billing"
-      : kind === "enquiry_received"
-        ? "/dashboard/leads"
-        : kind === "identity_accepted" || kind === "verification_phone_confirmed"
-          ? "/verification"
-          : "/dashboard";
+  const path =
+    kind === "business_check_update"
+      ? "/dashboard/businesses"
+      : moderation
+        ? "/appeals"
+        : kind.startsWith("payment_")
+          ? "/billing"
+          : kind === "enquiry_received"
+            ? "/dashboard/leads"
+            : kind === "identity_accepted" || kind === "verification_phone_confirmed"
+              ? "/verification"
+              : "/dashboard";
   return sendEmail({
     to,
     subject,

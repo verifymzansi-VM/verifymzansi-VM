@@ -7,6 +7,9 @@ import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
 
 import { requireVerificationOwner } from "../_lib/owner-guard";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { settleStaffCommand, staffCommandRefusal } from "@/lib/foundation/staff-command";
 
 const log = createLogger("BusinessVerificationSeenRequest");
 
@@ -29,6 +32,39 @@ const schema = z
  * an in-person visit where we can. Staff schedule it and report back.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationOwnerRoute({
+      request,
+      log,
+      action: "business-verification:seen",
+      mutate: true,
+      successStatus: 201,
+      unavailableMessage: "The business check could not be confirmed. Reload before trying again.",
+      signInMessage: "Sign in to request a business check",
+      refusal: staffCommandRefusal,
+      command: async (api, body) => {
+        const id = z.uuid().parse((await params).id);
+        const input = schema.strict().parse(body);
+        return settleStaffCommand(
+          api.rpc(
+            "request_frontend_business_seen",
+            {
+              p_business: id,
+              p_method: input.method,
+              p_slots: input.slots,
+              p_consent: input.consentScreenshots,
+              ...(input.method === "visit" && input.address ? { p_address: input.address } : {}),
+            },
+            { get: false }
+          ),
+          z.strictObject({
+            caseId: z.uuid(),
+            status: z.literal("pending"),
+            reused: z.boolean().optional(),
+          })
+        );
+      },
+    });
   try {
     const ctx = await requireVerificationOwner(request, params, {
       log,

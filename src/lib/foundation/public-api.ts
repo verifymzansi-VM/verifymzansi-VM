@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parseFoundationConnection } from "./connection";
-import type { FoundationPublicDatabase } from "../../../database/foundation/api-role-types";
+import type { FoundationRuntimePublicDatabase as FoundationPublicDatabase } from "../../../database/foundation/runtime-api-types";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 
 export type FoundationPublicApi = Pick<SupabaseClient<FoundationPublicDatabase, "api">, "rpc">;

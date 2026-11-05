@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { MIN_SEEN_PHOTOS, PREMISES_TYPES, type SeenState } from "@/lib/business-verification/seen";
@@ -8,6 +8,10 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { settleStaffCommand, staffCommandRefusal } from "@/lib/foundation/staff-command";
+import { currentBusinessClaim } from "@/lib/foundation/business-seen";
 
 import { loadOpenSeenCase, requireStaffCase } from "../../_lib/staff-guard";
 
@@ -40,6 +44,49 @@ const schema = z.discriminatedUnion("action", [
  * took it records what they saw; a different staff member approves.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationOwnerRoute({
+      request: request instanceof NextRequest ? request : new NextRequest(request),
+      log,
+      action: "business-verification:visit",
+      mutate: true,
+      requireCaller: true,
+      maxBytes: 10000,
+      signInMessage: "Sign in to work on business checks",
+      unavailableMessage: "The check could not be updated. Reload the case.",
+      refusal: staffCommandRefusal,
+      command: async (api, payload, caller) => {
+        const id = z.uuid().parse((await params).id);
+        const input = schema.parse(payload);
+        const expected = z.iso.datetime({ offset: true }).parse(input.expectedUpdatedAt);
+        if (!caller) throw new Error("Verified reviewer required");
+        let rpc;
+        if (input.action === "schedule") {
+          const claim = await currentBusinessClaim(api, caller.accountId, id, false);
+          rpc = api.rpc(
+            "schedule_frontend_seen_check",
+            {
+              p_case: id,
+              p_expected: expected,
+              p_scheduled: input.scheduledFor,
+              ...(claim ? { p_generation: claim.generation, p_nonce: claim.nonce } : {}),
+            },
+            { get: false }
+          );
+        } else {
+          const { action: _action, expectedUpdatedAt: _expected, ...report } = input;
+          rpc = api.rpc(
+            "report_frontend_seen_check",
+            { p_case: id, p_expected: expected, p_report: report },
+            { get: false }
+          );
+        }
+        return settleStaffCommand(
+          rpc,
+          z.strictObject({ ok: z.literal(true), updatedAt: z.iso.datetime({ offset: true }) })
+        );
+      },
+    });
   try {
     // Claims are checked below: the assigned verifier keeps working their
     // booked check without re-claiming it.

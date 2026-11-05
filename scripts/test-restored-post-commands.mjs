@@ -278,6 +278,7 @@ try {
     "database/foundation/updates/20261105091725_restored_support_inbox.sql",
     "database/foundation/updates/20261105092547_restored_partner_workflows.sql",
     "database/foundation/updates/20261105093342_restored_staff_role_review.sql",
+    "database/foundation/updates/20261105094316_restored_business_seen_requests.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -321,7 +322,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions; role_change uuid;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions; role_change uuid; seen_case uuid; seen_time timestamptz; photo_digest text; visit jsonb;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -973,6 +974,70 @@ try {
       select revision into rev from private.posts where id=business_target;
       c:=api.execute_my_frontend_post_action(gen_random_uuid(),business_target,rev,'resubmit','business','business');
       if c->>'status'<>'pending_moderation' then raise exception 'cleared changed content did not require new moderation';end if;
+      ${claims(reviewer)}
+      lease:=api.claim_queue_item('post',business_target);
+      perform api.moderate_post(business_target,(c->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
+      ${claims(unverified)}
+      begin perform api.request_frontend_business_seen(business_target,'video',array['Friday morning'],false);raise exception 'seen case accepted without consent';exception when invalid_parameter_value then null;end;
+      c:=api.request_frontend_business_seen(business_target,'visit',array['Friday morning'],true,'Synthetic private street address');
+      seen_case:=(c->>'caseId')::uuid;
+      if api.request_frontend_business_seen(business_target,'visit',array['Friday morning'],true,'Synthetic private street address')->>'reused' is distinct from 'true'
+        or position('Synthetic private street address' in api.get_my_frontend_business_checks(business_target)::text)>0 then raise exception 'seen intake retry or private address drift';end if;
+      c:=api.reserve_frontend_seen_reply_file(business_target,seen_case,repeat('9',64),'application/pdf');
+      move_request:=(c->>'artifact_id')::uuid;
+      perform api.complete_evidence_upload(move_request,repeat('d',64),repeat('9',64),128);
+      ${claims(governor)}
+      c:=api.get_frontend_seen_case(seen_case);
+      if c->'seen'->>'address' is not null or jsonb_array_length(c->'files')<>0 then raise exception 'unclaimed seen evidence was disclosed';end if;
+      begin perform api.authorize_frontend_seen_file(move_request);raise exception 'unsent owner attachment was readable';exception when sqlstate 'PT404' then null;end;
+      ${claims(unverified)}
+      perform api.send_frontend_seen_message(seen_case,'',business_target,move_request);
+      perform api.send_frontend_seen_message(seen_case,'',business_target,move_request);
+      if (select count(*) from private.frontend_business_check_messages where attachment_file_id=move_request)<>1
+        then raise exception 'owner attachment retry duplicated a message';end if;
+      ${claims(owner)}
+      begin perform api.get_my_frontend_business_checks(business_target);raise exception 'foreign business checks disclosed';exception when sqlstate 'PT404' then null;end;
+      ${claims(reviewer)}
+      lease:=api.claim_frontend_staff_items('business_kyc',1)->'items'->0;
+      if lease->>'case_id' is distinct from seen_case::text then raise exception 'seen request did not reach the actual business claim bar';end if;
+      c:=api.get_frontend_seen_case(seen_case);
+      if c->'files'->0->>'id' is distinct from move_request::text or c->'seen'->>'address' is distinct from 'Synthetic private street address'
+        or api.authorize_frontend_seen_file(move_request,true) ? 'object_key' then raise exception 'claimed seen evidence projection changed';end if;
+      if api.frontend_seen_file_object(seen_case,move_request)->>'mime' is distinct from 'application/pdf' then raise exception 'service attachment receipt missing';end if;
+      select updated_at into seen_time from private.frontend_business_checks where id=seen_case;
+      c:=api.schedule_frontend_seen_check(seen_case,seen_time,clock_timestamp()+interval '1 day',lease->>'claim_generation',(lease->>'claim_nonce')::uuid);
+      seen_time:=(c->>'updatedAt')::timestamptz;
+      visit:='{"outcome":"seen","identityConfirmed":true,"signage":true,"productsSeen":"Synthetic stock observed","premisesType":"shop","city":"Johannesburg","notes":null}';
+      begin perform api.report_frontend_seen_check(seen_case,seen_time,visit);raise exception 'seen report accepted without three confirmed photos';exception when sqlstate 'PT409' then null;end;
+      for total in 1..3 loop
+        photo_digest:=repeat(total::text,64);
+        c:=api.reserve_frontend_seen_photo(seen_case,photo_digest,-26.15,28.03);
+        perform api.complete_evidence_upload((c->>'artifact_id')::uuid,repeat('b',64),photo_digest,128);
+        if api.get_frontend_seen_photo_receipt(seen_case,(c->>'artifact_id')::uuid)->>'by' is distinct from '${reviewer.id}' then raise exception 'verified photo receipt lost assigned verifier';end if;
+      end loop;
+      c:=api.report_frontend_seen_check(seen_case,seen_time,visit);seen_time:=(c->>'updatedAt')::timestamptz;
+      begin perform api.decide_frontend_seen_check(seen_case,seen_time,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);raise exception 'verifier approved own visit report';exception when insufficient_privilege then null;end;
+      ${claims(governor)}
+      lease:=api.claim_evidence_case(seen_case);
+      c:=api.decide_frontend_seen_check(seen_case,seen_time,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,'Independent synthetic verification review');
+      if c->>'status' is distinct from 'approved' then raise exception 'independent Seen approval failed';end if;
+      c:=api.get_public_frontend_business_seen(array[business_target]);
+      if c->0->>'business_id' is distinct from business_target::text or c->0->>'city' is distinct from 'Johannesburg'
+        or c->0 ?| array['address','latitude','longitude','artifact_id','object_key'] then
+        raise exception 'public Seen badge result: rows %, eligible %, reviewed %, city match %',jsonb_array_length(c),
+          exists(select 1 from private.public_eligible_posts where id=business_target),internal.frontend_business_identity_reviewed('${unverified.id}'),
+          (c->0->>'city') is not distinct from 'Johannesburg';
+      end if;
+      ${claims(unverified)}
+      if api.get_my_frontend_business_checks(business_target)->'stickers'->'seen'->>'method' is distinct from 'visit' then raise exception 'owner missed approved Seen badge';end if;
+      if not exists(select 1 from jsonb_array_elements(api.list_my_frontend_notices()->'items') n
+        where n->>'kind'='business_check_update' and n->>'post_id'=business_target::text) then raise exception 'business status change lost its owner notice';end if;
+      c:=api.claim_supported_notification_outbox(array['business_check_update'],1);
+      if c->0->>'kind' is distinct from 'business_check_update' or c->0->>'notice_reason' is not null then raise exception 'business mail receipt missing or disclosed private note';end if;
+      ${claims(administrator)}
+      select updated_at into seen_time from private.frontend_business_checks where id=seen_case;
+      perform api.revoke_frontend_seen_check(seen_case,seen_time,'Synthetic separate review reversed the badge','other');
+      if jsonb_array_length(api.get_public_frontend_business_seen(array[business_target]))<>0 then raise exception 'revoked seen badge remained public';end if;
       ${claims(owner)}
       select revision into rev from private.posts where id=target;
       c:=api.execute_my_frontend_post_action(gen_random_uuid(),target,rev,'deactivate','listing','market');

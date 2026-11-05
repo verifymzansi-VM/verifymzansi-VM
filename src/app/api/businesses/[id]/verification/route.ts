@@ -4,6 +4,11 @@ import { approvedOffice, isIdReviewed } from "@/lib/business-verification/servic
 import { createLogger } from "@/lib/utils/logger";
 
 import { requireVerificationOwner } from "./_lib/owner-guard";
+import { z } from "zod";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { staffCommandRefusal } from "@/lib/foundation/staff-command";
+import { readMyBusinessChecks } from "@/lib/foundation/business-seen";
 
 const log = createLogger("BusinessVerificationState");
 
@@ -13,6 +18,17 @@ const log = createLogger("BusinessVerificationState");
  * the message thread, and other verified profiles this one can join.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationOwnerRoute({
+      request,
+      log,
+      action: "business-verification:read",
+      mutate: false,
+      unavailableMessage: "Could not load verification status",
+      signInMessage: "Sign in to view your business verification",
+      refusal: staffCommandRefusal,
+      command: async (api) => readMyBusinessChecks(api, z.uuid().parse((await params).id)),
+    });
   try {
     const ctx = await requireVerificationOwner(request, params, { log, requireIdReviewed: false });
     if (ctx instanceof NextResponse) return ctx;

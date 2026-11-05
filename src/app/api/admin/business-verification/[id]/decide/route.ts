@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { decideBusinessVerification } from "@/lib/business-verification/decide";
@@ -9,6 +9,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import {
+  FoundationStaffCommandError,
+  settleStaffCommand,
+  staffCommandRefusal,
+} from "@/lib/foundation/staff-command";
+import { currentBusinessClaim } from "@/lib/foundation/business-seen";
 
 import { requireStaffCase } from "../../_lib/staff-guard";
 
@@ -39,6 +47,70 @@ const STEP_UP = new Set(["confirm_exception", "revoke"]);
 
 /** POST /api/admin/business-verification/[id]/decide — staff decide a case. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationOwnerRoute({
+      request: request instanceof NextRequest ? request : new NextRequest(request),
+      log,
+      action: "business-verification:decide",
+      mutate: true,
+      requireCaller: true,
+      signInMessage: "Sign in to decide business verification",
+      unavailableMessage: "The review could not be confirmed. Reload the case.",
+      refusal: staffCommandRefusal,
+      command: async (api, payload, caller) => {
+        if (!caller) throw new Error("Verified reviewer required");
+        const id = z.uuid().parse((await params).id);
+        const input = schema.strict().parse(payload);
+        const expected = z.iso.datetime({ offset: true }).parse(input.expectedUpdatedAt);
+        let rpc;
+        let status: "approved" | "rejected" | "withdrawn" | "info_requested";
+        if (input.action === "revoke") {
+          status = "withdrawn";
+          rpc = api.rpc(
+            "revoke_frontend_seen_check",
+            {
+              p_case: id,
+              p_expected: expected,
+              p_note: input.note ?? "",
+              p_reason: input.reasonCode ?? "other",
+            },
+            { get: false }
+          );
+        } else {
+          if (
+            input.action !== "approve" &&
+            input.action !== "reject" &&
+            input.action !== "request_info"
+          )
+            throw new FoundationStaffCommandError(422, "Choose an action for this visit check.");
+          const claim = await currentBusinessClaim(api, caller.accountId, id, true);
+          if (!claim) throw new Error("Current claim required");
+          status =
+            input.action === "approve"
+              ? "approved"
+              : input.action === "reject"
+                ? "rejected"
+                : "info_requested";
+          rpc = api.rpc(
+            "decide_frontend_seen_check",
+            {
+              p_case: id,
+              p_expected: expected,
+              p_action: input.action,
+              p_generation: claim.generation,
+              p_nonce: claim.nonce,
+              ...(input.note ? { p_note: input.note } : {}),
+              ...(input.reasonCode ? { p_reason: input.reasonCode } : {}),
+            },
+            { get: false }
+          );
+        }
+        return settleStaffCommand(
+          rpc,
+          z.strictObject({ caseId: z.literal(id), status: z.literal(status) })
+        );
+      },
+    });
   try {
     const guard = await requireStaffCase(request, params, { log, requireClaim: false });
     if (guard instanceof NextResponse) return guard;

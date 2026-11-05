@@ -4,6 +4,475 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "reserve_frontend_seen_reply_file",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_mime",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current business owner; attachment is bound to the open Seen case and stays private until sent."
+    },
+    {
+      "name": "get_my_frontend_business_checks",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current owner only; business case and current Seen sticker state, no staff findings or private evidence."
+    },
+    {
+      "name": "request_frontend_business_seen",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_method",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "text[]",
+          "optional": false
+        },
+        {
+          "name": "p_consent",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_address",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current verified business owner; explicit consent and represented business, with an exact retry acknowledgement."
+    },
+    {
+      "name": "withdraw_frontend_business_check",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current owner of the represented open check; closes the native evidence case and starts existing retention."
+    },
+    {
+      "name": "get_frontend_seen_queue",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_tab",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current queue staff; bounded visit queue summaries and counts with no visit address or photo content."
+    },
+    {
+      "name": "get_frontend_seen_case",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current staff; sensitive details require fresh TOTP and a current claim or assigned reviewer relationship, with an evidence access log."
+    },
+    {
+      "name": "reserve_frontend_seen_photo",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_lat",
+          "sqlType": "numeric",
+          "optional": true
+        },
+        {
+          "name": "p_lng",
+          "sqlType": "numeric",
+          "optional": true
+        },
+        {
+          "name": "p_mime",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current assigned verifier only; reserves a bounded distinct native encrypted evidence upload."
+    },
+    {
+      "name": "get_frontend_seen_photo_receipt",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current assigned verifier; only a matched clean stored photo receives a successful receipt."
+    },
+    {
+      "name": "schedule_frontend_seen_check",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_scheduled",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_generation",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_nonce",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current assignee or independent live case claimant; represented current case and booking time."
+    },
+    {
+      "name": "report_frontend_seen_check",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_report",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current assigned verifier; represented case, validated report and at least three distinct verified photographs for a successful visit."
+    },
+    {
+      "name": "decide_frontend_seen_check",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh staff decision and live claim; approval requires independent staff, current identity and retained photos. Close or return the represented case atomically."
+    },
+    {
+      "name": "revoke_frontend_seen_check",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current senior staff with fresh TOTP and represented approved check; removes its public sticker immediately."
+    },
+    {
+      "name": "send_frontend_seen_message",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_body",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current owner or current authorized staff for the represented open Seen check; closed private text thread."
+    },
+    {
+      "name": "authorize_frontend_seen_file",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_record",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh staff MFA and assigned, final reviewer or live claim relationship; no object key returned; access must be logged before download."
+    },
+    {
+      "name": "frontend_seen_file_object",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted service only after signed reviewer authorization; checks the native clean artifact receipt and retention."
+    },
+    {
+      "name": "get_public_frontend_business_seen",
+      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Bounded public eligible businesses; current approved Seen sticker, dates, method and canonical city only. No address or evidence."
+    },
+    {
       "name": "get_frontend_staff_role_review",
       "updates": ["updates/20261105093342_restored_staff_role_review.sql"],
       "arguments": [
@@ -153,7 +622,11 @@
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
-      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
       "authority": "Current support staff; actual open support totals and oldest timestamp with no ticket body."
     },
     {
@@ -822,7 +1295,8 @@
       "name": "claim_supported_notification_outbox",
       "updates": [
         "updates/20261105035413_native_report_warning_delivery.sql",
-        "updates/20261105053509_restored_member_appeals.sql"
+        "updates/20261105053509_restored_member_appeals.sql",
+        "updates/20261105094316_restored_business_seen_requests.sql"
       ],
       "arguments": [
         {

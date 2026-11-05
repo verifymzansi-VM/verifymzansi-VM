@@ -21,6 +21,7 @@ const row = foundationNotificationPageSchema.shape.items.element
       "account_suspended",
       "account_banned",
       "appeal_decided",
+      "business_check_update",
     ]),
     warning_reason: z.string().min(10).max(500).nullable().optional(),
     organisation_slug: z
@@ -44,6 +45,12 @@ const query = z.object({
 });
 function presentedNotification(n: z.infer<typeof row>) {
   const content = {
+    business_check_update: [
+      "Business verification update",
+      "Open your business verification to see the details.",
+      n.post_id ? `/dashboard/businesses/${n.post_id}/verification` : "/dashboard/businesses",
+      "info",
+    ],
     account_warning: ["Account warning", n.warning_reason ?? "", "/dashboard", "warning"],
     content_hidden: ["Content hidden", "A post was hidden after review.", "/appeals", "warning"],
     account_suspended: [

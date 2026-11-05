@@ -18,6 +18,9 @@ import { listQueue, QUEUE_TABS, type QueueTab } from "@/lib/business-verificatio
 import { countMyClaims, getClaimsForItems, getMyClaimedItems } from "@/lib/services/queue-claims";
 import { cn } from "@/lib/utils";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readStaffSeenQueue } from "@/lib/foundation/business-seen";
 
 export const metadata = {
   title: "Verify businesses — Admin",
@@ -48,14 +51,22 @@ export default async function AdminBusinessVerificationPage({
   let data: Awaited<ReturnType<typeof listQueue>>;
   let myClaims = 0;
   try {
-    const mine = await getMyClaimedItems(user.id, "business_kyc");
-    [data, myClaims] = await Promise.all([
-      listQueue(
-        tab,
-        mine.map((m) => m.id)
-      ),
-      countMyClaims(user.id, "business_kyc"),
-    ]);
+    if (getDataBackend() === "foundation") {
+      const { api } = await readFoundationServerSession();
+      [data, myClaims] = await Promise.all([
+        readStaffSeenQueue(api, user.id, tab),
+        countMyClaims(user.id, "business_kyc"),
+      ]);
+    } else {
+      const mine = await getMyClaimedItems(user.id, "business_kyc");
+      [data, myClaims] = await Promise.all([
+        listQueue(
+          tab,
+          mine.map((m) => m.id)
+        ),
+        countMyClaims(user.id, "business_kyc"),
+      ]);
+    }
   } catch (error) {
     createLogger("AdminBusinessVerificationPage").error("Queue read failed", {
       error: error instanceof Error ? error.message : "unknown",

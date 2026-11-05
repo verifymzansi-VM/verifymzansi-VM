@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { notifyOwner } from "@/lib/business-verification/decide";
@@ -6,6 +6,9 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { settleStaffCommand, staffCommandRefusal } from "@/lib/foundation/staff-command";
 
 import { requireStaffCase } from "../../_lib/staff-guard";
 
@@ -19,6 +22,30 @@ const schema = z.object({ body: z.string().trim().min(1).max(2000) });
  * case for the owner, use the "request info" decision instead.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationOwnerRoute({
+      request: request instanceof NextRequest ? request : new NextRequest(request),
+      log,
+      action: "business-verification:message",
+      mutate: true,
+      successStatus: 201,
+      maxBytes: 13500,
+      signInMessage: "Sign in to work on business checks",
+      unavailableMessage: "The message could not be confirmed. Reload the check.",
+      refusal: staffCommandRefusal,
+      command: async (api, input) =>
+        settleStaffCommand(
+          api.rpc(
+            "send_frontend_seen_message",
+            {
+              p_case: z.uuid().parse((await params).id),
+              p_body: schema.strict().parse(input).body,
+            },
+            { get: false }
+          ),
+          z.strictObject({ ok: z.literal(true) })
+        ),
+    });
   try {
     const guard = await requireStaffCase(request, params, {
       log,

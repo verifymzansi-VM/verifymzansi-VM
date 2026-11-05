@@ -696,3 +696,19 @@ assignment also requires authenticator proof after its grant, so an older
 session cannot acquire the new capabilities. Existing active assignments are
 preserved. The native fixture verifies these rules without changing any
 production account.
+
+`20261105094316_restored_business_seen_requests.sql` reconnects the existing
+Seen workflow. Only the current business owner with a reviewed ID may request a
+check, and screenshot consent is required. Staff work through the native
+evidence claim, with the assigned verifier recording the visit or call and a
+different reviewer deciding it. A successful report and approval require three
+distinct clean photos. Owners can reply with a private attachment; staff file
+access is authorized and logged before serving verified encrypted evidence. The
+public card reads only a current approved sticker, date, method and canonical
+city. Addresses, coordinates and evidence stay private.
+
+The native fixture covers owner and staff boundaries, real claim selection,
+synthetic photo and attachment receipts, independent approval, revocation and
+generic owner notices. It does not create production cases, upload real files or
+send real mail. CIPC registration review uses separate evidence and remains a
+separate integration.

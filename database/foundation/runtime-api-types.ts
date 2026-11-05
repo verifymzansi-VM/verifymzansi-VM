@@ -3,11 +3,87 @@
 import type { Json } from "./api.types";
 import type {
   FoundationAuthenticatedDatabase as Baseline,
+  FoundationPublicDatabase,
   FoundationServiceDatabase,
 } from "./api-role-types";
+export type FoundationRuntimePublicDatabase = {
+  api: Omit<FoundationPublicDatabase["api"], "Functions"> & {
+    Functions: FoundationPublicDatabase["api"]["Functions"] & {
+      get_public_frontend_business_seen: { Args: { p_post_ids: string[] }; Returns: Json };
+    };
+  };
+};
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_my_frontend_business_checks: { Args: { p_business: string }; Returns: Json };
+      get_public_frontend_business_seen: { Args: { p_post_ids: string[] }; Returns: Json };
+      request_frontend_business_seen: {
+        Args: {
+          p_business: string;
+          p_method: string;
+          p_slots: string[];
+          p_consent: boolean;
+          p_address?: string;
+        };
+        Returns: Json;
+      };
+      withdraw_frontend_business_check: {
+        Args: { p_business: string; p_case: string };
+        Returns: Json;
+      };
+      get_frontend_seen_queue: { Args: { p_tab: string }; Returns: Json };
+      get_frontend_seen_case: { Args: { p_case: string }; Returns: Json };
+      reserve_frontend_seen_photo: {
+        Args: { p_case: string; p_digest: string; p_lat?: number; p_lng?: number; p_mime?: string };
+        Returns: Json;
+      };
+      get_frontend_seen_photo_receipt: {
+        Args: { p_case: string; p_artifact: string };
+        Returns: Json;
+      };
+      schedule_frontend_seen_check: {
+        Args: {
+          p_case: string;
+          p_expected: string;
+          p_scheduled: string;
+          p_generation?: string;
+          p_nonce?: string;
+        };
+        Returns: Json;
+      };
+      report_frontend_seen_check: {
+        Args: { p_case: string; p_expected: string; p_report: Json };
+        Returns: Json;
+      };
+      decide_frontend_seen_check: {
+        Args: {
+          p_case: string;
+          p_expected: string;
+          p_action: string;
+          p_generation: string;
+          p_nonce: string;
+          p_note?: string;
+          p_reason?: string;
+        };
+        Returns: Json;
+      };
+      revoke_frontend_seen_check: {
+        Args: { p_case: string; p_expected: string; p_note: string; p_reason: string };
+        Returns: Json;
+      };
+      send_frontend_seen_message: {
+        Args: { p_case: string; p_body: string; p_business?: string; p_artifact?: string };
+        Returns: Json;
+      };
+      reserve_frontend_seen_reply_file: {
+        Args: { p_business: string; p_case: string; p_digest: string; p_mime: string };
+        Returns: Json;
+      };
+      authorize_frontend_seen_file: {
+        Args: { p_artifact: string; p_record?: boolean };
+        Returns: Json;
+      };
       get_frontend_staff_role_review: { Args: { p_page?: number; p_role?: string }; Returns: Json };
       propose_frontend_staff_role: {
         Args: { p_email: string; p_role: string; p_reason: string };
@@ -265,6 +341,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      frontend_seen_file_object: { Args: { p_case: string; p_artifact: string }; Returns: Json };
       submit_frontend_support: {
         Args: { p_name: string; p_email: string; p_category: string; p_message: string };
         Returns: Json;
