@@ -4,6 +4,15 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_my_frontend_posting_allowance_v2",
+      "updates": ["updates/20261105053049_restored_creation_allowance.sql"],
+      "arguments": [{ "name": "p_area", "sqlType": "text", "optional": false }],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current member only; actual slot and activation-period headroom per usable entitlement. Released activations still count toward the period limit."
+    },
+    {
       "name": "get_frontend_enforcement",
       "updates": ["updates/20261105052337_restored_enforcement_views.sql"],
       "arguments": [],

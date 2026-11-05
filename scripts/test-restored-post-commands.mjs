@@ -270,6 +270,7 @@ try {
     "database/foundation/updates/20261105043010_native_report_content_holds.sql",
     "database/foundation/updates/20261105050356_native_report_account_restrictions.sql",
     "database/foundation/updates/20261105052337_restored_enforcement_views.sql",
+    "database/foundation/updates/20261105053049_restored_creation_allowance.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -317,10 +318,10 @@ try {
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
-      c:=api.get_my_frontend_posting_allowance('market');
+      c:=api.get_my_frontend_posting_allowance_v2('market');
       if c->>'capacity'<>'0' or c->'trial_offer'->>'eligible'<>'true' or c->>'trial_used'<>'false' then raise exception 'initial trial allowance drift';end if;
       insert into restored_allowance_probe values(c);
-      begin perform api.get_my_frontend_posting_allowance('project');raise exception 'unsupported program accepted';exception when invalid_parameter_value then null;end;
+      begin perform api.get_my_frontend_posting_allowance_v2('project');raise exception 'unsupported program accepted';exception when invalid_parameter_value then null;end;
       perform api.save_my_legal_name((api.get_my_profile()->>'revision')::integer,'Fixture','Owner');
       c:=api.open_verification_case();
       i:=api.begin_evidence_upload((c->>'case_id')::uuid,'id_front');
@@ -381,7 +382,7 @@ try {
       begin perform api.stage_frontend_post_command('${owner.id}','${request}',repeat('e',64),input);raise exception 'changed request accepted';exception when sqlstate 'PT409' then null;end;
       answer:=api.consume_frontend_post_command('${request}');again:=api.consume_frontend_post_command('${request}');
       if answer<>again or answer->>'status'<>'pending_moderation' then raise exception 'owner command idempotence failed'; end if;
-      c:=api.get_my_frontend_posting_allowance('market');
+      c:=api.get_my_frontend_posting_allowance_v2('market');
       if c->>'capacity'<>'1' or c->>'used'<>'1' or c->>'tier'<>'active' or c->>'trial_used'<>'true' or c->'trial_offer'->>'eligible'<>'false' then raise exception 'actual trial capacity drift';end if;
       insert into restored_allowance_probe values(c);
       if not internal.media_object_in_use((logo->>'object_id')::uuid) or not internal.media_object_in_use((poster->>'object_id')::uuid) then raise exception 'supplemental media omitted from retention'; end if;
@@ -895,6 +896,21 @@ try {
       select revision into rev from private.posts where id=business_target;
       c:=api.execute_my_frontend_post_action(gen_random_uuid(),business_target,rev,'resubmit','business','business');
       if c->>'status'<>'pending_moderation' then raise exception 'cleared changed content did not require new moderation';end if;
+      ${claims(owner)}
+      select revision into rev from private.posts where id=target;
+      c:=api.execute_my_frontend_post_action(gen_random_uuid(),target,rev,'deactivate','listing','market');
+      perform api.execute_my_frontend_post_action(gen_random_uuid(),target,(c->>'revision')::integer,'delete','listing','market');
+      c:=api.get_my_frontend_posting_allowance_v2('market');
+      if c->>'capacity' is distinct from '1' or c->>'used' is distinct from '0'
+        or c->>'creation_remaining' is distinct from '1' or c->'trial_offer'->>'eligible' is distinct from 'false'
+        then raise exception 'released reusable slot reopened the trial grant or lost its capacity';end if;
+      -- The baseline trial has an uncapped reusable slot. Simulate a capped
+      -- entitlement in this rollback fixture, preserving actual activation history.
+      update private.entitlements set activations_per_period=1 where owner_id='${owner.id}' and source='intro_trial';
+      c:=api.get_my_frontend_posting_allowance_v2('market');
+      if c->>'capacity' is distinct from '1' or c->>'used' is distinct from '0' or c->>'creation_remaining' is distinct from '0'
+        then raise exception 'released activation reopened a capped entitlement';end if;
+      if (api.get_my_frontend_posting_allowance('market')) ? 'creation_remaining' then raise exception 'legacy allowance response changed';end if;
       ${claims(governor)}
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
@@ -1131,6 +1147,7 @@ try {
   report.checks.push(
     "listing/business/event form commands",
     "self-only native posting gate, trial claim and current capacity DTOs",
+    "a reusable released slot and a released activation with exhausted period budget have distinct creation allowances",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",

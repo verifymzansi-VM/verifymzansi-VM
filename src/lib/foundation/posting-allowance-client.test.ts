@@ -12,6 +12,7 @@ const body = (id = owner) => ({
     profile_exists: true,
     capacity: 0,
     used: 0,
+    creation_remaining: 0,
     max_photos: 10,
     max_videos: 1,
     tier: "free",

@@ -21,7 +21,7 @@ class PostRefusal extends Error {
   }
 }
 function fail(
-  error: { code?: string; details?: string | null },
+  error: { code?: string; details?: string | null; message?: string },
   collection: PublicCollection
 ): never {
   if (error.details === "posting_verification_required")
@@ -60,8 +60,11 @@ function fail(
   if (error.code === "PT409")
     throw new PostRefusal({
       status: 409,
-      error: "Your post or posting allowance changed. Reload your posts before retrying.",
-      reason: "post_changed",
+      error:
+        error.message === "all posting capacity is in use"
+          ? "Your available slots or allowance for new posts are used. Check your posting plan."
+          : "Your post or posting allowance changed. Reload your posts before retrying.",
+      reason: error.message === "all posting capacity is in use" ? "posting_limit" : "post_changed",
     });
   if (error.code === "PT429")
     throw new PostRefusal({

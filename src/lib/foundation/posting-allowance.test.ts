@@ -13,6 +13,7 @@ const facts = () =>
     profile_exists: true,
     capacity: 0,
     used: 0,
+    creation_remaining: 0,
     max_photos: 10,
     max_videos: 1,
     tier: "free",
@@ -46,6 +47,7 @@ it("uses an existing shared or trial allowance without offering another grant", 
     ...facts(),
     capacity: 4,
     used: 3,
+    creation_remaining: 1,
     tier: "active",
     max_photos: 8,
     max_videos: 0,
@@ -57,9 +59,22 @@ it("uses an existing shared or trial allowance without offering another grant", 
     isTrial: false,
     maxAllowed: 4,
     currentCount: 3,
+    creationRemaining: 1,
     maxPhotos: 8,
     videoAllowed: false,
   });
+});
+it("keeps real slot counts while a released activation still uses the period allowance", () => {
+  expect(
+    restoredPostingPlanInfo({
+      ...facts(),
+      capacity: 1,
+      used: 0,
+      creation_remaining: 0,
+      tier: "active",
+      trial_used: true,
+    })
+  ).toMatchObject({ maxAllowed: 1, currentCount: 0, creationRemaining: 0 });
 });
 it("keeps an expired and consumed trial closed", () => {
   const base = facts();

@@ -635,3 +635,11 @@ response does not include the reporter's identity. A member with a valid session
 can read their own restriction status and suspension end to reach the existing
 ban page or suspension notice. They still cannot use active member commands.
 Appeal and privacy commands require their own authorization.
+
+`20261105053049_restored_creation_allowance.sql` adds a versioned allowance
+read. It keeps the actual occupied and total slot counts and calculates how many
+new posts can be funded across individual entitlements. Releasing a post frees
+its slot; its activation still counts when the entitlement has a period limit.
+The existing once-per-identity trial grant and uncapped slot within that trial
+remain unchanged. The posting form distinguishes an exhausted activation
+allowance from occupied slots.

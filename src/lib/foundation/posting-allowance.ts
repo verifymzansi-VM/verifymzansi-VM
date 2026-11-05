@@ -4,26 +4,29 @@ import type { MarketplaceArea } from "@/types/enums";
 import { PLANS, type PlanDefinition } from "../constants/pricing";
 import type { FoundationBillingCatalogue } from "./billing-catalogue";
 const count = z.number().int().nonnegative();
-export const postingAllowanceSchema = z.strictObject({
-  account_id: z.uuid(),
-  profile_exists: z.boolean(),
-  capacity: count,
-  used: count,
-  max_photos: count.max(50),
-  max_videos: count.max(10),
-  tier: z.enum(["free", "active", "month", "quarter", "half_year", "enterprise"]),
-  trial_ends_at: z.iso.datetime({ offset: true }).nullable(),
-  trial_used: z.boolean(),
-  trial_offer: z.strictObject({
-    eligible: z.boolean(),
-    sevenDayAvailable: z.boolean(),
-    thirtyDayAvailable: z.boolean(),
-    remaining: z.null(),
-    launchEnabled: z.literal(true),
-    shortDays: z.literal(7),
-    longDays: z.literal(30),
-  }),
-});
+export const postingAllowanceSchema = z
+  .strictObject({
+    account_id: z.uuid(),
+    profile_exists: z.boolean(),
+    capacity: count,
+    used: count,
+    creation_remaining: count,
+    max_photos: count.max(50),
+    max_videos: count.max(10),
+    tier: z.enum(["free", "active", "month", "quarter", "half_year", "enterprise"]),
+    trial_ends_at: z.iso.datetime({ offset: true }).nullable(),
+    trial_used: z.boolean(),
+    trial_offer: z.strictObject({
+      eligible: z.boolean(),
+      sevenDayAvailable: z.boolean(),
+      thirtyDayAvailable: z.boolean(),
+      remaining: z.null(),
+      launchEnabled: z.literal(true),
+      shortDays: z.literal(7),
+      longDays: z.literal(30),
+    }),
+  })
+  .refine((value) => value.creation_remaining <= Math.max(0, value.capacity - value.used));
 export type PostingAllowance = z.infer<typeof postingAllowanceSchema>;
 const foundationPostingAreas = {
   MZANSI_MARKET: "market",
@@ -32,7 +35,7 @@ const foundationPostingAreas = {
 } as const;
 export async function readPostingAllowance(api: FoundationAuthenticatedApi, area: MarketplaceArea) {
   const result = await api.rpc(
-    "get_my_frontend_posting_allowance",
+    "get_my_frontend_posting_allowance_v2",
     { p_area: foundationPostingAreas[area] },
     { get: false }
   );
@@ -55,6 +58,7 @@ export function restoredPostingPlanInfo(facts: PostingAllowance, now = Date.now(
     postingLimitBypassEnabled: false,
     currentCount: facts.used,
     maxAllowed: facts.capacity || (offerAvailable ? 1 : 0),
+    creationRemaining: offerAvailable ? 1 : facts.creation_remaining,
     maxPhotos: facts.max_photos,
     maxVideos: facts.max_videos,
     videoAllowed: facts.max_videos > 0,

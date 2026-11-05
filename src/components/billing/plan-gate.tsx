@@ -115,6 +115,7 @@ interface PlanInfo {
   postingLimitBypassEnabled: boolean;
   currentCount: number;
   maxAllowed: number;
+  creationRemaining?: number;
   maxPhotos: number;
   maxVideos: number;
   videoAllowed: boolean;
@@ -657,7 +658,9 @@ export function PlanGate({
 
   // ── At listing limit → inline upgrade picker ──
   const isUnlimited = planInfo.maxAllowed === -1;
-  if (!isUnlimited && planInfo.currentCount >= planInfo.maxAllowed) {
+  const periodLimitReached =
+    planInfo.creationRemaining === 0 && planInfo.currentCount < planInfo.maxAllowed;
+  if (!isUnlimited && (planInfo.currentCount >= planInfo.maxAllowed || periodLimitReached)) {
     // Slots stack: any retail plan adds one more active posting slot.
     const upgradePlans = areaPlans;
 
@@ -671,20 +674,28 @@ export function PlanGate({
                 className="h-7 w-7 flex-shrink-0 text-brand-gold-700 dark:text-brand-gold-300"
               />
               <div>
-                <h2 className="font-display text-lg font-bold">All posting slots in use</h2>
+                <h2 className="font-display text-lg font-bold">
+                  {periodLimitReached ? "New post allowance used" : "All posting slots in use"}
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  You&apos;ve used{" "}
-                  <strong>
-                    {planInfo.currentCount}/{planInfo.maxAllowed}
-                  </strong>{" "}
-                  {AREA_ITEM_LABELS[area]} on your{" "}
-                  <Badge variant="outline" className="mx-1 text-xs">
-                    {planInfo.isTrial
-                      ? "Free post"
-                      : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "current")}
-                  </Badge>{" "}
-                  plan. Mark a sold item, deactivate a post from your dashboard, add another slot
-                  below, or move to multi-listing to keep more posts live at once.
+                  {periodLimitReached ? (
+                    "A slot is free, but your current plan has reached its limit for new posts. Choose another plan below or wait for the allowance to renew, if your plan allows it."
+                  ) : (
+                    <>
+                      You&apos;ve used{" "}
+                      <strong>
+                        {planInfo.currentCount}/{planInfo.maxAllowed}
+                      </strong>{" "}
+                      {AREA_ITEM_LABELS[area]} on your{" "}
+                      <Badge variant="outline" className="mx-1 text-xs">
+                        {planInfo.isTrial
+                          ? "Free post"
+                          : (PLAN_TIER_LABELS[planInfo.tier as PlanTier] ?? "current")}
+                      </Badge>{" "}
+                      plan. Mark a sold item, deactivate a post from your dashboard, add another
+                      slot below, or move to multi-listing to keep more posts live at once.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
