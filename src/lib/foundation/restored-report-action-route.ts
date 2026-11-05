@@ -60,6 +60,7 @@ export function handleRestoredReportAction(request: NextRequest) {
           action: z.literal(input.action),
           status: z.enum(["dismissed", "applied", "proposed", "emergency_applied"]),
           reused: z.boolean().optional(),
+          decision_id: z.uuid().optional(),
         })
       );
       if (
@@ -69,6 +70,15 @@ export function handleRestoredReportAction(request: NextRequest) {
         throw new FoundationStaffCommandError(
           503,
           "The report outcome could not be confirmed. Reload reports."
+        );
+      if (
+        ["suspend", "ban"].includes(input.action) &&
+        (!result.decision_id ||
+          result.status !== (input.emergency ? "emergency_applied" : "proposed"))
+      )
+        throw new FoundationStaffCommandError(
+          503,
+          "The restriction proposal could not be confirmed. Reload reports."
         );
       const messages = {
         dismissed: "Report dismissed.",
@@ -81,8 +91,8 @@ export function handleRestoredReportAction(request: NextRequest) {
         success: true,
         action: input.action,
         status: result.status,
-        decisionId: null,
-        reviewDecisionId: null,
+        decisionId: result.decision_id ?? null,
+        reviewDecisionId: result.status === "emergency_applied" ? result.decision_id : null,
         message: messages[result.status],
       };
     },

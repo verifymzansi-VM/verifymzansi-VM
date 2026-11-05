@@ -268,6 +268,7 @@ try {
     "database/foundation/updates/20261104231625_restored_report_actions.sql",
     "database/foundation/updates/20261105035413_native_report_warning_delivery.sql",
     "database/foundation/updates/20261105043010_native_report_content_holds.sql",
+    "database/foundation/updates/20261105050356_native_report_account_restrictions.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -311,6 +312,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -604,6 +606,7 @@ try {
       lease:=api.claim_queue_item('post',(answer->>'id')::uuid);
       perform api.moderate_post((answer->>'id')::uuid,(c->>'revision')::integer,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,null);
       if internal.approved_edit_count((answer->>'id')::uuid)<>2 or not internal.recent_price_change((answer->>'id')::uuid) then raise exception 'offline price-only policy drift';end if;
+      target:=(answer->>'id')::uuid;
       ${claims(unverified)}
       begin perform api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,1,'delete','listing','market');raise exception 'foreign owner action accepted';exception when insufficient_privilege then null;end;
       begin perform api.resolve_my_frontend_media(array[picture->>'object_key'],null);raise exception 'foreign upload key resolved';exception when invalid_parameter_value then null;end;
@@ -760,6 +763,82 @@ try {
       if c->>'total'<>'61' or jsonb_array_length(c->'items')<>11 then raise exception 'audit second page count drift';end if;
       insert into restored_audit_probe values('second',c);
       if has_table_privilege('authenticated','private.frontend_staff_audit_events','select') or has_table_privilege('service_role','private.frontend_staff_audit_events','select') then raise exception 'private audit view directly exposed';end if;
+      -- Use the original eligible listing and real, distinct staff sessions.
+      ${claims(unverified)}
+      c:=api.submit_frontend_report(target,'listing','harassment','Fixture report requiring independent suspension review',repeat('p',43),null);restriction_report:=(c->>'id')::uuid;
+      c:=api.submit_frontend_report(target,'listing','prohibited_item','Fixture report requiring emergency assessment',repeat('q',43),null);emergency_report:=(c->>'id')::uuid;
+      c:=api.submit_frontend_report(target,'listing','impersonation','Fixture report requiring identity bound ban review',repeat('r',43),null);ban_reports:=array[(c->>'id')::uuid];
+      ${claims(administrator)}
+      c:=api.submit_frontend_report(target,'listing','scam','Fixture staff report requiring independent ban review',repeat('s',43),'${administrator.id}');ban_reports:=array_append(ban_reports,(c->>'id')::uuid);
+      ${claims(reviewer)}
+      report_lease:=api.claim_queue_item('report',restriction_report);
+      begin perform api.execute_frontend_report_action_v2(restriction_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'suspend','Unauthorized emergency suspension',3,true);raise exception 'moderator applied emergency containment';exception when insufficient_privilege then null;end;
+      c:=api.execute_frontend_report_action_v2(restriction_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'suspend','A three day suspension rationale',3);
+      decision:=(c->>'decision_id')::uuid;
+      if c->>'status' is distinct from 'proposed' or decision is null or not exists(select 1 from private.public_eligible_posts where id=target) then raise exception 'ordinary proposal restricted a live account';end if;
+      c:=api.execute_frontend_report_action_v2(restriction_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'suspend','A three day suspension rationale',3);
+      if c->>'reused' is distinct from 'true' or (c->>'decision_id')::uuid is distinct from decision then raise exception 'ordinary proposal retry changed decision';end if;
+      select d.case_id into restriction_case from private.decisions d where d.id=decision;
+      ${claims(governor)}
+      begin perform api.claim_queue_item('report',restriction_report);raise exception 'report reclaimed while decision pending';exception when invalid_parameter_value then null;end;
+      c:=api.get_frontend_report_review_queue('market');
+      if not exists(select 1 from jsonb_array_elements(c->'items') j where j->>'id'=restriction_report::text and j->>'awaiting_decision'='true' and j->'foundation'='null'::jsonb) then raise exception 'pending report disclosed a claim or lost its queue state';end if;
+      c:=api.decide_frontend_governance(decision,restriction_case,1,1,'approve','Independent three day suspension');
+      select x.id into restriction from private.frontend_account_restrictions x where x.decision_id=decision and not x.emergency and x.ends_at=x.starts_at+interval '3 days';
+      if c->>'status' is distinct from 'approved' or restriction is null or exists(select 1 from private.public_eligible_posts where id=target) or (select status from private.posts where id=target)<>'live' then raise exception 'approved suspension had the wrong term or changed owner workflow state';end if;
+      begin perform api.lift_frontend_account_restriction(restriction,1,'Original approver cannot lift restriction');raise exception 'approver lifted own restriction';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      c:=api.lift_frontend_account_restriction(restriction,1,'Independent lift of timed restriction');
+      if c->>'status' is distinct from 'lifted' or not exists(select 1 from private.public_eligible_posts where id=target) then raise exception 'independent lift did not restore eligible listing';end if;
+      c:=api.lift_frontend_account_restriction(restriction,1,'Independent lift of timed restriction');
+      if c->>'reused' is distinct from 'true' then raise exception 'restriction lift retry was not stable';end if;
+      report_lease:=api.claim_queue_item('report',emergency_report);
+      c:=api.execute_frontend_report_action_v2(emergency_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'suspend','Emergency containment pending independent review',7,true);
+      decision:=(c->>'decision_id')::uuid;
+      if c->>'status' is distinct from 'emergency_applied' or exists(select 1 from private.public_eligible_posts where id=target)
+        or not exists(select 1 from private.frontend_account_restrictions x where x.decision_id=decision and x.emergency and x.ends_at=x.starts_at+interval '72 hours') then raise exception 'emergency must contain exactly 72 hours';end if;
+      select d.case_id into restriction_case from private.decisions d where d.id=decision;
+      ${claims(governor)}
+      perform api.decide_frontend_governance(decision,restriction_case,1,1,'reject','Independent rejection of emergency request');
+      if not exists(select 1 from private.public_eligible_posts where id=target) then raise exception 'emergency restriction survived rejection';end if;
+      report_lease:=api.claim_queue_item('report',emergency_report);
+      select revision into rev from private.reports where id=emergency_report;
+      c:=api.execute_frontend_report_action_v2(emergency_report,rev,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'ban','Emergency ban proposal permitted to expire',null,true);
+      decision:=(c->>'decision_id')::uuid;
+      update private.frontend_report_proposals set expires_at=statement_timestamp()-interval '1 second' where decision_id=decision;
+      update private.frontend_account_restrictions set starts_at=statement_timestamp()-interval '73 hours',ends_at=statement_timestamp()-interval '1 hour' where decision_id=decision and emergency;
+      select d.case_id into restriction_case from private.decisions d where d.id=decision;
+      ${claims(administrator)}
+      begin perform api.decide_frontend_governance(decision,restriction_case,1,1,'approve','Cannot approve an expired proposal');raise exception 'expired restriction proposal was approved';exception when sqlstate 'PT409' then null;end;
+      if not exists(select 1 from private.public_eligible_posts where id=target) then raise exception 'expired emergency still restricts the account';end if;
+      perform api.claim_queue_item('report',emergency_report);
+      ${claims(reviewer)}
+      foreach restriction_report in array ban_reports loop
+        report_lease:=api.claim_queue_item('report',restriction_report);
+        c:=api.execute_frontend_report_action_v2(restriction_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'ban','Independent review of permanent report ban');
+        ban_decisions:=array_append(ban_decisions,(c->>'decision_id')::uuid);
+      end loop;
+      ${claims(administrator)}
+      select d.case_id into restriction_case from private.decisions d where d.id=ban_decisions[2];
+      begin perform api.decide_frontend_governance(ban_decisions[2],restriction_case,1,1,'approve','Reporter cannot approve their own ban');raise exception 'reporter approved own report';exception when insufficient_privilege then null;end;
+      ${claims(governor)}
+      foreach decision in array ban_decisions loop
+        select d.case_id into restriction_case from private.decisions d where d.id=decision;
+        perform api.decide_frontend_governance(decision,restriction_case,1,1,'approve','Independent identity bound ban approval');
+      end loop;
+      if not exists(select 1 from private.banned_identities where decision_id=any(ban_decisions)) then raise exception 'approved ban lost its accepted identity binding';end if;
+      ${claims(administrator)}
+      select x.id into restriction from private.frontend_account_restrictions x where x.decision_id=ban_decisions[1] and not x.emergency;
+      perform api.lift_frontend_account_restriction(restriction,1,'Independent lift with a separate active ban');
+      if not exists(select 1 from private.banned_identities where decision_id=ban_decisions[2]) or exists(select 1 from private.current_account_access where id='${owner.id}') then raise exception 'lifting a ban removed a separate active ban';end if;
+      begin perform internal.record_identity_ban(ban_decisions[1],'${identity.fingerprint}','impersonation');raise exception 'lifted ban was re-recorded';exception when sqlstate 'PT409' then null;end;
+      delete from private.reports where id=ban_reports[2];
+      select x.id into restriction from private.frontend_account_restrictions x where x.decision_id=ban_decisions[2] and not x.emergency;
+      begin perform api.lift_frontend_account_restriction(restriction,1,'Reporter attempted a lift after report retention');raise exception 'report retention removed the reviewer conflict';exception when insufficient_privilege then null;end;
+      -- The remaining ban's reporter, proposer and approver are all staff, so
+      -- none may lift it; restore only this synthetic fixture for later tests.
+      update private.frontend_account_restrictions set version=version+1,lifted_at=clock_timestamp(),lift_reason='Fixture setup for subsequent coverage' where decision_id=ban_decisions[2];
+      delete from private.banned_identities where decision_id=ban_decisions[2];
       -- A later hide must never forget changes made under an earlier hold.
       ${claims(unverified)}
       c:=api.create_verification_phone_challenge('${unverified.id}','+27700000124',repeat('c',64));
@@ -1053,6 +1132,7 @@ try {
     "informational warning with one owner-only notice/reason and outbox event; exact retry, legacy reader/worker compatibility and fenced supported-kind delivery acknowledgement",
     "represented content hide, actual hidden owner state, owner/old publication refusal, independent release and multiple-hold restoration safety",
     "a later hold preserves owner changes made under an earlier hold; final release leaves changed content unpublished for explicit resubmission and review",
+    "native ordinary and emergency account restrictions, independent approval and lift, requeue on rejection and expiry, and concurrent identity ban fences",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

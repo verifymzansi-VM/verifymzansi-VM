@@ -603,3 +603,27 @@ denied browser table access. It is supplementary SQL evidence, not a complete
 hosted authentication/provider or recovery rehearsal. Live preflight and role
 checks also passed after application; the security advisor's existing
 leaked-password protection warning remained unchanged.
+
+## Native report suspensions and bans
+
+`20261105050356_native_report_account_restrictions.sql` extends the existing
+claimed report action and native governance decision commands. A moderator can
+propose a suspension of 1–30 days or a ban without restricting the account. An
+administrator or governor with fresh TOTP may apply 72 hours of emergency
+containment pending independent review. Rejection ends containment and requeues
+the report; expiration stops containment and prevents approval of the expired
+proposal. The restriction and report resolution are applied together on
+approval.
+
+The restriction affects account access and public eligibility without changing
+the post's workflow status or rewriting GoTrue credentials. A separate reviewer
+can lift a represented restriction; another active restriction still applies.
+Report retention does not remove the original reporter conflict. Lifting a ban
+preserves any other active identity ban, and replay cannot restore the lifted
+one. The approved native decision, not editable Auth metadata, is authoritative.
+
+The isolated native fixture exercises real local staff TOTP sessions, rejection,
+expiry, independent approval and lift, and an overlapping identity ban. It
+creates no production accounts, reports or restrictions. The update provides the
+backend controls; the preserved restriction, appeal and privacy screens need
+their own access and data adapters before the application is released.

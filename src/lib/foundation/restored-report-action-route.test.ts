@@ -124,3 +124,24 @@ it("requires and forwards the represented content revision before hiding", async
     { get: false }
   );
 });
+it("passes the suspension term and accepts only a decision-bound proposal", async () => {
+  const input = { ...body(), action: "suspend", durationDays: 3 };
+  const decisionId = "33333333-3333-4333-8333-333333333333";
+  rpc.mockResolvedValueOnce({
+    data: { report_id: reportId, action: "suspend", status: "proposed", decision_id: decisionId },
+    error: null,
+  });
+  const response = await handleRestoredReportAction(request(input));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ status: "proposed", decisionId });
+  expect(rpc).toHaveBeenLastCalledWith(
+    "execute_frontend_report_action_v2",
+    expect.objectContaining({ p_action: "suspend", p_duration_days: 3, p_emergency: false }),
+    { get: false }
+  );
+  rpc.mockResolvedValueOnce({
+    data: { report_id: reportId, action: "suspend", status: "proposed" },
+    error: null,
+  });
+  expect((await handleRestoredReportAction(request(input))).status).toBe(503);
+});

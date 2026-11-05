@@ -39,11 +39,20 @@ const row = z
       })
       .nullable(),
     foundation: nativeReportReviewSchema.nullable(),
+    awaiting_decision: z.literal(true).optional(),
   })
   .refine((v) =>
     v.foundation
       ? v.claim?.mine === true && v.status === "in_progress" && v.description !== null
       : v.description === null && !v.claim?.mine
+  )
+  .refine(
+    (r) =>
+      !r.awaiting_decision ||
+      (r.status === "in_progress" &&
+        r.claim === null &&
+        r.foundation === null &&
+        r.description === null)
   );
 export async function readFrontendReportQueue(
   api: FoundationAuthenticatedApi,
@@ -86,6 +95,7 @@ export async function readFrontendReportQueue(
       created_at: r.created_at,
       ...(r.description !== null ? { description: r.description } : {}),
       ...(r.foundation ? { foundation: r.foundation } : {}),
+      ...(r.awaiting_decision ? { awaitingDecision: true as const } : {}),
     };
   });
   return {

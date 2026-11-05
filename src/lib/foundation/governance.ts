@@ -23,7 +23,11 @@ const resultSchema = z
       .array(
         z.strictObject({
           decision_id: z.uuid(),
-          recommendation: z.string().min(1).max(500),
+          recommendation: z.string().min(1).max(2000),
+          report_id: z.uuid().nullable().optional(),
+          display_category: z.enum(["account_suspend", "account_ban"]).nullable().optional(),
+          proposal_expired: z.boolean().optional(),
+          reporter_conflict: z.boolean().optional(),
           events: z.array(event).max(4),
         })
       )
@@ -79,9 +83,11 @@ export async function readRestoredGovernance(
     const escalated = annotation.events.some((e) => e.action === "escalate");
     const status =
       d.status === "proposed"
-        ? escalated
-          ? "escalated"
-          : "pending_approval"
+        ? annotation.proposal_expired
+          ? "expired"
+          : escalated
+            ? "escalated"
+            : "pending_approval"
         : d.status === "withdrawn" && final?.action === "reject"
           ? "rejected"
           : d.status;
@@ -124,9 +130,9 @@ export async function readRestoredGovernance(
     );
     return {
       id: d.id,
-      case_id: d.case_id,
-      case_type: d.case_kind,
-      action_category: d.action,
+      case_id: annotation.report_id ?? d.case_id,
+      case_type: annotation.report_id ? "report" : d.case_kind,
+      action_category: annotation.display_category ?? d.action,
       status,
       recommender_id: d.proposed_by,
       approver_id: d.approved_by,
@@ -142,8 +148,11 @@ export async function readRestoredGovernance(
         caseVersion: d.current_case_version,
         proposalVersion: d.case_version,
       },
-      blockedReason:
-        d.subject_id === callerId ? "You cannot decide a case affecting your own account." : null,
+      blockedReason: annotation.reporter_conflict
+        ? "You submitted this report. Another reviewer must decide it."
+        : d.subject_id === callerId
+          ? "You cannot decide a case affecting your own account."
+          : null,
       timeline,
     };
   });

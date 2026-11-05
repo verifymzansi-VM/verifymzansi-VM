@@ -4,6 +4,23 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "lift_frontend_account_restriction",
+      "updates": ["updates/20261105050356_native_report_account_restrictions.sql"],
+      "arguments": [
+        { "name": "p_restriction", "sqlType": "uuid", "optional": false },
+        { "name": "p_expected_version", "sqlType": "integer", "optional": false },
+        { "name": "p_reason", "sqlType": "text", "optional": false }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent account-restoration reviewer and fresh TOTP; subject, proposer, approver and reporter conflicts are denied. Represented restriction version and bounded rationale. Any separate active restriction still applies."
+    },
+    {
       "name": "release_frontend_content_hold",
       "updates": ["updates/20261105043010_native_report_content_holds.sql"],
       "arguments": [
@@ -34,7 +51,10 @@
     },
     {
       "name": "execute_frontend_report_action_v2",
-      "updates": ["updates/20261105043010_native_report_content_holds.sql"],
+      "updates": [
+        "updates/20261105043010_native_report_content_holds.sql",
+        "updates/20261105050356_native_report_account_restrictions.sql"
+      ],
       "arguments": [
         {
           "name": "p_report",
@@ -89,11 +109,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Native reviewer/MFA and current independent exact report lease; hides require the separate content-hide capability and represented current target revision. Atomic closure, paused workflow, distribution hold and bounded retry receipt. Existing dismiss/warn commands are reused."
+      "authority": "Native reviewer with fresh TOTP and current exact report lease; hides require the separate content-hide capability and represented target revision. A suspension or ban requires independent approval. An authorized emergency reviewer may contain the account for up to 72 hours pending that decision."
     },
     {
       "name": "get_frontend_report_review_queue",
-      "updates": ["updates/20261105043010_native_report_content_holds.sql"],
+      "updates": [
+        "updates/20261105043010_native_report_content_holds.sql",
+        "updates/20261105050356_native_report_account_restrictions.sql"
+      ],
       "arguments": [
         {
           "name": "p_area",
@@ -108,7 +131,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current independent native queue reviewer; existing bounded summary/private review projection with the holder's represented target revision. Old queue contract remains unchanged."
+      "authority": "Current independent native queue reviewer; bounded summary and claim holder's represented target revision. A report awaiting decision contains no claim or private review body."
     },
     {
       "name": "list_my_frontend_notices",
@@ -454,11 +477,14 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current independent native governance reviewer and fresh TOTP; immutable represented proposal/case versions and evidence snapshot. Native approval effects remain atomic; identity approval requires its own held/recently inspected pair. Rejection closes only the proposal. Same-actor exact acknowledgement retries never repeat effects."
+      "authority": "Current independent native governance reviewer and fresh TOTP; immutable represented proposal and case versions. Identity approval requires its own held and recently inspected evidence pair. Report approval checks expiry and conflicts, and rejection ends any associated emergency containment."
     },
     {
       "name": "get_frontend_governance_page",
-      "updates": ["updates/20261104214932_restored_governance_decisions.sql"],
+      "updates": [
+        "updates/20261104214932_restored_governance_decisions.sql",
+        "updates/20261105050356_native_report_account_restrictions.sql"
+      ],
       "arguments": [
         {
           "name": "p_request",
@@ -473,7 +499,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current native decision reviewer and recent TOTP; existing bounded native decision projection with matching, bounded rationale/escalation audit facts. No proposal payload or evidence storage keys."
+      "authority": "Current native decision reviewer and recent TOTP; bounded decision projection includes the represented report category, rationale and conflict, alongside native audit facts. No proposal payload or evidence storage keys."
     },
     {
       "name": "get_frontend_staff_verification_queue",

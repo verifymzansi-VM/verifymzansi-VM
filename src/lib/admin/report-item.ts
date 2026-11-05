@@ -13,4 +13,5 @@ export interface ReportItem {
   reporter_user_id?: string | null;
   created_at: string;
   foundation?: NativeReportReview;
+  awaitingDecision?: true;
 }

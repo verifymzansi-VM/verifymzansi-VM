@@ -26,8 +26,17 @@ import { ClaimBadge, useQueueClaim } from "./queue-claims";
 import type { ReportItem } from "@/lib/admin/report-item";
 
 /** "Take action" for one report, disabled while someone else holds it. */
-function ReportActionButton({ reportId, onOpen }: { reportId: string; onOpen: () => void }) {
+function ReportActionButton({
+  reportId,
+  onOpen,
+  awaitingDecision,
+}: {
+  reportId: string;
+  onOpen: () => void;
+  awaitingDecision?: boolean;
+}) {
   const { blocked, blockedReason } = useQueueClaim("report", reportId);
+  const reason = awaitingDecision ? "Awaiting an independent decision" : blockedReason;
   return (
     <div className="flex flex-shrink-0 flex-col items-end gap-1">
       <ClaimBadge type="report" id={reportId} />
@@ -35,12 +44,12 @@ function ReportActionButton({ reportId, onOpen }: { reportId: string; onOpen: ()
         size="sm"
         variant="outline"
         onClick={onOpen}
-        disabled={blocked}
-        title={blockedReason ?? undefined}
+        disabled={blocked || awaitingDecision}
+        title={reason ?? undefined}
       >
         Take action
       </Button>
-      {blockedReason && <p className="text-[11px] text-muted-foreground">{blockedReason}</p>}
+      {reason && <p className="text-[11px] text-muted-foreground">{reason}</p>}
     </div>
   );
 }
@@ -233,7 +242,11 @@ export function FlaggingQueueTable({
                   </p>
                 </div>
                 {!readOnly && (
-                  <ReportActionButton reportId={report.id} onOpen={() => openAction(report)} />
+                  <ReportActionButton
+                    reportId={report.id}
+                    awaitingDecision={report.awaitingDecision}
+                    onOpen={() => openAction(report)}
+                  />
                 )}
               </div>
             </CardContent>

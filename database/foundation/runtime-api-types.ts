@@ -27,6 +27,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_hold: string; p_expected_version: number; p_reason: string };
         Returns: Json;
       };
+      lift_frontend_account_restriction: {
+        Args: { p_restriction: string; p_expected_version: number; p_reason: string };
+        Returns: Json;
+      };
       list_my_frontend_notices: {
         Args: { p_limit?: number; p_unread?: boolean; p_before?: string };
         Returns: Json;
