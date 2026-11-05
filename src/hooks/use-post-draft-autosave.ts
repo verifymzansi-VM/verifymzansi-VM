@@ -16,11 +16,16 @@ import {
 /*  Server sync helpers                                                */
 /* ------------------------------------------------------------------ */
 
-async function saveToServer<T>(flow: DraftFlow, step: number, data: T): Promise<void> {
+async function saveToServer<T>(
+  flow: DraftFlow,
+  owner: string,
+  step: number,
+  data: T
+): Promise<void> {
   try {
     await fetch("/api/drafts", {
       method: "PUT",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+      headers: withCsrfHeaders({ "Content-Type": "application/json", "X-Draft-Account": owner }),
       body: JSON.stringify({ flow: serverFlow(flow), step, data }),
     });
   } catch {
@@ -33,9 +38,13 @@ function serverFlow(flow: DraftFlow): DraftFlow {
   return flow === "tourism" ? "promotion" : flow;
 }
 
-async function loadFromServer<T>(flow: DraftFlow): Promise<DraftEnvelope<T> | null | undefined> {
+async function loadFromServer<T>(
+  flow: DraftFlow,
+  owner: string
+): Promise<DraftEnvelope<T> | null | undefined> {
   try {
     const res = await fetch(`/api/drafts?flow=${encodeURIComponent(serverFlow(flow))}`, {
+      headers: { "X-Draft-Account": owner },
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return undefined;
@@ -52,11 +61,11 @@ async function loadFromServer<T>(flow: DraftFlow): Promise<DraftEnvelope<T> | nu
   }
 }
 
-async function deleteFromServer(flow: DraftFlow): Promise<void> {
+async function deleteFromServer(flow: DraftFlow, owner: string): Promise<void> {
   try {
     await fetch(`/api/drafts?flow=${encodeURIComponent(serverFlow(flow))}`, {
       method: "DELETE",
-      headers: withCsrfHeaders(),
+      headers: withCsrfHeaders({ "X-Draft-Account": owner }),
     });
   } catch {
     // Best-effort.
@@ -94,7 +103,7 @@ export function usePostDraftAutosave<T>(
 
   const serverSync = useDebouncedCallback((step: number, data: T) => {
     if (!userId || !enabled || !restoreRef.current?.canSync) return;
-    void saveToServer<T>(flow, step, data);
+    void saveToServer<T>(flow, userId, step, data);
   }, 5_000);
 
   const saveAll = useCallback(
@@ -120,7 +129,7 @@ export function usePostDraftAutosave<T>(
       promise: Promise.resolve<DraftEnvelope<T> | null>(null),
     };
     restoreRef.current = entry;
-    entry.promise = loadFromServer<T>(flow).then((server) => {
+    entry.promise = loadFromServer<T>(flow, userId).then((server) => {
       if (restoreRef.current !== entry) return null;
       entry.ready = true;
       // If loading failed, retain local editing without overwriting an unknown
@@ -141,7 +150,7 @@ export function usePostDraftAutosave<T>(
     serverSync.cancel();
     restoreRef.current = null;
     clearDraft(flow, userId);
-    void deleteFromServer(flow);
+    void deleteFromServer(flow, userId);
   }, [userId, flow, save, serverSync]);
 
   /* Cancel pending saves on unmount */

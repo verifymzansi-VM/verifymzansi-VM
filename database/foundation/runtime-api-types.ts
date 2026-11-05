@@ -10,6 +10,7 @@ export type FoundationRuntimePublicDatabase = {
   api: Omit<FoundationPublicDatabase["api"], "Functions"> & {
     Functions: FoundationPublicDatabase["api"]["Functions"] & {
       get_public_frontend_business_seen: { Args: { p_post_ids: string[] }; Returns: Json };
+      get_public_frontend_business_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
       get_public_frontend_business_cipc: { Args: { p_post_ids: string[] }; Returns: Json };
     };
   };
@@ -18,6 +19,17 @@ export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
       get_frontend_affiliation_workspace: { Args: { p_slug?: string }; Returns: Json };
+      frontend_form_draft: {
+        Args: {
+          p_flow: string;
+          p_action: string;
+          p_step?: number;
+          p_data?: Json;
+          p_expected_account?: string;
+        };
+        Returns: Json;
+      };
+      get_public_frontend_business_affiliations: { Args: { p_post_ids: string[] }; Returns: Json };
       get_frontend_staff_organisation_directory: { Args: Record<never, never>; Returns: Json };
       get_frontend_staff_organisation_detail: { Args: { p_id: string }; Returns: Json };
       get_frontend_staff_payments: { Args: { p_page: number; p_status?: string }; Returns: Json };
@@ -446,6 +458,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      purge_frontend_form_drafts: { Args: { p_limit: number }; Returns: number };
       start_frontend_cipc_email: {
         Args: {
           p_owner: string;

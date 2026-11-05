@@ -115,11 +115,11 @@ independent HTTP session races. It never uses application database credentials.
 Docker absence is INCOMPLETE. The new full-state lane needs execution on Linux;
 its local non-execution is not PostgreSQL proof.
 
-`test:browser:isolated` snapshots the working tree into a detached checkout
+`test:browser:isolated` copies the working tree into an isolated build directory
 under `tmp/isolated-browser`, installs the frozen dependencies there, builds and
 runs critical Chromium flows with deterministic providers, and records bundle
 checks at the same 275/325 KB budgets as CI. Desktop and mobile Chrome execute
-the same selected suite. It retains the checkout and artifacts for review. Skips
+the same selected suite. It retains the snapshot and artifacts for review. Skips
 without a passing instance of the same scenario in another project produce
 UNAVAILABLE. KYC browser coverage exercises anonymous/callback boundaries and
 synthetic authenticated ID/selfie submission, private evidence access, queue

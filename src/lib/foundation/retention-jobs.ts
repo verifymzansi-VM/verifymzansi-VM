@@ -30,8 +30,12 @@ export async function runFoundationRetention(
   service: FoundationServiceApi = createFoundationServiceApi(),
   remove = deleteFromR2
 ) {
-  const swept = await service.rpc("run_retention", { p_limit: 100 });
+  const [swept, drafts] = await Promise.all([
+    service.rpc("run_retention", { p_limit: 100 }),
+    service.rpc("purge_frontend_form_drafts", { p_limit: 500 }),
+  ]);
   if (swept.error) throw new Error("Retention transactions could not be completed");
+  if (drafts.error) throw new Error("Expired form drafts could not be removed");
   const [media, evidence] = await Promise.all([
     service.rpc("claim_media_cleanup", { p_limit: 4 }),
     service.rpc("claim_evidence_cleanup", { p_limit: 4 }),

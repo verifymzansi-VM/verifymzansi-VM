@@ -38,6 +38,7 @@ it("deletes only journal-claimed keys and display variants, then uses token-fenc
   expect(remove).toHaveBeenCalledWith(expect.any(String), `media/${id}`);
   expect(remove).toHaveBeenCalledWith(expect.any(String), `evidence/${id}/${other}`);
   expect(rpc).toHaveBeenCalledWith("mark_media_deleted", { p_object_id: id, p_claim_token: token });
+  expect(rpc).toHaveBeenCalledWith("purge_frontend_form_drafts", { p_limit: 500 });
   expect(rpc).toHaveBeenCalledWith("mark_evidence_deleted", {
     p_artifact: other,
     p_claim_token: token,

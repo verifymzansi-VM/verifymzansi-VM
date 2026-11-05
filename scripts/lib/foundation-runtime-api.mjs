@@ -1,16 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const publicBusinessStickers = new Set([
+const publicBusinessProjections = new Set([
   "get_public_frontend_business_seen",
   "get_public_frontend_business_cipc",
+  "get_public_frontend_business_affiliations",
 ]);
 function validateRuntimeAudience(fn) {
   assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
   assert.equal(typeof fn.execute.authenticated, "boolean");
   assert.equal(typeof fn.execute.service_role, "boolean");
   assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
-  if (publicBusinessStickers.has(fn.name)) {
+  if (publicBusinessProjections.has(fn.name)) {
     assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
     assert.equal(fn.volatility, "s");
     assert.equal(fn.returns, "jsonb");
@@ -93,9 +94,9 @@ export async function verifyFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    if (publicBusinessStickers.has(fn.name)) {
+    if (publicBusinessProjections.has(fn.name)) {
       if (response.status !== 200 || !Array.isArray(data) || data.length !== 0)
-        throw new Error("Reviewed public Seen projection probe failed");
+        throw new Error("Reviewed public business projection probe failed");
     } else if (![401, 403].includes(response.status) || data?.code !== "42501")
       throw new Error("Runtime API presence/authentication check failed");
     verified++;

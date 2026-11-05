@@ -1,6 +1,8 @@
 import { withPublicName } from "@/lib/account/public-name";
 import { getDataBackend } from "@/lib/data-backend";
 import { restoredBusinessDetail } from "@/lib/foundation/marketplace-server";
+import { readRestoredBusinessAffiliations } from "@/lib/foundation/public-business-affiliations";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import type { Metadata } from "next";
 import { cache } from "react";
@@ -273,7 +275,13 @@ export async function BusinessDetailPageContent({
     ? computeTrustLevel(readAccountVerificationStatus(ownerProfile))
     : null;
   const breadcrumbs = getBreadcrumbs(isOwnerPreview, business.business_name, resolvedSection);
-  const affiliations = isOwnerPreview ? [] : await loadBusinessAffiliations(supabase, business.id);
+  const affiliations = isOwnerPreview
+    ? []
+    : getDataBackend() === "foundation"
+      ? await readRestoredBusinessAffiliations(foundationServerPublicApi(), [business.id]).catch(
+          () => []
+        )
+      : await loadBusinessAffiliations(supabase, business.id);
   const promotionsWithLikes = promotions.map((promotion) => ({
     ...promotion,
     view_count: promotionViewSummary.ok ? (promotionViewSummary.data.get(promotion.id) ?? 0) : null,

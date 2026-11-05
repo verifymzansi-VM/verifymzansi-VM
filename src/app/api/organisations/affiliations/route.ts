@@ -3,6 +3,9 @@ import { organisationsPublicEnabled } from "@/lib/commercial/settings";
 import { createClient } from "@/lib/supabase/server";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
+import { getDataBackend } from "@/lib/data-backend";
+import { readRestoredBusinessAffiliations } from "@/lib/foundation/public-business-affiliations";
+import { handlePublicOrganisationRead } from "@/app/api/foundation/_lib/organisation-route";
 
 import type { PublicAffiliation } from "@/lib/organisations/affiliations";
 
@@ -22,6 +25,10 @@ export async function GET(request: NextRequest) {
     .filter((id) => UUID.test(id))
     .slice(0, 100);
   if (ids.length === 0) return NextResponse.json({ affiliations: [] });
+  if (getDataBackend() === "foundation")
+    return handlePublicOrganisationRead(request, async (api) => ({
+      affiliations: await readRestoredBusinessAffiliations(api, ids),
+    }));
 
   if (checkLocalRateLimit(getClientRateLimitKey(request), "affiliations:read", 240).limited) {
     return NextResponse.json({ affiliations: [] }, { status: 429 });

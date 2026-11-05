@@ -283,6 +283,8 @@ try {
     "database/foundation/updates/20261105153628_restored_affiliation_workspace.sql",
     "database/foundation/updates/20261105200401_restored_staff_organisation_workspace.sql",
     "database/foundation/updates/20261105201822_restored_staff_payments.sql",
+    "database/foundation/updates/20261105202617_restored_form_autosave.sql",
+    "database/foundation/updates/20261105203431_restored_public_affiliation_badges.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -1147,8 +1149,18 @@ try {
           then raise exception 'mismatched funding request was not rolled back';end if;
         sponsor:=(api.execute_frontend_organisation_action(org,aff,'sponsor','founding','Synthetic founding request')->>'id')::uuid;
         if api.org_list_sponsorships(org)->>'waitlisted' is distinct from '1'
-          or api.execute_frontend_organisation_action(org,sponsor,'end_sponsorship',p_note=>'Synthetic end request')->>'status' is distinct from 'ended'
           then raise exception 'sponsorship queue or end result changed';end if;
+        update private.organisations set sponsored_capacity=1 where id=org;
+        view:=api.get_public_frontend_business_affiliations(array[business_target]);
+        if view->0->>'organisation_id' is distinct from org::text or view->0->>'sponsored' is distinct from 'false'
+          or view->0->>'logo_object_key' is not null then raise exception 'founding place or unapproved logo was shown as paid support';end if;
+        if api.execute_frontend_organisation_action(org,sponsor,'end_sponsorship',p_note=>'Synthetic end request')->>'status' is distinct from 'ended'
+          then raise exception 'founding sponsorship could not be ended';end if;
+        update private.organisations set programme_status='active_paid' where id=org;
+        sponsor:=(api.execute_frontend_organisation_action(org,aff,'sponsor','organisation','Synthetic organisation funding')->>'id')::uuid;
+        view:=api.get_public_frontend_business_affiliations(array[business_target]);
+        if view->0->>'sponsored' is distinct from 'true' or view->0->>'sponsorship_label' is distinct from 'Supported by Synthetic Affiliation'
+          then raise exception 'active organisation-funded sponsorship did not match the selected public badge';end if;
         ${claims(unverified)}
         view:=api.get_frontend_affiliation_workspace();
         if view->'applications'->0->>'status' is distinct from 'approved' or view->'affiliations'->0->>'id' is distinct from aff::text
@@ -1182,6 +1194,8 @@ try {
           'Synthetic stale edit',profile_id,2);raise exception 'stale staff profile edit accepted';exception when sqlstate 'PT409' then null;end;
         ${claims(owner)}
         perform api.execute_frontend_organisation_action(org,aff,'revoke','Synthetic affiliation revocation');
+        if api.get_public_frontend_business_affiliations(array[business_target]) is distinct from '[]'::jsonb
+          then raise exception 'revoked affiliation remained public';end if;
         ${claims(unverified)}
         if api.get_frontend_affiliation_workspace()->'affiliations' is distinct from '[]'::jsonb
           then raise exception 'revoked affiliation remained in member workspace';end if;
@@ -1306,6 +1320,28 @@ try {
       insert into restored_owner_identity_probe values('retired_dashboard',api.get_my_dashboard()),('retired_identity',api.get_my_frontend_identity_state());
       update private.accepted_identity_facts set revoked_at=clock_timestamp() where owner_id='${owner.id}' and revoked_at is null;
       if api.get_my_frontend_identity_state()->>'identity_reviewed_at' is not null or api.get_my_verification_case()->>'verified'<>'false' then raise exception 'revoked identity remained accepted';end if;
+      perform api.frontend_form_draft('listing','save',2,'{"title":"Synthetic private draft"}','${owner.id}');
+      perform api.frontend_form_draft('promotion','save',1,'{"title":"Synthetic expired draft"}');
+      c:=api.frontend_form_draft('listing','read');
+      if c->'draft'->>'step' is distinct from '2' or c->'draft'->'data'->>'title' is distinct from 'Synthetic private draft'
+        then raise exception 'saved form did not restore the selected fields and step';end if;
+      ${claims(unverified)}
+      begin perform api.frontend_form_draft('listing','save',1,'{}','${owner.id}');raise exception 'stale browser account saved an autosave';exception when insufficient_privilege then null;end;
+      if api.frontend_form_draft('listing','read')->'draft' is distinct from 'null'::jsonb
+        then raise exception 'member read another account autosave';end if;
+      perform api.frontend_form_draft('business','save',1,'{"businessName":"Synthetic closing account"}');
+      perform api.close_account_evidence('${unverified.id}');
+      if exists(select 1 from private.frontend_form_drafts where owner_id='${unverified.id}')
+        then raise exception 'account closure left the form data in storage';end if;
+      begin perform api.frontend_form_draft('business','save',2,'{}');raise exception 'closed account created an autosave';exception when insufficient_privilege then null;end;
+      ${claims(owner)}
+      update private.frontend_form_drafts set saved_at=statement_timestamp()-interval '16 days',expires_at=statement_timestamp()-interval '2 days'
+        where owner_id='${owner.id}' and flow='promotion';
+      if api.frontend_form_draft('promotion','read')->'draft' is distinct from 'null'::jsonb
+        or api.purge_frontend_form_drafts(500)<>1 then raise exception 'expired wizard autosave was exposed or not purged';end if;
+      perform api.frontend_form_draft('listing','discard');
+      if exists(select 1 from private.frontend_form_drafts)
+        then raise exception 'discard did not remove the stored form data';end if;
     end $fixture$;
     select value from restored_owner_form_probe;
     select 'ALLOWANCE:'||value::text from restored_allowance_probe;
@@ -1535,6 +1571,8 @@ try {
     "owner-scoped affiliations, verified organisation dashboard, cross-organisation action refusal and atomic funding rollback",
     "staff organisation directory, public contact scope and atomic private profile creation, slug collision rollback and stale edit refusal",
     "bounded staff payment read, fresh TOTP reversal, exact retry, revoked entitlement and partner commission, private staff audit",
+    "wizard autosave restore, owner isolation, stale account refusal, discard, bounded expiry purge and account closure cleanup",
+    "public affiliation ID, consented logo boundary, distinction between founding and organisation funding, and immediate revocation",
     "approved administrator invitation fence, independent staff role promotion, post-grant MFA and auditable removal",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",

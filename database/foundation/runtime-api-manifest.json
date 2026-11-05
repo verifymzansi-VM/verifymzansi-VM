@@ -4,6 +4,83 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_public_frontend_business_affiliations",
+      "updates": ["updates/20261105203431_restored_public_affiliation_badges.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current public business and listed organisation; active affiliation, consented logo and only currently organisation-funded support."
+    },
+    {
+      "name": "frontend_form_draft",
+      "updates": ["updates/20261105202617_restored_form_autosave.sql"],
+      "arguments": [
+        {
+          "name": "p_flow",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_step",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_data",
+          "sqlType": "jsonb",
+          "optional": true
+        },
+        {
+          "name": "p_expected_account",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live authenticated account, only its own temporary form data; expected account protects against a session switch."
+    },
+    {
+      "name": "purge_frontend_form_drafts",
+      "updates": ["updates/20261105202617_restored_form_autosave.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "integer",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only scheduled purge; bounded deletion of expired autosaves."
+    },
+    {
       "name": "get_frontend_staff_payments",
       "updates": ["updates/20261105201822_restored_staff_payments.sql"],
       "arguments": [

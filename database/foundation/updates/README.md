@@ -769,3 +769,21 @@ The fixture checks access, stale authenticator proof, funding and commission
 revocation, exact retry and the audit entry with synthetic settlement data.
 London recorded the migration as `20261105202246`; no payment or reversal was
 created in production.
+
+`20261105202617_restored_form_autosave.sql` restores cross-device autosaves for
+the existing listing, business and tourism/event forms. Only the current account
+can read or update its drafts. The client also identifies the account that
+loaded the form so a session switch cannot save that form to the new account.
+Discard and account closure remove saved form data. Unused drafts expire after
+14 days and the retention job removes them in bounded batches.
+
+The native fixture verifies owner-only access, session-switch refusal, expiry,
+discard and closure cleanup. London recorded the migration as `20261105203132`;
+no production drafts were created by this validation.
+
+`20261105203431_restored_public_affiliation_badges.sql` reconnects the existing
+business card badges and business detail section. It returns active affiliations
+of public businesses and listed organisations. The logo requires recorded
+permission, and a founding place does not appear as organisation-funded support.
+The isolated fixture checks both funding types and revocation. London recorded
+this migration as `20261105203919` and the empty anonymous probe passed.

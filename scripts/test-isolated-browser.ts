@@ -10,14 +10,17 @@ async function main() {
   const output = path.join(root, "tmp/isolated-browser");
   await mkdir(output, { recursive: true });
   const checkout = await mkdtemp(path.join(output, "checkout-"));
-  const git = (args: string[], cwd = root) => {
-    const result = spawnSync("git", args, { cwd, encoding: "utf8", timeout: 120_000 });
+  const git = (args: string[]) => {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8", timeout: 120_000 });
     if (result.status !== 0) throw new Error(`git ${args[0]} failed: ${result.stderr}`);
     return result.stdout;
   };
-  git(["worktree", "add", "--detach", checkout, "HEAD"]);
-  // Copy the authorized working snapshot without copying ignored credentials.
+  const commit = git(["rev-parse", "HEAD"]).trim();
+  // Use an ordinary build directory. There is no Git checkout, branch or
+  // worktree here, and ignored credentials are excluded from the copy.
   await copyWorkingTreeSnapshot(root, checkout, git);
+  if (git(["rev-parse", "HEAD"]).trim() !== commit)
+    throw new Error("The source commit changed while copying the browser fixture");
   // The production build below still needs Playwright, TypeScript and the
   // contract generator. Do not let inherited production settings omit them.
   const [pnpm, installArgs] = pnpmInvocation([
@@ -36,6 +39,7 @@ async function main() {
       )
     ),
     SENTRY_AUTH_TOKEN: "",
+    GIT_CEILING_DIRECTORIES: output,
     NODE_OPTIONS: "--max-old-space-size=4096",
     NODE_ENV: "production",
     // This lane exercises the source fixtures, independent of the caller's
@@ -179,7 +183,7 @@ async function main() {
       });
     }
   }
-  // Keep the isolated checkout and browser artifacts as reviewable evidence.
+  // Keep the isolated source snapshot and browser artifacts as evidence.
   const pkg = JSON.parse(await readFile(path.join(checkout, "package.json"), "utf8"));
   await writeFile(
     path.join(output, "latest.json"),
@@ -187,7 +191,7 @@ async function main() {
       {
         schemaVersion: 1,
         checkout,
-        commit: git(["rev-parse", "HEAD"], checkout).trim(),
+        commit,
         snapshot: "working tree without ignored secrets",
         next: pkg.dependencies.next,
         results,
