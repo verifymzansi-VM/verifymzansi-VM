@@ -69,3 +69,20 @@ authenticated browser acceptance. The update was applied to the connected London
 project on 4 November; exact API grants, private-table isolation and the
 provisioned-runtime preflight were then verified. Deployment remains dependent
 on the remaining restored-page integrations.
+
+## Database readiness tooling
+
+The normal preflight selects its database verifier from the configured backend.
+The native path shares the provisioned-runtime checks: approved connection,
+immutable reference digest, gateway role contracts, real public projections,
+extension presence/anonymous refusal and schema isolation. It never queries or
+asks an operator to recreate the retired public tables. Explicit source mode
+remains available to isolated historical fixtures. Failure never switches to a
+different database verifier.
+
+The runtime-only option does not approve a fresh installation or certify full
+release acceptance. The clean-baseline command still exits incomplete while that
+separate acceptance is open. Development preflight now passes its native
+database check and retains the four existing non-production provider warnings;
+production environment/provider checks and final release verification remain
+required.

@@ -118,11 +118,10 @@ directory. The strict secret scanner remains unchanged and scans current builds.
 
 ## Recovery
 
-- Recovery branch: `codex/recovery-before-frontend-restore-20261027`, pointing
-  at the complete project before restoration (`1bc248cd`).
-- Restoration branch: `codex/restore-6356f78f-frontend`.
+- The historical recovery and restoration branches were removed during the
+  owner's subsequent branch cleanup. Only `main` remains. The pre-restoration
+  source commit `1bc248cd` remains in Git history.
 - Local tracked-source recovery archive:
   `C:\Users\SENZO\Documents\verifymzansi-recovery\2026-10-27-frontend-restore\project-before-restore.zip`.
 - The archive contains tracked source; existing ignored environment files and
-  local artifacts were left in place. Neither Git history nor the recovery
-  branch was deleted or rewritten.
+  local artifacts were left in place. Git history was not rewritten.
