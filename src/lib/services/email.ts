@@ -36,6 +36,22 @@ const platformNotices = {
     "Account warning",
     "A staff warning has been recorded on your VerifyMzansi account.",
   ],
+  content_hidden: [
+    "Content hidden after review",
+    "A post on your account was hidden. Review the decision and your options.",
+  ],
+  account_suspended: [
+    "Account suspension",
+    "A suspension has been recorded. Sign in to see the current decision and when it ends.",
+  ],
+  account_banned: [
+    "Account ban",
+    "A ban has been recorded. Sign in to see the decision and your appeal options.",
+  ],
+  appeal_decided: [
+    "Your appeal has been decided",
+    "An independent reviewer has decided your appeal. Sign in to read the outcome.",
+  ],
   payment_completed: [
     "Payment received",
     "Your payment has been recorded. View your posting allowance and invoice in Billing.",
@@ -95,13 +111,21 @@ export async function sendPlatformNotice(
     throw new Error("Account warning details unavailable");
   const [subject, intro] = platformNotices[kind];
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const path = kind.startsWith("payment_")
-    ? "/billing"
-    : kind === "enquiry_received"
-      ? "/dashboard/leads"
-      : kind === "identity_accepted" || kind === "verification_phone_confirmed"
-        ? "/verification"
-        : "/dashboard";
+  const moderation = [
+    "content_hidden",
+    "account_suspended",
+    "account_banned",
+    "appeal_decided",
+  ].includes(kind);
+  const path = moderation
+    ? "/appeals"
+    : kind.startsWith("payment_")
+      ? "/billing"
+      : kind === "enquiry_received"
+        ? "/dashboard/leads"
+        : kind === "identity_accepted" || kind === "verification_phone_confirmed"
+          ? "/verification"
+          : "/dashboard";
   return sendEmail({
     to,
     subject,

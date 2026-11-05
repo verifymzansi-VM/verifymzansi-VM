@@ -54,6 +54,12 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
         throw error;
       const restriction = await readMyRestrictionStatus(caller.api, caller.accountId);
       if (!restriction || restriction.status === "active") throw error;
+      if (
+        path === "/appeals" ||
+        path === "/appeals/new" ||
+        (path === "/api/appeals" && request.method === "POST")
+      )
+        return reply(next());
       if (apiRequest) return refuse(403, restriction.status === "banned" ? "Banned" : "Suspended");
       if (restriction.status === "banned") return redirect("/banned");
       if (path === "/dashboard" && request.nextUrl.searchParams.get("suspended") === "true")

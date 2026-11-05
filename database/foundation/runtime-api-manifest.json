@@ -4,39 +4,170 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
-      "name": "get_my_frontend_posting_allowance_v2",
-      "updates": ["updates/20261105053049_restored_creation_allowance.sql"],
-      "arguments": [{ "name": "p_area", "sqlType": "text", "optional": false }],
+      "name": "get_my_frontend_decisions",
+      "updates": ["updates/20261105053509_restored_member_appeals.sql"],
+      "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
-      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed member session, including a restricted member; limited self-only decision and appeal status. No reviewer, reporter, or staff notes."
+    },
+    {
+      "name": "submit_my_frontend_appeal",
+      "updates": ["updates/20261105053509_restored_member_appeals.sql"],
+      "arguments": [
+        {
+          "name": "p_action",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed member; one appeal per finalized moderation action that affects their own account, with exact pending submission retry."
+    },
+    {
+      "name": "get_frontend_appeal_queue",
+      "updates": ["updates/20261105053509_restored_member_appeals.sql"],
+      "arguments": [
+        {
+          "name": "p_appeal",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current appeal reviewer and fresh TOTP; bounded queue or represented detail, exact pending count, and conflict check without reporter identity."
+    },
+    {
+      "name": "resolve_frontend_appeal",
+      "updates": ["updates/20261105053509_restored_member_appeals.sql"],
+      "arguments": [
+        {
+          "name": "p_appeal",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_outcome",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_effect_version",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_shorten_to",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent appeal reviewer and fresh TOTP. Represented effect version, single bound effect, exact acknowledgement and transaction-bound resolution."
+    },
+    {
+      "name": "get_my_frontend_posting_allowance_v2",
+      "updates": ["updates/20261105053049_restored_creation_allowance.sql"],
+      "arguments": [
+        {
+          "name": "p_area",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
       "authority": "Current member only; actual slot and activation-period headroom per usable entitlement. Released activations still count toward the period limit."
     },
     {
       "name": "get_frontend_enforcement",
-      "updates": ["updates/20261105052337_restored_enforcement_views.sql"],
+      "updates": [
+        "updates/20261105052337_restored_enforcement_views.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
+      ],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
-      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
       "authority": "Current restriction reviewer with fresh TOTP. Bounded active items and history, exact counts, and current reviewer conflict without reporter identity."
     },
     {
       "name": "get_my_frontend_restriction_status",
-      "updates": ["updates/20261105052337_restored_enforcement_views.sql"],
+      "updates": [
+        "updates/20261105052337_restored_enforcement_views.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
+      ],
       "arguments": [],
       "returns": "jsonb",
       "volatility": "v",
-      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
       "authority": "Live confirmed member session, including a currently restricted member, may read only their own current account restriction type and suspension end."
     },
     {
       "name": "lift_frontend_account_restriction",
       "updates": ["updates/20261105050356_native_report_account_restrictions.sql"],
       "arguments": [
-        { "name": "p_restriction", "sqlType": "uuid", "optional": false },
-        { "name": "p_expected_version", "sqlType": "integer", "optional": false },
-        { "name": "p_reason", "sqlType": "text", "optional": false }
+        {
+          "name": "p_restriction",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_version",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
       ],
       "returns": "jsonb",
       "volatility": "v",
@@ -49,7 +180,10 @@
     },
     {
       "name": "release_frontend_content_hold",
-      "updates": ["updates/20261105043010_native_report_content_holds.sql"],
+      "updates": [
+        "updates/20261105043010_native_report_content_holds.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
+      ],
       "arguments": [
         {
           "name": "p_hold",
@@ -80,7 +214,8 @@
       "name": "execute_frontend_report_action_v2",
       "updates": [
         "updates/20261105043010_native_report_content_holds.sql",
-        "updates/20261105050356_native_report_account_restrictions.sql"
+        "updates/20261105050356_native_report_account_restrictions.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
       ],
       "arguments": [
         {
@@ -162,7 +297,10 @@
     },
     {
       "name": "list_my_frontend_notices",
-      "updates": ["updates/20261105035413_native_report_warning_delivery.sql"],
+      "updates": [
+        "updates/20261105035413_native_report_warning_delivery.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
+      ],
       "arguments": [
         {
           "name": "p_limit",
@@ -191,7 +329,10 @@
     },
     {
       "name": "claim_supported_notification_outbox",
-      "updates": ["updates/20261105035413_native_report_warning_delivery.sql"],
+      "updates": [
+        "updates/20261105035413_native_report_warning_delivery.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
+      ],
       "arguments": [
         {
           "name": "p_supported_kinds",
@@ -361,7 +502,8 @@
       "name": "get_frontend_staff_audit_page",
       "updates": [
         "updates/20261104221219_restored_staff_audit_page.sql",
-        "updates/20261105035413_native_report_warning_delivery.sql"
+        "updates/20261105035413_native_report_warning_delivery.sql",
+        "updates/20261105053509_restored_member_appeals.sql"
       ],
       "arguments": [
         {

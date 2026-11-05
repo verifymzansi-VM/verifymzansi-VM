@@ -1,6 +1,9 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDataBackend } from "@/lib/data-backend";
+import { readMyFrontendDecisions } from "@/lib/foundation/member-appeals";
+import { readSelfReviewCaller } from "@/lib/foundation/self-review-session";
 
 /**
  * Moderation decisions that affect a member, as the member may see them:
@@ -31,6 +34,11 @@ const APPEALABLE_CATEGORIES = new Set([
 ]);
 
 export async function getMemberDecisions(userId: string): Promise<MemberDecision[]> {
+  if (getDataBackend() === "foundation") {
+    const { api, accountId } = await readSelfReviewCaller();
+    if (accountId !== userId) throw new Error("Current account changed");
+    return readMyFrontendDecisions(api, accountId);
+  }
   const admin = createAdminClient();
 
   const [restrictionsResult, effectsResult] = await Promise.all([

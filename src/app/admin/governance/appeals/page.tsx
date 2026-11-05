@@ -5,6 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Scale } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendAppeals } from "@/lib/foundation/member-appeals";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 export const metadata = {
   title: "Appeals — Governance",
@@ -12,9 +18,22 @@ export const metadata = {
 };
 
 export default async function GovernanceAppealsPage() {
-  await requireStaff("appeal:decide");
+  const { user } = await requireStaff("appeal:decide");
 
-  const appeals = await getPendingAppeals(50);
+  const { items: appeals, total } = await (async () => {
+    if (getDataBackend() !== "foundation") {
+      const items = await getPendingAppeals(50);
+      return { items, total: items.length };
+    }
+    const { api } = await readFoundationServerSession();
+    try {
+      return await readFrontendAppeals(api, user.id);
+    } catch (error) {
+      if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+        redirect(staffVerifyHref("/staff/two-step", "/admin/governance/appeals"));
+      throw error;
+    }
+  })();
 
   return (
     <div className="space-y-6">
@@ -23,7 +42,7 @@ export default async function GovernanceAppealsPage() {
         description="Review appeals against finalized decisions."
         breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Appeals" }]}
       >
-        <Badge variant="outline">{appeals.length} pending</Badge>
+        <Badge variant="outline">{total} pending</Badge>
       </PageHeader>
 
       <Card>

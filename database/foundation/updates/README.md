@@ -643,3 +643,12 @@ its slot; its activation still counts when the entitlement has a period limit.
 The existing once-per-identity trial grant and uncapped slot within that trial
 remain unchanged. The posting form distinguishes an exhausted activation
 allowance from occupied slots.
+
+`20261105053509_restored_member_appeals.sql` reconnects the member and staff
+appeal screens. A restricted member can submit one appeal on their own finalized
+moderation decision. A fresh, independent staff reviewer can affirm or reverse
+it, or shorten an active suspension. Each resolution binds the represented
+effect version and changes only the effect under review. Active content holds
+survive the retention of the originating report. Generic owner notices and an
+email job are recorded in the same transaction as each effect or resolution.
+Neither the email nor the owner list discloses the reporter.

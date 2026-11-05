@@ -271,6 +271,7 @@ try {
     "database/foundation/updates/20261105050356_native_report_account_restrictions.sql",
     "database/foundation/updates/20261105052337_restored_enforcement_views.sql",
     "database/foundation/updates/20261105053049_restored_creation_allowance.sql",
+    "database/foundation/updates/20261105053509_restored_member_appeals.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -314,7 +315,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -501,7 +502,12 @@ try {
       c:=api.execute_frontend_report_action_v2(content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','Independent content removal',null,false,pre_hide_rev);
       if c->>'reused'<>'true' or (select count(*) from private.frontend_content_holds)<>1 then raise exception 'hide retry repeated its hold';end if;
       begin perform api.release_frontend_content_hold(hold_a,1,'Original reviewer self restoration');raise exception 'hider restored own content';exception when insufficient_privilege then null;end;
+      delete from private.reports where id=content_report;
+      if not exists(select 1 from private.frontend_content_holds where id=hold_a and released_at is null)
+        or exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'report retention removed an active content hold';end if;
       ${claims(owner)}
+      c:=api.submit_my_frontend_appeal(hold_a,'A fixture explanation for why the content should be reviewed again');
+      appeal:=(c->>'appeal_id')::uuid;
       insert into restored_hidden_owner_probe values(api.get_my_frontend_post((answer->>'id')::uuid));
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       begin perform api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,rev,'reactivate','listing','market');raise exception 'owner removed staff hold';exception when sqlstate 'PT423' then null;end;
@@ -512,8 +518,12 @@ try {
       content_lease:=api.claim_queue_item('report',other_content_report);
       c:=api.execute_frontend_report_action_v2(other_content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','A second independent content hold',null,false,pre_hide_rev+1);
       select id into hold_b from private.frontend_report_action_receipts where report_id=other_content_report;
-      c:=api.release_frontend_content_hold(hold_a,1,'Independent release of the first hold');
-      if c->>'restored'<>'false' or exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'one release bypassed another hold';end if;
+      c:=api.get_frontend_appeal_queue(appeal);
+      if c->>'total' is distinct from '1' or c->'items'->0->>'can_resolve' is distinct from 'true'
+        or c->'items'->0->>'decision_reason' is distinct from 'Independent content removal' then raise exception 'retained hold lost appeal detail';end if;
+      c:=api.resolve_frontend_appeal(appeal,'overturned','Independent appeal decision cleared only the first hold',1);
+      if c->>'status' is distinct from 'overturned' or not exists(select 1 from private.frontend_content_holds where id=hold_a and released_at is not null)
+        or exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'one appeal bypassed another hold';end if;
       ${claims(administrator)}
       c:=api.release_frontend_content_hold(hold_b,1,'Independent release after current review');
       if c->>'restored'<>'true' or not exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'unchanged eligible content was not restored';end if;
@@ -797,13 +807,41 @@ try {
       if c->>'status' is distinct from 'suspended' or c->>'ends_at' is null or c->>'account_id' is distinct from '${owner.id}' then raise exception 'restricted self-status lost the member or term';end if;
       begin perform api.get_my_account_context();raise exception 'restricted self-status allowed an ordinary account read';exception when insufficient_privilege then null;end;
       begin perform api.get_frontend_enforcement();raise exception 'member read private enforcement';exception when insufficient_privilege then null;end;
+      c:=api.get_my_frontend_decisions();
+      if c->>'account_id' is distinct from '${owner.id}' or not exists(select 1 from jsonb_array_elements(c->'items') j
+        where j->>'decisionId'=decision::text and j->>'appealable'='true' and not (j ? 'reporter_id')) then raise exception 'self-only appeal target missing or disclosed a reporter';end if;
+      c:=api.submit_my_frontend_appeal(decision,'A fixture reason to request independent review');
+      appeal:=(c->>'appeal_id')::uuid;
+      if appeal is null or api.submit_my_frontend_appeal(decision,'A fixture reason to request independent review')->>'reused' is distinct from 'true'
+        then raise exception 'exact appeal submission retry not idempotent';end if;
+      ${claims(unverified)}
+      begin perform api.submit_my_frontend_appeal(decision,'Another member cannot appeal this decision');raise exception 'cross-account appeal accepted';exception when sqlstate 'PT409' then null;end;
+      ${claims(governor)}
+      begin perform api.resolve_frontend_appeal(appeal,'upheld','Original approver cannot decide an appeal',1);raise exception 'original reviewer decided an appeal';exception when insufficient_privilege then null;end;
       ${claims(administrator)}
-      c:=api.lift_frontend_account_restriction(restriction,1,'Independent lift of timed restriction');
+      select starts_at+interval '1 day' into shortened from private.frontend_account_restrictions where id=restriction;
+      c:=api.resolve_frontend_appeal(appeal,'partially_overturned','An independent reviewer shortened this suspension',1,shortened);
+      if c->>'restrictions_changed' is distinct from '1' then raise exception 'partial appeal did not shorten the term';end if;
+      c:=api.resolve_frontend_appeal(appeal,'partially_overturned','An independent reviewer shortened this suspension',1,shortened);
+      if c->>'reused' is distinct from 'true' then raise exception 'exact appeal review acknowledgement was lost';end if;
+      if (select count(*) from private.notifications n where n.account_id='${owner.id}' and n.subject_id=appeal and n.kind='appeal_decided')<>1
+        or (select count(*) from private.outbox_events o where o.owner_id='${owner.id}' and o.subject_id=appeal and o.kind='appeal_decided')<>1 then raise exception 'appeal resolution missed or duplicated notices';end if;
+      ${claims(owner)}
+      if (api.get_my_frontend_restriction_status()->>'ends_at')::timestamptz is distinct from shortened
+        or exists(select 1 from private.current_account_access where id='${owner.id}') then raise exception 'shortened suspension ignored or lifted too early';end if;
+      ${claims(administrator)}
+      c:=api.lift_frontend_account_restriction(restriction,2,'Independent lift of timed restriction');
       if c->>'status' is distinct from 'lifted' or not exists(select 1 from private.public_eligible_posts where id=target) then raise exception 'independent lift did not restore eligible listing';end if;
-      c:=api.lift_frontend_account_restriction(restriction,1,'Independent lift of timed restriction');
+      c:=api.lift_frontend_account_restriction(restriction,2,'Independent lift of timed restriction');
       if c->>'reused' is distinct from 'true' then raise exception 'restriction lift retry was not stable';end if;
       ${claims(owner)}
       if api.get_my_frontend_restriction_status()->>'status' is distinct from 'active' then raise exception 'lifted restriction remained active';end if;
+      if not exists(select 1 from jsonb_array_elements(api.list_my_frontend_notices()->'items') n
+          join private.notifications x on x.id::text=n->>'id' where n->>'kind'='appeal_decided' and x.subject_id=appeal)
+        or exists(select 1 from jsonb_array_elements(api.list_my_notifications()->'items') n where n->>'kind'='appeal_decided')
+        then raise exception 'appeal notice is missing or changed older reader';end if;
+      c:=api.claim_supported_notification_outbox(array['appeal_decided'],1);
+      if c->0->>'kind' is distinct from 'appeal_decided' or c->0->>'notice_reason' is not null then raise exception 'appeal mail job disclosed private reasons or was not claimable';end if;
       ${claims(administrator)}
       report_lease:=api.claim_queue_item('report',emergency_report);
       c:=api.execute_frontend_report_action_v2(emergency_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'suspend','Emergency containment pending independent review',7,true);

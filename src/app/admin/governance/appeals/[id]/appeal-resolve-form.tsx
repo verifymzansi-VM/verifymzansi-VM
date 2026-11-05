@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Gavel, Loader2 } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 const RESOLUTION_OPTIONS = [
   { value: "upheld", label: "Uphold the decision", effect: "Nothing changes." },
@@ -26,9 +27,15 @@ const RESOLUTION_OPTIONS = [
 
 interface AppealResolveFormProps {
   appealId: string;
+  effectVersion?: number;
+  canShorten?: boolean;
 }
 
-export function AppealResolveForm({ appealId }: AppealResolveFormProps) {
+export function AppealResolveForm({
+  appealId,
+  effectVersion,
+  canShorten = true,
+}: AppealResolveFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [submitting, setSubmitting] = useState(false);
@@ -58,6 +65,7 @@ export function AppealResolveForm({ appealId }: AppealResolveFormProps) {
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           appealId,
+          effectVersion,
           status,
           rationale: rationale.trim(),
           // End of the chosen day, South African time.
@@ -67,6 +75,10 @@ export function AppealResolveForm({ appealId }: AppealResolveFormProps) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.code === "step_up_required" || data.code === "mfa_required") {
+          router.push(staffVerifyHref("/staff/two-step", `/admin/governance/appeals/${appealId}`));
+          return;
+        }
         throw new Error(data.error || "The appeal could not be resolved. Try again.");
       }
 
@@ -95,7 +107,9 @@ export function AppealResolveForm({ appealId }: AppealResolveFormProps) {
           onChange={(e) => setStatus(e.target.value)}
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
         >
-          {RESOLUTION_OPTIONS.map((option) => (
+          {RESOLUTION_OPTIONS.filter(
+            (option) => canShorten || option.value !== "partially_overturned"
+          ).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -128,7 +142,7 @@ export function AppealResolveForm({ appealId }: AppealResolveFormProps) {
           id={rationaleFieldId}
           value={rationale}
           onChange={(e) => setRationale(e.target.value)}
-          placeholder="Explain the resolution for the audit trail..."
+          placeholder="Explain the outcome to the member..."
           rows={3}
         />
       </div>

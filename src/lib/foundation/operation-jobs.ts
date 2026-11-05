@@ -15,6 +15,10 @@ const kind = z.enum([
   "identity_accepted",
   "enquiry_received",
   "account_warning",
+  "content_hidden",
+  "account_suspended",
+  "account_banned",
+  "appeal_decided",
 ]);
 const jobs = z
   .array(

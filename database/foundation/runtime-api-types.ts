@@ -8,6 +8,22 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_my_frontend_decisions: { Args: Record<PropertyKey, never>; Returns: Json };
+      submit_my_frontend_appeal: {
+        Args: { p_action: string; p_reason: string };
+        Returns: Json;
+      };
+      get_frontend_appeal_queue: { Args: { p_appeal?: string }; Returns: Json };
+      resolve_frontend_appeal: {
+        Args: {
+          p_appeal: string;
+          p_outcome: string;
+          p_reason: string;
+          p_effect_version?: number;
+          p_shorten_to?: string;
+        };
+        Returns: Json;
+      };
       get_frontend_enforcement: { Args: Record<PropertyKey, never>; Returns: Json };
       get_my_frontend_restriction_status: { Args: Record<PropertyKey, never>; Returns: Json };
       get_frontend_report_review_queue: { Args: { p_area?: string }; Returns: Json };

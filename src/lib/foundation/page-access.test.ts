@@ -165,6 +165,16 @@ it("routes confirmed bans to the original page and keeps protected APIs closed",
     (await checkFoundationPageAccess(request("/banned"), false)).headers.get("x-middleware-next")
   ).toBe("1");
   expect((await checkFoundationPageAccess(request("/api/content"), false)).status).toBe(403);
+  expect(
+    (await checkFoundationPageAccess(request("/appeals/new"), false)).headers.get(
+      "x-middleware-next"
+    )
+  ).toBe("1");
+  const appeal = new NextRequest("https://verifymzansi.com/api/appeals", { method: "POST" });
+  expect((await checkFoundationPageAccess(appeal, false)).headers.get("x-middleware-next")).toBe(
+    "1"
+  );
+  expect((await checkFoundationPageAccess(request("/api/appeals"), false)).status).toBe(403);
 });
 it("uses the canonical suspension date and only allows the original suspension landing", async () => {
   read.mockRejectedValue(new FoundationAccountContextError("forbidden"));

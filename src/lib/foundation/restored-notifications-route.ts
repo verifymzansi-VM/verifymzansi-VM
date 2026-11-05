@@ -17,6 +17,10 @@ const row = foundationNotificationPageSchema.shape.items.element
     kind: z.enum([
       ...foundationNotificationPageSchema.shape.items.element.shape.kind.options,
       "account_warning",
+      "content_hidden",
+      "account_suspended",
+      "account_banned",
+      "appeal_decided",
     ]),
     warning_reason: z.string().min(10).max(500).nullable().optional(),
     organisation_slug: z
@@ -41,6 +45,25 @@ const query = z.object({
 function presentedNotification(n: z.infer<typeof row>) {
   const content = {
     account_warning: ["Account warning", n.warning_reason ?? "", "/dashboard", "warning"],
+    content_hidden: ["Content hidden", "A post was hidden after review.", "/appeals", "warning"],
+    account_suspended: [
+      "Account suspension",
+      "Check your current decision and its end date.",
+      "/appeals",
+      "warning",
+    ],
+    account_banned: [
+      "Account ban",
+      "Check the decision and your appeal options.",
+      "/appeals",
+      "warning",
+    ],
+    appeal_decided: [
+      "Your appeal has been decided",
+      "Sign in to read the review outcome.",
+      "/appeals",
+      "info",
+    ],
     enquiry_received: [
       "New enquiry",
       "A buyer sent an enquiry about your post.",

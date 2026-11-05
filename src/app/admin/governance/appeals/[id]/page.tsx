@@ -1,5 +1,5 @@
 import { requireStaff } from "@/lib/auth/require-staff";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, MessageSquare } from "lucide-react";
 import { AppealResolveForm } from "./appeal-resolve-form";
 import { formatDateTime } from "@/lib/utils/format";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendAppeals } from "@/lib/foundation/member-appeals";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import { z } from "zod";
 
 export const metadata = {
   title: "Appeal — Governance",
@@ -16,11 +22,7 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
-export default async function AppealDetailPage({ params }: Props) {
-  const { id } = await params;
-
-  await requireStaff("appeal:decide");
-
+async function readSourceAppeal(id: string) {
   const admin = createAdminClient();
 
   const { data: appeal, error } = await admin
@@ -42,6 +44,53 @@ export default async function AppealDetailPage({ params }: Props) {
   if (decisionError) {
     throw new Error(`Appealed decision could not be loaded: ${decisionError.message}`);
   }
+  return { appeal, decision, canResolve: true, effectVersion: undefined, canShorten: true };
+}
+
+async function readNativeAppeal(id: string, userId: string) {
+  const { api } = await readFoundationServerSession();
+  let item;
+  try {
+    const result = await readFrontendAppeals(api, userId, id);
+    item = result.items[0];
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", `/admin/governance/appeals/${id}`));
+    throw error;
+  }
+  if (!item) notFound();
+  const categories = {
+    ban: "account_ban",
+    suspension: "account_suspend",
+    warning: "account_warning",
+    content_hidden: "content_removal",
+  } as const;
+  return {
+    appeal: item,
+    decision: item.decision_reason
+      ? {
+          action_category: categories[item.kind],
+          status: item.status === "overturned" ? "overridden" : "approved",
+          case_type: "decision",
+          case_id: item.decision_id,
+          recommendation: item.decision_reason,
+        }
+      : null,
+    canResolve: item.can_resolve,
+    effectVersion: item.effect_version ?? undefined,
+    canShorten:
+      item.kind === "suspension" && Boolean(item.ends_at && Date.parse(item.ends_at) > Date.now()),
+  };
+}
+
+export default async function AppealDetailPage({ params }: Props) {
+  const { id } = await params;
+  const { user } = await requireStaff("appeal:decide");
+  if (!z.uuid().safeParse(id).success) notFound();
+  const { appeal, decision, canResolve, effectVersion, canShorten } =
+    getDataBackend() === "foundation"
+      ? await readNativeAppeal(id, user.id)
+      : await readSourceAppeal(id);
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -126,7 +175,17 @@ export default async function AppealDetailPage({ params }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <AppealResolveForm appealId={appeal.id} />
+            {canResolve ? (
+              <AppealResolveForm
+                appealId={appeal.id}
+                effectVersion={effectVersion}
+                canShorten={canShorten}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This appeal requires another reviewer or its decision is unavailable.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

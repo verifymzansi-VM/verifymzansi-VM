@@ -7,10 +7,13 @@ import { readMyRestrictionStatus } from "./enforcement";
 
 /** Restricted-account status only. All normal page and command guards still
  * require the active account context. */
-export const readSelfReviewSession = cache(async () => {
+export const readSelfReviewCaller = cache(async () => {
   const store = await cookies();
-  const { api, accountId } = await readFoundationRequestCaller(readFoundationRuntimeConnection(), {
+  return readFoundationRequestCaller(readFoundationRuntimeConnection(), {
     getAll: () => store.getAll(),
   });
+});
+export const readSelfReviewSession = cache(async () => {
+  const { api, accountId } = await readSelfReviewCaller();
   return readMyRestrictionStatus(api, accountId);
 });
