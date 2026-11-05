@@ -669,3 +669,11 @@ The existing response targets are preserved. The access rule references the
 Submission and outcome notices use a private claim queue, and an extension
 records its notification time only after provider acceptance. The fixture uses
 synthetic notice acknowledgements and performs no actual delivery.
+
+`20261105091725_restored_support_inbox.sql` backs the existing contact form and
+staff inbox with native tickets. Submission is service-only after CAPTCHA and
+rate checks, with a short exact-retry window. Staff see recorded provider
+acceptance, which does not imply inbox delivery. A moderator or administrator
+can change the represented status; a governor can read the inbox. The ticket and
+status event use one transaction, and staff dashboard counts come from the same
+tickets.

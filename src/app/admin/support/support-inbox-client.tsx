@@ -56,13 +56,14 @@ export function SupportInboxClient({
   );
 
   async function updateStatus(id: string, status: SupportSubmission["status"]) {
+    const revision = submissions.find((item) => item.id === id)?.revision;
     setPendingId(id);
     setError("");
     try {
       const res = await fetch("/api/admin/support/update", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ submissionId: id, status }),
+        body: JSON.stringify({ submissionId: id, status, revision }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

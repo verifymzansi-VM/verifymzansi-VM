@@ -8,6 +8,9 @@ import { SupportInboxClient } from "./support-inbox-client";
 import Link from "next/link";
 import { uuidSchema } from "@/lib/validations/shared";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendSupportInbox } from "@/lib/foundation/support-inbox";
 
 export const metadata = {
   title: "Support inbox — Admin",
@@ -21,53 +24,30 @@ export interface SupportSubmission {
   message: string;
   status: "new" | "in_progress" | "resolved";
   created_at: string;
+  revision?: number;
   emailActivity?: { template: string; accepted: boolean; created_at: string }[];
 }
 
-export default async function AdminSupportPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string; submission?: string }>;
-}) {
-  const { role } = await requireStaff();
-  const canRespond = roleHasCapability(role, "case:recommend");
-
+const pageSize = 50;
+async function readSourceSupport(page: number, selected?: string) {
   const admin = createAdminClient();
-  const params = await searchParams;
-  const parsedPage = Number(params.page || 1);
-  const page =
-    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
-  const pageSize = 50;
-  const selected = uuidSchema.safeParse(params.submission);
 
   let query = admin
     .from("contact_submissions")
     .select("id, name, email, message, status, created_at", { count: "exact" })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false });
-  if (selected.success) query = query.eq("id", selected.data);
+  if (selected) query = query.eq("id", selected);
   const {
     data: submissions,
     error,
     count,
-  } = await query.range(
-    selected.success ? 0 : (page - 1) * pageSize,
-    selected.success ? 0 : page * pageSize - 1
-  );
-  if (error) {
-    createLogger("SupportInbox").error("Support inbox read failed", { error: error.message });
-    return (
-      <p role="alert">
-        The support inbox could not be loaded. Refresh to try again. This does not mean there are no
-        requests.
-      </p>
-    );
-  }
+  } = await query.range(selected ? 0 : (page - 1) * pageSize, selected ? 0 : page * pageSize - 1);
+  if (error) throw new Error("Source support inbox unavailable");
 
   const rows: SupportSubmission[] = Array.isArray(submissions)
     ? (submissions as SupportSubmission[])
     : [];
-  const newCount = rows.filter((r) => r.status === "new").length;
   let activityUnavailable = false;
   if (rows.length) {
     const { data: activity, error: activityError } = await admin
@@ -92,6 +72,43 @@ export default async function AdminSupportPage({
         }));
     }
   }
+  return { rows, count: count ?? rows.length, activityUnavailable };
+}
+
+export default async function AdminSupportPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; submission?: string }>;
+}) {
+  const { role, user } = await requireStaff();
+  const params = await searchParams;
+  const parsedPage = Number(params.page || 1);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const selected = uuidSchema.safeParse(params.submission);
+  let rows: SupportSubmission[], count: number, canRespond: boolean, activityUnavailable: boolean;
+  try {
+    if (getDataBackend() === "foundation") {
+      const { api } = await readFoundationServerSession();
+      const result = await readFrontendSupportInbox(api, user.id, page, selected.data);
+      rows = result.items;
+      count = result.total;
+      canRespond = result.can_update;
+      activityUnavailable = false;
+    } else {
+      ({ rows, count, activityUnavailable } = await readSourceSupport(page, selected.data));
+      canRespond = roleHasCapability(role, "case:recommend");
+    }
+  } catch {
+    createLogger("SupportInbox").error("Support inbox read failed");
+    return (
+      <p role="alert">
+        The support inbox could not be loaded. Refresh to try again. This does not mean there are no
+        requests.
+      </p>
+    );
+  }
+  const newCount = rows.filter((r) => r.status === "new").length;
 
   return (
     <div className="space-y-6">

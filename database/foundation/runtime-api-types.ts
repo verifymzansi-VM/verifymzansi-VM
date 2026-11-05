@@ -8,6 +8,12 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_frontend_support_inbox: { Args: { p_page?: number; p_ticket?: string }; Returns: Json };
+      get_frontend_support_metrics: { Args: Record<PropertyKey, never>; Returns: Json };
+      update_frontend_support_status: {
+        Args: { p_ticket: string; p_revision: number; p_status: string };
+        Returns: Json;
+      };
       export_frontend_privacy_request: {
         Args: { p_case: string; p_revision: number };
         Returns: Json;
@@ -238,6 +244,14 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      submit_frontend_support: {
+        Args: { p_name: string; p_email: string; p_category: string; p_message: string };
+        Returns: Json;
+      };
+      record_frontend_support_mail: {
+        Args: { p_ticket: string; p_template: string; p_accepted: boolean };
+        Returns: boolean;
+      };
       claim_frontend_privacy_notice: { Args: Record<PropertyKey, never>; Returns: Json };
       complete_frontend_privacy_notice: {
         Args: { p_job: string; p_claim: string; p_delivered: boolean };

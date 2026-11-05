@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { z } from "zod";
 import { readFoundationServerSession } from "./server-session";
+import { readFrontendSupportMetrics } from "./support-inbox";
 
 const count = z.number().int().nonnegative();
 const instant = z.iso.datetime({ offset: true });
@@ -53,10 +54,13 @@ const foundationStaffDashboardSchema = z
 export const readFoundationStaffDashboard = cache(async (actorId: string) => {
   const current = await readFoundationServerSession();
   if (current.user.id !== actorId) throw new Error("Staff overview account changed");
-  const { data, error } = await current.api.rpc("get_staff_dashboard", {});
+  const [{ data, error }, support] = await Promise.all([
+    current.api.rpc("get_staff_dashboard", {}),
+    readFrontendSupportMetrics(current.api, actorId).catch(() => null),
+  ]);
   if (error) throw new Error("Staff overview is temporarily unavailable");
   const overview = foundationStaffDashboardSchema.parse(data);
   if (overview.role !== current.account.staff?.role)
     throw new Error("Staff overview authority changed");
-  return overview;
+  return { ...overview, support };
 });

@@ -273,6 +273,7 @@ try {
     "database/foundation/updates/20261105053049_restored_creation_allowance.sql",
     "database/foundation/updates/20261105053509_restored_member_appeals.sql",
     "database/foundation/updates/20261105085900_restored_privacy_requests.sql",
+    "database/foundation/updates/20261105091725_restored_support_inbox.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -316,7 +317,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -983,6 +984,24 @@ try {
       if c->>'capacity' is distinct from '1' or c->>'used' is distinct from '0' or c->>'creation_remaining' is distinct from '0'
         then raise exception 'released activation reopened a capped entitlement';end if;
       if (api.get_my_frontend_posting_allowance('market')) ? 'creation_remaining' then raise exception 'legacy allowance response changed';end if;
+      c:=api.submit_frontend_support('Fixture sender','fixture@example.invalid','general_support','Fixture support message for the staff inbox');
+      ticket:=(c->>'id')::uuid;
+      if c->>'reused' is distinct from 'false' or not api.record_frontend_support_mail(ticket,'support_acknowledgement',true)
+        or api.record_frontend_support_mail(ticket,'support_acknowledgement',false) then raise exception 'support submission or provider receipt changed';end if;
+      c:=api.submit_frontend_support('Fixture sender','FIXTURE@example.invalid','general_support','Fixture support message for the staff inbox');
+      if c->>'reused' is distinct from 'true' or c->>'accepted' is distinct from 'true' or c->>'id' is distinct from ticket::text
+        then raise exception 'support retry duplicated the request or lost acknowledgement';end if;
+      begin perform api.get_frontend_support_inbox();raise exception 'member read support inbox';exception when insufficient_privilege then null;end;
+      ${claims(governor)}
+      c:=api.get_frontend_support_inbox(1,ticket);
+      if c->>'can_update' is distinct from 'false' or c->>'total' is distinct from '1'
+        or c->'items'->0->'emailActivity'->0->>'accepted' is distinct from 'true' then raise exception 'support read-only role or mail activity drift';end if;
+      begin perform api.update_frontend_support_status(ticket,1,'resolved');raise exception 'read-only governor changed support status';exception when insufficient_privilege then null;end;
+      ${claims(reviewer)}
+      perform api.update_frontend_support_status(ticket,1,'in_progress');
+      begin perform api.update_frontend_support_status(ticket,1,'resolved');raise exception 'stale support status overwrite';exception when sqlstate 'PT409' then null;end;
+      perform api.update_frontend_support_status(ticket,2,'resolved');
+      if api.get_frontend_support_metrics()->>'new' is distinct from '0' then raise exception 'support metrics used stale counts';end if;
       ${claims(governor)}
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
@@ -1221,6 +1240,7 @@ try {
     "self-only native posting gate, trial claim and current capacity DTOs",
     "a reusable released slot and a released activation with exhausted period budget have distinct creation allowances",
     "restricted member privacy intake, live session fence, verified staff transitions, bounded export, and claimed deadline notices",
+    "support request deduplication, provider acceptance history, viewer and updater authority, and stale status refusal",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",

@@ -4,6 +4,131 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_support_metrics",
+      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current support staff; actual open support totals and oldest timestamp with no ticket body."
+    },
+    {
+      "name": "submit_frontend_support",
+      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "arguments": [
+        {
+          "name": "p_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_category",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_message",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server after origin, CAPTCHA and rate checks. Exact short-window retries reuse the recorded support reference."
+    },
+    {
+      "name": "record_frontend_support_mail",
+      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "arguments": [
+        {
+          "name": "p_ticket",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_template",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_accepted",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server records provider acceptance for one approved template without storing provider diagnostics."
+    },
+    {
+      "name": "get_frontend_support_inbox",
+      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "arguments": [
+        {
+          "name": "p_page",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_ticket",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current support staff, bounded paged request and mail activity projection with database-authorized edit hint."
+    },
+    {
+      "name": "update_frontend_support_status",
+      "updates": ["updates/20261105091725_restored_support_inbox.sql"],
+      "arguments": [
+        {
+          "name": "p_ticket",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_status",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current support moderator or admin, represented revision; status and audit event commit together."
+    },
+    {
       "name": "record_frontend_privacy_request",
       "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
       "arguments": [

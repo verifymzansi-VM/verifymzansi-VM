@@ -92,7 +92,7 @@ export const getStaffDashboard = cache(async (actorId: string): Promise<StaffDas
       return {
         role: current.role === "governor" ? "governance_controller" : current.role,
         generated_at: current.generated_at,
-        queues: current.restored_queues,
+        queues: { ...current.restored_queues, support: current.support ?? null },
         // These source-only summaries have no canonical equivalent yet.
         // The preserved cards already render null as Unavailable.
         shift: null,
@@ -165,6 +165,7 @@ export const getStaffNavCounts = cache(async (actorId: string): Promise<StaffNav
         kyc: current.counts.kyc,
         content: current.counts.content,
         business_kyc: current.counts.business_kyc,
+        ...(current.support ? { support: current.support.new } : {}),
         ...(current.role === "moderator" ? {} : { decisions: current.counts.decisions }),
       };
     } catch {
