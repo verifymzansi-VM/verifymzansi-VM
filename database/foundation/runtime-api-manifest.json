@@ -4,8 +4,64 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "list_my_frontend_notices",
+      "updates": ["updates/20261105035413_native_report_warning_delivery.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_unread",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_before",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current active self-only account and live session; closed kind projection with owner-bound warning reason and current dismissal/read state. No caller-selected owner or private staff/reporter data."
+    },
+    {
+      "name": "claim_supported_notification_outbox",
+      "updates": ["updates/20261105035413_native_report_warning_delivery.sql"],
+      "arguments": [
+        {
+          "name": "p_supported_kinds",
+          "sqlType": "text[]",
+          "optional": false
+        },
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted mail worker only; bounded declared supported kinds, current due leases, owner-confirmed recipient and warning reason. Old workers cannot consume new warning deliveries; completion remains fenced by the original claim token."
+    },
+    {
       "name": "execute_frontend_report_action",
-      "updates": ["updates/20261104231625_restored_report_actions.sql"],
+      "updates": [
+        "updates/20261104231625_restored_report_actions.sql",
+        "updates/20261105035413_native_report_warning_delivery.sql"
+      ],
       "arguments": [
         {
           "name": "p_report",
@@ -55,7 +111,7 @@
         "authenticated": true,
         "service_role": false
       },
-      "authority": "Current independent native report reviewer and recent TOTP; represented report revision/lease. Native dismissal and one exact bounded retry receipt; unsupported enforcement fails without mutation or successful acknowledgement."
+      "authority": "Current independent native reviewer and recent TOTP; represented report revision/lease. Native dismissal or informational warning, one exact bounded retry receipt, owner-only notice and durable delivery event. Remaining enforcement actions fail without success."
     },
     {
       "name": "get_frontend_area_activity",
@@ -146,7 +202,10 @@
     },
     {
       "name": "get_frontend_staff_audit_page",
-      "updates": ["updates/20261104221219_restored_staff_audit_page.sql"],
+      "updates": [
+        "updates/20261104221219_restored_staff_audit_page.sql",
+        "updates/20261105035413_native_report_warning_delivery.sql"
+      ],
       "arguments": [
         {
           "name": "p_request",
@@ -1118,7 +1177,10 @@
     },
     {
       "name": "list_my_frontend_notifications",
-      "updates": ["updates/20261103231355_owner_notification_dismissals.sql"],
+      "updates": [
+        "updates/20261103231355_owner_notification_dismissals.sql",
+        "updates/20261105035413_native_report_warning_delivery.sql"
+      ],
       "arguments": [
         {
           "name": "p_limit",

@@ -14,22 +14,32 @@ const kind = z.enum([
   "verification_phone_confirmed",
   "identity_accepted",
   "enquiry_received",
+  "account_warning",
 ]);
 const jobs = z
   .array(
-    z.object({
-      id: z.uuid(),
-      kind,
-      claim_token: z.uuid(),
-      locked_until: z.iso.datetime({ offset: true }),
-      recipient: z.email().nullable(),
-    })
+    z
+      .object({
+        id: z.uuid(),
+        kind,
+        claim_token: z.uuid(),
+        locked_until: z.iso.datetime({ offset: true }),
+        recipient: z.email().nullable(),
+        notice_reason: z.string().min(10).max(500).nullable().optional(),
+      })
+      .refine(
+        (job) =>
+          job.kind !== "account_warning" ||
+          job.recipient === null ||
+          typeof job.notice_reason === "string"
+      )
   )
   .max(1);
 type Delivery = (
   recipient: string,
   event: PlatformNoticeKind,
-  key: string
+  key: string,
+  reason?: string
 ) => Promise<{ success: boolean }>;
 export async function runFoundationOperationJobs(
   service: FoundationServiceApi = createFoundationServiceApi(),
@@ -44,7 +54,10 @@ export async function runFoundationOperationJobs(
     const result = await service.rpc(name, args);
     if (result.error) throw new Error("A scheduled foundation transaction failed");
   }
-  const claimed = await service.rpc("claim_notification_outbox", { p_limit: 1 });
+  const claimed = await service.rpc("claim_supported_notification_outbox", {
+    p_limit: 1,
+    p_supported_kinds: kind.options,
+  });
   if (claimed.error) throw new Error("Notification jobs could not be claimed");
   const batch = jobs.parse(claimed.data);
   const result = { claimed: batch.length, succeeded: 0, retrying: 0 };
@@ -55,8 +68,14 @@ export async function runFoundationOperationJobs(
     }
     let success = job.recipient === null;
     try {
-      if (job.recipient)
-        success = (await deliver(job.recipient, job.kind, `foundation-outbox/${job.id}`)).success;
+      if (job.recipient) {
+        const key = `foundation-outbox/${job.id}`;
+        success = (
+          job.kind === "account_warning" && job.notice_reason
+            ? await deliver(job.recipient, job.kind, key, job.notice_reason)
+            : await deliver(job.recipient, job.kind, key)
+        ).success;
+      }
     } catch {
       success = false;
     }

@@ -245,6 +245,7 @@ try {
     "database/foundation/updates/20261104001222_restore_full_admin_capabilities.sql",
     "database/foundation/updates/20261103180512_restored_owner_dashboard.sql",
     "database/foundation/updates/20261103183017_repair_dashboard_identity_lookup.sql",
+    "database/foundation/updates/20261103231355_owner_notification_dismissals.sql",
     "database/foundation/updates/20261104002445_restored_post_commands.sql",
     "database/foundation/updates/20261104042501_preserve_existing_edit_consent.sql",
     "database/foundation/updates/20261104043441_restored_post_manager.sql",
@@ -265,6 +266,7 @@ try {
     "database/foundation/updates/20261104222400_restored_report_workflow.sql",
     "database/foundation/updates/20261104224230_restored_staff_report_queue.sql",
     "database/foundation/updates/20261104231625_restored_report_actions.sql",
+    "database/foundation/updates/20261105035413_native_report_warning_delivery.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -306,7 +308,7 @@ try {
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
-      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;
+      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -448,6 +450,34 @@ try {
       c:=api.get_frontend_area_activity('market',20);
       if c->'today'->>'approve'<>'1' or c->'today'->>'dismiss'<>'1' or not exists(select 1 from jsonb_array_elements(c->'items')e where e->>'action'='content_approve') then raise exception 'native program action counts drift';end if;
       insert into restored_activity_probe values(c);
+      c:=api.submit_frontend_report((answer->>'id')::uuid,'listing','spam','Synthetic second report for an account warning',repeat('y',43),'${unverified.id}');
+      warning_report:=(c->>'id')::uuid;
+      warning_lease:=api.claim_queue_item('report',warning_report);
+      begin perform api.execute_frontend_report_action(warning_report,2,warning_lease->>'claim_generation',(warning_lease->>'claim_nonce')::uuid,'warn','short');raise exception 'warning without adequate reason applied';exception when invalid_parameter_value then null;end;
+      c:=api.execute_frontend_report_action(warning_report,2,warning_lease->>'claim_generation',(warning_lease->>'claim_nonce')::uuid,'warn','Synthetic account warning reason');
+      if c->>'status'<>'applied' or not exists(select 1 from private.current_account_access where id='${owner.id}') or (select count(*) from private.frontend_account_warnings where account_id='${owner.id}')<>1 then raise exception 'warning did not remain an informational notice';end if;
+      c:=api.execute_frontend_report_action(warning_report,2,warning_lease->>'claim_generation',(warning_lease->>'claim_nonce')::uuid,'warn','Synthetic account warning reason');
+      if c->>'reused'<>'true' or (select count(*) from private.notifications where account_id='${owner.id}' and kind='account_warning')<>1 or (select count(*) from private.outbox_events where owner_id='${owner.id}' and kind='account_warning')<>1 then raise exception 'warning retry repeated its notices';end if;
+      ${claims(owner)}
+      c:=api.list_my_frontend_notifications();
+      if jsonb_array_length(c->'items')<>0 or c->>'unread_count'<>'0' then raise exception 'old notification reader received unsupported warning kind';end if;
+      c:=api.list_my_frontend_notices();
+      if c->>'unread_count'<>'1' or c->'items'->0->>'warning_reason'<>'Synthetic account warning reason' then raise exception 'owner warning reason unavailable';end if;
+      ${claims(unverified)}
+      c:=api.list_my_frontend_notices();
+      if jsonb_array_length(c->'items')<>0 then raise exception 'another account read warning notice';end if;
+      update private.outbox_events set processed_at=statement_timestamp() where kind<>'account_warning';
+      c:=api.claim_notification_outbox(50);
+      if jsonb_array_length(c)<>0 or (select delivery_attempts from private.outbox_events where kind='account_warning')<>0 then raise exception 'old worker consumed unsupported warning delivery';end if;
+      c:=api.claim_supported_notification_outbox(array['account_warning'],1);
+      if jsonb_array_length(c)<>1 or c->0->>'notice_reason'<>'Synthetic account warning reason' or c->0->>'recipient' is null then raise exception 'supported warning mail context missing';end if;
+      if api.complete_notification_outbox((c->0->>'id')::uuid,gen_random_uuid(),true,null) then raise exception 'wrong mail lease acknowledged warning';end if;
+      if not api.complete_notification_outbox((c->0->>'id')::uuid,(c->0->>'claim_token')::uuid,true,null) then raise exception 'warning mail acknowledgement missing';end if;
+      if has_function_privilege('authenticated','api.claim_supported_notification_outbox(text[],integer)','execute') or has_table_privilege('authenticated','private.frontend_account_warnings','select') then raise exception 'warning delivery or facts crossed browser boundary';end if;
+      ${claims(governor)}
+      c:=api.get_frontend_staff_audit_page('{"action":"report_warn"}');
+      if c->>'total'<>'1' or c->'items'->0->>'reason'<>'Synthetic account warning reason' or c->'items'->0->>'target_id'<>warning_report::text then raise exception 'warning audit effect unavailable';end if;
+      ${claims(reviewer)}
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       ${claims(owner)}
       input:=jsonb_set(input,'{request_id}',to_jsonb('${editRequest}'::text))||jsonb_build_object('target_id',answer->>'id','expected_revision',rev);
@@ -924,6 +954,7 @@ try {
     "native report queue summaries, claimant-only descriptions/revision fences, independent foreign-claim secrecy and waiting counts that include claimed work",
     "minimal program activity, actual moderation/resolution counts and South African day scope without report bodies or evidence payloads",
     "represented report dismissal, released/stale lease refusal, exact outcome acknowledgement retry and immutable reason binding",
+    "informational warning with one owner-only notice/reason and outbox event; exact retry, legacy reader/worker compatibility and fenced supported-kind delivery acknowledgement",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

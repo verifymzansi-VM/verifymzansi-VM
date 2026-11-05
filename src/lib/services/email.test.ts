@@ -26,9 +26,30 @@ import {
   sendSupportAcknowledgement,
   sendModerationNoticeEmail,
   sendDsarExtensionEmail,
+  sendPlatformNotice,
 } from "./email";
 
 describe("email service", () => {
+  it("sends the full escaped account-warning reason with the durable event key", async () => {
+    const reason = "Review <script>not executable</script> & keep the complete explanation.";
+    await sendPlatformNotice(
+      "owner@example.invalid",
+      "account_warning",
+      "foundation-outbox/synthetic",
+      reason
+    );
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend.mock.calls[0][0].html).toContain(
+      "&lt;script&gt;not executable&lt;/script&gt; &amp;"
+    );
+    expect(mockSend.mock.calls[0][0].html).not.toContain("<script>");
+    expect(mockSend.mock.calls[0][0].text).toContain(reason);
+    expect(mockSend.mock.calls[0][1].idempotencyKey).toBe("foundation-outbox/synthetic");
+    await expect(
+      sendPlatformNotice("owner@example.invalid", "account_warning", "foundation-outbox/missing")
+    ).rejects.toThrow("details unavailable");
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",

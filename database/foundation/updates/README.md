@@ -5,6 +5,34 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Account warning notices and delivery, 5 November 2026
+
+`20261105035413_native_report_warning_delivery.sql` is applied. The represented
+report command now records an informational warning, resolves the reviewed
+report, and writes one owner-only notice and one durable delivery event in the
+same transaction. It does not change identity, posting allowance or account
+access. The actual review reason is available to the owner through the selected
+notification interface and is included, escaped, in the operational email. Exact
+receipt retries do not repeat either notice.
+
+The versioned notice reader keeps the old DTO compatible. The mail consumer
+declares its supported kinds, and the old worker claim cannot consume a new
+warning event or exhaust its attempts during rollout. Delivery and completion
+remain bound to one current lease, with the existing durable provider key.
+Missing warning details fail before sending; removed recipients are completed
+without mail. Closed warning subjects do not receive queued warning email.
+Receipt effects are included in the protected staff audit view.
+
+The native GoTrue/TOTP fixture verifies notice ownership, real reason, duplicate
+prevention, legacy reader/worker compatibility, supported-kind mail context,
+wrong-lease refusal and audit visibility. HTTP, inbox, worker and template tests
+verify the selected interface, missing-detail refusal, complete escaped reasons
+and delivery keys. Types, lint, import, dead-code and duplication checks passed.
+Hosted SQL verified audiences, warning RLS and no browser table access, with
+zero real warning records/jobs created. All local mail delivery was mocked;
+genuine provider delivery and the remaining hide/suspend/ban integration remain
+separate outstanding work.
+
 ## Represented report dismissal, 5 November 2026
 
 `20261104231625_restored_report_actions.sql` is applied for dismissal. The

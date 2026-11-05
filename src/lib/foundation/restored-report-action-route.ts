@@ -26,10 +26,11 @@ export function handleRestoredReportAction(request: NextRequest) {
     command: async (api, body) => {
       const input = inputSchema.parse(body),
         scope = input.foundation;
-      if (!input.reason || input.reason.length < 5)
+      const minimum = input.action === "dismiss" ? 5 : 10;
+      if (!input.reason || input.reason.length < minimum)
         throw new FoundationStaffCommandError(
           422,
-          "Give a review reason of at least 5 characters."
+          `Give a review reason of at least ${minimum} characters.`
         );
       const result = await settleStaffCommand(
         api.rpc(

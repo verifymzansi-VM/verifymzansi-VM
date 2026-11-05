@@ -12,12 +12,19 @@ import { inboxRefusal } from "@/lib/foundation/inbox-refusal";
 import { createBooleanFlagSchema, createBoundedIntegerSchema } from "../validations/shared";
 import { createLogger } from "../utils/logger";
 const log = createLogger("RestoredNotifications");
-const row = foundationNotificationPageSchema.shape.items.element.extend({
-  organisation_slug: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9-]{0,79}$/)
-    .nullable(),
-});
+const row = foundationNotificationPageSchema.shape.items.element
+  .extend({
+    kind: z.enum([
+      ...foundationNotificationPageSchema.shape.items.element.shape.kind.options,
+      "account_warning",
+    ]),
+    warning_reason: z.string().min(10).max(500).nullable().optional(),
+    organisation_slug: z
+      .string()
+      .regex(/^[a-z0-9][a-z0-9-]{0,79}$/)
+      .nullable(),
+  })
+  .refine((n) => n.kind !== "account_warning" || typeof n.warning_reason === "string");
 const page = z.strictObject({
   items: z.array(row).max(50),
   unread_count: z.number().int().nonnegative(),
@@ -33,6 +40,7 @@ const query = z.object({
 });
 function presentedNotification(n: z.infer<typeof row>) {
   const content = {
+    account_warning: ["Account warning", n.warning_reason ?? "", "/dashboard", "warning"],
     enquiry_received: [
       "New enquiry",
       "A buyer sent an enquiry about your post.",
@@ -111,7 +119,7 @@ export function handleRestoredNotifications(
       if (method === "GET") {
         const parsed = query.safeParse(Object.fromEntries(request.nextUrl.searchParams));
         if (!parsed.success) throw new FoundationInboxError("invalid");
-        const { data, error } = await api.rpc("list_my_frontend_notifications", {
+        const { data, error } = await api.rpc("list_my_frontend_notices", {
           p_limit: parsed.data.limit,
           p_unread: parsed.data.unread,
           ...(parsed.data.before ? { p_before: parsed.data.before } : {}),

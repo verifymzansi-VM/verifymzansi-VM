@@ -32,6 +32,10 @@ function getResend(): Resend {
 const FROM_EMAIL = "VerifyMzansi <noreply@verifymzansi.com>";
 
 const platformNotices = {
+  account_warning: [
+    "Account warning",
+    "A staff warning has been recorded on your VerifyMzansi account.",
+  ],
   payment_completed: [
     "Payment received",
     "Your payment has been recorded. View your posting allowance and invoice in Billing.",
@@ -81,8 +85,14 @@ export type PlatformNoticeKind = keyof typeof platformNotices;
 export async function sendPlatformNotice(
   to: string,
   kind: PlatformNoticeKind,
-  idempotencyKey: string
+  idempotencyKey: string,
+  noticeReason?: string
 ): Promise<SendEmailResult> {
+  if (
+    kind === "account_warning" &&
+    (!noticeReason || noticeReason.length < 10 || noticeReason.length > 500)
+  )
+    throw new Error("Account warning details unavailable");
   const [subject, intro] = platformNotices[kind];
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const path = kind.startsWith("payment_")
@@ -99,11 +109,13 @@ export async function sendPlatformNotice(
     html: brandedEmail({
       title: subject,
       intro,
-      bodyHtml: paragraph("Sign in to your account to view the details."),
+      bodyHtml: paragraph(
+        kind === "account_warning" ? noticeReason! : "Sign in to your account to view the details."
+      ),
       cta: { label: "View your account", href: appUrl + path },
       reason: "This is an operational update about your VerifyMzansi account.",
     }),
-    text: `${subject}\n\n${intro}\n\nSign in to view the details: ${appUrl}${path}`,
+    text: `${subject}\n\n${intro}${kind === "account_warning" ? `\n\n${noticeReason}` : ""}\n\nSign in to view the details: ${appUrl}${path}`,
   });
 }
 

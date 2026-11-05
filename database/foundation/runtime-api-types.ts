@@ -8,6 +8,10 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      list_my_frontend_notices: {
+        Args: { p_limit?: number; p_unread?: boolean; p_before?: string };
+        Returns: Json;
+      };
       execute_frontend_report_action: {
         Args: {
           p_report: string;
@@ -162,6 +166,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      claim_supported_notification_outbox: {
+        Args: { p_supported_kinds: string[]; p_limit?: number };
+        Returns: Json;
+      };
       submit_frontend_report: {
         Args: {
           p_post_id: string;
