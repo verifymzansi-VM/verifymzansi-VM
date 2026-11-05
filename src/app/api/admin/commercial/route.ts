@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
@@ -15,6 +15,10 @@ import {
 } from "@/lib/commercial/settings";
 import { sendOrganisationAdminInviteEmail } from "@/lib/services/email";
 import { sanitizeAppUrl } from "@/lib/services/email-template";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
+import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
 
 const log = createLogger("AdminCommercial");
 
@@ -391,6 +395,50 @@ async function inviteOrganisationAdmin(
  * that re-checks the actor's role and writes the audit row atomically.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") {
+    return handleFoundationOwnerRoute({
+      request: request instanceof NextRequest ? request : new NextRequest(request),
+      log,
+      action: "admin:commercial",
+      mutate: true,
+      maxBytes: 16000,
+      signInMessage: "Sign in to manage commercial settings",
+      unavailableMessage: "The change could not be confirmed. Reload before trying again.",
+      refusal: staffCommandRefusal,
+      command: async (api, input) => {
+        const body = schema.parse(input);
+        if (body.action === "partner.manage") {
+          const data = await saveRestoredPartner(api, {
+            account_id: body.userId,
+            action: body.operation === "rate" ? "set_rate" : body.operation,
+            reason: body.reason,
+            code: body.values.code,
+            commission_bps: body.values.commissionBps ?? undefined,
+            note: body.values.notes?.trim() || undefined,
+          });
+          return { success: true, data };
+        }
+        if (body.action === "commission.manage") {
+          if (body.values.amountCents !== undefined)
+            throw new FoundationStaffCommandError(
+              422,
+              "Commission amounts are fixed by the recorded payment."
+            );
+          const data = await decideRestoredCommission(api, {
+            commission_id: body.commissionId,
+            action: body.operation,
+            reason: body.reason,
+            ...(body.operation === "mark_paid" ? { reference: body.values.reference } : {}),
+          });
+          return { success: true, data };
+        }
+        throw new FoundationStaffCommandError(
+          501,
+          "This action is not yet available on the new backend."
+        );
+      },
+    });
+  }
   const guard = await enforceAdminMutationGuard({
     request,
     logger: log,

@@ -274,6 +274,7 @@ try {
     "database/foundation/updates/20261105053509_restored_member_appeals.sql",
     "database/foundation/updates/20261105085900_restored_privacy_requests.sql",
     "database/foundation/updates/20261105091725_restored_support_inbox.sql",
+    "database/foundation/updates/20261105092547_restored_partner_workflows.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -317,7 +318,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -1002,6 +1003,32 @@ try {
       begin perform api.update_frontend_support_status(ticket,1,'resolved');raise exception 'stale support status overwrite';exception when sqlstate 'PT409' then null;end;
       perform api.update_frontend_support_status(ticket,2,'resolved');
       if api.get_frontend_support_metrics()->>'new' is distinct from '0' then raise exception 'support metrics used stale counts';end if;
+      begin perform api.get_frontend_partner_admin();raise exception 'moderator read partner commission administration';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      c:=api.save_frontend_partner('${owner.id}','create','Synthetic partner onboarding','fixture21',null,'Recorded operator note');
+      partner:=(c->>'id')::uuid;
+      if c->>'code' is distinct from 'FIXTURE21' or not exists(select 1 from private.frontend_partner_notes where partner_id=partner and note='Recorded operator note')
+        then raise exception 'partner setup lost normalized code or operator note';end if;
+      perform api.save_frontend_partner('${owner.id}','activate','Synthetic partner activation');
+      ${claims(unverified)}
+      c:=api.record_my_acquisition('{}','FIXTURE21');
+      if c->>'source' is distinct from 'partner' or c->>'recorded' is distinct from 'true' then raise exception 'new member referral missing';end if;
+      select * into retail_plan from private.plan_versions where retired_at is null and is_public order by price_cents,id limit 1;
+      payment:=api.start_checkout(retail_plan.id);
+      perform api.attach_provider_request((payment->>'payment_id')::uuid,'restored-partner-fixture-request');
+      perform api.apply_provider_event(jsonb_build_object('payload_sha256',repeat('6',64),'merchant_reference',payment->>'merchant_reference',
+        'provider_request_id','restored-partner-fixture-request','provider_transaction_id','restored-partner-fixture-transaction','status','complete',
+        'amount_cents',retail_plan.price_cents,'currency','ZAR'));
+      ${claims(administrator)}
+      c:=api.get_frontend_partner_admin();
+      if c->>'default_rate_bps' is distinct from '2000' or c->'partners'->0->>'referrals' is distinct from '1'
+        or c->'commissions'->0->>'payment_status' is distinct from 'complete' or c->'commissions'->0->>'status' is distinct from 'pending'
+        or c->'commissions'->0->>'amount_cents' is distinct from floor(retail_plan.price_cents::numeric/5)::text
+        then raise exception 'partner admin projection did not follow actual settlement';end if;
+      ${claims(owner)}
+      c:=api.my_partner_dashboard();
+      if c->>'paying_referrals' is distinct from '1' or position('${unverified.id}' in c::text)>0
+        then raise exception 'owner referral count drift or buyer identity leak';end if;
       ${claims(governor)}
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
@@ -1241,6 +1268,7 @@ try {
     "a reusable released slot and a released activation with exhausted period budget have distinct creation allowances",
     "restricted member privacy intake, live session fence, verified staff transitions, bounded export, and claimed deadline notices",
     "support request deduplication, provider acceptance history, viewer and updater authority, and stale status refusal",
+    "selected partner administration and owner projections backed by verified attribution and synthetic provider settlement",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",

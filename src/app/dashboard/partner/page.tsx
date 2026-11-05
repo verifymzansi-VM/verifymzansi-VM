@@ -5,6 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { formatPlanPrice } from "@/lib/constants/pricing";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFoundationPartnerDashboard } from "@/lib/foundation/partners";
 
 export const metadata = { title: "Partner programme", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -39,16 +42,61 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 export default async function PartnerDashboardPage() {
+  const native = getDataBackend() === "foundation";
+  const partner: PartnerDashboard | null = native
+    ? await readNativeDashboard()
+    : await readSourceDashboard();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+
+  return <PartnerDashboardContent partner={partner} appUrl={appUrl} native={native} />;
+}
+
+async function readSourceDashboard() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?returnUrl=/dashboard/partner");
 
-  const { data } = await createAdminClient().rpc("partner_dashboard", { p_user: user.id });
-  const partner = (data ?? null) as PartnerDashboard | null;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
+  const { data, error } = await createAdminClient().rpc("partner_dashboard", { p_user: user.id });
+  if (error) throw new Error("Partner dashboard could not be loaded");
+  return (data ?? null) as PartnerDashboard | null;
+}
 
+async function readNativeDashboard(): Promise<PartnerDashboard | null> {
+  const { api } = await readFoundationServerSession();
+  const partner = await readFoundationPartnerDashboard(api);
+  if (!partner) return null;
+  return {
+    code: partner.code,
+    status: partner.status,
+    rateBps: partner.rate_bps,
+    referrals: partner.referrals,
+    payingReferrals: partner.paying_referrals,
+    totals: Object.fromEntries(
+      Object.entries(partner.totals).map(([status, value]) => [status.toUpperCase(), Number(value)])
+    ),
+    recent: partner.recent.map((row) => ({
+      id: row.id,
+      amountCents: Number(row.amount_cents),
+      baseCents: Number(row.base_cents),
+      status: row.status.toUpperCase(),
+      createdAt: row.created_at,
+      eligibleAt: row.eligible_at,
+      manual: false,
+    })),
+  };
+}
+
+function PartnerDashboardContent({
+  partner,
+  appUrl,
+  native,
+}: {
+  partner: PartnerDashboard | null;
+  appUrl: string;
+  native: boolean;
+}) {
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -135,7 +183,7 @@ export default async function PartnerDashboardPage() {
           <p className="text-xs text-muted-foreground">
             No commission is paid on free trials, free events, invitation-only programmes,
             organisation-sponsored accounts, your own purchases, refunds or chargebacks.
-            Organisation and enterprise contracts are approved individually.
+            {!native && " Organisation and enterprise contracts are approved individually."}
           </p>
         </>
       )}

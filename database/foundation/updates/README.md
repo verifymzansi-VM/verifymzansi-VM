@@ -677,3 +677,12 @@ acceptance, which does not imply inbox delivery. A moderator or administrator
 can change the represented status; a governor can read the inbox. The ticket and
 status event use one transaction, and staff dashboard counts come from the same
 tickets.
+
+`20261105092547_restored_partner_workflows.sql` supplies the selected partner
+administration panel from canonical partner, attribution, commission and payment
+records. The existing partner commands still enforce identity, independence from
+self, eligibility and exact amounts. Staff notes and the change are committed
+together. The verified signup callback passes the existing first-touch cookie to
+the native attribution command, and the operations job runs the existing
+due-commission sweep. The local fixture uses synthetic provider settlement
+without charging a payment.

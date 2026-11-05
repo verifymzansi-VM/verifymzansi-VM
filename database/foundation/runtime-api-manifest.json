@@ -4,6 +4,63 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_partner_admin",
+      "updates": ["updates/20261105092547_restored_partner_workflows.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current partner administrator and fresh TOTP; bounded canonical partner, referral and commission data without customer contact or provider payloads."
+    },
+    {
+      "name": "save_frontend_partner",
+      "updates": ["updates/20261105092547_restored_partner_workflows.sql"],
+      "arguments": [
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_code",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_rate",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current partner administrator and fresh TOTP; delegates to native authority and commits any staff note in the same transaction."
+    },
+    {
       "name": "get_frontend_support_metrics",
       "updates": ["updates/20261105091725_restored_support_inbox.sql"],
       "arguments": [],

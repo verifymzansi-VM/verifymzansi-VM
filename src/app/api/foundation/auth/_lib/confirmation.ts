@@ -9,6 +9,9 @@ import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { foundationAuthPrivateResponse } from "./attempt-route";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
+import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
+import { recordRestoredAcquisitionCookie } from "@/lib/foundation/partners";
+import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 
 /** PKCE protects this top-level email navigation; it cannot require the
  * mutation CSRF header used by in-app POSTs. The flow id selects one verifier.
@@ -65,7 +68,7 @@ export async function handleFoundationConfirmation(
       throw new Error();
     }
     const values = new Map(request.cookies.getAll().map(({ name, value }) => [name, value]));
-    await confirmFoundationAccount(
+    const api = await confirmFoundationAccount(
       config,
       { code: query.get("code"), flowId: query.get("sb_flow_id") },
       {
@@ -79,6 +82,17 @@ export async function handleFoundationConfirmation(
       purpose
     );
     success = true;
+    if (purpose !== "recovery") {
+      const cookie = request.headers
+        .get("cookie")
+        ?.split(/;\s*/)
+        .find((part) => part.startsWith(ACQUISITION_COOKIE + "="));
+      if (cookie)
+        scheduleBackgroundTask(
+          recordRestoredAcquisitionCookie(api, cookie.slice(ACQUISITION_COOKIE.length + 1)),
+          "partner attribution"
+        );
+    }
   } catch {
     // Never expose codes, verifier values, provider responses or account ids.
   }

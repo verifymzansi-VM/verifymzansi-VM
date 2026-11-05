@@ -6,6 +6,7 @@ import { parseFoundationConnection } from "./connection";
 import { createFoundationRequestCaller, FoundationSessionError } from "./request-api";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { readFoundationAccountProfile } from "./account-profile";
+import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
 const exchange = z.strictObject({
   code: z
@@ -35,7 +36,7 @@ export async function confirmFoundationAccount(
   cookies: FoundationAuthCookies,
   fetcher: typeof fetch = createTimeoutFetch(),
   purpose: "signup" | "recovery" | "google" = "signup"
-): Promise<void> {
+): Promise<FoundationAuthenticatedApi> {
   const parsed = exchange.safeParse(input);
   if (!parsed.success) throw new FoundationConfirmationError(401);
   try {
@@ -68,6 +69,7 @@ export async function confirmFoundationAccount(
       if (!caller.recovery) throw new FoundationConfirmationError(401);
       await readFoundationAccountProfile(caller.api);
     }
+    return caller.api;
   } catch (error) {
     if (error instanceof FoundationConfirmationError) throw error;
     if (error instanceof FoundationSessionError)

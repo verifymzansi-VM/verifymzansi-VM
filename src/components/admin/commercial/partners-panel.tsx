@@ -52,11 +52,13 @@ export function PartnersPanel({
   commissions,
   defaultRateBps,
   appUrl,
+  nativeRetailOnly = false,
 }: {
   partners: AdminPartner[];
   commissions: AdminCommission[];
   defaultRateBps: number;
   appUrl: string;
+  nativeRetailOnly?: boolean;
 }) {
   const create = useCommercialAction();
   const rowAction = useCommercialAction();
@@ -65,7 +67,7 @@ export function PartnersPanel({
     <div className="space-y-6">
       <AdminCard
         title="Add a partner / agent"
-        description={`Default commission is ${defaultRateBps / 100}% of collected retail revenue. No commission on free trials, events, programmes, self-referrals, refunds or chargebacks. Institutional payments always need manual approval.`}
+        description={`Default commission is ${defaultRateBps / 100}% of collected retail revenue. No commission on free trials, events, programmes, self-referrals, refunds or chargebacks.${nativeRetailOnly ? "" : " Institutional payments always need manual approval."}`}
       >
         <form
           className="grid gap-3 sm:grid-cols-4 sm:items-end"

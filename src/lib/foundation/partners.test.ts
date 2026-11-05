@@ -3,6 +3,7 @@ import {
   decideFoundationCommission,
   readFoundationPartnerDashboard,
   recordFoundationAcquisition,
+  recordRestoredAcquisitionCookie,
   saveFoundationPartner,
 } from "./partners";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
@@ -54,6 +55,25 @@ describe("foundation partner adapter", () => {
         })
       )
     ).rejects.toMatchObject({ reason: "unavailable" });
+  });
+  it("keeps a valid referral from the existing cookie when other fields are invalid", async () => {
+    const client = api({ data: { source: "partner", recorded: true }, error: null });
+    await recordRestoredAcquisitionCookie(
+      client,
+      encodeURIComponent(
+        JSON.stringify({
+          partnerCode: "FIXTURE21",
+          landingPath: "https://example.invalid",
+          source: "SOCIAL",
+          utm: { utm_medium: "social", unknown: "ignored" },
+        })
+      )
+    );
+    expect(client.rpc).toHaveBeenCalledExactlyOnceWith("record_my_acquisition", {
+      p_partner_code: "FIXTURE21",
+      p_source: "social",
+      p_utm: { utm_medium: "social" },
+    });
   });
 
   it("requires a payout reference only to mark a commission paid", async () => {

@@ -55,6 +55,7 @@ export async function runFoundationOperationJobs(
     ["sweep_sponsorships", { p_limit: 100 }],
     ["purge_expired_inbox", { p_limit: 100 }],
     ["reconcile_intro_trials", { p_limit: 20 }],
+    ["approve_due_commissions", { p_limit: 20 }],
   ] as const) {
     const result = await service.rpc(name, args);
     if (result.error) throw new Error("A scheduled foundation transaction failed");

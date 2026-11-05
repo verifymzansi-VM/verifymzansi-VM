@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 export type CommercialPayload = Record<string, unknown> & { action: string };
 
@@ -24,6 +25,12 @@ export function useCommercialAction() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (body.code === "step_up_required" || body.code === "mfa_required") {
+          router.push(
+            staffVerifyHref("/staff/two-step", window.location.pathname + window.location.search)
+          );
+          return null;
+        }
         setMessage({ tone: "error", text: body.error ?? "The change could not be applied." });
         return null;
       }
