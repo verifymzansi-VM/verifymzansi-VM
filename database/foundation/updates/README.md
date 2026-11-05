@@ -652,3 +652,20 @@ effect version and changes only the effect under review. Active content holds
 survive the retention of the originating report. Generic owner notices and an
 email job are recorded in the same transaction as each effect or resolution.
 Neither the email nor the owner list discloses the reporter.
+
+`20261105085900_restored_privacy_requests.sql` reconnects the existing data
+request and staff forms. Website intake is bound to a live confirmed account and
+stores only the supplied ID suffix. Manual requests start unverified. Current
+staff with fresh TOTP can assign, review, extend and complete cases against the
+represented revision, with subject conflicts denied. An access export requires
+verified identity and a started or completed case; it reads the fixed dataset
+registry in one snapshot and refuses an oversized export without returning a
+partial file. No raw evidence, credentials, storage keys or counterpart contact
+fields are returned. Deletion requests require a recorded staff attestation and
+never trigger automatic deletion.
+
+The existing response targets are preserved. The access rule references the
+[private-body PAIA provisions](https://www.justice.gov.za/legislation/acts/2000-002.pdf).
+Submission and outcome notices use a private claim queue, and an extension
+records its notification time only after provider acceptance. The fixture uses
+synthetic notice acknowledgements and performs no actual delivery.

@@ -152,6 +152,7 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
     return {
       api,
       accountId: claims.sub,
+      sessionId: claims.session_id,
       user: verified.data.user,
       recovery: foundationRecoveryClaim(claims.session_id, claims.amr),
     };

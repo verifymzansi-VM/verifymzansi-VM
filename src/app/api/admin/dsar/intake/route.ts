@@ -6,6 +6,9 @@ import { createLogger } from "@/lib/utils/logger";
 import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
+import { getDataBackend } from "@/lib/data-backend";
+import { handlePrivacyStaffRoute } from "@/lib/foundation/privacy-requests";
+import { settleStaffCommand } from "@/lib/foundation/staff-command";
 
 const log = createLogger("DsarIntake");
 
@@ -32,6 +35,32 @@ const MAX_BACKDATE_MS = 60 * 24 * 60 * 60 * 1000;
  * must be checked manually before anything is disclosed.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") {
+    return handlePrivacyStaffRoute(request, log, "intake", async (api, body) => {
+      const input = intakeSchema.strict().parse(body);
+      const created = await settleStaffCommand(
+        api.rpc(
+          "record_frontend_privacy_intake",
+          {
+            p_type: input.type,
+            p_email: input.requesterEmail,
+            p_phone: input.requesterPhone || null,
+            p_description: input.description,
+            p_note: input.intakeNote,
+            ...(input.receivedAt ? { p_received: input.receivedAt } : {}),
+          },
+          { get: false }
+        ),
+        z.strictObject({ id: z.uuid(), due_by: z.iso.datetime({ offset: true }) })
+      );
+      return {
+        status: "created",
+        requestId: created.id,
+        reference: `DSAR-${created.id.slice(0, 8).toUpperCase()}`,
+        dueBy: created.due_by,
+      };
+    });
+  }
   try {
     const guard = await enforceAdminMutationGuard({
       request,

@@ -16,12 +16,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Check, CheckCircle, Loader2, XCircle } from "lucide-react";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import type { DsarCase } from "@/types/database";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 interface DsarActionButtonsProps {
   requestId: string;
   status: "submitted" | "in_progress";
   requestType: DsarCase["type"];
   identityVerified: boolean;
+  revision?: number;
 }
 
 export function DsarActionButtons({
@@ -29,6 +31,7 @@ export function DsarActionButtons({
   status,
   requestType,
   identityVerified,
+  revision,
 }: DsarActionButtonsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -49,11 +52,15 @@ export function DsarActionButtons({
       const res = await fetch("/api/admin/dsar/decide", {
         method: "POST",
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ requestId, decision }),
+        body: JSON.stringify({ requestId, decision, revision }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.code === "step_up_required" || data.code === "mfa_required") {
+          router.push(staffVerifyHref("/staff/two-step", "/admin/dsar"));
+          return;
+        }
         throw new Error(data.error || `Failed (${res.status})`);
       }
 
@@ -79,6 +86,7 @@ export function DsarActionButtons({
         headers: withCsrfHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           requestId,
+          revision,
           notes: completionNotes.trim() || undefined,
           deletionAttestation: isDeletion ? deletionAttestation.trim() : undefined,
         }),
@@ -86,6 +94,10 @@ export function DsarActionButtons({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.code === "step_up_required" || data.code === "mfa_required") {
+          router.push(staffVerifyHref("/staff/two-step", "/admin/dsar"));
+          return;
+        }
         throw new Error(data.error || `Failed (${res.status})`);
       }
 

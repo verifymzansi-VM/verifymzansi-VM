@@ -26,6 +26,8 @@ interface DsarCaseControlsProps {
   canExtend: boolean;
   extensionDays: number;
   isOpen: boolean;
+  revision?: number;
+  canExport?: boolean;
 }
 
 type ErrorBody = { error?: string; code?: string; verifyUrl?: string };
@@ -48,6 +50,8 @@ export function DsarCaseControls({
   canExtend,
   extensionDays,
   isOpen,
+  revision,
+  canExport = identityVerified,
 }: DsarCaseControlsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -61,8 +65,8 @@ export function DsarCaseControls({
   async function failed(res: Response): Promise<boolean> {
     if (res.ok) return false;
     const data = (await res.json().catch(() => ({}))) as ErrorBody;
-    if ((data.code === "step_up_required" || data.code === "mfa_required") && data.verifyUrl) {
-      router.push(staffVerifyHref(data.verifyUrl, "/admin/dsar"));
+    if (data.code === "step_up_required" || data.code === "mfa_required") {
+      router.push(staffVerifyHref(data.verifyUrl ?? "/staff/two-step", "/admin/dsar"));
       return true;
     }
     setError(data.error || `Failed (${res.status})`);
@@ -81,7 +85,7 @@ export function DsarCaseControls({
     setError(null);
     setWorking("export");
     try {
-      const res = await post("/api/admin/dsar/export", { requestId });
+      const res = await post("/api/admin/dsar/export", { requestId, revision });
       if (await failed(res)) return;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -106,7 +110,12 @@ export function DsarCaseControls({
     setError(null);
     setWorking("assign");
     try {
-      const res = await post("/api/admin/dsar/case", { action: "assign", requestId, assigneeId });
+      const res = await post("/api/admin/dsar/case", {
+        action: "assign",
+        requestId,
+        assigneeId,
+        revision,
+      });
       if (await failed(res)) return;
       startTransition(() => router.refresh());
     } catch {
@@ -123,6 +132,7 @@ export function DsarCaseControls({
       const res = await post("/api/admin/dsar/case", {
         action: "extend",
         requestId,
+        revision,
         reason: reason.trim(),
       });
       if (await failed(res)) return;
@@ -174,8 +184,14 @@ export function DsarCaseControls({
           variant="outline"
           size="sm"
           className="gap-2"
-          disabled={busy || !identityVerified}
-          title={identityVerified ? undefined : "Verify the requester's identity first"}
+          disabled={busy || !canExport}
+          title={
+            canExport
+              ? undefined
+              : identityVerified
+                ? "Start a verified access request before exporting"
+                : "Verify the requester's identity first"
+          }
           onClick={handleExport}
         >
           {working === "export" ? (

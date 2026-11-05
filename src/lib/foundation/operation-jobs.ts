@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { createFoundationServiceApi, type FoundationServiceApi } from "./service-api";
 import { sendPlatformNotice, type PlatformNoticeKind } from "../services/email";
+import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 const kind = z.enum([
   "payment_completed",
   "payment_reversed",
@@ -91,6 +92,11 @@ export async function runFoundationOperationJobs(
     });
     if (done.error || done.data !== true || !success) result.retrying++;
     else result.succeeded++;
+  }
+  const privacy = await runFoundationPrivacyNotice(service);
+  if (privacy !== "empty") {
+    result.claimed++;
+    result[privacy]++;
   }
   return result;
 }

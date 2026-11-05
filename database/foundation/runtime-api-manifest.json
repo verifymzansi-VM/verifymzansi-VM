@@ -4,6 +4,228 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "record_frontend_privacy_request",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_account",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_type",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_name",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_last_four",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_details",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted server after CAPTCHA and CSRF; database binds the actual live account session and confirmed email. Only a masked identifier suffix is accepted."
+    },
+    {
+      "name": "record_frontend_privacy_intake",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_type",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_phone",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_description",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_received",
+          "sqlType": "timestamp with time zone",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy reviewer and fresh TOTP. Manual cases begin unverified and are not linked to a customer from an unverified address."
+    },
+    {
+      "name": "get_frontend_privacy_queue",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_view",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_page",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy reviewer and fresh TOTP. Bounded numbered pages, exact counts and represented revision."
+    },
+    {
+      "name": "process_frontend_privacy_request",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_assignee",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_attestation",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy reviewer and fresh TOTP. Subject conflicts and stale revisions are denied; completion requires verified identity and deletion attestation where applicable."
+    },
+    {
+      "name": "export_frontend_privacy_request",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_revision",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current privacy reviewer with fresh TOTP; only the represented verified access request and fixed subject-scoped datasets. Oversized exports are refused in full."
+    },
+    {
+      "name": "claim_frontend_privacy_notice",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted mail worker only; claims one bounded durable notice for the represented request."
+    },
+    {
+      "name": "complete_frontend_privacy_notice",
+      "updates": ["updates/20261105085900_restored_privacy_requests.sql"],
+      "arguments": [
+        {
+          "name": "p_job",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_delivered",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted mail worker only; exact active claim token fences the receipt. A delivered deadline extension records its written notice time."
+    },
+    {
       "name": "get_my_frontend_decisions",
       "updates": ["updates/20261105053509_restored_member_appeals.sql"],
       "arguments": [],

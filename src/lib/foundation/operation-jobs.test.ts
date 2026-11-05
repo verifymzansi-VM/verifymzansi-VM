@@ -9,6 +9,7 @@ const claim = "00000000-0000-4000-8000-000000000002";
 const rpc = vi.fn(),
   deliver = vi.fn();
 const service = { rpc } as unknown as FoundationServiceApi;
+vi.mock("./privacy-notice-job", () => ({ runFoundationPrivacyNotice: vi.fn(async () => "empty") }));
 const job = () => ({
   id,
   claim_token: claim,

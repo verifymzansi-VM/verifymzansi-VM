@@ -13,6 +13,12 @@ import { DsarCaseControls } from "./dsar-case-controls";
 import { createLogger } from "@/lib/utils/logger";
 import type { DsarCase } from "@/types/database";
 import type { DsarStatus } from "@/types/enums";
+import { redirect } from "next/navigation";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendPrivacyQueue } from "@/lib/foundation/privacy-requests";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 export const metadata = {
   title: "Data requests — Admin",
@@ -50,22 +56,7 @@ function daysUntil(iso: string, now: number): number {
   return Math.ceil((new Date(iso).getTime() - now) / DAY_MS);
 }
 
-export default async function AdminDSARPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ view?: string; page?: string }>;
-}) {
-  const { user } = await requireStaff("dsar:manage");
-
-  const params = (await searchParams) ?? {};
-  const view: DsarView = VIEWS.includes(params.view as DsarView)
-    ? (params.view as DsarView)
-    : "open";
-  const parsedPage = Number(params.page || 1);
-  const page =
-    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
-
-  const now = requestTime();
+async function readSourcePrivacyQueue(userId: string, view: DsarView, page: number, now: number) {
   const nowIso = new Date(now).toISOString();
   const dueSoonIso = new Date(now + DUE_SOON_DAYS * DAY_MS).toISOString();
   const admin = createAdminClient();
@@ -80,7 +71,7 @@ export default async function AdminDSARPage({
   if (view === "overdue") query = query.lt("effective_due_at", nowIso);
   if (view === "due_soon")
     query = query.gte("effective_due_at", nowIso).lt("effective_due_at", dueSoonIso);
-  if (view === "mine") query = query.eq("assigned_to", user.id);
+  if (view === "mine") query = query.eq("assigned_to", userId);
   query =
     view === "closed"
       ? query.order("created_at", { ascending: false })
@@ -104,17 +95,13 @@ export default async function AdminDSARPage({
 
   const failure =
     casesResult.error ?? overdueResult.error ?? dueSoonResult.error ?? rulesResult.error;
-  if (failure) {
-    createLogger("AdminDSAR").error("DSAR read failed", { error: failure.message });
-    return (
-      <p role="alert">
-        Data requests could not be loaded. Refresh to try again. This does not mean there are no
-        requests.
-      </p>
-    );
-  }
+  if (failure) throw new Error("Privacy queue source read failed");
 
-  const requests = (casesResult.data ?? []) as DsarCase[];
+  const requests = ((casesResult.data ?? []) as DsarCase[]).map((row) => ({
+    ...row,
+    revision: undefined,
+    may_process: true,
+  }));
   const total = casesResult.count ?? requests.length;
   const rules = new Map(
     ((rulesResult.data ?? []) as DeadlineRule[]).map((r) => [r.request_type, r] as const)
@@ -133,9 +120,67 @@ export default async function AdminDSARPage({
     (assignees ?? []).map((a) => [a.user_id, a.display_name || "a staff member"] as const)
   );
 
-  const tabCounts: Partial<Record<DsarView, number | null>> = {
+  return {
+    requests,
+    total,
+    rules,
+    assigneeNames,
     overdue: overdueResult.count,
-    due_soon: dueSoonResult.count,
+    dueSoon: dueSoonResult.count,
+  };
+}
+
+async function readNativePrivacyQueue(userId: string, view: DsarView, page: number) {
+  const { api } = await readFoundationServerSession();
+  const data = await readFrontendPrivacyQueue(api, userId, view, page);
+  const assigneeNames = new Map(
+    data.items.flatMap((item) =>
+      item.assigned_to ? [[item.assigned_to, item.assignee_name || "a staff member"] as const] : []
+    )
+  );
+  return {
+    requests: data.items,
+    total: data.total,
+    rules: new Map<string, DeadlineRule>(data.rules.map((rule) => [rule.request_type, rule])),
+    assigneeNames,
+    overdue: data.overdue,
+    dueSoon: data.due_soon,
+  };
+}
+
+export default async function AdminDSARPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ view?: string; page?: string }>;
+}) {
+  const { user } = await requireStaff("dsar:manage");
+  const params = (await searchParams) ?? {};
+  const view = VIEWS.includes(params.view as DsarView) ? (params.view as DsarView) : "open";
+  const parsedPage = Number(params.page || 1);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const now = requestTime();
+  let data;
+  try {
+    data =
+      getDataBackend() === "foundation"
+        ? await readNativePrivacyQueue(user.id, view, page)
+        : await readSourcePrivacyQueue(user.id, view, page, now);
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", `/admin/dsar?view=${view}&page=${page}`));
+    createLogger("AdminDSAR").error("DSAR read failed");
+    return (
+      <p role="alert">
+        Data requests could not be loaded. Refresh to try again. This does not mean there are no
+        requests.
+      </p>
+    );
+  }
+  const { requests, total, rules, assigneeNames } = data;
+  const tabCounts: Partial<Record<DsarView, number | null>> = {
+    overdue: data.overdue,
+    due_soon: data.dueSoon,
   };
   const hrefFor = (nextView: DsarView, nextPage = 1) =>
     `/admin/dsar?view=${nextView}${nextPage > 1 ? `&page=${nextPage}` : ""}`;
@@ -266,23 +311,35 @@ export default async function AdminDSARPage({
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      {(req.status === "submitted" || req.status === "in_progress") && (
-                        <DsarActionButtons
+                      {req.may_process &&
+                        (req.status === "submitted" || req.status === "in_progress") && (
+                          <DsarActionButtons
+                            requestId={req.id}
+                            status={req.status}
+                            requestType={req.type}
+                            identityVerified={req.identity_verified}
+                            revision={req.revision}
+                          />
+                        )}
+                      {req.may_process && (
+                        <DsarCaseControls
                           requestId={req.id}
-                          status={req.status}
-                          requestType={req.type}
+                          viewerId={user.id}
+                          assignedTo={req.assigned_to}
                           identityVerified={req.identity_verified}
+                          canExtend={canExtend}
+                          extensionDays={rule?.extension_days ?? 0}
+                          isOpen={isOpen}
+                          revision={req.revision}
+                          canExport={
+                            req.revision === undefined
+                              ? req.identity_verified
+                              : req.identity_verified &&
+                                req.type === "access" &&
+                                ["in_progress", "completed"].includes(req.status)
+                          }
                         />
                       )}
-                      <DsarCaseControls
-                        requestId={req.id}
-                        viewerId={user.id}
-                        assignedTo={req.assigned_to}
-                        identityVerified={req.identity_verified}
-                        canExtend={canExtend}
-                        extensionDays={rule?.extension_days ?? 0}
-                        isOpen={isOpen}
-                      />
                     </div>
                   </div>
                 </CardContent>

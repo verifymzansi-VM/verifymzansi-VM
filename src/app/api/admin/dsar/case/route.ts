@@ -7,6 +7,12 @@ import { createLogger } from "@/lib/utils/logger";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { uuidSchema } from "@/lib/validations/shared";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  handlePrivacyStaffRoute,
+  privacyRevision,
+  processFrontendPrivacyRequest,
+} from "@/lib/foundation/privacy-requests";
 
 const log = createLogger("DsarCase");
 
@@ -44,6 +50,20 @@ const EXTEND_REFUSALS: Record<string, [number, string]> = {
  *   assign → give the case to someone who can handle data requests.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") {
+    return handlePrivacyStaffRoute(request, log, "case", (api, body) => {
+      const input = z
+        .discriminatedUnion("action", [
+          caseActionSchema.options[0].extend({ revision: privacyRevision }).strict(),
+          caseActionSchema.options[1].extend({ revision: privacyRevision }).strict(),
+        ])
+        .parse(body);
+      return processFrontendPrivacyRequest(api, {
+        ...input,
+        ...(input.action === "extend" ? { note: input.reason } : {}),
+      });
+    });
+  }
   try {
     const guard = await enforceAdminMutationGuard({
       request,

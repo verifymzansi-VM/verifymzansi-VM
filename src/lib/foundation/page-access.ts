@@ -57,7 +57,8 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
       if (
         path === "/appeals" ||
         path === "/appeals/new" ||
-        (path === "/api/appeals" && request.method === "POST")
+        path === "/dsar" ||
+        (["/api/appeals", "/api/dsar/submit"].includes(path) && request.method === "POST")
       )
         return reply(next());
       if (apiRequest) return refuse(403, restriction.status === "banned" ? "Banned" : "Suspended");

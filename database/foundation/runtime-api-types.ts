@@ -8,6 +8,36 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      export_frontend_privacy_request: {
+        Args: { p_case: string; p_revision: number };
+        Returns: Json;
+      };
+      record_frontend_privacy_intake: {
+        Args: {
+          p_type: string;
+          p_email: string;
+          p_phone: string | null;
+          p_description: string;
+          p_note: string;
+          p_received?: string;
+        };
+        Returns: Json;
+      };
+      get_frontend_privacy_queue: {
+        Args: { p_view?: string; p_page?: number };
+        Returns: Json;
+      };
+      process_frontend_privacy_request: {
+        Args: {
+          p_case: string;
+          p_revision: number;
+          p_action: string;
+          p_note?: string;
+          p_assignee?: string;
+          p_attestation?: string;
+        };
+        Returns: Json;
+      };
       get_my_frontend_decisions: { Args: Record<PropertyKey, never>; Returns: Json };
       submit_my_frontend_appeal: {
         Args: { p_action: string; p_reason: string };
@@ -208,6 +238,22 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      claim_frontend_privacy_notice: { Args: Record<PropertyKey, never>; Returns: Json };
+      complete_frontend_privacy_notice: {
+        Args: { p_job: string; p_claim: string; p_delivered: boolean };
+        Returns: boolean;
+      };
+      record_frontend_privacy_request: {
+        Args: {
+          p_account: string;
+          p_session: string;
+          p_type: string;
+          p_name: string;
+          p_last_four: string | null;
+          p_details: string | null;
+        };
+        Returns: Json;
+      };
       claim_supported_notification_outbox: {
         Args: { p_supported_kinds: string[]; p_limit?: number };
         Returns: Json;

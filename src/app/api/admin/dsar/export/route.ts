@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { withAllPrivateFields } from "@/lib/content/private-fields";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -8,6 +8,14 @@ import { checkSensitiveActionRateLimit } from "@/lib/utils/rate-limit";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { parseAndValidateJsonRequest, rateLimitResponse } from "@/lib/utils/api";
 import { uuidSchema } from "@/lib/validations/shared";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import { privacyRevision } from "@/lib/foundation/privacy-requests";
+import {
+  FoundationStaffCommandError,
+  settleStaffCommand,
+  staffCommandRefusal,
+} from "@/lib/foundation/staff-command";
 
 const log = createLogger("DSARExport");
 
@@ -256,6 +264,73 @@ async function collectSubjectData(admin: Admin, subjectId: string) {
  * the staff member, who sends it to the requester.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") {
+    return handleFoundationOwnerRoute<{ request_id: string }>({
+      request: request instanceof NextRequest ? request : new NextRequest(request),
+      log,
+      action: "admin:dsar:export:local",
+      mutate: true,
+      requireCaller: true,
+      unavailableMessage: "The data export could not be confirmed. Nothing was exported.",
+      signInMessage: "Sign in to review data requests",
+      refusal: staffCommandRefusal,
+      responseHeaders: (result) => ({
+        "Content-Disposition": `attachment; filename="dsar-export-${result.request_id.slice(0, 8)}.json"`,
+        "X-Content-Type-Options": "nosniff",
+      }),
+      command: async (api, body, caller) => {
+        if (!caller) throw new Error("Verified staff caller required");
+        const input = exportSchema.extend({ revision: privacyRevision }).strict().parse(body);
+        const rl = await checkSensitiveActionRateLimit(caller.accountId, "admin:dsar:export");
+        if (rl.degraded || rl.limited)
+          throw new FoundationStaffCommandError(
+            rl.degraded ? 503 : 429,
+            "Export protection is temporarily unavailable or the limit has been reached."
+          );
+        const rpc = await api.rpc(
+          "export_frontend_privacy_request",
+          {
+            p_case: input.requestId,
+            p_revision: input.revision,
+          },
+          { get: false }
+        );
+        if (rpc.error?.code === "PT413")
+          throw new FoundationStaffCommandError(
+            413,
+            "The export is too large for a direct download. Nothing was exported."
+          );
+        const date = z.iso.datetime({ offset: true });
+        const result = await settleStaffCommand(
+          Promise.resolve(rpc),
+          z
+            .strictObject({
+              request_id: z.literal(input.requestId),
+              reference: z.literal(`DSAR-${input.requestId.slice(0, 8).toUpperCase()}`),
+              generated_at: date,
+              request_type: z.literal("access"),
+              received_at: date,
+              due_by: date,
+              account_found: z.boolean(),
+              datasets: z.record(
+                z.string().regex(/^[a-z_]{1,40}$/),
+                z.array(z.record(z.string(), z.unknown())).max(2500)
+              ),
+            })
+            .refine((v) =>
+              v.account_found
+                ? Object.keys(v.datasets).length === 32
+                : Object.keys(v.datasets).length === 0
+            )
+        );
+        return {
+          ...result,
+          scope:
+            "Account records in the listed datasets. Raw identity evidence, credentials, internal storage and provider data, and counterpart contact details are excluded.",
+        };
+      },
+    });
+  }
   try {
     const guard = await enforceAdminMutationGuard({
       request,

@@ -488,7 +488,8 @@ export async function sendPaymentFailedEmail(
 export async function sendDsarSubmissionEmail(
   email: string,
   reference: string,
-  dueByIso: string
+  dueByIso: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const dueDate = new Date(dueByIso).toLocaleDateString("en-ZA", {
@@ -518,11 +519,11 @@ export async function sendDsarSubmissionEmail(
 
   const text = `Hi,\n\nWe have received your VerifyMzansi data request.\n\nReference: ${reference}\nTarget response date: ${dueDate}\n\nIf we need more information to verify your identity or clarify your request, we will contact you using this email address.\n\nLearn more: ${appUrl}/dsar`;
 
-  return sendEmail({ to: email, subject, html, text });
+  return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
 /**
- * Written notice that an access request's deadline was extended (PAIA s26):
+ * Written notice that an access request's deadline was extended (PAIA s57):
  * the new date and the reason.
  */
 export async function sendDsarExtensionEmail(
@@ -575,7 +576,8 @@ Learn more: ${appUrl}/dsar`;
 export async function sendDsarCompletedEmail(
   email: string,
   reference: string,
-  summary?: string
+  summary?: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const summaryHtml = summary ? noteBox(`<strong>Summary:</strong><br>${escapeHtml(summary)}`) : "";
@@ -598,13 +600,14 @@ export async function sendDsarCompletedEmail(
 
   const text = `Hi,\n\nYour VerifyMzansi data request has been marked as completed.\n\nReference: ${reference}${summary ? `\nSummary: ${summary}` : ""}\n\nIf you still need assistance or believe something is missing, please contact support.\n\nMore information: ${appUrl}/dsar`;
 
-  return sendEmail({ to: email, subject, html, text });
+  return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
 export async function sendDsarRejectedEmail(
   email: string,
   reference: string,
-  notes?: string
+  notes?: string,
+  idempotencyKey?: string
 ): Promise<SendEmailResult> {
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const notesHtml = notes ? noteBox(`<strong>Reason:</strong><br>${escapeHtml(notes)}`) : "";
@@ -628,7 +631,7 @@ export async function sendDsarRejectedEmail(
 
   const text = `Hi,\n\nYour VerifyMzansi data request was reviewed and could not be processed.\n\nReference: ${reference}${notes ? `\nReason: ${notes}` : ""}\n\nIf you believe this decision is incorrect, please contact support.\n\nMore information: ${appUrl}/dsar`;
 
-  return sendEmail({ to: email, subject, html, text });
+  return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
 export async function sendAlreadyRegisteredEmail(email: string): Promise<SendEmailResult> {

@@ -43,6 +43,7 @@ export async function handleFoundationOwnerRoute<T>({
   command,
   refusal,
   includeAccountId = false,
+  requireCaller = false,
   maxBytes = 4096,
   successStatus = 200,
   responseHeaders,
@@ -53,9 +54,14 @@ export async function handleFoundationOwnerRoute<T>({
   mutate: boolean;
   unavailableMessage: string;
   signInMessage: string;
-  command: (api: FoundationAuthenticatedApi, input: unknown) => Promise<T>;
+  command: (
+    api: FoundationAuthenticatedApi,
+    input: unknown,
+    caller?: { accountId: string; sessionId: string }
+  ) => Promise<T>;
   refusal: (error: unknown) => FoundationRefusal | null;
   includeAccountId?: boolean;
+  requireCaller?: boolean;
   maxBytes?: number;
   successStatus?: 200 | 201;
   responseHeaders?: (data: T) => Record<string, string>;
@@ -93,12 +99,12 @@ export async function handleFoundationOwnerRoute<T>({
         )
       );
     let api: FoundationAuthenticatedApi;
-    let accountId: string | undefined;
+    let caller: { accountId: string; sessionId: string } | undefined;
     try {
-      if (includeAccountId) {
-        const caller = await context.authenticateCaller();
-        api = caller.api;
-        accountId = caller.accountId;
+      if (includeAccountId || requireCaller) {
+        const verified = await context.authenticateCaller();
+        api = verified.api;
+        caller = { accountId: verified.accountId, sessionId: verified.sessionId };
       } else api = await context.authenticate();
     } catch (error) {
       if (!(error instanceof FoundationSessionError) || error.status === 503)
@@ -113,9 +119,9 @@ export async function handleFoundationOwnerRoute<T>({
           NextResponse.json({ error: "Check the details and try again" }, { status: 400 })
         );
     }
-    const data = await command(api, input);
+    const data = await command(api, input, caller);
     return context.respond(
-      NextResponse.json(includeAccountId ? { account_id: accountId, data } : data, {
+      NextResponse.json(includeAccountId ? { account_id: caller?.accountId, data } : data, {
         status: successStatus,
         headers: responseHeaders?.(data),
       })

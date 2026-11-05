@@ -35,6 +35,7 @@ beforeEach(() => {
   } as Awaited<ReturnType<typeof cookies>>);
   vi.mocked(readFoundationRequestCaller).mockResolvedValue({
     accountId: id,
+    sessionId: id,
     user,
     api,
   } as Awaited<ReturnType<typeof readFoundationRequestCaller>>);
@@ -59,6 +60,7 @@ it("rejects another account's context", async () => {
 it("refuses inconsistent verified user and account identities", async () => {
   vi.mocked(readFoundationRequestCaller).mockResolvedValue({
     accountId: id,
+    sessionId: id,
     api,
     recovery: null,
     user: { ...user, id: "00000000-0000-4000-8000-000000000002" },

@@ -272,6 +272,7 @@ try {
     "database/foundation/updates/20261105052337_restored_enforcement_views.sql",
     "database/foundation/updates/20261105053049_restored_creation_allowance.sql",
     "database/foundation/updates/20261105053509_restored_member_appeals.sql",
+    "database/foundation/updates/20261105085900_restored_privacy_requests.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -315,7 +316,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -805,6 +806,13 @@ try {
       ${claims(owner)}
       c:=api.get_my_frontend_restriction_status();
       if c->>'status' is distinct from 'suspended' or c->>'ends_at' is null or c->>'account_id' is distinct from '${owner.id}' then raise exception 'restricted self-status lost the member or term';end if;
+      c:=api.record_frontend_privacy_request('${owner.id}','${owner.claims.session_id}','access','Fixture Owner','0123','Synthetic access request');
+      privacy_case:=(c->>'id')::uuid;privacy_due:=(c->>'due_by')::timestamptz;
+      if not exists(select 1 from private.privacy_requests r where r.id=privacy_case and r.subject_user_id='${owner.id}' and r.requester_email=(select email from auth.users where id='${owner.id}') and r.due_by=r.received_at+interval '30 days' and not r.identity_verified)
+        or api.record_frontend_privacy_request('${owner.id}','${owner.claims.session_id}','access','Fixture Owner','0123','Synthetic access request')->>'reused' is distinct from 'true'
+        then raise exception 'privacy intake did not bind confirmed member, deadline, or retry';end if;
+      begin perform api.record_frontend_privacy_request('${owner.id}','${unverified.claims.session_id}','access','Fixture Owner','0123',null);raise exception 'cross-account privacy session accepted';exception when insufficient_privilege then null;end;
+      begin perform api.get_frontend_privacy_queue();raise exception 'member read staff privacy queue';exception when insufficient_privilege then null;end;
       begin perform api.get_my_account_context();raise exception 'restricted self-status allowed an ordinary account read';exception when insufficient_privilege then null;end;
       begin perform api.get_frontend_enforcement();raise exception 'member read private enforcement';exception when insufficient_privilege then null;end;
       c:=api.get_my_frontend_decisions();
@@ -819,6 +827,32 @@ try {
       ${claims(governor)}
       begin perform api.resolve_frontend_appeal(appeal,'upheld','Original approver cannot decide an appeal',1);raise exception 'original reviewer decided an appeal';exception when insufficient_privilege then null;end;
       ${claims(administrator)}
+      c:=api.get_frontend_privacy_queue();
+      if c->>'total' is distinct from '1' or c->'items'->0->>'id' is distinct from privacy_case::text
+        or c->'items'->0->>'revision' is distinct from '1' then raise exception 'privacy queue lost exact current case';end if;
+      perform api.process_frontend_privacy_request(privacy_case,1,'extend','Review needs the permitted additional time.');
+      begin perform api.process_frontend_privacy_request(privacy_case,2,'extend','A second extension must not be permitted.');raise exception 'duplicate privacy extension accepted';exception when sqlstate 'PT409' then null;end;
+      perform api.process_frontend_privacy_request(privacy_case,2,'approve');
+      begin perform api.process_frontend_privacy_request(privacy_case,3,'complete');raise exception 'unverified privacy case marked complete';exception when sqlstate 'PT409' then null;end;
+      begin perform api.export_frontend_privacy_request(privacy_case,3);raise exception 'unverified privacy case exported';exception when sqlstate 'PT409' then null;end;
+      perform api.process_frontend_privacy_request(privacy_case,3,'verify_identity');
+      c:=api.export_frontend_privacy_request(privacy_case,4);
+      if c->'datasets'->'account'->0->>'id' is distinct from '${owner.id}'
+        or (select count(*) from jsonb_object_keys(c->'datasets'))<>32
+        or c->'datasets'->'evidence_metadata'->0 ? 'object_key'
+        or c->'datasets'->'enquiries_received'->0 ? 'buyer_email'
+        or c->'datasets'->'account'->0 ? 'encrypted_password' then raise exception 'privacy export lost scope or disclosed private data';end if;
+      notice:=api.claim_frontend_privacy_notice();
+      if notice->>'kind' is distinct from 'submitted' or notice->>'request_id' is distinct from privacy_case::text
+        or api.complete_frontend_privacy_notice((notice->>'id')::uuid,gen_random_uuid(),true) then raise exception 'privacy notice claim was not fenced';end if;
+      perform api.complete_frontend_privacy_notice((notice->>'id')::uuid,(notice->>'claim_token')::uuid,true);
+      notice:=api.claim_frontend_privacy_notice();
+      if notice->>'kind' is distinct from 'extended' or (notice->>'due')::timestamptz is distinct from privacy_due+interval '30 days'
+        then raise exception 'extension notice used an inaccurate deadline';end if;
+      perform api.complete_frontend_privacy_notice((notice->>'id')::uuid,(notice->>'claim_token')::uuid,true);
+      if not exists(select 1 from private.privacy_requests r where r.id=privacy_case and r.extension_notified_at is not null) then raise exception 'extension receipt missing';end if;
+      perform api.process_frontend_privacy_request(privacy_case,4,'complete','Fulfilment reviewed in rollback fixture');
+      if api.get_frontend_privacy_queue('closed',1)->>'total' is distinct from '1' then raise exception 'closed request missing';end if;
       select starts_at+interval '1 day' into shortened from private.frontend_account_restrictions where id=restriction;
       c:=api.resolve_frontend_appeal(appeal,'partially_overturned','An independent reviewer shortened this suspension',1,shortened);
       if c->>'restrictions_changed' is distinct from '1' then raise exception 'partial appeal did not shorten the term';end if;
@@ -1186,6 +1220,7 @@ try {
     "listing/business/event form commands",
     "self-only native posting gate, trial claim and current capacity DTOs",
     "a reusable released slot and a released activation with exhausted period budget have distinct creation allowances",
+    "restricted member privacy intake, live session fence, verified staff transitions, bounded export, and claimed deadline notices",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",

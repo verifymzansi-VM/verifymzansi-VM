@@ -7,6 +7,12 @@ import { adminDsarDecideSchema } from "@/lib/validations/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { enforceAdminMutationGuard } from "@/lib/utils/admin-route-guard";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  handlePrivacyStaffRoute,
+  privacyRevision,
+  processFrontendPrivacyRequest,
+} from "@/lib/foundation/privacy-requests";
 
 const log = createLogger("DSARDecide");
 
@@ -19,6 +25,19 @@ const log = createLogger("DSARDecide");
  *   verify_identity → identity_verified = true (unblocks export/complete)
  */
 export async function POST(req: Request) {
+  if (getDataBackend() === "foundation") {
+    return handlePrivacyStaffRoute(req, log, "decide", (api, body) => {
+      const input = adminDsarDecideSchema
+        .extend({ revision: privacyRevision })
+        .strict()
+        .parse(body);
+      return processFrontendPrivacyRequest(api, {
+        ...input,
+        action: input.decision,
+        note: input.notes,
+      });
+    });
+  }
   try {
     const guard = await enforceAdminMutationGuard({
       request: req,
