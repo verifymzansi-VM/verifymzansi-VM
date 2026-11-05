@@ -148,6 +148,7 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
   // -- Early exit for public routes ------------------------------------------
 
   const needsAuth =
+    (foundationMode && pathname === "/banned") ||
     PROTECTED_PREFIXES.some((p) => matchesPrefix(pathname, p)) ||
     AUTH_ROUTES.some((r) => matchesPrefix(pathname, r));
 

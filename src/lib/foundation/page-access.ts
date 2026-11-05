@@ -6,6 +6,7 @@ import { createFoundationRequestCaller, FoundationSessionError } from "./request
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
+import { readMyRestrictionStatus } from "./enforcement";
 
 function under(path: string, prefix: string) {
   return path === prefix || path.startsWith(prefix + "/");
@@ -41,7 +42,26 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
         }
       },
     });
-    const account = await readFoundationAccountContext(caller.api);
+    if (path === "/banned") {
+      const restriction = await readMyRestrictionStatus(caller.api, caller.accountId);
+      return restriction?.status === "banned" ? reply(next()) : redirect("/");
+    }
+    let account;
+    try {
+      account = await readFoundationAccountContext(caller.api);
+    } catch (error) {
+      if (!(error instanceof FoundationAccountContextError) || error.reason !== "forbidden")
+        throw error;
+      const restriction = await readMyRestrictionStatus(caller.api, caller.accountId);
+      if (!restriction || restriction.status === "active") throw error;
+      if (apiRequest) return refuse(403, restriction.status === "banned" ? "Banned" : "Suspended");
+      if (restriction.status === "banned") return redirect("/banned");
+      if (path === "/dashboard" && request.nextUrl.searchParams.get("suspended") === "true")
+        return reply(next());
+      const params = new URLSearchParams({ suspended: "true" });
+      if (restriction.ends_at) params.set("until", restriction.ends_at);
+      return redirect("/dashboard?" + params.toString());
+    }
     if (account.account_id !== caller.accountId)
       throw new FoundationAccountContextError("unavailable");
     if (authPage) return redirect(account.phone ? "/dashboard" : FOUNDATION_POST_SIGNUP_PATH);

@@ -13,6 +13,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useLeadsUnread } from "@/hooks/use-leads-unread";
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { signOutBrowserSession } from "@/hooks/use-auth";
+import { getDataBackend } from "@/lib/data-backend";
+import { dashboardVerificationSteps, parseOwnerDashboard } from "@/lib/foundation/owner-dashboard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [badges, setBadges] = useState<DashboardSidebarBadges>({});
@@ -34,6 +36,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           data: { user },
         } = await supabase.auth.getUser();
         if (!user) return;
+
+        if (getDataBackend() === "foundation") {
+          const response = await fetch("/api/foundation/dashboard", { cache: "no-store" });
+          if (!response.ok) return;
+          const dashboard = parseOwnerDashboard(await response.json(), user.id);
+          const verificationSummary = summarizeVerification(
+            dashboard.verification.verified ? "verified" : null,
+            dashboardVerificationSteps(dashboard)
+          );
+          setBadges({
+            unreadNotifications: dashboard.unread_notifications,
+            rejectedListings: dashboard.counts.rejected_listings,
+            pendingModeration: dashboard.counts.pending_listings,
+            incompleteVerification:
+              verificationSummary.accountVerificationStatus === "incomplete" ||
+              verificationSummary.accountVerificationStatus === "rejected",
+            pendingReview: verificationSummary.accountVerificationStatus === "pending_review",
+            verificationProgress: {
+              approved: verificationSummary.approvedStepCount,
+              submitted: verificationSummary.submittedStepCount,
+              total: 4,
+            },
+          });
+          return;
+        }
 
         const [leadOwnerColumn, listingOwnerColumn] = await Promise.all([
           getOwnerColumn(supabase, "leads"),
@@ -128,9 +155,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <main id="main-content" className="w-0 min-w-0 max-w-full flex-1 overflow-x-hidden">
           <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-            <Suspense fallback={null}>
-              <SuspensionNotice />
-            </Suspense>
+            {getDataBackend() !== "foundation" && (
+              <Suspense fallback={null}>
+                <SuspensionNotice />
+              </Suspense>
+            )}
             {children}
           </div>
         </main>

@@ -9,7 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
-export function LiftRestrictionButton({ restrictionId }: { restrictionId: string }) {
+export function LiftRestrictionButton({
+  restrictionId,
+  expectedVersion,
+}: {
+  restrictionId: string;
+  expectedVersion?: number;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -24,22 +30,28 @@ export function LiftRestrictionButton({ restrictionId }: { restrictionId: string
     }
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/admin/governance/restrictions/lift", {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ restrictionId, reason: reason.trim() }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.code === "mfa_required") {
-        router.push(staffVerifyHref(data.verifyUrl, "/admin/governance/enforcement"));
+    try {
+      const res = await fetch("/api/admin/governance/restrictions/lift", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ restrictionId, expectedVersion, reason: reason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== "lifted") {
+        if (data.code === "mfa_required" || data.code === "step_up_required") {
+          router.push(staffVerifyHref("/staff/two-step", "/admin/governance/enforcement"));
+          return;
+        }
+        setError(data.error ?? "The restriction could not be lifted. Reload before trying again.");
         return;
       }
-      setError(data.error ?? "The restriction could not be lifted. Try again.");
+      setOpen(false);
+      startTransition(() => router.refresh());
+    } catch {
+      setError("The lift could not be confirmed. Reload before trying again.");
+    } finally {
       setBusy(false);
-      return;
     }
-    startTransition(() => router.refresh());
   }
 
   if (!open) {
@@ -59,6 +71,7 @@ export function LiftRestrictionButton({ restrictionId }: { restrictionId: string
         id={`lift-${restrictionId}`}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
+        maxLength={expectedVersion === undefined ? 1000 : 500}
         rows={2}
       />
       <div className="flex gap-2">

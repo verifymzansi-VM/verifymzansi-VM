@@ -627,3 +627,11 @@ expiry, independent approval and lift, and an overlapping identity ban. It
 creates no production accounts, reports or restrictions. The update provides the
 backend controls; the preserved restriction, appeal and privacy screens need
 their own access and data adapters before the application is released.
+
+`20261105052337_restored_enforcement_views.sql` reconnects the existing
+enforcement list and lift form. Staff see exact active totals, the latest
+restrictions and enforcement history, and whether they can review each item. The
+response does not include the reporter's identity. A member with a valid session
+can read their own restriction status and suspension end to reach the existing
+ban page or suspension notice. They still cannot use active member commands.
+Appeal and privacy commands require their own authorization.

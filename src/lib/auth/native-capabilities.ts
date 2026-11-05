@@ -8,6 +8,7 @@ const aliases = new Map([
   ["role:assign", "role:manage"],
   ["role:revoke", "role:manage"],
   ["oversight:view", "decision:approve"],
+  ["enforcement:execute", "account:restore"],
 ]);
 export function nativeCapabilityFor(capability: string) {
   return aliases.get(capability) ?? capability;

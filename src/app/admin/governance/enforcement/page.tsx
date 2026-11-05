@@ -10,6 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, Clock } from "lucide-react";
 import { LiftRestrictionButton } from "./lift-restriction-button";
+import { redirect } from "next/navigation";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendEnforcement } from "@/lib/foundation/enforcement";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 export const metadata = {
   title: "Restrictions — Governance",
@@ -18,8 +24,7 @@ export const metadata = {
 
 const PAGE_SIZE = 50;
 
-export default async function GovernanceEnforcementPage() {
-  const { user } = await requireStaff("enforcement:execute");
+async function readSourceEnforcement(userId: string) {
   const admin = createAdminClient();
 
   const [restrictionsResult, suspensions, bans, recentResult] = await Promise.all([
@@ -50,17 +55,8 @@ export default async function GovernanceEnforcementPage() {
       .limit(20),
   ]);
 
-  if (restrictionsResult.error) {
-    createLogger("GovernanceEnforcement").error("Enforcement read failed", {
-      error: restrictionsResult.error.message,
-    });
-    return (
-      <p role="alert">
-        Enforcement could not be loaded. Refresh to try again. This does not mean nobody is
-        restricted.
-      </p>
-    );
-  }
+  if (restrictionsResult.error || suspensions.error || bans.error || recentResult.error)
+    throw new Error("Enforcement source read failed");
 
   const restrictions = restrictionsResult.data ?? [];
   const userIds = [...new Set(restrictions.map((r) => r.user_id))];
@@ -71,6 +67,52 @@ export default async function GovernanceEnforcementPage() {
         .in("user_id", userIds)
     : { data: [] as Array<{ user_id: string; display_name: string | null }> };
   const nameById = new Map((profiles ?? []).map((p) => [p.user_id, p.display_name] as const));
+  return {
+    items: restrictions.map((r) => {
+      const decision = Array.isArray(r.decision_records)
+        ? r.decision_records[0]
+        : r.decision_records;
+      return {
+        ...r,
+        account_id: r.user_id,
+        display_name: nameById.get(r.user_id),
+        conflicted: decision?.recommender_id === userId || decision?.approver_id === userId,
+        version: undefined,
+      };
+    }),
+    suspensions: suspensions.count,
+    bans: bans.count,
+    emergency: restrictions.filter((r) => r.emergency).length,
+    total: restrictionsResult.count ?? 0,
+    recent: (recentResult.data ?? []).map((item) => ({
+      ...item,
+      account_id: item.target_owner_id,
+    })),
+  };
+}
+
+export default async function GovernanceEnforcementPage() {
+  const { user } = await requireStaff("enforcement:execute");
+  let data;
+  try {
+    if (getDataBackend() === "foundation") {
+      const { api } = await readFoundationServerSession();
+      data = await readFrontendEnforcement(api, user.id);
+    } else {
+      data = await readSourceEnforcement(user.id);
+    }
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", "/admin/governance/enforcement"));
+    createLogger("GovernanceEnforcement").error("Enforcement read failed");
+    return (
+      <p role="alert">
+        Enforcement could not be loaded. Refresh to try again. This does not mean nobody is
+        restricted.
+      </p>
+    );
+  }
+  const restrictions = data.items;
 
   return (
     <div className="space-y-6">
@@ -87,7 +129,7 @@ export default async function GovernanceEnforcementPage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{suspensions.count ?? "Unavailable"}</div>
+            <div className="text-2xl font-bold">{data.suspensions ?? "Unavailable"}</div>
           </CardContent>
         </Card>
         <Card>
@@ -96,7 +138,7 @@ export default async function GovernanceEnforcementPage() {
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{bans.count ?? "Unavailable"}</div>
+            <div className="text-2xl font-bold">{data.bans ?? "Unavailable"}</div>
           </CardContent>
         </Card>
         <Card>
@@ -105,9 +147,7 @@ export default async function GovernanceEnforcementPage() {
             <ShieldCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {restrictions.filter((r) => r.emergency).length}
-            </div>
+            <div className="text-2xl font-bold">{data.emergency}</div>
           </CardContent>
         </Card>
       </div>
@@ -123,54 +163,51 @@ export default async function GovernanceEnforcementPage() {
             </p>
           ) : (
             <ul className="space-y-2">
-              {restrictions.map((r) => {
-                const decision = Array.isArray(r.decision_records)
-                  ? r.decision_records[0]
-                  : r.decision_records;
-                const tookPart =
-                  decision?.recommender_id === user.id || decision?.approver_id === user.id;
-                return (
-                  <li
-                    key={r.id}
-                    className="flex flex-wrap items-start justify-between gap-3 rounded-lg border p-4"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-medium">
-                        {nameById.get(r.user_id) || `${r.user_id.slice(0, 8)}…`}{" "}
-                        <Badge variant={r.kind === "ban" ? "destructive" : "secondary"}>
-                          {r.kind === "ban" ? "Banned" : "Suspended"}
-                        </Badge>{" "}
-                        {r.emergency && <Badge variant="outline">Emergency, 72 hours</Badge>}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Since {formatSaLongDate(r.starts_at)}
-                        {r.ends_at
-                          ? ` · ends ${formatSaLongDate(r.ends_at)}`
-                          : " · until lifted"} ·{" "}
-                        <Link
-                          href={`/admin/governance/escalations/${r.decision_id}`}
-                          className="underline"
-                        >
-                          Decision
-                        </Link>
-                      </p>
-                      <p className="line-clamp-2 text-xs text-muted-foreground">{r.reason}</p>
-                    </div>
-                    {tookPart ? (
-                      <p className="text-xs text-muted-foreground">
-                        You took part in this decision, so someone else must lift it.
-                      </p>
-                    ) : (
-                      <LiftRestrictionButton restrictionId={r.id} />
-                    )}
-                  </li>
-                );
-              })}
+              {restrictions.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-start justify-between gap-3 rounded-lg border p-4"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium">
+                      {r.display_name || `${r.account_id.slice(0, 8)}…`}{" "}
+                      <Badge variant={r.kind === "ban" ? "destructive" : "secondary"}>
+                        {r.kind === "ban" ? "Banned" : "Suspended"}
+                      </Badge>{" "}
+                      {r.emergency && <Badge variant="outline">Emergency, 72 hours</Badge>}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Since {formatSaLongDate(r.starts_at)}
+                      {r.ends_at
+                        ? ` · ends ${formatSaLongDate(r.ends_at)}`
+                        : " · until lifted"} ·{" "}
+                      <Link
+                        href={`/admin/governance/escalations/${r.decision_id}`}
+                        className="underline"
+                      >
+                        Decision
+                      </Link>
+                    </p>
+                    <p className="line-clamp-2 text-xs text-muted-foreground">{r.reason}</p>
+                  </div>
+                  {r.version === null ? (
+                    <p className="text-xs text-muted-foreground">
+                      This restriction requires review through its decision.
+                    </p>
+                  ) : r.conflicted ? (
+                    <p className="text-xs text-muted-foreground">
+                      You took part in this decision, so someone else must lift it.
+                    </p>
+                  ) : (
+                    <LiftRestrictionButton restrictionId={r.id} expectedVersion={r.version} />
+                  )}
+                </li>
+              ))}
             </ul>
           )}
-          {(restrictionsResult.count ?? 0) > PAGE_SIZE && (
+          {data.total > PAGE_SIZE && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Showing the latest {PAGE_SIZE} of {restrictionsResult.count}.
+              Showing the latest {PAGE_SIZE} of {data.total}.
             </p>
           )}
         </CardContent>
@@ -181,11 +218,11 @@ export default async function GovernanceEnforcementPage() {
           <CardTitle>Recent enforcement actions</CardTitle>
         </CardHeader>
         <CardContent>
-          {!recentResult.data?.length ? (
+          {!data.recent.length ? (
             <p className="py-8 text-center text-sm text-muted-foreground">No recent actions.</p>
           ) : (
             <ul className="space-y-2">
-              {recentResult.data.map((action) => (
+              {data.recent.map((action) => (
                 <li
                   key={action.id}
                   className="flex items-center justify-between rounded-lg border p-4"
@@ -193,7 +230,7 @@ export default async function GovernanceEnforcementPage() {
                   <div>
                     <p className="text-sm font-medium capitalize">{action.action}</p>
                     <p className="text-xs text-muted-foreground">
-                      {action.target_owner_id ? `${action.target_owner_id.slice(0, 8)}… · ` : ""}
+                      {action.account_id ? `${action.account_id.slice(0, 8)}… · ` : ""}
                       {formatSaLongDate(action.created_at)}
                     </p>
                     <p className="line-clamp-1 text-xs text-muted-foreground">{action.reason}</p>

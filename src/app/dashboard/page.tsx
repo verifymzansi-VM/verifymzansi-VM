@@ -37,7 +37,9 @@ import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-l
 import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { RecentLeads, type RecentLead } from "@/components/dashboard/recent-leads";
 import { VerificationStatusCard } from "@/components/dashboard/verification-status-card";
+import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { getDataBackend } from "@/lib/data-backend";
+import { readSelfReviewSession } from "@/lib/foundation/self-review-session";
 import {
   readRestoredOwnerDashboard,
   restoredDashboardResults,
@@ -77,7 +79,19 @@ export const metadata = {
   description: "Your VerifyMzansi dashboard: manage posts, leads and businesses in one place.",
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ suspended?: string | string[] }>;
+} = {}) {
+  const foundation = getDataBackend() === "foundation";
+  if (foundation && (await searchParams)?.suspended === "true") {
+    const restriction = await readSelfReviewSession();
+    if (!restriction) redirect("/error?reason=forbidden");
+    if (restriction.status === "banned") redirect("/banned");
+    if (restriction.status === "suspended" && restriction.ends_at)
+      return <SuspensionNotice confirmedUntil={restriction.ends_at} />;
+  }
   const supabase = await createClient();
 
   const {
@@ -86,8 +100,7 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const foundationDashboard =
-    getDataBackend() === "foundation" ? await readRestoredOwnerDashboard(user.id) : null;
+  const foundationDashboard = foundation ? await readRestoredOwnerDashboard(user.id) : null;
 
   const nowDate = new Date();
   const now = nowDate.toISOString();

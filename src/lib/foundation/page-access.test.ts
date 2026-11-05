@@ -7,6 +7,7 @@ import {
 } from "./account-context";
 import { createFoundationRequestCaller, FoundationSessionError } from "./request-api";
 import { checkFoundationPageAccess } from "./page-access";
+import { readMyRestrictionStatus } from "./enforcement";
 
 vi.mock("server-only", () => ({}));
 vi.mock("./runtime-connection", () => ({ readFoundationRuntimeConnection: () => ({}) }));
@@ -18,6 +19,7 @@ vi.mock("./account-context", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   readFoundationAccountContext: vi.fn(),
 }));
+vi.mock("./enforcement", () => ({ readMyRestrictionStatus: vi.fn() }));
 const id = "00000000-0000-4000-8000-000000000001";
 const base = {
   account_id: id,
@@ -26,12 +28,14 @@ const base = {
 } as FoundationAccountContext;
 const call = vi.mocked(createFoundationRequestCaller);
 const read = vi.mocked(readFoundationAccountContext);
+const status = vi.mocked(readMyRestrictionStatus);
 beforeEach(() => {
   vi.clearAllMocks();
   call.mockResolvedValue({ accountId: id, api: {} } as Awaited<
     ReturnType<typeof createFoundationRequestCaller>
   >);
   read.mockResolvedValue(base);
+  status.mockResolvedValue(null);
 });
 const request = (path: string, cookie?: string) =>
   new NextRequest("https://verifymzansi.com" + path, cookie ? { headers: { cookie } } : {});
@@ -150,6 +154,33 @@ it("refuses revoked or suspended accounts even when the Auth session itself veri
   expect(
     (await checkFoundationPageAccess(request("/dashboard"), false)).headers.get("location")
   ).toBe("https://verifymzansi.com/error?reason=forbidden");
+});
+it("routes confirmed bans to the original page and keeps protected APIs closed", async () => {
+  read.mockRejectedValue(new FoundationAccountContextError("forbidden"));
+  status.mockResolvedValue({ account_id: id, status: "banned", ends_at: null });
+  expect(
+    (await checkFoundationPageAccess(request("/dashboard"), false)).headers.get("location")
+  ).toBe("https://verifymzansi.com/banned");
+  expect(
+    (await checkFoundationPageAccess(request("/banned"), false)).headers.get("x-middleware-next")
+  ).toBe("1");
+  expect((await checkFoundationPageAccess(request("/api/content"), false)).status).toBe(403);
+});
+it("uses the canonical suspension date and only allows the original suspension landing", async () => {
+  read.mockRejectedValue(new FoundationAccountContextError("forbidden"));
+  const ends = "2026-11-10T11:00:00Z";
+  status.mockResolvedValue({ account_id: id, status: "suspended", ends_at: ends });
+  const response = await checkFoundationPageAccess(request("/post?until=spoofed"), false);
+  const target = new URL(response.headers.get("location")!);
+  expect(target.pathname).toBe("/dashboard");
+  expect(target.searchParams.get("suspended")).toBe("true");
+  expect(target.searchParams.get("until")).toBe(ends);
+  expect(
+    (await checkFoundationPageAccess(request(target.pathname + target.search), false)).headers.get(
+      "x-middleware-next"
+    )
+  ).toBe("1");
+  expect((await checkFoundationPageAccess(request("/api/account"), false)).status).toBe(403);
 });
 it("rejects an inconsistent account response instead of displaying another account", async () => {
   read.mockResolvedValue({ ...base, account_id: "00000000-0000-4000-8000-000000000002" });

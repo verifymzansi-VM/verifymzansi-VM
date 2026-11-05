@@ -269,6 +269,7 @@ try {
     "database/foundation/updates/20261105035413_native_report_warning_delivery.sql",
     "database/foundation/updates/20261105043010_native_report_content_holds.sql",
     "database/foundation/updates/20261105050356_native_report_account_restrictions.sql",
+    "database/foundation/updates/20261105052337_restored_enforcement_views.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -786,12 +787,23 @@ try {
       c:=api.decide_frontend_governance(decision,restriction_case,1,1,'approve','Independent three day suspension');
       select x.id into restriction from private.frontend_account_restrictions x where x.decision_id=decision and not x.emergency and x.ends_at=x.starts_at+interval '3 days';
       if c->>'status' is distinct from 'approved' or restriction is null or exists(select 1 from private.public_eligible_posts where id=target) or (select status from private.posts where id=target)<>'live' then raise exception 'approved suspension had the wrong term or changed owner workflow state';end if;
+      c:=api.get_frontend_enforcement();
+      if c->>'suspensions' is distinct from '1' or c->>'bans' is distinct from '0' or c->>'total' is distinct from '1'
+        or c->'items'->0->>'conflicted' is distinct from 'true' or c->'items'->0 ? 'reporter_id' then raise exception 'enforcement list drift or identity leak';end if;
       begin perform api.lift_frontend_account_restriction(restriction,1,'Original approver cannot lift restriction');raise exception 'approver lifted own restriction';exception when insufficient_privilege then null;end;
+      ${claims(owner)}
+      c:=api.get_my_frontend_restriction_status();
+      if c->>'status' is distinct from 'suspended' or c->>'ends_at' is null or c->>'account_id' is distinct from '${owner.id}' then raise exception 'restricted self-status lost the member or term';end if;
+      begin perform api.get_my_account_context();raise exception 'restricted self-status allowed an ordinary account read';exception when insufficient_privilege then null;end;
+      begin perform api.get_frontend_enforcement();raise exception 'member read private enforcement';exception when insufficient_privilege then null;end;
       ${claims(administrator)}
       c:=api.lift_frontend_account_restriction(restriction,1,'Independent lift of timed restriction');
       if c->>'status' is distinct from 'lifted' or not exists(select 1 from private.public_eligible_posts where id=target) then raise exception 'independent lift did not restore eligible listing';end if;
       c:=api.lift_frontend_account_restriction(restriction,1,'Independent lift of timed restriction');
       if c->>'reused' is distinct from 'true' then raise exception 'restriction lift retry was not stable';end if;
+      ${claims(owner)}
+      if api.get_my_frontend_restriction_status()->>'status' is distinct from 'active' then raise exception 'lifted restriction remained active';end if;
+      ${claims(administrator)}
       report_lease:=api.claim_queue_item('report',emergency_report);
       c:=api.execute_frontend_report_action_v2(emergency_report,2,report_lease->>'claim_generation',(report_lease->>'claim_nonce')::uuid,'suspend','Emergency containment pending independent review',7,true);
       decision:=(c->>'decision_id')::uuid;
@@ -827,6 +839,8 @@ try {
         perform api.decide_frontend_governance(decision,restriction_case,1,1,'approve','Independent identity bound ban approval');
       end loop;
       if not exists(select 1 from private.banned_identities where decision_id=any(ban_decisions)) then raise exception 'approved ban lost its accepted identity binding';end if;
+      ${claims(owner)}
+      if api.get_my_frontend_restriction_status()->>'status' is distinct from 'banned' then raise exception 'ban not visible to member';end if;
       ${claims(administrator)}
       select x.id into restriction from private.frontend_account_restrictions x where x.decision_id=ban_decisions[1] and not x.emergency;
       perform api.lift_frontend_account_restriction(restriction,1,'Independent lift with a separate active ban');

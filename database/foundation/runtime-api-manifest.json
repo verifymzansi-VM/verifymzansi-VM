@@ -4,6 +4,24 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_enforcement",
+      "updates": ["updates/20261105052337_restored_enforcement_views.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Current restriction reviewer with fresh TOTP. Bounded active items and history, exact counts, and current reviewer conflict without reporter identity."
+    },
+    {
+      "name": "get_my_frontend_restriction_status",
+      "updates": ["updates/20261105052337_restored_enforcement_views.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": { "anon": false, "authenticated": true, "service_role": false },
+      "authority": "Live confirmed member session, including a currently restricted member, may read only their own current account restriction type and suspension end."
+    },
+    {
       "name": "lift_frontend_account_restriction",
       "updates": ["updates/20261105050356_native_report_account_restrictions.sql"],
       "arguments": [

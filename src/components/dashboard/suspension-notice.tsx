@@ -8,11 +8,11 @@ import { formatSaLongDate } from "@/lib/utils/format";
  * Shown when the middleware redirects a suspended member to the dashboard
  * (`?suspended=true&until=...`): what happened, until when, and how to appeal.
  */
-export function SuspensionNotice() {
+export function SuspensionNotice({ confirmedUntil }: { confirmedUntil?: string } = {}) {
   const params = useSearchParams();
-  if (params.get("suspended") !== "true") return null;
+  if (confirmedUntil === undefined && params.get("suspended") !== "true") return null;
 
-  const until = params.get("until");
+  const until = confirmedUntil ?? params.get("until");
   const untilDate = until && !Number.isNaN(Date.parse(until)) ? formatSaLongDate(until) : null;
 
   return (
