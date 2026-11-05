@@ -10,7 +10,7 @@ import { officeToLocation } from "../cipc/address";
 import { sourceIdentityDigestToFingerprint } from "../domains/verification/identity-fingerprint";
 import { createFoundationServiceApi } from "./service-api";
 import { currentBusinessClaim, readMyBusinessChecks } from "./business-seen";
-import { protectBusinessEvidenceRoute, storeBusinessEvidence } from "./seen-media-route";
+import { protectBusinessEvidenceRoute, storeBusinessEvidence } from "./business-evidence-route";
 import { FoundationStaffCommandError, settleStaffCommand } from "./staff-command";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
@@ -90,19 +90,24 @@ async function recordCipcFile(
   );
 }
 
+async function requireReviewedBusiness(api: FoundationAuthenticatedApi, id: string) {
+  const business = z.uuid().parse(id);
+  const current = await readMyBusinessChecks(api, business);
+  if (!current.stickers.idReviewed)
+    throw new FoundationStaffCommandError(
+      403,
+      "Complete your ID review before sending a CIPC document."
+    );
+  return business;
+}
+
 export function previewNativeCipc(request: Request, id: string) {
   return protectBusinessEvidenceRoute(
     request,
     "business-verification:preview",
     true,
     async (caller, incoming) => {
-      const business = z.uuid().parse(id);
-      const current = await readMyBusinessChecks(caller.api, business);
-      if (!current.stickers.idReviewed)
-        throw new FoundationStaffCommandError(
-          403,
-          "Complete your ID review before sending a CIPC document."
-        );
+      const business = await requireReviewedBusiness(caller.api, id);
       const input = await cipcForm(incoming, ["file"]);
       if (input instanceof NextResponse) return input;
       const result = await settleStaffCommand(
@@ -140,13 +145,7 @@ export function submitNativeCipc(request: Request, id: string) {
     "business-verification:cipc",
     true,
     async (caller, incoming) => {
-      const business = z.uuid().parse(id);
-      const current = await readMyBusinessChecks(caller.api, business);
-      if (!current.stickers.idReviewed)
-        throw new FoundationStaffCommandError(
-          403,
-          "Complete your ID review before sending a CIPC document."
-        );
+      const business = await requireReviewedBusiness(caller.api, id);
       const input = await cipcForm(incoming, [
         "file",
         "registrationNumber",

@@ -53,8 +53,19 @@ const types = [
   "online_only",
   "market_stall",
 ];
-const rpc = vi.fn(async (name: string, args: { p_request: unknown }) => {
+const rpc = vi.fn(async (name: string, args: { p_request: unknown } | { p_post_ids: string[] }) => {
+  if (
+    name === "get_public_frontend_business_seen" ||
+    name === "get_public_frontend_business_cipc"
+  ) {
+    // This browse fixture has no business review cases; the native fixture
+    // exercises the actual sticker RPCs and their publication boundaries.
+    if (!("p_post_ids" in args) || args.p_post_ids.length !== 1)
+      throw new Error("Expected a sticker lookup for the matching business");
+    return { data: [], error: null };
+  }
   if (name !== "search_post_cards") throw new Error(`Unexpected RPC ${name}`);
+  if (!("p_request" in args)) throw new Error("Missing browse filters");
   const result = await db.query<{ data: unknown }>("select api.search_post_cards($1::jsonb) data", [
     JSON.stringify(args.p_request),
   ]);
@@ -174,10 +185,17 @@ it("filters and counts event dates before paging, with one RPC for twelve cards"
 
 it("supports every existing business format without inventing values", async () => {
   await db.exec("set role anon");
-  for (const type of types) {
+  for (const [index, type] of types.entries()) {
+    rpc.mockClear();
     const result = await readRestoredCollection(api, "businesses", new URLSearchParams({ type }));
     expect(result.total).toBe(1);
     expect(result.rows[0]?.business_type).toBe(type);
+    for (const suffix of ["seen", "cipc"])
+      expect(rpc).toHaveBeenCalledWith(
+        `get_public_frontend_business_${suffix}`,
+        { p_post_ids: [id(501 + index)] },
+        { get: false }
+      );
   }
 });
 

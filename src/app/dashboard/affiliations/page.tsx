@@ -10,19 +10,16 @@ import {
 } from "@/components/organisations/affiliation-request-panel";
 import { SHARED_WITH_ORGANISATION } from "@/lib/organisations/affiliations";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readAffiliationWorkspace } from "@/lib/foundation/affiliation-workspace";
 
 const log = createLogger("AffiliationsPage");
 
 export const metadata = { title: "Organisation affiliations" };
 export const dynamic = "force-dynamic";
 
-export default async function AffiliationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ org?: string }>;
-}) {
-  const { org: orgParam } = await searchParams;
-  const orgSlug = orgParam && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(orgParam) ? orgParam : null;
+async function readSourceWorkspace(orgSlug: string | null) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -93,7 +90,40 @@ export default async function AffiliationsPage({
     .filter((org): org is { name: string; slug: string; programme_status: string } =>
       Boolean(org && org.programme_status !== "ended")
     );
+  return {
+    businesses: (businesses.data ?? []).map((b) => ({
+      id: b.id,
+      name: b.business_name,
+      status: b.status,
+    })),
+    applications: (applications.data ?? []) as unknown as MemberApplication[],
+    affiliations: (affiliations.data ?? []) as unknown as MemberAffiliation[],
+    administered,
+    preselected: preselected.data ?? null,
+  };
+}
 
+async function readNativeWorkspace(orgSlug: string | null) {
+  const { api, user } = await readFoundationServerSession();
+  const result = await readAffiliationWorkspace(api, orgSlug ?? undefined);
+  if (result.account_id !== user.id) throw new Error("Current account changed");
+  return result;
+}
+
+export default async function AffiliationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string }>;
+}) {
+  const { org: orgParam } = await searchParams;
+  const orgSlug =
+    orgParam && orgParam.length <= 80 && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(orgParam)
+      ? orgParam
+      : null;
+  const data =
+    getDataBackend() === "foundation"
+      ? await readNativeWorkspace(orgSlug)
+      : await readSourceWorkspace(orgSlug);
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -102,11 +132,11 @@ export default async function AffiliationsPage({
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Affiliations" }]}
       />
 
-      {administered.length > 0 ? (
+      {data.administered.length > 0 ? (
         <section className="rounded-xl border border-brand-green/30 bg-brand-green/5 p-4 text-sm">
           <p className="font-semibold">Organisations you administer</p>
           <ul className="mt-2 flex flex-wrap gap-3">
-            {administered.map((org) => (
+            {data.administered.map((org) => (
               <li key={org.slug}>
                 <Link className="underline" href={`/dashboard/organisation/${org.slug}`}>
                   {org.name} dashboard
@@ -118,15 +148,11 @@ export default async function AffiliationsPage({
       ) : null}
 
       <AffiliationRequestPanel
-        businesses={(businesses.data ?? []).map((b) => ({
-          id: b.id,
-          name: b.business_name,
-          status: b.status,
-        }))}
-        applications={(applications.data ?? []) as unknown as MemberApplication[]}
-        affiliations={(affiliations.data ?? []) as unknown as MemberAffiliation[]}
+        businesses={data.businesses}
+        applications={data.applications}
+        affiliations={data.affiliations}
         sharedFields={[...SHARED_WITH_ORGANISATION]}
-        preselect={preselected.data ?? null}
+        preselect={data.preselected}
       />
     </div>
   );

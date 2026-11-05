@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -8,6 +8,9 @@ import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleOrganisationRoute } from "@/app/api/foundation/_lib/organisation-route";
+import { acceptFoundationOrganisationInvite } from "@/lib/foundation/organisations";
 
 const log = createLogger("OrganisationInviteAccept");
 const schema = z.object({ token: z.string().min(20).max(200) });
@@ -19,6 +22,20 @@ const schema = z.object({ token: z.string().min(20).max(200) });
  * matches the invitation and that their identity has been reviewed.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation") {
+    return handleOrganisationRoute(
+      request instanceof NextRequest ? request : new NextRequest(request),
+      "organisation:invite",
+      true,
+      async (api, body) => {
+        const data = await acceptFoundationOrganisationInvite(api, body);
+        return {
+          success: true,
+          data: { organisationSlug: data.organisation_slug, role: data.role },
+        };
+      }
+    );
+  }
   const blocked = enforceMutationRequest(request, log);
   if (blocked) return blocked;
 

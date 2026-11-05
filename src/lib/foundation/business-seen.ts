@@ -25,7 +25,7 @@ const seen = z.strictObject({
   method,
   city: z.string().max(80).nullable(),
 });
-export async function readPublicBusinessSeen(api: FoundationPublicApi, ids: string[]) {
+async function readPublicBusinessSeen(api: FoundationPublicApi, ids: string[]) {
   if (!ids.length)
     return new Map<
       string,

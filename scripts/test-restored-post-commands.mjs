@@ -280,6 +280,7 @@ try {
     "database/foundation/updates/20261105093342_restored_staff_role_review.sql",
     "database/foundation/updates/20261105094316_restored_business_seen_requests.sql",
     "database/foundation/updates/20261105150107_restored_cipc_review.sql",
+    "database/foundation/updates/20261105153628_restored_affiliation_workspace.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -1110,6 +1111,52 @@ try {
       c:=api.record_frontend_cipc_callback(cipc_case,seen_time,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,
         '{"numberSource":"Official fixture website","spokeTo":"Fixture director","confirmedPosition":"Manager","confirmed":true,"notes":null}');
       if c->>'confirmed' is distinct from 'true' then raise exception 'independent callback did not bind to verified representative';end if;
+      -- The new workspace must use the actual owner-scoped projection and
+      -- preserve the funding selection even when the underlying action writes.
+      declare org uuid;other_org uuid;app uuid;aff uuid;sponsor uuid;view jsonb;
+      begin
+        insert into private.organisations(slug,name,organisation_type,is_public,programme_status,sponsored_capacity)
+          values('synthetic-affiliation','Synthetic Affiliation','other',true,'founding_trial',0)
+          returning id into org;
+        insert into private.organisations(slug,name,organisation_type)
+          values('synthetic-unlisted','Synthetic Unlisted','other') returning id into other_org;
+        insert into private.organisation_admins(organisation_id,account_id,role)
+          values(org,'${owner.id}','owner'),(other_org,'${owner.id}','owner');
+        ${claims(unverified)}
+        view:=api.get_frontend_affiliation_workspace('synthetic-affiliation');
+        if view->>'account_id' is distinct from '${unverified.id}' or view->'preselected'->>'slug' is distinct from 'synthetic-affiliation'
+          or not exists(select 1 from jsonb_array_elements(view->'businesses') b where b->>'id'=business_target::text)
+          or api.get_frontend_affiliation_workspace('synthetic-unlisted')->'preselected' is distinct from 'null'::jsonb
+          or api.get_frontend_organisation_dashboard('synthetic-affiliation') is not null
+          then raise exception 'affiliation workspace leaked an unlisted or foreign organisation';end if;
+        app:=(api.apply_to_organisation(org,business_target,false,true,p_reason=>'Synthetic affiliation request')->>'id')::uuid;
+        begin perform api.execute_frontend_organisation_action(org,app,'decide','approve');raise exception 'applicant self-approved';exception when insufficient_privilege then null;end;
+        ${claims(owner)}
+        view:=api.get_frontend_organisation_dashboard('synthetic-affiliation');
+        if view->>'viewer_role' is distinct from 'owner' or view->'applications'->>'pending' is distinct from '1'
+          or view->'admins'->0->>'user_id' is distinct from '${owner.id}'
+          or api.get_frontend_affiliation_workspace()->'applications' <> '[]'::jsonb
+          then raise exception 'organisation dashboard lost its scope or pending requests';end if;
+        begin perform api.execute_frontend_organisation_action(other_org,app,'decide','approve');raise exception 'cross-organisation dispatch was accepted';exception when sqlstate 'PT404' then null;end;
+        aff:=(api.execute_frontend_organisation_action(org,app,'decide','approve')->>'affiliation_id')::uuid;
+        if aff is null then raise exception 'scoped approval did not create affiliation';end if;
+        begin perform api.execute_frontend_organisation_action(org,aff,'sponsor','organisation','Synthetic funding request');raise exception 'wrong programme funding accepted';exception when sqlstate 'PT409' then null;end;
+        if exists(select 1 from private.organisation_sponsorships where affiliation_id=aff)
+          then raise exception 'mismatched funding request was not rolled back';end if;
+        sponsor:=(api.execute_frontend_organisation_action(org,aff,'sponsor','founding','Synthetic founding request')->>'id')::uuid;
+        if api.org_list_sponsorships(org)->>'waitlisted' is distinct from '1'
+          or api.execute_frontend_organisation_action(org,sponsor,'end_sponsorship',p_note=>'Synthetic end request')->>'status' is distinct from 'ended'
+          then raise exception 'sponsorship queue or end result changed';end if;
+        ${claims(unverified)}
+        view:=api.get_frontend_affiliation_workspace();
+        if view->'applications'->0->>'status' is distinct from 'approved' or view->'affiliations'->0->>'id' is distinct from aff::text
+          then raise exception 'accepted affiliation missing from member workspace';end if;
+        ${claims(owner)}
+        perform api.execute_frontend_organisation_action(org,aff,'revoke','Synthetic affiliation revocation');
+        ${claims(unverified)}
+        if api.get_frontend_affiliation_workspace()->'affiliations' is distinct from '[]'::jsonb
+          then raise exception 'revoked affiliation remained in member workspace';end if;
+      end;
       ${claims(owner)}
       select revision into rev from private.posts where id=target;
       c:=api.execute_my_frontend_post_action(gen_random_uuid(),target,rev,'deactivate','listing','market');
@@ -1428,6 +1475,7 @@ try {
     "restricted member privacy intake, live session fence, verified staff transitions, bounded export, and claimed deadline notices",
     "support request deduplication, provider acceptance history, viewer and updater authority, and stale status refusal",
     "selected partner administration and owner projections backed by verified attribution and synthetic provider settlement",
+    "owner-scoped affiliations, verified organisation dashboard, cross-organisation action refusal and atomic funding rollback",
     "approved administrator invitation fence, independent staff role promotion, post-grant MFA and auditable removal",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",

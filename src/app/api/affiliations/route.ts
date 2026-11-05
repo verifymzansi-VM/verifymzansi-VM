@@ -9,6 +9,15 @@ import { createLogger } from "@/lib/utils/logger";
 import { mapCommercialError } from "@/lib/commercial/errors";
 import { logAuditEvent } from "@/lib/services/audit";
 import { SHARED_WITH_ORGANISATION } from "@/lib/organisations/affiliations";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleOrganisationRoute } from "@/app/api/foundation/_lib/organisation-route";
+import {
+  applyToFoundationOrganisation,
+  FoundationOrganisationError,
+  input,
+  updateMyFoundationApplication,
+} from "@/lib/foundation/organisations";
+import { readAffiliationWorkspace } from "@/lib/foundation/affiliation-workspace";
 
 const log = createLogger("Affiliations");
 
@@ -41,7 +50,17 @@ async function currentUser() {
 }
 
 /** GET /api/affiliations — the member's own applications and affiliations. */
-export async function GET() {
+export async function GET(request?: NextRequest) {
+  if (getDataBackend() === "foundation") {
+    if (!request) return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
+    return handleOrganisationRoute(request, "organisation:read", false, async (api) => {
+      const { applications, affiliations } = await readAffiliationWorkspace(api);
+      return {
+        applications,
+        affiliations: affiliations.map((row) => ({ ...row, status: "active" })),
+      };
+    });
+  }
   try {
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -95,6 +114,29 @@ export async function GET() {
 
 /** POST /api/affiliations — request affiliation (with consent), respond, withdraw. */
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation")
+    return handleOrganisationRoute(request, "organisation:apply", true, async (api, body) => {
+      const value = input(schema, body);
+      if (value.action === "submit") {
+        const result = await applyToFoundationOrganisation(api, {
+          organisation_id: value.organisationId,
+          post_id: value.businessId,
+          programme_id: value.programmeId,
+          share_representative_name: value.consent.shareRepresentativeName,
+          consent: value.consent.accepted,
+          reason: value.reason || undefined,
+          member_reference: value.reference || undefined,
+        });
+        return { success: true, data: result.id };
+      }
+      const result = await updateMyFoundationApplication(api, {
+        application_id: value.applicationId,
+        action: value.action,
+        ...(value.action === "respond" ? { response: value.response } : {}),
+      });
+      if (!result) throw new FoundationOrganisationError("not_found");
+      return { success: true, data: result.id };
+    });
   const blocked = enforceMutationRequest(request, log);
   if (blocked) return blocked;
   const user = await currentUser();

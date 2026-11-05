@@ -727,3 +727,18 @@ registrations. The street and postal code stay private until the owner chooses
 to show them. The isolated fixture checks the official-copy boundary, matched
 director, case queue, private/public office, and representative code and
 callback with synthetic evidence and no actual provider email or uploads.
+
+`20261105153628_restored_affiliation_workspace.sql` reconnects the owner
+affiliations and organisation dashboard to native business posts, applications,
+memberships and sponsorships. The owner sees their own requests and
+affiliations. Organisation administrators see their own dashboard and contact
+fields already published by an eligible business. The existing invitation is
+redeemed through the native verified account flow.
+
+The action dispatcher binds each application, affiliation and sponsorship to the
+represented organisation and preserves the submitted funding type. The isolated
+fixture checks that a funding mismatch rolls back, that outsiders and other
+organisations cannot decide a request, and that approved and revoked
+affiliations appear correctly. The London migration was recorded as
+`20261105200230`; no production organisations, affiliations or sponsorships were
+seeded.

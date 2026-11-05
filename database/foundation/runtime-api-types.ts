@@ -17,6 +17,18 @@ export type FoundationRuntimePublicDatabase = {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_frontend_affiliation_workspace: { Args: { p_slug?: string }; Returns: Json };
+      get_frontend_organisation_dashboard: { Args: { p_slug: string }; Returns: Json };
+      execute_frontend_organisation_action: {
+        Args: {
+          p_org: string;
+          p_item: string;
+          p_action: string;
+          p_value?: string;
+          p_note?: string;
+        };
+        Returns: Json;
+      };
       get_my_frontend_business_review_state: { Args: { p_business: string }; Returns: Json };
       get_frontend_business_review_queue: { Args: { p_tab: string }; Returns: Json };
       get_frontend_cipc_case: { Args: { p_case: string }; Returns: Json };

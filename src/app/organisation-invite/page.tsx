@@ -8,6 +8,14 @@ import { Button } from "@/components/ui/button";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { AcceptInviteButton } from "./accept-invite-button";
+import { getDataBackend } from "@/lib/data-backend";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
+import { previewFoundationOrganisationInvite } from "@/lib/foundation/organisations";
+import {
+  readFoundationServerSession,
+  FoundationServerSessionError,
+} from "@/lib/foundation/server-session";
+import { foundationVerificationStatusSchema } from "@/lib/foundation/verification-status";
 
 export const metadata: Metadata = {
   title: "Programme administrator invitation",
@@ -19,7 +27,6 @@ export const dynamic = "force-dynamic";
 
 type Preview = {
   organisationName: string;
-  organisationSlug: string;
   email: string;
   expiresAt: string;
   status: "open" | "used" | "revoked" | "expired" | "inactive";
@@ -49,31 +56,60 @@ export default async function OrganisationInvitePage({
   searchParams: Promise<{ token?: string }>;
 }) {
   const { token } = await searchParams;
-  const valid = typeof token === "string" && /^[A-Za-z0-9_-]{20,200}$/.test(token);
-  const preview = valid
-    ? ((
-        await createAdminClient().rpc("organisation_invite_preview", {
-          p_token_hash: createHash("sha256").update(token).digest("hex"),
-        })
-      ).data as Preview | null)
-    : null;
+  const native = getDataBackend() === "foundation";
+  let preview: Preview | null = null;
+  if (
+    typeof token === "string" &&
+    (native ? /^[A-Za-z0-9_-]{43}$/ : /^[A-Za-z0-9_-]{20,200}$/).test(token)
+  ) {
+    if (native) {
+      const data = await previewFoundationOrganisationInvite(foundationServerPublicApi(), {
+        token,
+      });
+      if (data)
+        preview = {
+          organisationName: data.organisation_name,
+          email: data.email,
+          expiresAt: data.expires_at,
+          status: data.status,
+        };
+    } else {
+      const result = await createAdminClient().rpc("organisation_invite_preview", {
+        p_token_hash: createHash("sha256").update(token).digest("hex"),
+      });
+      if (result.error) throw new Error("Invitation could not be loaded");
+      preview = result.data as Preview | null;
+    }
+  }
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: profile } = user
-    ? await supabase
-        .from("account_profiles")
-        .select("account_verification_status")
-        .eq("user_id", user.id)
-        .maybeSingle()
-    : { data: null };
+  const { data: profile } =
+    user && !native
+      ? await supabase
+          .from("account_profiles")
+          .select("account_verification_status")
+          .eq("user_id", user.id)
+          .maybeSingle()
+      : { data: null };
   const returnUrl = encodeURIComponent(`/organisation-invite?token=${token ?? ""}`);
   const emailMatches = Boolean(
     user?.email && preview && user.email.toLowerCase() === preview.email
   );
-  const verified = profile?.account_verification_status === "verified";
+  let verified = profile?.account_verification_status === "verified";
+  if (native && user && emailMatches && preview?.status === "open") {
+    try {
+      const current = await readFoundationServerSession();
+      if (current.user.id !== user.id) throw new Error("The invitation account changed");
+      const { data, error } = await current.api.rpc("get_my_verification_case", {}, { get: false });
+      if (error) throw new Error("Verification status could not be loaded");
+      verified = foundationVerificationStatusSchema.parse(data).verified;
+    } catch (error) {
+      if (!(error instanceof FoundationServerSessionError) || error.status === 503) throw error;
+    }
+  }
 
   let body: React.ReactNode;
   if (!preview) {

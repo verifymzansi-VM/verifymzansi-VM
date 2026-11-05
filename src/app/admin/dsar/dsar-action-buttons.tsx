@@ -44,6 +44,16 @@ export function DsarActionButtons({
   const busy = isPending || submitting;
   const isDeletion = requestType === "deletion";
 
+  async function checkResponse(res: Response) {
+    if (res.ok) return true;
+    const data = await res.json().catch(() => ({}));
+    if (data.code === "step_up_required" || data.code === "mfa_required") {
+      router.push(staffVerifyHref("/staff/two-step", "/admin/dsar"));
+      return false;
+    }
+    throw new Error(data.error || `Failed (${res.status})`);
+  }
+
   async function handleDecision(decision: "approve" | "reject" | "verify_identity") {
     setError(null);
     setSubmitting(true);
@@ -55,14 +65,7 @@ export function DsarActionButtons({
         body: JSON.stringify({ requestId, decision, revision }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.code === "step_up_required" || data.code === "mfa_required") {
-          router.push(staffVerifyHref("/staff/two-step", "/admin/dsar"));
-          return;
-        }
-        throw new Error(data.error || `Failed (${res.status})`);
-      }
+      if (!(await checkResponse(res))) return;
 
       setShowIdentityDialog(false);
       startTransition(() => {
@@ -92,14 +95,7 @@ export function DsarActionButtons({
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.code === "step_up_required" || data.code === "mfa_required") {
-          router.push(staffVerifyHref("/staff/two-step", "/admin/dsar"));
-          return;
-        }
-        throw new Error(data.error || `Failed (${res.status})`);
-      }
+      if (!(await checkResponse(res))) return;
 
       startTransition(() => {
         router.refresh();

@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCommercialSettings } from "@/lib/commercial/settings";
+import { DEFAULT_COMMERCIAL_SETTINGS, getCommercialSettings } from "@/lib/commercial/settings";
 import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -18,6 +18,18 @@ import {
 } from "@/components/organisations/performance-report";
 import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
 import { getOpenOfferForOrganisation } from "@/lib/trials/extension-offers";
+
+import { getDataBackend } from "@/lib/data-backend";
+import {
+  FoundationServerSessionError,
+  readFoundationServerSession,
+} from "@/lib/foundation/server-session";
+import { readAffiliationOrganisationDashboard } from "@/lib/foundation/affiliation-workspace";
+import {
+  readFoundationOrganisationAffiliations,
+  readFoundationOrganisationApplications,
+} from "@/lib/foundation/organisations";
+import { readFoundationOrganisationSponsorships } from "@/lib/foundation/organisation-sponsorships";
 
 export const metadata = { title: "Organisation dashboard", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -50,18 +62,86 @@ function reportWindow(startedAt: string | null) {
   };
 }
 
-/**
- * Organisation administrators see only their own organisation. Every RPC
- * re-checks membership; nothing here exposes VerifyMzansi internal data.
- */
-export default async function OrganisationDashboardPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) notFound();
+async function readNativeDashboard(slug: string) {
+  const { api, user } = await readFoundationServerSession().catch((error: unknown) => {
+    if (error instanceof FoundationServerSessionError && error.status === 401)
+      redirect(`/login?returnUrl=${encodeURIComponent(`/dashboard/organisation/${slug}`)}`);
+    if (error instanceof FoundationServerSessionError && error.status === 403) notFound();
+    throw error;
+  });
+  const native = await readAffiliationOrganisationDashboard(api, slug);
+  if (!native) notFound();
+  if (native.account_id !== user.id || native.slug !== slug)
+    throw new Error("Organisation dashboard scope changed");
 
+  const scope = { organisation_id: native.id };
+  const [applications, affiliations, sponsorships] = await Promise.all([
+    readFoundationOrganisationApplications(api, scope),
+    readFoundationOrganisationAffiliations(api, scope),
+    readFoundationOrganisationSponsorships(api, scope),
+  ]);
+  const activeSponsorships = new Map(
+    sponsorships.items
+      .filter((row) => row.status === "active" || row.status === "waitlisted")
+      .map((row) => [row.affiliation_id, row])
+  );
+  const publicContacts = new Map(native.public_contacts.map((row) => [row.application_id, row]));
+  const members: OrganisationMemberRow[] = affiliations.map((row) => {
+    const sponsor = activeSponsorships.get(row.id);
+    return {
+      ...row,
+      affiliation_id: row.id,
+      business_id: row.post_id,
+      business_name: row.business_name ?? "Business",
+      business_status: row.live ? "live" : "not_live",
+      sponsorship_id: sponsor?.id ?? null,
+      sponsorship_status: sponsor?.status ?? null,
+      sponsor_type: sponsor
+        ? sponsor.sponsor_type === "founding"
+          ? "VERIFYMZANSI_FOUNDING"
+          : "ORGANISATION"
+        : null,
+      sponsorship_ends_at: sponsor?.ends_at ?? null,
+    };
+  });
+  const summary: Summary = {
+    ...native.applications,
+    programmeStatus: native.programme_status,
+    trialEndsAt: native.ends_at,
+    sponsoredCapacity: native.sponsored_capacity,
+    adminLimit: native.admin_limit,
+    affiliated: native.affiliated,
+    sponsored: sponsorships.active,
+    waitlisted: sponsorships.waitlisted,
+    daysRemaining: native.ends_at
+      ? Math.max(0, Math.ceil((Date.parse(native.ends_at) - Date.now()) / 86_400_000))
+      : null,
+  };
+  return {
+    org: { ...native, trial_starts_at: native.starts_at },
+    summary,
+    applications: applications.map((row): OrganisationApplicationRow => {
+      const contacts = publicContacts.get(row.id);
+      return {
+        ...row,
+        business_id: row.post_id,
+        business_name: row.business_name ?? "Business",
+        business_phone: contacts?.phone ?? null,
+        business_email: contacts?.email ?? null,
+        business_website: contacts?.website ?? null,
+      };
+    }),
+    members,
+    admins: native.admins,
+    isOwner: native.viewer_role === "owner",
+    canSponsor: native.programme_status === "active_paid",
+    settings: DEFAULT_COMMERCIAL_SETTINGS,
+    report: null,
+    offer: null,
+  };
+}
+
+async function readSourceDashboard(slug: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -98,12 +178,52 @@ export default async function OrganisationDashboardPage({
     getCommercialSettings(db as never),
     getOpenOfferForOrganisation(org.id).catch(() => null),
   ]);
-  const s = (summary.data ?? {}) as Partial<Summary>;
-  const adminIds = (admins.data ?? []).map((a) => a.user_id);
+  const adminRows = admins.data ?? [];
+  const adminIds = adminRows.map((a) => a.user_id);
   const adminProfiles = adminIds.length
     ? await db.from("account_profiles").select("user_id, display_name").in("user_id", adminIds)
     : { data: [] as Array<{ user_id: string; display_name: string | null }> };
-  const parsedReport = parsePerformanceReport(report.data);
+  return {
+    org,
+    summary: (summary.data ?? {}) as Partial<Summary>,
+    applications: (applications.data ?? []) as OrganisationApplicationRow[],
+    members: (members.data ?? []) as OrganisationMemberRow[],
+    admins: adminRows.map((row) => ({
+      ...row,
+      display_name: (adminProfiles.data ?? []).find((profile) => profile.user_id === row.user_id)
+        ?.display_name,
+    })),
+    isOwner: adminRows.some((a) => a.user_id === user.id && a.role === "owner"),
+    canSponsor: ["founding_trial", "active_paid"].includes(org.programme_status),
+    settings,
+    report: report.data,
+    offer,
+  };
+}
+
+export default async function OrganisationDashboardPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  if (slug.length < 3 || slug.length > 60 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) notFound();
+  const {
+    org,
+    summary: s,
+    applications,
+    members,
+    admins,
+    isOwner,
+    canSponsor,
+    settings,
+    report,
+    offer,
+  } = getDataBackend() === "foundation"
+    ? await readNativeDashboard(slug)
+    : await readSourceDashboard(slug);
+  const window = reportWindow(org.trial_starts_at);
+  const parsedReport = parsePerformanceReport(report);
   // Alerts start at the earliest configured threshold (default 60/30/14/7 days).
   const alertFrom = Math.max(...settings.founding_organisation.alertDays);
   const showAlert =
@@ -113,7 +233,6 @@ export default async function OrganisationDashboardPage({
   // Trial expiry moves the organisation to affiliation-only (see organisation_lifecycle).
   const pilotEnded =
     s.programmeStatus === "affiliation_only" && Boolean(s.trialEndsAt) && s.daysRemaining === 0;
-  const isOwner = (admins.data ?? []).some((a) => a.user_id === user.id && a.role === "owner");
   const capacity = s.sponsoredCapacity ?? 0;
   const filled = s.sponsored ?? 0;
   const waiting = s.waitlisted ?? 0;
@@ -259,17 +378,14 @@ export default async function OrganisationDashboardPage({
           </TabsList>
         </div>
         <TabsContent value="applications" className="mt-4">
-          <ApplicationsReview
-            organisationId={org.id}
-            applications={(applications.data ?? []) as OrganisationApplicationRow[]}
-          />
+          <ApplicationsReview organisationId={org.id} applications={applications} />
         </TabsContent>
         <TabsContent value="members" className="mt-4">
           <MembersManager
             organisationId={org.id}
-            members={(members.data ?? []) as OrganisationMemberRow[]}
+            members={members}
             sponsoredCapacity={s.sponsoredCapacity ?? 0}
-            canSponsor={["founding_trial", "active_paid"].includes(org.programme_status)}
+            canSponsor={canSponsor}
             allowFoundingSponsorship={false}
           />
         </TabsContent>
@@ -307,17 +423,15 @@ export default async function OrganisationDashboardPage({
             . Badge wording: “{org.affiliation_wording}”.
           </p>
           <p className="text-muted-foreground">
-            Administrators: {adminIds.length} of {s.adminLimit ?? 0}. VerifyMzansi sends new
+            Administrators: {admins.length} of {s.adminLimit ?? 0}. VerifyMzansi sends new
             administrators an email invitation. To change your profile, programme description, logo
             or wording, contact VerifyMzansi; a logo is shown only once written permission is on
             record.
           </p>
           <ul className="space-y-1">
-            {(admins.data ?? []).map((row) => (
+            {admins.map((row) => (
               <li key={row.user_id}>
-                {(adminProfiles.data ?? []).find((p) => p.user_id === row.user_id)?.display_name ??
-                  "Administrator"}{" "}
-                · {row.role}
+                {row.display_name ?? "Administrator"} · {row.role}
               </li>
             ))}
           </ul>

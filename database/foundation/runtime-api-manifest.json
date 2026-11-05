@@ -4,6 +4,83 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_affiliation_workspace",
+      "updates": ["updates/20261105153628_restored_affiliation_workspace.sql"],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live member session; only the caller's own business posts, applications, affiliations and organisation membership."
+    },
+    {
+      "name": "execute_frontend_organisation_action",
+      "updates": ["updates/20261105153628_restored_affiliation_workspace.sql"],
+      "arguments": [
+        {
+          "name": "p_org",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_item",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_value",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Verified organisation administrator or current authorised staff with recent MFA; exact organisation and funding bound to the native command."
+    },
+    {
+      "name": "get_frontend_organisation_dashboard",
+      "updates": ["updates/20261105153628_restored_affiliation_workspace.sql"],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live organisation administrator membership and native organisation authority; only scoped totals, administrator roster and currently public business contacts."
+    },
+    {
       "name": "reserve_frontend_cipc_document",
       "updates": ["updates/20261105150107_restored_cipc_review.sql"],
       "arguments": [
