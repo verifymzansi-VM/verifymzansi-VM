@@ -2,6 +2,9 @@ import { requireStaff } from "@/lib/auth/require-staff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import Link from "next/link";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendStaffPayments, staffPaymentFilter } from "@/lib/foundation/staff-payments";
 import { PaymentsPanel, type AdminPaymentRow } from "@/components/admin/commercial/partners-panel";
 import { PageHeader } from "@/components/layout/page-header";
 
@@ -24,19 +27,7 @@ function describe(providerData: unknown): string {
   return typeof meta.type === "string" ? meta.type.replace(/_/g, " ") : "Payment";
 }
 
-export default async function PaymentsAdminPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ status?: string; page?: string }>;
-}) {
-  const { role } = await requireStaff("bi:view");
-  const canRefund = roleHasCapability(role, "payments:refund");
-
-  const params = await searchParams;
-  const status = params.status && /^[a-z_]{3,20}$/.test(params.status) ? params.status : undefined;
-  const parsedPage = Number(params.page || 1);
-  const page =
-    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+async function readSourcePayments(page: number, status?: string) {
   let query = createAdminClient()
     .from("payments")
     .select("id, user_id, area, amount_cents, status, created_at, provider_data", {
@@ -58,7 +49,38 @@ export default async function PaymentsAdminPage({
     description: describe(row.provider_data),
   }));
 
-  const total = count ?? rows.length;
+  return { rows, total: count ?? rows.length };
+}
+
+export default async function PaymentsAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; page?: string }>;
+}) {
+  const native = getDataBackend() === "foundation";
+  const staff = await requireStaff("payments:view");
+
+  const canRefund = native
+    ? staff.assignedCapabilities?.includes("payments:refund") === true
+    : roleHasCapability(staff.role, "payments:refund");
+  const params = await searchParams;
+  const nativeStatus = staffPaymentFilter.safeParse(params.status).data;
+  const status = native
+    ? nativeStatus
+    : params.status && /^[a-z_]{3,20}$/.test(params.status)
+      ? params.status
+      : undefined;
+  const parsedPage = Number(params.page || 1);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 100_000) : 1;
+  const { rows, total } = native
+    ? await (async () => {
+        const { api } = await readFoundationServerSession();
+        const result = await readFrontendStaffPayments(api, page, nativeStatus);
+        return { rows: result.items, total: result.total };
+      })()
+    : await readSourcePayments(page, status);
+
   const hrefFor = (nextPage: number) => {
     const query = new URLSearchParams();
     if (status) query.set("status", status);

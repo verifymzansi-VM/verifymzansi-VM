@@ -288,7 +288,7 @@ export const ADMIN_NAV: readonly NavItem[] = [
     label: "Payments & refunds",
     icon: "receipt",
     section: "commercial",
-    capability: "bi:view",
+    capability: "payments:view",
   },
 
   {

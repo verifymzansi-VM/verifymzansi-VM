@@ -31,6 +31,7 @@ const event = z.strictObject({
     "partner",
     "account",
     "feature_flag",
+    "payment",
   ]),
   action: z.string().regex(/^[a-z][a-z0-9_]{0,149}$/),
   reason: z.string().max(5000).nullable(),

@@ -51,6 +51,7 @@ export type Capability =
   | "organisations:manage"
   | "partners:manage"
   | "contracts:manage"
+  | "payments:view"
   | "payments:refund";
 
 const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
@@ -123,6 +124,7 @@ const ROLE_CAPABILITIES: Record<StaffRole, ReadonlySet<Capability>> = {
     "organisations:manage",
     "partners:manage",
     "contracts:manage",
+    "payments:view",
     "payments:refund",
   ]),
 };

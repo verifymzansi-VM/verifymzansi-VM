@@ -20,6 +20,11 @@ export type FoundationRuntimeAuthenticatedDatabase = {
       get_frontend_affiliation_workspace: { Args: { p_slug?: string }; Returns: Json };
       get_frontend_staff_organisation_directory: { Args: Record<never, never>; Returns: Json };
       get_frontend_staff_organisation_detail: { Args: { p_id: string }; Returns: Json };
+      get_frontend_staff_payments: { Args: { p_page: number; p_status?: string }; Returns: Json };
+      record_frontend_staff_payment_reversal: {
+        Args: { p_id: string; p_kind: string; p_reason: string };
+        Returns: Json;
+      };
       save_frontend_organisation_profile: {
         Args: {
           p_slug: string;

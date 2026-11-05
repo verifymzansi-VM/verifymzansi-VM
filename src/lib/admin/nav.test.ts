@@ -130,6 +130,13 @@ describe("admin navigation registry", () => {
     expect(hrefs).not.toContain("/admin/verification/evidence");
   });
 
+  it("shows native payment access without enabling unrelated intelligence pages", () => {
+    const hrefs = navFor("admin", {}, ["payments:view"]).flatMap((section) =>
+      section.items.map((item) => item.href)
+    );
+    expect(hrefs).toEqual(["/admin", "/admin/payments"]);
+  });
+
   it("names each role's home after its job", () => {
     expect(navFor("moderator")[0].items[0].label).toBe(HOME_TITLES.moderator);
     expect(navFor("governance_controller")[0].items[0].label).toBe("Decisions");

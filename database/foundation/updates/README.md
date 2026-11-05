@@ -756,3 +756,16 @@ The isolated fixture verifies staff authority, live counts, private profile
 creation, invalid-field rollback, slug collisions and stale edits. London
 recorded this migration as `20261105201428`. No organisation or invite was
 created in production by this validation.
+
+`20261105201822_restored_staff_payments.sql` connects the selected payments
+screen to the native ledger. Staff see only the payment status, amount and
+display fields needed by the page. The existing record-refund and
+record-chargeback controls require a current admin and recent authenticator
+proof. They record a provider action already handled separately, revoke the
+native funding and partner commission, and write one audit receipt. Exact
+retries return the saved result. This path does not submit an Ozow refund.
+
+The fixture checks access, stale authenticator proof, funding and commission
+revocation, exact retry and the audit entry with synthetic settlement data.
+London recorded the migration as `20261105202246`; no payment or reversal was
+created in production.

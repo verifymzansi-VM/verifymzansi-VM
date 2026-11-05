@@ -19,6 +19,7 @@ import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
+import { recordFrontendStaffPaymentReversal } from "@/lib/foundation/staff-payments";
 import {
   inviteFrontendStaffOrganisationAdmin,
   manageFrontendStaffOrganisation,
@@ -415,6 +416,16 @@ export async function POST(request: Request) {
       refusal: staffCommandRefusal,
       command: async (api, input) => {
         const body = schema.parse(input);
+        if (body.action === "payment.reverse")
+          return {
+            success: true,
+            data: await recordFrontendStaffPaymentReversal(
+              api,
+              body.paymentId.toLowerCase(),
+              body.kind,
+              body.reason
+            ),
+          };
         if (body.action === "organisation.upsert")
           return { success: true, data: await saveFrontendStaffOrganisation(api, body) };
         if (body.action === "organisation.manage")

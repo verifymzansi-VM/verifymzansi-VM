@@ -282,6 +282,7 @@ try {
     "database/foundation/updates/20261105150107_restored_cipc_review.sql",
     "database/foundation/updates/20261105153628_restored_affiliation_workspace.sql",
     "database/foundation/updates/20261105200401_restored_staff_organisation_workspace.sql",
+    "database/foundation/updates/20261105201822_restored_staff_payments.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -1244,6 +1245,34 @@ try {
       c:=api.my_partner_dashboard();
       if c->>'paying_referrals' is distinct from '1' or position('${unverified.id}' in c::text)>0
         then raise exception 'owner referral count drift or buyer identity leak';end if;
+      begin perform api.get_frontend_staff_payments(1);raise exception 'member read the payments workspace';exception when insufficient_privilege then null;end;
+      ${claims(reviewer)}
+      begin perform api.record_frontend_staff_payment_reversal((payment->>'payment_id')::uuid,'refunded','Synthetic unauthorized refund');
+        raise exception 'moderator recorded a reversal';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      c:=api.get_frontend_staff_payments(1,'complete');
+      if c->>'total' is distinct from '1' or c->'items'->0->>'description' is distinct from retail_plan.label
+        or c->'items'->0->>'amount_cents' is distinct from retail_plan.price_cents::text
+        or position('restored-partner-fixture-transaction' in c::text)>0
+        then raise exception 'staff payments projection drift or leaked provider identifiers';end if;
+      perform set_config('request.jwt.claims',jsonb_set(auth.jwt(),'{amr}',
+        jsonb_build_array(jsonb_build_object('method','totp','timestamp',extract(epoch from clock_timestamp()-interval '20 minutes')::bigint)))::text,true);
+      begin perform api.record_frontend_staff_payment_reversal((payment->>'payment_id')::uuid,'refunded','Synthetic refund with stale proof');
+        raise exception 'stale authenticator proof authorized a reversal';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      c:=api.record_frontend_staff_payment_reversal((payment->>'payment_id')::uuid,'refunded','Synthetic recorded provider refund');
+      if c->>'status' is distinct from 'refunded' or c is distinct from
+        api.record_frontend_staff_payment_reversal((payment->>'payment_id')::uuid,'refunded','Synthetic recorded provider refund')
+        or not exists(select 1 from private.entitlements e where e.payment_id=(payment->>'payment_id')::uuid and e.status='revoked')
+        or not exists(select 1 from private.partner_commissions x where x.payment_id=(payment->>'payment_id')::uuid and x.status='reversed')
+        then raise exception 'recorded refund did not atomically revoke funding or acknowledge the exact retry';end if;
+      begin perform api.record_frontend_staff_payment_reversal((payment->>'payment_id')::uuid,'chargeback','Synthetic changed reversal');
+        raise exception 'recorded refund was replaced with a different reversal';exception when sqlstate 'PT409' then null;end;
+      c:=api.get_frontend_staff_audit_page(jsonb_build_object('target',payment->>'payment_id','type','payment'));
+      if c->>'total' is distinct from '1' or c->'items'->0->>'reason' is distinct from 'Synthetic recorded provider refund'
+        or c->'items'->0->>'actor_id' is distinct from '${administrator.id}'
+        then raise exception 'payment reversal was not written to the staff audit history';end if;
+      ${claims(owner)}
       begin perform api.get_frontend_staff_role_review();raise exception 'member read staff role roster';exception when insufficient_privilege then null;end;
       ${claims(administrator)}
       begin perform api.propose_frontend_staff_role('${unverified.claims.email}','admin','Unapproved full administrator proposal');raise exception 'unapproved account could become full administrator';exception when insufficient_privilege then null;end;
@@ -1505,6 +1534,7 @@ try {
     "selected partner administration and owner projections backed by verified attribution and synthetic provider settlement",
     "owner-scoped affiliations, verified organisation dashboard, cross-organisation action refusal and atomic funding rollback",
     "staff organisation directory, public contact scope and atomic private profile creation, slug collision rollback and stale edit refusal",
+    "bounded staff payment read, fresh TOTP reversal, exact retry, revoked entitlement and partner commission, private staff audit",
     "approved administrator invitation fence, independent staff role promotion, post-grant MFA and auditable removal",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",

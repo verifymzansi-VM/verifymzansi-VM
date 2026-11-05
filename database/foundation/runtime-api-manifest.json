@@ -4,6 +4,59 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_staff_payments",
+      "updates": ["updates/20261105201822_restored_staff_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_page",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_status",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment viewing capability and live authenticator session; minimal paged payment fields without provider identifiers or metadata."
+    },
+    {
+      "name": "record_frontend_staff_payment_reversal",
+      "updates": ["updates/20261105201822_restored_staff_payments.sql"],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; only another account's settled payment, local effects and exact audit receipt in one transaction."
+    },
+    {
       "name": "get_frontend_staff_organisation_detail",
       "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
       "arguments": [
