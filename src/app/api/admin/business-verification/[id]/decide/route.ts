@@ -16,7 +16,7 @@ import {
   settleStaffCommand,
   staffCommandRefusal,
 } from "@/lib/foundation/staff-command";
-import { currentBusinessClaim } from "@/lib/foundation/business-seen";
+import { currentBusinessClaim, readStaffSeenCase } from "@/lib/foundation/business-seen";
 
 import { requireStaffCase } from "../../_lib/staff-guard";
 
@@ -62,12 +62,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const id = z.uuid().parse((await params).id);
         const input = schema.strict().parse(payload);
         const expected = z.iso.datetime({ offset: true }).parse(input.expectedUpdatedAt);
+        const isSeen = Boolean(await readStaffSeenCase(api, id));
         let rpc;
-        let status: "approved" | "rejected" | "withdrawn" | "info_requested";
+        let status: "approved" | "rejected" | "withdrawn" | "info_requested" | "pending";
         if (input.action === "revoke") {
           status = "withdrawn";
           rpc = api.rpc(
-            "revoke_frontend_seen_check",
+            isSeen ? "revoke_frontend_seen_check" : "revoke_frontend_cipc",
             {
               p_case: id,
               p_expected: expected,
@@ -78,6 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           );
         } else {
           if (
+            isSeen &&
             input.action !== "approve" &&
             input.action !== "reject" &&
             input.action !== "request_info"
@@ -86,13 +88,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           const claim = await currentBusinessClaim(api, caller.accountId, id, true);
           if (!claim) throw new Error("Current claim required");
           status =
-            input.action === "approve"
+            input.action === "approve" || input.action === "confirm_exception"
               ? "approved"
               : input.action === "reject"
                 ? "rejected"
-                : "info_requested";
+                : input.action === "request_info"
+                  ? "info_requested"
+                  : "pending";
           rpc = api.rpc(
-            "decide_frontend_seen_check",
+            isSeen ? "decide_frontend_seen_check" : "decide_frontend_cipc",
             {
               p_case: id,
               p_expected: expected,
@@ -101,6 +105,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               p_nonce: claim.nonce,
               ...(input.note ? { p_note: input.note } : {}),
               ...(input.reasonCode ? { p_reason: input.reasonCode } : {}),
+              ...(!isSeen
+                ? { p_confirmed: Boolean(input.checks?.inBusiness && input.checks.ownerConfirmed) }
+                : {}),
             },
             { get: false }
           );

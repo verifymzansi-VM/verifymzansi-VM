@@ -13,6 +13,8 @@ import { normaliseRegistrationNumber } from "@/lib/cipc/parse";
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { submitNativeCipc } from "@/lib/foundation/cipc-document-route";
 
 import { requireVerificationOwner } from "../_lib/owner-guard";
 import { formFile, formText, readVerificationForm } from "../_lib/read-upload";
@@ -25,6 +27,7 @@ const log = createLogger("BusinessVerificationSubmit");
  * staff approve from a copy they fetch from CIPC themselves.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation") return submitNativeCipc(request, (await params).id);
   let storedKey: string | null = null;
   try {
     const ctx = await requireVerificationOwner(request, params, {

@@ -10,6 +10,7 @@ import { getClaimsForItems } from "@/lib/services/queue-claims";
 import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readStaffSeenCase } from "@/lib/foundation/business-seen";
+import { readStaffCipcCase } from "@/lib/foundation/business-cipc";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
 import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 import { suggestNextStep } from "@/lib/cipc/screen";
@@ -26,6 +27,7 @@ async function readNativeDetail(id: string): Promise<CaseDetail> {
   let data;
   try {
     data = await readStaffSeenCase(api, id);
+    if (!data) return await readStaffCipcCase(api, id);
   } catch (error) {
     if (error instanceof FoundationStaffCommandError && error.mfaRequired)
       redirect(staffVerifyHref("/staff/two-step", `/admin/business-verification/${id}`));

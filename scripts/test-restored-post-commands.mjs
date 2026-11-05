@@ -279,6 +279,7 @@ try {
     "database/foundation/updates/20261105092547_restored_partner_workflows.sql",
     "database/foundation/updates/20261105093342_restored_staff_role_review.sql",
     "database/foundation/updates/20261105094316_restored_business_seen_requests.sql",
+    "database/foundation/updates/20261105150107_restored_cipc_review.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -322,7 +323,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions; role_change uuid; seen_case uuid; seen_time timestamptz; photo_digest text; visit jsonb;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions; role_change uuid; seen_case uuid; seen_time timestamptz; photo_digest text; visit jsonb; cipc_case uuid; cipc_summary jsonb; directors jsonb;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -1038,6 +1039,77 @@ try {
       select updated_at into seen_time from private.frontend_business_checks where id=seen_case;
       perform api.revoke_frontend_seen_check(seen_case,seen_time,'Synthetic separate review reversed the badge','other');
       if jsonb_array_length(api.get_public_frontend_business_seen(array[business_target]))<>0 then raise exception 'revoked seen badge remained public';end if;
+      ${claims(unverified)}
+      cipc_summary:='{"registrationNumber":"2020/123456/07","registeredName":"Fixture Registered Company","enterpriseStatus":"In Business","docType":"full_disclosure","registeredOfficeLines":[],"registeredOffice":{"streetLines":["123 Private Registry Street"],"suburb":null,"city":"Johannesburg","province":"Gauteng","postalCode":"2000","cityKnown":true}}';
+      directors:=jsonb_build_array(jsonb_build_object('name','Fixture Company Director','role','Director','fingerprint','${otherIdentity.fingerprint}'));
+      c:=api.reserve_frontend_cipc_document(business_target,'2020/123456/07','director',true,repeat('1',64));
+      cipc_case:=(c->>'case_id')::uuid;move_request:=(c->>'artifact_id')::uuid;
+      perform api.complete_evidence_upload(move_request,repeat('a',64),repeat('1',64),128);
+      begin perform api.record_frontend_cipc_parse('${unverified.id}','${owner.claims.session_id}',move_request,cipc_summary,directors);raise exception 'mismatched CIPC session recorded a proof';exception when sqlstate 'PT409' then null;end;
+      perform api.record_frontend_cipc_parse('${unverified.id}','${unverified.claims.session_id}',move_request,cipc_summary,directors);
+      ${claims(reviewer)}
+      lease:=api.claim_frontend_staff_items('business_kyc',1)->'items'->0;
+      if lease->>'case_id' is distinct from cipc_case::text or api.get_frontend_business_review_queue('review')->'counts'->>'review' is distinct from '1'
+        then raise exception 'submitted CIPC case missed its queue';end if;
+      select updated_at into seen_time from private.frontend_business_checks where id=cipc_case;
+      begin perform api.decide_frontend_cipc(cipc_case,seen_time,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,p_confirmed=>true);raise exception 'owner supplied PDF granted a CIPC badge';exception when sqlstate 'PT409' then null;end;
+      c:=api.reserve_frontend_cipc_official(cipc_case,seen_time,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,repeat('2',64));
+      move_request:=(c->>'artifact_id')::uuid;
+      perform api.complete_evidence_upload(move_request,repeat('b',64),repeat('2',64),128);
+      c:=api.record_frontend_cipc_parse('${reviewer.id}','${reviewer.claims.session_id}',move_request,jsonb_set(cipc_summary,'{registrationNumber}','"2020/654321/07"'),directors);
+      seen_time:=(c->>'updatedAt')::timestamptz;
+      begin perform api.decide_frontend_cipc(cipc_case,seen_time,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,p_confirmed=>true);raise exception 'different official registration number approved';exception when sqlstate 'PT409' then null;end;
+      c:=api.reserve_frontend_cipc_official(cipc_case,seen_time,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,repeat('3',64));
+      move_request:=(c->>'artifact_id')::uuid;
+      perform api.complete_evidence_upload(move_request,repeat('b',64),repeat('3',64),128);
+      c:=api.record_frontend_cipc_parse('${reviewer.id}','${reviewer.claims.session_id}',move_request,cipc_summary,directors);
+      seen_time:=(c->>'updatedAt')::timestamptz;
+      c:=api.decide_frontend_cipc(cipc_case,seen_time,'approve',lease->>'claim_generation',(lease->>'claim_nonce')::uuid,p_confirmed=>true);
+      if c->>'status' is distinct from 'approved'
+        or not exists(select 1 from private.frontend_current_cipc_stickers s where s.business_id=business_target
+          and s.registration_number='2020/123456/07' and s.accepted_role='director' and s.owner_id='${unverified.id}')
+        or exists(select 1 from private.frontend_cipc_documents d where d.check_id=cipc_case and position('${otherIdentity.fingerprint}' in d.summary::text)>0)
+        then raise exception 'CIPC approval lacked matched official facts or disclosed fingerprint';end if;
+      c:=api.get_public_frontend_business_cipc(array[business_target]);
+      if c->0->>'registration_number' is distinct from '2020/123456/07' or c->0->'office' ? 'streetLines'
+        or c->0->'office' ? 'postalCode' then raise exception 'public CIPC projection disclosed the private office or lost its fact';end if;
+      ${claims(unverified)}
+      if api.get_my_frontend_business_review_state(business_target)->'stickers'->'cipc'->>'registeredName' is distinct from 'Fixture Registered Company'
+        or (select data->>'location_address' from private.post_presentations where post_id=business_target) is distinct from '123 Private Registry Street, 2000'
+        then raise exception 'owner-approved registered office or CIPC sticker missing';end if;
+      perform api.set_frontend_cipc_office_visibility(business_target,true);
+      if api.get_public_frontend_business_cipc(array[business_target])->0->'office'->'streetLines'->>0 is distinct from '123 Private Registry Street'
+        then raise exception 'current owner consent did not update the public office';end if;
+      perform api.set_frontend_cipc_office_visibility(business_target,false);
+      c:=api.reserve_frontend_cipc_document(business_target,'2020/123456/07','representative',false,repeat('4',64));
+      cipc_case:=(c->>'case_id')::uuid;move_request:=(c->>'artifact_id')::uuid;
+      perform api.complete_evidence_upload(move_request,repeat('c',64),repeat('4',64),128);
+      perform api.record_frontend_cipc_parse('${unverified.id}','${unverified.claims.session_id}',move_request,cipc_summary,'[]');
+      c:=api.start_frontend_cipc_email('${unverified.id}','${unverified.claims.session_id}',business_target,cipc_case,
+        'synthetic@example.invalid','Manager',repeat('5',64));
+      move_request:=(c->>'challenge')::uuid;
+      if api.verify_frontend_cipc_email('${unverified.id}','${unverified.claims.session_id}',business_target,cipc_case,repeat('5',64))->>'verified' is distinct from 'false'
+        or api.mark_frontend_cipc_email_sent('${unverified.id}','${unverified.claims.session_id}',cipc_case,gen_random_uuid())
+        then raise exception 'unacknowledged work email proof accepted';end if;
+      if not api.mark_frontend_cipc_email_sent('${unverified.id}','${unverified.claims.session_id}',cipc_case,move_request) then raise exception 'valid code delivery could not be acknowledged';end if;
+      for total in 1..5 loop
+        c:=api.verify_frontend_cipc_email('${unverified.id}','${unverified.claims.session_id}',business_target,cipc_case,repeat('6',64));
+        if c->>'remaining' is distinct from (5-total)::text then raise exception 'work email attempt limit was not durable';end if;
+      end loop;
+      if api.verify_frontend_cipc_email('${unverified.id}','${unverified.claims.session_id}',business_target,cipc_case,repeat('5',64))->>'verified' is distinct from 'false'
+        then raise exception 'exhausted representative code was accepted';end if;
+      update private.frontend_cipc_email_codes set started_at=clock_timestamp()-interval '2 minutes' where check_id=cipc_case;
+      c:=api.start_frontend_cipc_email('${unverified.id}','${unverified.claims.session_id}',business_target,cipc_case,
+        'synthetic@example.invalid','Manager',repeat('7',64));
+      perform api.mark_frontend_cipc_email_sent('${unverified.id}','${unverified.claims.session_id}',cipc_case,(c->>'challenge')::uuid);
+      if api.verify_frontend_cipc_email('${unverified.id}','${unverified.claims.session_id}',business_target,cipc_case,repeat('7',64))->>'verified' is distinct from 'true'
+        then raise exception 'represented valid work email code not recorded';end if;
+      ${claims(reviewer)}
+      lease:=api.claim_evidence_case(cipc_case);
+      select updated_at into seen_time from private.frontend_business_checks where id=cipc_case;
+      c:=api.record_frontend_cipc_callback(cipc_case,seen_time,lease->>'claim_generation',(lease->>'claim_nonce')::uuid,true,
+        '{"numberSource":"Official fixture website","spokeTo":"Fixture director","confirmedPosition":"Manager","confirmed":true,"notes":null}');
+      if c->>'confirmed' is distinct from 'true' then raise exception 'independent callback did not bind to verified representative';end if;
       ${claims(owner)}
       select revision into rev from private.posts where id=target;
       c:=api.execute_my_frontend_post_action(gen_random_uuid(),target,rev,'deactivate','listing','market');

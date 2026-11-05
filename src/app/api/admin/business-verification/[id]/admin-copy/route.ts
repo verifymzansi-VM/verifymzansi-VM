@@ -8,6 +8,8 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { attachNativeOfficialCipc } from "@/lib/foundation/cipc-document-route";
 
 import { readStaffUpload, requireStaffCase } from "../../_lib/staff-guard";
 
@@ -20,6 +22,8 @@ const log = createLogger("AdminBusinessVerificationCopy");
  * upload field by field.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return attachNativeOfficialCipc(request, (await params).id);
   let storedKey: string | null = null;
   try {
     const ctx = await requireStaffCase(request, params, { log });

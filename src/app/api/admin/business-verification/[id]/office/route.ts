@@ -6,6 +6,8 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleNativeCipcStaffAction } from "@/lib/foundation/cipc-commands";
 
 import { requireStaffCase } from "../../_lib/staff-guard";
 
@@ -30,6 +32,8 @@ const schema = z.object({
  * Staff correct how we read the registered office before approving.
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleNativeCipcStaffAction(request, (await params).id, "office", schema.strict());
   try {
     const guard = await requireStaffCase(request, params, { log });
     if (guard instanceof NextResponse) return guard;

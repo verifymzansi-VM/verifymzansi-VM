@@ -710,5 +710,20 @@ city. Addresses, coordinates and evidence stay private.
 The native fixture covers owner and staff boundaries, real claim selection,
 synthetic photo and attachment receipts, independent approval, revocation and
 generic owner notices. It does not create production cases, upload real files or
-send real mail. CIPC registration review uses separate evidence and remains a
-separate integration.
+send real mail. CIPC registration review uses the separate evidence described
+below.
+
+`20261105150107_restored_cipc_review.sql` reconnects the CIPC preview, owner
+upload, independent official copy, representative code and callback,
+registration decisions, renewal, linked profiles and office visibility. The
+official copy must match the registration and show the company as In Business. A
+separate senior reviewer can confirm a unique verified legal name when the
+official copy omits the ID; this does not waive registry status. Active
+registrations for a different owner prevent approval.
+
+Native evidence serving rechecks the reviewer and stored bytes and records
+access before serving the file. Public responses use only current eligible
+registrations. The street and postal code stay private until the owner chooses
+to show them. The isolated fixture checks the official-copy boundary, matched
+director, case queue, private/public office, and representative code and
+callback with synthetic evidence and no actual provider email or uploads.

@@ -9,6 +9,8 @@ import { logAuditEvent } from "@/lib/services/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleNativeCipcStaffAction } from "@/lib/foundation/cipc-commands";
 
 import { requireStaffCase } from "../../_lib/staff-guard";
 
@@ -33,6 +35,13 @@ const schema = z.object({
  * the applicant), who confirmed, and the confirmed position.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleNativeCipcStaffAction(
+      request,
+      (await params).id,
+      "representative",
+      schema.strict()
+    );
   try {
     const guard = await requireStaffCase(request, params, { log });
     if (guard instanceof NextResponse) return guard;

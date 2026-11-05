@@ -4,6 +4,603 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "reserve_frontend_cipc_document",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_number",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_route",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_office",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current reviewed business owner; immutable case and document intent with bounded exact retry."
+    },
+    {
+      "name": "reserve_frontend_cipc_official",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent reviewer and fresh TOTP; represented live evidence claim and separate official PDF intent."
+    },
+    {
+      "name": "record_frontend_cipc_parse",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_actor",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_artifact",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_summary",
+          "sqlType": "jsonb",
+          "optional": false
+        },
+        {
+          "name": "p_directors",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted parser only after signed caller and stored PDF integrity. Owner/staff provenance and claim are rechecked; no raw identity or other directors' fingerprints are retained in the presentation."
+    },
+    {
+      "name": "get_frontend_cipc_preview_context",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_fingerprints",
+          "sqlType": "text[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted parser for current confirmed business owner; returns only an index into the supplied director list and a profile address hint."
+    },
+    {
+      "name": "request_frontend_cipc_recheck",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_source",
+          "sqlType": "uuid",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current reviewed owner; one open request, actual 60-day renewal window or a current same-owner source registration."
+    },
+    {
+      "name": "decide_frontend_cipc",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_confirmed",
+          "sqlType": "boolean",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh independent staff decision and represented live claim. Current official In Business copy, exact registration, current director/representative proof, and other-owner conflict guard. Name exception needs separate senior review."
+    },
+    {
+      "name": "revoke_frontend_cipc",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh senior reviewer for a represented approved case; revoked source badges invalidate linked publication."
+    },
+    {
+      "name": "start_frontend_cipc_email",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_position",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted work-email sender after live owner proof; one challenge per case per minute and private 15-minute digest."
+    },
+    {
+      "name": "mark_frontend_cipc_email_sent",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_challenge",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted sender marks only the represented current challenge after provider acceptance."
+    },
+    {
+      "name": "verify_frontend_cipc_email",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_owner",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_session",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_digest",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Trusted signed owner-code verifier; dispatched challenge, bound case, expiry and five persistent attempts."
+    },
+    {
+      "name": "record_frontend_cipc_callback",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_domain",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_callback",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh independent staff reviewer and current claim; represented verified work email and callback record."
+    },
+    {
+      "name": "switch_frontend_cipc_representative",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current owner may switch their represented open director check to the representative route without losing evidence or messages."
+    },
+    {
+      "name": "set_frontend_cipc_office_visibility",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_show",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current owner controls whether a currently approved registration displays street and postal code."
+    },
+    {
+      "name": "correct_frontend_cipc_office",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_office",
+          "sqlType": "jsonb",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh independent staff reviewer and represented current evidence claim; validated private office correction."
+    },
+    {
+      "name": "get_my_frontend_business_review_state",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_business",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current business owner only; current stickers, open and historical cases, representative progress and same-owner links, no fingerprints or code hashes."
+    },
+    {
+      "name": "get_frontend_business_review_queue",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_tab",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current queue staff; bounded canonical registration and Seen summaries with exact queue counts."
+    },
+    {
+      "name": "get_frontend_cipc_case",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_case",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current queue staff; private documents, notes and callback facts require a live claim or prior reviewer relation and fresh TOTP; evidence access is recorded."
+    },
+    {
+      "name": "get_public_frontend_business_cipc",
+      "updates": ["updates/20261105150107_restored_cipc_review.sql"],
+      "arguments": [
+        {
+          "name": "p_post_ids",
+          "sqlType": "uuid[]",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "s",
+      "execute": {
+        "anon": true,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current eligible public business registrations only. Street and postal code are returned only with current owner consent."
+    },
+    {
       "name": "reserve_frontend_seen_reply_file",
       "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
       "arguments": [
@@ -373,7 +970,10 @@
     },
     {
       "name": "send_frontend_seen_message",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "updates": [
+        "updates/20261105094316_restored_business_seen_requests.sql",
+        "updates/20261105150107_restored_cipc_review.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -431,7 +1031,10 @@
     },
     {
       "name": "frontend_seen_file_object",
-      "updates": ["updates/20261105094316_restored_business_seen_requests.sql"],
+      "updates": [
+        "updates/20261105094316_restored_business_seen_requests.sql",
+        "updates/20261105150107_restored_cipc_review.sql"
+      ],
       "arguments": [
         {
           "name": "p_case",
@@ -1852,7 +2455,10 @@
     },
     {
       "name": "claim_frontend_staff_items",
-      "updates": ["updates/20261104155022_restored_staff_claim_controls.sql"],
+      "updates": [
+        "updates/20261104155022_restored_staff_claim_controls.sql",
+        "updates/20261105150107_restored_cipc_review.sql"
+      ],
       "arguments": [
         {
           "name": "p_queue",

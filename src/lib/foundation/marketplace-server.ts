@@ -8,7 +8,7 @@ import {
   type PublicCollection,
 } from "./marketplace-read";
 import { readFoundationPublicPost, readFoundationPublicContactChannels } from "./public-post";
-import { readPublicBusinessSeen } from "./business-seen";
+import { readPublicBusinessStickers } from "./business-seen";
 import { searchFoundationPresentedCards } from "./public-cards";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import type { PromotionDetailRecord } from "@/components/listings/promotion-detail-content";
@@ -91,7 +91,7 @@ export const restoredListingDetail = cache(async (id: string) => {
 export const restoredBusinessDetail = cache(async (id: string) => {
   const post = await restoredPublicDetail(id);
   if (post?.kind !== "business") return null;
-  const sticker = (await readPublicBusinessSeen(foundationServerPublicApi(), [id])).get(id);
+  const sticker = (await readPublicBusinessStickers(foundationServerPublicApi(), [id])).get(id);
   const business: BusinessDetailRecord = {
     ...restoredPublicRow(post, post),
     ...sticker,

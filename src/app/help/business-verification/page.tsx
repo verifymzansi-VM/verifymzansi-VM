@@ -40,7 +40,7 @@ const STICKERS = [
 const DOCUMENTS = [
   {
     name: "Free disclosure",
-    how: "CIPC eServices or BizPortal → search your company → free disclosure. Costs nothing.",
+    how: "CIPC eServices → search your company → free disclosure. It has limited information and is for initial review.",
   },
   {
     name: "Disclosure Certificate",

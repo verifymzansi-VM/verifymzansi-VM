@@ -6,6 +6,8 @@ import { approvedOffice } from "@/lib/business-verification/service";
 import { logAuditEvent } from "@/lib/services/audit";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleNativeCipcOwnerAction } from "@/lib/foundation/cipc-commands";
 
 import { requireVerificationOwner } from "../_lib/owner-guard";
 
@@ -19,6 +21,8 @@ const schema = z.object({ showFull: z.boolean() });
  * Suburb, city and province always show once CIPC is verified.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleNativeCipcOwnerAction(request, (await params).id, "office-visibility");
   try {
     const ctx = await requireVerificationOwner(request, params, {
       log,

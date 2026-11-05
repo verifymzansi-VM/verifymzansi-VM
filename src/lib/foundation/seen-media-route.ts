@@ -7,7 +7,7 @@ import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { createFoundationServiceApi } from "./service-api";
 import { FoundationSessionError } from "./request-api";
 import { foundationNoStore } from "./owner-route";
-import { visitPhotoReceipt } from "./business-seen";
+import { readMyBusinessChecks, visitPhotoReceipt } from "./business-seen";
 import {
   FoundationStaffCommandError,
   settleStaffCommand,
@@ -39,11 +39,11 @@ const privateBucket = () => process.env.R2_PRIVATE_BUCKET || "verifymzansi-priva
 type Caller = Awaited<
   ReturnType<ReturnType<typeof createFoundationRouteContext>["authenticateCaller"]>
 >;
-async function storeSeenEvidence(
+export async function storeBusinessEvidence(
   reserved: z.infer<typeof reservation>,
   caseId: string,
   bytes: Buffer,
-  purpose: "business_visit_photo" | "business_reply_attachment"
+  purpose: "business_visit_photo" | "business_reply_attachment" | "registration"
 ) {
   if (reserved.completed) return;
   const service = createFoundationServiceApi();
@@ -85,7 +85,7 @@ async function storeSeenEvidence(
   );
   if (completed.error) throw new Error("Evidence receipt unavailable");
 }
-async function protectedSeenRoute(
+export async function protectBusinessEvidenceRoute(
   incoming: Request,
   action: string,
   mutate: boolean,
@@ -146,7 +146,7 @@ async function protectedSeenRoute(
 }
 
 export function uploadSeenPhoto(incoming: Request, id: string) {
-  return protectedSeenRoute(
+  return protectBusinessEvidenceRoute(
     incoming,
     "business-verification:visit-photo",
     true,
@@ -193,7 +193,7 @@ export function uploadSeenPhoto(incoming: Request, id: string) {
         ),
         reservation
       );
-      await storeSeenEvidence(reserved, caseId, bytes, "business_visit_photo");
+      await storeBusinessEvidence(reserved, caseId, bytes, "business_visit_photo");
       const photo = await settleStaffCommand(
         api.rpc(
           "get_frontend_seen_photo_receipt",
@@ -211,7 +211,7 @@ export function uploadSeenPhoto(incoming: Request, id: string) {
 }
 
 export function readSeenEvidenceFile(incoming: Request, id: string) {
-  return protectedSeenRoute(incoming, "admin:evidence:view", false, async ({ api }) => {
+  return protectBusinessEvidenceRoute(incoming, "admin:evidence:view", false, async ({ api }) => {
     const artifact = z.uuid().parse(id);
     const scope = z.strictObject({
       case_id: z.uuid(),
@@ -265,11 +265,12 @@ export function readSeenEvidenceFile(incoming: Request, id: string) {
 }
 
 export function sendSeenOwnerMessage(incoming: Request, id: string) {
-  return protectedSeenRoute(
+  return protectBusinessEvidenceRoute(
     incoming,
     "business-verification:message",
     true,
-    async ({ api, accountId }, request) => {
+    async (caller, request) => {
+      const { api, accountId } = caller;
       const business = z.uuid().parse(id);
       const form = await readBoundedRequestFormData(request, 6 * 1024 * 1024);
       if (
@@ -284,31 +285,44 @@ export function sendSeenOwnerMessage(incoming: Request, id: string) {
       let attachment: string | undefined;
       const file = form.get("file");
       if (file instanceof File && file.size) {
-        const data = await readCipcFile(file);
-        if (isIntakeError(data))
-          return NextResponse.json({ error: data.error, code: data.code }, { status: data.status });
-        if (data.activeContent)
-          return NextResponse.json(
-            { error: "This file contains active content." },
-            { status: 422 }
-          );
-        const bytes = Buffer.from(data.bytes);
-        const mime = evidenceMime.parse(detectMimeFromMagicBytes(bytes));
-        const reserved = await settleStaffCommand(
-          api.rpc(
-            "reserve_frontend_seen_reply_file",
-            {
-              p_business: business,
-              p_case: input.caseId,
-              p_digest: sha(bytes),
-              p_mime: mime,
-            },
-            { get: false }
-          ),
-          reservation.refine((r) => r.owner_id === accountId)
+        const current = (await readMyBusinessChecks(api, business)).cases.find(
+          (item) => item.id === input.caseId
         );
-        await storeSeenEvidence(reserved, input.caseId, bytes, "business_reply_attachment");
-        attachment = reserved.artifact_id;
+        if (!current)
+          throw new FoundationStaffCommandError(404, "This business case is unavailable.");
+        if (current.kind === "cipc") {
+          const { attachNativeCipcReplyFile } = await import("./cipc-document-route");
+          attachment = await attachNativeCipcReplyFile(caller, business, current, file);
+        } else {
+          const data = await readCipcFile(file);
+          if (isIntakeError(data))
+            return NextResponse.json(
+              { error: data.error, code: data.code },
+              { status: data.status }
+            );
+          if (data.activeContent)
+            return NextResponse.json(
+              { error: "This file contains active content." },
+              { status: 422 }
+            );
+          const bytes = Buffer.from(data.bytes);
+          const mime = evidenceMime.parse(detectMimeFromMagicBytes(bytes));
+          const reserved = await settleStaffCommand(
+            api.rpc(
+              "reserve_frontend_seen_reply_file",
+              {
+                p_business: business,
+                p_case: input.caseId,
+                p_digest: sha(bytes),
+                p_mime: mime,
+              },
+              { get: false }
+            ),
+            reservation.refine((r) => r.owner_id === accountId)
+          );
+          await storeBusinessEvidence(reserved, input.caseId, bytes, "business_reply_attachment");
+          attachment = reserved.artifact_id;
+        }
       }
       if (!attachment && !input.body)
         return NextResponse.json({ error: "Write a message or attach a file." }, { status: 400 });

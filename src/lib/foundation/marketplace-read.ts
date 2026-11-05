@@ -1,5 +1,5 @@
 import type { FoundationPublicApi } from "./public-api";
-import { readPublicBusinessSeen } from "./business-seen";
+import { readPublicBusinessStickers } from "./business-seen";
 import {
   searchFoundationPresentedCards,
   foundationMediaUrl,
@@ -312,7 +312,7 @@ export async function readRestoredCollection(
   }
   if (organisation) total = cards.length;
   const selected = organisation ? cards.slice((page - 1) * limit, page * limit) : cards;
-  const stickers = await readPublicBusinessSeen(
+  const stickers = await readPublicBusinessStickers(
     api,
     selected.filter((row) => row.kind === "business").map((row) => row.id)
   );

@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { logAuditEvent } from "@/lib/services/audit";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleNativeCipcOwnerAction } from "@/lib/foundation/cipc-commands";
 
 import { requireVerificationOwner } from "../_lib/owner-guard";
 
@@ -17,6 +19,8 @@ const log = createLogger("BusinessVerificationRenew");
  * decide as usual; the owner only uploads if staff ask for it.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleNativeCipcOwnerAction(request, (await params).id, "renew");
   try {
     const ctx = await requireVerificationOwner(request, params, {
       log,

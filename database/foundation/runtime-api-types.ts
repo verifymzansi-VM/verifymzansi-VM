@@ -10,14 +10,90 @@ export type FoundationRuntimePublicDatabase = {
   api: Omit<FoundationPublicDatabase["api"], "Functions"> & {
     Functions: FoundationPublicDatabase["api"]["Functions"] & {
       get_public_frontend_business_seen: { Args: { p_post_ids: string[] }; Returns: Json };
+      get_public_frontend_business_cipc: { Args: { p_post_ids: string[] }; Returns: Json };
     };
   };
 };
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_my_frontend_business_review_state: { Args: { p_business: string }; Returns: Json };
+      get_frontend_business_review_queue: { Args: { p_tab: string }; Returns: Json };
+      get_frontend_cipc_case: { Args: { p_case: string }; Returns: Json };
+      request_frontend_cipc_recheck: {
+        Args: { p_business: string; p_source?: string };
+        Returns: Json;
+      };
+      switch_frontend_cipc_representative: {
+        Args: { p_business: string; p_case: string };
+        Returns: Json;
+      };
+      set_frontend_cipc_office_visibility: {
+        Args: { p_business: string; p_show: boolean };
+        Returns: Json;
+      };
+      decide_frontend_cipc: {
+        Args: {
+          p_case: string;
+          p_expected: string;
+          p_action: string;
+          p_generation: string;
+          p_nonce: string;
+          p_note?: string;
+          p_reason?: string;
+          p_confirmed?: boolean;
+        };
+        Returns: Json;
+      };
+      revoke_frontend_cipc: {
+        Args: { p_case: string; p_expected: string; p_note: string; p_reason: string };
+        Returns: Json;
+      };
+      correct_frontend_cipc_office: {
+        Args: {
+          p_case: string;
+          p_expected: string;
+          p_generation: string;
+          p_nonce: string;
+          p_office: Json;
+        };
+        Returns: Json;
+      };
+      record_frontend_cipc_callback: {
+        Args: {
+          p_case: string;
+          p_expected: string;
+          p_generation: string;
+          p_nonce: string;
+          p_domain: boolean;
+          p_callback: Json;
+        };
+        Returns: Json;
+      };
+      reserve_frontend_cipc_document: {
+        Args: {
+          p_business: string;
+          p_number: string;
+          p_route: string;
+          p_office: boolean;
+          p_digest: string;
+          p_case?: string;
+        };
+        Returns: Json;
+      };
+      reserve_frontend_cipc_official: {
+        Args: {
+          p_case: string;
+          p_expected: string;
+          p_generation: string;
+          p_nonce: string;
+          p_digest: string;
+        };
+        Returns: Json;
+      };
       get_my_frontend_business_checks: { Args: { p_business: string }; Returns: Json };
       get_public_frontend_business_seen: { Args: { p_post_ids: string[] }; Returns: Json };
+      get_public_frontend_business_cipc: { Args: { p_post_ids: string[] }; Returns: Json };
       request_frontend_business_seen: {
         Args: {
           p_business: string;
@@ -341,6 +417,46 @@ export type FoundationRuntimeAuthenticatedDatabase = {
 export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
+      start_frontend_cipc_email: {
+        Args: {
+          p_owner: string;
+          p_session: string;
+          p_business: string;
+          p_case: string;
+          p_email: string;
+          p_position: string;
+          p_digest: string;
+        };
+        Returns: Json;
+      };
+      mark_frontend_cipc_email_sent: {
+        Args: { p_owner: string; p_session: string; p_case: string; p_challenge: string };
+        Returns: boolean;
+      };
+      verify_frontend_cipc_email: {
+        Args: {
+          p_owner: string;
+          p_session: string;
+          p_business: string;
+          p_case: string;
+          p_digest: string;
+        };
+        Returns: Json;
+      };
+      record_frontend_cipc_parse: {
+        Args: {
+          p_actor: string;
+          p_session: string;
+          p_artifact: string;
+          p_summary: Json;
+          p_directors: Json;
+        };
+        Returns: Json;
+      };
+      get_frontend_cipc_preview_context: {
+        Args: { p_owner: string; p_session: string; p_business: string; p_fingerprints: string[] };
+        Returns: Json;
+      };
       frontend_seen_file_object: { Args: { p_case: string; p_artifact: string }; Returns: Json };
       submit_frontend_support: {
         Args: { p_name: string; p_email: string; p_category: string; p_message: string };

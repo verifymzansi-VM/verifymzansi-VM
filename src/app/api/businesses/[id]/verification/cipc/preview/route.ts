@@ -7,6 +7,8 @@ import {
   profileHasStreetAddress,
 } from "@/lib/business-verification/service";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { previewNativeCipc } from "@/lib/foundation/cipc-document-route";
 
 import { requireVerificationOwner } from "../../_lib/owner-guard";
 import { formFile, readVerificationForm } from "../../_lib/read-upload";
@@ -19,6 +21,7 @@ const log = createLogger("BusinessVerificationPreview");
  * submitting. Nothing is stored and nothing is decided here.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation") return previewNativeCipc(request, (await params).id);
   try {
     const ctx = await requireVerificationOwner(request, params, {
       log,

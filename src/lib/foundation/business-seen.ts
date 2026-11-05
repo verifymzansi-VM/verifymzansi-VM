@@ -6,7 +6,19 @@ import { readFrontendStaffClaims } from "./staff-claims";
 import { PREMISES_TYPES } from "../business-verification/seen";
 const date = z.iso.datetime({ offset: true });
 const method = z.enum(["video", "visit"]);
-const state = z.enum(["pending", "info_requested", "approved", "rejected", "withdrawn"]);
+const state = z.enum(["pending", "info_requested", "approved", "rejected", "withdrawn", "revoked"]);
+const businessKind = z.enum(["seen", "cipc", "cipc_link"]);
+const cipcRoute = z.enum(["director", "representative"]);
+const registration = z.string().regex(/^\d{4}\/\d{6}\/\d{2}$/);
+const position = z.enum(["director", "member", "representative"]);
+export const registeredOffice = z.object({
+  suburb: z.string().max(120).nullable().optional(),
+  city: z.string().max(120).nullable().optional(),
+  province: z.string().max(80).nullable().optional(),
+  streetLines: z.array(z.string().max(240)).max(6).optional(),
+  postalCode: z.string().max(12).nullable().optional(),
+  cityKnown: z.boolean().optional(),
+});
 const seen = z.strictObject({
   verifiedAt: date,
   expiresAt: date,
@@ -59,9 +71,51 @@ export async function readPublicBusinessSeen(api: FoundationPublicApi, ids: stri
   );
 }
 
+export async function readPublicBusinessStickers(api: FoundationPublicApi, ids: string[]) {
+  if (!ids.length) return new Map<string, object>();
+  const allowed = new Set(z.array(z.uuid()).max(100).parse(ids));
+  const [seen, cipc] = await Promise.all([
+    readPublicBusinessSeen(api, [...allowed]),
+    api.rpc("get_public_frontend_business_cipc", { p_post_ids: [...allowed] }, { get: false }),
+  ]);
+  if (cipc.error) throw new Error("Current CIPC stickers could not be loaded");
+  const items = z
+    .array(
+      z.strictObject({
+        business_id: z.uuid(),
+        verified_at: date,
+        expires_at: date,
+        registration_number: registration,
+        registered_name: z.string().max(250),
+        role: position,
+        position: z.string().max(120).nullable(),
+        office: registeredOffice.nullable(),
+      })
+    )
+    .max(100)
+    .parse(cipc.data);
+  if (
+    items.some((item) => !allowed.has(item.business_id)) ||
+    new Set(items.map((i) => i.business_id)).size !== items.length
+  )
+    throw new Error("Business sticker response changed");
+  const results = new Map<string, object>(seen);
+  for (const item of items)
+    results.set(item.business_id, {
+      ...results.get(item.business_id),
+      cipc_verified_at: item.verified_at,
+      cipc_registration_number: item.registration_number,
+      cipc_registered_name: item.registered_name,
+      cipc_registered_office: item.office,
+      owner_verified_role: item.role,
+      owner_position_title: item.position,
+    });
+  return results;
+}
+
 export async function readMyBusinessChecks(api: FoundationAuthenticatedApi, businessId: string) {
   const response = await api.rpc(
-    "get_my_frontend_business_checks",
+    "get_my_frontend_business_review_state",
     { p_business: businessId },
     { get: false }
   );
@@ -71,15 +125,30 @@ export async function readMyBusinessChecks(api: FoundationAuthenticatedApi, busi
     Promise.resolve(response),
     z.strictObject({
       business: z.strictObject({ id: z.literal(businessId), name: z.string().nullable() }),
-      stickers: z.strictObject({ idReviewed: z.boolean(), cipc: z.null(), seen: seen.nullable() }),
+      stickers: z.strictObject({
+        idReviewed: z.boolean(),
+        seen: seen.nullable(),
+        cipc: z
+          .strictObject({
+            verifiedAt: date,
+            expiresAt: date,
+            registrationNumber: registration,
+            registeredName: z.string().max(250),
+            role: position,
+            position: z.string().max(120).nullable(),
+            showFullRegisteredOffice: z.boolean(),
+            registeredOffice: registeredOffice.nullable(),
+          })
+          .nullable(),
+      }),
       cases: z
         .array(
           z.strictObject({
             id: z.uuid(),
-            kind: z.enum(["seen", "cipc"]),
+            kind: businessKind,
             status: state,
-            route: z.null(),
-            registrationNumber: z.null(),
+            route: cipcRoute.nullable(),
+            registrationNumber: registration.nullable(),
             reasonCode: z.string().max(80).nullable(),
             note: z.string().max(1000).nullable(),
             createdAt: date,
@@ -87,7 +156,14 @@ export async function readMyBusinessChecks(api: FoundationAuthenticatedApi, busi
             expiresAt: date.nullable(),
             seenMethod: method.nullable(),
             seenScheduledFor: date.nullable(),
-            representative: z.null(),
+            representative: z
+              .strictObject({
+                email: z.email().max(254).nullable(),
+                position: z.string().max(40).nullable(),
+                emailVerified: z.boolean(),
+                codeSent: z.boolean(),
+              })
+              .nullable(),
             messages: z
               .array(
                 z.strictObject({
@@ -102,7 +178,16 @@ export async function readMyBusinessChecks(api: FoundationAuthenticatedApi, busi
           })
         )
         .max(20),
-      linkable: z.array(z.never()).max(0),
+      linkable: z
+        .array(
+          z.strictObject({
+            businessId: z.uuid(),
+            businessName: z.string(),
+            registrationNumber: registration,
+            registeredName: z.string().max(250),
+          })
+        )
+        .max(100),
     })
   );
 }
@@ -129,13 +214,13 @@ export async function currentBusinessClaim(
 const count = z.number().int().nonnegative();
 const row = z.strictObject({
   id: z.uuid(),
-  kind: z.literal("seen"),
-  route: z.null(),
+  kind: businessKind,
+  route: cipcRoute.nullable(),
   status: state,
   businessId: z.uuid(),
   businessName: z.string(),
   ownerName: z.string(),
-  registrationNumber: z.null(),
+  registrationNumber: registration.nullable(),
   red: count,
   amber: count,
   createdAt: date,
@@ -146,7 +231,7 @@ const row = z.strictObject({
 });
 export function readStaffSeenQueue(api: FoundationAuthenticatedApi, actor: string, tab: string) {
   return settleStaffCommand(
-    api.rpc("get_frontend_seen_queue", { p_tab: tab }, { get: false }),
+    api.rpc("get_frontend_business_review_queue", { p_tab: tab }, { get: false }),
     z.strictObject({
       actor_id: z.literal(actor),
       counts: z.strictObject({

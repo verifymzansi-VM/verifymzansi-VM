@@ -14,6 +14,8 @@ import {
 import { logAuditEvent } from "@/lib/services/audit";
 import { sendWorkEmailCode } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleNativeCipcOwnerAction } from "@/lib/foundation/cipc-commands";
 
 import { loadOwnCase, requireOwnerJson } from "../_lib/owner-guard";
 
@@ -45,6 +47,8 @@ const schema = z.discriminatedUnion("action", [
  * "send" emails a 6-digit code, "verify" checks it (5 tries, 15 minutes).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (getDataBackend() === "foundation")
+    return handleNativeCipcOwnerAction(request, (await params).id, "work-email");
   try {
     const gate = await requireOwnerJson(request, params, schema, {
       log,

@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const publicSeen = "get_public_frontend_business_seen";
+const publicBusinessStickers = new Set([
+  "get_public_frontend_business_seen",
+  "get_public_frontend_business_cipc",
+]);
 function validateRuntimeAudience(fn) {
   assert.deepEqual(Object.keys(fn.execute).sort(), ["anon", "authenticated", "service_role"]);
   assert.equal(typeof fn.execute.authenticated, "boolean");
   assert.equal(typeof fn.execute.service_role, "boolean");
   assert.notEqual(fn.execute.authenticated, fn.execute.service_role);
-  if (fn.name === publicSeen) {
+  if (publicBusinessStickers.has(fn.name)) {
     assert.deepEqual(fn.execute, { anon: true, authenticated: true, service_role: false });
     assert.equal(fn.volatility, "s");
     assert.equal(fn.returns, "jsonb");
@@ -55,7 +58,7 @@ export async function verifyFoundationRuntimeApi(
   assert.ok(
     Array.isArray(manifest.functions) &&
       manifest.functions.length > 0 &&
-      manifest.functions.length <= 100
+      manifest.functions.length <= 160
   );
   assert.equal(new Set(manifest.functions.map((fn) => fn.name)).size, manifest.functions.length);
   let verified = 0;
@@ -90,7 +93,7 @@ export async function verifyFoundationRuntimeApi(
       signal: AbortSignal.timeout(5000),
     });
     const data = await response.json().catch(() => null);
-    if (fn.name === publicSeen) {
+    if (publicBusinessStickers.has(fn.name)) {
       if (response.status !== 200 || !Array.isArray(data) || data.length !== 0)
         throw new Error("Reviewed public Seen projection probe failed");
     } else if (![401, 403].includes(response.status) || data?.code !== "42501")
