@@ -66,7 +66,9 @@ export function RoleAssignForm({ mode }: { mode: "admin" | "governor" }) {
 
       if (!res.ok) {
         if (data.code === "step_up_required" || data.code === "mfa_required") {
-          router.push(staffVerifyHref(data.verifyUrl, "/admin/governance/roles"));
+          router.push(
+            staffVerifyHref(data.verifyUrl ?? "/staff/two-step", "/admin/governance/roles")
+          );
           return;
         }
         throw new Error(data.error || `Request failed (${res.status})`);

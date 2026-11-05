@@ -26,24 +26,31 @@ export function RoleChangeReviewActions({
   async function send(action: "approve" | "reject") {
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/admin/governance/roles", {
-      method: "POST",
-      headers: withCsrfHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(
-        action === "approve" ? { action, decisionId, payloadVersion } : { action, decisionId }
-      ),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (data.code === "step_up_required" || data.code === "mfa_required") {
-        router.push(staffVerifyHref(data.verifyUrl, "/admin/governance/roles"));
+    try {
+      const res = await fetch("/api/admin/governance/roles", {
+        method: "POST",
+        headers: withCsrfHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(
+          action === "approve" ? { action, decisionId, payloadVersion } : { action, decisionId }
+        ),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.code === "step_up_required" || data.code === "mfa_required") {
+          router.push(
+            staffVerifyHref(data.verifyUrl ?? "/staff/two-step", "/admin/governance/roles")
+          );
+          return;
+        }
+        setError(data.error ?? "The change could not be saved. Reload and try again.");
         return;
       }
-      setError(data.error ?? "The change could not be saved. Try again.");
+      router.refresh();
+    } catch {
+      setError("The change could not be confirmed. Reload the roster before trying again.");
+    } finally {
       setBusy(false);
-      return;
     }
-    router.refresh();
   }
 
   return (

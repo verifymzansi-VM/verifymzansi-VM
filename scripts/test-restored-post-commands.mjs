@@ -142,6 +142,7 @@ try {
   await verifyTotp(reviewer);
   await verifyTotp(governor);
   await verifyTotp(administrator);
+  await verifyTotp(unverified);
   const claims = (account) =>
     `perform set_config('request.jwt.claims','${JSON.stringify(account.claims)}',true);`;
   const request = randomUUID(),
@@ -241,6 +242,7 @@ try {
       .replace(/^commit;\s*$/gm, "");
   const files = [
     "database/foundation/updates/20261029191349_restore_public_browse_contract.sql",
+    "database/foundation/updates/20261103152035_owner_admin_setup.sql",
     "database/foundation/updates/20261104000046_restored_verification_transport.sql",
     "database/foundation/updates/20261104001222_restore_full_admin_capabilities.sql",
     "database/foundation/updates/20261103180512_restored_owner_dashboard.sql",
@@ -275,6 +277,7 @@ try {
     "database/foundation/updates/20261105085900_restored_privacy_requests.sql",
     "database/foundation/updates/20261105091725_restored_support_inbox.sql",
     "database/foundation/updates/20261105092547_restored_partner_workflows.sql",
+    "database/foundation/updates/20261105093342_restored_staff_role_review.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -318,7 +321,7 @@ try {
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
       answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
-      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions;
+      restriction_report uuid; emergency_report uuid; ban_reports uuid[]; ban_decisions uuid[]; decision uuid; restriction uuid; restriction_case uuid; target uuid; appeal uuid; shortened timestamptz; privacy_case uuid; privacy_due timestamptz; notice jsonb; ticket uuid; partner uuid; payment jsonb; retail_plan private.plan_versions; role_change uuid;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -1029,6 +1032,25 @@ try {
       c:=api.my_partner_dashboard();
       if c->>'paying_referrals' is distinct from '1' or position('${unverified.id}' in c::text)>0
         then raise exception 'owner referral count drift or buyer identity leak';end if;
+      begin perform api.get_frontend_staff_role_review();raise exception 'member read staff role roster';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      begin perform api.propose_frontend_staff_role('${unverified.claims.email}','admin','Unapproved full administrator proposal');raise exception 'unapproved account could become full administrator';exception when insufficient_privilege then null;end;
+      c:=api.propose_frontend_staff_role('${unverified.claims.email}','moderator','Synthetic moderator appointment for independent review');
+      role_change:=(c->>'id')::uuid;
+      if c->>'status' is distinct from 'proposed' or exists(select 1 from private.staff_roles r where r.user_id='${unverified.id}' and r.revoked_at is null)
+        then raise exception 'proposed role became active prematurely';end if;
+      begin perform api.review_frontend_staff_role(role_change,'approve',1);raise exception 'role proposer approved their own proposal';exception when insufficient_privilege then null;end;
+      ${claims(governor)}
+      c:=api.get_frontend_staff_role_review();
+      if c->'pending'->0->>'id' is distinct from role_change::text then raise exception 'governor cannot review represented role proposal';end if;
+      perform api.review_frontend_staff_role(role_change,'approve',1,'Synthetic independent appointment review');
+      ${claims(unverified)}
+      if api.get_my_account_context()->'staff'->>'can_access' is distinct from 'false' then raise exception 'old MFA proof remained ready after a new assignment';end if;
+      begin perform api.get_frontend_support_inbox();raise exception 'old pre-grant MFA proof entered staff command';exception when insufficient_privilege then null;end;
+      ${claims(administrator)}
+      c:=api.propose_frontend_staff_role('${unverified.claims.email}','member','Synthetic administrator removal');
+      if c->>'status' is distinct from 'applied' or api.get_frontend_staff_role_review()->'history'->0->>'to_role' is distinct from 'member'
+        then raise exception 'direct authorized role removal did not reach roster history';end if;
       ${claims(governor)}
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
@@ -1269,6 +1291,7 @@ try {
     "restricted member privacy intake, live session fence, verified staff transitions, bounded export, and claimed deadline notices",
     "support request deduplication, provider acceptance history, viewer and updater authority, and stale status refusal",
     "selected partner administration and owner projections backed by verified attribution and synthetic provider settlement",
+    "approved administrator invitation fence, independent staff role promotion, post-grant MFA and auditable removal",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",
     "separate ID/selfie approvals bind one live lease; only both attestations invoke native identity acceptance; final acknowledgement is retry-safe",

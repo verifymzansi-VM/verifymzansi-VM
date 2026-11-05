@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
@@ -11,6 +11,13 @@ import {
   parseAndValidateJsonRequest,
   rateLimitResponse,
 } from "@/lib/utils/api";
+import { getDataBackend } from "@/lib/data-backend";
+import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
+import {
+  FoundationStaffCommandError,
+  settleStaffCommand,
+  staffCommandRefusal,
+} from "@/lib/foundation/staff-command";
 
 const log = createLogger("GovernanceRoles");
 
@@ -83,6 +90,76 @@ const REFUSALS: Record<string, [number, string]> = {
  * Every action needs a second factor verified in the last 15 minutes.
  */
 export async function POST(request: Request) {
+  if (getDataBackend() === "foundation")
+    return handleFoundationOwnerRoute({
+      request: request instanceof NextRequest ? request : new NextRequest(request),
+      log,
+      action: "admin:role:review",
+      mutate: true,
+      requireCaller: true,
+      signInMessage: "Sign in to manage staff roles",
+      unavailableMessage: "The role change could not be confirmed. Reload the roster.",
+      refusal: staffCommandRefusal,
+      command: async (api, input, caller) => {
+        if (!caller) throw new Error("Verified role reviewer required");
+        const body = roleChangeSchema.parse(input);
+        const limit = await checkSensitiveActionRateLimit(caller.accountId, "admin:role:assign", 5);
+        if (limit.degraded || limit.limited)
+          throw new FoundationStaffCommandError(
+            limit.degraded ? 503 : 429,
+            "Role changes are temporarily limited. Try again shortly."
+          );
+        const rpc =
+          body.action === "propose"
+            ? await api.rpc(
+                "propose_frontend_staff_role",
+                {
+                  p_email: body.targetEmail,
+                  p_role: body.newRole === "governance_controller" ? "governor" : body.newRole,
+                  p_reason: body.reason,
+                },
+                { get: false }
+              )
+            : await api.rpc(
+                "review_frontend_staff_role",
+                {
+                  p_decision: body.decisionId,
+                  p_action: body.action,
+                  ...(body.action === "approve" ? { p_version: body.payloadVersion } : {}),
+                  ...(body.note ? { p_note: body.note } : {}),
+                },
+                { get: false }
+              );
+        if (rpc.error?.code === "PT404")
+          throw new FoundationStaffCommandError(404, "The account or role change was not found.");
+        if (rpc.error?.code === "23514")
+          throw new FoundationStaffCommandError(
+            409,
+            "The last active administrator cannot be removed."
+          );
+        if (rpc.error?.message === "owner-approved administrator invitation required")
+          throw new FoundationStaffCommandError(
+            403,
+            "Only an owner-approved account can become a full administrator."
+          );
+        const result = await settleStaffCommand(
+          Promise.resolve(rpc),
+          z
+            .strictObject({
+              id: body.action === "propose" ? z.uuid() : z.literal(body.decisionId),
+              status: z.enum(["proposed", "applied", "rejected", "withdrawn"]),
+            })
+            .refine((r) =>
+              body.action === "approve"
+                ? r.status === "applied"
+                : body.action === "propose"
+                  ? ["proposed", "applied"].includes(r.status)
+                  : ["rejected", "withdrawn"].includes(r.status)
+            )
+        );
+        return { success: true, status: result.status, decisionId: result.id };
+      },
+    });
   try {
     const guard = await enforceAdminMutationGuard({
       request,

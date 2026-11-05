@@ -2,6 +2,7 @@ import { BrandShield as Shield } from "@/components/shared/brand-shield";
 import { requireStaff } from "@/lib/auth/require-staff";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createLogger } from "@/lib/utils/logger";
 import { formatSaLongDate } from "@/lib/utils/format";
@@ -12,6 +13,11 @@ import { UserPlus, UserMinus, Clock, Hourglass } from "lucide-react";
 import { RoleAssignForm } from "@/components/admin/role-assign-form";
 import { RoleChangeReviewActions } from "@/components/admin/role-change-review-actions";
 import type { StaffRole } from "@/types/enums";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readRestoredStaffRoles } from "@/lib/foundation/staff-role-review";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
 
 export const metadata = {
   title: "Staff roles — Governance",
@@ -48,18 +54,8 @@ interface Person {
   email: string | null;
 }
 
-export default async function GovernanceRolesPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ page?: string; role?: string }>;
-}) {
-  const { user, role } = await requireStaff("role:review");
-  const params = (await searchParams) ?? {};
-  const roleFilter = ROLE_FILTERS.find((r) => r === params.role);
-  const parsedPage = Number(params.page || 1);
-  const page =
-    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 10_000) : 1;
-  const canAssign = roleHasCapability(role, "role:assign");
+type RoleFilter = (typeof ROLE_FILTERS)[number];
+async function readSourceStaffRoles(page: number, roleFilter?: RoleFilter) {
   const admin = createAdminClient();
 
   let staffQuery = admin
@@ -87,28 +83,11 @@ export default async function GovernanceRolesPage({
       .limit(25),
   ]);
 
-  if (staffResult.error || pendingResult.error || historyResult.error) {
-    createLogger("GovernanceRolesPage").error("Role management read failed", {
-      error: (staffResult.error ?? pendingResult.error ?? historyResult.error)?.message,
-    });
-    return (
-      <p role="alert">
-        Role management could not be loaded. Refresh to try again. This does not mean there are no
-        staff.
-      </p>
-    );
-  }
+  if (staffResult.error || pendingResult.error || historyResult.error)
+    throw new Error("Staff roster unavailable");
 
   const staff = staffResult.data ?? [];
   const staffTotal = staffResult.count ?? staff.length;
-  const rosterHref = (next: { page?: number; role?: string }) => {
-    const query = new URLSearchParams();
-    const nextRole = "role" in next ? next.role : roleFilter;
-    if (nextRole) query.set("role", nextRole);
-    if (next.page && next.page > 1) query.set("page", String(next.page));
-    const qs = query.toString();
-    return qs ? `/admin/governance/roles?${qs}` : "/admin/governance/roles";
-  };
   const pending = (pendingResult.data ?? []).map((row) => {
     const payload = (row.payload ?? {}) as Record<string, unknown>;
     return {
@@ -143,8 +122,97 @@ export default async function GovernanceRolesPage({
       { name: d.display_name || d.email || `${d.user_id.slice(0, 8)}…`, email: d.email },
     ])
   );
-  const person = (id: string): Person =>
-    people.get(id) ?? { name: `${id.slice(0, 8)}…`, email: null };
+  return { staff, staffTotal, pending, history, people };
+}
+
+async function readNativeStaffRoles(actorId: string, page: number, filter?: RoleFilter) {
+  const { api } = await readFoundationServerSession();
+  const dto = await readRestoredStaffRoles(
+    api,
+    actorId,
+    page,
+    filter === "governance_controller" ? "governor" : filter
+  );
+  const presentedRole = (role: string) => (role === "governor" ? "governance_controller" : role);
+  return {
+    staff: dto.staff.map((r) => ({ ...r, role: presentedRole(r.role) })),
+    staffTotal: dto.staff_total,
+    pending: dto.pending.map((r) => ({
+      id: r.id,
+      targetId: r.target_id,
+      recommender_id: r.proposer_id,
+      from: presentedRole(r.from_role),
+      to: presentedRole(r.to_role),
+      rationale: r.reason,
+      payload_version: 1,
+      created_at: r.created_at,
+      expires_at: r.expires_at,
+    })),
+    history: dto.history.map((r) => ({
+      id: r.id,
+      target_user_id: r.target_id,
+      assigned_by: r.reviewer_id,
+      previous_role: presentedRole(r.from_role),
+      new_role: presentedRole(r.to_role),
+      reason: r.reason,
+      created_at: r.decided_at,
+    })),
+    people: new Map<string, Person>(
+      dto.people.map((r) => [
+        r.user_id,
+        {
+          name: r.display_name || r.email || `${r.user_id.slice(0, 8)}…`,
+          email: r.email,
+        },
+      ])
+    ),
+  };
+}
+
+export default async function GovernanceRolesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string; role?: string }>;
+}) {
+  const { user, role, assignedCapabilities } = await requireStaff("role:review");
+  const params = (await searchParams) ?? {};
+  const roleFilter = ROLE_FILTERS.find((r) => r === params.role);
+  const parsedPage = Number(params.page || 1);
+  const page =
+    Number.isSafeInteger(parsedPage) && parsedPage > 0 ? Math.min(parsedPage, 10_000) : 1;
+  const canAssign = assignedCapabilities
+    ? assignedCapabilities.includes("role:manage")
+    : roleHasCapability(role, "role:assign");
+  let data;
+  try {
+    data =
+      getDataBackend() === "foundation"
+        ? await readNativeStaffRoles(user.id, page, roleFilter)
+        : await readSourceStaffRoles(page, roleFilter);
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", "/admin/governance/roles"));
+    createLogger("GovernanceRolesPage").error("Role management read failed");
+    return (
+      <p role="alert">
+        Role management could not be loaded. Refresh to try again. This does not mean there are no
+        staff.
+      </p>
+    );
+  }
+  const { staff, staffTotal, pending, history, people } = data;
+  const rosterHref = (next: { page?: number; role?: string }) => {
+    const query = new URLSearchParams();
+    const nextRole = "role" in next ? next.role : roleFilter;
+    if (nextRole) query.set("role", nextRole);
+    if (next.page && next.page > 1) query.set("page", String(next.page));
+    const qs = query.toString();
+    return qs ? `/admin/governance/roles?${qs}` : "/admin/governance/roles";
+  };
+  const person = (id: string | null): Person =>
+    id
+      ? (people.get(id) ?? { name: `${id.slice(0, 8)}…`, email: null })
+      : { name: "Former staff member", email: null };
 
   return (
     <div className="space-y-6">

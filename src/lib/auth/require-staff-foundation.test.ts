@@ -87,7 +87,7 @@ it("an empty native assignment cannot fall back to the legacy admin capability s
 });
 it("maps exact renamed native management capabilities without adding unrelated grants", async () => {
   read.mockResolvedValue(
-    session("admin", true, ["organisation:manage", "partner:manage", "role:manage"])
+    session("admin", true, ["organisation:manage", "partner:manage", "role:manage", "role:review"])
   );
   for (const capability of [
     "organisations:manage",

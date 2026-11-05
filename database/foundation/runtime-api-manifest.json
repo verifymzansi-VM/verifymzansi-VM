@@ -4,6 +4,93 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_staff_role_review",
+      "updates": ["updates/20261105093342_restored_staff_role_review.sql"],
+      "arguments": [
+        {
+          "name": "p_page",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_role",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh staff role reviewer; bounded roster, represented proposals and applied history."
+    },
+    {
+      "name": "propose_frontend_staff_role",
+      "updates": ["updates/20261105093342_restored_staff_role_review.sql"],
+      "arguments": [
+        {
+          "name": "p_email",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_role",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh staff role reviewer. Canonical role snapshot, self-change prohibition, and owner invitation required for full administrator. Only permitted admin demotions take effect directly."
+    },
+    {
+      "name": "review_frontend_staff_role",
+      "updates": ["updates/20261105093342_restored_staff_role_review.sql"],
+      "arguments": [
+        {
+          "name": "p_decision",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_version",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_note",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Fresh independently authorized reviewer, represented current proposal and prior assignment. Role and outcome commit together; new assignments require TOTP after the grant."
+    },
+    {
       "name": "get_frontend_partner_admin",
       "updates": ["updates/20261105092547_restored_partner_workflows.sql"],
       "arguments": [],

@@ -686,3 +686,13 @@ together. The verified signup callback passes the existing first-touch cookie to
 the native attribution command, and the operations job runs the existing
 due-commission sweep. The local fixture uses synthetic provider settlement
 without charging a payment.
+
+`20261105093342_restored_staff_role_review.sql` reconnects the existing staff
+roster and role review. The canonical assignment stays unchanged until
+independent approval, except for permitted administrator removals. Full
+administrator eligibility comes from the owner's existing claimed invitations.
+Every command checks live authority and recent authenticator proof. A new
+assignment also requires authenticator proof after its grant, so an older
+session cannot acquire the new capabilities. Existing active assignments are
+preserved. The native fixture verifies these rules without changing any
+production account.
