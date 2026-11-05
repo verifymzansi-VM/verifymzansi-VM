@@ -281,6 +281,7 @@ try {
     "database/foundation/updates/20261105094316_restored_business_seen_requests.sql",
     "database/foundation/updates/20261105150107_restored_cipc_review.sql",
     "database/foundation/updates/20261105153628_restored_affiliation_workspace.sql",
+    "database/foundation/updates/20261105200401_restored_staff_organisation_workspace.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -1113,7 +1114,7 @@ try {
       if c->>'confirmed' is distinct from 'true' then raise exception 'independent callback did not bind to verified representative';end if;
       -- The new workspace must use the actual owner-scoped projection and
       -- preserve the funding selection even when the underlying action writes.
-      declare org uuid;other_org uuid;app uuid;aff uuid;sponsor uuid;view jsonb;
+      declare org uuid;other_org uuid;app uuid;aff uuid;sponsor uuid;view jsonb;profile_id uuid;
       begin
         insert into private.organisations(slug,name,organisation_type,is_public,programme_status,sponsored_capacity)
           values('synthetic-affiliation','Synthetic Affiliation','other',true,'founding_trial',0)
@@ -1151,6 +1152,33 @@ try {
         view:=api.get_frontend_affiliation_workspace();
         if view->'applications'->0->>'status' is distinct from 'approved' or view->'affiliations'->0->>'id' is distinct from aff::text
           then raise exception 'accepted affiliation missing from member workspace';end if;
+        begin perform api.get_frontend_staff_organisation_detail(org);raise exception 'applicant accessed staff organisation detail';exception when insufficient_privilege then null;end;
+        ${claims(administrator)}
+        view:=api.get_frontend_staff_organisation_directory();
+        if view->>'total' is distinct from '2' or not exists(select 1 from jsonb_array_elements(view->'items') item
+          where item->>'id'=org::text and item->>'affiliated'='1') then raise exception 'staff directory lost its live organisation counts';end if;
+        view:=api.get_frontend_staff_organisation_detail(org);
+        if view->>'id' is distinct from org::text or view->'public_contacts'->0->>'application_id' is distinct from app::text
+          then raise exception 'staff detail lost its represented organisation or public contact scope';end if;
+        begin perform api.save_frontend_organisation_profile('synthetic-rolled-back',
+          '{"name":"Invalid Profile","organisation_type":"other","province_id":"unknown"}','Synthetic invalid profile');
+          raise exception 'invalid staff profile was created';exception when invalid_parameter_value then null;end;
+        if exists(select 1 from private.organisations where slug='synthetic-rolled-back')
+          then raise exception 'failed profile patch created an incomplete organisation';end if;
+        view:=api.save_frontend_organisation_profile('synthetic-staff-created',
+          '{"name":"Synthetic Staff Profile","organisation_type":"other","province_id":"gp","sponsored_capacity":11}','Synthetic staff profile');
+        profile_id:=(view->>'id')::uuid;
+        if view->>'revision' is distinct from '2' or not exists(select 1 from private.organisations
+          where id=profile_id and not is_public and sponsored_capacity=11 and province_id='gp')
+          then raise exception 'staff profile creation lost form values or exposed a new organisation';end if;
+        begin perform api.save_frontend_organisation_profile('synthetic-affiliation','{"name":"Do not replace"}',
+          'Synthetic conflicting slug',profile_id,2);raise exception 'duplicate organisation slug accepted';exception when sqlstate 'PT409' then null;end;
+        view:=api.save_frontend_organisation_profile('synthetic-staff-renamed','{"name":"Synthetic Staff Renamed"}',
+          'Synthetic profile rename',profile_id,2);
+        if view->>'slug' is distinct from 'synthetic-staff-renamed' or view->>'revision' is distinct from '3'
+          then raise exception 'staff profile rename lost its revision fence';end if;
+        begin perform api.save_frontend_organisation_profile('synthetic-staff-renamed','{"name":"Stale value"}',
+          'Synthetic stale edit',profile_id,2);raise exception 'stale staff profile edit accepted';exception when sqlstate 'PT409' then null;end;
         ${claims(owner)}
         perform api.execute_frontend_organisation_action(org,aff,'revoke','Synthetic affiliation revocation');
         ${claims(unverified)}
@@ -1476,6 +1504,7 @@ try {
     "support request deduplication, provider acceptance history, viewer and updater authority, and stale status refusal",
     "selected partner administration and owner projections backed by verified attribution and synthetic provider settlement",
     "owner-scoped affiliations, verified organisation dashboard, cross-organisation action refusal and atomic funding rollback",
+    "staff organisation directory, public contact scope and atomic private profile creation, slug collision rollback and stale edit refusal",
     "approved administrator invitation fence, independent staff role promotion, post-grant MFA and auditable removal",
     "staff moderation summaries, claim-scoped bodies and represented lease DTOs",
     "actual native evidence metadata contract used by private authorization",

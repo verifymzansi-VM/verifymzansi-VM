@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
+import { FoundationStaffCommandError, settleStaffCommand } from "./staff-command";
+import { applicationPublicContacts } from "./organisation-management-data";
 import {
   foundationOrganisationTypes,
   foundationOrganisationStatuses,
@@ -12,6 +14,33 @@ import {
   slug,
 } from "./organisations";
 const count = z.number().int().nonnegative();
+export function readFrontendStaffOrganisationDirectory(api: FoundationAuthenticatedApi) {
+  return settleStaffCommand(
+    api.rpc("get_frontend_staff_organisation_directory", {}, { get: false }),
+    z
+      .strictObject({
+        total: count,
+        items: z
+          .array(
+            z.strictObject({
+              id: z.uuid(),
+              slug,
+              name: z.string(),
+              organisation_type: z.enum(foundationOrganisationTypes),
+              programme_status: z.enum(foundationOrganisationStatuses),
+              is_public: z.boolean(),
+              ends_at: instant.nullable(),
+              sponsored_capacity: count,
+              affiliated: count,
+              pending: count,
+              sponsored: count,
+            })
+          )
+          .max(200),
+      })
+      .refine(({ total, items }) => items.length === Math.min(total, 200))
+  );
+}
 // The RPC includes an operator row; project an explicit editor subset before
 // passing it to the browser. Unknown future/private columns are discarded.
 const organisation = z.object({
@@ -63,6 +92,18 @@ const organisation = z.object({
     .max(1000),
   notes: z.array(z.strictObject({ id: z.uuid(), note: z.string(), created_at: instant })).max(50),
 });
+export async function readFrontendStaffOrganisationDetail(
+  api: FoundationAuthenticatedApi,
+  id: string
+) {
+  const record = await settleStaffCommand(
+    api.rpc("get_frontend_staff_organisation_detail", { p_id: id }, { get: false }),
+    organisation.extend({ public_contacts: applicationPublicContacts }).nullable()
+  );
+  if (record && record.id !== id)
+    throw new FoundationStaffCommandError(503, "Organisation details could not be confirmed.");
+  return record;
+}
 export async function readFoundationStaffOrganisation(
   api: FoundationAuthenticatedApi,
   value: unknown

@@ -13,7 +13,6 @@ export interface AdminOrganisationInvite {
   id: string;
   email: string;
   expires_at: string;
-  created_at: string;
 }
 
 const date = new Intl.DateTimeFormat("en-ZA", {

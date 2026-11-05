@@ -258,7 +258,7 @@ describe("DashboardPage", () => {
       api: { rpc },
     } as unknown as Awaited<ReturnType<typeof readFoundationServerSession>>);
     try {
-      render(await DashboardPage());
+      render(await DashboardPage({ searchParams: Promise.resolve({}) }));
       expect(screen.getByText("Canonical", { exact: false })).toBeInTheDocument();
       expect(screen.getByText("stats:2:3:9")).toBeInTheDocument();
       expect(mockSupabase.from).not.toHaveBeenCalled();
@@ -356,7 +356,7 @@ describe("DashboardPage", () => {
       ],
     });
 
-    const ui = await DashboardPage();
+    const ui = await DashboardPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("needs:verified:0")).toBeInTheDocument();
@@ -376,7 +376,7 @@ describe("DashboardPage", () => {
       ],
     });
 
-    const ui = await DashboardPage();
+    const ui = await DashboardPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("needs:incomplete:2")).toBeInTheDocument();
@@ -414,7 +414,7 @@ describe("DashboardPage", () => {
       activeListingsCount: 1,
     });
 
-    const ui = await DashboardPage();
+    const ui = await DashboardPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("listing-manager-mini")).toBeInTheDocument();
@@ -435,7 +435,7 @@ describe("DashboardPage", () => {
       tourismBusinessCount: 1,
     });
 
-    const ui = await DashboardPage();
+    const ui = await DashboardPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("stats:0:0:1")).toBeInTheDocument();

@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({ createClient: vi.fn(), createAdminClient: vi.f
 vi.mock("@/lib/supabase/server", () => ({ createClient: mocks.createClient }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.createAdminClient }));
 
+import { NextRequest } from "next/server";
 import { GET } from "./route";
+
+const getAffiliations = () => GET(new NextRequest("https://example.test/api/affiliations"));
 
 function setup(failedTable?: string, noBusinesses = false) {
   const tables = ["businesses", "organisation_applications", "organisation_affiliations"];
@@ -48,7 +51,7 @@ describe("GET /api/affiliations", () => {
 
   it("scopes both application and business ownership reads and prevents caching", async () => {
     const { queries } = setup();
-    const response = await GET();
+    const response = await getAffiliations();
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(await response.json()).toEqual({
@@ -66,7 +69,7 @@ describe("GET /api/affiliations", () => {
     "reports %s query failures without pretending the inbox is empty",
     async (table) => {
       setup(table);
-      const response = await GET();
+      const response = await getAffiliations();
       expect(response.status).toBe(503);
       expect(await response.text()).not.toContain("internal database detail");
     }
@@ -74,7 +77,7 @@ describe("GET /api/affiliations", () => {
 
   it("skips affiliations lookup when the member has no businesses", async () => {
     const { from } = setup(undefined, true);
-    const response = await GET();
+    const response = await getAffiliations();
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ affiliations: [] });
     expect(from).not.toHaveBeenCalledWith("organisation_affiliations");
@@ -84,13 +87,13 @@ describe("GET /api/affiliations", () => {
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
     });
-    expect((await GET()).status).toBe(401);
+    expect((await getAffiliations()).status).toBe(401);
     expect(mocks.createAdminClient).not.toHaveBeenCalled();
   });
 
   it("returns a safe retryable error when the client throws", async () => {
     mocks.createClient.mockRejectedValue(new Error("internal service detail"));
-    const response = await GET();
+    const response = await getAffiliations();
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("internal service detail");
   });

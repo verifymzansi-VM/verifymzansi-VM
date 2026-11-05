@@ -34,6 +34,7 @@ const ORGANISATION_TYPES = [
 
 export interface AdminOrganisation {
   id: string;
+  revision?: number;
   slug: string;
   name: string;
   organisation_type: string;
@@ -355,6 +356,7 @@ export function OrganisationProfileForm({ org }: { org: AdminOrganisation }) {
             {
               action: "organisation.upsert",
               organisationId: org.id,
+              revision: org.revision,
               values: profileValues(form, true),
               reason: form.reason,
             },
@@ -451,6 +453,7 @@ export function OrganisationActionsForm({ org }: { org: AdminOrganisation }) {
             {
               action: "organisation.manage",
               organisationId: org.id,
+              revision: org.revision,
               operation,
               values: values(form),
               reason: form.reason,
@@ -667,7 +670,7 @@ export function ShowcaseToggle({
   showcase,
 }: {
   orgId: string;
-  showcase: { id: string; title: string; enabled: boolean };
+  showcase: { id: string; title: string; enabled: boolean; revision?: number };
 }) {
   const { run, busy, message } = useCommercialAction();
   return (
@@ -684,7 +687,11 @@ export function ShowcaseToggle({
             action: "organisation.manage",
             organisationId: orgId,
             operation: "upsert_showcase",
-            values: { showcaseId: showcase.id, enabled: !showcase.enabled },
+            values: {
+              showcaseId: showcase.id,
+              enabled: !showcase.enabled,
+              revision: showcase.revision,
+            },
             reason,
           });
         }}

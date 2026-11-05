@@ -4,6 +4,77 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "get_frontend_staff_organisation_detail",
+      "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current organisation management capability and recent authenticator proof; scoped organisation detail with published business contacts and masked invite addresses."
+    },
+    {
+      "name": "get_frontend_staff_organisation_directory",
+      "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current organisation management capability and recent authenticator proof; newest 200 organisations with live administration totals."
+    },
+    {
+      "name": "save_frontend_organisation_profile",
+      "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
+      "arguments": [
+        {
+          "name": "p_slug",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_patch",
+          "sqlType": "jsonb",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": true
+        },
+        {
+          "name": "p_expected",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current organisation management capability and recent authenticator proof; atomic private creation or exact revision profile edit."
+    },
+    {
       "name": "get_frontend_affiliation_workspace",
       "updates": ["updates/20261105153628_restored_affiliation_workspace.sql"],
       "arguments": [

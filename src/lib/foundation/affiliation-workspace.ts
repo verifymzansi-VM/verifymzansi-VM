@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { foundationOrganisationStatuses, instant, settle, slug } from "./organisations";
 
+import { applicationPublicContacts } from "./organisation-management-data";
+
 const organisation = z.strictObject({ name: z.string(), slug });
 const id = z.uuid();
 const count = z.number().int().nonnegative();
@@ -70,16 +72,7 @@ const dashboard = organisation
       approved: count,
       declined: count,
     }),
-    public_contacts: z
-      .array(
-        z.strictObject({
-          application_id: id,
-          phone: z.string().nullable(),
-          email: z.string().nullable(),
-          website: z.string().nullable(),
-        })
-      )
-      .max(200),
+    public_contacts: applicationPublicContacts,
     affiliated: count,
     admins: z
       .array(z.strictObject({ user_id: id, role, display_name: z.string().nullable() }))

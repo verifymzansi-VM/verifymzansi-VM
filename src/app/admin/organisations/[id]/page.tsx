@@ -1,6 +1,6 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   OrganisationActionsForm,
@@ -23,6 +23,17 @@ import {
   type AdminOrganisationInvite,
 } from "@/components/admin/commercial/organisation-invites";
 
+import { z } from "zod";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationOrganisationManagementData } from "@/lib/foundation/organisation-management-data";
+import { foundationMediaUrl } from "@/lib/foundation/public-media-url";
+import { readRestoredStaffAudit } from "@/lib/foundation/restored-staff-audit";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { readFoundationStaffShowcases } from "@/lib/foundation/staff-directory";
+import { readFrontendStaffOrganisationDetail } from "@/lib/foundation/staff-organisations";
+
 export const metadata = { title: "Organisation" };
 export const dynamic = "force-dynamic";
 
@@ -41,14 +52,68 @@ function reportWindow(startedAt: string | null): { from: string; to: string } {
   };
 }
 
-export default async function OrganisationAdminDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const { user } = await requireStaff("organisations:manage");
+async function readNativeDetail(id: string) {
+  try {
+    const { api, user } = await readFoundationServerSession();
+    const org = await readFrontendStaffOrganisationDetail(api, id);
+    if (!org) notFound();
+    const [management, showcases, audit] = await Promise.all([
+      readFoundationOrganisationManagementData(api, id, org.public_contacts),
+      readFoundationStaffShowcases(api, { organisation_id: id }),
+      readRestoredStaffAudit(api, user.id, { page: 1, type: "organisation", target: id }),
+    ]);
+    return {
+      org: {
+        id: org.id,
+        revision: org.revision,
+        slug: org.slug,
+        name: org.name,
+        organisation_type: org.organisation_type,
+        description: org.description,
+        programme_description: org.programme_description,
+        service_area: org.service_area,
+        website: org.website,
+        public_email: org.public_email,
+        public_phone: org.public_phone,
+        logo_permission_at: org.logo_permission_at,
+        logo_permission_reference: org.logo_permission_reference,
+        programme_status: org.programme_status,
+        is_public: org.is_public,
+        accepting_applications: org.accepting_applications,
+        affiliation_wording: org.affiliation_wording,
+        sponsorship_wording: org.sponsorship_wording,
+        sponsored_capacity: org.sponsored_capacity,
+        admin_limit: org.admin_limit,
+        show_on_strip: org.show_on_strip,
+        show_on_home: org.show_on_home,
+        display_order: org.display_order,
+        trial_starts_at: org.programme_starts_at,
+        trial_ends_at: org.programme_ends_at,
+        province: org.province_id,
+        logo_url: org.logo_permission_at ? foundationMediaUrl(org.logo_object_key) : null,
+      } satisfies AdminOrganisation,
+      applications: management.applications,
+      members: management.members,
+      admins: org.admins.map((row) => ({ ...row, user_id: row.account_id })),
+      notes: org.notes.slice(0, 20),
+      programmes: org.programmes,
+      showcases,
+      audit: audit.items.slice(0, 30).map((row) => ({
+        ...row,
+        actor_label: row.actor_name ?? "Account",
+        created_at: row.occurred_at,
+      })),
+      report: null,
+      openInvites: org.open_invites,
+    };
+  } catch (error) {
+    if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+      redirect(staffVerifyHref("/staff/two-step", `/admin/organisations/${id}`));
+    throw error;
+  }
+}
 
+async function readSourceDetail(id: string, actorId: string) {
   const admin = createAdminClient();
   const { data: org, error: orgError } = await admin
     .from("organisations")
@@ -62,8 +127,8 @@ export default async function OrganisationAdminDetailPage({
   const { from: reportFrom, to: reportTo } = reportWindow(org.trial_starts_at);
   const [applications, members, admins, notes, programmes, showcases, audit, report, invites] =
     await Promise.all([
-      admin.rpc("org_list_applications", { p_user: user.id, p_org: id, p_status: null }),
-      admin.rpc("org_list_members", { p_user: user.id, p_org: id }),
+      admin.rpc("org_list_applications", { p_user: actorId, p_org: id, p_status: null }),
+      admin.rpc("org_list_members", { p_user: actorId, p_org: id }),
       admin
         .from("organisation_admins")
         .select("user_id, role, created_at")
@@ -89,7 +154,7 @@ export default async function OrganisationAdminDetailPage({
         .order("created_at", { ascending: false })
         .limit(30),
       admin.rpc("organisation_performance_report", {
-        p_user: user.id,
+        p_user: actorId,
         p_org: id,
         p_from: reportFrom,
         p_to: reportTo,
@@ -108,9 +173,48 @@ export default async function OrganisationAdminDetailPage({
   const adminProfiles = adminIds.length
     ? await admin.from("account_profiles").select("user_id, display_name").in("user_id", adminIds)
     : { data: [] as Array<{ user_id: string; display_name: string | null }> };
-  const parsedReport = parsePerformanceReport(report.data);
-  const openInvites = (invites.data ?? []) as AdminOrganisationInvite[];
-  const seatsLeft = Math.max(0, org.admin_limit - adminIds.length - openInvites.length);
+  return {
+    org: org as AdminOrganisation,
+    applications: (applications.data ?? []) as OrganisationApplicationRow[],
+    members: (members.data ?? []) as OrganisationMemberRow[],
+    admins: (admins.data ?? []).map((row) => ({
+      ...row,
+      display_name: (adminProfiles.data ?? []).find((p) => p.user_id === row.user_id)?.display_name,
+    })),
+    notes: notes.data ?? [],
+    programmes: programmes.data ?? [],
+    showcases: showcases.data ?? [],
+    audit: (audit.data ?? []).map((row) => ({ ...row, actor_label: row.actor_role })),
+    report: report.data,
+    openInvites: (invites.data ?? []) as AdminOrganisationInvite[],
+  };
+}
+
+export default async function OrganisationAdminDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { user } = await requireStaff("organisations:manage");
+  const id = (await params).id.toLowerCase();
+  if (!z.uuid().safeParse(id).success) notFound();
+  const {
+    org,
+    applications,
+    members,
+    admins,
+    notes,
+    programmes,
+    showcases,
+    audit,
+    report,
+    openInvites,
+  } =
+    getDataBackend() === "foundation"
+      ? await readNativeDetail(id)
+      : await readSourceDetail(id, user.id);
+  const parsedReport = parsePerformanceReport(report);
+  const seatsLeft = Math.max(0, org.admin_limit - admins.length - openInvites.length);
 
   return (
     <div className="space-y-6 p-4">
@@ -147,7 +251,7 @@ export default async function OrganisationAdminDetailPage({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="space-y-6">
-          <OrganisationActionsForm org={org as AdminOrganisation} />
+          <OrganisationActionsForm org={org} />
           <OrganisationInvitesCard
             organisationId={org.id}
             invites={openInvites}
@@ -156,31 +260,28 @@ export default async function OrganisationAdminDetailPage({
         </div>
         <section className="space-y-3 rounded-xl border bg-card p-4">
           <h2 className="text-base font-semibold">
-            Administrators ({adminIds.length} / {org.admin_limit})
+            Administrators ({admins.length} / {org.admin_limit})
           </h2>
           <ul className="space-y-1 text-sm">
-            {(admins.data ?? []).map((row) => (
+            {admins.map((row) => (
               <li key={row.user_id} className="break-all">
-                {(adminProfiles.data ?? []).find((p) => p.user_id === row.user_id)?.display_name ??
-                  "Account"}{" "}
-                — {row.role} · <span className="text-muted-foreground">{row.user_id}</span>
+                {row.display_name ?? "Account"} — {row.role} ·{" "}
+                <span className="text-muted-foreground">{row.user_id}</span>
               </li>
             ))}
           </ul>
           <h2 className="pt-2 text-base font-semibold">Programmes</h2>
           <ul className="text-sm">
-            {(programmes.data ?? []).map((p) => (
+            {programmes.map((p) => (
               <li key={p.id}>
                 {p.name} {p.active ? "" : "(inactive)"}
               </li>
             ))}
-            {(programmes.data ?? []).length === 0 ? (
-              <li className="text-muted-foreground">None yet</li>
-            ) : null}
+            {programmes.length === 0 ? <li className="text-muted-foreground">None yet</li> : null}
           </ul>
           <h2 className="pt-2 text-base font-semibold">Programme showrooms</h2>
           <ul className="space-y-2 text-sm">
-            {(showcases.data ?? []).map((s) => (
+            {showcases.map((s) => (
               <li key={s.id} className="space-y-1">
                 <p>
                   {s.title} · {s.placement} · {s.enabled ? "enabled" : "disabled"} · until{" "}
@@ -189,13 +290,13 @@ export default async function OrganisationAdminDetailPage({
                 <ShowcaseToggle orgId={org.id} showcase={s} />
               </li>
             ))}
-            {(showcases.data ?? []).length === 0 ? (
+            {showcases.length === 0 ? (
               <li className="text-muted-foreground">None configured</li>
             ) : null}
           </ul>
           <h2 className="pt-2 text-base font-semibold">Internal notes</h2>
           <ul className="space-y-1 text-sm">
-            {(notes.data ?? []).map((n) => (
+            {notes.map((n) => (
               <li key={n.id}>
                 <span className="text-muted-foreground">
                   {date.format(new Date(n.created_at))}:{" "}
@@ -209,17 +310,14 @@ export default async function OrganisationAdminDetailPage({
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Affiliation applications</h2>
-        <ApplicationsReview
-          organisationId={org.id}
-          applications={(applications.data ?? []) as OrganisationApplicationRow[]}
-        />
+        <ApplicationsReview organisationId={org.id} applications={applications} />
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Affiliated and sponsored businesses</h2>
         <MembersManager
           organisationId={org.id}
-          members={(members.data ?? []) as OrganisationMemberRow[]}
+          members={members}
           sponsoredCapacity={org.sponsored_capacity}
           canSponsor={["founding_trial", "active_paid"].includes(org.programme_status)}
           allowFoundingSponsorship={org.programme_status === "founding_trial"}
@@ -230,15 +328,15 @@ export default async function OrganisationAdminDetailPage({
         <PerformanceReport organisationName={org.name} report={parsedReport} />
       ) : null}
 
-      <OrganisationProfileForm org={org as AdminOrganisation} />
+      <OrganisationProfileForm org={org} />
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Audit history</h2>
         <ul className="space-y-1 text-sm">
-          {(audit.data ?? []).map((row) => (
+          {audit.map((row) => (
             <li key={row.id}>
               <span className="text-muted-foreground">{date.format(new Date(row.created_at))}</span>{" "}
-              · {row.action.replace(/_/g, " ")} by {row.actor_role}
+              · {row.action.replace(/_/g, " ")} by {row.actor_label}
               {row.reason ? ` — ${row.reason}` : ""}
             </li>
           ))}

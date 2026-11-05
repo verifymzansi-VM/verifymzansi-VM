@@ -19,6 +19,12 @@ import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { FoundationStaffCommandError, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { decideRestoredCommission, saveRestoredPartner } from "@/lib/foundation/partners";
+import {
+  inviteFrontendStaffOrganisationAdmin,
+  manageFrontendStaffOrganisation,
+  revokeFrontendStaffOrganisationInvite,
+  saveFrontendStaffOrganisation,
+} from "@/lib/foundation/staff-organisation-commands";
 
 const log = createLogger("AdminCommercial");
 
@@ -149,12 +155,14 @@ const schema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("organisation.upsert"),
     organisationId: uuid.optional(),
+    revision: z.number().int().min(1).optional(),
     values,
     reason,
   }),
   z.object({
     action: z.literal("organisation.manage"),
     organisationId: uuid,
+    revision: z.number().int().min(1).optional(),
     operation: z.enum([
       "activate_trial",
       "suspend",
@@ -407,6 +415,17 @@ export async function POST(request: Request) {
       refusal: staffCommandRefusal,
       command: async (api, input) => {
         const body = schema.parse(input);
+        if (body.action === "organisation.upsert")
+          return { success: true, data: await saveFrontendStaffOrganisation(api, body) };
+        if (body.action === "organisation.manage")
+          return { success: true, data: await manageFrontendStaffOrganisation(api, body) };
+        if (body.action === "organisation.invite_admin")
+          return { success: true, data: await inviteFrontendStaffOrganisationAdmin(api, body) };
+        if (body.action === "organisation.revoke_invite")
+          return {
+            success: true,
+            data: await revokeFrontendStaffOrganisationInvite(api, body.inviteId, body.reason),
+          };
         if (body.action === "partner.manage") {
           const data = await saveRestoredPartner(api, {
             account_id: body.userId,

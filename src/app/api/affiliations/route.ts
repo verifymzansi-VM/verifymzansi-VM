@@ -50,9 +50,8 @@ async function currentUser() {
 }
 
 /** GET /api/affiliations — the member's own applications and affiliations. */
-export async function GET(request?: NextRequest) {
+export async function GET(request: NextRequest) {
   if (getDataBackend() === "foundation") {
-    if (!request) return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
     return handleOrganisationRoute(request, "organisation:read", false, async (api) => {
       const { applications, affiliations } = await readAffiliationWorkspace(api);
       return {

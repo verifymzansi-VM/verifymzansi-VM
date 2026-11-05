@@ -18,6 +18,18 @@ export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
       get_frontend_affiliation_workspace: { Args: { p_slug?: string }; Returns: Json };
+      get_frontend_staff_organisation_directory: { Args: Record<never, never>; Returns: Json };
+      get_frontend_staff_organisation_detail: { Args: { p_id: string }; Returns: Json };
+      save_frontend_organisation_profile: {
+        Args: {
+          p_slug: string;
+          p_patch: Json;
+          p_reason: string;
+          p_id?: string;
+          p_expected?: number;
+        };
+        Returns: Json;
+      };
       get_frontend_organisation_dashboard: { Args: { p_slug: string }; Returns: Json };
       execute_frontend_organisation_action: {
         Args: {

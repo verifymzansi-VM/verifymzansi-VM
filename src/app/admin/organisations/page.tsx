@@ -5,6 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { OrganisationCreateForm } from "@/components/admin/commercial/organisation-forms";
 
+import { redirect } from "next/navigation";
+import { getDataBackend } from "@/lib/data-backend";
+import { readFoundationServerSession } from "@/lib/foundation/server-session";
+import { readFrontendStaffOrganisationDirectory } from "@/lib/foundation/staff-organisations";
+import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
+import { staffVerifyHref } from "@/lib/auth/staff-mfa-links";
+
 export const metadata = { title: "Organisations" };
 export const dynamic = "force-dynamic";
 
@@ -13,9 +20,23 @@ const date = new Intl.DateTimeFormat("en-ZA", {
   timeZone: "Africa/Johannesburg",
 });
 
-export default async function OrganisationsAdminPage() {
-  await requireStaff("organisations:manage");
+async function readNativeDirectory() {
+  const { api } = await readFoundationServerSession();
+  const { total, items } = await readFrontendStaffOrganisationDirectory(api).catch(
+    (error: unknown) => {
+      if (error instanceof FoundationStaffCommandError && error.mfaRequired)
+        redirect(staffVerifyHref("/staff/two-step", "/admin/organisations"));
+      throw error;
+    }
+  );
+  return {
+    total,
+    items: items.map((row) => ({ ...row, trial_ends_at: row.ends_at })),
+    countError: false,
+  };
+}
 
+async function readSourceDirectory() {
   const admin = createAdminClient();
   const orgs = await admin
     .from("organisations")
@@ -42,9 +63,22 @@ export default async function OrganisationsAdminPage() {
       }>
     ).map((row) => [row.organisation_id, row] as const)
   );
-  const countOf = (id: string, key: "affiliated" | "sponsored" | "pending") =>
-    countError ? "—" : (counts.get(id)?.[key] ?? 0);
-  const total = orgs.count ?? ids.length;
+  return {
+    total: orgs.count ?? ids.length,
+    items: (orgs.data ?? []).map((row) => ({
+      ...row,
+      affiliated: countError ? "—" : (counts.get(row.id)?.affiliated ?? 0),
+      sponsored: countError ? "—" : (counts.get(row.id)?.sponsored ?? 0),
+      pending: countError ? "—" : (counts.get(row.id)?.pending ?? 0),
+    })),
+    countError: Boolean(countError),
+  };
+}
+
+export default async function OrganisationsAdminPage() {
+  await requireStaff("organisations:manage");
+  const { total, items, countError } =
+    getDataBackend() === "foundation" ? await readNativeDirectory() : await readSourceDirectory();
 
   return (
     <div className="space-y-6">
@@ -63,16 +97,16 @@ export default async function OrganisationsAdminPage() {
             Member counts could not be loaded, so they show as —. Refresh to try again.
           </p>
         )}
-        {total > ids.length && (
+        {total > items.length && (
           <p className="text-sm text-muted-foreground">
-            Showing the newest {ids.length} of {total} organisations.
+            Showing the newest {items.length} of {total} organisations.
           </p>
         )}
-        {(orgs.data ?? []).length === 0 ? (
+        {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">No organisations yet.</p>
         ) : (
           <ul className="grid gap-3 md:grid-cols-2">
-            {(orgs.data ?? []).map((org) => (
+            {items.map((org) => (
               <li key={org.id} className="rounded-xl border p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
@@ -90,17 +124,17 @@ export default async function OrganisationsAdminPage() {
                 <dl className="mt-2 grid grid-cols-3 gap-2 text-xs">
                   <div>
                     <dt className="text-muted-foreground">Affiliated</dt>
-                    <dd>{countOf(org.id, "affiliated")}</dd>
+                    <dd>{org.affiliated}</dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Sponsored</dt>
                     <dd>
-                      {countOf(org.id, "sponsored")} / {org.sponsored_capacity}
+                      {org.sponsored} / {org.sponsored_capacity}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Pending</dt>
-                    <dd>{countOf(org.id, "pending")}</dd>
+                    <dd>{org.pending}</dd>
                   </div>
                 </dl>
                 {org.trial_ends_at ? (

@@ -25,11 +25,7 @@ import {
   readFoundationServerSession,
 } from "@/lib/foundation/server-session";
 import { readAffiliationOrganisationDashboard } from "@/lib/foundation/affiliation-workspace";
-import {
-  readFoundationOrganisationAffiliations,
-  readFoundationOrganisationApplications,
-} from "@/lib/foundation/organisations";
-import { readFoundationOrganisationSponsorships } from "@/lib/foundation/organisation-sponsorships";
+import { readFoundationOrganisationManagementData } from "@/lib/foundation/organisation-management-data";
 
 export const metadata = { title: "Organisation dashboard", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -74,36 +70,11 @@ async function readNativeDashboard(slug: string) {
   if (native.account_id !== user.id || native.slug !== slug)
     throw new Error("Organisation dashboard scope changed");
 
-  const scope = { organisation_id: native.id };
-  const [applications, affiliations, sponsorships] = await Promise.all([
-    readFoundationOrganisationApplications(api, scope),
-    readFoundationOrganisationAffiliations(api, scope),
-    readFoundationOrganisationSponsorships(api, scope),
-  ]);
-  const activeSponsorships = new Map(
-    sponsorships.items
-      .filter((row) => row.status === "active" || row.status === "waitlisted")
-      .map((row) => [row.affiliation_id, row])
+  const { applications, members, sponsorships } = await readFoundationOrganisationManagementData(
+    api,
+    native.id,
+    native.public_contacts
   );
-  const publicContacts = new Map(native.public_contacts.map((row) => [row.application_id, row]));
-  const members: OrganisationMemberRow[] = affiliations.map((row) => {
-    const sponsor = activeSponsorships.get(row.id);
-    return {
-      ...row,
-      affiliation_id: row.id,
-      business_id: row.post_id,
-      business_name: row.business_name ?? "Business",
-      business_status: row.live ? "live" : "not_live",
-      sponsorship_id: sponsor?.id ?? null,
-      sponsorship_status: sponsor?.status ?? null,
-      sponsor_type: sponsor
-        ? sponsor.sponsor_type === "founding"
-          ? "VERIFYMZANSI_FOUNDING"
-          : "ORGANISATION"
-        : null,
-      sponsorship_ends_at: sponsor?.ends_at ?? null,
-    };
-  });
   const summary: Summary = {
     ...native.applications,
     programmeStatus: native.programme_status,
@@ -120,17 +91,7 @@ async function readNativeDashboard(slug: string) {
   return {
     org: { ...native, trial_starts_at: native.starts_at },
     summary,
-    applications: applications.map((row): OrganisationApplicationRow => {
-      const contacts = publicContacts.get(row.id);
-      return {
-        ...row,
-        business_id: row.post_id,
-        business_name: row.business_name ?? "Business",
-        business_phone: contacts?.phone ?? null,
-        business_email: contacts?.email ?? null,
-        business_website: contacts?.website ?? null,
-      };
-    }),
+    applications,
     members,
     admins: native.admins,
     isOwner: native.viewer_role === "owner",

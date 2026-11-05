@@ -82,10 +82,10 @@ export const metadata = {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ suspended?: string | string[] }>;
-} = {}) {
+  searchParams: Promise<{ suspended?: string | string[] }>;
+}) {
   const foundation = getDataBackend() === "foundation";
-  if (foundation && (await searchParams)?.suspended === "true") {
+  if (foundation && (await searchParams).suspended === "true") {
     const restriction = await readSelfReviewSession();
     if (!restriction) redirect("/error?reason=forbidden");
     if (restriction.status === "banned") redirect("/banned");

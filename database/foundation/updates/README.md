@@ -742,3 +742,17 @@ organisations cannot decide a request, and that approved and revoked
 affiliations appear correctly. The London migration was recorded as
 `20261105200230`; no production organisations, affiliations or sponsorships were
 seeded.
+
+`20261105200401_restored_staff_organisation_workspace.sql` reconnects the
+existing staff organisation list, record and profile forms. Staff see native
+counts, masked invitations, memberships, applications and public business
+contacts. Profile creation is atomic and private by default. Edits require the
+displayed revision; a rejected slug or invalid field rolls back the entire edit.
+Existing native commands handle invitations, programme entries, showrooms and
+supported administration actions. Funded pilot activation, paid conversions and
+engagement reporting still require their own adapters.
+
+The isolated fixture verifies staff authority, live counts, private profile
+creation, invalid-field rollback, slug collisions and stale edits. London
+recorded this migration as `20261105201428`. No organisation or invite was
+created in production by this validation.
