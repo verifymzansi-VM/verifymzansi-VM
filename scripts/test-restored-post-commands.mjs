@@ -267,6 +267,7 @@ try {
     "database/foundation/updates/20261104224230_restored_staff_report_queue.sql",
     "database/foundation/updates/20261104231625_restored_report_actions.sql",
     "database/foundation/updates/20261105035413_native_report_warning_delivery.sql",
+    "database/foundation/updates/20261105043010_native_report_content_holds.sql",
   ];
   report.provenance = Object.fromEntries(
     files.map((f) => [f, createHash("sha256").update(readFileSync(f)).digest("hex")])
@@ -291,6 +292,7 @@ try {
     create temporary table restored_audit_probe(kind text,value jsonb);
     create temporary table restored_report_probe(value jsonb);
     create temporary table restored_activity_probe(value jsonb);
+    create temporary table restored_hidden_owner_probe(value jsonb);
     create function pg_temp.bind_frontend_media(p_input jsonb) returns jsonb language plpgsql as $$
     declare keys text[]; resolved jsonb; images jsonb; extras jsonb;begin
       select coalesce(array_agg(distinct i.value->>'object_key'),'{}'::text[]) into keys
@@ -308,7 +310,7 @@ try {
       input jsonb:=$payload$${JSON.stringify(payload)}$payload$::jsonb;
       business_input jsonb:=$business$${JSON.stringify(businessPayload)}$business$::jsonb;
       event_input jsonb:=$event$${JSON.stringify(eventPayload)}$event$::jsonb;
-      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;
+      answer jsonb; again jsonb; edited jsonb; rev integer; total integer;move_request uuid;queue_case jsonb;case_lease jsonb;id_request uuid;selfie_request uuid;identity_pair jsonb;reported uuid;report_lease jsonb;warning_report uuid;warning_lease jsonb;warning_notice jsonb;content_report uuid;other_content_report uuid;content_lease jsonb;hold_a uuid;hold_b uuid;pre_hide_rev integer;business_target uuid;
     begin
       ${claims(owner)}
       begin perform api.get_frontend_staff_moderation_queue();raise exception 'member read staff queue';exception when insufficient_privilege then null;end;
@@ -477,6 +479,42 @@ try {
       ${claims(governor)}
       c:=api.get_frontend_staff_audit_page('{"action":"report_warn"}');
       if c->>'total'<>'1' or c->'items'->0->>'reason'<>'Synthetic account warning reason' or c->'items'->0->>'target_id'<>warning_report::text then raise exception 'warning audit effect unavailable';end if;
+      ${claims(reviewer)}
+      c:=api.submit_frontend_report((answer->>'id')::uuid,'listing','scam','Synthetic content removal report',repeat('z',43),'${unverified.id}');content_report:=(c->>'id')::uuid;
+      c:=api.submit_frontend_report((answer->>'id')::uuid,'listing','misleading','Synthetic independent content report',repeat('w',43),null);other_content_report:=(c->>'id')::uuid;
+      select revision into pre_hide_rev from private.posts where id=(answer->>'id')::uuid;
+      content_lease:=api.claim_queue_item('report',content_report);
+      c:=api.get_frontend_report_review_queue('market');
+      if not exists(select 1 from jsonb_array_elements(c->'items')e where e->>'id'=content_report::text and e->'foundation'->>'expectedPostRevision'=pre_hide_rev::text) then raise exception 'reviewed target revision missing';end if;
+      begin perform api.execute_frontend_report_action_v2(content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','Independent content removal',null,false,pre_hide_rev);raise exception 'moderator hid content directly';exception when insufficient_privilege then null;end;
+      perform api.control_my_frontend_staff_claims('release');
+      ${claims(administrator)}
+      content_lease:=api.claim_queue_item('report',content_report);
+      begin perform api.execute_frontend_report_action_v2(content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','Independent content removal',null,false,pre_hide_rev+1);raise exception 'changed target revision hidden';exception when sqlstate 'PT409' then null;end;
+      c:=api.execute_frontend_report_action_v2(content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','Independent content removal',null,false,pre_hide_rev);
+      if c->>'status'<>'applied' or exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'hidden content still public';end if;
+      select id into hold_a from private.frontend_report_action_receipts where report_id=content_report;
+      c:=api.execute_frontend_report_action_v2(content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','Independent content removal',null,false,pre_hide_rev);
+      if c->>'reused'<>'true' or (select count(*) from private.frontend_content_holds)<>1 then raise exception 'hide retry repeated its hold';end if;
+      begin perform api.release_frontend_content_hold(hold_a,1,'Original reviewer self restoration');raise exception 'hider restored own content';exception when insufficient_privilege then null;end;
+      ${claims(owner)}
+      insert into restored_hidden_owner_probe values(api.get_my_frontend_post((answer->>'id')::uuid));
+      select revision into rev from private.posts where id=(answer->>'id')::uuid;
+      begin perform api.execute_my_frontend_post_action(gen_random_uuid(),(answer->>'id')::uuid,rev,'reactivate','listing','market');raise exception 'owner removed staff hold';exception when sqlstate 'PT423' then null;end;
+      begin update private.posts set status='live',revision=revision+1 where id=(answer->>'id')::uuid;raise exception 'core publication bypassed staff hold';exception when sqlstate 'PT423' then null;end;
+      c:=api.search_post_cards(jsonb_build_object('post_id',answer->>'id','limit',1,'presentation',true,'frontend_presentation',true));
+      if jsonb_array_length(c->'items')<>0 then raise exception 'hidden post appeared in search';end if;
+      ${claims(governor)}
+      content_lease:=api.claim_queue_item('report',other_content_report);
+      c:=api.execute_frontend_report_action_v2(other_content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','A second independent content hold',null,false,pre_hide_rev+1);
+      select id into hold_b from private.frontend_report_action_receipts where report_id=other_content_report;
+      c:=api.release_frontend_content_hold(hold_a,1,'Independent release of the first hold');
+      if c->>'restored'<>'false' or exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'one release bypassed another hold';end if;
+      ${claims(administrator)}
+      c:=api.release_frontend_content_hold(hold_b,1,'Independent release after current review');
+      if c->>'restored'<>'true' or not exists(select 1 from private.public_eligible_posts where id=(answer->>'id')::uuid) then raise exception 'unchanged eligible content was not restored';end if;
+      c:=api.release_frontend_content_hold(hold_b,1,'Independent release after current review');
+      if c->>'reused'<>'true' then raise exception 'hold release acknowledgement not stable';end if;
       ${claims(reviewer)}
       select revision into rev from private.posts where id=(answer->>'id')::uuid;
       ${claims(owner)}
@@ -722,6 +760,49 @@ try {
       if c->>'total'<>'61' or jsonb_array_length(c->'items')<>11 then raise exception 'audit second page count drift';end if;
       insert into restored_audit_probe values('second',c);
       if has_table_privilege('authenticated','private.frontend_staff_audit_events','select') or has_table_privilege('service_role','private.frontend_staff_audit_events','select') then raise exception 'private audit view directly exposed';end if;
+      -- A later hide must never forget changes made under an earlier hold.
+      ${claims(unverified)}
+      c:=api.create_verification_phone_challenge('${unverified.id}','+27700000124',repeat('c',64));
+      perform api.claim_verification_phone_attempt('${unverified.id}',(c->>'challenge_id')::uuid);
+      perform api.finalize_verification_phone('${unverified.id}',(c->>'challenge_id')::uuid,repeat('c',64));
+      perform api.confirm_verification_locality('gp','gp_johannesburg');
+      c:=api.reserve_frontend_media_upload('image',128,repeat('7',64));
+      perform api.complete_frontend_media_upload((c->>'object_id')::uuid,128,repeat('7',64),'image/jpeg',800,600);
+      move_request:=gen_random_uuid();
+      business_input:=jsonb_set(business_input,'{request_id}',to_jsonb(move_request));
+      business_input:=jsonb_set(jsonb_set(business_input,'{media,0,object_id}',c->'object_id'),'{presentation_media,0,object_id}',c->'object_id');
+      perform api.stage_frontend_post_command('${unverified.id}',move_request,repeat('8',64),business_input);
+      c:=api.consume_frontend_post_command(move_request);
+      business_target:=(c->>'id')::uuid;rev:=(c->>'revision')::integer;
+      ${claims(reviewer)}
+      if (select status from private.posts where id=business_target)='pending_moderation' then
+        content_lease:=api.claim_queue_item('post',business_target);
+        perform api.moderate_post(business_target,rev,'approve',content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,null);
+      elsif not exists(select 1 from private.public_eligible_posts where id=business_target) then raise exception 'expected a publishable fixture business';end if;
+      c:=api.submit_frontend_report(business_target,'business','misleading','Synthetic business review before owner changes',repeat('n',43),null);content_report:=(c->>'id')::uuid;
+      c:=api.submit_frontend_report(business_target,'business','spam','Synthetic second business review before changes',repeat('o',43),null);other_content_report:=(c->>'id')::uuid;
+      ${claims(administrator)}
+      content_lease:=api.claim_queue_item('report',content_report);
+      select revision into rev from private.posts where id=business_target;
+      perform api.execute_frontend_report_action_v2(content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','First business content hold',null,false,rev);
+      select id into hold_a from private.frontend_report_action_receipts where report_id=content_report;
+      ${claims(unverified)}
+      c:=api.get_my_frontend_post(business_target);
+      perform api.save_post_content(business_target,(c->>'revision')::integer,jsonb_set(c->'content','{title}','"Changed business while staff review is pending"'));
+      ${claims(governor)}
+      content_lease:=api.claim_queue_item('report',other_content_report);
+      select revision into rev from private.posts where id=business_target;
+      perform api.execute_frontend_report_action_v2(other_content_report,2,content_lease->>'claim_generation',(content_lease->>'claim_nonce')::uuid,'hide','Second business content hold after change',null,false,rev);
+      select id into hold_b from private.frontend_report_action_receipts where report_id=other_content_report;
+      perform api.release_frontend_content_hold(hold_a,1,'Independent release of first changed hold');
+      ${claims(administrator)}
+      c:=api.release_frontend_content_hold(hold_b,1,'Independent release with changes needing review');
+      if c->>'restored'<>'false' or exists(select 1 from private.public_eligible_posts where id=business_target) or (select status_reason from private.posts where id=business_target)<>'staff_review_cleared' then raise exception 'changed content republished after a later hide';end if;
+      ${claims(unverified)}
+      select revision into rev from private.posts where id=business_target;
+      c:=api.execute_my_frontend_post_action(gen_random_uuid(),business_target,rev,'resubmit','business','business');
+      if c->>'status'<>'pending_moderation' then raise exception 'cleared changed content did not require new moderation';end if;
+      ${claims(governor)}
       -- Retention changes the files, not the accepted review. These fixtures
       -- never write actual objects; native state transitions still enforce
       -- their terminal-state and verification-invalidation rules.
@@ -748,6 +829,7 @@ try {
     select 'AUDIT:'||jsonb_build_object('kind',kind,'value',value)::text from restored_audit_probe;
     select 'REPORT_QUEUE:'||value::text from restored_report_probe;
     select 'AREA_ACTIVITY:'||value::text from restored_activity_probe;
+    select 'HIDDEN_OWNER:'||value::text from restored_hidden_owner_probe;
     select 'NATIVE_POST_COMMANDS_PASS';
     rollback;
   `);
@@ -863,6 +945,20 @@ try {
   assert.equal(activity.today.approve, 1);
   assert.equal(activity.items.find((e) => e.action === "content_approve").area, "MZANSI_MARKET");
   assert.equal(activity.today.dismiss, 1);
+  const hiddenOwner = parseRestoredOwnerPost(
+    JSON.parse(
+      outcome
+        .split("\n")
+        .find((line) => line.startsWith("HIDDEN_OWNER:"))
+        .slice(13)
+    )
+  );
+  assert.equal(restoredOwnerPostRow(hiddenOwner, owner.id).status, "hidden");
+  assert.equal(hiddenOwner.status_reason, "staff_hidden");
+  assert.equal(
+    restoredOwnerPostRow(hiddenOwner, owner.id).status_reason,
+    "Hidden for staff review"
+  );
   const reportProbes = outcome
     .split("\n")
     .filter((line) => line.startsWith("REPORT_QUEUE:"))
@@ -955,6 +1051,8 @@ try {
     "minimal program activity, actual moderation/resolution counts and South African day scope without report bodies or evidence payloads",
     "represented report dismissal, released/stale lease refusal, exact outcome acknowledgement retry and immutable reason binding",
     "informational warning with one owner-only notice/reason and outbox event; exact retry, legacy reader/worker compatibility and fenced supported-kind delivery acknowledgement",
+    "represented content hide, actual hidden owner state, owner/old publication refusal, independent release and multiple-hold restoration safety",
+    "a later hold preserves owner changes made under an earlier hold; final release leaves changed content unpublished for explicit resubmission and review",
     "typed mixed claim metadata, foreign lease secrecy, atomic renew/release and audited independent evidence handoff",
     "create/submit/trial once",
     "owned ready logo and poster retained",

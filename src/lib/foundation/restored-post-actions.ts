@@ -66,6 +66,13 @@ export function handleRestoredPostAction(
       );
       if (result.error) {
         const code = result.error.code;
+        if (code === "PT423")
+          throw new ActionRefusal({
+            status: 409,
+            error:
+              "This content is hidden for staff review. Staff must release the hold before it can be submitted or reactivated.",
+            reason: "staff_visibility_hold",
+          });
         if (code === "42501")
           throw new ActionRefusal({
             status: 403,

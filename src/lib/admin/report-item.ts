@@ -1,4 +1,4 @@
-import type { NativeContentReview } from "./native-content-review";
+import type { NativeReportReview } from "./native-report-review";
 import type { ReportSeverity } from "@/types/enums";
 /** Fields the selected report controls actually use. Reporter identifiers and
  * abuse-detection fingerprints are not part of the queue presentation. */
@@ -12,5 +12,5 @@ export interface ReportItem {
   description?: string;
   reporter_user_id?: string | null;
   created_at: string;
-  foundation?: NativeContentReview;
+  foundation?: NativeReportReview;
 }

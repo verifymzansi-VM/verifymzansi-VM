@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
-import { nativeContentReviewSchema } from "../admin/native-content-review";
+import { nativeReportReviewSchema } from "../admin/native-report-review";
 import type { ReportItem } from "../admin/report-item";
 import type { ClaimView } from "../services/queue-claims";
 import { settleStaffCommand } from "./staff-command";
@@ -38,7 +38,7 @@ const row = z
         expires_at: instant,
       })
       .nullable(),
-    foundation: nativeContentReviewSchema.nullable(),
+    foundation: nativeReportReviewSchema.nullable(),
   })
   .refine((v) =>
     v.foundation
@@ -51,7 +51,7 @@ export async function readFrontendReportQueue(
   area?: "market" | "business" | "tourism_events"
 ) {
   const result = await settleStaffCommand(
-    api.rpc("get_frontend_report_queue", area ? { p_area: area } : {}, { get: false }),
+    api.rpc("get_frontend_report_review_queue", area ? { p_area: area } : {}, { get: false }),
     z
       .strictObject({
         account_id: z.literal(callerId),

@@ -8,6 +8,25 @@ import type {
 export type FoundationRuntimeAuthenticatedDatabase = {
   api: Omit<Baseline["api"], "Functions"> & {
     Functions: Baseline["api"]["Functions"] & {
+      get_frontend_report_review_queue: { Args: { p_area?: string }; Returns: Json };
+      execute_frontend_report_action_v2: {
+        Args: {
+          p_report: string;
+          p_expected_revision: number;
+          p_claim_generation: string;
+          p_claim_nonce: string;
+          p_action: string;
+          p_reason: string;
+          p_duration_days?: number;
+          p_emergency?: boolean;
+          p_expected_post_revision?: number;
+        };
+        Returns: Json;
+      };
+      release_frontend_content_hold: {
+        Args: { p_hold: string; p_expected_version: number; p_reason: string };
+        Returns: Json;
+      };
       list_my_frontend_notices: {
         Args: { p_limit?: number; p_unread?: boolean; p_before?: string };
         Returns: Json;

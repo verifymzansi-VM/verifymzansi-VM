@@ -5,6 +5,36 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Staff content holds, 5 November 2026
+
+`20261105043010_native_report_content_holds.sql` is applied. The selected Hide
+action carries the report and target revisions plus the current claim. Only an
+independent reviewer with the assigned hide capability and recent authenticator
+proof can apply it. The report closure, receipt, paused post and independent
+distribution hold commit together. Core publication and owner
+reactivation/resubmission cannot bypass an active hold. The owner's existing
+status display distinguishes a staff hold from an owner deactivation.
+
+The versioned report reader preserves the old DTO and adds target revision only
+to the holder's private fence. Each complaint can keep a separate hold. A
+different authorized reviewer must release a hold; another active hold keeps the
+post hidden. Last release restores unchanged, eligible content using its
+existing approval/funding and current identity/time checks. It does not extend
+the paid window. Later owner edits remain unpublished until explicit
+resubmission and review, even when a second hold was placed after the edit.
+
+Native GoTrue/TOTP fixtures verify stale target and moderator refusal, exact
+hide/release retries, public search exclusion, owner/core publication refusal,
+two independent holds, and changed-content resubmission. The latter uses a
+separate verified fixture member: deleting the first member's trial post does
+not grant another introductory activation. A posting-gate projection gap for
+spent activation periods is tracked separately. Focused route/client tests,
+types, lint and duplication checks passed. Hosted SQL verified RPC audiences,
+new capability assignments, private RLS and the active public guard; no real
+holds were created. Release is available at the native command boundary; the
+selected appeal/enforcement workflows, hide notices and account suspension/ban
+still need their remaining integration.
+
 ## Account warning notices and delivery, 5 November 2026
 
 `20261105035413_native_report_warning_delivery.sql` is applied. The represented

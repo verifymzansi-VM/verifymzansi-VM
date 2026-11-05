@@ -4,6 +4,113 @@
   "scope": "Reviewed additive application updates; immutable clean-baseline artifacts remain unchanged",
   "functions": [
     {
+      "name": "release_frontend_content_hold",
+      "updates": ["updates/20261105043010_native_report_content_holds.sql"],
+      "arguments": [
+        {
+          "name": "p_hold",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_version",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent content-restoration reviewer and recent TOTP; represented hold version, subject locks, immutable cause and exact retry. Other active holds and later owner changes prevent republishing; unchanged content requires current native identity, time and funding eligibility."
+    },
+    {
+      "name": "execute_frontend_report_action_v2",
+      "updates": ["updates/20261105043010_native_report_content_holds.sql"],
+      "arguments": [
+        {
+          "name": "p_report",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_expected_revision",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_claim_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_claim_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_action",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_duration_days",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_emergency",
+          "sqlType": "boolean",
+          "optional": true
+        },
+        {
+          "name": "p_expected_post_revision",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Native reviewer/MFA and current independent exact report lease; hides require the separate content-hide capability and represented current target revision. Atomic closure, paused workflow, distribution hold and bounded retry receipt. Existing dismiss/warn commands are reused."
+    },
+    {
+      "name": "get_frontend_report_review_queue",
+      "updates": ["updates/20261105043010_native_report_content_holds.sql"],
+      "arguments": [
+        {
+          "name": "p_area",
+          "sqlType": "text",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current independent native queue reviewer; existing bounded summary/private review projection with the holder's represented target revision. Old queue contract remains unchanged."
+    },
+    {
       "name": "list_my_frontend_notices",
       "updates": ["updates/20261105035413_native_report_warning_delivery.sql"],
       "arguments": [
@@ -686,7 +793,10 @@
     },
     {
       "name": "execute_my_frontend_post_action",
-      "updates": ["updates/20261104101932_restored_owner_post_actions.sql"],
+      "updates": [
+        "updates/20261104101932_restored_owner_post_actions.sql",
+        "updates/20261105043010_native_report_content_holds.sql"
+      ],
       "arguments": [
         {
           "name": "p_request",

@@ -54,7 +54,11 @@ it("loads minimal report summaries from the native caller with actual waiting co
   expect(view.reports[0]).not.toHaveProperty("description");
   expect(view.reports[0]).not.toHaveProperty("reporter_ip_hash");
   expect(createAdminClient).not.toHaveBeenCalled();
-  expect(rpc).toHaveBeenCalledExactlyOnceWith("get_frontend_report_queue", {}, { get: false });
+  expect(rpc).toHaveBeenCalledExactlyOnceWith(
+    "get_frontend_report_review_queue",
+    {},
+    { get: false }
+  );
 });
 it("carries the holder's actual body/fence and keeps claimed reports in waiting totals", async () => {
   const foundation = { expectedRevision: 2, claimGeneration: "4", claimNonce: id };

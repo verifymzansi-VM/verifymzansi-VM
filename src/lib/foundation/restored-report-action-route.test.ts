@@ -56,7 +56,7 @@ it("binds dismissal to the represented native report revision and claim without 
     message: "Report dismissed.",
   });
   expect(rpc).toHaveBeenCalledExactlyOnceWith(
-    "execute_frontend_report_action",
+    "execute_frontend_report_action_v2",
     {
       p_report: reportId,
       p_expected_revision: 2,
@@ -95,4 +95,32 @@ it("keeps stale/MFA refusals and contradictory acknowledgements visible without 
   });
   expect((await handleRestoredReportAction(request())).status).toBe(503);
   expect(rpc).toHaveBeenCalledTimes(3);
+});
+it("requires and forwards the represented content revision before hiding", async () => {
+  expect((await handleRestoredReportAction(request({ ...body(), action: "hide" }))).status).toBe(
+    422
+  );
+  expect(rpc).not.toHaveBeenCalled();
+  rpc.mockResolvedValueOnce({
+    data: { report_id: reportId, action: "hide", status: "applied" },
+    error: null,
+  });
+  const response = await handleRestoredReportAction(
+    request({
+      ...body(),
+      action: "hide",
+      foundation: { ...body().foundation, expectedPostRevision: 9 },
+    })
+  );
+  expect(response.status).toBe(200);
+  expect(rpc).toHaveBeenCalledExactlyOnceWith(
+    "execute_frontend_report_action_v2",
+    expect.objectContaining({
+      p_action: "hide",
+      p_expected_post_revision: 9,
+      p_expected_revision: 2,
+      p_claim_nonce: nonce,
+    }),
+    { get: false }
+  );
 });

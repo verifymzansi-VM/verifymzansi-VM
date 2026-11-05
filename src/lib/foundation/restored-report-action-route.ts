@@ -2,7 +2,7 @@ import "server-only";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { handleFoundationOwnerRoute } from "./owner-route";
-import { nativeContentReviewSchema } from "../admin/native-content-review";
+import { nativeReportReviewSchema } from "../admin/native-report-review";
 import { adminFlaggingActionSchema } from "../validations/admin";
 import {
   settleStaffCommand,
@@ -12,7 +12,7 @@ import {
 import { createLogger } from "../utils/logger";
 const log = createLogger("NativeReportAction");
 const inputSchema = adminFlaggingActionSchema
-  .safeExtend({ foundation: nativeContentReviewSchema })
+  .safeExtend({ foundation: nativeReportReviewSchema })
   .strict();
 export function handleRestoredReportAction(request: NextRequest) {
   return handleFoundationOwnerRoute({
@@ -32,9 +32,14 @@ export function handleRestoredReportAction(request: NextRequest) {
           422,
           `Give a review reason of at least ${minimum} characters.`
         );
+      if (input.action === "hide" && !scope.expectedPostRevision)
+        throw new FoundationStaffCommandError(
+          422,
+          "Reload the report and inspect the current content before hiding it."
+        );
       const result = await settleStaffCommand(
         api.rpc(
-          "execute_frontend_report_action",
+          "execute_frontend_report_action_v2",
           {
             p_report: input.reportId,
             p_expected_revision: scope.expectedRevision,
@@ -44,6 +49,9 @@ export function handleRestoredReportAction(request: NextRequest) {
             p_reason: input.reason,
             p_emergency: input.emergency ?? false,
             ...(input.durationDays ? { p_duration_days: input.durationDays } : {}),
+            ...(scope.expectedPostRevision
+              ? { p_expected_post_revision: scope.expectedPostRevision }
+              : {}),
           },
           { get: false }
         ),
@@ -54,10 +62,13 @@ export function handleRestoredReportAction(request: NextRequest) {
           reused: z.boolean().optional(),
         })
       );
-      if (input.action === "dismiss" && result.status !== "dismissed")
+      if (
+        (input.action === "dismiss" && result.status !== "dismissed") ||
+        (["warn", "hide"].includes(input.action) && result.status !== "applied")
+      )
         throw new FoundationStaffCommandError(
           503,
-          "The dismissal could not be confirmed. Reload reports."
+          "The report outcome could not be confirmed. Reload reports."
         );
       const messages = {
         dismissed: "Report dismissed.",

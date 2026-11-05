@@ -9,6 +9,11 @@ import { foundationMediaUrl } from "./public-media-url";
 import reference from "../domains/taxonomy/reference.json";
 import { OWNER_DEACTIVATED_REASON } from "../posting/content-status";
 const instant = z.iso.datetime({ offset: true });
+function presentedStatusReason(reason: string | null) {
+  if (reason === "staff_hidden") return "Hidden for staff review";
+  if (reason === "staff_review_cleared") return "Staff review cleared; resubmit for approval";
+  return reason;
+}
 const status = z.enum([
   "draft",
   "pending_moderation",
@@ -142,9 +147,12 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
     business_type: post.business_type,
     promotion_type: "event",
     status: post.status === "paused" ? "hidden" : post.status,
-    status_reason: post.status === "paused" ? OWNER_DEACTIVATED_REASON : post.status_reason,
-    moderation_notes: post.status_reason,
-    rejection_reason: post.status_reason,
+    status_reason:
+      post.status === "paused" && !post.status_reason?.startsWith("staff_")
+        ? OWNER_DEACTIVATED_REASON
+        : presentedStatusReason(post.status_reason),
+    moderation_notes: presentedStatusReason(post.status_reason),
+    rejection_reason: presentedStatusReason(post.status_reason),
     revision: post.revision,
     edit_of: post.edit_of,
     pending_edit: post.pending_edit,
