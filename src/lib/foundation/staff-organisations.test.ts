@@ -73,3 +73,39 @@ it("keeps a missing organisation distinct from a failed read", async () => {
     readFoundationStaffOrganisation(client(null, { code: "42501" }).api, { id })
   ).rejects.toMatchObject({ reason: "forbidden" });
 });
+
+it("validates the bounded staff directory and refuses a mismatched detail response", async () => {
+  const { readFrontendStaffOrganisationDirectory, readFrontendStaffOrganisationDetail } =
+    await import("./staff-organisations");
+  const directory = {
+    total: 1,
+    items: [
+      {
+        id,
+        slug: row.slug,
+        name: row.name,
+        organisation_type: "other",
+        programme_status: "invited",
+        is_public: false,
+        ends_at: null,
+        sponsored_capacity: 50,
+        affiliated: 0,
+        pending: 0,
+        sponsored: 0,
+      },
+    ],
+  };
+  await expect(readFrontendStaffOrganisationDirectory(client(directory).api)).resolves.toEqual(
+    directory
+  );
+  await expect(
+    readFrontendStaffOrganisationDirectory(client({ total: 2, items: directory.items }).api)
+  ).rejects.toMatchObject({ status: 503 });
+  const detail = { ...row, public_contacts: [] };
+  await expect(readFrontendStaffOrganisationDetail(client(detail).api, id)).resolves.toEqual(
+    detail
+  );
+  await expect(
+    readFrontendStaffOrganisationDetail(client(detail).api, "00000000-0000-4000-8000-000000000002")
+  ).rejects.toMatchObject({ status: 503 });
+});
