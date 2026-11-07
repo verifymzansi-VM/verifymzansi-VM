@@ -7,13 +7,15 @@
 // emails are read from the local mail catcher, phone proofs use the service
 // commands the website calls after an SMS code matches.
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
 import { processIdentityNumber } from "../../src/lib/domains/verification/identity-processing.ts";
 import { validateSaIdChecksum } from "../../src/lib/utils/sa-id-validation.ts";
 import reference from "../../src/lib/domains/taxonomy/reference.json" with { type: "json" };
+import people from "../../e2e/foundation/fixture/people.json" with { type: "json" };
+import postsFixture from "../../e2e/foundation/fixture/posts.json" with { type: "json" };
 import { nativeTotp } from "./foundation-native-totp.mjs";
 import { E2E_FIXTURE, assertLocalFoundationTarget } from "./foundation-e2e-target.mjs";
 
@@ -21,10 +23,9 @@ const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function readFixtureFiles(root = process.cwd()) {
-  const read = (file) =>
-    JSON.parse(readFileSync(path.join(root, "e2e/foundation/fixture", file), "utf8"));
-  return { people: read("people.json"), posts: read("posts.json").posts };
+/** The committed fixture definitions (module imports, not runtime file reads). */
+export function readFixtureFiles() {
+  return { people, posts: postsFixture.posts };
 }
 
 /** HTTP helpers for the local gateway only (asserted on every request). */
@@ -95,19 +96,27 @@ async function verifyTotp(api, token, factor) {
   return verified.data;
 }
 
-/** Reads the newest message to an address from the local mail catcher. */
+/** Reads the newest message to an address from the local mail catcher. The
+ * requests carry no fixture data: the fixed local catcher's recent-message list
+ * is fetched and filtered here, and only a message id it returned is used. */
+const MAIL_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.mailPort}`;
 async function latestMail(mailUrl, email, { after = 0, timeoutMs = 20000 } = {}) {
-  const origin = new URL(mailUrl).origin;
-  assert.ok(origin === `http://127.0.0.1:${E2E_FIXTURE.mailPort}`, "mail catcher must be local");
+  assert.equal(new URL(mailUrl).origin, MAIL_ORIGIN, "mail catcher must be local");
+  const wanted = email.toLowerCase();
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const search = await fetch(
-      `${origin}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}&limit=5`,
-      { signal: AbortSignal.timeout(5000) }
-    ).then((response) => response.json());
-    const message = (search.messages ?? []).find((item) => Date.parse(item.Created) >= after);
-    if (message) {
-      return fetch(`${origin}/api/v1/message/${message.ID}`, {
+    const list = await fetch(`${MAIL_ORIGIN}/api/v1/messages?limit=50`, {
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+    }).then((response) => response.json());
+    const message = (list.messages ?? []).find(
+      (item) =>
+        Date.parse(item.Created) >= after &&
+        (item.To ?? []).some((to) => String(to.Address).toLowerCase() === wanted)
+    );
+    if (message && /^[A-Za-z0-9]{8,64}$/.test(message.ID)) {
+      return fetch(`${MAIL_ORIGIN}/api/v1/message/${message.ID}`, {
+        redirect: "error",
         signal: AbortSignal.timeout(5000),
       }).then((response) => response.json());
     }
@@ -225,7 +234,7 @@ async function verifyIdentity({ api, sql, owner, reviewer }) {
 
 async function verifyPhone({ api, owner }) {
   // The website stores only a hash of the SMS code; the code never matters here.
-  const phone = "+2771" + String(1000000 + (randomBytes(3).readUIntBE(0, 3) % 8999999));
+  const phone = "+2771" + String(randomInt(1000000, 10000000));
   const hash = randomBytes(32).toString("hex");
   const challenge = await api.call(
     "create_verification_phone_challenge",
@@ -361,12 +370,12 @@ async function publishPost({ api, root, owner, moderator, spec }) {
 }
 
 /**
- * Seeds a fresh copy and returns the state the specs read (ids and the
- * authenticator secrets local Auth generated). Refuses a database that
+ * Seeds a fresh copy and returns its account and post ids. Authenticator
+ * secrets stay in local Auth (auth.mfa_factors); specs read them from there. Refuses a database that
  * already has accounts: reset the copy instead of seeding twice.
  */
 export async function seedTestCopy({ root = process.cwd(), status, sql, log = () => {} }) {
-  const { people, posts } = readFixtureFiles(root);
+  const { posts } = readFixtureFiles();
   const api = localApi(status);
   if (
     sql(
@@ -475,12 +484,6 @@ export async function seedTestCopy({ root = process.cwd(), status, sql, log = ()
     version: 1,
     createdAt: new Date().toISOString(),
     accounts: Object.fromEntries(accounts.map((key) => [key, { id: session[key].id }])),
-    totp: Object.fromEntries(
-      Object.entries(factors).map(([key, factor]) => [
-        key,
-        { factorId: factor.id, secret: factor.secret },
-      ])
-    ),
     posts: published,
   };
 }

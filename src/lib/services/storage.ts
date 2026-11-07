@@ -341,6 +341,16 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     const path = await import("node:path");
     const arrayBuffer = await params.file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    // Private objects (identity evidence) go to the ignored private fixture
+    // folder that evidence review reads, never under public/.
+    const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+    if (params.bucket === privateBucket) {
+      const target = await playwrightStoragePath(params.bucket, params.key);
+      if (!target) throw new Error("Isolated private storage unavailable");
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, buffer);
+      return { url: "", key: params.key.replace(/\\/g, "/") };
+    }
     const publicRoot = path.join(process.cwd(), "public", "e2e-media");
     const destination = path.join(publicRoot, params.key);
 

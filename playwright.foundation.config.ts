@@ -48,7 +48,8 @@ export default defineConfig({
   webServer: {
     command: "node --import tsx scripts/foundation-e2e.mjs serve",
     url: `${baseURL}/api/health`,
-    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
+    // Always this copy's own server: an existing one on the port cannot prove its build.
+    reuseExistingServer: false,
     timeout: Number(process.env.PLAYWRIGHT_WEB_SERVER_TIMEOUT_MS || 1_200_000),
     stdout: "pipe",
     stderr: "pipe",

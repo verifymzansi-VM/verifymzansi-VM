@@ -149,7 +149,8 @@ e2e/visual-regression.spec.ts-snapshots/*
 .wrangler-dry-run/
 
 # ── Local E2E uploaded media fixtures ─────────────────────────
-/public/e2e-media/media/
+/public/e2e-media/*
+!/public/e2e-media/.gitkeep
 
 # ── Claude IDE / planning ────────────────────────────────────
 .claude/

@@ -1,6 +1,10 @@
 // Helpers for specs that run against the local foundation test copy (M0.7).
-// Every address is the local stack's; the guard refuses anything else.
-import { readFileSync } from "node:fs";
+// Requests go only to the fixed local gateway (checked by the target guard).
+// No runtime file read feeds a request: the people come from the committed
+// fixture (module import), and the gateway key, post ids and authenticator
+// secrets are read from the copy itself (local CLI status and the copy's own
+// database container).
+import people from "../fixture/people.json";
 import {
   E2E_FIXTURE,
   assertLocalFoundationTarget,
@@ -8,41 +12,53 @@ import {
 import {
   openFixture,
   psql,
+  readStatus,
   PUBLIC_TABLES_QUERY,
 } from "../../../scripts/lib/foundation-e2e-stack.mjs";
 import { nativeTotp } from "../../../scripts/lib/foundation-native-totp.mjs";
 
 export type PersonKey = "invitedMember" | "verifiedMember" | "moderator" | "admin";
 
-type Person = { email: string; password: string; firstName: string; lastName: string };
+/** The only address any helper sends a request to. */
+const API_ORIGIN = assertLocalFoundationTarget({
+  apiUrl: `http://127.0.0.1:${E2E_FIXTURE.apiPort}`,
+});
 
-export type TestCopyState = {
-  apiUrl: string;
-  mailUrl: string;
+export type TestCopy = {
   publishableKey: string;
-  accounts: Record<PersonKey, { id: string }>;
-  totp: Partial<Record<PersonKey, { factorId: string; secret: string }>>;
-  posts: { key: string; id: string; title: string; kind: string; mediaKey: string }[];
+  posts: { id: string; title: string; mediaKey: string }[];
 };
 
-export function readTestCopy(): TestCopyState {
-  const state = JSON.parse(readFileSync(E2E_FIXTURE.stateFile, "utf8")) as TestCopyState;
-  assertLocalFoundationTarget({ apiUrl: state.apiUrl });
-  return state;
-}
-
-export const people = JSON.parse(
-  readFileSync("e2e/foundation/fixture/people.json", "utf8")
-) as Record<PersonKey, Person>;
-
-/** Read-only count over the copy's own database container. */
-export function countPublicTables(): number {
-  return Number(psql(openFixture(), PUBLIC_TABLES_QUERY));
-}
+const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 
 /** Read-only catalogue/count query over the copy's own database container. */
 export function queryTestCopy(statement: string): string {
   return psql(openFixture(), statement);
+}
+
+/** The copy's gateway key and seeded posts, read from the running copy. */
+export function readTestCopy(): TestCopy {
+  const status = readStatus(openFixture());
+  if (status.apiUrl !== API_ORIGIN) throw new Error("Unexpected test copy gateway");
+  const posts = queryTestCopy(
+    "select p.id, p.title, m.object_key from private.posts p " +
+      "join private.post_media pm on pm.post_id = p.id and pm.purpose = 'cover' " +
+      "join private.media_objects m on m.id = pm.object_id " +
+      "where p.status = 'live' and p.title like 'Fixture %' order by p.published_at;"
+  )
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [id, title, mediaKey] = line.split("|");
+      if (!UUID.test(id) || !/^media\/[a-f0-9-]{36}$/.test(mediaKey))
+        throw new Error("Unexpected seeded post");
+      return { id, title, mediaKey };
+    });
+  return { publishableKey: status.publishableKey, posts };
+}
+
+export function countPublicTables(): number {
+  return Number(psql(openFixture(), PUBLIC_TABLES_QUERY));
 }
 
 /** RFC 6238 code from the authenticator secret, computed with node:crypto. */
@@ -50,17 +66,31 @@ export function totpCode(secret: string, at = Date.now()): string {
   return nativeTotp(secret, at);
 }
 
+/** The verified authenticator factor local Auth holds for a test person. */
+function authenticatorOf(key: PersonKey): { factorId: string; secret: string } | null {
+  const email = people[key].email.toLowerCase().replace(/[^a-z0-9@.-]/g, "");
+  const row = queryTestCopy(
+    "select f.id, f.secret from auth.mfa_factors f join auth.users u on u.id = f.user_id " +
+      `where lower(u.email) = '${email}' and f.factor_type = 'totp' and f.status = 'verified';`
+  );
+  if (!row) return null;
+  const [factorId, secret] = row.split("|");
+  if (!UUID.test(factorId)) throw new Error("Unexpected authenticator factor");
+  return { factorId, secret };
+}
+
 async function request(
-  state: TestCopyState,
-  pathname: string,
+  copy: TestCopy,
+  pathname: `/${string}`,
   init: { body?: unknown; token?: string; headers?: Record<string, string>; method?: string } = {}
 ) {
-  const url = new URL(pathname, state.apiUrl);
+  const url = new URL(pathname, API_ORIGIN);
+  if (url.origin !== API_ORIGIN) throw new Error("Test copy requests stay on the local gateway");
   const response = await fetch(url, {
     method: init.method ?? "POST",
     redirect: "error",
     headers: {
-      apikey: state.publishableKey,
+      apikey: copy.publishableKey,
       "Content-Type": "application/json",
       ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}),
       ...init.headers,
@@ -72,8 +102,9 @@ async function request(
 }
 
 /** Calls a production API command through the local gateway. */
-export function rpc(state: TestCopyState, name: string, body: unknown, token?: string) {
-  return request(state, `/rest/v1/rpc/${name}`, {
+export function rpc(copy: TestCopy, name: string, body: unknown, token?: string) {
+  if (!/^[a-z_]+$/.test(name)) throw new Error("Unexpected command name");
+  return request(copy, `/rest/v1/rpc/${name}`, {
     body,
     token,
     headers: { "Content-Profile": "api", "Accept-Profile": "api" },
@@ -81,25 +112,26 @@ export function rpc(state: TestCopyState, name: string, body: unknown, token?: s
 }
 
 /** A read the retired backend's clients make: a table in schema public. */
-export function retiredTableRead(state: TestCopyState, table: string) {
-  return request(state, `/rest/v1/${table}?select=id&limit=1`, {
+export function retiredTableRead(copy: TestCopy, table: string) {
+  if (!/^[a-z_]+$/.test(table)) throw new Error("Unexpected table name");
+  return request(copy, `/rest/v1/${table}?select=id&limit=1`, {
     method: "GET",
     headers: { "Accept-Profile": "public" },
   });
 }
 
-/** Real local GoTrue password sign-in; with a factor, the authenticator step too. */
-export async function signIn(state: TestCopyState, key: PersonKey) {
-  const login = await request(state, "/auth/v1/token?grant_type=password", {
+/** Real local GoTrue password sign-in; with an authenticator, the second step too. */
+export async function signIn(copy: TestCopy, key: PersonKey) {
+  const login = await request(copy, "/auth/v1/token?grant_type=password", {
     body: { email: people[key].email, password: people[key].password },
   });
   if (login.status !== 200) throw new Error(`Sign-in failed for ${key} (${login.status})`);
-  const factor = state.totp[key];
+  const factor = authenticatorOf(key);
   if (!factor) return { token: login.data.access_token as string, aal: "aal1" };
-  const challenge = await request(state, `/auth/v1/factors/${factor.factorId}/challenge`, {
+  const challenge = await request(copy, `/auth/v1/factors/${factor.factorId}/challenge`, {
     token: login.data.access_token,
   });
-  const verified = await request(state, `/auth/v1/factors/${factor.factorId}/verify`, {
+  const verified = await request(copy, `/auth/v1/factors/${factor.factorId}/verify`, {
     token: login.data.access_token,
     body: { challenge_id: challenge.data.id, code: totpCode(factor.secret) },
   });

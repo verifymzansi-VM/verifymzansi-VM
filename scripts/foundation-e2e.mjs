@@ -14,7 +14,8 @@
 // It takes no connection settings: every address comes from the local CLI
 // and must pass the loopback guard (scripts/lib/foundation-e2e-target.mjs).
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import {
   applyHostedHookGrants,
   isRunning,
@@ -29,7 +30,11 @@ import {
 } from "./lib/foundation-e2e-stack.mjs";
 import { seedTestCopy } from "./lib/foundation-e2e-seed.mjs";
 import { E2E_FIXTURE } from "./lib/foundation-e2e-target.mjs";
-import { foundationWebsiteEnv } from "./lib/foundation-e2e-website.mjs";
+import {
+  assertBuildIsCopy,
+  foundationWebsiteEnv,
+  writeBuildStamp,
+} from "./lib/foundation-e2e-website.mjs";
 
 const log = (line) => process.stdout.write(`[foundation-e2e] ${line}\n`);
 const seconds = (started) => `${Math.round((Date.now() - started) / 1000)} s`;
@@ -46,8 +51,23 @@ function readState(fixture, status) {
   return known === "4" ? state : null;
 }
 
+/** Files the copy writes outside the stack (all git-ignored). */
+const SMS_SINK = "tmp/foundation-e2e/sms-sink.jsonl";
+function removeLocalArtifacts(root) {
+  for (const file of [E2E_FIXTURE.stateFile, SMS_SINK])
+    rmSync(path.join(root, file), { force: true });
+  for (const directory of ["public/e2e-media", "tmp/e2e-private-storage"]) {
+    const full = path.join(root, directory);
+    if (!existsSync(full)) continue;
+    for (const name of readdirSync(full))
+      if (name !== ".gitkeep") rmSync(path.join(full, name), { recursive: true, force: true });
+  }
+}
+
 async function up(fixture) {
   const started = Date.now();
+  // Specs must never read a code from an earlier run.
+  rmSync(path.join(fixture.root, SMS_SINK), { force: true });
   if (isRunning(fixture)) {
     verifyWorkspace(fixture);
     log("Stack already running; reusing it.");
@@ -78,8 +98,6 @@ async function up(fixture) {
     ...seeded,
     apiUrl: status.apiUrl,
     mailUrl: status.mailUrl,
-    // Local default publishable key: public by design. The secret key is not stored.
-    publishableKey: status.publishableKey,
   };
   writeFileSync(E2E_FIXTURE.stateFile, `${JSON.stringify(state, null, 2)}\n`);
   log(
@@ -101,10 +119,14 @@ function build(env) {
   const started = Date.now();
   log("Building the website in foundation mode for the test copy.");
   runPnpm(["build"], env);
-  log(`Website built (${seconds(started)}).`);
+  writeBuildStamp(env);
+  assertBuildIsCopy(env);
+  log(`Website built and checked: no hosted settings in the client bundle (${seconds(started)}).`);
 }
 
 function serve(env) {
+  // Never serve a .next built for production or with other settings.
+  assertBuildIsCopy(env);
   const server = spawn(
     process.execPath,
     [
@@ -134,7 +156,10 @@ try {
   const fixture = openFixture();
   if (command === "down" || command === "reset") {
     stopStack(fixture);
-    log("Stack stopped; its containers and data were deleted. Other stacks are untouched.");
+    removeLocalArtifacts(fixture.root);
+    log(
+      "Stack stopped; its containers, data and local files were deleted. Other stacks are untouched."
+    );
   }
   if (command !== "down") {
     const { status } = await up(fixture);

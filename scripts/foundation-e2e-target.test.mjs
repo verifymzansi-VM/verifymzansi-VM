@@ -9,7 +9,19 @@ import {
   replayMigrationNames,
 } from "./lib/foundation-e2e-target.mjs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
-import { foundationWebsiteEnv } from "./lib/foundation-e2e-website.mjs";
+import {
+  BUILD_STAMP,
+  assertBuildIsCopy,
+  envFileKeyNames,
+  foundationWebsiteEnv,
+  hostedMarkersIn,
+  writeBuildStamp,
+} from "./lib/foundation-e2e-website.mjs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { EOL, tmpdir } from "node:os";
+import path from "node:path";
 
 const API = "http://127.0.0.1:55443";
 const DB = "postgresql://postgres:postgres@127.0.0.1:55452/postgres";
@@ -42,6 +54,8 @@ for (const [label, apiUrl] of [
   ["the default CLI port", "http://127.0.0.1:54321"],
   ["https on loopback", "https://127.0.0.1:55443"],
   ["credentials in the URL", "http://user:pass@127.0.0.1:55443"],
+  ["user info before another host", "http://127.0.0.1:55443@evil"],
+  ["a look-alike host", "http://127.0.0.1:55443.evil"],
   ["a production ref in the path", "http://127.0.0.1:55443/gntzjtuncsyefujajmjy"],
   ["a query string", "http://127.0.0.1:55443/?target=remote"],
   ["localhost (the website accepts only 127.0.0.1)", "http://localhost:55443"],
@@ -178,13 +192,20 @@ test("the website runs in foundation mode against the copy only, with the existi
     process.env.SUPABASE_URL = "https://gntzjtuncsyefujajmjy.supabase.co";
     process.env.FOUNDATION_PROJECT_REF = "gntzjtuncsyefujajmjy";
     process.env.PLAYWRIGHT_E2E_AUTH = "1";
-    const env = foundationWebsiteEnv(status);
+    process.env.OZOW_CLIENT_SECRET = "caller-provider-secret";
+    process.env.SENTRY_DSN = "https://caller@example.invalid/1";
+    // An empty folder: no .env files to neutralise in this test.
+    const env = foundationWebsiteEnv(status, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
     assert.equal(env.NEXT_PUBLIC_DATA_BACKEND, "foundation");
     assert.equal(env.NEXT_PUBLIC_SUPABASE_URL, API);
     assert.equal(env.FOUNDATION_SUPABASE_URL, API);
     assert.equal(env.FOUNDATION_PROJECT_REF, E2E_FIXTURE.projectRef);
     assert.equal(env.SUPABASE_URL, undefined);
     assert.equal(env.PLAYWRIGHT_E2E_AUTH, undefined);
+    assert.equal(env.OZOW_CLIENT_SECRET, undefined);
+    assert.equal(env.SENTRY_DSN, undefined);
     assert.equal(env.PLAYWRIGHT_SUPABASE_MODE, undefined);
     assert.equal(env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE, undefined);
     // Reused switches from scripts/start-playwright-server.cjs.
@@ -202,4 +223,124 @@ test("the website runs in foundation mode against the copy only, with the existi
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);
   }
+});
+
+const LOCAL_STATUS = {
+  apiUrl: API,
+  publishableKey: "sb_publishable_local_fixture",
+  secretKey: "sb_secret_local_fixture_value_000000",
+};
+
+// Hostile .env files, as a developer machine may hold: hosted URLs, the
+// production limiter and provider keys. Synthetic values only.
+const HOSTILE = {
+  ".env.production.local": [
+    "OTP_RATE_LIMITER_URL=https://limiter.example.invalid",
+    "RATE_LIMITER_API_KEY=hostile-limiter-key",
+    "FOUNDATION_SUPABASE_URL=https://gntzjtuncsyefujajmjy.supabase.co",
+    "FOUNDATION_PHONE_OTP_KEY=hostile-otp-key",
+  ],
+  ".env.local": [
+    "export OZOW_CLIENT_ID=hostile-ozow-client",
+    "OZOW_CLIENT_SECRET = hostile-ozow-secret",
+    "PAYFAST_MERCHANT_KEY=hostile-payfast",
+    "NEXT_PUBLIC_SUPABASE_URL=https://gntzjtuncsyefujajmjy.supabase.co",
+    "SUPABASE_URL=https://gntzjtuncsyefujajmjy.supabase.co",
+    "PLAYWRIGHT_E2E_AUTH=1",
+  ],
+  ".env": ["RESEND_API_KEY=re_hostile", "SENTRY_DSN=https://hostile@example.invalid/1"],
+};
+
+test("no value from .env files reaches the website, as Next loads them", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-env-"));
+  try {
+    for (const [file, lines] of Object.entries(HOSTILE))
+      writeFileSync(path.join(dir, file), lines.map((line) => `${line}${EOL}`).join(""));
+    assert.deepEqual(
+      [...envFileKeyNames(dir)].sort(),
+      Object.values(HOSTILE)
+        .flat()
+        .map((line) =>
+          line
+            .replace(/^export /, "")
+            .split("=")[0]
+            .trim()
+        )
+        .sort()
+    );
+    // Hermetic: the caller's own environment must not already hold these keys.
+    const names = [...envFileKeyNames(dir)];
+    const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    for (const name of names) delete process.env[name];
+    let env;
+    try {
+      env = foundationWebsiteEnv(LOCAL_STATUS, { root: dir });
+    } finally {
+      for (const [name, value] of Object.entries(saved))
+        if (value !== undefined) process.env[name] = value;
+    }
+    const nextEnv = createRequire(import.meta.url).resolve("@next/env");
+    // A fresh process, as `next build` / `next start` load env files at startup.
+    const probe = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `require(${JSON.stringify(nextEnv)}).loadEnvConfig(${JSON.stringify(dir)}, false, { info() {}, error() {} });` +
+          "process.stdout.write(JSON.stringify(process.env));",
+      ],
+      { env: { ...env, NODE_ENV: "production" }, encoding: "utf8" }
+    );
+    assert.equal(probe.status, 0, probe.stderr);
+    const loaded = JSON.parse(probe.stdout);
+    for (const value of Object.values(loaded))
+      assert.equal(/hostile|supabase\.co|example\.invalid|re_hostile/.test(String(value)), false);
+    assert.equal(loaded.FOUNDATION_SUPABASE_URL, API);
+    assert.equal(loaded.NEXT_PUBLIC_SUPABASE_URL, API);
+    assert.equal(loaded.OTP_RATE_LIMITER_URL, "http://127.0.0.1:55456/check");
+    assert.equal(loaded.RATE_LIMITER_API_KEY, "local-fixture-limiter-key-unused");
+    assert.equal(loaded.OZOW_CLIENT_SECRET, "");
+    assert.equal(loaded.PLAYWRIGHT_E2E_AUTH, "");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("serving refuses a .next folder not built for the copy", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-build-"));
+  try {
+    const env = foundationWebsiteEnv(LOCAL_STATUS, { root: dir });
+    mkdirSync(path.join(dir, ".next", "static", "chunks"), { recursive: true });
+    const chunk = path.join(dir, ".next", "static", "chunks", "app.js");
+    writeFileSync(chunk, `const k="${LOCAL_STATUS.publishableKey}";`);
+    // No stamp: a normal build (which deletes .next) never carries one.
+    assert.throws(() => assertBuildIsCopy(env, dir), /not a test copy build/);
+    writeBuildStamp(env, dir);
+    assert.doesNotThrow(() => assertBuildIsCopy(env, dir));
+    assert.equal(
+      path.join(dir, BUILD_STAMP).endsWith(path.join(".next", "foundation-e2e-stamp.json")),
+      true
+    );
+    // Other settings at build time.
+    assert.throws(
+      () => assertBuildIsCopy({ ...env, NEXT_PUBLIC_APP_URL: "https://verifymzansi.com" }, dir),
+      /other settings/
+    );
+    // A hosted project or a foreign key inlined in the client bundle.
+    for (const inlined of [
+      "https://gntzjtuncsyefujajmjy.supabase.co",
+      "sb_publishable_0therProjectKey",
+    ]) {
+      writeFileSync(chunk, `const u="${inlined}";`);
+      assert.throws(() => assertBuildIsCopy(env, dir), /client bundle names hosted settings/);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("hosted markers are found, the local key is not", () => {
+  assert.deepEqual(hostedMarkersIn("x sb_publishable_local y", "sb_publishable_local"), []);
+  assert.deepEqual(hostedMarkersIn("https://abcdefghijklmnopqrst.supabase.co/rest", "k"), [
+    "abcdefghijklmnopqrst.supabase.co",
+  ]);
 });

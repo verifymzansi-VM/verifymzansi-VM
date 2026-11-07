@@ -72,7 +72,18 @@ public and a fingerprint equal to `fingerprint.json`. It then adds
 the sign-up hook is switched on) and seeds the test people and posts from
 `e2e/foundation/fixture/` through the real local Auth, the mail catcher and the
 production API commands. Every entry point refuses any database address that is
-not this local stack. `reset` rebuilds the copy and `down` deletes it.
+not this local stack. `reset` rebuilds the copy; `down` deletes the stack, its
+data and the files the copy wrote (`tmp/foundation-e2e/state.json`, the fake SMS
+sink, `public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
+
+The website environment blanks every key named in the root `.env*` files, so
+Next cannot refill real settings from them; `build` stamps `.next` with a hash
+of the copy's public and foundation settings, and `serve` refuses a build
+without a matching stamp or whose client bundle names a hosted project.
+Exposure: the pinned Supabase CLI cannot bind ports to 127.0.0.1 only, so while
+the copy runs, Docker publishes its database (55452, local default password),
+gateway (55443) and mail catcher (55454) on all interfaces. Run it only on a
+trusted network or behind the machine's firewall, and stop it with `down`.
 
 ## Retired source schema and first administrator
 
