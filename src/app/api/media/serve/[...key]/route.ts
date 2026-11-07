@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { S3Client, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { createLogger } from "@/lib/utils/logger";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
+import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
 
 const logger = createLogger("MediaServe");
 
@@ -350,7 +351,11 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
   // uploadToR2 writes to the local filesystem in stub mode, but this route
   // otherwise falls through to the S3 API with fake credentials — producing
   // TLS handshake errors and test timeouts. Serve the local file directly.
-  if (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") {
+  // The local foundation test copy (M0.7) stores its media the same way.
+  if (
+    (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") ||
+    isPlaywrightFoundationCopy()
+  ) {
     try {
       const fs = await import("node:fs/promises");
       const path = await import("node:path");

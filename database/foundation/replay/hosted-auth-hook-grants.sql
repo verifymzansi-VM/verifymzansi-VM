@@ -1,0 +1,11 @@
+-- Replay only: applied by the local foundation browser test copy (M0.7) after
+-- its stack starts. Never apply this to a hosted project.
+--
+-- Production runs internal.acceptance_signup_guard as the Auth "Before user
+-- created" hook. When that hook is switched on in the hosted dashboard,
+-- Supabase grants the Auth service role usage on the function's schema; the
+-- production catalogue shows this grant on schema internal, but no repository
+-- file creates it (update 20261103154538_owner_signup_access.sql grants only
+-- execute on the function and usage on private). Without it local Auth fails
+-- every sign-up with "permission denied for schema internal".
+grant usage on schema internal to supabase_auth_admin;

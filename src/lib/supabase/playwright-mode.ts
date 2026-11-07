@@ -29,6 +29,23 @@ export function isPlaywrightTestMode(): boolean {
   );
 }
 
+/**
+ * The private local foundation test copy (roadmap M0.7): browser test mode on
+ * a server whose foundation connection is the local stack. Server only. Off in
+ * production: ENVIRONMENT=production switches test mode off, and the local
+ * project marker is accepted only with a 127.0.0.1 connection
+ * (src/lib/foundation/connection.ts), never with the London project.
+ */
+export function isPlaywrightFoundationCopy(): boolean {
+  if (typeof window !== "undefined" || process.env.ENVIRONMENT === "production") return false;
+  return (
+    isPlaywrightTestMode() &&
+    process.env.NEXT_PUBLIC_DATA_BACKEND === "foundation" &&
+    process.env.FOUNDATION_PROJECT_REF === "local-foundation" &&
+    /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(process.env.FOUNDATION_SUPABASE_URL ?? "")
+  );
+}
+
 export function isPlaywrightSupabaseStubMode(): boolean {
   if (typeof window !== "undefined") {
     return process.env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE === "stub" && isPlaywrightTestMode();

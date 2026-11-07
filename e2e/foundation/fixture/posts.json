@@ -1,0 +1,40 @@
+{
+  "$comment": "Synthetic showroom posts seeded into the local foundation test copy (M0.7). Owned by verifiedMember (the verified intro trial funds one business post; events are free), published through the real submit, queue claim and moderation commands. Titles start with 'Fixture' so specs can find them.",
+  "posts": [
+    {
+      "key": "workshop",
+      "kind": "business",
+      "area": "business",
+      "categoryKey": "automotive_services",
+      "title": "Fixture Mzansi Motor Workshop",
+      "description": "Synthetic local workshop used by the foundation browser tests.",
+      "provinceId": "gp",
+      "cityId": "gp_johannesburg",
+      "colour": "#0b6e4f"
+    },
+    {
+      "key": "market",
+      "kind": "event",
+      "area": "tourism_events",
+      "categoryKey": "events",
+      "title": "Fixture Soweto Craft Market",
+      "description": "Synthetic local craft market used by the foundation browser tests.",
+      "provinceId": "gp",
+      "cityId": "gp_johannesburg",
+      "colour": "#c9a227",
+      "durationDays": 14
+    },
+    {
+      "key": "festival",
+      "kind": "event",
+      "area": "tourism_events",
+      "categoryKey": "events",
+      "title": "Fixture Jozi Food Festival",
+      "description": "Synthetic local event used by the foundation browser tests.",
+      "provinceId": "gp",
+      "cityId": "gp_johannesburg",
+      "colour": "#1d3557",
+      "durationDays": 30
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createLogger } from "@/lib/utils/logger";
 import { maskPhone } from "@/lib/utils/mask";
+import { recordTestSms } from "./sms-test-sink";
 
 const log = createLogger("SMS");
 const AT_SENDER_ID_REGEX = /^[A-Za-z0-9]{1,12}$/;
@@ -130,6 +131,8 @@ export async function sendSms(
   if ((process.env.NODE_ENV === "development" && process.env.SMS_MOCK === "true") || isE2eRuntime) {
     const rawTo = Array.isArray(params.to) ? params.to[0] : params.to;
     log.info("Mock SMS sent", { to: maskPhone(rawTo) });
+    // Local foundation test copy only (no-op elsewhere): keep the message for the test.
+    await recordTestSms(rawTo, params.message);
     return {
       success: true,
       messageId: "mock-" + Date.now(),
