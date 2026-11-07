@@ -5,6 +5,7 @@
 // It never contacts Cloudflare and needs no credentials.
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -15,12 +16,14 @@ import {
 
 const outdir = mkdtempSync(path.join(tmpdir(), "vm-worker-size-"));
 try {
+  // Run Wrangler's own entry point with this Node binary: no shell involved.
+  const wranglerPackage = createRequire(import.meta.url).resolve("wrangler/package.json");
+  const wrangler = path.join(path.dirname(wranglerPackage), "bin", "wrangler.js");
   const result = spawnSync(
-    "pnpm",
-    ["exec", "wrangler", "deploy", "--dry-run", "--env", "production", "--outdir", outdir],
+    process.execPath,
+    [wrangler, "deploy", "--dry-run", "--env", "production", "--outdir", outdir],
     {
       encoding: "utf8",
-      shell: process.platform === "win32",
       env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_SEND_ERROR_REPORTS: "false" },
       maxBuffer: 64 * 1024 * 1024,
     }
