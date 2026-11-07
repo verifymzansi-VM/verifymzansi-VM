@@ -64,6 +64,32 @@ describe("proxy — immutable posting terms versions", () => {
   });
 });
 
+describe("proxy — display-only sample posts", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(["/sample/not-a-sample", "/sample", "/sample/", "/sample/a/b", "/sample/..%2Fadmin"])(
+    "answers unknown sample paths with a real 404 before streaming or Auth: %s",
+    async (path) => {
+      vi.stubEnv("SAMPLE_POSTS_ENABLED", "true");
+      const response = await routeRequest(createMockRequest(path));
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe("Not found");
+      expect(mockGetUser).not.toHaveBeenCalled();
+    }
+  );
+
+  it("hides every sample while the switch is off", async () => {
+    vi.stubEnv("SAMPLE_POSTS_ENABLED", "");
+    expect((await routeRequest(createMockRequest("/sample/any-sample"))).status).toBe(404);
+  });
+
+  it("leaves unrelated paths alone", async () => {
+    const response = await routeRequest(createMockRequest("/samples-and-more"));
+    expect(response.status).not.toBe(404);
+  });
+});
+
 describe("proxy — missing Supabase env", () => {
   const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

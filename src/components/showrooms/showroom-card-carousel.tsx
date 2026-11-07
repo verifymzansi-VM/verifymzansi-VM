@@ -48,6 +48,8 @@ export interface CarouselItem {
   mediaWidth?: number | null;
   mediaHeight?: number | null;
   fallbackMediaUrl?: string | null;
+  /** Display-only sample post: labelled, never counted as a post view or appearance. */
+  sample?: boolean;
 }
 
 export interface ShowroomCardCarouselProps {
@@ -720,7 +722,8 @@ export function ShowroomCardCarousel({
   /* ── Viewable showroom appearances ─────────────────────── */
 
   const frontItem = count > 0 ? carouselItems[normalizedActiveIndex] : undefined;
-  const frontTable = frontItem ? SHOWROOM_TABLES[frontItem.type] : undefined;
+  // Samples are not database posts: their appearances are never reported.
+  const frontTable = frontItem && !frontItem.sample ? SHOWROOM_TABLES[frontItem.type] : undefined;
   const frontId = frontItem?.id;
   useEffect(() => {
     if (!frontId || !frontTable || !isHalfVisible) return;
@@ -1015,8 +1018,9 @@ export function ShowroomCardCarousel({
               >
                 <PosterCardShell
                   href={item.href}
-                  viewTarget={{ type: item.type, id: item.id }}
-                  viewSurface={surface}
+                  viewTarget={item.sample ? undefined : { type: item.type, id: item.id }}
+                  viewSurface={item.sample ? undefined : surface}
+                  sample={item.sample}
                   title={item.title}
                   location={item.location}
                   mediaUrl={cardMediaUrl}
