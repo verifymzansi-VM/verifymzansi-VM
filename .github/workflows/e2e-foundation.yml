@@ -13,6 +13,8 @@ name: E2E foundation
 # pull request but does not block merging. It becomes required after five
 # green days in a row (the nightly run counts them).
 on:
+  push: # TEMPORARY: trial run before the pull request; removed before review
+    branches: [slice/M0-7-foundation-test-copy]
   pull_request:
     branches: [main]
   schedule:
