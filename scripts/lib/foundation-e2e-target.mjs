@@ -29,6 +29,17 @@ export const E2E_DB_CONTAINER = `supabase_db_${E2E_FIXTURE.projectId}`;
 /** Synthetic secret for the website's email job route (/api/webhooks/ops-jobs);
  * it exists only in the copy, where the browser tests run the job. */
 export const LOCAL_OPS_JOBS_SECRET = "local-fixture-ops-jobs-secret-0123456789";
+/** Synthetic keys for the website's phone-code and ID-number protection
+ * (64 hex characters with enough distinct digits, as the website requires).
+ * They exist only in the copy; nothing they protect leaves this machine. */
+export const LOCAL_PHONE_OTP_KEY =
+  "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"; // secret-scan: allow synthetic local-only fixture key
+export const LOCAL_ID_ENCRYPTION_KEY =
+  "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"; // secret-scan: allow synthetic local-only fixture key
+/** Files the website writes in the copy (git-ignored, reset on `up`): the SMS
+ * it would have sent, and every request it tried to send off this machine. */
+export const TEST_SMS_SINK_FILE = "tmp/foundation-e2e/sms-sink.jsonl";
+export const OUTBOUND_LOG_FILE = "tmp/foundation-e2e/outbound.jsonl";
 
 /** Hosted projects this copy must never reach (production, the retired source
  * project and the other known hosted refs from src/lib/foundation/connection.ts). */

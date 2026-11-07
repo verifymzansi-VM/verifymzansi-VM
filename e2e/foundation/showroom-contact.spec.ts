@@ -90,7 +90,9 @@ async function guardAndCapture(context: BrowserContext) {
 async function openPostFromShowroom(page: Page, post: { id: string; title: string }) {
   await page.goto("/");
   const showroom = page.locator("section", { has: page.locator("#home-showroom-title") });
-  await expect(showroom.getByRole("link", { name: `Open ${post.title}` })).toBeAttached();
+  // Attached, not necessarily exposed: with four cards the one opposite the
+  // front is hidden (opacity 0) until the carousel turns towards it.
+  await expect(showroom.locator(`a[aria-label="Open ${post.title}"]`)).toBeAttached();
   const slides = showroom.getByRole("group", { name: /^\d+ of \d+$/ });
   const count = await slides.count();
   const front = showroom.locator('[data-showroom-layer="active"] a[data-carousel-link="true"]');

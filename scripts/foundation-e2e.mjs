@@ -9,7 +9,8 @@
 //   build   `up`, then build the website for the copy
 //   serve   `up`, build (unless PLAYWRIGHT_SKIP_BUILD=1), start the local rate
 //           limiter stub, the local email relay to the mail catcher and the
-//           website on http://127.0.0.1:3110 (the Playwright web server command)
+//           website on http://127.0.0.1:3110 (the Playwright web server command),
+//           with a fence that keeps the website's own requests on this machine
 //   down    stop and delete the stack and its data
 //
 // It takes no connection settings: every address comes from the local CLI
@@ -17,6 +18,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   applyHostedHookGrants,
   isRunning,
@@ -32,7 +34,11 @@ import {
 import { seedTestCopy } from "./lib/foundation-e2e-seed.mjs";
 import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
 import { startLocalMailRelay } from "./lib/foundation-e2e-mail-relay.mjs";
-import { E2E_FIXTURE } from "./lib/foundation-e2e-target.mjs";
+import {
+  E2E_FIXTURE,
+  OUTBOUND_LOG_FILE,
+  TEST_SMS_SINK_FILE,
+} from "./lib/foundation-e2e-target.mjs";
 import {
   LOCAL_LIMITER_KEY,
   LOCAL_MAIL_RELAY_KEY,
@@ -57,9 +63,9 @@ function readState(fixture, status) {
 }
 
 /** Files the copy writes outside the stack (all git-ignored). */
-const SMS_SINK = "tmp/foundation-e2e/sms-sink.jsonl";
+const RUN_FILES = [TEST_SMS_SINK_FILE, OUTBOUND_LOG_FILE];
 function removeLocalArtifacts(root) {
-  for (const file of [E2E_FIXTURE.stateFile, SMS_SINK])
+  for (const file of [E2E_FIXTURE.stateFile, ...RUN_FILES])
     rmSync(path.join(root, file), { force: true });
   for (const directory of ["public/e2e-media", "tmp/e2e-private-storage"]) {
     const full = path.join(root, directory);
@@ -71,8 +77,8 @@ function removeLocalArtifacts(root) {
 
 async function up(fixture) {
   const started = Date.now();
-  // Specs must never read a code from an earlier run.
-  rmSync(path.join(fixture.root, SMS_SINK), { force: true });
+  // Specs must never read a code or a request from an earlier run.
+  for (const file of RUN_FILES) rmSync(path.join(fixture.root, file), { force: true });
   if (isRunning(fixture)) {
     verifyWorkspace(fixture);
     log("Stack already running; reusing it.");
@@ -143,6 +149,15 @@ async function serve(env) {
     mailOrigin: `http://127.0.0.1:${E2E_FIXTURE.mailPort}`,
   });
   log(`Local email relay to the mail catcher listening on 127.0.0.1:${E2E_FIXTURE.mailRelayPort}.`);
+  // The website's own server process (only this one) gets the outbound fence:
+  // loopback requests pass, everything else is refused and recorded.
+  const fence = pathToFileURL(
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "lib",
+      "foundation-e2e-outbound-preload.mjs"
+    )
+  ).href;
   const server = spawn(
     process.execPath,
     [
@@ -153,7 +168,11 @@ async function serve(env) {
       "--port",
       String(E2E_FIXTURE.appPort),
     ],
-    { env, stdio: "inherit", windowsHide: true }
+    {
+      env: { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS ?? ""} --import=${fence}`.trim() },
+      stdio: "inherit",
+      windowsHide: true,
+    }
   );
   const stop = (signal) => !server.killed && server.kill(signal);
   process.on("SIGINT", stop);
