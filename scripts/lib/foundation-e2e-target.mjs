@@ -14,6 +14,8 @@ export const E2E_FIXTURE = Object.freeze({
   mailPort: 55454,
   /** The local rate limiter stub that `serve` runs (scripts/lib/foundation-e2e-limiter.mjs). */
   limiterPort: 55456,
+  /** The local email relay that `serve` runs (scripts/lib/foundation-e2e-mail-relay.mjs). */
+  mailRelayPort: 55451,
   /** Mock payment page (HTTPS, served by the browser tests themselves; nothing listens). */
   mockPaymentPort: 55455,
   appPort: 3110,
@@ -24,6 +26,9 @@ export const E2E_FIXTURE = Object.freeze({
     "realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
 });
 export const E2E_DB_CONTAINER = `supabase_db_${E2E_FIXTURE.projectId}`;
+/** Synthetic secret for the website's email job route (/api/webhooks/ops-jobs);
+ * it exists only in the copy, where the browser tests run the job. */
+export const LOCAL_OPS_JOBS_SECRET = "local-fixture-ops-jobs-secret-0123456789";
 
 /** Hosted projects this copy must never reach (production, the retired source
  * project and the other known hosted refs from src/lib/foundation/connection.ts). */

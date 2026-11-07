@@ -79,11 +79,17 @@ sink, `public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
 The website environment blanks every key named in the root `.env*` files, so
 Next cannot refill real settings from them; `build` stamps `.next` with a hash
 of the copy's public and foundation settings, and `serve` refuses a build
-without a matching stamp or whose client bundle names a hosted project.
-Exposure: the pinned Supabase CLI cannot bind ports to 127.0.0.1 only, so while
-the copy runs, Docker publishes its database (55452, local default password),
-gateway (55443) and mail catcher (55454) on all interfaces. Run it only on a
-trusted network or behind the machine's firewall, and stop it with `down`.
+without a matching stamp or whose client bundle names a hosted project. `serve`
+also starts two loopback stand-ins: a rate limiter that allows every well-formed
+request (55456) and an email relay (55451). The copy points the email provider's
+SDK at the relay (`RESEND_BASE_URL`, set only in the copy), so the website's own
+emails, such as the email job's seller notices, land in the mail catcher; the
+relay accepts only `.test` recipients and never contacts the provider. The email
+job route runs with a synthetic local secret. Exposure: the pinned Supabase CLI
+cannot bind ports to 127.0.0.1 only, so while the copy runs, Docker publishes
+its database (55452, local default password), gateway (55443) and mail catcher
+(55454) on all interfaces. Run it only on a trusted network or behind the
+machine's firewall, and stop it with `down`.
 
 ## Retired source schema and first administrator
 

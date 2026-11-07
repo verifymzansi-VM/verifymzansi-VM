@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   E2E_FIXTURE,
   HOSTED_PROJECT_REFS,
+  LOCAL_OPS_JOBS_SECRET,
   assertLocalFoundationTarget,
   assertLoopbackUrl,
   localDockerContext,
@@ -14,6 +15,8 @@ import {
   E2E_APP_URL,
   LOCAL_LIMITER_KEY,
   LOCAL_LIMITER_URL,
+  LOCAL_MAIL_RELAY_KEY,
+  LOCAL_MAIL_RELAY_URL,
   LOCAL_OZOW_SITE_CODE,
   assertBuildIsCopy,
   envFileKeyNames,
@@ -22,6 +25,11 @@ import {
   writeBuildStamp,
 } from "./lib/foundation-e2e-website.mjs";
 import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
+import {
+  IDEMPOTENCY_HEADER,
+  startLocalMailRelay,
+  toMailCatcherMessage,
+} from "./lib/foundation-e2e-mail-relay.mjs";
 import { TEST_COPY_CHECKOUT, testCopyCheckout } from "../src/lib/payments/checkout-origins.ts";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -254,7 +262,12 @@ const HOSTILE = {
     "SUPABASE_URL=https://gntzjtuncsyefujajmjy.supabase.co",
     "PLAYWRIGHT_E2E_AUTH=1",
   ],
-  ".env": ["RESEND_API_KEY=re_hostile", "SENTRY_DSN=https://hostile@example.invalid/1"],
+  ".env": [
+    "RESEND_API_KEY=re_hostile",
+    "RESEND_BASE_URL=https://mail.example.invalid",
+    "OPS_JOBS_SECRET=hostile-ops-jobs-secret-0123456789abcdef",
+    "SENTRY_DSN=https://hostile@example.invalid/1",
+  ],
 };
 
 test("no value from .env files reaches the website, as Next loads them", () => {
@@ -306,6 +319,9 @@ test("no value from .env files reaches the website, as Next loads them", () => {
     assert.equal(loaded.RATE_LIMITER_API_KEY, LOCAL_LIMITER_KEY);
     assert.equal(loaded.OZOW_CLIENT_SECRET, "");
     assert.equal(loaded.PLAYWRIGHT_E2E_AUTH, "");
+    assert.equal(loaded.RESEND_BASE_URL, LOCAL_MAIL_RELAY_URL);
+    assert.equal(loaded.RESEND_API_KEY, LOCAL_MAIL_RELAY_KEY);
+    assert.equal(loaded.OPS_JOBS_SECRET, LOCAL_OPS_JOBS_SECRET);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -474,6 +490,7 @@ test("the copy's website settings switch on test checkout at exactly the copy's 
     E2E_FIXTURE.appPort,
     E2E_FIXTURE.limiterPort,
     E2E_FIXTURE.mockPaymentPort,
+    E2E_FIXTURE.mailRelayPort,
   ];
   assert.equal(new Set(ports).size, ports.length);
   assert.equal(LOCAL_LIMITER_URL, `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/check`);
@@ -510,6 +527,156 @@ test("the local limiter stub allows well-formed requests on loopback only", asyn
     await new Promise((resolve) => server.close(resolve));
   }
   assert.throws(() => startLocalLimiter({ port: 1, apiKey: "short" }), /Invalid limiter key/);
+});
+
+test("the copy's website emails go to the local relay, never the provider", () => {
+  const saved = { ...process.env };
+  try {
+    // A caller's own provider address and keys are replaced, not forwarded.
+    process.env.RESEND_BASE_URL = "https://api.resend.com";
+    process.env.Resend_Api_Key = "re_caller_key";
+    process.env.OPS_JOBS_SECRET = "caller-ops-jobs-secret-0123456789abcdef";
+    const env = foundationWebsiteEnv(LOCAL_STATUS, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
+    assert.equal(env.RESEND_BASE_URL, `http://127.0.0.1:${E2E_FIXTURE.mailRelayPort}`);
+    assert.equal(env.RESEND_API_KEY, LOCAL_MAIL_RELAY_KEY);
+    assert.equal(env.Resend_Api_Key, undefined);
+    assert.equal(env.OPS_JOBS_SECRET, LOCAL_OPS_JOBS_SECRET);
+    // The website's job route refuses secrets shorter than 32 characters.
+    assert.ok(LOCAL_OPS_JOBS_SECRET.length >= 32);
+    // The website's env schema: the provider key must look like one.
+    assert.match(LOCAL_MAIL_RELAY_KEY, /^re_/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the relay translates provider requests and keeps mail on the reserved .test domain", () => {
+  const key = "foundation-outbox/0b4a9d2e-0000-4000-8000-000000000001";
+  const ok = toMailCatcherMessage(
+    {
+      from: "VerifyMzansi <noreply@verifymzansi.com>",
+      to: "seller@verifymzansi.test",
+      reply_to: "support@verifymzansi.com",
+      subject: "New enquiry",
+      html: "<p>Hi</p>",
+      text: "Hi",
+    },
+    key
+  );
+  assert.deepEqual(ok, {
+    ok: true,
+    message: {
+      From: { Email: "noreply@verifymzansi.com", Name: "VerifyMzansi" },
+      To: [{ Email: "seller@verifymzansi.test" }],
+      ReplyTo: [{ Email: "support@verifymzansi.com" }],
+      Subject: "New enquiry",
+      Text: "Hi",
+      HTML: "<p>Hi</p>",
+      Headers: { [IDEMPOTENCY_HEADER]: key },
+    },
+  });
+  const base = { from: "noreply@verifymzansi.com", to: "a@verifymzansi.test", subject: "S" };
+  const attempt = (body, idempotencyKey) =>
+    toMailCatcherMessage({ ...base, ...body }, idempotencyKey);
+  assert.deepEqual(attempt({ to: "someone@gmail.com" }), {
+    ok: false,
+    reason: "recipient outside the copy",
+  });
+  assert.equal(attempt({ to: ["a@verifymzansi.test", "b@example.com"] }).ok, false);
+  assert.equal(attempt({ to: "a@verifymzansi.test.example.com" }).ok, false);
+  assert.equal(attempt({ to: [] }).ok, false);
+  assert.equal(attempt({ from: "not an address" }).ok, false);
+  assert.equal(attempt({ bcc: "x@verifymzansi.test" }).ok, false);
+  assert.equal(attempt({ subject: "" }).ok, false);
+  assert.equal(attempt({ html: 5 }).ok, false);
+  assert.equal(attempt({}, "bad key, X-Injected: 1").ok, false);
+  assert.equal(toMailCatcherMessage(null).ok, false);
+});
+
+test("the local relay answers like the provider and hands mail only to the local catcher", async () => {
+  assert.throws(
+    () =>
+      startLocalMailRelay({
+        port: 0,
+        apiKey: LOCAL_MAIL_RELAY_KEY,
+        mailOrigin: "https://mail.example.com",
+      }),
+    refused
+  );
+  assert.throws(
+    () => startLocalMailRelay({ port: 0, apiKey: "short", mailOrigin: "http://127.0.0.1:1" }),
+    /Invalid relay key/
+  );
+  const sent = [];
+  let catcherStatus = 200;
+  const server = await startLocalMailRelay({
+    port: 0,
+    apiKey: LOCAL_MAIL_RELAY_KEY,
+    mailOrigin: `http://127.0.0.1:${E2E_FIXTURE.mailPort}`,
+    fetchImpl: async (url, init) => {
+      sent.push({ url: String(url), body: JSON.parse(init.body) });
+      return new Response(JSON.stringify(catcherStatus === 200 ? { ID: "abc12345XYZ" } : {}), {
+        status: catcherStatus,
+      });
+    },
+  });
+  try {
+    const address = server.address();
+    assert.equal(address.address, "127.0.0.1");
+    const call = (pathname, init = {}) =>
+      fetch(`http://127.0.0.1:${address.port}${pathname}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOCAL_MAIL_RELAY_KEY}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": "foundation-outbox/1",
+        },
+        body: JSON.stringify({
+          from: "VerifyMzansi <noreply@verifymzansi.com>",
+          to: "seller@verifymzansi.test",
+          subject: "New enquiry",
+          text: "Hi",
+        }),
+        ...init,
+      });
+    const accepted = await call("/emails");
+    assert.equal(accepted.status, 200);
+    assert.deepEqual(await accepted.json(), { id: "abc12345XYZ" });
+    assert.deepEqual(sent, [
+      {
+        url: `http://127.0.0.1:${E2E_FIXTURE.mailPort}/api/v1/send`,
+        body: {
+          From: { Email: "noreply@verifymzansi.com", Name: "VerifyMzansi" },
+          To: [{ Email: "seller@verifymzansi.test" }],
+          Subject: "New enquiry",
+          Text: "Hi",
+          Headers: { [IDEMPOTENCY_HEADER]: "foundation-outbox/1" },
+        },
+      },
+    ]);
+    const wrongKey = await call("/emails", {
+      headers: { Authorization: "Bearer re_wrong", "Content-Type": "application/json" },
+    });
+    assert.equal(wrongKey.status, 401);
+    assert.equal((await call("/emails/batch")).status, 404);
+    assert.equal((await call("/emails", { method: "GET", body: undefined })).status, 405);
+    assert.equal((await call("/emails", { body: "{" })).status, 422);
+    const outside = await call("/emails", {
+      body: JSON.stringify({ from: "a@verifymzansi.com", to: "x@gmail.com", subject: "S" }),
+    });
+    assert.equal(outside.status, 422);
+    catcherStatus = 500;
+    const failed = await call("/emails");
+    assert.equal(failed.status, 502);
+    assert.equal((await failed.json()).name, "application_error");
+    // Refused requests never reached the catcher; the failed one did.
+    assert.equal(sent.length, 2);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("hosted markers are found, the local key is not", () => {

@@ -272,7 +272,7 @@ async function publishPost({ api, root, owner, moderator, spec }) {
   const detail =
     spec.kind === "event"
       ? {
-          contact_channels: ["form"],
+          contact_channels: spec.contactChannels ?? ["form"],
           starts_at: new Date(Date.now() - 60_000).toISOString(),
           ends_at: new Date(Date.now() + spec.durationDays * 86_400_000).toISOString(),
           timezone: "Africa/Johannesburg",
