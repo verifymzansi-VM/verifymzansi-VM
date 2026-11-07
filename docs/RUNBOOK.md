@@ -547,23 +547,49 @@ pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
 ### Rollback on Failure
 
-The GitHub Actions deploy workflow runs on `ubuntu-latest`, deploys the main
-OpenNext worker plus auxiliary workers, then checks `${APP_URL}/api/health` and
-public/auth pages. If production fails after deploy, use manual rollback from a
-Linux, macOS, or WSL environment:
+The Deploy workflow does **not** roll back automatically. Rolling back only the
+main Worker left production half old and half new twice in October 2026, once on
+a build made for the retired backend. When any production step fails after the
+deploy has started (helper Worker deploys, the health check), the step "Stop for
+manual rollback" fails the run with the error "Manual rollback needed". The site
+keeps whatever versions are live until a person acts.
 
-```bash
-# Inspect recent worker versions
-pnpm exec wrangler versions list
+### Manual rollback (all Workers)
 
-# Roll back the main OpenNext worker to the previous stable version
-pnpm exec wrangler rollback
-```
+Roll every Worker back to the same last good release, never only the main one.
+`wrangler rollback` needs no build, so it also works from Windows.
 
-Select a rollback version whose compiled Supabase project and API contracts
-match the current database. A Worker rollback does not roll back database
-migrations. Versions compiled against the deleted Supabase project cannot serve
-as a working recovery target for the foundation release.
+1. **Pick the last good commit.** Actions → Deploy: the newest successful run
+   before the failed one. Its commit SHA is the target (each Worker version is
+   tagged with the SHA it was built from).
+2. **Check it is a foundation build.**
+   `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` must print
+   `foundation`. Never roll back to a build made for the retired source backend.
+3. **Check the database.** A Worker rollback does not undo database updates. If
+   the failed release came with a database update, the older code must still
+   work with it (updates are additive; see
+   [AGENTS.md](../AGENTS.md#database-changes)). If unsure, stop and ask.
+4. **Roll back each Worker** to its version tagged with that SHA. For each row
+   below, list versions, find the version whose tag is the target SHA, then roll
+   back to that version ID:
+
+   | Worker                   | List versions                                                               | Roll back                                                                                                                |
+   | ------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+   | `verifymzansi` (website) | `pnpm exec wrangler versions list --env production`                         | `pnpm exec wrangler rollback <version-id> --env production --message "Manual rollback to <sha>"`                         |
+   | site monitor             | `pnpm exec wrangler versions list --config wrangler.site-monitor.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.site-monitor.toml --message "Manual rollback to <sha>"`      |
+   | rate limiter             | `pnpm exec wrangler versions list --config wrangler.rate-limiter.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.rate-limiter.toml --message "Manual rollback to <sha>"`      |
+   | retention clean-up       | `pnpm exec wrangler versions list --config wrangler.retention-cleanup.toml` | `pnpm exec wrangler rollback <version-id> --config wrangler.retention-cleanup.toml --message "Manual rollback to <sha>"` |
+   | payment clean-up         | `pnpm exec wrangler versions list --config wrangler.payment-cleanup.toml`   | `pnpm exec wrangler rollback <version-id> --config wrangler.payment-cleanup.toml --message "Manual rollback to <sha>"`   |
+   | operations jobs          | `pnpm exec wrangler versions list --config wrangler.ops-jobs.toml`          | `pnpm exec wrangler rollback <version-id> --config wrangler.ops-jobs.toml --message "Manual rollback to <sha>"`          |
+
+   A Worker the failed run never reached is already on the target version; skip
+   it.
+
+5. **Confirm.** `pnpm exec wrangler deployments list --env production` (and
+   `--config <file>` for each helper) shows the target versions; `/api/health`
+   answers `ok`; the site monitor is green.
+6. **Revert the bad pull request** on GitHub so the next merge does not redeploy
+   it.
 
 ### Worker Deployment
 

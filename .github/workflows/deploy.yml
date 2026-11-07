@@ -225,6 +225,7 @@ jobs:
           test "$(git rev-parse origin/main)" = "$DEPLOY_TARGET_SHA"
 
       - name: Deploy authenticated service monitor
+        id: deploy-monitor
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -281,14 +282,14 @@ jobs:
           pnpm exec tsx scripts/check-deployment-health.ts
           pnpm run backend:verify:live
 
-      - name: Rollback main worker on health check failure
-        if: failure() && steps.health-check.outcome == 'failure'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # No automatic rollback: rolling back only the main Worker left production
+      # half old and half new, and could pick a build for the retired backend.
+      # Stop loudly instead; a person follows the runbook's all-Worker rollback.
+      - name: Stop for manual rollback
+        if: failure() && steps.deploy-monitor.outcome != 'skipped'
         run: |
-          echo "::warning::Health check failed — rolling back main worker to previous deployment"
-          pnpm exec wrangler rollback --env production --message "Auto-rollback: health check failed" || echo "::error::Rollback failed — manual intervention required"
+          echo "::error title=Manual rollback needed::A production change failed after the deploy started. Nothing was rolled back automatically. Follow docs/RUNBOOK.md, section 'Manual rollback (all Workers)', to return every Worker to the last good release."
+          exit 1
 
       - name: Install Chromium for post-deploy verification
         uses: ./.github/actions/install-browsers

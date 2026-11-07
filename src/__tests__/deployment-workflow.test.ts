@@ -53,6 +53,26 @@ describe("production deployment wiring", () => {
         ).run
       ).toContain("--secrets-file");
   });
+  it("never rolls back part of production automatically and stops for a person instead", () => {
+    const steps = workflow.jobs.deploy.steps as {
+      id?: string;
+      name?: string;
+      if?: string;
+      run?: string;
+    }[];
+    for (const step of steps) expect(step.run ?? "").not.toMatch(/wrangler\s+rollback/);
+    const firstChange = steps.findIndex((step) => step.id === "deploy-monitor");
+    const app = steps.findIndex((step) => step.name === "Deploy to Cloudflare");
+    expect(firstChange).toBeGreaterThanOrEqual(0);
+    expect(firstChange).toBeLessThan(app);
+    const stop = steps.findIndex((step) => step.name === "Stop for manual rollback");
+    expect(stop).toBeGreaterThan(steps.findIndex((step) => step.id === "health-check"));
+    expect(steps[stop].if).toBe("failure() && steps.deploy-monitor.outcome != 'skipped'");
+    expect(steps[stop].run).toContain("Manual rollback needed");
+    expect(steps[stop].run).toContain("docs/RUNBOOK.md");
+    expect(steps[stop].run).toMatch(/exit 1\s*$/);
+    expect(readFileSync("docs/RUNBOOK.md", "utf8")).toContain("### Manual rollback (all Workers)");
+  });
 });
 
 describe("CI browser installation", () => {
