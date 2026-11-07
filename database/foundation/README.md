@@ -59,6 +59,21 @@ are compared with `lint-baseline.json`: errors fail unless listed in
 and fixed entries must be removed, so the baseline only shrinks
 (`pnpm db:foundation:lint -- --write-baseline`).
 
+## Browser test copy (CI job `e2e-foundation`)
+
+`playwright.foundation.config.ts` runs the restored website in foundation mode
+against a private, throwaway local Supabase stack (CLI project
+`vm-foundation-e2e`, API `127.0.0.1:55443`, workspace `tmp/foundation-e2e`).
+`node --import tsx scripts/foundation-e2e.mjs up` copies the same replay
+(without the platform prelude, which the real stack provides) byte for byte into
+the workspace's migrations folder, starts the stack, and proves zero tables in
+public and a fingerprint equal to `fingerprint.json`. It then adds
+`replay/hosted-auth-hook-grants.sql` (a grant the hosted dashboard makes when
+the sign-up hook is switched on) and seeds the test people and posts from
+`e2e/foundation/fixture/` through the real local Auth, the mail catcher and the
+production API commands. Every entry point refuses any database address that is
+not this local stack. `reset` rebuilds the copy and `down` deletes it.
+
 ## Retired source schema and first administrator
 
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
