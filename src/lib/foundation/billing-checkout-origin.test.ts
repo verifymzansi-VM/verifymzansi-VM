@@ -19,6 +19,7 @@ vi.mock("../payments/ozow", () => ({
   getOzowPaymentRequestStatus: vi.fn(),
   isMockOzowEnabled: vi.fn(),
   listOzowPaymentTransactions: vi.fn(),
+  MOCK_OZOW_REQUEST_PREFIX: "mock-",
 }));
 
 type Env = Record<string, string | undefined>;
@@ -270,6 +271,8 @@ describe("in the local test copy", () => {
     (value) => new URL(value).origin !== COPY_ORIGIN
   ).concat([
     "http://127.0.0.1:3111",
+    "http://127.0.0.1:31100",
+    "http://127.0.0.1:311",
     "https://127.0.0.1:3110",
     "http://user@127.0.0.1:3110",
     "http://127.0.0.1:3110@evil.example",

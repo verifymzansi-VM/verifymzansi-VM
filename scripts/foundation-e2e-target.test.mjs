@@ -14,6 +14,7 @@ import {
   E2E_APP_URL,
   LOCAL_LIMITER_KEY,
   LOCAL_LIMITER_URL,
+  LOCAL_OZOW_SITE_CODE,
   assertBuildIsCopy,
   envFileKeyNames,
   foundationWebsiteEnv,
@@ -305,6 +306,106 @@ test("no value from .env files reaches the website, as Next loads them", () => {
     assert.equal(loaded.RATE_LIMITER_API_KEY, LOCAL_LIMITER_KEY);
     assert.equal(loaded.OZOW_CLIENT_SECRET, "");
     assert.equal(loaded.PLAYWRIGHT_E2E_AUTH, "");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("inherited settings in any letter case never reach the website (Windows reads names case-insensitively)", () => {
+  const saved = { ...process.env };
+  try {
+    Object.assign(process.env, {
+      Ozow_Client_Id: "caller-ozow-client",
+      ozow_client_secret: "caller-ozow-secret",
+      Ozow_Api_Base_Url: "https://proxy.example.invalid",
+      Ozow_Site_Code: "caller-site-code",
+      Ozow_Env: "production",
+      Ozow_Payment_Oauth_Scope: "caller-scope",
+      Supabase_Url: "https://gntzjtuncsyefujajmjy.supabase.co",
+      Foundation_Project_Ref: "gntzjtuncsyefujajmjy",
+      Kyc_Provider: "stub",
+      Environment: "production",
+    });
+    const env = foundationWebsiteEnv(LOCAL_STATUS, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
+    const spellings = (name) => Object.entries(env).filter(([key]) => key.toUpperCase() === name);
+    for (const name of [
+      "OZOW_CLIENT_ID",
+      "OZOW_CLIENT_SECRET",
+      "OZOW_PAYMENT_OAUTH_SCOPE",
+      "SUPABASE_URL",
+    ])
+      assert.deepEqual(spellings(name), [], name);
+    assert.deepEqual(spellings("OZOW_ENV"), [["OZOW_ENV", "staging"]]);
+    assert.deepEqual(spellings("OZOW_SITE_CODE"), [["OZOW_SITE_CODE", LOCAL_OZOW_SITE_CODE]]);
+    assert.deepEqual(spellings("OZOW_API_BASE_URL"), [
+      ["OZOW_API_BASE_URL", "https://stagingone.ozow.com"],
+    ]);
+    assert.deepEqual(spellings("FOUNDATION_PROJECT_REF"), [
+      ["FOUNDATION_PROJECT_REF", E2E_FIXTURE.projectRef],
+    ]);
+    assert.deepEqual(spellings("KYC_PROVIDER"), [["KYC_PROVIDER", "manual"]]);
+    assert.deepEqual(spellings("ENVIRONMENT"), [["ENVIRONMENT", "test"]]);
+    for (const value of Object.values(env))
+      assert.equal(/caller-|proxy\.example|gntzjtuncsyefujajmjy/.test(String(value)), false);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the target guard reads setting names in any letter case", () => {
+  for (const env of [
+    { Supabase_Url: "https://gntzjtuncsyefujajmjy.supabase.co" },
+    { next_public_supabase_url: "http://127.0.0.1:55441" },
+    { Foundation_Project_Ref: "gntzjtuncsyefujajmjy" },
+    { Database_Url: "postgresql://postgres@db.example.invalid:5432/postgres" },
+    { Environment: "production" },
+    { ENVIRONMENT: "Production" },
+  ])
+    assert.throws(() => assertLocalFoundationTarget({ apiUrl: API, env }), refused);
+});
+
+test(".env names spelled in another case are blanked or left to the copy's own value", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-env-case-"));
+  try {
+    writeFileSync(
+      path.join(dir, ".env.local"),
+      ["ozow_client_id=hostile-lower", "Ozow_Env=production", "node_env=development"]
+        .map((line) => `${line}${EOL}`)
+        .join("")
+    );
+    const saved = Object.fromEntries(
+      ["ozow_client_id", "Ozow_Env", "node_env"].map((name) => [name, process.env[name]])
+    );
+    let env;
+    try {
+      for (const name of Object.keys(saved)) delete process.env[name];
+      env = foundationWebsiteEnv(LOCAL_STATUS, { root: dir });
+    } finally {
+      for (const [name, value] of Object.entries(saved))
+        if (value !== undefined) process.env[name] = value;
+    }
+    assert.equal(env.ozow_client_id, "");
+    assert.equal(env.Ozow_Env, "");
+    assert.equal(env.OZOW_ENV, "staging");
+    assert.equal("node_env" in env, false);
+    const nextEnv = createRequire(import.meta.url).resolve("@next/env");
+    const probe = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `require(${JSON.stringify(nextEnv)}).loadEnvConfig(${JSON.stringify(dir)}, false, { info() {}, error() {} });` +
+          "process.stdout.write(JSON.stringify({ozow: process.env.OZOW_CLIENT_ID ?? null, env: process.env.OZOW_ENV, all: Object.values(process.env).join(' ')}));",
+      ],
+      { env: { ...env, NODE_ENV: "production" }, encoding: "utf8" }
+    );
+    assert.equal(probe.status, 0, probe.stderr);
+    const loaded = JSON.parse(probe.stdout);
+    assert.equal(/hostile/.test(loaded.all), false);
+    assert.equal(loaded.env, "staging");
+    assert.notEqual(loaded.ozow, "hostile-lower");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

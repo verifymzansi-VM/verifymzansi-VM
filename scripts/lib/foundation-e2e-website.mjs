@@ -18,14 +18,21 @@ export const E2E_APP_URL = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 /** Inherited settings that could point the website at another database,
  * switch on the retired stub's persona shortcuts, or carry real provider and
  * operations credentials the stub suite does not replace; always replaced or
- * removed (and blanked when an .env file names them). */
+ * removed (and blanked when an .env file names them). Every Ozow setting is
+ * dropped; the copy sets the few it needs. Case-insensitive: Windows treats
+ * names case-insensitively, so a parent's "Ozow_Client_Id" would reach the
+ * website as OZOW_CLIENT_ID. */
 const DROPPED = new RegExp(
   "^(SUPABASE_|NEXT_PUBLIC_SUPABASE_|FOUNDATION_|PLAYWRIGHT_SUPABASE_MODE$|" +
     "NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE$|PLAYWRIGHT_E2E_AUTH$|PLAYWRIGHT_E2E_AUTO_APPROVE$|" +
-    "DATABASE_URL$|POSTGRES_URL$|OZOW_CLIENT_|PAYFAST_|SENTRY_|NEXT_PUBLIC_SENTRY_|" +
+    "DATABASE_URL$|POSTGRES_URL$|OZOW_|PAYFAST_|SENTRY_|NEXT_PUBLIC_SENTRY_|" +
     "CLOUDFLARE_|KYC_WEBHOOK_SECRET$|INTERNAL_JOBS_SECRET$|OPS_JOBS_SECRET$|" +
-    "HEALTH_DIAGNOSTIC_TOKEN$|SITE_MONITOR_API_KEY$)"
+    "HEALTH_DIAGNOSTIC_TOKEN$|SITE_MONITOR_API_KEY$)",
+  "i"
 );
+
+/** Synthetic Ozow site code; exists only in the copy. */
+export const LOCAL_OZOW_SITE_CODE = "local-fixture-ozow-site";
 
 /**
  * Key NAMES (never values) defined in the root .env* files. `next build` and
@@ -54,16 +61,15 @@ export const LOCAL_LIMITER_URL = `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/ch
 /** Synthetic key the stub expects; it exists only in the copy. */
 export const LOCAL_LIMITER_KEY = "local-fixture-limiter-key";
 
-/** Keys Next itself manages; never blanked. */
+/** Keys Next itself manages, in any letter case; never blanked. */
 const NEXT_MANAGED = new Set(["NODE_ENV"]);
 
 export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
   // createDeterministicEnv() is the caller's environment plus the stub
   // suite's fixed test values; database and persona settings are dropped.
+  const inherited = createDeterministicEnv();
   const base = Object.fromEntries(
-    Object.entries(createDeterministicEnv()).filter(
-      ([key, value]) => value !== undefined && !DROPPED.test(key)
-    )
+    Object.entries(inherited).filter(([key, value]) => value !== undefined && !DROPPED.test(key))
   );
   const env = {
     ...base,
@@ -94,11 +100,26 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     OTP_RATE_LIMITER_URL: LOCAL_LIMITER_URL,
     OTP_RATE_LIMITER_TIMEOUT_MS: "500",
     RATE_LIMITER_API_KEY: LOCAL_LIMITER_KEY,
+    // Ozow: mock mode (the stub suite's ENABLE_MOCK_OZOW) against the test
+    // system, with synthetic values only. The base URL is the code's own
+    // default for staging and a valid URL (the runtime rejects ""); mock Ozow
+    // never contacts it (src/lib/payments/ozow.ts refuses provider requests).
     OZOW_ENV: "staging",
+    OZOW_SITE_CODE: LOCAL_OZOW_SITE_CODE,
+    OZOW_WEBHOOK_SECRET: inherited.OZOW_WEBHOOK_SECRET,
+    OZOW_API_BASE_URL: "https://stagingone.ozow.com",
     NEXT_PUBLIC_CF_IMAGE_RESIZING: "false",
   };
+  // A name in another letter case beside its all-capitals form (a parent's
+  // "Kyc_Provider" next to KYC_PROVIDER) is dropped, so the copy's value wins.
+  for (const key of Object.keys(env))
+    if (key !== key.toUpperCase() && key.toUpperCase() in env) delete env[key];
+  // Every .env name is blanked exactly as written unless the copy sets that
+  // name: on Windows the copy's all-capitals value still wins (Node passes the
+  // first name in sort order, and capitals sort first), elsewhere the other
+  // spelling is a separate, empty variable.
   for (const name of envFileKeyNames(root))
-    if (!(name in env) && !NEXT_MANAGED.has(name)) env[name] = "";
+    if (!(name in env) && !NEXT_MANAGED.has(name.toUpperCase())) env[name] = "";
   assertLocalFoundationTarget({ apiUrl: status.apiUrl, env });
   if (new URL(env.OTP_RATE_LIMITER_URL).hostname !== "127.0.0.1")
     throw new Error("Foundation test copy refused: the rate limiter must stay local");

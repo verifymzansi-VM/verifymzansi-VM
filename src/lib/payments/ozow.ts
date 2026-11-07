@@ -243,6 +243,9 @@ function throwOzowProviderFailure({
   });
 }
 
+/** Request ids of mock checkouts; they never exist at Ozow. */
+export const MOCK_OZOW_REQUEST_PREFIX = "mock-";
+
 function createMockHostedPaymentResponse(
   input: OzowHostedPaymentRequest
 ): OzowHostedPaymentResponse {
@@ -264,14 +267,14 @@ function createMockHostedPaymentResponse(
   redirectUrl.searchParams.set("cancelUrl", input.cancelUrl);
 
   return {
-    providerPaymentId: `mock-${input.paymentId}`,
+    providerPaymentId: `${MOCK_OZOW_REQUEST_PREFIX}${input.paymentId}`,
     providerReference: input.merchantReference,
     redirectUrl: redirectUrl.toString(),
     expireAt,
     correlationId,
     idempotencyKey,
     rawResponse: {
-      id: `mock-${input.paymentId}`,
+      id: `${MOCK_OZOW_REQUEST_PREFIX}${input.paymentId}`,
       redirectUrl: redirectUrl.toString(),
       expireAt,
       mockFlow: true,
@@ -578,6 +581,9 @@ export async function createOzowHostedPayment(
 }
 
 async function ozowRequest(path: string, method = "GET"): Promise<Response> {
+  // Mock mode never contacts Ozow: lookups and cancellations fail closed instead.
+  if (isMockOzowEnabled())
+    throw new OzowConfigurationError("Ozow requests are disabled while mock Ozow is enabled");
   const { baseUrl } = getOzowBaseUrlContext();
   const scope = env("OZOW_PAYMENT_OAUTH_SCOPE") || DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
   const url = new URL(path, baseUrl);

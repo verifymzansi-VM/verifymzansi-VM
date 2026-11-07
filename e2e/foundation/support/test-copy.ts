@@ -62,6 +62,25 @@ export function countPublicTables(): number {
   return Number(psql(openFixture(), PUBLIC_TABLES_QUERY));
 }
 
+/**
+ * Fixture reset, on the local copy only: deletes a test person's unpaid
+ * checkouts that never reached a provider or reached only the mock, so the
+ * next checkout creates a new quote and takes the provider path again.
+ * Returns how many pending payments the person still has (always 0).
+ */
+export function clearUnpaidMockCheckouts(accountId: string): number {
+  if (!UUID.test(accountId)) throw new Error("Unexpected account id");
+  queryTestCopy(
+    `delete from private.payments where owner_id = '${accountId}' and status = 'pending' ` +
+      "and (provider_request_id is null or provider_request_id like 'mock-%');"
+  );
+  return Number(
+    queryTestCopy(
+      `select count(*) from private.payments where owner_id = '${accountId}' and status = 'pending';`
+    )
+  );
+}
+
 /** RFC 6238 code from the authenticator secret, computed with node:crypto. */
 export function totpCode(secret: string, at = Date.now()): string {
   return nativeTotp(secret, at);

@@ -1,16 +1,26 @@
 import { expect, test } from "@playwright/test";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
-import { browserSessionCookies, queryTestCopy, readTestCopy, rpc } from "./support/test-copy";
+import {
+  browserSessionCookies,
+  clearUnpaidMockCheckouts,
+  queryTestCopy,
+  readTestCopy,
+  rpc,
+} from "./support/test-copy";
 
 // Checkout smoke test for the private test copy (M0.8): a signed-in member goes
 // through the website's own checkout (confirmation page, create-checkout route,
 // SQL quote, mock provider, checkout URL guard, SQL attach) and lands on the
 // mock payment page. Paying, the signed notification and fulfilment are M0.9c.
+// The member's unpaid mock checkouts are cleared first, so every run (each
+// project, retry or rerun) creates a new quote and takes the provider path
+// rather than reusing a stored checkout URL.
 //
-// Every browser request is checked against an allowlist: the copy's website
-// and its local database gateway continue, the mock payment page is served
-// here, and anything else is aborted and fails the test. On the server side
-// the provider is the mock (asserted below from the stored provider id).
+// Browser HTTP(S) requests are checked against an allowlist: the copy's
+// website and its local database gateway continue, the mock payment page is
+// served here, and anything else is aborted and fails the test. Requests the
+// website's server makes are not visible here; the provider being the mock is
+// asserted from the stored provider request id.
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
@@ -61,7 +71,7 @@ test.describe("checkout in the foundation test copy", () => {
     plan = plans[0];
   });
 
-  test("a member's checkout reaches the mock payment page and nothing leaves this machine", async ({
+  test("a member's checkout reaches the mock payment page; browser requests stay on loopback", async ({
     context,
     page,
   }) => {
@@ -90,6 +100,7 @@ test.describe("checkout in the foundation test copy", () => {
 
     const session = await browserSessionCookies(state, "verifiedMember");
     await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    expect(clearUnpaidMockCheckouts(session.accountId)).toBe(0);
 
     await page.goto(`/billing/checkout?plan=${plan.id}`);
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
@@ -130,6 +141,12 @@ test.describe("checkout in the foundation test copy", () => {
       `mock-${paymentId}`,
       landed.href,
     ]);
+    // A new quote: no stored checkout URL existed, so the provider path ran.
+    expect(
+      queryTestCopy(
+        `select count(*) from private.payments where owner_id = '${session.accountId}' and status = 'pending';`
+      )
+    ).toBe("1");
     expect(outside).toEqual([]);
   });
 });

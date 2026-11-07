@@ -16,7 +16,7 @@ assertLocalFoundationTarget({
   apiUrl: `http://127.0.0.1:${E2E_FIXTURE.apiPort}`,
   env: Object.fromEntries(
     Object.entries(process.env).filter(([key]) =>
-      /SUPABASE_URL$|PROJECT_REF$|^ENVIRONMENT$/.test(key)
+      /SUPABASE_URL$|PROJECT_REF$|^ENVIRONMENT$/i.test(key)
     )
   ),
 });

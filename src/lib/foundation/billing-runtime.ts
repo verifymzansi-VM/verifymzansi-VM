@@ -10,6 +10,7 @@ import {
   getOzowPaymentRequestStatus,
   isMockOzowEnabled,
   listOzowPaymentTransactions,
+  MOCK_OZOW_REQUEST_PREFIX,
   type NormalizedOzowWebhook,
 } from "../payments/ozow";
 import { validateOzowConfirmation } from "../payments/confirmation";
@@ -310,14 +311,22 @@ export async function applyFoundationOzowNotification(
   return { success: true, result: outcome };
 }
 
+/** Mock checkouts exist only in test copies and never at Ozow. Production
+ * never enables mock Ozow and never stores a mock request id. */
+const isMockCheckout = (requestId: string) =>
+  isMockOzowEnabled() || requestId.startsWith(MOCK_OZOW_REQUEST_PREFIX);
+
 export async function reconcileFoundationPayment(
   paymentId: string,
   service = createFoundationServiceApi()
 ) {
+  // No provider to ask in mock mode: leave the stored state as it is.
+  if (isMockOzowEnabled()) return { checked: false, pendingTransaction: false };
   const raw = await command(service, "claim_payment_reconciliation", { p_payment_id: paymentId });
   if (raw === null) return { checked: false, pendingTransaction: false };
   const pay = foundationPaymentSchema.parse(raw);
-  if (!pay.provider_request_id) return { checked: false, pendingTransaction: false };
+  if (!pay.provider_request_id || isMockCheckout(pay.provider_request_id))
+    return { checked: false, pendingTransaction: false };
   const transactions = await listOzowPaymentTransactions(pay.provider_request_id, pay.created_at);
   for (const transaction of transactions)
     if (validateOzowConfirmation(confirmationShape(pay), transaction))
@@ -363,6 +372,8 @@ export async function cancelFoundationPendingPayment(
       409,
       "Check this payment's status before starting another checkout"
     );
+  // A mock checkout has no provider evidence to close it with: refuse.
+  if (isMockCheckout(pay.provider_request_id)) throw new FoundationBillingError(409);
   await cancelOzowPaymentRequest(pay.provider_request_id);
   // A simultaneous settlement must win. The private row CAS and the provider
   // evidence both have to agree before the pending checkout is closed.

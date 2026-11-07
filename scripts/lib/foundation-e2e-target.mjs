@@ -97,19 +97,21 @@ export function assertLocalFoundationTarget({ apiUrl, dbUrl, env = {} }) {
       allowUserInfo: true,
     });
   }
+  // Names in any letter case: Windows treats "Supabase_Url" as SUPABASE_URL.
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined || value === "") continue;
-    if (/SUPABASE_URL$/.test(key) && value !== api.origin) refuse(key);
-    if (/(DATABASE|POSTGRES|DB)_URL$/.test(key))
+    if (/SUPABASE_URL$/i.test(key) && value !== api.origin) refuse(key);
+    if (/(DATABASE|POSTGRES|DB)_URL$/i.test(key))
       assertLoopbackUrl(value, {
         what: key,
         protocols: ["postgresql:", "postgres:"],
         port: E2E_FIXTURE.dbPort,
         allowUserInfo: true,
       });
-    if (/PROJECT_REF$/.test(key) && value !== E2E_FIXTURE.projectRef) refuse(key);
+    if (/PROJECT_REF$/i.test(key) && value !== E2E_FIXTURE.projectRef) refuse(key);
+    if (/^ENVIRONMENT$/i.test(key) && String(value).toLowerCase() === "production")
+      refuse("ENVIRONMENT");
   }
-  if (env.ENVIRONMENT === "production") refuse("ENVIRONMENT");
   return api.origin;
 }
 

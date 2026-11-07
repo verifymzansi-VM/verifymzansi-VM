@@ -693,4 +693,68 @@ describe("mock checkout page (M0.8)", () => {
       "http://localhost:3000/api/mock-ozow"
     );
   });
+
+  // NODE_ENV=test keeps the mock on, so only the test copy profile decides.
+  it.each([
+    ["ENVIRONMENT=production", { ENVIRONMENT: "production" }],
+    ["ENVIRONMENT=staging", { ENVIRONMENT: "staging" }],
+    ["OZOW_ENV=production", { OZOW_ENV: "production" }],
+    ["another database address", { FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55441" }],
+    ["no e2e runtime", { VERIFYMZANSI_RUNTIME_MODE: "" }],
+  ])("is not the test copy's page with %s", async (_label, change) => {
+    stub({ ...copy, NODE_ENV: "test", ...change });
+    vi.stubGlobal("fetch", vi.fn());
+    const { createOzowHostedPayment } = await import("./ozow");
+    const result = await createOzowHostedPayment(input);
+    expect(new URL(result.redirectUrl).origin + new URL(result.redirectUrl).pathname).toBe(
+      "http://localhost:3000/api/mock-ozow"
+    );
+  });
+
+  it.each([
+    ["listOzowPaymentTransactions", "list"],
+    ["getOzowPaymentRequestStatus", "status"],
+    ["getOzowTransaction", "transaction"],
+  ])("%s never contacts Ozow while mock Ozow is enabled", async (_name, kind) => {
+    stub({ ENABLE_MOCK_OZOW: "true", NODE_ENV: "test" });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const ozow = await import("./ozow");
+    const call =
+      kind === "list"
+        ? ozow.listOzowPaymentTransactions("request-1", "2026-10-02T08:00:00Z")
+        : kind === "status"
+          ? ozow.getOzowPaymentRequestStatus("request-1")
+          : ozow.getOzowTransaction("transaction-1");
+    await expect(call).rejects.toMatchObject({ code: "ozow_configuration_error" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("asks Ozow as before with production settings, even if the mock switch leaked in", async () => {
+    stub({
+      ENABLE_MOCK_OZOW: "true",
+      NODE_ENV: "production",
+      ENVIRONMENT: "production",
+      VERIFYMZANSI_RUNTIME_MODE: "e2e",
+      PLAYWRIGHT_TEST_MODE: "1",
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "token", expires_in: "14400" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "request-1", status: "Created" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getOzowPaymentRequestStatus, isMockOzowEnabled } = await import("./ozow");
+    expect(isMockOzowEnabled()).toBe(false);
+    expect(await getOzowPaymentRequestStatus("request-1")).toBe("Created");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][0].toString()).toBe(
+      "https://stagingone.ozow.com/v1/payments/request-1"
+    );
+  });
 });
