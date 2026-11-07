@@ -29,7 +29,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Generate/update Chromium Linux baselines
         run: pnpm exec playwright test e2e/visual-regression.spec.ts --project=chromium --update-snapshots
-      - name: Commit baselines
+      # `main` only changes through a reviewed pull request, so baselines are
+      # pushed to their own branch for the owner to review and merge.
+      - name: Commit baselines to a review branch
+        env:
+          BASELINE_BRANCH: bot/visual-baselines-${{ github.run_id }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -37,6 +41,8 @@ jobs:
           if git diff --cached --quiet; then
             echo "No baseline changes to commit"
           else
+            git switch -c "$BASELINE_BRANCH"
             git commit -m "chore: update Chromium Linux visual baselines"
-            git push
+            git push origin "$BASELINE_BRANCH"
+            echo "::notice::Baselines pushed to $BASELINE_BRANCH; open a pull request to review them."
           fi
