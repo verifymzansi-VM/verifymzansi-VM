@@ -193,12 +193,15 @@ Prefer this pattern instead:
   read them, and each step receives only the values it uses: dependency
   installation, the build (`scripts/build-cloudflare-release.mjs`, which uses
   synthetic private values and refuses real ones), browser installation and
-  upload steps get none.
+  upload steps receive none, and the deploy deletes its temporary secret files
+  right after the last deploy step. Code installed earlier in the same job still
+  runs later beside secrets, so dependency review remains a control.
 - **GitHub environment `backup`** (deployment branch: `main` only) holds the
-  nightly backup's own read-only database login (`BACKUP_DB_ROLE`,
-  `BACKUP_DB_PASSWORD`), its storage token limited to the backup bucket
-  (`BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`) and
-  `R2_ACCOUNT_ID`.
+  nightly backup's database password (`SUPABASE_BACKUP_DB_PASSWORD`), its
+  storage token limited to the backup bucket (`BACKUP_R2_ACCESS_KEY_ID`,
+  `BACKUP_R2_SECRET_ACCESS_KEY`) and `R2_ACCOUNT_ID`. A dedicated read-only
+  database login replaces the password with the restore drill (the pinned
+  Supabase CLI always dumps as `postgres`).
 - **Repository-level secrets** hold only what pull-request CI and scheduled
   monitoring need (for example `DOCKERHUB_TOKEN`, `SITE_MONITOR_API_KEY`,
   `PRODUCTION_APP_URL`). Any workflow on any branch can read them, so never put
@@ -711,30 +714,16 @@ bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
 after 35 days.
 
 - **Credentials** (GitHub environment `backup`, deployment branch `main`):
-  - `BACKUP_DB_ROLE` and `BACKUP_DB_PASSWORD`: a dedicated login that can only
-    read. The owner creates it once in the Supabase SQL editor, with a long
-    random password from the password manager (never written anywhere else):
-
-    ```sql
-    create role backup_reader with login bypassrls password '<long random password>';
-    grant pg_read_all_data to backup_reader;
-    alter role backup_reader set default_transaction_read_only = on;
-    ```
-
-    `bypassrls` lets the dump read every row of tables protected by row level
-    security; the role still cannot change anything. Then set
-    `BACKUP_DB_ROLE=backup_reader` and `BACKUP_DB_PASSWORD`, run the workflow by
-    hand, and check it succeeds. If it fails, delete those two secrets: the
-    workflow falls back to the old password while the cause is found.
-
+  - `SUPABASE_BACKUP_DB_PASSWORD`: the database password (Supabase > Project
+    Settings > Database). Reset it there if a run reports an authentication
+    failure, then update the secret. The connection string is built inside the
+    dump step and never shared with other steps.
   - `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY`: an R2 API token
     with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
     leaked backup token cannot touch member media or ID evidence.
   - `R2_ACCOUNT_ID`.
-  - Transitional only: until those exist, the workflow uses the postgres
-    password (`SUPABASE_BACKUP_DB_PASSWORD`) and the app's storage key, and
-    warns on every run. Once the dedicated credentials work, delete
-    `SUPABASE_BACKUP_DB_PASSWORD`; keep the app's storage key only in the
+  - Transitional only: until the bucket token exists, the upload uses the app's
+    storage key and warns on every run. Keep the app's storage key only in the
     `production` environment, which the backup job cannot read.
 - **Decryption key:** only the owner holds the private key, offline (key
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup

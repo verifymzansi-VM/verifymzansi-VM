@@ -152,6 +152,7 @@ describe("release build", () => {
     const result = spawnSync(process.execPath, ["scripts/build-cloudflare-release.mjs"], {
       encoding: "utf8",
       env: {
+        NODE_ENV: "test",
         PATH: process.env.PATH ?? "",
         SystemRoot: process.env.SystemRoot ?? "",
         GITHUB_ACTIONS: "true",
@@ -168,7 +169,11 @@ describe("release build", () => {
   it("runs only in GitHub Actions", () => {
     const result = spawnSync(process.execPath, ["scripts/build-cloudflare-release.mjs"], {
       encoding: "utf8",
-      env: { PATH: process.env.PATH ?? "", SystemRoot: process.env.SystemRoot ?? "" },
+      env: {
+        NODE_ENV: "test",
+        PATH: process.env.PATH ?? "",
+        SystemRoot: process.env.SystemRoot ?? "",
+      },
     });
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("runs only in GitHub Actions");
