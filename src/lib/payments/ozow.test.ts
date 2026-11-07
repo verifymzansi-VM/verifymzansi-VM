@@ -758,3 +758,139 @@ describe("mock checkout page (M0.8)", () => {
     );
   });
 });
+
+describe("provider lookups in the foundation test copy (M0.9c)", () => {
+  const request = "mock-11111111-1111-4111-8111-111111111111";
+  const copy = {
+    NODE_ENV: "production",
+    ENVIRONMENT: "test",
+    VERIFYMZANSI_RUNTIME_MODE: "e2e",
+    PLAYWRIGHT_TEST_MODE: "1",
+    ENABLE_MOCK_OZOW: "true",
+    OZOW_ENV: "staging",
+    NEXT_PUBLIC_DATA_BACKEND: "foundation",
+    FOUNDATION_PROJECT_REF: "local-foundation",
+    FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
+  };
+  const stub = (values: Record<string, string>) => {
+    vi.stubGlobal("window", undefined);
+    vi.stubGlobal("document", undefined);
+    for (const [key, value] of Object.entries(values)) vi.stubEnv(key, value);
+  };
+  const reply = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+  const transaction = {
+    id: "transaction-1",
+    paymentRequestId: request,
+    merchantReference: "a".repeat(32),
+    siteCode: "site-code",
+    status: "Successful",
+    amount: { currency: "ZAR", value: 50 },
+  };
+
+  beforeEach(() => vi.resetModules());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("asks only the copy's loopback stand-in, with no token or credentials", async () => {
+    stub(copy);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply({ results: [transaction], links: { next: null } }))
+      .mockResolvedValueOnce(reply({ id: request, status: "Created" }))
+      .mockResolvedValueOnce(reply(transaction));
+    vi.stubGlobal("fetch", fetchMock);
+    const ozow = await import("./ozow");
+    const listed = await ozow.listOzowPaymentTransactions(request, "2026-10-02T08:00:00Z");
+    expect(listed).toEqual([
+      expect.objectContaining({
+        transactionId: "transaction-1",
+        providerPaymentId: request,
+        status: "Successful",
+        amount: "50",
+        currencyCode: "ZAR",
+      }),
+    ]);
+    expect(await ozow.getOzowPaymentRequestStatus(request)).toBe("Created");
+    expect((await ozow.getOzowTransaction("transaction-1")).transactionId).toBe("transaction-1");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const urls = fetchMock.mock.calls.map(([url]) => new URL(String(url)));
+    expect(urls.map((url) => url.origin)).toEqual(Array(3).fill("http://127.0.0.1:55448"));
+    expect(urls.map((url) => url.pathname)).toEqual([
+      `/v1/payments/${request}/transactions`,
+      `/v1/payments/${request}`,
+      "/v1/transactions/transaction-1",
+    ]);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init).toMatchObject({ method: "GET", redirect: "manual" });
+      expect(init.headers).toBeUndefined();
+      expect(init.credentials).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ["to Ozow", `https://one.ozow.com/v1/payments/${request}/transactions?offset=50`],
+    ["off the provider API", "http://127.0.0.1:55448/admin?offset=50"],
+  ])("refuses a pagination link that leaves the stand-in's API (%s)", async (_label, next) => {
+    stub(copy);
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply({ results: [], links: { next } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { listOzowPaymentTransactions } = await import("./ozow");
+    await expect(
+      listOzowPaymentTransactions(request, "2026-10-02T08:00:00Z")
+    ).rejects.toMatchObject({ code: "ozow_provider_error" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a stand-in failure as a provider failure", async () => {
+    stub(copy);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce({ ok: false, status: 503 }));
+    const { getOzowPaymentRequestStatus } = await import("./ozow");
+    await expect(getOzowPaymentRequestStatus(request)).rejects.toMatchObject({
+      code: "ozow_provider_error",
+      context: { status: 503 },
+    });
+  });
+
+  // NODE_ENV=test keeps mock Ozow on, so only the test copy profile decides.
+  it.each([
+    ["ENVIRONMENT=production", { ENVIRONMENT: "production" }],
+    ["ENVIRONMENT=staging", { ENVIRONMENT: "staging" }],
+    ["OZOW_ENV=production", { OZOW_ENV: "production" }],
+    ["another database address", { FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55441" }],
+    ["the retired backend", { NEXT_PUBLIC_DATA_BACKEND: "source" }],
+    ["no e2e runtime", { VERIFYMZANSI_RUNTIME_MODE: "" }],
+    ["no browser test mode", { PLAYWRIGHT_TEST_MODE: "" }],
+  ])("asks nobody in mock mode outside the test copy (%s)", async (_label, change) => {
+    stub({ ...copy, NODE_ENV: "test", ...change });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const ozow = await import("./ozow");
+    expect(ozow.isMockOzowEnabled()).toBe(true);
+    await expect(ozow.getOzowPaymentRequestStatus(request)).rejects.toMatchObject({
+      code: "ozow_configuration_error",
+    });
+    await expect(
+      ozow.listOzowPaymentTransactions(request, "2026-10-02T08:00:00Z")
+    ).rejects.toMatchObject({ code: "ozow_configuration_error" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("asks Ozow as before with production settings, even with every test switch leaked in", async () => {
+    stub({ ...copy, ENVIRONMENT: "production" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(reply({ access_token: "token", expires_in: "14400" }))
+      .mockResolvedValueOnce(reply({ id: "request-1", status: "Created" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getOzowPaymentRequestStatus, isMockOzowEnabled } = await import("./ozow");
+    expect(isMockOzowEnabled()).toBe(false);
+    expect(await getOzowPaymentRequestStatus("request-1")).toBe("Created");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://stagingone.ozow.com/v1/token",
+      "https://stagingone.ozow.com/v1/payments/request-1",
+    ]);
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer token");
+  });
+});

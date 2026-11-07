@@ -230,6 +230,26 @@ export function rpc(copy: TestCopy, name: string, body: unknown, token?: string)
   });
 }
 
+let secretKey: string | undefined;
+
+/**
+ * Calls a service-only production command through the local gateway with the
+ * copy's own secret key (read from the local CLI status, never from a file),
+ * as the website's server does.
+ */
+export function serviceRpc(name: string, body: unknown) {
+  if (!/^[a-z_]+$/.test(name)) throw new Error("Unexpected command name");
+  if (!secretKey) {
+    const status = readStatus(openFixture());
+    if (status.apiUrl !== API_ORIGIN) throw new Error("Unexpected test copy gateway");
+    secretKey = status.secretKey as string;
+  }
+  return request({ publishableKey: secretKey, posts: [] }, `/rest/v1/rpc/${name}`, {
+    body,
+    headers: { "Content-Profile": "api", "Accept-Profile": "api" },
+  });
+}
+
 /** A read the retired backend's clients make: a table in schema public. */
 export function retiredTableRead(copy: TestCopy, table: string) {
   if (!/^[a-z_]+$/.test(table)) throw new Error("Unexpected table name");

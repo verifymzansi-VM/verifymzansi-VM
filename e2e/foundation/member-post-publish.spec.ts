@@ -85,6 +85,7 @@ type Reply = { method: string; path: string; status: number; body: unknown };
 async function guard(context: BrowserContext) {
   const outside: string[] = [];
   const replies: Reply[] = [];
+  const sent: string[] = [];
   const captchaTokens: unknown[] = [];
   await context.route("**/*", async (route) => {
     const request = route.request();
@@ -99,6 +100,8 @@ async function guard(context: BrowserContext) {
       request.method() === "GET"
     )
       return route.continue();
+    // Recorded when sent; a reply is recorded only once it arrives.
+    sent.push(url.pathname);
     let postData: string | undefined;
     if (url.pathname === "/api/auth/register") {
       const body = JSON.parse(request.postData() ?? "{}");
@@ -129,7 +132,8 @@ async function guard(context: BrowserContext) {
     return route.fulfill({ response, body: bytes });
   });
   const reply = (pathname: string) => replies.filter((entry) => entry.path === pathname);
-  return { outside, replies, reply, captchaTokens };
+  const sentTo = (pathname: string) => sent.filter((entry) => entry === pathname).length;
+  return { outside, replies, reply, sentTo, captchaTokens };
 }
 
 /** The camera is unavailable, so the photo steps offer their upload fallback,
@@ -159,12 +163,14 @@ async function runOpsJob(request: APIRequestContext) {
 
 /** "Claim next 10" in a staff queue. A click that lands before the page is
  * interactive does nothing, so the click is repeated until the claim request
- * is sent (never once one was sent); the claim must then succeed. */
-async function claimQueue(page: Page, claims: () => Reply[]) {
+ * is sent (never once one was sent, even while its reply is slow: a second
+ * claim would find nothing left and replace the page's message); the claim
+ * must then succeed. */
+async function claimQueue(page: Page, claims: () => Reply[], sent: () => number) {
   const button = page.getByRole("button", { name: "Claim next 10" });
   await expect(async () => {
-    if (claims().length === 0) await button.click();
-    expect(claims().length).toBeGreaterThan(0);
+    if (sent() === 0) await button.click();
+    expect(sent()).toBeGreaterThan(0);
   }).toPass({ timeout: 30_000, intervals: [1_000, 2_000, 4_000] });
   await expect.poll(() => claims().map((entry) => entry.status)).toEqual([200]);
   await expect(page.getByText(/^You hold \d+ items? in this queue\.$/)).toBeVisible();
@@ -466,7 +472,7 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     request,
   }) => {
     test.setTimeout(150_000);
-    const { outside, reply } = await guard(context);
+    const { outside, reply, sentTo } = await guard(context);
     await signInBrowser(context, "admin");
     const displayName = queryTestCopy(
       `select display_name from private.profiles where account_id = '${member.id}';`
@@ -474,7 +480,11 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     expect(displayName.length).toBeGreaterThan(1);
 
     await page.goto("/admin/verification");
-    await claimQueue(page, () => reply("/api/admin/queue"));
+    await claimQueue(
+      page,
+      () => reply("/api/admin/queue"),
+      () => sentTo("/api/admin/queue")
+    );
     // This member's case: the nearest block around their name that holds the
     // review buttons (one per account in the queue).
     const card = page
@@ -579,7 +589,10 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
               `where owner_id = '${member.id}' and revoked_at is null;`
           )
         ).toBe("1");
-        await expect(page.getByRole("heading", { name: "Verification approved" })).toBeVisible();
+        // The page loads the status after its first paint; allow a slow machine.
+        await expect(page.getByRole("heading", { name: "Verification approved" })).toBeVisible({
+          timeout: 20_000,
+        });
         await expect(page.getByRole("link", { name: "Return to posting" })).toHaveAttribute(
           "href",
           "/post/create-business"
@@ -651,7 +664,11 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
       await signInBrowser(staff, "moderator");
       const staffPage = await staff.newPage();
       await staffPage.goto("/admin/moderation");
-      await claimQueue(staffPage, () => moderation.reply("/api/admin/queue"));
+      await claimQueue(
+        staffPage,
+        () => moderation.reply("/api/admin/queue"),
+        () => moderation.sentTo("/api/admin/queue")
+      );
       const item = staffPage
         .locator("div")
         .filter({ hasText: business.name })
