@@ -24,50 +24,22 @@ jobs:
     permissions:
       contents: read
       actions: read
+    # Same rule as deploy.yml: secrets only from the protected "production"
+    # environment and only on the steps that use them.
+    environment: production
     env:
       DEPLOY_TARGET_SHA: ${{ inputs.source_commit || github.sha }}
       NODE_ENV: production
       WRANGLER_SEND_ERROR_REPORTS: "false"
       NEXT_PUBLIC_DATA_BACKEND: foundation
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
-      FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
-      FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
-      FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
-      FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
-      FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
-      NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
-      AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
-      AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
-      AFRICASTALKING_SENDER_ID: ${{ secrets.AFRICASTALKING_SENDER_ID }}
-      OZOW_ENV: ${{ secrets.OZOW_ENV }}
-      OZOW_CLIENT_ID: ${{ secrets.OZOW_CLIENT_ID }}
-      OZOW_CLIENT_SECRET: ${{ secrets.OZOW_CLIENT_SECRET }}
-      OZOW_SITE_CODE: ${{ secrets.OZOW_SITE_CODE }}
-      OZOW_PAYMENT_OAUTH_SCOPE: ${{ secrets.OZOW_PAYMENT_OAUTH_SCOPE }}
-      OZOW_WEBHOOK_SECRET: ${{ secrets.OZOW_WEBHOOK_SECRET }}
-      KYC_PROVIDER: ${{ secrets.KYC_PROVIDER }}
-      KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
-      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_PUBLIC_BUCKET: verifymzansi-public
       R2_PRIVATE_BUCKET: verifymzansi-private
-      KYC_ENCRYPTION_KEY: ${{ secrets.KYC_ENCRYPTION_KEY }}
-      ID_ENCRYPTION_KEY: ${{ secrets.ID_ENCRYPTION_KEY }}
-      HMAC_SECRET: ${{ secrets.HMAC_SECRET }}
-      IP_HASH_SECRET: ${{ secrets.IP_HASH_SECRET }}
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
-      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-      NODE_OPTIONS: --max-old-space-size=4096
-      INTERNAL_JOBS_SECRET: ${{ secrets.INTERNAL_JOBS_SECRET }}
-      OPS_JOBS_SECRET: ${{ secrets.OPS_JOBS_SECRET }}
-      HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.HEALTH_DIAGNOSTIC_TOKEN }}
-      RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
       OTP_RATE_LIMITER_URL: https://verifymzansi-rate-limiter.verifymzansi.workers.dev
       OTP_RATE_LIMITER_TIMEOUT_MS: "2500"
+      NODE_OPTIONS: --max-old-space-size=4096
+      # The Wrangler build hook may only verify the artifact built above,
+      # never rebuild it inside a step that holds Cloudflare credentials.
+      CLOUDFLARE_BUILD_HOOK: verify-only
     steps:
       - name: Validate the requested source selector
         run: '[[ "$DEPLOY_TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'
@@ -86,18 +58,48 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile --prod=false
       - name: Match all public build settings to production bindings
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.TURNSTILE_SITE_KEY }}
         run: node scripts/export-cloudflare-public-env.mjs
       - name: Require successful CI for this exact main commit
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: pnpm exec tsx scripts/check-deployment-ci.ts
       - name: Verify hosted connection and candidate contracts
+        env:
+          FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+          FOUNDATION_PROJECT_REF: ${{ secrets.FOUNDATION_PROJECT_REF }}
+          FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+          FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
         run: pnpm exec tsx scripts/check-foundation-candidate.ts
       - name: Validate production configuration
-        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          AFRICASTALKING_API_KEY: ${{ secrets.AFRICASTALKING_API_KEY }}
+          AFRICASTALKING_USERNAME: ${{ secrets.AFRICASTALKING_USERNAME }}
+          AFRICASTALKING_SENDER_ID: ${{ secrets.AFRICASTALKING_SENDER_ID }}
+          OZOW_ENV: ${{ secrets.OZOW_ENV }}
+          OZOW_CLIENT_ID: ${{ secrets.OZOW_CLIENT_ID }}
+          OZOW_CLIENT_SECRET: ${{ secrets.OZOW_CLIENT_SECRET }}
+          OZOW_SITE_CODE: ${{ secrets.OZOW_SITE_CODE }}
+          OZOW_PAYMENT_OAUTH_SCOPE: ${{ secrets.OZOW_PAYMENT_OAUTH_SCOPE }}
+          OZOW_WEBHOOK_SECRET: ${{ secrets.OZOW_WEBHOOK_SECRET }}
+          KYC_PROVIDER: ${{ secrets.KYC_PROVIDER }}
+          KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
+        run: pnpm exec tsx scripts/validate-launch-env.ts --mode=production --runtime-secrets-in-cloudflare
       - name: Build and check the actual Worker
         run: |
-          pnpm run build:cloudflare
+          node scripts/build-cloudflare-release.mjs
           pnpm test:cloudflare:startup
       # The runtime verifier records the workflow event SHA. When a previous
       # green main commit is selected, preserve both revisions explicitly.
@@ -106,6 +108,16 @@ jobs:
           git rev-parse HEAD > tmp/cloudflare-runtime/source-commit.txt
           printf '%s\n' "$GITHUB_SHA" > tmp/cloudflare-runtime/workflow-commit.txt
       - name: Prepare additive scoped bindings
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          FOUNDATION_SUPABASE_SECRET_KEY: ${{ secrets.FOUNDATION_SUPABASE_SECRET_KEY }}
+          FOUNDATION_PHONE_OTP_KEY: ${{ secrets.FOUNDATION_PHONE_OTP_KEY }}
+          INTERNAL_JOBS_SECRET: ${{ secrets.INTERNAL_JOBS_SECRET }}
+          OPS_JOBS_SECRET: ${{ secrets.OPS_JOBS_SECRET }}
+          KYC_WEBHOOK_SECRET: ${{ secrets.KYC_WEBHOOK_SECRET }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+          HEALTH_DIAGNOSTIC_TOKEN: ${{ secrets.HEALTH_DIAGNOSTIC_TOKEN }}
+          RATE_LIMITER_API_KEY: ${{ secrets.RATE_LIMITER_API_KEY }}
         run: node scripts/prepare-cloudflare-candidate-secrets.mjs
       # Upload only: no deploy, route, trigger or traffic-allocation command.
       # Existing provider, encryption, HMAC and R2 keys are inherited.

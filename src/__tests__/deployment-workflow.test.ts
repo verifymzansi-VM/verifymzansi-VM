@@ -1,4 +1,4 @@
-import { readFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -52,6 +52,64 @@ describe("production deployment wiring", () => {
           (step: { name?: string }) => step.name === `Deploy ${worker} Worker`
         ).run
       ).toContain("--secrets-file");
+  });
+  it("never rolls back part of production automatically and stops for a person instead", () => {
+    type Step = {
+      id?: string;
+      name?: string;
+      if?: string;
+      run?: string;
+      uses?: string;
+      with?: Record<string, unknown>;
+      "continue-on-error"?: unknown;
+    };
+    // No workflow step may roll back or shift traffic between Worker versions,
+    // whether directly, through an action, or through a helper script.
+    const rollbackCommand =
+      /\bwrangler\b[^\n]*\b(rollback|versions\s+deploy)\b|\brollback[\w.-]*\.(sh|mjs|cjs|js|ts)\b/i;
+    for (const file of readdirSync(".github/workflows")) {
+      const parsed = parse(readFileSync(path.join(".github/workflows", file), "utf8"));
+      for (const [jobName, job] of Object.entries(parsed.jobs ?? {}) as [
+        string,
+        { steps?: Step[] },
+      ][])
+        for (const step of job.steps ?? []) {
+          const where = `${file} ${jobName} ${step.name ?? step.uses ?? ""}`;
+          expect(step.run ?? "", where).not.toMatch(rollbackCommand);
+          expect(JSON.stringify(step.with ?? {}), where).not.toMatch(/rollback|versions\s+deploy/i);
+        }
+    }
+    expect(Object.keys(workflow.jobs)).toEqual(["deploy"]);
+    const steps = workflow.jobs.deploy.steps as Step[];
+    const firstChange = steps.findIndex((step) => step.id === "deploy-monitor");
+    const stop = steps.findIndex((step) => step.name === "Stop for manual rollback");
+    const health = steps.findIndex((step) => step.id === "health-check");
+    expect(firstChange).toBeGreaterThanOrEqual(0);
+    expect(health).toBeGreaterThan(firstChange);
+    expect(stop).toBeGreaterThan(health);
+    // Every step that changes Cloudflare sits between the first change and the stop.
+    const changesProduction = (step: Step) =>
+      /wrangler\s+(deploy|secret|versions|rollback)|opennextjs-cloudflare\s+(deploy|upload)/.test(
+        step.run ?? ""
+      ) || /wrangler-action/.test(step.uses ?? "");
+    steps.forEach((step, index) => {
+      if (changesProduction(step)) {
+        expect(index, step.name).toBeGreaterThanOrEqual(firstChange);
+        expect(index, step.name).toBeLessThan(stop);
+      }
+    });
+    // Nothing from the first change to the stop may hide a failure.
+    for (const step of steps.slice(firstChange, stop + 1))
+      expect(step["continue-on-error"], step.name).toBeUndefined();
+    expect(steps[stop].if).toBe(
+      "(failure() || cancelled()) && steps.deploy-monitor.outcome != 'skipped'"
+    );
+    expect(steps[stop].run).toContain("Manual rollback needed");
+    expect(steps[stop].run).toContain("docs/RUNBOOK.md");
+    expect(steps[stop].run).toMatch(/exit 1\s*$/);
+    const runbook = readFileSync("docs/RUNBOOK.md", "utf8");
+    expect(runbook).toContain("### Manual rollback (all Workers)");
+    expect(runbook).toContain("gh workflow disable deploy.yml");
   });
 });
 

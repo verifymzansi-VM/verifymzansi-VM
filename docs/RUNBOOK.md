@@ -181,13 +181,43 @@ Prefer this pattern instead:
 
 ## Secret Rotation
 
+### Where secrets live
+
+- **Cloudflare (Worker secrets)** hold every value the running site needs. The
+  runtime-only keys `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET` and
+  `IP_HASH_SECRET` live **only** here, never in GitHub. Release validation
+  (`validate-launch-env.ts --runtime-secrets-in-cloudflare`) and
+  `pnpm cloudflare:secrets:check` confirm they exist on the Worker by name.
+- **GitHub environment `production`** (deployment branch: `main` only) holds the
+  values the Deploy and Cloudflare Candidate workflows use. Only those jobs can
+  read them, and each step receives only the values it uses: dependency
+  installation, the build (`scripts/build-cloudflare-release.mjs`, which uses
+  synthetic private values and refuses real ones), browser installation and
+  upload steps receive none, and the deploy deletes its temporary secret files
+  right after the last deploy step. Code installed earlier in the same job still
+  runs later beside secrets, so dependency review remains a control.
+- **GitHub environment `backup`** (deployment branch: `main` only) holds the
+  nightly backup's database password (`SUPABASE_BACKUP_DB_PASSWORD`), its
+  storage token limited to the backup bucket (`BACKUP_R2_ACCESS_KEY_ID`,
+  `BACKUP_R2_SECRET_ACCESS_KEY`) and `R2_ACCOUNT_ID`. A dedicated read-only
+  database login replaces the password with the restore drill (the pinned
+  Supabase CLI always dumps as `postgres`).
+- **Repository-level secrets** hold only what pull-request CI and scheduled
+  monitoring need (for example `DOCKERHUB_TOKEN`, `SITE_MONITOR_API_KEY`,
+  `PRODUCTION_APP_URL`). Any workflow on any branch can read them, so never put
+  a production credential there.
+
+Keep the canonical copy of each value in the owner's password manager. GitHub
+secrets cannot be read back; moving one means entering it again.
+
 ### Supabase Keys
 
 1. Go to Supabase Dashboard → Settings → API
 2. Rotate the `service_role` key
-3. Update in Cloudflare Pages environment variables:
-   - `SUPABASE_SERVICE_ROLE_KEY`
-4. Redeploy the application
+3. Set the new secret key as `FOUNDATION_SUPABASE_SECRET_KEY` in the GitHub
+   `production` environment. The next deploy installs it on the Worker under
+   both `FOUNDATION_SUPABASE_SECRET_KEY` and `SUPABASE_SERVICE_ROLE_KEY`.
+4. Redeploy the application (Actions → Deploy → Run workflow)
 5. Verify `/api/health` returns 200
 
 > **Note:** The `anon` key is public and does not need rotation unless
@@ -547,23 +577,69 @@ pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
 ### Rollback on Failure
 
-The GitHub Actions deploy workflow runs on `ubuntu-latest`, deploys the main
-OpenNext worker plus auxiliary workers, then checks `${APP_URL}/api/health` and
-public/auth pages. If production fails after deploy, use manual rollback from a
-Linux, macOS, or WSL environment:
+The Deploy workflow does **not** roll back automatically. Rolling back only the
+main Worker left production half old and half new twice in October 2026, once on
+a build made for the retired backend. When any production step fails or the run
+is cancelled after the deploy has started (helper Worker deploys, the health
+check), the step "Stop for manual rollback" fails the run with the error "Manual
+rollback needed". The site keeps whatever versions are live until a person acts.
+A run that timed out or lost its runner after "Deploy authenticated service
+monitor" started needs the same procedure, even without that message.
 
-```bash
-# Inspect recent worker versions
-pnpm exec wrangler versions list
+### Manual rollback (all Workers)
 
-# Roll back the main OpenNext worker to the previous stable version
-pnpm exec wrangler rollback
-```
+Roll every Worker back to the same last good release, never only the main one.
+`wrangler rollback` needs no build, so it also works from Windows (run the
+commands in Git Bash, or use the PowerShell equivalents noted).
 
-Select a rollback version whose compiled Supabase project and API contracts
-match the current database. A Worker rollback does not roll back database
-migrations. Versions compiled against the deleted Supabase project cannot serve
-as a working recovery target for the foundation release.
+0. **Stop new deploys first.** Actions → Deploy → "…" → Disable workflow (or
+   `gh workflow disable deploy.yml`). Otherwise the next green CI run on `main`,
+   or a queued run, deploys over a half-finished rollback. Check Actions for a
+   newer Deploy run: if one already fixed forward, do not roll back to an older
+   release. Re-enable the workflow only after step 6.
+1. **Pick the last good release and its version IDs.** Actions → Deploy: the
+   newest successful run before the failed one. Its log prints one
+   `Current Version ID:` line per Worker; those IDs are the targets. For the
+   main Worker, the target version's message is `verified-main-deployment`
+   (inactive `inactive-main-candidate` uploads carry the same commit tag and are
+   never a target). `wrangler versions list` shows only the 10 newest versions;
+   use the Cloudflare dashboard (Worker → Deployments) for older ones.
+2. **Check it is a foundation build.**
+   `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` (PowerShell:
+   `git show <sha>:wrangler.toml | Select-String NEXT_PUBLIC_DATA_BACKEND`) must
+   print `foundation`;
+   `pnpm exec wrangler versions view <version-id> --env production` shows the
+   version's own variables. Never roll back to a build made for the retired
+   source backend.
+3. **Check the database.** A Worker rollback does not undo database updates.
+   `git diff <good-sha>..<bad-sha> -- database/` lists the updates in between.
+   Older code works with updates that only added pieces; never roll back past an
+   update that removed or renamed something the older code uses (see "Database
+   changes" in [AGENTS.md](../AGENTS.md)). If unsure, stop and ask.
+4. **Check secrets and schedules.** If `wrangler rollback` lists secrets that
+   changed since the target version, confirming restores their old values. Stop
+   unless those old values are still valid (a rotated and revoked key would
+   break the site), or put the current secrets back right after the rollback.
+   Cron schedules and routes are not part of a version:
+   `git diff <good-sha>..<bad-sha> -- 'wrangler*.toml'` shows whether they
+   changed. Durable Object and KV data is never rolled back.
+5. **Roll back each Worker.** First run `deployments list` for every Worker and
+   skip only a Worker that already shows its target version ID. For the rest:
+
+   | Worker                   | Current deployment                                                             | Roll back                                                                                                                |
+   | ------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+   | `verifymzansi` (website) | `pnpm exec wrangler deployments list --env production`                         | `pnpm exec wrangler rollback <version-id> --env production --message "Manual rollback to <sha>"`                         |
+   | site monitor             | `pnpm exec wrangler deployments list --config wrangler.site-monitor.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.site-monitor.toml --message "Manual rollback to <sha>"`      |
+   | rate limiter             | `pnpm exec wrangler deployments list --config wrangler.rate-limiter.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.rate-limiter.toml --message "Manual rollback to <sha>"`      |
+   | retention clean-up       | `pnpm exec wrangler deployments list --config wrangler.retention-cleanup.toml` | `pnpm exec wrangler rollback <version-id> --config wrangler.retention-cleanup.toml --message "Manual rollback to <sha>"` |
+   | payment clean-up         | `pnpm exec wrangler deployments list --config wrangler.payment-cleanup.toml`   | `pnpm exec wrangler rollback <version-id> --config wrangler.payment-cleanup.toml --message "Manual rollback to <sha>"`   |
+   | operations jobs          | `pnpm exec wrangler deployments list --config wrangler.ops-jobs.toml`          | `pnpm exec wrangler rollback <version-id> --config wrangler.ops-jobs.toml --message "Manual rollback to <sha>"`          |
+
+6. **Confirm and clean up.** `deployments list` shows every target version;
+   `/api/health` answers `ok`; the site monitor is green. Revert the bad pull
+   request on GitHub. When the revert's CI on `main` is green, re-enable the
+   Deploy workflow and run it by hand (Actions → Deploy → Run workflow) so
+   production matches `main` again.
 
 ### Worker Deployment
 
@@ -637,9 +713,18 @@ the Supabase CLI, checks the dump, encrypts it to
 bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
 after 35 days.
 
-- **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
-  Supabase > Project Settings > Database). Reset it there if a run reports an
-  authentication failure, then update the secret.
+- **Credentials** (GitHub environment `backup`, deployment branch `main`):
+  - `SUPABASE_BACKUP_DB_PASSWORD`: the database password (Supabase > Project
+    Settings > Database). Reset it there if a run reports an authentication
+    failure, then update the secret. The connection string is built inside the
+    dump step and never shared with other steps.
+  - `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY`: an R2 API token
+    with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
+    leaked backup token cannot touch member media or ID evidence.
+  - `R2_ACCOUNT_ID`.
+  - Transitional only: until the bucket token exists, the upload uses the app's
+    storage key and warns on every run. Keep the app's storage key only in the
+    `production` environment, which the backup job cannot read.
 - **Decryption key:** only the owner holds the private key, offline (key
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
   can be restored. Never commit it or store it in GitHub, Cloudflare or
