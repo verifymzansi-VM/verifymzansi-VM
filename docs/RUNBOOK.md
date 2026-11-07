@@ -181,13 +181,40 @@ Prefer this pattern instead:
 
 ## Secret Rotation
 
+### Where secrets live
+
+- **Cloudflare (Worker secrets)** hold every value the running site needs. The
+  runtime-only keys `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET` and
+  `IP_HASH_SECRET` live **only** here, never in GitHub. Release validation
+  (`validate-launch-env.ts --runtime-secrets-in-cloudflare`) and
+  `pnpm cloudflare:secrets:check` confirm they exist on the Worker by name.
+- **GitHub environment `production`** (deployment branch: `main` only) holds the
+  values the Deploy and Cloudflare Candidate workflows use. Only those jobs can
+  read them, and each step receives only the values it uses: dependency
+  installation, the build (`scripts/build-cloudflare-release.mjs`, which uses
+  synthetic private values and refuses real ones), browser installation and
+  upload steps get none.
+- **GitHub environment `backup`** (deployment branch: `main` only) holds the
+  nightly backup's own read-only database login (`BACKUP_DB_ROLE`,
+  `BACKUP_DB_PASSWORD`), its storage token limited to the backup bucket
+  (`BACKUP_R2_ACCESS_KEY_ID`, `BACKUP_R2_SECRET_ACCESS_KEY`) and
+  `R2_ACCOUNT_ID`.
+- **Repository-level secrets** hold only what pull-request CI and scheduled
+  monitoring need (for example `DOCKERHUB_TOKEN`, `SITE_MONITOR_API_KEY`,
+  `PRODUCTION_APP_URL`). Any workflow on any branch can read them, so never put
+  a production credential there.
+
+Keep the canonical copy of each value in the owner's password manager. GitHub
+secrets cannot be read back; moving one means entering it again.
+
 ### Supabase Keys
 
 1. Go to Supabase Dashboard → Settings → API
 2. Rotate the `service_role` key
-3. Update in Cloudflare Pages environment variables:
-   - `SUPABASE_SERVICE_ROLE_KEY`
-4. Redeploy the application
+3. Set the new secret key as `FOUNDATION_SUPABASE_SECRET_KEY` in the GitHub
+   `production` environment. The next deploy installs it on the Worker under
+   both `FOUNDATION_SUPABASE_SECRET_KEY` and `SUPABASE_SERVICE_ROLE_KEY`.
+4. Redeploy the application (Actions → Deploy → Run workflow)
 5. Verify `/api/health` returns 200
 
 > **Note:** The `anon` key is public and does not need rotation unless
@@ -683,9 +710,32 @@ the Supabase CLI, checks the dump, encrypts it to
 bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
 after 35 days.
 
-- **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
-  Supabase > Project Settings > Database). Reset it there if a run reports an
-  authentication failure, then update the secret.
+- **Credentials** (GitHub environment `backup`, deployment branch `main`):
+  - `BACKUP_DB_ROLE` and `BACKUP_DB_PASSWORD`: a dedicated login that can only
+    read. The owner creates it once in the Supabase SQL editor, with a long
+    random password from the password manager (never written anywhere else):
+
+    ```sql
+    create role backup_reader with login bypassrls password '<long random password>';
+    grant pg_read_all_data to backup_reader;
+    alter role backup_reader set default_transaction_read_only = on;
+    ```
+
+    `bypassrls` lets the dump read every row of tables protected by row level
+    security; the role still cannot change anything. Then set
+    `BACKUP_DB_ROLE=backup_reader` and `BACKUP_DB_PASSWORD`, run the workflow by
+    hand, and check it succeeds. If it fails, delete those two secrets: the
+    workflow falls back to the old password while the cause is found.
+
+  - `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY`: an R2 API token
+    with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
+    leaked backup token cannot touch member media or ID evidence.
+  - `R2_ACCOUNT_ID`.
+  - Transitional only: until those exist, the workflow uses the postgres
+    password (`SUPABASE_BACKUP_DB_PASSWORD`) and the app's storage key, and
+    warns on every run. Once the dedicated credentials work, delete
+    `SUPABASE_BACKUP_DB_PASSWORD`; keep the app's storage key only in the
+    `production` environment, which the backup job cannot read.
 - **Decryption key:** only the owner holds the private key, offline (key
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
   can be restored. Never commit it or store it in GitHub, Cloudflare or
