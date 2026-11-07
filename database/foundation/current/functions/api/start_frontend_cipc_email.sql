@@ -1,0 +1,11 @@
+-- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
+-- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
+
+CREATE OR REPLACE FUNCTION api.start_frontend_cipc_email(p_owner uuid, p_session uuid, p_business uuid, p_case uuid, p_email text, p_position text, p_digest text)
+ RETURNS jsonb
+ LANGUAGE sql
+ SET search_path TO 'pg_catalog'
+AS $function$select internal.start_frontend_cipc_email(p_owner,p_session,p_business,p_case,p_email,p_position,p_digest)$function$;
+alter function api.start_frontend_cipc_email(uuid,uuid,uuid,uuid,text,text,text) owner to postgres;
+revoke all on function api.start_frontend_cipc_email(uuid,uuid,uuid,uuid,text,text,text) from public;
+grant execute on function api.start_frontend_cipc_email(uuid,uuid,uuid,uuid,text,text,text) to service_role;
