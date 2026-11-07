@@ -11,9 +11,14 @@ import {
 // Smoke test for the private test copy (M0.7): the restored website in
 // foundation mode, reading the local database that was built only from
 // database/foundation/, with the seeded test people and posts.
-const state = readTestCopy();
+// Read in beforeAll, never at import time: listing specs must not touch the copy.
+let state: ReturnType<typeof readTestCopy>;
 
 test.describe("foundation test copy", () => {
+  test.beforeAll(() => {
+    state = readTestCopy();
+  });
+
   test("the database has no tables in public, so retired-backend reads fail as they do live", async () => {
     expect(countPublicTables()).toBe(0);
     // supabase-js defaults to schema public; like production, the gateway
