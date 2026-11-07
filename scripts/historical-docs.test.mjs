@@ -36,8 +36,8 @@ test("the README describes the automatic release, not a manual one", () => {
   const readme = readFileSync("README.md", "utf8");
   assert.equal(readme.includes("Pushing\n`main` runs CI only"), false);
   assert.equal(readme.includes("Pushing `main` runs CI only"), false);
-  assert.equal(/push to `master`/.test(readme), false);
-  assert.match(readme, /Merging a pull request into `main` releases it/);
+  assert.equal(readme.includes("push to `master`"), false);
+  assert.ok(readme.includes("Merging a pull request into `main` releases it"));
 });
 
 test("AGENTS.md states the live backend, database changes and release rule", () => {
@@ -51,7 +51,7 @@ test("AGENTS.md states the live backend, database changes and release rule", () 
   ]) {
     assert.ok(agents.includes(heading), `AGENTS.md needs "${heading}"`);
   }
-  assert.match(agents, /database\/foundation\/updates\//);
-  assert.match(agents, /A merge into `main` is a production release/);
-  assert.match(agents, /<!-- BEGIN:nextjs-agent-rules -->/);
+  assert.ok(agents.includes("database/foundation/updates/"));
+  assert.ok(agents.includes("A merge into `main` is a production release"));
+  assert.ok(agents.includes("<!-- BEGIN:nextjs-agent-rules -->"));
 });
