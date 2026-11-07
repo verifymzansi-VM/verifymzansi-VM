@@ -547,23 +547,69 @@ pnpm exec wrangler deploy --config wrangler.retention-cleanup.toml
 
 ### Rollback on Failure
 
-The GitHub Actions deploy workflow runs on `ubuntu-latest`, deploys the main
-OpenNext worker plus auxiliary workers, then checks `${APP_URL}/api/health` and
-public/auth pages. If production fails after deploy, use manual rollback from a
-Linux, macOS, or WSL environment:
+The Deploy workflow does **not** roll back automatically. Rolling back only the
+main Worker left production half old and half new twice in October 2026, once on
+a build made for the retired backend. When any production step fails or the run
+is cancelled after the deploy has started (helper Worker deploys, the health
+check), the step "Stop for manual rollback" fails the run with the error "Manual
+rollback needed". The site keeps whatever versions are live until a person acts.
+A run that timed out or lost its runner after "Deploy authenticated service
+monitor" started needs the same procedure, even without that message.
 
-```bash
-# Inspect recent worker versions
-pnpm exec wrangler versions list
+### Manual rollback (all Workers)
 
-# Roll back the main OpenNext worker to the previous stable version
-pnpm exec wrangler rollback
-```
+Roll every Worker back to the same last good release, never only the main one.
+`wrangler rollback` needs no build, so it also works from Windows (run the
+commands in Git Bash, or use the PowerShell equivalents noted).
 
-Select a rollback version whose compiled Supabase project and API contracts
-match the current database. A Worker rollback does not roll back database
-migrations. Versions compiled against the deleted Supabase project cannot serve
-as a working recovery target for the foundation release.
+0. **Stop new deploys first.** Actions → Deploy → "…" → Disable workflow (or
+   `gh workflow disable deploy.yml`). Otherwise the next green CI run on `main`,
+   or a queued run, deploys over a half-finished rollback. Check Actions for a
+   newer Deploy run: if one already fixed forward, do not roll back to an older
+   release. Re-enable the workflow only after step 6.
+1. **Pick the last good release and its version IDs.** Actions → Deploy: the
+   newest successful run before the failed one. Its log prints one
+   `Current Version ID:` line per Worker; those IDs are the targets. For the
+   main Worker, the target version's message is `verified-main-deployment`
+   (inactive `inactive-main-candidate` uploads carry the same commit tag and are
+   never a target). `wrangler versions list` shows only the 10 newest versions;
+   use the Cloudflare dashboard (Worker → Deployments) for older ones.
+2. **Check it is a foundation build.**
+   `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` (PowerShell:
+   `git show <sha>:wrangler.toml | Select-String NEXT_PUBLIC_DATA_BACKEND`) must
+   print `foundation`;
+   `pnpm exec wrangler versions view <version-id> --env production` shows the
+   version's own variables. Never roll back to a build made for the retired
+   source backend.
+3. **Check the database.** A Worker rollback does not undo database updates.
+   `git diff <good-sha>..<bad-sha> -- database/` lists the updates in between.
+   Older code works with updates that only added pieces; never roll back past an
+   update that removed or renamed something the older code uses (see "Database
+   changes" in [AGENTS.md](../AGENTS.md)). If unsure, stop and ask.
+4. **Check secrets and schedules.** If `wrangler rollback` lists secrets that
+   changed since the target version, confirming restores their old values. Stop
+   unless those old values are still valid (a rotated and revoked key would
+   break the site), or put the current secrets back right after the rollback.
+   Cron schedules and routes are not part of a version:
+   `git diff <good-sha>..<bad-sha> -- 'wrangler*.toml'` shows whether they
+   changed. Durable Object and KV data is never rolled back.
+5. **Roll back each Worker.** First run `deployments list` for every Worker and
+   skip only a Worker that already shows its target version ID. For the rest:
+
+   | Worker                   | Current deployment                                                             | Roll back                                                                                                                |
+   | ------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+   | `verifymzansi` (website) | `pnpm exec wrangler deployments list --env production`                         | `pnpm exec wrangler rollback <version-id> --env production --message "Manual rollback to <sha>"`                         |
+   | site monitor             | `pnpm exec wrangler deployments list --config wrangler.site-monitor.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.site-monitor.toml --message "Manual rollback to <sha>"`      |
+   | rate limiter             | `pnpm exec wrangler deployments list --config wrangler.rate-limiter.toml`      | `pnpm exec wrangler rollback <version-id> --config wrangler.rate-limiter.toml --message "Manual rollback to <sha>"`      |
+   | retention clean-up       | `pnpm exec wrangler deployments list --config wrangler.retention-cleanup.toml` | `pnpm exec wrangler rollback <version-id> --config wrangler.retention-cleanup.toml --message "Manual rollback to <sha>"` |
+   | payment clean-up         | `pnpm exec wrangler deployments list --config wrangler.payment-cleanup.toml`   | `pnpm exec wrangler rollback <version-id> --config wrangler.payment-cleanup.toml --message "Manual rollback to <sha>"`   |
+   | operations jobs          | `pnpm exec wrangler deployments list --config wrangler.ops-jobs.toml`          | `pnpm exec wrangler rollback <version-id> --config wrangler.ops-jobs.toml --message "Manual rollback to <sha>"`          |
+
+6. **Confirm and clean up.** `deployments list` shows every target version;
+   `/api/health` answers `ok`; the site monitor is green. Revert the bad pull
+   request on GitHub. When the revert's CI on `main` is green, re-enable the
+   Deploy workflow and run it by hand (Actions → Deploy → Run workflow) so
+   production matches `main` again.
 
 ### Worker Deployment
 
