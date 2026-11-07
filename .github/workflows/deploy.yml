@@ -286,9 +286,9 @@ jobs:
       # half old and half new, and could pick a build for the retired backend.
       # Stop loudly instead; a person follows the runbook's all-Worker rollback.
       - name: Stop for manual rollback
-        if: failure() && steps.deploy-monitor.outcome != 'skipped'
+        if: (failure() || cancelled()) && steps.deploy-monitor.outcome != 'skipped'
         run: |
-          echo "::error title=Manual rollback needed::A production change failed after the deploy started. Nothing was rolled back automatically. Follow docs/RUNBOOK.md, section 'Manual rollback (all Workers)', to return every Worker to the last good release."
+          echo "::error title=Manual rollback needed::A production change failed or was cancelled after the deploy started. Nothing was rolled back automatically. Follow docs/RUNBOOK.md, section 'Manual rollback (all Workers)', to return every Worker to the last good release."
           exit 1
 
       - name: Install Chromium for post-deploy verification
