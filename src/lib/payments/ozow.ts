@@ -594,10 +594,16 @@ async function testCopyProviderRequest(path: string, method: string): Promise<Re
   if (url.origin !== origin || !url.pathname.startsWith("/v1/")) {
     throw new OzowProviderError("Invalid Ozow pagination link");
   }
-  const response = await fetchWithoutRedirects(url, {
-    method,
-    signal: AbortSignal.timeout(10_000),
-  });
+  let response: Response;
+  try {
+    // A redirect is refused, never followed.
+    response = await fetchWithoutRedirects(url, {
+      method,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new OzowProviderError("Ozow payment lookup or cancellation failed");
+  }
   if (!response.ok)
     throw new OzowProviderError("Ozow payment lookup or cancellation failed", {
       status: response.status,

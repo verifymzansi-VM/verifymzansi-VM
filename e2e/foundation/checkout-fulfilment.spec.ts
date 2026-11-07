@@ -11,7 +11,7 @@ import {
   LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
 } from "../../scripts/lib/foundation-e2e-target.mjs";
-import { characterise, KnownBreak } from "./support/known-break";
+import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
 import {
   browserSessionCookies,
@@ -121,7 +121,11 @@ async function guard(context: BrowserContext) {
     } catch (error) {
       // The test already ended (its page closed mid-request); nothing to record.
       if (/disposed|closed/i.test(String(error))) return;
-      throw error;
+      // Recorded, not thrown: every step checks `failures`, and an error in a
+      // route handler would otherwise fail a marked test outside its pin.
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${request.method()} ${url.pathname}: ${message.slice(0, 200)}`);
+      return route.abort("failed").catch(() => undefined);
     }
     let body: unknown = `${bytes.length} bytes`;
     if (/json/i.test(response.headers()["content-type"] ?? ""))
@@ -274,6 +278,9 @@ test.describe("checkout to fulfilment", () => {
     await ozow.start();
   });
 
+  // A marked step may fail only through its known break (support/known-break.ts).
+  test.afterEach(({}, testInfo) => requireOnlyKnownBreak(testInfo));
+
   test.afterAll(async () => {
     try {
       // Leave no public post behind when a step failed before the member
@@ -361,7 +368,7 @@ test.describe("checkout to fulfilment", () => {
     page,
   }) => {
     const mark = readOutboundAttempts().length;
-    const { outside } = await guard(context);
+    const { outside, failures } = await guard(context);
     await signInBrowser(context, member);
     // Any member page gives the browser the CSRF cookie the form would use.
     await page.goto("/dashboard");
@@ -446,6 +453,7 @@ test.describe("checkout to fulfilment", () => {
     await context.clearCookies();
     await page.goto(`/mzansi-business/${business.id}`);
     await expect(page.getByText(business.name).filter({ visible: true }).first()).toBeVisible();
+    expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);
   });
@@ -679,6 +687,7 @@ test.describe("checkout to fulfilment", () => {
         // BL-05 as recorded: paid and active, shown to the owner, invisible to visitors.
         expect(failures).toEqual([]);
         expect(outside).toEqual([]);
+        expectNoOutboundSince(mark);
         throw new KnownBreak(
           `${BL05}: the paid Urgent window is active and the owner sees "Already urgent", but the post page shows no Urgent label`
         );
@@ -700,7 +709,7 @@ test.describe("checkout to fulfilment", () => {
 
   test("the member deletes the post, which frees the plan's slot", async ({ context, page }) => {
     const mark = readOutboundAttempts().length;
-    const { outside, reply } = await guard(context);
+    const { outside, failures, reply } = await guard(context);
     await signInBrowser(context, member);
     await page.goto("/dashboard/listings");
     const item = page
@@ -731,6 +740,7 @@ test.describe("checkout to fulfilment", () => {
       status: 200,
       body: { used: 0, hasPaidPlan: true },
     });
+    expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);
   });
@@ -791,6 +801,7 @@ test.describe("checkout to fulfilment", () => {
         // expired before it was created, under the failed attempt's key.
         expect(failures).toEqual([]);
         expect(outside).toEqual([]);
+        expectNoOutboundSince(mark);
         throw new KnownBreak(
           `${PAY03}: the retry reused the payment window that ended ${-Number(secondsLeft)} s ago and the same idempotency key`
         );

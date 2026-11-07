@@ -832,6 +832,11 @@ describe("provider lookups in the foundation test copy (M0.9c)", () => {
   it.each([
     ["to Ozow", `https://one.ozow.com/v1/payments/${request}/transactions?offset=50`],
     ["off the provider API", "http://127.0.0.1:55448/admin?offset=50"],
+    [
+      "to the copy's database gateway",
+      `http://127.0.0.1:55443/v1/payments/${request}/transactions`,
+    ],
+    ["to another name for loopback", `http://localhost:55448/v1/payments/${request}/transactions`],
   ])("refuses a pagination link that leaves the stand-in's API (%s)", async (_label, next) => {
     stub(copy);
     const fetchMock = vi.fn().mockResolvedValueOnce(reply({ results: [], links: { next } }));
@@ -841,6 +846,23 @@ describe("provider lookups in the foundation test copy (M0.9c)", () => {
       listOzowPaymentTransactions(request, "2026-10-02T08:00:00Z")
     ).rejects.toMatchObject({ code: "ozow_provider_error" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never follows a stand-in redirect and reports it as a provider failure", async () => {
+    stub(copy);
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 302,
+      type: "basic",
+      headers: new Headers({ Location: "https://one.ozow.com/v1/payments/request-1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { getOzowPaymentRequestStatus } = await import("./ozow");
+    await expect(getOzowPaymentRequestStatus(request)).rejects.toMatchObject({
+      code: "ozow_provider_error",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: "manual" });
   });
 
   it("reports a stand-in failure as a provider failure", async () => {
