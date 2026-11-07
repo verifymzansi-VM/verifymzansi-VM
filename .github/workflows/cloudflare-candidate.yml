@@ -36,6 +36,10 @@ jobs:
       R2_PRIVATE_BUCKET: verifymzansi-private
       OTP_RATE_LIMITER_URL: https://verifymzansi-rate-limiter.verifymzansi.workers.dev
       OTP_RATE_LIMITER_TIMEOUT_MS: "2500"
+      NODE_OPTIONS: --max-old-space-size=4096
+      # The Wrangler build hook may only verify the artifact built above,
+      # never rebuild it inside a step that holds Cloudflare credentials.
+      CLOUDFLARE_BUILD_HOOK: verify-only
     steps:
       - name: Validate the requested source selector
         run: '[[ "$DEPLOY_TARGET_SHA" =~ ^[a-f0-9]{40}$ ]]'

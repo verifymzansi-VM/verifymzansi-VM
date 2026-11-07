@@ -43,10 +43,10 @@ jobs:
         github.event.workflow_run.head_repository.full_name == github.repository))
     # Production secrets live in the protected "production" environment, which
     # only this job on main can read. No secret is set at job level: each step
-    # gets only the values it uses, so dependency installation, the build,
-    # browser installation and third-party actions never see a credential.
-    # Runtime-only keys (ID evidence encryption, ID fingerprint, IP hashing)
-    # are not stored in GitHub at all; they live on the Worker in Cloudflare.
+    # gets only the values it uses, and dependency installation, the build,
+    # browser installation and upload steps receive none. Runtime-only keys
+    # (ID evidence encryption, ID fingerprint, IP hashing) are not stored in
+    # GitHub at all; they live on the Worker in Cloudflare.
     environment: production
     env:
       NODE_ENV: production
@@ -57,6 +57,9 @@ jobs:
       R2_PRIVATE_BUCKET: verifymzansi-private
       OTP_RATE_LIMITER_URL: https://verifymzansi-rate-limiter.verifymzansi.workers.dev
       OTP_RATE_LIMITER_TIMEOUT_MS: "2500"
+      # The Wrangler build hook may only verify the artifact built above,
+      # never rebuild it inside a step that holds Cloudflare credentials.
+      CLOUDFLARE_BUILD_HOOK: verify-only
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -279,6 +282,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy --config wrangler.ops-jobs.toml --tag "$DEPLOY_TARGET_SHA" --secrets-file "$RUNNER_TEMP/cloudflare-ops-secrets.json"
+
+      # The secrets files are needed only by the deploy steps above. Remove
+      # them before browser installation and other later steps run.
+      - name: Remove deployment secret files
+        if: always()
+        run: |
+          rm -f -- "$RUNNER_TEMP"/cloudflare-*-secrets.json
 
       - name: Post-deploy health check
         id: health-check

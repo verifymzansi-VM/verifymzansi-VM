@@ -27,3 +27,14 @@ export function privateBuildNames(fixture) {
     (name) => !name.startsWith("NEXT_PUBLIC_") && !PUBLIC_BUILD_SETTINGS.has(name)
   );
 }
+
+/** Release credentials that are not Worker settings and must never reach the build. */
+export const RELEASE_ONLY_CREDENTIALS = [
+  "CLOUDFLARE_API_TOKEN",
+  "SITE_MONITOR_API_KEY",
+  "DEPLOY_HEALTHCHECK_URL",
+  "GITHUB_TOKEN",
+  "SUPABASE_BACKUP_DB_PASSWORD",
+  "BACKUP_R2_ACCESS_KEY_ID",
+  "BACKUP_R2_SECRET_ACCESS_KEY",
+];

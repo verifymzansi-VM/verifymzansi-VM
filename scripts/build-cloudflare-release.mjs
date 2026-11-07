@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parse } from "smol-toml";
 import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
-import { privateBuildNames } from "./lib/release-build-env.mjs";
+import { RELEASE_ONLY_CREDENTIALS, privateBuildNames } from "./lib/release-build-env.mjs";
 
 if (process.argv.length > 2) throw new Error("Release build accepts no arguments");
 if (process.env.GITHUB_ACTIONS !== "true") {
@@ -23,7 +23,9 @@ const fixture = createCloudflareStartupFixture({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
 });
 const privateNames = privateBuildNames(fixture);
-const leaked = privateNames.filter((name) => (process.env[name] ?? "") !== "");
+const leaked = [...privateNames, ...RELEASE_ONLY_CREDENTIALS].filter(
+  (name) => (process.env[name] ?? "") !== ""
+);
 if (leaked.length > 0) {
   console.error(`::error::Private credentials must not reach the build step: ${leaked.join(", ")}`);
   process.exit(1);

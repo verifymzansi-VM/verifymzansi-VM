@@ -22,15 +22,42 @@ const load = (file: string) =>
     env?: Record<string, string>;
     jobs: Record<string, Job>;
   };
-const usesSecret = (value: unknown) => /\$\{\{\s*secrets\./.test(JSON.stringify(value ?? {}));
-// Steps that run third-party code or dependency scripts and must see no secret.
-const mustBeSecretFree = (step: Step) =>
-  /pnpm install|playwright install|build-cloudflare-release|build:cloudflare/.test(
-    step.run ?? ""
-  ) ||
-  /^(actions\/(checkout|setup-node|upload-artifact)|pnpm\/action-setup|\.\/\.github\/actions\/install-browsers)/.test(
-    step.uses ?? ""
-  );
+// Any expression that reads the secrets context, whatever the syntax: secrets.X, secrets['X'], toJSON(secrets).
+const usesSecret = (value: unknown) => /\$\{\{[^}]*\bsecrets\b/.test(JSON.stringify(value ?? {}));
+const label = (step: Step) => step.name ?? step.uses ?? step.run ?? "";
+
+// The only steps allowed to receive secrets. Every other step gets none.
+const SECRET_STEPS: Record<string, string[]> = {
+  "deploy.yml": [
+    "Normalize deploy env aliases",
+    "Verify London release and API contracts",
+    "Match public build settings to production bindings",
+    "Validate production launch env",
+    "Enforce production Ozow mode",
+    "Validate Cloudflare deploy credentials",
+    "Verify Cloudflare Worker secrets before deploy",
+    "Deploy authenticated service monitor",
+    "Deploy to Cloudflare",
+    "Deploy Rate Limiter Worker",
+    "Deploy Retention Cleanup Worker",
+    "Deploy Payment Cleanup Worker",
+    "Deploy Ops Jobs Worker",
+    "Post-deploy health check",
+  ],
+  "cloudflare-candidate.yml": [
+    "Match all public build settings to production bindings",
+    "Verify hosted connection and candidate contracts",
+    "Validate production configuration",
+    "Prepare additive scoped bindings",
+    "Upload inactive production candidate",
+  ],
+};
+// Secret-bearing steps that may write to $GITHUB_ENV (public values only).
+const ENV_WRITERS = new Set([
+  "Normalize deploy env aliases",
+  "Match public build settings to production bindings",
+  "Match all public build settings to production bindings",
+]);
 
 describe("production secrets reach only the steps that use them", () => {
   for (const [file, jobName] of [
@@ -43,18 +70,26 @@ describe("production secrets reach only the steps that use them", () => {
       expect(job.environment).toBe("production");
       expect(usesSecret(workflow.env)).toBe(false);
       expect(usesSecret(job.env)).toBe(false);
+      expect(job.env?.CLOUDFLARE_BUILD_HOOK).toBe("verify-only");
     });
 
-    it(`${file} gives install, build, browser and upload steps no secret`, () => {
+    it(`${file} gives secrets only to the reviewed steps`, () => {
       const job = load(file).jobs[jobName];
-      const checked = job.steps.filter(mustBeSecretFree);
-      expect(checked.length).toBeGreaterThanOrEqual(4);
-      for (const step of checked) {
-        expect(usesSecret(step.env), step.name ?? step.uses).toBe(false);
-        expect(usesSecret(step.with), step.name ?? step.uses).toBe(false);
+      const allowed = new Set(SECRET_STEPS[file]);
+      for (const step of job.steps) {
+        const secret = usesSecret(step.env) || usesSecret(step.with) || usesSecret(step.run);
+        if (!allowed.has(label(step))) expect(secret, label(step)).toBe(false);
+        if (secret && /GITHUB_ENV/.test(step.run ?? ""))
+          expect(ENV_WRITERS.has(label(step)), label(step)).toBe(true);
       }
+      for (const name of allowed)
+        expect(
+          job.steps.some((step) => label(step) === name),
+          `${name} exists`
+        ).toBe(true);
       const build = job.steps.find((step) => /build-cloudflare-release/.test(step.run ?? ""));
-      expect(build?.run).not.toMatch(/pnpm run build:cloudflare/);
+      expect(build, "release build step").toBeDefined();
+      expect(build?.run ?? "").not.toMatch(/pnpm run build:cloudflare/);
     });
 
     it(`${file} validates with runtime-only keys left in Cloudflare`, () => {
@@ -64,6 +99,16 @@ describe("production secrets reach only the steps that use them", () => {
     });
   }
 
+  it("deploy.yml removes the secret files before later steps run", () => {
+    const steps = load("deploy.yml").jobs.deploy.steps;
+    const lastWrite = steps.findLastIndex((step) => /--secrets-file/.test(step.run ?? ""));
+    const cleanup = steps.findIndex((step) => step.name === "Remove deployment secret files");
+    expect(cleanup).toBe(lastWrite + 1);
+    expect(steps[cleanup].run).toContain('"$RUNNER_TEMP"/cloudflare-*-secrets.json');
+    const browsers = steps.findIndex((step) => /install-browsers/.test(step.uses ?? ""));
+    expect(cleanup).toBeLessThan(browsers);
+  });
+
   it("no workflow references the runtime-only keys", () => {
     for (const file of readdirSync(".github/workflows")) {
       const text = readFileSync(path.join(".github/workflows", file), "utf8");
@@ -71,14 +116,14 @@ describe("production secrets reach only the steps that use them", () => {
     }
   });
 
-  it("backups use their own protected environment and never fall back silently", () => {
+  it("backups use their own protected environment and keep the connection string in one step", () => {
     const job = load("database-backup.yml").jobs.backup;
     expect(job.environment).toBe("backup");
     const text = readFileSync(".github/workflows/database-backup.yml", "utf8");
-    expect(text).toContain("secrets.BACKUP_DB_ROLE");
+    expect(text).not.toMatch(/DB_URL=[^\n]*GITHUB_ENV/);
+    const dump = job.steps.find((step) => step.name === "Dump roles, schema and data");
+    expect(dump?.env?.DB_PASSWORD).toContain("secrets.SUPABASE_BACKUP_DB_PASSWORD");
     expect(text).toContain("secrets.BACKUP_R2_ACCESS_KEY_ID");
-    expect(text).toContain("must be the dedicated read-only backup role, not postgres");
-    expect(text).toMatch(/::warning::Backups still use the postgres password/);
     expect(text).toMatch(/::warning::Backups still use the app's storage key/);
   });
 });
@@ -103,7 +148,7 @@ describe("release build", () => {
     expect(names).not.toContain("NODE_ENV");
   });
 
-  it("refuses to build when a real private credential is in its environment", () => {
+  it("refuses to build when a real private or release credential is in its environment", () => {
     const result = spawnSync(process.execPath, ["scripts/build-cloudflare-release.mjs"], {
       encoding: "utf8",
       env: {
@@ -111,11 +156,13 @@ describe("release build", () => {
         SystemRoot: process.env.SystemRoot ?? "",
         GITHUB_ACTIONS: "true",
         KYC_ENCRYPTION_KEY: "a".repeat(64),
+        CLOUDFLARE_API_TOKEN: "synthetic-token",
       },
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Private credentials must not reach the build step");
     expect(result.stderr).toContain("KYC_ENCRYPTION_KEY");
+    expect(result.stderr).toContain("CLOUDFLARE_API_TOKEN");
   });
 
   it("runs only in GitHub Actions", () => {

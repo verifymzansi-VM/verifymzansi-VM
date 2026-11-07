@@ -27,9 +27,9 @@ jobs:
   backup:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # Backup credentials live in the protected "backup" environment (main only):
-    # a dedicated read-only database login and a storage token limited to the
-    # backup bucket, never the app's own keys or the postgres password.
+    # Backup credentials live in the protected "backup" environment (main
+    # only), which no other workflow can read, with a storage token limited
+    # to the backup bucket instead of the app's own storage key.
     environment: backup
     env:
       SUPABASE_PROJECT_REF: gntzjtuncsyefujajmjy
@@ -41,51 +41,29 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build the database connection string
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.120.0
+
+      # The connection string is built inside this step and never written to
+      # $GITHUB_ENV, so no other step (or third-party action) can read it.
+      # The pinned CLI dumps as role "postgres", so this still uses the
+      # postgres password; a dedicated read-only login needs a direct pg_dump
+      # path and is introduced with the restore drill.
+      - name: Dump roles, schema and data
         env:
-          BACKUP_DB_ROLE: ${{ secrets.BACKUP_DB_ROLE }}
-          BACKUP_DB_PASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
-          # Transitional: the postgres password, used only until the dedicated
-          # read-only role exists. Remove the secret once BACKUP_DB_* are set.
-          LEGACY_DB_PASSWORD: ${{ secrets.SUPABASE_BACKUP_DB_PASSWORD }}
+          DB_PASSWORD: ${{ secrets.SUPABASE_BACKUP_DB_PASSWORD }}
         run: |
           # Pasting into the GitHub secret form can add a trailing newline.
-          clean() { printf '%s' "$1" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
-          DB_ROLE=$(clean "$BACKUP_DB_ROLE")
-          DB_PASSWORD=$(clean "$BACKUP_DB_PASSWORD")
-          if [ -n "$DB_ROLE" ] || [ -n "$DB_PASSWORD" ]; then
-            if [ -z "$DB_ROLE" ] || [ -z "$DB_PASSWORD" ]; then
-              echo "::error::Set both BACKUP_DB_ROLE and BACKUP_DB_PASSWORD in the backup environment."
-              exit 1
-            fi
-            if [ "$DB_ROLE" = "postgres" ]; then
-              echo "::error::BACKUP_DB_ROLE must be the dedicated read-only backup role, not postgres."
-              exit 1
-            fi
-          else
-            DB_ROLE=postgres
-            DB_PASSWORD=$(clean "$LEGACY_DB_PASSWORD")
-            if [ -z "$DB_PASSWORD" ]; then
-              echo "::error::Set BACKUP_DB_ROLE and BACKUP_DB_PASSWORD (dedicated read-only role) in the backup environment."
-              exit 1
-            fi
-            echo "::warning::Backups still use the postgres password. Create the read-only backup role (docs/RUNBOOK.md, Database Backups) and set BACKUP_DB_ROLE and BACKUP_DB_PASSWORD."
-          fi
-          if ! printf '%s' "$DB_ROLE" | grep -Eq '^[a-z_][a-z0-9_]{0,62}$'; then
-            echo "::error::BACKUP_DB_ROLE is not a valid role name."
+          DB_PASSWORD=$(printf '%s' "$DB_PASSWORD" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "::error::Add SUPABASE_BACKUP_DB_PASSWORD to the backup environment (Supabase > Project Settings > Database password)."
             exit 1
           fi
           encoded=$(DB_PASSWORD="$DB_PASSWORD" python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["DB_PASSWORD"], safe=""))')
           echo "::add-mask::$encoded"
           # Session mode (port 5432) supports pg_dump; the transaction pooler does not.
-          echo "DB_URL=postgresql://${DB_ROLE}.${SUPABASE_PROJECT_REF}:${encoded}@${SUPABASE_POOLER_HOST}:5432/postgres" >> "$GITHUB_ENV"
-
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
-        with:
-          version: 2.120.0
-
-      - name: Dump roles, schema and data
-        run: |
+          DB_URL="postgresql://postgres.${SUPABASE_PROJECT_REF}:${encoded}@${SUPABASE_POOLER_HOST}:5432/postgres"
           mkdir -p "$RUNNER_TEMP/backup"
           cd "$RUNNER_TEMP/backup"
           supabase db dump --db-url "$DB_URL" -f roles.sql --role-only
@@ -142,7 +120,8 @@ jobs:
           BACKUP_R2_ACCESS_KEY_ID: ${{ secrets.BACKUP_R2_ACCESS_KEY_ID }}
           BACKUP_R2_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_R2_SECRET_ACCESS_KEY }}
           # Transitional: the app's storage key, used only until the backup
-          # bucket's own token exists. Remove it from this environment then.
+          # bucket's own token exists. It is never placed in the backup
+          # environment, so it stops resolving once removed from the repository.
           LEGACY_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           LEGACY_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
@@ -150,7 +129,11 @@ jobs:
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
         run: |
-          if [ -n "$BACKUP_R2_ACCESS_KEY_ID" ] && [ -n "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+          if [ -n "$BACKUP_R2_ACCESS_KEY_ID" ] || [ -n "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+            if [ -z "$BACKUP_R2_ACCESS_KEY_ID" ] || [ -z "$BACKUP_R2_SECRET_ACCESS_KEY" ]; then
+              echo "::error::Set both BACKUP_R2_ACCESS_KEY_ID and BACKUP_R2_SECRET_ACCESS_KEY in the backup environment."
+              exit 1
+            fi
             export AWS_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY"
           elif [ -n "$LEGACY_R2_ACCESS_KEY_ID" ] && [ -n "$LEGACY_R2_SECRET_ACCESS_KEY" ]; then
             export AWS_ACCESS_KEY_ID="$LEGACY_R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$LEGACY_R2_SECRET_ACCESS_KEY"
