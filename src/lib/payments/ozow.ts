@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { testCopyCheckout } from "./checkout-origins";
 import { createLogger } from "@/lib/utils/logger";
 import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
@@ -250,7 +251,12 @@ function createMockHostedPaymentResponse(
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
   const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
-  const redirectUrl = new URL("/api/mock-ozow", appUrl);
+  // The foundation test copy stores checkout URLs, which must be HTTPS; its
+  // mock payment page lives on a fixed loopback address the browser tests serve.
+  const testCopy = testCopyCheckout();
+  const redirectUrl = testCopy
+    ? new URL("/checkout", testCopy.mockPaymentOrigin)
+    : new URL("/api/mock-ozow", appUrl);
 
   redirectUrl.searchParams.set("paymentId", input.paymentId);
   redirectUrl.searchParams.set("amount", amount);

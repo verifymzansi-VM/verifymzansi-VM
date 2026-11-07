@@ -632,3 +632,65 @@ describe("ozow payments", () => {
     expect(fromOzowMerchantReference("11111111-1111-4111-8111-111111111111")).toBeNull();
   });
 });
+
+describe("mock checkout page (M0.8)", () => {
+  const paymentId = "11111111-1111-4111-8111-111111111111";
+  const input = {
+    paymentId,
+    merchantReference: "11111111111141118111111111111111",
+    amountCents: 5000,
+    returnUrl: `http://127.0.0.1:3110/billing/success?payment=${paymentId}`,
+    cancelUrl: `http://127.0.0.1:3110/billing/cancel?payment=${paymentId}`,
+  };
+  const copy = {
+    NODE_ENV: "production",
+    ENVIRONMENT: "test",
+    VERIFYMZANSI_RUNTIME_MODE: "e2e",
+    PLAYWRIGHT_TEST_MODE: "1",
+    ENABLE_MOCK_OZOW: "true",
+    OZOW_ENV: "staging",
+    NEXT_PUBLIC_DATA_BACKEND: "foundation",
+    FOUNDATION_PROJECT_REF: "local-foundation",
+    FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
+  };
+  const stub = (values: Record<string, string>) => {
+    vi.stubGlobal("window", undefined);
+    vi.stubGlobal("document", undefined);
+    for (const [key, value] of Object.entries(values)) vi.stubEnv(key, value);
+  };
+
+  beforeEach(() => vi.resetModules());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("is the fixed HTTPS loopback page in the foundation test copy, with no provider call", async () => {
+    stub(copy);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { createOzowHostedPayment } = await import("./ozow");
+    const result = await createOzowHostedPayment(input);
+    const url = new URL(result.redirectUrl);
+    expect(url.origin).toBe("https://127.0.0.1:55455");
+    expect(url.pathname).toBe("/checkout");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      paymentId,
+      amount: "50.00",
+      returnUrl: input.returnUrl,
+      cancelUrl: input.cancelUrl,
+    });
+    expect(result.providerPaymentId).toBe(`mock-${paymentId}`);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stays on the website's own mock route outside the foundation test copy", async () => {
+    stub({ ...copy, NEXT_PUBLIC_DATA_BACKEND: "source", NODE_ENV: "test" });
+    vi.stubGlobal("fetch", vi.fn());
+    const { createOzowHostedPayment } = await import("./ozow");
+    const result = await createOzowHostedPayment(input);
+    expect(new URL(result.redirectUrl).origin + new URL(result.redirectUrl).pathname).toBe(
+      "http://localhost:3000/api/mock-ozow"
+    );
+  });
+});

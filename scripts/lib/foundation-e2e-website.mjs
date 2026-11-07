@@ -49,8 +49,10 @@ export function envFileKeyNames(root = process.cwd()) {
   return names;
 }
 
-/** A loopback port in the copy's range that nothing listens on. */
-export const LOCAL_DEAD_LIMITER_URL = "http://127.0.0.1:55456/check";
+/** The copy's local rate limiter stub, started by `serve` on loopback. */
+export const LOCAL_LIMITER_URL = `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/check`;
+/** Synthetic key the stub expects; it exists only in the copy. */
+export const LOCAL_LIMITER_KEY = "local-fixture-limiter-key";
 
 /** Keys Next itself manages; never blanked. */
 const NEXT_MANAGED = new Set(["NODE_ENV"]);
@@ -87,11 +89,11 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     // The stub suite unsets these; unset keys would be refilled from .env files.
     // The e2e runtime validates the environment strictly (a limiter key needs a
     // limiter URL, formatted keys reject ""), so these get neutral valid
-    // values. The limiter URL is a deliberately closed loopback port: requests
-    // fail locally and the website falls back to its in-memory limiter.
-    OTP_RATE_LIMITER_URL: LOCAL_DEAD_LIMITER_URL,
+    // values. The limiter is the copy's own loopback stub (started by `serve`),
+    // so fail-closed actions such as checkout are not blocked as "degraded".
+    OTP_RATE_LIMITER_URL: LOCAL_LIMITER_URL,
     OTP_RATE_LIMITER_TIMEOUT_MS: "500",
-    RATE_LIMITER_API_KEY: "local-fixture-limiter-key-unused",
+    RATE_LIMITER_API_KEY: LOCAL_LIMITER_KEY,
     OZOW_ENV: "staging",
     NEXT_PUBLIC_CF_IMAGE_RESIZING: "false",
   };

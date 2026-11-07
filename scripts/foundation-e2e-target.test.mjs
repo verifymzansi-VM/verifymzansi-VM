@@ -11,12 +11,17 @@ import {
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import {
   BUILD_STAMP,
+  E2E_APP_URL,
+  LOCAL_LIMITER_KEY,
+  LOCAL_LIMITER_URL,
   assertBuildIsCopy,
   envFileKeyNames,
   foundationWebsiteEnv,
   hostedMarkersIn,
   writeBuildStamp,
 } from "./lib/foundation-e2e-website.mjs";
+import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
+import { TEST_COPY_CHECKOUT, testCopyCheckout } from "../src/lib/payments/checkout-origins.ts";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -297,7 +302,7 @@ test("no value from .env files reaches the website, as Next loads them", () => {
     assert.equal(loaded.FOUNDATION_SUPABASE_URL, API);
     assert.equal(loaded.NEXT_PUBLIC_SUPABASE_URL, API);
     assert.equal(loaded.OTP_RATE_LIMITER_URL, "http://127.0.0.1:55456/check");
-    assert.equal(loaded.RATE_LIMITER_API_KEY, "local-fixture-limiter-key-unused");
+    assert.equal(loaded.RATE_LIMITER_API_KEY, LOCAL_LIMITER_KEY);
     assert.equal(loaded.OZOW_CLIENT_SECRET, "");
     assert.equal(loaded.PLAYWRIGHT_E2E_AUTH, "");
   } finally {
@@ -336,6 +341,74 @@ test("serving refuses a .next folder not built for the copy", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the copy's website settings switch on test checkout at exactly the copy's addresses", () => {
+  // The website's guard (src/lib/payments/checkout-origins.ts) and the copy
+  // must name the same addresses, and the copy's settings must satisfy it.
+  assert.deepEqual(TEST_COPY_CHECKOUT, {
+    appOrigin: E2E_APP_URL,
+    databaseUrl: API,
+    mockPaymentOrigin: `https://127.0.0.1:${E2E_FIXTURE.mockPaymentPort}`,
+  });
+  const env = foundationWebsiteEnv(LOCAL_STATUS, {
+    root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+  });
+  const saved = { ...process.env };
+  try {
+    for (const key of Object.keys(process.env)) delete process.env[key];
+    Object.assign(process.env, env, { NODE_ENV: "production" });
+    assert.equal(testCopyCheckout(), TEST_COPY_CHECKOUT);
+    process.env.ENVIRONMENT = "production";
+    assert.equal(testCopyCheckout(), null);
+  } finally {
+    for (const key of Object.keys(process.env)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  // Nothing else in the copy uses the mock payment or limiter ports.
+  const ports = [
+    E2E_FIXTURE.apiPort,
+    E2E_FIXTURE.dbPort,
+    E2E_FIXTURE.mailPort,
+    E2E_FIXTURE.appPort,
+    E2E_FIXTURE.limiterPort,
+    E2E_FIXTURE.mockPaymentPort,
+  ];
+  assert.equal(new Set(ports).size, ports.length);
+  assert.equal(LOCAL_LIMITER_URL, `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/check`);
+});
+
+test("the local limiter stub allows well-formed requests on loopback only", async () => {
+  const server = await startLocalLimiter({ port: 0, apiKey: LOCAL_LIMITER_KEY });
+  try {
+    const address = server.address();
+    assert.equal(address.address, "127.0.0.1");
+    const url = `http://127.0.0.1:${address.port}`;
+    const call = (pathname, init = {}) =>
+      fetch(`${url}${pathname}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOCAL_LIMITER_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ key: "account:ip", action: "billing:checkout" }),
+        ...init,
+      });
+    const allowed = await call("/check");
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(await allowed.json(), { allowed: true });
+    assert.equal(
+      (await call("/check", { headers: { Authorization: "Bearer wrong" } })).status,
+      401
+    );
+    assert.equal((await call("/other")).status, 404);
+    assert.equal((await call("/check", { method: "GET", body: undefined })).status, 405);
+    assert.equal((await call("/check", { body: "{" })).status, 400);
+    assert.equal((await call("/check", { body: JSON.stringify({ key: 1 }) })).status, 400);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+  assert.throws(() => startLocalLimiter({ port: 1, apiKey: "short" }), /Invalid limiter key/);
 });
 
 test("hosted markers are found, the local key is not", () => {

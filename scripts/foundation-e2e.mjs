@@ -7,8 +7,9 @@
 //   up      start the stack if needed, prove the schema, seed once
 //   reset   delete the stack and its data, then `up`
 //   build   `up`, then build the website for the copy
-//   serve   `up`, build (unless PLAYWRIGHT_SKIP_BUILD=1), start the website
-//           on http://127.0.0.1:3110 (the Playwright web server command)
+//   serve   `up`, build (unless PLAYWRIGHT_SKIP_BUILD=1), start the local rate
+//           limiter stub and the website on http://127.0.0.1:3110 (the
+//           Playwright web server command)
 //   down    stop and delete the stack and its data
 //
 // It takes no connection settings: every address comes from the local CLI
@@ -29,8 +30,10 @@ import {
   verifyWorkspace,
 } from "./lib/foundation-e2e-stack.mjs";
 import { seedTestCopy } from "./lib/foundation-e2e-seed.mjs";
+import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
 import { E2E_FIXTURE } from "./lib/foundation-e2e-target.mjs";
 import {
+  LOCAL_LIMITER_KEY,
   assertBuildIsCopy,
   foundationWebsiteEnv,
   writeBuildStamp,
@@ -124,9 +127,14 @@ function build(env) {
   log(`Website built and checked: no hosted settings in the client bundle (${seconds(started)}).`);
 }
 
-function serve(env) {
+async function serve(env) {
   // Never serve a .next built for production or with other settings.
   assertBuildIsCopy(env);
+  const limiter = await startLocalLimiter({
+    port: E2E_FIXTURE.limiterPort,
+    apiKey: LOCAL_LIMITER_KEY,
+  });
+  log(`Local rate limiter stub listening on 127.0.0.1:${E2E_FIXTURE.limiterPort}.`);
   const server = spawn(
     process.execPath,
     [
@@ -142,7 +150,10 @@ function serve(env) {
   const stop = (signal) => !server.killed && server.kill(signal);
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
-  server.on("exit", (code) => process.exit(code ?? 0));
+  server.on("exit", (code) => {
+    limiter.close();
+    process.exit(code ?? 0);
+  });
 }
 
 const command = process.argv[2];
@@ -167,7 +178,7 @@ try {
     if (command === "build") build(env);
     if (command === "serve") {
       if (process.env.PLAYWRIGHT_SKIP_BUILD !== "1") build(env);
-      serve(env);
+      await serve(env);
     }
   }
 } catch (error) {

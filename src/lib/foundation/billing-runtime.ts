@@ -8,10 +8,12 @@ import {
   cancelOzowPaymentRequest,
   createOzowHostedPayment,
   getOzowPaymentRequestStatus,
+  isMockOzowEnabled,
   listOzowPaymentTransactions,
   type NormalizedOzowWebhook,
 } from "../payments/ozow";
 import { validateOzowConfirmation } from "../payments/confirmation";
+import { PRODUCTION_CHECKOUT_ORIGIN, testCopyCheckout } from "../payments/checkout-origins";
 import type { PaymentRecordShape } from "../payments/types";
 
 type BillingRpcName =
@@ -155,16 +157,29 @@ async function readFoundationServicePayment(
   return data === null ? null : foundationPaymentSchema.parse(data);
 }
 
+/** Test copy addresses (src/lib/payments/checkout-origins.ts), only while the
+ * provider really is the mock, so a test address never reaches Ozow. Null with
+ * production settings, which leaves both checks below exactly as before. */
+function testCheckout() {
+  const copy = testCopyCheckout();
+  return copy && isMockOzowEnabled() ? copy : null;
+}
+function isTestCopyMockPayment(url: URL) {
+  const copy = testCheckout();
+  return copy !== null && !url.username && !url.password && url.origin === copy.mockPaymentOrigin;
+}
+
 function checkoutRedirect(value: string) {
   const url = new URL(value);
   if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.port ||
-    !["ozow.com", "pay.ozow.com", "secure.ozow.com", "one.ozow.com", "stagingone.ozow.com"].some(
-      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`)
-    )
+    (url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !["ozow.com", "pay.ozow.com", "secure.ozow.com", "one.ozow.com", "stagingone.ozow.com"].some(
+        (host) => url.hostname === host || url.hostname.endsWith(`.${host}`)
+      )) &&
+    !isTestCopyMockPayment(url)
   )
     throw new FoundationBillingError(503, "The payment provider returned an invalid checkout URL");
   return url.href;
@@ -193,7 +208,11 @@ export async function startFoundationCheckout(
   service = createFoundationServiceApi()
 ) {
   const app = new URL(appUrl);
-  if (app.origin !== "https://verifymzansi.com" || app.username || app.password)
+  if (
+    (app.origin !== PRODUCTION_CHECKOUT_ORIGIN && app.origin !== testCheckout()?.appOrigin) ||
+    app.username ||
+    app.password
+  )
     throw new FoundationBillingError(503);
   const quote = quoteSchema.parse(
     await command(api, "start_checkout", {

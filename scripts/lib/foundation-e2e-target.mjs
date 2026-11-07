@@ -12,6 +12,10 @@ export const E2E_FIXTURE = Object.freeze({
   apiPort: 55443,
   dbPort: 55452,
   mailPort: 55454,
+  /** The local rate limiter stub that `serve` runs (scripts/lib/foundation-e2e-limiter.mjs). */
+  limiterPort: 55456,
+  /** Mock payment page (HTTPS, served by the browser tests themselves; nothing listens). */
+  mockPaymentPort: 55455,
   appPort: 3110,
   /** The website's connection guard accepts only this marker for a local stack. */
   projectRef: "local-foundation",

@@ -4,6 +4,7 @@
 // fixture (module import), and the gateway key, post ids and authenticator
 // secrets are read from the copy itself (local CLI status and the copy's own
 // database container).
+import { createServerClient } from "@supabase/ssr";
 import people from "../fixture/people.json";
 import {
   E2E_FIXTURE,
@@ -127,7 +128,12 @@ export async function signIn(copy: TestCopy, key: PersonKey) {
   });
   if (login.status !== 200) throw new Error(`Sign-in failed for ${key} (${login.status})`);
   const factor = authenticatorOf(key);
-  if (!factor) return { token: login.data.access_token as string, aal: "aal1" };
+  if (!factor)
+    return {
+      token: login.data.access_token as string,
+      refreshToken: login.data.refresh_token as string,
+      aal: "aal1",
+    };
   const challenge = await request(copy, `/auth/v1/factors/${factor.factorId}/challenge`, {
     token: login.data.access_token,
   });
@@ -138,5 +144,42 @@ export async function signIn(copy: TestCopy, key: PersonKey) {
   if (verified.status !== 200) throw new Error(`Authenticator step failed for ${key}`);
   const token = verified.data.access_token as string;
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-  return { token, aal: claims.aal as string };
+  return { token, refreshToken: verified.data.refresh_token as string, aal: claims.aal as string };
+}
+
+/**
+ * The website's session cookies for a test person, after a real local sign-in.
+ * @supabase/ssr itself writes them (name, chunking, encoding), as the website's
+ * own sign-in would; its only request goes to the local gateway.
+ */
+export async function browserSessionCookies(copy: TestCopy, key: PersonKey) {
+  const session = await signIn(copy, key);
+  const cookies: { name: string; value: string }[] = [];
+  const auth = createServerClient(API_ORIGIN, copy.publishableKey, {
+    cookies: {
+      getAll: () => cookies,
+      setAll: (items) => {
+        for (const { name, value } of items) {
+          const index = cookies.findIndex((cookie) => cookie.name === name);
+          if (index >= 0) cookies.splice(index, 1);
+          if (value) cookies.push({ name, value });
+        }
+      },
+    },
+    global: {
+      fetch: (input, init) => {
+        const url = new URL(input instanceof Request ? input.url : String(input));
+        if (url.origin !== API_ORIGIN)
+          throw new Error("Test copy requests stay on the local gateway");
+        return fetch(input, init);
+      },
+    },
+  }).auth;
+  const { data, error } = await auth.setSession({
+    access_token: session.token,
+    refresh_token: session.refreshToken,
+  });
+  if (error || !data.session) throw new Error(`Session cookies failed for ${key}`);
+  if (cookies.length === 0) throw new Error("No session cookie was written");
+  return { accountId: data.session.user.id, cookies };
 }
