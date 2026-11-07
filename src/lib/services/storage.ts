@@ -9,12 +9,18 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import { createLogger } from "@/lib/utils/logger";
-import { isPlaywrightSupabaseStubMode, isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import {
+  isPlaywrightFoundationCopy,
+  isPlaywrightSupabaseStubMode,
+  isPlaywrightTestMode,
+} from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Storage");
 
+/** Local files instead of R2: the stub browser suite and the local foundation
+ * test copy only. Both require test mode, which production can never enable. */
 function shouldUsePlaywrightStorage(): boolean {
-  return isPlaywrightTestMode() && isPlaywrightSupabaseStubMode();
+  return isPlaywrightTestMode() && (isPlaywrightSupabaseStubMode() || isPlaywrightFoundationCopy());
 }
 
 async function playwrightStoragePath(bucket: string, key: string): Promise<string | null> {
@@ -335,6 +341,16 @@ export async function uploadToR2(params: UploadParams): Promise<UploadResult> {
     const path = await import("node:path");
     const arrayBuffer = await params.file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    // Private objects (identity evidence) go to the ignored private fixture
+    // folder that evidence review reads, never under public/.
+    const privateBucket = process.env.R2_PRIVATE_BUCKET || "verifymzansi-private";
+    if (params.bucket === privateBucket) {
+      const target = await playwrightStoragePath(params.bucket, params.key);
+      if (!target) throw new Error("Isolated private storage unavailable");
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.writeFile(target, buffer);
+      return { url: "", key: params.key.replace(/\\/g, "/") };
+    }
     const publicRoot = path.join(process.cwd(), "public", "e2e-media");
     const destination = path.join(publicRoot, params.key);
 

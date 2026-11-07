@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Webhook } from "svix";
 import { env } from "@/lib/config/env";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
+import { testCopyCheckout } from "./checkout-origins";
 import { createLogger } from "@/lib/utils/logger";
 import { fetchWithoutRedirects } from "@/lib/utils/fetch-without-redirects";
 
@@ -242,6 +243,9 @@ function throwOzowProviderFailure({
   });
 }
 
+/** Request ids of mock checkouts; they never exist at Ozow. */
+export const MOCK_OZOW_REQUEST_PREFIX = "mock-";
+
 function createMockHostedPaymentResponse(
   input: OzowHostedPaymentRequest
 ): OzowHostedPaymentResponse {
@@ -250,7 +254,12 @@ function createMockHostedPaymentResponse(
   const correlationId = crypto.randomUUID();
   const idempotencyKey = crypto.randomUUID();
   const appUrl = env("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
-  const redirectUrl = new URL("/api/mock-ozow", appUrl);
+  // The foundation test copy stores checkout URLs, which must be HTTPS; its
+  // mock payment page lives on a fixed loopback address the browser tests serve.
+  const testCopy = testCopyCheckout();
+  const redirectUrl = testCopy
+    ? new URL("/checkout", testCopy.mockPaymentOrigin)
+    : new URL("/api/mock-ozow", appUrl);
 
   redirectUrl.searchParams.set("paymentId", input.paymentId);
   redirectUrl.searchParams.set("amount", amount);
@@ -258,14 +267,14 @@ function createMockHostedPaymentResponse(
   redirectUrl.searchParams.set("cancelUrl", input.cancelUrl);
 
   return {
-    providerPaymentId: `mock-${input.paymentId}`,
+    providerPaymentId: `${MOCK_OZOW_REQUEST_PREFIX}${input.paymentId}`,
     providerReference: input.merchantReference,
     redirectUrl: redirectUrl.toString(),
     expireAt,
     correlationId,
     idempotencyKey,
     rawResponse: {
-      id: `mock-${input.paymentId}`,
+      id: `${MOCK_OZOW_REQUEST_PREFIX}${input.paymentId}`,
       redirectUrl: redirectUrl.toString(),
       expireAt,
       mockFlow: true,
@@ -572,6 +581,9 @@ export async function createOzowHostedPayment(
 }
 
 async function ozowRequest(path: string, method = "GET"): Promise<Response> {
+  // Mock mode never contacts Ozow: lookups and cancellations fail closed instead.
+  if (isMockOzowEnabled())
+    throw new OzowConfigurationError("Ozow requests are disabled while mock Ozow is enabled");
   const { baseUrl } = getOzowBaseUrlContext();
   const scope = env("OZOW_PAYMENT_OAUTH_SCOPE") || DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
   const url = new URL(path, baseUrl);

@@ -23,6 +23,7 @@ supabase/.temp/
 database/foundation/*.json
 !database/foundation/runtime-api-manifest.json
 database/foundation/openapi/
+database/foundation/current/
 docs/backend-foundation/evidence/
 docs/backend-foundation/schema-map.json
 docs/backend-foundation/post-field-proposals.json

@@ -8,10 +8,13 @@ import {
   cancelOzowPaymentRequest,
   createOzowHostedPayment,
   getOzowPaymentRequestStatus,
+  isMockOzowEnabled,
   listOzowPaymentTransactions,
+  MOCK_OZOW_REQUEST_PREFIX,
   type NormalizedOzowWebhook,
 } from "../payments/ozow";
 import { validateOzowConfirmation } from "../payments/confirmation";
+import { PRODUCTION_CHECKOUT_ORIGIN, testCopyCheckout } from "../payments/checkout-origins";
 import type { PaymentRecordShape } from "../payments/types";
 
 type BillingRpcName =
@@ -155,16 +158,29 @@ async function readFoundationServicePayment(
   return data === null ? null : foundationPaymentSchema.parse(data);
 }
 
+/** Test copy addresses (src/lib/payments/checkout-origins.ts), only while the
+ * provider really is the mock, so a test address never reaches Ozow. Null with
+ * production settings, which leaves both checks below exactly as before. */
+function testCheckout() {
+  const copy = testCopyCheckout();
+  return copy && isMockOzowEnabled() ? copy : null;
+}
+function isTestCopyMockPayment(url: URL) {
+  const copy = testCheckout();
+  return copy !== null && !url.username && !url.password && url.origin === copy.mockPaymentOrigin;
+}
+
 function checkoutRedirect(value: string) {
   const url = new URL(value);
   if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.port ||
-    !["ozow.com", "pay.ozow.com", "secure.ozow.com", "one.ozow.com", "stagingone.ozow.com"].some(
-      (host) => url.hostname === host || url.hostname.endsWith(`.${host}`)
-    )
+    (url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !["ozow.com", "pay.ozow.com", "secure.ozow.com", "one.ozow.com", "stagingone.ozow.com"].some(
+        (host) => url.hostname === host || url.hostname.endsWith(`.${host}`)
+      )) &&
+    !isTestCopyMockPayment(url)
   )
     throw new FoundationBillingError(503, "The payment provider returned an invalid checkout URL");
   return url.href;
@@ -193,7 +209,11 @@ export async function startFoundationCheckout(
   service = createFoundationServiceApi()
 ) {
   const app = new URL(appUrl);
-  if (app.origin !== "https://verifymzansi.com" || app.username || app.password)
+  if (
+    (app.origin !== PRODUCTION_CHECKOUT_ORIGIN && app.origin !== testCheckout()?.appOrigin) ||
+    app.username ||
+    app.password
+  )
     throw new FoundationBillingError(503);
   const quote = quoteSchema.parse(
     await command(api, "start_checkout", {
@@ -291,14 +311,22 @@ export async function applyFoundationOzowNotification(
   return { success: true, result: outcome };
 }
 
+/** Mock checkouts exist only in test copies and never at Ozow. Production
+ * never enables mock Ozow and never stores a mock request id. */
+const isMockCheckout = (requestId: string) =>
+  isMockOzowEnabled() || requestId.startsWith(MOCK_OZOW_REQUEST_PREFIX);
+
 export async function reconcileFoundationPayment(
   paymentId: string,
   service = createFoundationServiceApi()
 ) {
+  // No provider to ask in mock mode: leave the stored state as it is.
+  if (isMockOzowEnabled()) return { checked: false, pendingTransaction: false };
   const raw = await command(service, "claim_payment_reconciliation", { p_payment_id: paymentId });
   if (raw === null) return { checked: false, pendingTransaction: false };
   const pay = foundationPaymentSchema.parse(raw);
-  if (!pay.provider_request_id) return { checked: false, pendingTransaction: false };
+  if (!pay.provider_request_id || isMockCheckout(pay.provider_request_id))
+    return { checked: false, pendingTransaction: false };
   const transactions = await listOzowPaymentTransactions(pay.provider_request_id, pay.created_at);
   for (const transaction of transactions)
     if (validateOzowConfirmation(confirmationShape(pay), transaction))
@@ -344,6 +372,8 @@ export async function cancelFoundationPendingPayment(
       409,
       "Check this payment's status before starting another checkout"
     );
+  // A mock checkout has no provider evidence to close it with: refuse.
+  if (isMockCheckout(pay.provider_request_id)) throw new FoundationBillingError(409);
   await cancelOzowPaymentRequest(pay.provider_request_id);
   // A simultaneous settlement must win. The private row CAS and the provider
   // evidence both have to agree before the pending checkout is closed.

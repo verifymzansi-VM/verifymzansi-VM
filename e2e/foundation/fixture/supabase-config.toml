@@ -1,0 +1,108 @@
+# Throwaway local Supabase stack for the foundation browser test copy (M0.7).
+# Copied unchanged into tmp/foundation-e2e/supabase/config.toml by
+# `node scripts/foundation-e2e.mjs up`. Never link this workspace to a hosted
+# project. Its migrations folder holds only byte-identical copies of the
+# database/foundation/ replay (candidate.sql, every update and the replay-only
+# baseline supplement, in replay order), checked by hash before every start, so
+# the retired supabase/migrations tree can never be applied here.
+#
+# Ports: the API must be 127.0.0.1:55443, the only local foundation port the
+# website's connection guard accepts apart from the native suite's 55441. The
+# other ports sit in 55450-55459 so this stack can run beside the native
+# fixture (backend-foundation-impl, 55440-55442) and the default CLI ports.
+project_id = "vm-foundation-e2e"
+
+[api]
+enabled = true
+port = 55443
+# Like production: only the api schema is exposed. public (empty) is not.
+schemas = ["api"]
+extra_search_path = ["extensions"]
+max_rows = 1000
+
+[api.tls]
+enabled = false
+
+[db]
+port = 55452
+shadow_port = 55450
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 55459
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = false
+sql_paths = []
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+port = 55453
+
+# Mail catcher (Mailpit): every Auth email lands here; nothing is delivered.
+[local_smtp]
+enabled = true
+port = 55454
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3110"
+additional_redirect_urls = ["http://127.0.0.1:3110/**"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 10
+
+[auth.rate_limit]
+email_sent = 200
+sign_in_sign_ups = 300
+token_verifications = 300
+token_refresh = 300
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = false
+max_frequency = "1s"
+
+[auth.sms]
+enable_signup = false
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+
+# Like production: only invited addresses may register
+# (internal.acceptance_signup_guard, from database/foundation/updates).
+[auth.hook.before_user_created]
+enabled = true
+uri = "pg-functions://postgres/internal/acceptance_signup_guard"
+
+[edge_runtime]
+enabled = false
+inspector_port = 55458
+
+[analytics]
+enabled = false
+port = 55457
