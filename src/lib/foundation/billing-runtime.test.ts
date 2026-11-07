@@ -6,6 +6,7 @@ import {
   cancelOzowPaymentRequest,
   createOzowHostedPayment,
   getOzowPaymentRequestStatus,
+  isMockOzowEnabled,
   listOzowPaymentTransactions,
   type NormalizedOzowWebhook,
 } from "../payments/ozow";
@@ -22,7 +23,9 @@ vi.mock("../payments/ozow", () => ({
   cancelOzowPaymentRequest: vi.fn(),
   createOzowHostedPayment: vi.fn(),
   getOzowPaymentRequestStatus: vi.fn(),
+  isMockOzowEnabled: vi.fn(),
   listOzowPaymentTransactions: vi.fn(),
+  MOCK_OZOW_REQUEST_PREFIX: "mock-",
   toOzowMerchantReference: (id: string) => id.replaceAll("-", ""),
 }));
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -119,6 +122,8 @@ beforeEach(() => {
   });
   vi.mocked(listOzowPaymentTransactions).mockResolvedValue([]);
   vi.mocked(getOzowPaymentRequestStatus).mockResolvedValue("Expired");
+  // Production: mock Ozow is never enabled.
+  vi.mocked(isMockOzowEnabled).mockReturnValue(false);
 });
 afterEach(() => vi.unstubAllEnvs());
 it("uses the server quote and durable provider keys, then attaches only with its claim", async () => {
@@ -242,6 +247,58 @@ it("preserves a concurrent bank settlement when cancellation races it", async ()
   expect(cancelOzowPaymentRequest).toHaveBeenCalledWith(requestId);
   expect(machine.mock.calls.some(([name]) => name === "apply_provider_event")).toBe(true);
   expect(machine.mock.calls.some(([name]) => name === "finish_unpaid_checkout")).toBe(false);
+});
+// Mock checkouts (test copies only) never reach the provider (M0.8).
+it("does not claim or ask the provider while mock Ozow is enabled", async () => {
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: false,
+    pendingTransaction: false,
+  });
+  expect(machine).not.toHaveBeenCalled();
+  expect(listOzowPaymentTransactions).not.toHaveBeenCalled();
+  expect(getOzowPaymentRequestStatus).not.toHaveBeenCalled();
+});
+it("never sends a mock checkout's request id to the provider", async () => {
+  machine.mockResolvedValueOnce({
+    data: { ...paymentDto(), provider_request_id: `mock-${payment}` },
+    error: null,
+  });
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: false,
+    pendingTransaction: false,
+  });
+  expect(listOzowPaymentTransactions).not.toHaveBeenCalled();
+  expect(getOzowPaymentRequestStatus).not.toHaveBeenCalled();
+  expect(machine.mock.calls.some(([name]) => name === "finish_unpaid_checkout")).toBe(false);
+});
+it("refuses to cancel while mock Ozow is enabled, without a provider call", async () => {
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  await expect(cancelFoundationPendingPayment(api, payment, service)).rejects.toMatchObject({
+    status: 409,
+  });
+  expect(cancelOzowPaymentRequest).not.toHaveBeenCalled();
+  expect(machine).not.toHaveBeenCalled();
+});
+it("refuses to cancel a mock checkout, without a provider call", async () => {
+  rpc.mockResolvedValueOnce({
+    data: { ...paymentDto(), provider_request_id: `mock-${payment}` },
+    error: null,
+  });
+  await expect(cancelFoundationPendingPayment(api, payment, service)).rejects.toMatchObject({
+    status: 409,
+  });
+  expect(cancelOzowPaymentRequest).not.toHaveBeenCalled();
+  expect(machine).not.toHaveBeenCalled();
+});
+it("with mock Ozow off, cancels a real checkout through the provider as before", async () => {
+  expect(await cancelFoundationPendingPayment(api, payment, service)).toEqual({ success: true });
+  expect(cancelOzowPaymentRequest).toHaveBeenCalledExactlyOnceWith(requestId);
+  expect(listOzowPaymentTransactions).toHaveBeenCalledOnce();
+  expect(machine).toHaveBeenLastCalledWith("finish_unpaid_checkout", {
+    p_payment_id: payment,
+    p_status: "cancelled",
+  });
 });
 it("parses only the caller's bounded billing projection", async () => {
   expect(await readFoundationBilling(api)).toEqual({

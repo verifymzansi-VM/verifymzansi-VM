@@ -6,6 +6,93 @@ digest, live public/service API contracts, credentials and hidden schemas. It
 never installs or changes the database. The default preflight still refuses an
 unreleased clean assembly, and its SQL installation guard remains intact.
 
+## Replay gate (CI job `foundation-replay`)
+
+`pnpm db:foundation:replay` rebuilds the production schema from this folder
+alone, in an embedded Postgres (PGlite) that cannot reach any hosted database:
+
+1. `replay/platform-prelude.sql`: stand-ins for what Supabase provides (API
+   roles, the Auth schema and helpers, the extensions schema);
+2. `candidate.sql`, the reviewed baseline;
+3. every file in `updates/` in filename order, with
+   `replay/baseline-supplement.sql` applied just before
+   `20261103154538_owner_signup_access.sql` (production received that hook
+   outside the repository; the supplement recreates its accepted body).
+
+It then runs `fingerprint.sql` (read-only catalogue queries: function bodies and
+metadata, columns, constraints, indexes, triggers, policies, grants, row level
+security, the event trigger) and compares the result with `fingerprint.json`. CI
+fails on any difference, including a new update whose fingerprint was not
+recorded. When a reviewed update intentionally changes the schema, run
+`pnpm db:foundation:replay -- --write` and commit the new `fingerprint.json` in
+the same pull request.
+
+To compare production, the owner runs `fingerprint.sql` unchanged in the
+Supabase SQL editor (it reads only the catalogue) and checks each row against
+`fingerprint.json`. Function bodies, columns, constraints, indexes and triggers
+matched production on 6 November 2026.
+
+The same job then checks two generated views of that replay:
+
+- `current/` is the readable current schema: one file per function, table and
+  view, plus schemas, sequences and platform hooks.
+  `pnpm db:foundation:snapshot` rewrites it; CI rewrites it and fails if
+  `git diff` or untracked files show a change, so an edited function cannot
+  merge without its regenerated file.
+- `pnpm db:foundation:api-check` compares `api-manifest.json`,
+  `runtime-api-manifest.json` and `runtime-api-types.ts` with the replayed `api`
+  schema (names, arguments, defaults, return types, volatility, execute grants).
+  Hand-written fields such as `updates` and `authority` are not derived.
+
+## SQL lint (CI job `foundation-sql-lint`)
+
+`pnpm db:foundation:lint` replays the same files into a throwaway local Postgres
+17 container (the pinned Supabase image, which ships plpgsql_check), started
+with no network and reached only through `docker exec`; it accepts no connection
+settings. It confirms the replay matches `fingerprint.json` and `current/`,
+applies `replay/lint-platform-stubs.sql` (declarations of Supabase platform
+functions called through dynamic SQL), and runs plpgsql_check over every
+PL/pgSQL function, checking trigger functions against each table they are
+attached to. A deliberately broken canary function must be reported. Findings
+are compared with `lint-baseline.json`: errors fail unless listed in
+`knownErrors` with a reason, warnings fail when they exceed the recorded counts,
+and fixed entries must be removed, so the baseline only shrinks
+(`pnpm db:foundation:lint -- --write-baseline`).
+
+## Browser test copy (CI job `e2e-foundation`)
+
+`playwright.foundation.config.ts` runs the restored website in foundation mode
+against a private, throwaway local Supabase stack (CLI project
+`vm-foundation-e2e`, API `127.0.0.1:55443`, workspace `tmp/foundation-e2e`).
+`node --import tsx scripts/foundation-e2e.mjs up` copies the same replay
+(without the platform prelude, which the real stack provides) byte for byte into
+the workspace's migrations folder, starts the stack, and proves zero tables in
+public and a fingerprint equal to `fingerprint.json`. It then adds
+`replay/hosted-auth-hook-grants.sql` (a grant the hosted dashboard makes when
+the sign-up hook is switched on) and seeds the test people and posts from
+`e2e/foundation/fixture/` through the real local Auth, the mail catcher and the
+production API commands. Every entry point refuses any database address that is
+not this local stack. `reset` rebuilds the copy; `down` deletes the stack, its
+data and the files the copy wrote (`tmp/foundation-e2e/state.json`, the fake SMS
+sink, `public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
+
+The website environment blanks every key named in the root `.env*` files, so
+Next cannot refill real settings from them; `build` stamps `.next` with a hash
+of the copy's public and foundation settings, and `serve` refuses a build
+without a matching stamp or whose client bundle names a hosted project. `serve`
+also starts two loopback stand-ins: a rate limiter that allows every well-formed
+request (55456) and an email relay (55451). The copy points the email provider's
+SDK at the relay (`RESEND_BASE_URL`, set only in the copy), so the website's own
+emails, such as the email job's seller notices, land in the mail catcher; the
+relay accepts only `.test` recipients and never contacts the provider. The email
+job route runs with a synthetic local secret. Exposure: the pinned Supabase CLI
+cannot bind ports to 127.0.0.1 only, so while the copy runs, Docker publishes
+its database (55452, local default password), gateway (55443) and mail catcher
+(55454) on all interfaces. Run it only on a trusted network or behind the
+machine's firewall, and stop it with `down`.
+
+## Retired source schema and first administrator
+
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
 export belong to the retired source schema. Their wrappers refuse foundation
 targets. Do not replay that tree into the new project. Use reviewed additive

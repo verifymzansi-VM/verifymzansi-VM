@@ -15,6 +15,8 @@ process.env.PLAYWRIGHT_HOST ||= PLAYWRIGHT_HOST;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Foundation test copy specs run only with playwright.foundation.config.ts.
+  testIgnore: ["**/foundation/**"],
   globalSetup: "./e2e/global.setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

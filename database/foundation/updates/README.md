@@ -5,6 +5,23 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## How to write a new update
+
+- **Use full definitions.** Every changed function is written out as a complete
+  `create or replace function ...` with its whole body, followed by its
+  `revoke`/`grant` statements. Do not read a stored body and patch it with
+  `replace()` and dynamic SQL: reviewers must be able to read the new rule in
+  the file. A guard that checks the current body's hash before replacing it may
+  stay, as a precondition only.
+- **Add before removing.** Name the file `YYYYMMDDHHMMSS_short_name.sql`; never
+  edit `candidate.sql` or an earlier update.
+- **Regenerate in the same pull request** and commit the results:
+  `pnpm db:foundation:replay -- --write` (fingerprint),
+  `pnpm db:foundation:snapshot` (the readable `../current/` folder),
+  `pnpm db:foundation:api-check` (update the API manifests and types if it
+  fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
+  warnings than `../lint-baseline.json`). CI runs all four.
+
 ## Staff content holds, 5 November 2026
 
 `20261105043010_native_report_content_holds.sql` is applied. The selected Hide
