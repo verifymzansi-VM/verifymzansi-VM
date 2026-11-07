@@ -37,8 +37,12 @@ such a check would block every pull request.
 - **No force pushes, no deletion** of `main`.
 - **Required checks** (GitHub Actions only, `integration_id` 15368):
   - `foundation-replay`: rebuilds the production database schema from
-    `database/foundation/` and compares its fingerprint
+    `database/foundation/` and compares its fingerprint, the readable
+    `database/foundation/current/` snapshot and the API manifests and types
     (`database/foundation/README.md`).
+  - `foundation-sql-lint`: runs plpgsql_check over every PL/pgSQL function of
+    that rebuilt schema in a throwaway local Postgres 17 and compares the result
+    with `database/foundation/lint-baseline.json`.
   - `lint-type-security`: lint, typecheck, OpenAPI/import checks, secrets,
     dependencies, licences and database invariants.
   - `knip`: dead code and dependencies.

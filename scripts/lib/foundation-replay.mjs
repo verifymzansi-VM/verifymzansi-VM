@@ -20,12 +20,38 @@ export function listUpdates(root = process.cwd()) {
 }
 
 /**
- * Applies, in order: the platform prelude, candidate.sql, every update in
- * filename order (with the baseline supplement just before the update that
- * needs it). Returns the open database; the caller closes it.
+ * The ordered replay: the platform prelude, candidate.sql, then every update in
+ * filename order, with the baseline supplement just before the update that
+ * needs it. Shared by the PGlite replay and the plpgsql_check lint database.
+ */
+export function replaySteps(root = process.cwd()) {
+  const updates = listUpdates(root);
+  if (!updates.includes(SUPPLEMENT_BEFORE)) {
+    throw new Error(`Expected update ${SUPPLEMENT_BEFORE} is missing`);
+  }
+  const steps = [
+    { label: "platform-prelude.sql", file: `${FOUNDATION_DIR}/replay/platform-prelude.sql` },
+    { label: "candidate.sql", file: `${FOUNDATION_DIR}/candidate.sql` },
+  ];
+  for (const update of updates) {
+    if (update === SUPPLEMENT_BEFORE) {
+      steps.push({
+        label: "baseline-supplement.sql",
+        file: `${FOUNDATION_DIR}/replay/baseline-supplement.sql`,
+      });
+    }
+    steps.push({ label: update, file: `${FOUNDATION_DIR}/updates/${update}` });
+  }
+  return { updates, steps: steps.map((step) => ({ ...step, sql: read(root, step.file) })) };
+}
+
+/**
+ * Applies replaySteps() in an embedded Postgres, then any extra SQL. Returns
+ * the open database; the caller closes it.
  */
 export async function replayFoundation({ root = process.cwd(), extraSql = [] } = {}) {
   const started = Date.now();
+  const { updates, steps } = replaySteps(root);
   const db = new PGlite({ extensions: { pg_trgm } });
   const apply = async (label, sql) => {
     try {
@@ -35,22 +61,7 @@ export async function replayFoundation({ root = process.cwd(), extraSql = [] } =
       throw new Error(`Replay failed at ${label}: ${error.message}`);
     }
   };
-  await apply("platform-prelude.sql", read(root, `${FOUNDATION_DIR}/replay/platform-prelude.sql`));
-  await apply("candidate.sql", read(root, `${FOUNDATION_DIR}/candidate.sql`));
-  const updates = listUpdates(root);
-  if (!updates.includes(SUPPLEMENT_BEFORE)) {
-    await db.close();
-    throw new Error(`Expected update ${SUPPLEMENT_BEFORE} is missing`);
-  }
-  for (const update of updates) {
-    if (update === SUPPLEMENT_BEFORE) {
-      await apply(
-        "baseline-supplement.sql",
-        read(root, `${FOUNDATION_DIR}/replay/baseline-supplement.sql`)
-      );
-    }
-    await apply(update, read(root, `${FOUNDATION_DIR}/updates/${update}`));
-  }
+  for (const step of steps) await apply(step.label, step.sql);
   for (const [index, sql] of extraSql.entries()) await apply(`extra SQL ${index + 1}`, sql);
   return { db, updates, milliseconds: Date.now() - started };
 }

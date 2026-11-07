@@ -1,0 +1,434 @@
+{
+  "tool": "plpgsql_check 2.8 in public.ecr.aws/supabase/postgres:17.11.0.004 (pnpm db:foundation:lint)",
+  "rules": "Errors fail unless listed in knownErrors with a reason. Warnings fail when they exceed the counts below. Entries that no longer occur fail too, so this file can only shrink: run pnpm db:foundation:lint -- --write-baseline.",
+  "knownErrors": [
+    {
+      "function": "internal.consume_frontend_post_command(uuid)",
+      "sqlstate": "42725",
+      "message": "operator is not unique: unknown - unknown",
+      "reason": "Live since update 20261104002445_restored_post_commands.sql: input->'detail'-'contact_channels' parses as input->('detail'-'contact_channels') because - binds tighter than ->, so the branch for commands with a target_id raises at run time. Recorded so the gate can start; the fix needs its own reviewed update."
+    }
+  ],
+  "warnings": [
+    {
+      "function": "internal.apply_provider_event(jsonb)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"ent\"",
+      "count": 1
+    },
+    {
+      "function": "internal.assess_identity_upload(uuid,text,text,text)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.can_receive_owner_topic(text)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.core_detail_guard()",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"post_kind\"",
+      "count": 1
+    },
+    {
+      "function": "internal.decide_frontend_governance(uuid,uuid,integer,integer,text,text)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"answer\"",
+      "count": 1
+    },
+    {
+      "function": "internal.evidence_review_object(uuid,uuid)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.execute_frontend_organisation_action(uuid,uuid,text,text,text)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.execute_frontend_report_action_v2(uuid,integer,text,uuid,text,text,integer,boolean,integer)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"state\"",
+      "count": 1
+    },
+    {
+      "function": "internal.frontend_privacy_export_data(uuid)",
+      "level": "security",
+      "sqlstate": "00000",
+      "message": "text type variable is not sanitized",
+      "count": 1
+    },
+    {
+      "function": "internal.frontend_privacy_export_data(uuid)",
+      "level": "warning",
+      "sqlstate": "42804",
+      "message": "target type is different type than source type",
+      "count": 1
+    },
+    {
+      "function": "internal.get_frontend_cipc_case(uuid)",
+      "level": "warning",
+      "sqlstate": "42804",
+      "message": "target type is different type than source type",
+      "count": 2
+    },
+    {
+      "function": "internal.get_frontend_report_review_queue(text)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.get_frontend_staff_verification_queue(integer,uuid[])",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "unused variable \"result\"",
+      "count": 1
+    },
+    {
+      "function": "internal.get_my_billing()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.get_my_inbox_counts()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.get_my_payment(uuid)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.identity_status(text)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.list_my_enquiries(text,timestamp with time zone,uuid,integer)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.list_my_frontend_enquiries(text,timestamp with time zone,uuid,integer)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.list_my_frontend_notices(integer,boolean,timestamp with time zone)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.list_my_frontend_notifications(integer,boolean,timestamp with time zone)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.list_my_notifications(timestamp with time zone,uuid,integer)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.list_my_posts(integer,integer)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.my_organisation_links()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.my_partner_dashboard()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.my_posting_capacity()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.my_sponsorships()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.org_list_affiliations(uuid)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.org_list_affiliations(uuid)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.org_list_applications(uuid,text)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.org_list_applications(uuid,text)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 2
+    },
+    {
+      "function": "internal.org_list_sponsorships(uuid)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.org_list_sponsorships(uuid)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.propose_frontend_report_restriction(uuid,integer,text,uuid,text,text,integer,boolean)",
+      "level": "warning",
+      "sqlstate": "42804",
+      "message": "target type is different type than source type",
+      "count": 1
+    },
+    {
+      "function": "internal.record_frontend_cipc_parse(uuid,uuid,uuid,jsonb,jsonb)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"d\"",
+      "count": 1
+    },
+    {
+      "function": "internal.release_queue_claim(text,uuid,text,uuid)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"s\"",
+      "count": 1
+    },
+    {
+      "function": "internal.require_table_rls()",
+      "level": "security",
+      "sqlstate": "00000",
+      "message": "text type variable is not sanitized",
+      "count": 1
+    },
+    {
+      "function": "internal.resolve_report(uuid,text,uuid,text,text)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"s\"",
+      "count": 1
+    },
+    {
+      "function": "internal.restored_owner_dashboard()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 4
+    },
+    {
+      "function": "internal.restored_staff_queues()",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.restored_staff_queues()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.search_posts(jsonb)",
+      "level": "warning",
+      "sqlstate": "42804",
+      "message": "target type is different type than source type",
+      "count": 3
+    },
+    {
+      "function": "internal.staff_audit_page(jsonb)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_audit_page(jsonb)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_cost_overview()",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_cost_overview()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_dashboard_overview()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_decision_page(jsonb)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_get_organisation(uuid)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_get_organisation(uuid)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_commissions(uuid,text)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_commissions(uuid,text)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_organisations()",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_organisations()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_partners()",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_partners()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_programme_showcases(uuid)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"actor\"",
+      "count": 1
+    },
+    {
+      "function": "internal.staff_list_programme_showcases(uuid)",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "routine is marked as STABLE, but expression is VOLATILE",
+      "count": 1
+    },
+    {
+      "function": "internal.verification_decision_effect()",
+      "level": "warning",
+      "sqlstate": "00000",
+      "message": "unused variable \"s\"",
+      "count": 1
+    },
+    {
+      "function": "internal.withdraw_frontend_business_check(uuid,uuid)",
+      "level": "warning extra",
+      "sqlstate": "00000",
+      "message": "never read variable \"current_case\"",
+      "count": 1
+    }
+  ]
+}

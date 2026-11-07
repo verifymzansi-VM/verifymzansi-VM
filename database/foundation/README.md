@@ -32,6 +32,35 @@ Supabase SQL editor (it reads only the catalogue) and checks each row against
 `fingerprint.json`. Function bodies, columns, constraints, indexes and triggers
 matched production on 6 November 2026.
 
+The same job then checks two generated views of that replay:
+
+- `current/` is the readable current schema: one file per function, table and
+  view, plus schemas, sequences and platform hooks.
+  `pnpm db:foundation:snapshot` rewrites it; CI rewrites it and fails if
+  `git diff` or untracked files show a change, so an edited function cannot
+  merge without its regenerated file.
+- `pnpm db:foundation:api-check` compares `api-manifest.json`,
+  `runtime-api-manifest.json` and `runtime-api-types.ts` with the replayed `api`
+  schema (names, arguments, defaults, return types, volatility, execute grants).
+  Hand-written fields such as `updates` and `authority` are not derived.
+
+## SQL lint (CI job `foundation-sql-lint`)
+
+`pnpm db:foundation:lint` replays the same files into a throwaway local Postgres
+17 container (the pinned Supabase image, which ships plpgsql_check), started
+with no network and reached only through `docker exec`; it accepts no connection
+settings. It confirms the replay matches `fingerprint.json` and `current/`,
+applies `replay/lint-platform-stubs.sql` (declarations of Supabase platform
+functions called through dynamic SQL), and runs plpgsql_check over every
+PL/pgSQL function, checking trigger functions against each table they are
+attached to. A deliberately broken canary function must be reported. Findings
+are compared with `lint-baseline.json`: errors fail unless listed in
+`knownErrors` with a reason, warnings fail when they exceed the recorded counts,
+and fixed entries must be removed, so the baseline only shrinks
+(`pnpm db:foundation:lint -- --write-baseline`).
+
+## Retired source schema and first administrator
+
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
 export belong to the retired source schema. Their wrappers refuse foundation
 targets. Do not replay that tree into the new project. Use reviewed additive

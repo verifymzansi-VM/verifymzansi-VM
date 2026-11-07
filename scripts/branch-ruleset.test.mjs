@@ -61,6 +61,8 @@ test("the committed ruleset only requires checks that run on pull requests to ma
   assert.deepEqual(validateRuleset(ruleset, available), []);
   // The roadmap's minimum set stays required.
   for (const name of [
+    "foundation-replay",
+    "foundation-sql-lint",
     "lint-type-security",
     "knip",
     "Duplication budget",
