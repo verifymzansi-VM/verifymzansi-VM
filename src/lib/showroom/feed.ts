@@ -15,6 +15,7 @@ import {
   type CarouselItem,
 } from "@/components/showrooms/carousel-item-transforms";
 import { createLogger } from "@/lib/utils/logger";
+import { loadSampleCarouselItems } from "@/lib/sample-posts/load";
 import { mixLocalFirst, type ShowroomEntry } from "./mix";
 
 const log = createLogger("ShowroomFeed");
@@ -244,10 +245,29 @@ export function varyFrontCard(entries: ShowroomEntry[], random = Math.random): S
 }
 
 /**
- * Showroom cards for a page, in fair rotation order, local posts first.
+ * Showroom cards for a page, in fair rotation order, local posts first, then
+ * any display-only sample posts for this showroom (only while
+ * SAMPLE_POSTS_ENABLED is on). Real posts always come first.
  * Never throws: on any failure the showroom falls back to newest first.
  */
 export async function loadShowroomItems(
+  surface: ShowroomSurface,
+  options: Parameters<typeof loadRealShowroomItems>[1]
+): Promise<CarouselItem[]> {
+  const [real, samples] = await Promise.all([
+    loadRealShowroomItems(surface, options),
+    loadSampleCarouselItems(surface).catch((error: unknown) => {
+      log.warn("Sample posts unavailable", {
+        surface,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return [] as CarouselItem[];
+    }),
+  ]);
+  return samples.length > 0 ? [...real, ...samples] : real;
+}
+
+async function loadRealShowroomItems(
   surface: ShowroomSurface,
   options: {
     province: string | null;

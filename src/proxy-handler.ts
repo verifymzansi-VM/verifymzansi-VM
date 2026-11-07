@@ -16,6 +16,7 @@ import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
 import postingTermsCatalogue from "@/lib/legal/terms-documents/catalogue.json";
 import { getDataBackend } from "@/lib/data-backend";
+import { isPublishedSampleSlug } from "@/lib/sample-posts/catalogue";
 import {
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
@@ -108,6 +109,16 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     const version = pathname.slice(termsPrefix.length + 1).replace(/\/$/, "");
     if (!Object.hasOwn(postingTermsCatalogue.versions, version))
       return new NextResponse("Not found", { status: 404 });
+  }
+
+  // Display-only sample posts: only published slugs (switch on, committed
+  // entry) are served; everything else is a real 404 before streaming starts.
+  // The development server also serves git-ignored local preview entries, so
+  // its page decides with notFound() instead.
+  const samplePrefix = "/sample";
+  if (matchesPrefix(pathname, samplePrefix) && process.env.NODE_ENV !== "development") {
+    const slug = pathname.slice(samplePrefix.length + 1).replace(/\/$/, "");
+    if (!isPublishedSampleSlug(slug)) return new NextResponse("Not found", { status: 404 });
   }
 
   // Local design previews. The pages call notFound() themselves, but streaming
