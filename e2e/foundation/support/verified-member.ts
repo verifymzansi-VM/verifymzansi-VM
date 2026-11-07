@@ -43,7 +43,7 @@ async function serviceCall(name: string, body: unknown) {
 }
 
 /** A valid synthetic South African ID number for an adult (Luhn checksum). */
-function syntheticIdNumber() {
+export function syntheticIdNumber() {
   const digits =
     `${randomInt(70, 100)}` +
     `${randomInt(1, 13)}`.padStart(2, "0") +
@@ -66,15 +66,17 @@ function syntheticIdNumber() {
   throw new Error("No checksum digit");
 }
 
-/** Invited sign-up through local Auth, confirmed from the mail catcher. */
-async function register(copy: TestCopy, email: string, password: string) {
+/** Invited sign-up through local Auth, confirmed from the mail catcher. The
+ * display name goes in the sign-up metadata, as the website's registration
+ * sends it (the database keeps it only if valid; never authority). */
+async function register(copy: TestCopy, email: string, password: string, displayName: string) {
   queryTestCopy(`insert into private.owner_admin_invitations(email) values ('${email}');`);
   const sentAfter = Date.now() - 1000;
   const signup = await fetch(new URL("/auth/v1/signup", API_ORIGIN), {
     method: "POST",
     redirect: "error",
     headers: { apikey: copy.publishableKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, data: { display_name: displayName } }),
   });
   if (signup.status !== 200) throw new Error(`Sign-up refused (${signup.status})`);
   const mail = await latestMailTo(email, { after: sentAfter });
@@ -179,16 +181,22 @@ async function verifyPhone(ownerId: string) {
   if (verified.verified !== true) throw new Error("Phone verification failed");
 }
 
-/** A new verified member with no plan, no trial and no posts. */
-export async function registerVerifiedMember(label: string): Promise<VerifiedMember> {
+/**
+ * A new member who signed up, confirmed the email, saved the legal name and
+ * verified a phone, but has sent no identity evidence yet (M0.9d: the staff
+ * review spec sends the ID and selfie photos through the website itself).
+ */
+export async function registerUnreviewedMember(label: string): Promise<VerifiedMember> {
   if (!/^[a-z]{3,20}$/.test(label)) throw new Error("Unexpected label");
   const copy = readTestCopy();
   const ref = randomUUID().slice(0, 8);
   const email = `${label}-${ref}@verifymzansi.test`;
   const password = `Local-fixture-${label}-${ref}`;
-  // Letters only (legal-name rules), unique per run.
-  const lastName = `Payer-${[...ref].map((c) => "abcdefghijklmnop"[parseInt(c, 16)]).join("")}`;
-  await register(copy, email, password);
+  // Letters only (legal-name rules), unique per run so staff find this
+  // member's case among earlier runs' cases.
+  const suffix = [...ref].map((c) => "abcdefghijklmnop"[parseInt(c, 16)]).join("");
+  const lastName = `${label[0].toUpperCase()}${label.slice(1)}-${suffix}`;
+  await register(copy, email, password, `Naledi ${lastName}`);
   const session = await signIn(copy, { email, password });
   const id = queryTestCopy(
     `select id from auth.users where email = '${email}' and email_confirmed_at is not null;`
@@ -201,14 +209,14 @@ export async function registerVerifiedMember(label: string): Promise<VerifiedMem
     { p_expected_revision: profile.revision, p_first_name: "Naledi", p_last_name: lastName },
     session.token
   );
-  await verifyIdentity(copy, id, session.token);
   await verifyPhone(id);
-  await call(
-    copy,
-    "confirm_verification_locality",
-    { p_province: "gp", p_city: "gp_johannesburg" },
-    session.token
-  );
+  return { id, email, password, firstName: "Naledi", lastName };
+}
+
+/** The posting terms, as the member accepts them on the create page. */
+export async function acceptPostingTerms(member: VerifiedMember) {
+  const copy = readTestCopy();
+  const session = await signIn(copy, member);
   const terms = await call(copy, "get_current_posting_terms", {});
   await call(
     copy,
@@ -216,5 +224,19 @@ export async function registerVerifiedMember(label: string): Promise<VerifiedMem
     { p_version: terms.version, p_document_hash: terms.document_hash },
     session.token
   );
-  return { id, email, password, firstName: "Naledi", lastName };
+}
+
+/** A new verified member with no plan, no trial and no posts. */
+export async function registerVerifiedMember(label: string): Promise<VerifiedMember> {
+  const member = await registerUnreviewedMember(label);
+  const session = await signIn(readTestCopy(), member);
+  await verifyIdentity(readTestCopy(), member.id, session.token);
+  await call(
+    readTestCopy(),
+    "confirm_verification_locality",
+    { p_province: "gp", p_city: "gp_johannesburg" },
+    session.token
+  );
+  await acceptPostingTerms(member);
+  return member;
 }

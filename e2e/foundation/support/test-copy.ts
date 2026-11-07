@@ -259,15 +259,56 @@ export function retiredTableRead(copy: TestCopy, table: string) {
   });
 }
 
+/**
+ * How a staff session is made (M0.9d): `passwordOnly` stops after the password
+ * (no authenticator step, as a person who has not entered a code yet);
+ * `authenticatorAgeSeconds` makes the authenticator step that many seconds old
+ * (see ageAuthenticatorStep).
+ */
+export type SessionOptions = { passwordOnly?: boolean; authenticatorAgeSeconds?: number };
+
+/**
+ * Trusted local step (copy only): moves the time local Auth recorded for a
+ * session's authenticator step back by `seconds`, then refreshes the session,
+ * so local Auth itself issues a token whose authenticator time is that old (as
+ * after waiting that long). Nothing else about the session changes.
+ */
+async function ageAuthenticatorStep(
+  copy: TestCopy,
+  token: string,
+  refreshToken: string,
+  seconds: number
+) {
+  if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 7 * 86_400)
+    throw new Error("Unexpected authenticator age");
+  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  const sessionId = String(claims.session_id);
+  if (!UUID.test(sessionId)) throw new Error("Unexpected session id");
+  const moved = queryTestCopy(
+    `update auth.mfa_amr_claims set created_at = least(created_at, now() - interval '${seconds} seconds'), ` +
+      `updated_at = now() - interval '${seconds} seconds' ` +
+      `where session_id = '${sessionId}' and authentication_method = 'totp' returning id;`
+  );
+  if (!UUID.test(moved)) throw new Error("The session has no authenticator step to age");
+  const refreshed = await request(copy, "/auth/v1/token?grant_type=refresh_token", {
+    body: { refresh_token: refreshToken },
+  });
+  if (refreshed.status !== 200) throw new Error(`Session refresh failed (${refreshed.status})`);
+  return {
+    token: refreshed.data.access_token as string,
+    refreshToken: refreshed.data.refresh_token as string,
+  };
+}
+
 /** Real local GoTrue password sign-in; with an authenticator, the second step too. */
-export async function signIn(copy: TestCopy, person: Person) {
+export async function signIn(copy: TestCopy, person: Person, options: SessionOptions = {}) {
   const { email, password } = credentialsOf(person);
   const key = typeof person === "string" ? person : "a registered test person";
   const login = await request(copy, "/auth/v1/token?grant_type=password", {
     body: { email, password },
   });
   if (login.status !== 200) throw new Error(`Sign-in failed for ${key} (${login.status})`);
-  const factor = authenticatorOf(person);
+  const factor = options.passwordOnly ? null : authenticatorOf(person);
   if (!factor)
     return {
       token: login.data.access_token as string,
@@ -282,9 +323,17 @@ export async function signIn(copy: TestCopy, person: Person) {
     body: { challenge_id: challenge.data.id, code: totpCode(factor.secret) },
   });
   if (verified.status !== 200) throw new Error(`Authenticator step failed for ${key}`);
-  const token = verified.data.access_token as string;
+  let token = verified.data.access_token as string;
+  let refreshToken = verified.data.refresh_token as string;
+  if (options.authenticatorAgeSeconds)
+    ({ token, refreshToken } = await ageAuthenticatorStep(
+      copy,
+      token,
+      refreshToken,
+      options.authenticatorAgeSeconds
+    ));
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-  return { token, refreshToken: verified.data.refresh_token as string, aal: claims.aal as string };
+  return { token, refreshToken, aal: claims.aal as string };
 }
 
 /**
@@ -292,9 +341,13 @@ export async function signIn(copy: TestCopy, person: Person) {
  * @supabase/ssr itself writes them (name, chunking, encoding), as the website's
  * own sign-in would; its only request goes to the local gateway.
  */
-export async function browserSessionCookies(copy: TestCopy, person: Person) {
+export async function browserSessionCookies(
+  copy: TestCopy,
+  person: Person,
+  options: SessionOptions = {}
+) {
   const key = typeof person === "string" ? person : "a registered test person";
-  const session = await signIn(copy, person);
+  const session = await signIn(copy, person, options);
   const cookies: { name: string; value: string }[] = [];
   const auth = createServerClient(API_ORIGIN, copy.publishableKey, {
     cookies: {
