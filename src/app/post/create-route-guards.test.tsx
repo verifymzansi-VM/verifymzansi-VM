@@ -10,11 +10,15 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+// These cases cover the source (old) backend; the foundation check is tested in
+// src/app/post/_lib/require-verified-post-access.test.ts.
+vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "source" }));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => mockCreateClient(),
 }));
 
-describe("create route guards", () => {
+describe("create route guards (source backend)", () => {
   const layoutLoaders = {
     listing: () => import("@/app/post/create-listing/layout"),
     business: () => import("@/app/post/create-business/layout"),

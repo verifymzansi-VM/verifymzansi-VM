@@ -48,8 +48,8 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 2. Member and public wording or behaviour |      12 | 11 keep, 1 put back | Billing, contact, dashboard, privacy and help texts                              |
 | 3. Staff screens only                     |      14 | keep                | Nothing; staff screens follow the new backend's review rules                     |
 | 4. Rewiring only                          |      80 | keep                | Nothing; the same pages read from the new backend                                |
-| 5. Tests and helpers                      |      15 | keep                | Nothing; not part of any page                                                    |
-| **Total**                                 | **124** |                     |                                                                                  |
+| 5. Tests and helpers                      |      16 | keep                | Nothing; not part of any page                                                    |
+| **Total**                                 | **125** |                     |                                                                                  |
 
 Questions for the owner:
 
@@ -213,6 +213,7 @@ Questions for the owner:
 | `src/app/dashboard/page.test.tsx`                          | test   | Unit tests for the page reading from the new backend.                            | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | a42a0179ee67 |
 | `src/app/dashboard/profile/page.test.tsx`                  | test   | Unit tests for the page reading from the new backend.                            | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 5444ac6c9762 |
 | `src/app/page.test.tsx`                                    | test   | Stubs app URL.                                                                   | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 1df81e31a459 |
+| `src/app/post/create-route-guards.test.tsx`                | test   | Pins these cases to the old backend; the new backend's check has its own test.   | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | b16b9d9566c2 |
 | `src/app/post/edit-business/[id]/page.test.tsx`            | test   | Test URL update.                                                                 | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 82b062950243 |
 | `src/app/verification/page.test.tsx`                       | test   | Unit tests for the page reading from the new backend.                            | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 3929c3d630a2 |
 
