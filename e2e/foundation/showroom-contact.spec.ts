@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   expect,
   test,
@@ -16,6 +17,10 @@ import {
   queryTestCopy,
   queueMailCheckNotice,
   readTestCopy,
+  rpc,
+  serviceRpc,
+  signIn,
+  type TestCopy,
 } from "./support/test-copy";
 
 // Critical-flow test (M0.9a): a visitor's journey from the home showroom to
@@ -36,6 +41,8 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const POST_TITLE = "Fixture Soweto Craft Market";
+/** The seller's seeded live business (fixture/posts.json). */
+const HOST_TITLE = "Fixture Mzansi Motor Workshop";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
@@ -98,6 +105,13 @@ async function openPostFromShowroom(page: Page, post: { id: string; title: strin
   await front.click();
   await page.waitForURL(`${APP_ORIGIN}/tourism-events/${post.id}`);
   await expect(page.getByText(post.title).filter({ visible: true }).first()).toBeVisible();
+}
+
+/** A production command through the copy's local gateway; refuses any non-200 reply. */
+async function command(copy: TestCopy, name: string, body: unknown, token?: string) {
+  const result = await rpc(copy, name, body, token);
+  if (result.status !== 200) throw new Error(`Command ${name} answered ${result.status}`);
+  return result.data;
 }
 
 /** Runs the website's email job once, as the ops-jobs Worker does every minute. */
@@ -248,5 +262,137 @@ test.describe("showroom to contact the seller", () => {
     expect(mail.subject).toBe("New enquiry");
     expect(mail.text).toMatch(/^Sign in to view the details: https:\/\/\S+\/dashboard\/leads\s*$/m);
     expect(outside).toEqual([]);
+  });
+
+  test("an event linked to its poster's live business shows the host business card", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    const copy = readTestCopy();
+    const host = copy.posts.find((entry) => entry.title === HOST_TITLE);
+    if (!host) throw new Error(`The test copy has no post "${HOST_TITLE}"`);
+    expect(queryTestCopy(`select owner_id from private.posts where id = '${host.id}';`)).toBe(
+      sellerId
+    );
+    const { outside } = await guardAndCapture(context);
+
+    // A fresh cover image record for the event (the bytes are not needed to show
+    // the host card; the database only accepts the seller's own recent uploads).
+    const sellerSession = await signIn(copy, "verifiedMember");
+    const upload = (await command(
+      copy,
+      "begin_media_upload",
+      { p_kind: "image", p_bytes: 4096 },
+      sellerSession.token
+    )) as { object_id: string; object_key: string };
+    const finalized = await serviceRpc("finalize_media", {
+      p_object_id: upload.object_id,
+      p_size: 4096,
+      p_sha256: createHash("sha256").update(upload.object_id).digest("hex"),
+      p_mime: "image/jpeg",
+      p_width: 800,
+      p_height: 600,
+    });
+    expect(finalized.status).toBe(200);
+
+    // The seller posts an event through the website's own route, naming their
+    // live business as host (the create form sends business_id the same way).
+    const seller = await browserSessionCookies(copy, "verifiedMember");
+    await context.addCookies(seller.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto("/dashboard");
+    const title = `Fixture Workshop Open Day ${crypto.randomUUID().slice(0, 8)}`;
+    const submitted = await page.evaluate(
+      async ({ title, businessId, image }) => {
+        const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+        const terms = await fetch("/api/foundation/posting-terms", { cache: "no-store" }).then(
+          (response) => response.json()
+        );
+        const response = await fetch("/api/promotions", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "x-csrf-token": token },
+          body: JSON.stringify({
+            postRequestId: crypto.randomUUID(),
+            postingTerms: { version: terms.version, document_hash: terms.document_hash },
+            title,
+            description:
+              "Synthetic open day at the workshop, used by the foundation browser tests.",
+            promotion_type: "event",
+            province: "Gauteng",
+            city: "Johannesburg",
+            images: [image],
+            contact_methods: ["form"],
+            start_date: new Date(Date.now() + 86_400_000).toISOString(),
+            end_date: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+            event_details: { event_type: "festival_concert" },
+            business_id: businessId,
+            termsAccepted: true,
+          }),
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { title, businessId: host.id, image: `${APP_ORIGIN}/api/media/serve/${upload.object_key}` }
+    );
+    expect(submitted).toMatchObject({ status: 200, body: { success: true } });
+    const eventId = (submitted.body as { id: string }).id;
+    expect(eventId).toMatch(UUID);
+
+    try {
+      // A moderator publishes it (production commands; staff screens are tested elsewhere).
+      const moderator = await signIn(copy, "moderator");
+      const revision = Number(
+        queryTestCopy(`select revision from private.posts where id = '${eventId}';`)
+      );
+      const lease = await command(
+        copy,
+        "claim_queue_item",
+        { p_subject: "post", p_id: eventId },
+        moderator.token
+      );
+      await command(
+        copy,
+        "moderate_post",
+        {
+          p_post_id: eventId,
+          p_expected_revision: revision,
+          p_decision: "approve",
+          p_reason: null,
+          p_claim_generation: lease.claim_generation,
+          p_claim_nonce: lease.claim_nonce,
+        },
+        moderator.token
+      );
+      expect(queryTestCopy(`select status from private.posts where id = '${eventId}';`)).toBe(
+        "live"
+      );
+
+      // A visitor opens the event: the host business card links to the business.
+      await context.clearCookies();
+      await page.goto(`/tourism-events/${eventId}`);
+      await expect(page.getByText(title).filter({ visible: true }).first()).toBeVisible();
+      const card = page.locator(`a[href="/mzansi-business/${host.id}"]`).filter({ visible: true });
+      await expect(card.first()).toBeVisible();
+      await expect(card.first()).toContainText(HOST_TITLE);
+      expect(outside).toEqual([]);
+    } finally {
+      // Leave the seller's event count as seeded for the other specs.
+      const session = await signIn(copy, "verifiedMember");
+      await command(
+        copy,
+        "execute_my_frontend_post_action",
+        {
+          p_request: crypto.randomUUID(),
+          p_post: eventId,
+          p_expected_revision: Number(
+            queryTestCopy(`select revision from private.posts where id = '${eventId}';`)
+          ),
+          p_action: "delete",
+          p_kind: "event",
+          p_area: "tourism_events",
+        },
+        session.token
+      );
+    }
   });
 });

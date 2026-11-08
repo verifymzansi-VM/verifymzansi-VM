@@ -11,7 +11,10 @@ import { readFoundationPublicPost, readFoundationPublicContactChannels } from ".
 import { readPublicBusinessStickers } from "./business-seen";
 import { searchFoundationPresentedCards } from "./public-cards";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
-import type { PromotionDetailRecord } from "@/components/listings/promotion-detail-content";
+import type {
+  LinkedBusinessRecord,
+  PromotionDetailRecord,
+} from "@/components/listings/promotion-detail-content";
 import { createLogger } from "../utils/logger";
 import { readFoundationProgrammeShowcases } from "./organisation-sponsorships";
 import {
@@ -118,3 +121,49 @@ export const restoredEventDetail = cache(async (id: string) => {
   };
   return promotion;
 });
+
+const stickerText = (value: unknown) => (typeof value === "string" ? value : null);
+
+/**
+ * The business an event names as its host (saved with the event; the database
+ * accepted only the poster's own business post), for the event page's host
+ * card. Public reads only: null unless that business is publicly live, and null
+ * when a read fails, so the event page still renders without the card. Only the
+ * card's fields leave here; the owner id stays hidden (null), so the card never
+ * claims the advertiser's verified position. The expiry dates let the page's
+ * toPublicVerification recheck the CIPC and Seen stickers.
+ */
+export async function restoredEventHostBusiness(
+  id: unknown
+): Promise<
+  (LinkedBusinessRecord & { cipc_expires_at: string | null; seen_expires_at: string | null }) | null
+> {
+  if (typeof id !== "string" || !z.uuid().safeParse(id).success) return null;
+  try {
+    const post = await restoredPublicDetail(id);
+    if (post?.kind !== "business") return null;
+    const row = restoredPublicRow(post, post);
+    const sticker = ((
+      await readPublicBusinessStickers(foundationServerPublicApi(), [post.id], {
+        withExpiry: true,
+      })
+    ).get(post.id) ?? {}) as Record<string, unknown>;
+    return {
+      id: post.id,
+      owner_id: null,
+      business_name: row.business_name,
+      logo_url: row.logo_url ?? null,
+      cipc_verified_at: stickerText(sticker.cipc_verified_at),
+      cipc_expires_at: stickerText(sticker.cipc_expires_at),
+      seen_verified_at: stickerText(sticker.seen_verified_at),
+      seen_expires_at: stickerText(sticker.seen_expires_at),
+      seen_method: stickerText(sticker.seen_method),
+      seen_city: stickerText(sticker.seen_city),
+      owner_verified_role: stickerText(sticker.owner_verified_role),
+      owner_position_title: stickerText(sticker.owner_position_title),
+    };
+  } catch {
+    log.warn("Event host business unavailable");
+    return null;
+  }
+}
