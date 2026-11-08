@@ -100,28 +100,9 @@ test.describe("Mobile UX smoke", () => {
     test.skip(!isMobileProject(testInfo.project.name), "Runs only on mobile projects.");
   });
 
-  test("homepage showroom controls have touch-friendly tap targets", async ({ page }) => {
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.waitForLoadState("networkidle").catch(() => {});
-
-    // The showroom opens the homepage; with no items it shows a single welcome card instead.
-    const spotlight = page.locator('main section[aria-roledescription="carousel"]').first();
-    requireTestData((await spotlight.count()) > 0, "showroom items (no carousel without them)");
-
-    // The carousel has no dot controls any more (showroom-card-carousel.test.tsx
-    // asserts their absence) and its arrows show only on wide screens. On a
-    // phone the tap target is the post card in front.
-    const activeCard = spotlight.locator('[data-showroom-layer="active"]').first();
-    requireTestData((await activeCard.count()) > 0, "a live post in the homepage showroom");
-    const cardLink = activeCard.locator("xpath=descendant-or-self::a[@href][1]");
-    await cardLink.scrollIntoViewIfNeeded();
-    await expect(cardLink).toBeVisible();
-
-    const box = await cardLink.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(44);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
-  });
+  // The homepage showroom check moved to e2e/foundation/fixture-smoke.spec.ts:
+  // this source-mode harness reads the home showroom through the anonymous
+  // client, never the stand-in, so it can never show a post here.
 
   test("login inputs remain comfortable to tap on mobile", async ({ page }) => {
     await page.goto("/login", { waitUntil: "domcontentloaded" });
