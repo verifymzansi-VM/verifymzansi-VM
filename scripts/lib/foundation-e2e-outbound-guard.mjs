@@ -10,17 +10,17 @@
 // Each answered or refused request is recorded (origin only, no path, query or
 // body) in tmp/foundation-e2e/outbound.jsonl, so browser tests can prove that
 // no provider (SMS, email, payments, identity checks) was contacted.
-import { createHash } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { KNOWN_BREACHED_PASSWORD, OUTBOUND_LOG_FILE } from "./foundation-e2e-target.mjs";
+import { OUTBOUND_LOG_FILE } from "./foundation-e2e-target.mjs";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const BREACH_CHECK_HOST = "api.pwnedpasswords.com";
-const KNOWN_BREACHED_SHA1 = createHash("sha1")
-  .update(KNOWN_BREACHED_PASSWORD, "utf8")
-  .digest("hex")
-  .toUpperCase();
+/** The breach service's public SHA-1 digest of KNOWN_BREACHED_PASSWORD
+ * (foundation-e2e-target.mjs), written out so the fence hashes no password.
+ * scripts/foundation-e2e-target.test.mjs proves it through the website's own
+ * breach-check parser. */
+const KNOWN_BREACHED_SHA1 = "E6B6AFBD6D76BB5D2041542D7D2E3FAC5BB05593";
 
 /**
  * @param {string} href
