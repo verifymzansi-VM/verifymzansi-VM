@@ -14,6 +14,7 @@ import {
   readOutboundAttempts,
   readTestCopy,
   sessionCookies,
+  sessionIsLive,
   signIn,
 } from "./support/test-copy";
 import {
@@ -36,9 +37,16 @@ import {
 //     again."), while the form from link B still works;
 //   - a known-breached password is refused on the reset page;
 //   - without the link's binding, the reset link's session can set no
-//     password: not on the reset page and not through the profile page's
-//     password change (even with a wrong current password);
-//   - a Google member (no password) sets a password from the profile page;
+//     password: not on the reset page, not through the profile page's
+//     password change (even with a wrong current password) and not by asking
+//     for a password setup link;
+//   - a Google member (no password) whose sign-in is over an hour old is
+//     asked to sign in again before "Set Password" sends anything;
+//   - a Google member (no password) sets a password from the profile page:
+//     the setup email's link opens the reset page, a known-breached password
+//     is refused there, the chosen one works for email sign-in, every session
+//     (including the Google one) is signed out, and asking again from a
+//     session signed in with that password is refused;
 //   - a member changes the sign-in email (both addresses confirm);
 //   - a member saves a communication choice, which stays saved;
 //   - a member deletes the account and cannot sign in again.
@@ -49,12 +57,13 @@ import {
 // opening (/reset-password?link=...), so a form from an earlier link is told
 // apart from the latest one.
 //
-// Four steps are broken today and are marked test.fail(), each pinned to its
+// "Set Password" sends only the member's email, no CAPTCHA token: the website
+// accepts it from a signed-in session with a recent sign-in instead, and asks
+// local Auth for the setup email with its server key.
+//
+// Three steps are broken today and are marked test.fail(), each pinned to its
 // exact known symptom (characterise, support/known-break.ts); any other
 // outcome turns the run red:
-// - "a Google member sets a password ...": SEC-03, fixed by M1.4. "Set
-//   Password" sends no CAPTCHA token; the recovery request is refused (400)
-//   and no email is sent.
 // - "... email change ...": SEC-03, fixed by M1.5. The email change route
 //   reads a table of the retired backend and answers 500 before local Auth is
 //   asked; nothing changes and no confirmation is sent.
@@ -90,7 +99,6 @@ import {
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
-const SEC03_GOOGLE = "SEC-03 (Set a password), fixed by M1.4";
 const SEC03_EMAIL = "SEC-03 (email change), fixed by M1.5";
 const SEC09 = "SEC-09, fixed by M1.7";
 const SEC02 = "SEC-02, fixed by M1.6c";
@@ -117,6 +125,16 @@ const RESET_PAGE = (url: URL) =>
 const SESSION_CHANGED = { error: "Your recovery session changed. Check the link again." };
 const BREACHED = {
   error: "This password has appeared in a known data breach. Choose a different password.",
+};
+/** "Set Password" without a recent sign-in (src/app/api/foundation/auth/_lib/password-setup.ts). */
+const SIGN_IN_AGAIN = {
+  error: "For your security, sign out and sign in again before setting a password.",
+  code: "reauthentication_required",
+};
+/** A reset link's session asking for a password change or setup. */
+const RECOVERY_SESSION = {
+  error: "Use the reset link from your email to set a new password",
+  reason: "recovery_session",
 };
 /** The binding the website keeps while an opened link may be used (plain http
  * here, so without the __Host- prefix production uses). */
@@ -526,10 +544,15 @@ test.describe("account recovery and self-service", () => {
       maxRedirects: 0,
     });
     expect(changed.status()).toBe(403);
-    expect(await changed.json()).toEqual({
-      error: "Use the reset link from your email to set a new password",
-      reason: "recovery_session",
+    expect(await changed.json()).toEqual(RECOVERY_SESSION);
+    // Nor can it ask for a password setup link (the profile page's request).
+    const setup = await page.request.post(`${APP_ORIGIN}${RECOVERY_PATH}`, {
+      headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+      data: { email: resetter.email },
+      maxRedirects: 0,
     });
+    expect(setup.status()).toBe(403);
+    expect(await setup.json()).toEqual(RECOVERY_SESSION);
     // Nor does the reset page complete without the binding.
     await page.getByLabel("New password", { exact: true }).fill(attempt);
     await page.getByLabel("Confirm password", { exact: true }).fill(attempt);
@@ -548,55 +571,121 @@ test.describe("account recovery and self-service", () => {
     expectNoProviderSince(mark);
   });
 
+  test("a Google member with an old sign-in is asked to sign in again before Set Password", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    // Signed in (through local Auth) 61 minutes ago; the session is still live.
+    const session = await sessionCookies(
+      readTestCopy(),
+      await googleMemberSession(google, 61 * 60)
+    );
+    expect(session.accountId).toBe(google.id);
+    await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await openProfileTab(page, "Security");
+    await expect(
+      page.getByText("Set a password so you can also sign in with email.")
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Set Password" }).click();
+    await expect.poll(() => guarded.reply(RECOVERY_PATH).length, { timeout: 20_000 }).toBe(1);
+    expect(guarded.sentTo(RECOVERY_PATH)[0].fields.join()).toBe("email");
+    expect(guarded.reply(RECOVERY_PATH)[0]).toEqual({
+      method: "POST",
+      path: RECOVERY_PATH,
+      status: 403,
+      body: SIGN_IN_AGAIN,
+    });
+    // The page shows the reason in its existing failure toast; nothing is sent.
+    await expect(toast(page, "Password setup failed")).toBeVisible();
+    await expect(page.getByText(SIGN_IN_AGAIN.error).first()).toBeVisible();
+    expect(await mailCountTo(google.email)).toBe(0);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
   test("a Google member sets a password from the security tab", async ({ context, page }) => {
     test.setTimeout(120_000);
-    test.fail(true, SEC03_GOOGLE);
-    await characterise(SEC03_GOOGLE, async () => {
-      const mark = readOutboundAttempts().length;
-      const guarded = await guard(context);
-      const session = await sessionCookies(readTestCopy(), await googleMemberSession(google));
-      expect(session.accountId).toBe(google.id);
-      await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
-      await openProfileTab(page, "Security");
-      // The page knows the account has no password.
-      await expect(
-        page.getByText("Set a password so you can also sign in with email.")
-      ).toBeVisible();
-      const requestedAfter = Date.now() - 1000;
-      await page.getByRole("button", { name: "Set Password" }).click();
-      await expect.poll(() => guarded.reply(RECOVERY_PATH).length, { timeout: 20_000 }).toBe(1);
-      const requested = guarded.reply(RECOVERY_PATH)[0];
-      if (
-        requested.status === 400 &&
-        sameJson(requested.body, { error: "Password recovery could not be requested" }) &&
-        guarded.sentTo(RECOVERY_PATH)[0].fields.join() === "email"
-      ) {
-        // SEC-03 as recorded: no CAPTCHA token, so the request is refused and
-        // no email is sent.
-        await expect(toast(page, "Password setup failed")).toBeVisible();
-        expect(await mailCountTo(google.email)).toBe(0);
-        expectContained(guarded);
-        expectNoProviderSince(mark);
-        throw new KnownBreak(
-          `${SEC03_GOOGLE}: "Set Password" sends no CAPTCHA token and the request is refused (400)`
-        );
-      }
-      // Promised (M1.4): the setup email arrives; its link opens the reset
-      // page, the new password is saved and works for email sign-in.
-      expect(requested).toMatchObject({ status: 200 });
-      await expect(toast(page, "Password setup email sent")).toBeVisible();
-      const link = await authLinkFor(google.email, requestedAfter);
-      await page.goto(link.href);
-      await page.waitForURL(RESET_PAGE);
-      const password = `Local-fixture-google-${google.id.slice(0, 8)}`;
-      await page.getByLabel("New password", { exact: true }).fill(password);
-      await page.getByLabel("Confirm password", { exact: true }).fill(password);
-      await page.getByRole("button", { name: "Save password" }).click();
-      await page.waitForURL(`${APP_ORIGIN}/login`);
-      expect(await canSignIn(google.email, password)).toBe(true);
-      expectContained(guarded);
-      expectNoProviderSince(mark);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    const googleSession = await googleMemberSession(google);
+    const session = await sessionCookies(readTestCopy(), googleSession);
+    expect(session.accountId).toBe(google.id);
+    await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await openProfileTab(page, "Security");
+    // The page knows the account has no password.
+    await expect(
+      page.getByText("Set a password so you can also sign in with email.")
+    ).toBeVisible();
+    const requestedAfter = Date.now() - 1000;
+    await page.getByRole("button", { name: "Set Password" }).click();
+    await expect.poll(() => guarded.reply(RECOVERY_PATH).length, { timeout: 20_000 }).toBe(1);
+    // The restored page sends only the email, no CAPTCHA token; the website
+    // accepts it from this signed-in session with its recent sign-in.
+    expect(guarded.sentTo(RECOVERY_PATH)[0].fields.join()).toBe("email");
+    expect(guarded.reply(RECOVERY_PATH)[0]).toMatchObject({ status: 200, body: { ok: true } });
+    await expect(toast(page, "Password setup email sent")).toBeVisible();
+    // Asking changed nothing yet: the Google session is still live.
+    expect(await sessionIsLive(readTestCopy(), googleSession.token)).toBe(true);
+    const link = await authLinkFor(google.email, requestedAfter);
+    openedLinks.add(link.href);
+    await page.goto(link.href);
+    await page.waitForURL(RESET_PAGE);
+    await expect(page.getByRole("heading", { name: "Set a new password" })).toBeVisible({
+      timeout: 20_000,
     });
+    // A known-breached password is refused with the existing message.
+    await page.getByLabel("New password", { exact: true }).fill(KNOWN_BREACHED_PASSWORD);
+    await page.getByLabel("Confirm password", { exact: true }).fill(KNOWN_BREACHED_PASSWORD);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+    expect(guarded.reply(RESET_PATH)[0]).toMatchObject({ status: 400, body: BREACHED });
+    await expect(page.getByText(BREACHED.error).first()).toBeVisible();
+    // The chosen password is saved from the same form.
+    const password = `Local-fixture-google-${google.id.slice(0, 8)}`;
+    await page.getByLabel("New password", { exact: true }).fill(password);
+    await page.getByLabel("Confirm password", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(2);
+    expect(guarded.reply(RESET_PATH)[1]).toMatchObject({
+      status: 200,
+      body: { success: true, signOutComplete: true },
+    });
+    await page.waitForURL(`${APP_ORIGIN}/login`);
+    expect(await canSignIn(google.email, password)).toBe(true);
+    expect(await canSignIn(google.email, KNOWN_BREACHED_PASSWORD)).toBe(false);
+    // Every session was signed out, the Google session the member started from too.
+    expect(await sessionIsLive(readTestCopy(), googleSession.token)).toBe(false);
+    // Local Auth keeps only the Google identity (its option to add an email
+    // identity on a first password is off by default, as on hosted Auth), so
+    // the account looks the same; the password is in local Auth's own record.
+    expect(
+      queryTestCopy(
+        `select string_agg(provider, ',' order by provider) || '|' || (encrypted_password <> '')::text ` +
+          `from auth.identities join auth.users u on u.id = user_id where user_id = '${google.id}' group by encrypted_password;`
+      )
+    ).toBe("google|true");
+    // Asking again from a session signed in with that password is refused.
+    const signedIn = await sessionCookies(
+      readTestCopy(),
+      await signIn(readTestCopy(), { email: google.email, password })
+    );
+    await context.addCookies(signedIn.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    const again = await page.request.post(`${APP_ORIGIN}${RECOVERY_PATH}`, {
+      headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+      data: { email: google.email },
+      maxRedirects: 0,
+    });
+    expect(again.status()).toBe(409);
+    expect(await again.json()).toEqual({
+      error: "This account already has a password. Use Change password instead.",
+      code: "password_exists",
+    });
+    expectContained(guarded);
+    expectNoProviderSince(mark);
   });
 
   test("a member completes an email change after confirming both addresses", async ({

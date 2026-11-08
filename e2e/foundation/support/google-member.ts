@@ -96,7 +96,8 @@ export async function registerGoogleMember(label: string): Promise<GoogleMember>
   }
 }
 
-/** A real local Auth session for the Google member (see linkSession). */
-export function googleMemberSession(member: GoogleMember) {
-  return linkSession(readTestCopy(), member.email);
+/** A real local Auth session for the Google member (see linkSession), signed
+ * in now or `signInAgeSeconds` ago. */
+export function googleMemberSession(member: GoogleMember, signInAgeSeconds?: number) {
+  return linkSession(readTestCopy(), member.email, signInAgeSeconds);
 }

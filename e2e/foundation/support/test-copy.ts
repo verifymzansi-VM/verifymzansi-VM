@@ -269,33 +269,42 @@ export function retiredTableRead(copy: TestCopy, table: string) {
  * How a staff session is made (M0.9d): `passwordOnly` stops after the password
  * (no authenticator step, as a person who has not entered a code yet);
  * `authenticatorAgeSeconds` makes the authenticator step that many seconds old
- * (see ageAuthenticatorStep).
+ * (see ageSessionStep).
  */
 export type SessionOptions = { passwordOnly?: boolean; authenticatorAgeSeconds?: number };
 
+/** The steps local Auth records in a session (its `amr` claim) that can be aged. */
+const SESSION_STEPS = {
+  authenticator: "'totp'",
+  "sign-in": "'password', 'oauth', 'otp', 'magiclink'",
+} as const;
+
 /**
  * Trusted local step (copy only): moves the time local Auth recorded for a
- * session's authenticator step back by `seconds`, then refreshes the session,
- * so local Auth itself issues a token whose authenticator time is that old (as
- * after waiting that long). Nothing else about the session changes.
+ * session's authenticator step (or its sign-in) back by `seconds`, then
+ * refreshes the session, so local Auth itself issues a token whose step time
+ * is that old (as after waiting that long). Nothing else about the session
+ * changes.
  */
-async function ageAuthenticatorStep(
+async function ageSessionStep(
   copy: TestCopy,
   token: string,
   refreshToken: string,
-  seconds: number
+  seconds: number,
+  step: keyof typeof SESSION_STEPS = "authenticator"
 ) {
   if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 7 * 86_400)
-    throw new Error("Unexpected authenticator age");
+    throw new Error(`Unexpected ${step} age`);
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
   const sessionId = String(claims.session_id);
   if (!UUID.test(sessionId)) throw new Error("Unexpected session id");
   const moved = queryTestCopy(
     `update auth.mfa_amr_claims set created_at = least(created_at, now() - interval '${seconds} seconds'), ` +
       `updated_at = now() - interval '${seconds} seconds' ` +
-      `where session_id = '${sessionId}' and authentication_method = 'totp' returning id;`
+      `where session_id = '${sessionId}' and authentication_method in (${SESSION_STEPS[step]}) returning id;`
   );
-  if (!UUID.test(moved)) throw new Error("The session has no authenticator step to age");
+  if (!UUID.test(moved.split("\n")[0] ?? ""))
+    throw new Error(`The session has no ${step} step to age`);
   const refreshed = await request(copy, "/auth/v1/token?grant_type=refresh_token", {
     body: { refresh_token: refreshToken },
   });
@@ -332,7 +341,7 @@ export async function signIn(copy: TestCopy, person: Person, options: SessionOpt
   let token = verified.data.access_token as string;
   let refreshToken = verified.data.refresh_token as string;
   if (options.authenticatorAgeSeconds)
-    ({ token, refreshToken } = await ageAuthenticatorStep(
+    ({ token, refreshToken } = await ageSessionStep(
       copy,
       token,
       refreshToken,
@@ -372,9 +381,10 @@ export async function authAdmin(pathname: `/auth/v1/admin/${string}`, body?: unk
  * through Google, which the copy cannot reach). Local Auth's admin API makes a
  * one-time sign-in link (generate_link) and local Auth itself redeems it
  * (verify), exactly as when the person opens that link: nothing about the
- * account changes (no password, no new identity).
+ * account changes (no password, no new identity). `signInAgeSeconds` makes
+ * that sign-in that many seconds old (see ageSessionStep).
  */
-export async function linkSession(copy: TestCopy, email: string) {
+export async function linkSession(copy: TestCopy, email: string, signInAgeSeconds?: number) {
   const link = await authAdmin("/auth/v1/admin/generate_link", { type: "magiclink", email });
   const tokenHash = link.data?.hashed_token;
   if (link.status !== 200 || typeof tokenHash !== "string")
@@ -383,10 +393,20 @@ export async function linkSession(copy: TestCopy, email: string) {
     body: { type: "magiclink", token_hash: tokenHash },
   });
   if (verified.status !== 200) throw new Error(`Sign-in link failed (${verified.status})`);
-  return {
+  const session = {
     token: verified.data.access_token as string,
     refreshToken: verified.data.refresh_token as string,
   };
+  return signInAgeSeconds
+    ? ageSessionStep(copy, session.token, session.refreshToken, signInAgeSeconds, "sign-in")
+    : session;
+}
+
+/** Whether local Auth still accepts the session behind this access token (a
+ * signed-out session is refused even while its token has not expired). */
+export async function sessionIsLive(copy: TestCopy, token: string) {
+  const answer = await request(copy, "/auth/v1/user", { token, method: "GET" });
+  return answer.status === 200;
 }
 
 /** The website's session cookies for an existing local Auth session (written
