@@ -31,9 +31,15 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
+  // The skip guard fails a CI run on any skip that is not a documented
+  // platform skip (e2e/support/skip-policy.ts).
   reporter: process.env.CI
-    ? [["list"], ["html", { open: "never", outputFolder: "playwright-report/foundation" }]]
-    : "list",
+    ? [
+        ["list"],
+        ["html", { open: "never", outputFolder: "playwright-report/foundation" }],
+        ["./e2e/support/skip-guard-reporter.ts"],
+      ]
+    : [["list"], ["./e2e/support/skip-guard-reporter.ts"]],
   timeout: 60_000,
   use: {
     baseURL,

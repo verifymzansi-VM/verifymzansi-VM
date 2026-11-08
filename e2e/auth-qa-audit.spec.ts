@@ -9,6 +9,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
+import { signInAccount } from "./support/test-account";
 
 // ── Evidence helpers ─────────────────────────────────────────
 const EVIDENCE_DIR = path.resolve(__dirname, "..", "evidence");
@@ -82,9 +83,10 @@ async function prepareTurnstile(page: Page) {
 }
 
 // ── Shared state ─────────────────────────────────────────────
-const hasAuthCreds = Boolean(process.env.E2E_EMAIL && process.env.E2E_PASSWORD);
+const account = signInAccount();
 let registeredEmail = "";
-const registeredPassword = "QaTestPass1234";
+// A fresh strong password each run, so the breach check never refuses it.
+const registeredPassword = `Qa-${Math.random().toString(36).slice(2, 10)}-Pass9!`;
 
 // ── Test config ──────────────────────────────────────────────
 test.use({ trace: "on" });
@@ -92,15 +94,12 @@ test.use({ trace: "on" });
 // ============================================================
 // SECTION 1: Registration Flow
 // ============================================================
-const skipRegistrationInCI = isPlaywrightTestMode;
+// Browser runs register against the local Supabase stand-in, which has no
+// email rate limits, so these run in CI too.
 
 test.describe.serial("Registration Flow", () => {
   test("TC01 — Register happy path", async ({ page }, testInfo) => {
     test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
-    test.skip(
-      skipRegistrationInCI,
-      "Registration flow skipped in CI — requires stable Supabase without rate limits"
-    );
     setupPageListeners(page);
     registeredEmail = freshEmail();
 
@@ -152,7 +151,9 @@ test.describe.serial("Registration Flow", () => {
     expect(responseBody).toHaveProperty("success", true);
 
     // Toast
-    await expect(page.locator("text=Account created!")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Account created!", { exact: true })).toBeVisible({
+      timeout: 5000,
+    });
 
     // Redirect
     await page.waitForURL("**/login?registered=true", { timeout: 10000 });
@@ -164,11 +165,7 @@ test.describe.serial("Registration Flow", () => {
   test("TC02 — Register duplicate email (anti-enumeration)", async ({ page }, testInfo) => {
     setupPageListeners(page);
     test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
-    test.skip(
-      skipRegistrationInCI,
-      "Registration flow skipped in CI — requires stable Supabase without rate limits"
-    );
-    test.skip(!registeredEmail, "TC01 must run first to set registeredEmail");
+    expect(registeredEmail, "TC01 registers the address first (serial)").not.toBe("");
 
     await page.goto("/register");
 
@@ -195,7 +192,9 @@ test.describe.serial("Registration Flow", () => {
     expect(responseBody).toHaveProperty("success", true);
 
     // Same toast and redirect as TC01
-    await expect(page.locator("text=Account created!")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("Account created!", { exact: true })).toBeVisible({
+      timeout: 5000,
+    });
     await page.waitForURL("**/login?registered=true", { timeout: 10000 });
 
     await screenshot(page, "TC02-duplicate-success");
@@ -279,15 +278,14 @@ test.describe("Registration Validation", () => {
 // ============================================================
 test.describe("Login Flow", () => {
   test("TC04 — Login happy path (requires E2E creds)", async ({ page }, testInfo) => {
-    test.skip(!hasAuthCreds, "Set E2E_EMAIL and E2E_PASSWORD to enable");
     test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
     setupPageListeners(page);
 
     await page.goto("/login");
     await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
 
-    await page.fill("#email", process.env.E2E_EMAIL!);
-    await page.fill("#password", process.env.E2E_PASSWORD!);
+    await page.fill("#email", account.email);
+    await page.fill("#password", account.password);
     await prepareTurnstile(page);
 
     await screenshot(page, "TC04-form-filled");
@@ -301,8 +299,11 @@ test.describe("Login Flow", () => {
     const response = await responsePromise;
     expect(response.status()).toBe(200);
 
-    await expect(page.locator("text=Welcome back!")).toBeVisible({ timeout: 5000 });
-    await page.waitForURL("**/dashboard**", { timeout: 10000 });
+    await expect(page.getByText("Welcome back!", { exact: true })).toBeVisible({ timeout: 5000 });
+    // Without a returnUrl the login page sends members home (sanitizeReturnUrl).
+    await page.waitForURL((url) => url.pathname === "/", { timeout: 10000 });
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/dashboard/);
 
     await screenshot(page, "TC04-dashboard");
   });
@@ -506,12 +507,11 @@ test.describe("Rate Limiting", () => {
 // ============================================================
 test.describe("Login Redirect", () => {
   test("TC11 — Login returnUrl redirect (requires E2E creds)", async ({ page }) => {
-    test.skip(!hasAuthCreds, "Set E2E_EMAIL and E2E_PASSWORD to enable");
     setupPageListeners(page);
 
     await page.goto("/login?returnUrl=/verification");
-    await page.fill("#email", process.env.E2E_EMAIL!);
-    await page.fill("#password", process.env.E2E_PASSWORD!);
+    await page.fill("#email", account.email);
+    await page.fill("#password", account.password);
     await prepareTurnstile(page);
 
     await page.getByRole("button", { name: /sign in/i }).click();
@@ -524,13 +524,12 @@ test.describe("Login Redirect", () => {
   test("TC12 — Logged-in user redirected away from auth pages (requires E2E creds)", async ({
     page,
   }) => {
-    test.skip(!hasAuthCreds, "Set E2E_EMAIL and E2E_PASSWORD to enable");
     setupPageListeners(page);
 
     // Login first
     await page.goto("/login");
-    await page.fill("#email", process.env.E2E_EMAIL!);
-    await page.fill("#password", process.env.E2E_PASSWORD!);
+    await page.fill("#email", account.email);
+    await page.fill("#password", account.password);
     await prepareTurnstile(page);
     await page.getByRole("button", { name: /sign in/i }).click();
     await page.waitForURL((url) => url.pathname === "/", { timeout: 10000 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { requireTestData } from "./support/test-data";
 
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
 const WEBKIT_SKIP_MSG =
@@ -132,9 +133,7 @@ test.describe("Singleton video playback", () => {
 
     const videos = page.locator('[data-testid="mzansi-market-grid-ready"] video');
     const videoCount = await videos.count();
-    if (videoCount < 2) {
-      test.skip(true, "Need at least 2 video cards to test singleton behavior.");
-    }
+    requireTestData(videoCount >= 2, "at least 2 video cards");
 
     // Wait for the arbitration manager to run (debounce is ~100ms)
     await page.waitForTimeout(500);
@@ -174,9 +173,7 @@ test.describe("Singleton video playback", () => {
 
     const videos = page.locator('[data-testid="mzansi-market-grid-ready"] video');
     const videoCount = await videos.count();
-    if (videoCount < 2) {
-      test.skip(true, "Need at least 2 video cards to test singleton behavior.");
-    }
+    requireTestData(videoCount >= 2, "at least 2 video cards");
 
     // Scroll to ensure multiple videos are in the viewport
     const firstVideo = videos.nth(0);
@@ -254,9 +251,7 @@ test.describe("Singleton video playback", () => {
 
     const videos = page.locator('[data-testid="mzansi-market-grid-ready"] video');
     const videoCount = await videos.count();
-    if (videoCount < 3) {
-      test.skip(true, "Need at least 3 video cards to test scroll singleton behavior.");
-    }
+    requireTestData(videoCount >= 3, "at least 3 video cards");
 
     // Scroll through each video element, pausing briefly for the IO + debounce
     for (let i = 0; i < videoCount; i++) {

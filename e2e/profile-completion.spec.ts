@@ -5,7 +5,10 @@ test.use({ storageState: POSTING_CHROMIUM_STATE });
 
 test.describe("Complete profile flow", () => {
   test.beforeEach(({ browserName }, testInfo) => {
-    test.skip(browserName !== "chromium" || testInfo.project.name !== "chromium");
+    test.skip(
+      browserName !== "chromium" || testInfo.project.name !== "chromium",
+      "The profile completion flow runs once, in the chromium project."
+    );
   });
 
   test("@smoke starts OTP verification from complete-profile", async ({ page }) => {

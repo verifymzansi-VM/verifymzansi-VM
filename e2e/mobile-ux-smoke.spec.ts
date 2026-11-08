@@ -1,4 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import {
+  completeMobileBusinessCreate,
+  completeMobileListingCreate,
+  completeMobilePromotionCreate,
+} from "./support/mobile-posting";
+import { requireTestData } from "./support/test-data";
 
 function isMobileProject(projectName: string): boolean {
   return projectName === "mobile-chrome" || projectName === "mobile-safari";
@@ -61,6 +67,35 @@ async function collectVisibleHrefs(page: Page, selector: string): Promise<string
 }
 
 test.describe("Mobile UX smoke", () => {
+  // The detail-page and showroom checks need live posts. The browser runs start
+  // with an empty Supabase stand-in, so publish a listing, a business and an
+  // event through the real forms first (posts are approved automatically).
+  test.beforeAll(async ({ browser }, testInfo) => {
+    if (!isMobileProject(testInfo.project.name)) return;
+    testInfo.setTimeout(300_000);
+    const { baseURL, viewport, userAgent, deviceScaleFactor, isMobile, hasTouch } =
+      testInfo.project.use;
+    const context = await browser.newContext({
+      baseURL,
+      viewport,
+      userAgent,
+      deviceScaleFactor,
+      isMobile,
+      hasTouch,
+    });
+    const page = await context.newPage();
+    try {
+      const session = await page.goto("/api/e2e/auth/session?persona=mobile-ux-seed&reset=1");
+      expect(session?.ok()).toBe(true);
+      const suffix = Date.now().toString().slice(-6);
+      await completeMobileListingCreate(page, `Mobile UX Listing ${suffix}`);
+      await completeMobileBusinessCreate(page, `Mobile UX Business ${suffix}`);
+      await completeMobilePromotionCreate(page, `Mobile UX Event ${suffix}`);
+    } finally {
+      await context.close();
+    }
+  });
+
   test.beforeEach(({}, testInfo) => {
     test.skip(!isMobileProject(testInfo.project.name), "Runs only on mobile projects.");
   });
@@ -71,21 +106,21 @@ test.describe("Mobile UX smoke", () => {
 
     // The showroom opens the homepage; with no items it shows a single welcome card instead.
     const spotlight = page.locator('main section[aria-roledescription="carousel"]').first();
-    if ((await spotlight.count()) === 0) {
-      test.skip(true, "The showroom has no items in this run, so there is no carousel.");
-    }
+    requireTestData((await spotlight.count()) > 0, "showroom items (no carousel without them)");
 
-    const slideButton = spotlight.getByRole("button", { name: /go to slide/i }).first();
-    if ((await slideButton.count()) === 0) {
-      test.skip(true, "Spotlight renders a single slide, so dot controls are absent.");
-    }
-    await slideButton.scrollIntoViewIfNeeded();
-    await expect(slideButton).toBeVisible();
+    // The carousel has no dot controls any more (showroom-card-carousel.test.tsx
+    // asserts their absence) and its arrows show only on wide screens. On a
+    // phone the tap target is the post card in front.
+    const activeCard = spotlight.locator('[data-showroom-layer="active"]').first();
+    requireTestData((await activeCard.count()) > 0, "a live post in the homepage showroom");
+    const cardLink = activeCard.locator("xpath=descendant-or-self::a[@href][1]");
+    await cardLink.scrollIntoViewIfNeeded();
+    await expect(cardLink).toBeVisible();
 
-    const box = await slideButton.boundingBox();
+    const box = await cardLink.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(32);
-    expect(box!.height).toBeGreaterThanOrEqual(32);
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
   });
 
   test("login inputs remain comfortable to tap on mobile", async ({ page }) => {
@@ -276,9 +311,7 @@ test.describe("Mobile UX smoke", () => {
     await page.waitForLoadState("networkidle").catch(() => {});
 
     const promotionHrefs = await collectVisibleHrefs(page, 'a[href^="/tourism-events/"]');
-    if (promotionHrefs.length === 0) {
-      test.skip(true, "No promotion links available in current fixture data.");
-    }
+    requireTestData(promotionHrefs.length > 0, "promotion links on /tourism-events");
 
     let openedPromotionWithActions = false;
     const maxPromotionCandidates = Math.min(promotionHrefs.length, 8);
@@ -297,9 +330,7 @@ test.describe("Mobile UX smoke", () => {
       }
     }
 
-    if (!openedPromotionWithActions) {
-      test.skip(true, "Could not find a promotion detail page with contact actions.");
-    }
+    requireTestData(openedPromotionWithActions, "a promotion detail page with share and report");
 
     const shareButton = page.getByRole("button", { name: /^share$|link copied!/i }).first();
     const reportButton = page.getByRole("button", { name: /^report$/i }).first();
@@ -331,13 +362,14 @@ test.describe("Mobile UX smoke", () => {
   });
 
   test("dsar request controls remain touch-friendly", async ({ page }) => {
+    // The request form is for signed-in members.
+    const session = await page.goto("/api/e2e/auth/session?persona=mobile-ux-dsar&reset=1");
+    expect(session?.ok()).toBe(true);
     await page.goto("/dsar", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => {});
 
     const redirectedToAuth = /\/(login|sign-in)(\?|$)/i.test(new URL(page.url()).pathname);
-    if (redirectedToAuth) {
-      test.skip(true, "DSAR route requires auth in this harness run.");
-    }
+    requireTestData(!redirectedToAuth, "an open /dsar page (it redirected to sign-in)");
 
     const requestType = page.locator('form button[type="button"]').first();
     await expect(requestType).toBeVisible();
@@ -345,7 +377,7 @@ test.describe("Mobile UX smoke", () => {
     expect(requestTypeBox).not.toBeNull();
     expect(requestTypeBox!.height).toBeGreaterThanOrEqual(44);
 
-    const submitButton = page.getByRole("button", { name: /submit request/i }).first();
+    const submitButton = page.getByRole("button", { name: /send request/i }).first();
     await expect(submitButton).toBeVisible();
     const submitBox = await submitButton.boundingBox();
     expect(submitBox).not.toBeNull();
@@ -357,9 +389,7 @@ test.describe("Mobile UX smoke", () => {
     await page.waitForLoadState("networkidle").catch(() => {});
 
     const listingHrefs = await collectVisibleHrefs(page, 'a[href^="/listing/"]');
-    if (listingHrefs.length === 0) {
-      test.skip(true, "No listing links available in current fixture data.");
-    }
+    requireTestData(listingHrefs.length > 0, "listing links on /mzansi-market");
 
     let openedLiveListingWithActions = false;
     const maxCandidates = Math.min(listingHrefs.length, 8);
@@ -380,9 +410,10 @@ test.describe("Mobile UX smoke", () => {
       }
     }
 
-    if (!openedLiveListingWithActions) {
-      test.skip(true, "Could not find a live listing detail page with contact actions.");
-    }
+    requireTestData(
+      openedLiveListingWithActions,
+      "a live listing detail page with share and report"
+    );
 
     const shareButton = page.getByRole("button", { name: /^share$|link copied!/i }).first();
     const reportButton = page.getByRole("button", { name: /^report$/i }).first();

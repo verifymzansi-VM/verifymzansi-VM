@@ -22,7 +22,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : Math.min(4, availableParallelism()),
-  reporter: "html",
+  // The skip guard lists every skip and, in CI, fails on any that is not a
+  // documented platform skip (e2e/support/skip-policy.ts).
+  reporter: [["html"], ["./e2e/support/skip-guard-reporter.ts"]],
   timeout: process.env.CI ? 90_000 : 60_000,
   use: {
     baseURL: PLAYWRIGHT_BASE_URL,

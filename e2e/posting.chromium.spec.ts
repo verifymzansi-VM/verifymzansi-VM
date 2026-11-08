@@ -207,7 +207,10 @@ async function expectSuccessfulEditSubmission(responsePromise: Promise<Response>
 
 test.describe("Posting flows in Chromium", () => {
   test.beforeEach(async ({ page, browserName }, testInfo) => {
-    test.skip(browserName !== "chromium" || testInfo.project.name !== "chromium");
+    test.skip(
+      browserName !== "chromium" || testInfo.project.name !== "chromium",
+      "Desktop posting flows run once, in the chromium project."
+    );
 
     const response = await page.goto(`/api/e2e/auth/session?persona=${POSTING_PERSONA}&reset=1`);
     expect(response?.ok()).toBe(true);
