@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SHOWROOM_PROVINCE_ALL, SHOWROOM_PROVINCE_COOKIE } from "@/lib/showroom/province-cookie";
 import { PLAYWRIGHT_HIDE_FIXTURES_COOKIE } from "@/lib/supabase/playwright-visual-fixtures";
 
 /**
@@ -103,12 +104,12 @@ async function openSettledScreen(
   viewport: { width: number; height: number }
 ) {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  const url = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3100";
   await page.context().addCookies([
-    {
-      name: PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-      value: "1",
-      url: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3100",
-    },
+    { name: PLAYWRIGHT_HIDE_FIXTURES_COOKIE, value: "1", url },
+    // The showroom otherwise guesses the visitor's province from the network,
+    // so a picture taken in South Africa would differ from one taken in CI.
+    { name: SHOWROOM_PROVINCE_COOKIE, value: SHOWROOM_PROVINCE_ALL, url },
   ]);
   await page.goto(screen.path, { waitUntil: "load" });
   await page.locator(screen.readySelector).first().waitFor({ state: "visible" });
