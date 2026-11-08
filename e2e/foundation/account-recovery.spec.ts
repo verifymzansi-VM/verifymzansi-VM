@@ -35,6 +35,9 @@ import {
 //     link A is refused ("Your recovery session changed. Check the link
 //     again."), while the form from link B still works;
 //   - a known-breached password is refused on the reset page;
+//   - without the link's binding, the reset link's session can set no
+//     password: not on the reset page and not through the profile page's
+//     password change (even with a wrong current password);
 //   - a Google member (no password) sets a password from the profile page;
 //   - a member changes the sign-in email (both addresses confirm);
 //   - a member saves a communication choice, which stays saved;
@@ -87,7 +90,6 @@ import {
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SEC03_GOOGLE = "SEC-03 (Set a password), fixed by M1.4";
 const SEC03_EMAIL = "SEC-03 (email change), fixed by M1.5";
 const SEC09 = "SEC-09, fixed by M1.7";
@@ -286,8 +288,8 @@ async function openResetLink(page: Page, guarded: Guarded, member: VerifiedMembe
   });
   const check = guarded.reply(RESET_PATH, "GET").at(-1);
   expect(check?.status).toBe(200);
-  expect(check?.body).toMatchObject({ valid: true, accountId: member.id });
-  expect(String((check?.body as { recoverySessionId?: unknown }).recoverySessionId)).toMatch(UUID);
+  // Only the answer reaches the page; the recovery session stays on the server.
+  expect(check?.body).toEqual({ valid: true });
   return link;
 }
 
@@ -494,6 +496,54 @@ test.describe("account recovery and self-service", () => {
         .slice(mark)
         .some((entry) => entry.origin === "https://api.pwnedpasswords.com")
     ).toBe(true);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
+  test("a reset link's session cannot set a password without its binding", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    await openResetLink(page, guarded, resetter);
+    // Someone holding the recovery session cookies (readable by page scripts)
+    // but not the script-hidden binding.
+    await context.clearCookies({ name: BINDING_COOKIE });
+    const attempt = `${resetter.password}-without-binding`;
+    // The profile page's password change refuses the reset link's session,
+    // even with a wrong current password.
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    expect(csrf?.value).toMatch(/^[a-f0-9]{64}$/i);
+    const changed = await page.request.post(`${APP_ORIGIN}/api/auth/change-password`, {
+      headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+      data: {
+        currentPassword: "not-the-current-password",
+        newPassword: attempt,
+        confirmNewPassword: attempt,
+      },
+      maxRedirects: 0,
+    });
+    expect(changed.status()).toBe(403);
+    expect(await changed.json()).toEqual({
+      error: "Use the reset link from your email to set a new password",
+      reason: "recovery_session",
+    });
+    // Nor does the reset page complete without the binding.
+    await page.getByLabel("New password", { exact: true }).fill(attempt);
+    await page.getByLabel("Confirm password", { exact: true }).fill(attempt);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+    expect(guarded.reply(RESET_PATH)[0]).toEqual({
+      method: "POST",
+      path: RESET_PATH,
+      status: 401,
+      body: { error: "Request a new recovery link" },
+    });
+    await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
+    expect(await canSignIn(resetter.email, attempt)).toBe(false);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
     expectContained(guarded);
     expectNoProviderSince(mark);
   });
