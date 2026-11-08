@@ -213,7 +213,7 @@ Questions for the owner:
 | `src/app/dashboard/page.test.tsx`                          | test   | Unit tests for the page reading from the new backend.                            | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | a42a0179ee67 |
 | `src/app/dashboard/profile/page.test.tsx`                  | test   | Unit tests for the page reading from the new backend.                            | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 5444ac6c9762 |
 | `src/app/page.test.tsx`                                    | test   | Stubs app URL.                                                                   | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 1df81e31a459 |
-| `src/app/post/create-route-guards.test.tsx`                | test   | Pins these cases to the old backend; the new backend's check has its own test.   | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | b16b9d9566c2 |
+| `src/app/post/create-route-guards.test.tsx`                | test   | Pins these cases to the old backend; the new backend's check has its own test.   | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 9ef0a5b5fad6 |
 | `src/app/post/edit-business/[id]/page.test.tsx`            | test   | Test URL update.                                                                 | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 82b062950243 |
 | `src/app/verification/page.test.tsx`                       | test   | Unit tests for the page reading from the new backend.                            | Nothing (not part of a page) | keep     | awaiting owner | 2026-11-08 | 3929c3d630a2 |
 

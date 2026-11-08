@@ -9,11 +9,12 @@ import type { FoundationAuthenticatedApi } from "@/lib/foundation/authenticated-
 import { createClient } from "@/lib/supabase/server";
 import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 
-const { redirect, backend } = vi.hoisted(() => ({
+const { redirect, backend, warn } = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
     throw new Error("redirect:" + path);
   }),
   backend: { mode: "foundation" as "foundation" | "source" },
+  warn: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect }));
@@ -24,6 +25,9 @@ vi.mock("@/lib/foundation/server-session", async (original) => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/account/resolved-verification", () => ({ resolveAccountVerification: vi.fn() }));
+vi.mock("@/lib/utils/logger", () => ({
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() }),
+}));
 
 const RETURN = "/post/create-business";
 const VERIFY = "/verification?returnUrl=%2Fpost%2Fcreate-business";
@@ -125,6 +129,78 @@ describe("foundation backend", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  describe("logs why it failed closed, without identifiers", () => {
+    const ID = "00000000-0000-4000-8000-000000000001";
+    const EMAIL = "member@example.invalid";
+    it.each([
+      [
+        "a database error keeps only its code",
+        () =>
+          rpc.mockResolvedValue({
+            data: null,
+            error: { code: "42501", message: `refused for ${ID}`, details: EMAIL, hint: ID },
+          }),
+        "Post access readiness unavailable",
+        { reason: "rpc_error", code: "42501" },
+      ],
+      [
+        "a gateway error code is kept",
+        () =>
+          rpc.mockResolvedValue({
+            data: null,
+            error: { code: "PGRST301", message: "JWT expired" },
+          }),
+        "Post access readiness unavailable",
+        { reason: "rpc_error", code: "PGRST301" },
+      ],
+      [
+        "an unexpected error code is dropped",
+        () => rpc.mockResolvedValue({ data: null, error: { code: EMAIL, message: ID } }),
+        "Post access readiness unavailable",
+        { reason: "rpc_error", code: null },
+      ],
+      [
+        "a malformed answer",
+        () => rpc.mockResolvedValue({ data: { owner: ID, email: EMAIL }, error: null }),
+        "Post access readiness unavailable",
+        { reason: "malformed", code: null },
+      ],
+      [
+        "a failed request",
+        () => rpc.mockRejectedValue(new Error(`socket closed for ${EMAIL}`)),
+        "Post access readiness unavailable",
+        { reason: "request_failed", code: null },
+      ],
+      [
+        "an unavailable session",
+        () => read.mockRejectedValue(new FoundationServerSessionError(503)),
+        "Post access session unavailable",
+        { reason: "session_503" },
+      ],
+      [
+        "an unexpected session error",
+        () => read.mockRejectedValue(new Error(`no account ${ID} ${EMAIL}`)),
+        "Post access session unavailable",
+        { reason: "session_threw" },
+      ],
+    ] as const)("%s", async (_label, arrange, message, meta) => {
+      arrange();
+      await expect(requireVerifiedPostAccess(RETURN)).rejects.toThrow("redirect:" + VERIFY);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(message, meta);
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).not.toContain(ID);
+      expect(logged).not.toContain(EMAIL);
+      expect(logged).not.toMatch(/refused|socket|JWT|no account/);
+    });
+
+    it("logs nothing when the member is simply not ready yet", async () => {
+      rpc.mockResolvedValue(readiness(false));
+      await expect(requireVerifiedPostAccess(RETURN)).rejects.toThrow("redirect:" + VERIFY);
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   it("never puts an outside address in the verification return link", async () => {
     rpc.mockResolvedValue(readiness(false));
     await expect(requireVerifiedPostAccess("//evil.example/post")).rejects.toThrow(
@@ -133,6 +209,9 @@ describe("foundation backend", () => {
   });
 });
 
+// legacy-backend: these cases cover the old ("source") backend path and run in the
+// foundation vitest project with getDataBackend mocked. Delete them together with
+// the old backend (see src/test/legacy-backend-suites.ts).
 describe("source backend (unchanged)", () => {
   function legacyClient(user: { id: string } | null) {
     vi.mocked(createClient).mockResolvedValue({

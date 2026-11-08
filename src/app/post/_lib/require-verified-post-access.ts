@@ -22,7 +22,7 @@ type FoundationPostAccess = "allowed" | "verification" | "login" | "forbidden";
 async function readFoundationPostAccess(): Promise<FoundationPostAccess> {
   const { readFoundationServerSession, FoundationServerSessionError } =
     await import("@/lib/foundation/server-session");
-  const { readFoundationVerificationReadiness } =
+  const { readFoundationVerificationReadiness, FoundationVerificationReadinessError } =
     await import("@/lib/foundation/verification-readiness");
   let session: Awaited<ReturnType<typeof readFoundationServerSession>>;
   try {
@@ -30,14 +30,23 @@ async function readFoundationPostAccess(): Promise<FoundationPostAccess> {
   } catch (error) {
     if (error instanceof FoundationServerSessionError && error.status === 401) return "login";
     if (error instanceof FoundationServerSessionError && error.status === 403) return "forbidden";
-    log.warn("Post access session unavailable");
+    // Category only: never ids, emails or raw error messages.
+    log.warn("Post access session unavailable", {
+      reason:
+        error instanceof FoundationServerSessionError ? `session_${error.status}` : "session_threw",
+    });
     return "verification";
   }
   try {
     const readiness = await readFoundationVerificationReadiness(session.api);
     return readiness.verification_ready === true ? "allowed" : "verification";
-  } catch {
-    log.warn("Post access readiness unavailable");
+  } catch (error) {
+    log.warn(
+      "Post access readiness unavailable",
+      error instanceof FoundationVerificationReadinessError
+        ? { reason: error.reason, code: error.code }
+        : { reason: "threw", code: null }
+    );
     return "verification";
   }
 }

@@ -39,12 +39,13 @@ import {
 // a member waiting for review is sent to /verification, an accepted member
 // sees the form ("open the create form").
 //
-// "submit, approve, showroom and search" sends the business post to the
-// website route the form itself posts to (POST /api/businesses, from the
-// member's browser with the page's CSRF token). Only the form's page is
-// bypassed; the staff approval, showroom and search steps use the real pages.
-// (On the copy the form page's posting-plan step shows the site's browser-test
-// placeholder, not the member's real allowance.)
+// "submit, approve, showroom and search" does not fill in the form yet: it
+// sends the business post to the website route the form itself posts to
+// (POST /api/businesses, from the member's browser with the page's CSRF
+// token). The staff approval, showroom and search steps use the real pages.
+// Submitting through the form's own steps is not covered by this test yet; a
+// later change adds it. (On the copy the form page's posting-plan step shows
+// the site's browser-test placeholder, not the member's real allowance.)
 //
 // Network: browser requests may only reach the copy's website and its local
 // database gateway; anything else is aborted and fails the test. The website's
