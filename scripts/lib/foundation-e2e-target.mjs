@@ -56,6 +56,10 @@ export const LOCAL_OZOW_WEBHOOK_SECRET = `whsec_${createHash("sha256")
   .digest("base64")}`;
 /** Synthetic payment-provider site code; exists only in the copy. */
 export const LOCAL_OZOW_SITE_CODE = "local-fixture-ozow-site";
+/** The one password the copy's breach-check stand-in reports as breached
+ * (scripts/lib/foundation-e2e-outbound-guard.mjs), so browser tests can prove
+ * the refusal. The real breach service lists it too. Never a member's password. */
+export const KNOWN_BREACHED_PASSWORD = "password1234";
 /** Files the website writes in the copy (git-ignored, reset on `up`): the SMS
  * it would have sent, and every request it tried to send off this machine. */
 export const TEST_SMS_SINK_FILE = "tmp/foundation-e2e/sms-sink.jsonl";

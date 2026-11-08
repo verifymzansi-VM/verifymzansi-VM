@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { E2E_FIXTURE, KNOWN_BREACHED_PASSWORD } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import {
   googleMemberSession,
@@ -29,18 +29,26 @@ import {
 //     the local mail catcher and opens it: the reset page accepts the
 //     recovery session; an unknown address gets the same answer and no email;
 //     a used link cannot be opened again;
-//   - a member saves a new password from that link and signs in with it;
+//   - a member saves a new password from that link and signs in with it; the
+//     old password stops working;
+//   - after opening link A and then link B in the same browser, the form from
+//     link A is refused ("Your recovery session changed. Check the link
+//     again."), while the form from link B still works;
+//   - a known-breached password is refused on the reset page;
 //   - a Google member (no password) sets a password from the profile page;
 //   - a member changes the sign-in email (both addresses confirm);
 //   - a member saves a communication choice, which stays saved;
 //   - a member deletes the account and cannot sign in again.
 //
-// Five steps are broken today and are marked test.fail(), each pinned to its
+// The reset page sends only the two password fields. The server remembers,
+// when the link is opened, which recovery session it opened in this browser
+// (an HttpOnly binding cookie), and the reset page's address names that
+// opening (/reset-password?link=...), so a form from an earlier link is told
+// apart from the latest one.
+//
+// Four steps are broken today and are marked test.fail(), each pinned to its
 // exact known symptom (characterise, support/known-break.ts); any other
 // outcome turns the run red:
-// - "a member resets a forgotten password ...": SEC-03, fixed by M1.3. The
-//   reset page sends only the two password fields; the server also needs the
-//   recovery session id and answers 400, so the password never changes.
 // - "a Google member sets a password ...": SEC-03, fixed by M1.4. "Set
 //   Password" sends no CAPTCHA token; the recovery request is refused (400)
 //   and no email is sent.
@@ -63,7 +71,8 @@ import {
 // Nothing is delivered. Network: browser requests may only reach the copy's
 // website and its local database gateway (anything else is aborted and fails
 // the test), and the website's own server runs behind the copy's outbound
-// fence, whose log may show only the password breach check it answers itself.
+// fence, whose log may show only the password breach check it answers itself
+// (as "breached" only for the copy's one known-breached test password).
 //
 // The CAPTCHA: the site's test mode hands forms the bypass token, which the
 // foundation recovery request refuses by design (production Auth verifies real
@@ -79,7 +88,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const SEC03_RESET = "SEC-03 (password reset), fixed by M1.3";
 const SEC03_GOOGLE = "SEC-03 (Set a password), fixed by M1.4";
 const SEC03_EMAIL = "SEC-03 (email change), fixed by M1.5";
 const SEC09 = "SEC-09, fixed by M1.7";
@@ -98,6 +106,21 @@ const RECOVERY_ANSWER = {
 };
 /** A link to local Auth, as it appears in a caught email. */
 const AUTH_LINK = /http:\/\/127\.0\.0\.1:\d+\/auth\/v1\/verify\?[^\s)\]>"]+/;
+/** The reset page an opened link leads to; its address names that opening. */
+const RESET_PAGE = (url: URL) =>
+  url.origin === APP_ORIGIN &&
+  url.pathname === "/reset-password" &&
+  /^\?link=[A-Za-z0-9_-]{22}$/.test(url.search);
+/** The website's answers on the reset page (src/app/api/foundation/auth/_lib/recovery-complete.ts). */
+const SESSION_CHANGED = { error: "Your recovery session changed. Check the link again." };
+const BREACHED = {
+  error: "This password has appeared in a known data breach. Choose a different password.",
+};
+/** The binding the website keeps while an opened link may be used (plain http
+ * here, so without the __Host- prefix production uses). */
+const BINDING_COOKIE = "vm_recovery_binding";
+/** Reset links already opened in this run; a new lookup waits for a newer one. */
+const openedLinks = new Set<string>();
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
@@ -214,14 +237,22 @@ async function canSignIn(email: string, password: string) {
   );
 }
 
-/** The local Auth link in the newest email to `address` since `after`. */
+/** The local Auth link in the newest email to `address` since `after`. Waits
+ * past emails without one (a password-change notice) and links already opened
+ * in this run, so two requests in quick succession get their own links. */
 async function authLinkFor(address: string, after: number) {
-  const mail = await latestMailTo(address, { after });
-  const link = mail.text.match(AUTH_LINK)?.[0];
-  if (!link) throw new Error("The email has no local Auth link");
-  const url = new URL(link.replaceAll("&amp;", "&"));
-  if (url.origin !== API_ORIGIN) throw new Error("Auth links stay on the local gateway");
-  return url;
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const mail = await latestMailTo(address, { after, timeoutMs: deadline - Date.now() });
+    const link = mail.text.match(AUTH_LINK)?.[0];
+    if (link) {
+      const url = new URL(link.replaceAll("&amp;", "&"));
+      if (url.origin !== API_ORIGIN) throw new Error("Auth links stay on the local gateway");
+      if (!openedLinks.has(url.href)) return url;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("No new email with a local Auth link reached the local mail catcher");
 }
 
 /**
@@ -247,8 +278,9 @@ async function openResetLink(page: Page, guarded: Guarded, member: VerifiedMembe
   const sentAfter = Date.now() - 1000;
   await requestResetLink(page, guarded, member.email);
   const link = await authLinkFor(member.email, sentAfter);
+  openedLinks.add(link.href);
   await page.goto(link.href);
-  await page.waitForURL(`${APP_ORIGIN}/reset-password`);
+  await page.waitForURL(RESET_PAGE);
   await expect(page.getByRole("heading", { name: "Set a new password" })).toBeVisible({
     timeout: 20_000,
   });
@@ -355,46 +387,115 @@ test.describe("account recovery and self-service", () => {
     page,
   }) => {
     test.setTimeout(120_000);
-    test.fail(true, SEC03_RESET);
-    await characterise(SEC03_RESET, async () => {
-      const mark = readOutboundAttempts().length;
-      const guarded = await guard(context);
-      await openResetLink(page, guarded, resetter);
-      const newPassword = `${resetter.password}-new`;
-      const changedAfter = Date.now() - 1000;
-      await page.getByLabel("New password", { exact: true }).fill(newPassword);
-      await page.getByLabel("Confirm password", { exact: true }).fill(newPassword);
-      await page.getByRole("button", { name: "Save password" }).click();
-      await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
-      const saved = guarded.reply(RESET_PATH)[0];
-      if (
-        saved.status === 400 &&
-        sameJson(saved.body, { error: "Use matching passwords of 12–128 characters" }) &&
-        guarded.sentTo(RESET_PATH)[0].fields.join() === "confirmPassword,password"
-      ) {
-        // SEC-03 as recorded: the page sends no recovery session id, the
-        // server refuses the form, and the password does not change.
-        await expect(toast(page, "Password reset failed")).toBeVisible();
-        await expect(page).toHaveURL(`${APP_ORIGIN}/reset-password`);
-        expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
-        expect(await canSignIn(resetter.email, newPassword)).toBe(false);
-        expectContained(guarded);
-        expectNoProviderSince(mark);
-        throw new KnownBreak(
-          `${SEC03_RESET}: the reset page sends no recovery session id and the new password is refused (400)`
-        );
-      }
-      // Promised (M1.3): saved, the member is sent to sign in, the new password
-      // works and the old one fails, and a notice of the change is emailed.
-      expect(saved).toMatchObject({ status: 200, body: { success: true } });
-      await page.waitForURL(`${APP_ORIGIN}/login`);
-      expect(await canSignIn(resetter.email, newPassword)).toBe(true);
-      expect(await canSignIn(resetter.email, resetter.password)).toBe(false);
-      await latestMailTo(resetter.email, { after: changedAfter });
-      resetter.password = newPassword;
-      expectContained(guarded);
-      expectNoProviderSince(mark);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    await openResetLink(page, guarded, resetter);
+    // Opening the link left a script-hidden, same-site binding in this browser.
+    const [binding] = (await context.cookies(APP_ORIGIN)).filter(
+      (cookie) => cookie.name === BINDING_COOKIE
+    );
+    expect(binding).toMatchObject({ httpOnly: true, sameSite: "Strict", path: "/" });
+    const newPassword = `${resetter.password}-new`;
+    const changedAfter = Date.now() - 1000;
+    await page.getByLabel("New password", { exact: true }).fill(newPassword);
+    await page.getByLabel("Confirm password", { exact: true }).fill(newPassword);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+    // The restored page still sends only the two passwords; the website
+    // supplies the recovery session from its binding.
+    expect(guarded.sentTo(RESET_PATH)[0].fields.join()).toBe("confirmPassword,password");
+    expect(guarded.reply(RESET_PATH)[0]).toMatchObject({
+      status: 200,
+      body: { success: true, signOutComplete: true },
     });
+    // Saved: the member is sent to sign in, the new password works and the
+    // old one fails, and a notice of the change is emailed.
+    await page.waitForURL(`${APP_ORIGIN}/login`);
+    expect(await canSignIn(resetter.email, newPassword)).toBe(true);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(false);
+    await latestMailTo(resetter.email, { after: changedAfter });
+    resetter.password = newPassword;
+    // The used link's binding is gone, so it cannot complete a second reset.
+    expect(
+      (await context.cookies(APP_ORIGIN)).filter((cookie) => cookie.name === BINDING_COOKIE)
+    ).toEqual([]);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
+  test("a reset form from link A is refused once link B is opened in the same browser", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    // Link A opens page A; link B, asked for and opened later in another tab
+    // of the same browser, replaces the recovery session.
+    await openResetLink(page, guarded, resetter);
+    const pageB = await context.newPage();
+    await openResetLink(pageB, guarded, resetter);
+    const staleAttempt = `${resetter.password}-from-link-a`;
+    await page.bringToFront();
+    await page.getByLabel("New password", { exact: true }).fill(staleAttempt);
+    await page.getByLabel("Confirm password", { exact: true }).fill(staleAttempt);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+    expect(guarded.reply(RESET_PATH)[0]).toEqual({
+      method: "POST",
+      path: RESET_PATH,
+      status: 401,
+      body: SESSION_CHANGED,
+    });
+    // Page A asks for a new link, as for any refused recovery session.
+    await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
+    expect(await canSignIn(resetter.email, staleAttempt)).toBe(false);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
+    // Page B, from the latest link, still saves.
+    const newPassword = `${resetter.password}-from-link-b`;
+    await pageB.bringToFront();
+    await pageB.getByLabel("New password", { exact: true }).fill(newPassword);
+    await pageB.getByLabel("Confirm password", { exact: true }).fill(newPassword);
+    await pageB.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(2);
+    expect(guarded.reply(RESET_PATH)[1]).toMatchObject({ status: 200, body: { success: true } });
+    await pageB.waitForURL(`${APP_ORIGIN}/login`);
+    expect(await canSignIn(resetter.email, newPassword)).toBe(true);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(false);
+    resetter.password = newPassword;
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
+  test("a known-breached password is refused on the reset page", async ({ context, page }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    await openResetLink(page, guarded, resetter);
+    await page.getByLabel("New password", { exact: true }).fill(KNOWN_BREACHED_PASSWORD);
+    await page.getByLabel("Confirm password", { exact: true }).fill(KNOWN_BREACHED_PASSWORD);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+    expect(guarded.reply(RESET_PATH)[0]).toEqual({
+      method: "POST",
+      path: RESET_PATH,
+      status: 400,
+      body: BREACHED,
+    });
+    // The existing message, and the member stays on the form to choose another.
+    await expect(toast(page, "Password reset failed")).toBeVisible();
+    await expect(page.getByText(BREACHED.error).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Set a new password" })).toBeVisible();
+    expect(await canSignIn(resetter.email, KNOWN_BREACHED_PASSWORD)).toBe(false);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
+    // The website asked the (locally answered) breach check, nothing else.
+    expect(
+      readOutboundAttempts()
+        .slice(mark)
+        .some((entry) => entry.origin === "https://api.pwnedpasswords.com")
+    ).toBe(true);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
   });
 
   test("a Google member sets a password from the security tab", async ({ context, page }) => {
@@ -436,7 +537,7 @@ test.describe("account recovery and self-service", () => {
       await expect(toast(page, "Password setup email sent")).toBeVisible();
       const link = await authLinkFor(google.email, requestedAfter);
       await page.goto(link.href);
-      await page.waitForURL(`${APP_ORIGIN}/reset-password`);
+      await page.waitForURL(RESET_PAGE);
       const password = `Local-fixture-google-${google.id.slice(0, 8)}`;
       await page.getByLabel("New password", { exact: true }).fill(password);
       await page.getByLabel("Confirm password", { exact: true }).fill(password);

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   E2E_FIXTURE,
   HOSTED_PROJECT_REFS,
+  KNOWN_BREACHED_PASSWORD,
   LOCAL_ID_ENCRYPTION_KEY,
   LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
@@ -816,6 +817,8 @@ test("the outbound fence forwards only loopback requests and records the others 
     assert.equal(await (await fetch(new URL("http://localhost:55443/x"))).text(), "ok");
     // The website's real breach-check parser reads the stand-in reply as "not found".
     assert.equal(await getPwnedPasswordCount("Local-fixture-password-0"), 0);
+    // Except the one known-breached test password, which the copy refuses.
+    assert.equal(await getPwnedPasswordCount(KNOWN_BREACHED_PASSWORD), 1000);
     await assert.rejects(
       fetch("https://api.africastalking.com/version1/messaging?secret=1", { method: "POST" }),
       TypeError
@@ -829,6 +832,7 @@ test("the outbound fence forwards only loopback requests and records the others 
     assert.deepEqual(
       log.map(({ origin, outcome }) => ({ origin, outcome })),
       [
+        { origin: "https://api.pwnedpasswords.com", outcome: "answered-locally" },
         { origin: "https://api.pwnedpasswords.com", outcome: "answered-locally" },
         { origin: "https://api.africastalking.com", outcome: "blocked" },
         { origin: "https://api.resend.com", outcome: "blocked" },

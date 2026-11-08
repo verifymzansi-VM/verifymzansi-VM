@@ -4,17 +4,23 @@
 // scripts/lib/foundation-e2e-outbound-preload.mjs. It wraps fetch:
 // - requests to this machine (loopback) go through unchanged;
 // - the password breach check (a k-anonymity range request) is answered here
-//   with "not found", so registration works without the internet;
+//   with "not found", so registration works without the internet, except for
+//   the copy's one known-breached test password (KNOWN_BREACHED_PASSWORD);
 // - every other request is refused before it leaves the machine.
 // Each answered or refused request is recorded (origin only, no path, query or
 // body) in tmp/foundation-e2e/outbound.jsonl, so browser tests can prove that
 // no provider (SMS, email, payments, identity checks) was contacted.
+import { createHash } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { OUTBOUND_LOG_FILE } from "./foundation-e2e-target.mjs";
+import { KNOWN_BREACHED_PASSWORD, OUTBOUND_LOG_FILE } from "./foundation-e2e-target.mjs";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const BREACH_CHECK_HOST = "api.pwnedpasswords.com";
+const KNOWN_BREACHED_SHA1 = createHash("sha1")
+  .update(KNOWN_BREACHED_PASSWORD, "utf8")
+  .digest("hex")
+  .toUpperCase();
 
 /**
  * @param {string} href
@@ -42,9 +48,15 @@ export function classifyOutbound(href) {
 }
 
 /** A padded range reply in which no suffix matches: one padding entry with
- * count 0, the format the breach service itself uses for padding. */
-export function breachCheckReply() {
-  return `${"0".repeat(35)}:0\r\n`;
+ * count 0, the format the breach service itself uses for padding. For the
+ * range holding KNOWN_BREACHED_PASSWORD, its suffix is listed as seen often.
+ * @param {string} [prefix] the five hex characters of the range request
+ */
+export function breachCheckReply(prefix = "") {
+  const padding = `${"0".repeat(35)}:0\r\n`;
+  return prefix.toUpperCase() === KNOWN_BREACHED_SHA1.slice(0, 5)
+    ? `${KNOWN_BREACHED_SHA1.slice(5)}:1000\r\n${padding}`
+    : padding;
 }
 
 function originOf(href) {
@@ -81,7 +93,7 @@ export function installOutboundGuard({ root = process.cwd(), fetchImpl = globalT
     if (kind === "local") return fetchImpl(input, init);
     if (kind === "breach-check") {
       record(originOf(href), "answered-locally");
-      return new Response(breachCheckReply(), {
+      return new Response(breachCheckReply(new URL(href).pathname.slice("/range/".length)), {
         status: 200,
         headers: { "Content-Type": "text/plain" },
       });
