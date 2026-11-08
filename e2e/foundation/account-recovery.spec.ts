@@ -12,7 +12,9 @@ import {
   mailCountTo,
   queryTestCopy,
   readOutboundAttempts,
+  readServerLogEntries,
   readTestCopy,
+  serverLogMentions,
   sessionCookies,
   sessionIsLive,
   signIn,
@@ -47,7 +49,14 @@ import {
 //     is refused there, the chosen one works for email sign-in, every session
 //     (including the Google one) is signed out, and asking again from a
 //     session signed in with that password is refused;
-//   - a member changes the sign-in email (both addresses confirm);
+//   - a member whose sign-in is over an hour old is asked to sign in again
+//     before an email change sends anything; signed in again, asking for an
+//     address that belongs to another account gets the usual answer and no
+//     email reaches anyone;
+//   - a member changes the sign-in email: the current and the new address
+//     each get a confirmation link; until both are opened the old address
+//     still signs in and the new one does not, then only the new one does;
+//     opening a link signs nobody in, and the member stays signed in;
 //   - a member saves a communication choice, which stays saved;
 //   - a member deletes the account and cannot sign in again.
 //
@@ -61,12 +70,15 @@ import {
 // accepts it from a signed-in session with a recent sign-in instead, and asks
 // local Auth for the setup email with its server key.
 //
-// Three steps are broken today and are marked test.fail(), each pinned to its
+// The email change sends only the new address: the website asks local Auth to
+// start the change with the member's own session (never the server key), and
+// local Auth, whose secure email change is on as on hosted Auth, emails both
+// addresses. Each link returns to the website's callback, which only picks
+// the page to show (the profile's Account tab) and opens no session.
+//
+// Two steps are broken today and are marked test.fail(), each pinned to its
 // exact known symptom (characterise, support/known-break.ts); any other
 // outcome turns the run red:
-// - "... email change ...": SEC-03, fixed by M1.5. The email change route
-//   reads a table of the retired backend and answers 500 before local Auth is
-//   asked; nothing changes and no confirmation is sent.
 // - "... communication choices ...": SEC-09, fixed by M1.7. Saving a choice
 //   writes a table of the retired backend and answers 500 with the database's
 //   own refusal; reading the choices hides the same failure and shows every
@@ -99,7 +111,6 @@ import {
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
-const SEC03_EMAIL = "SEC-03 (email change), fixed by M1.5";
 const SEC09 = "SEC-09, fixed by M1.7";
 const SEC02 = "SEC-02, fixed by M1.6c";
 const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
@@ -131,6 +142,20 @@ const SIGN_IN_AGAIN = {
   error: "For your security, sign out and sign in again before setting a password.",
   code: "reauthentication_required",
 };
+/** An email change without a recent sign-in (src/app/api/foundation/auth/_lib/email-change.ts). */
+const EMAIL_SIGN_IN_AGAIN = {
+  error: "For your security, sign out and sign in again before changing your email address.",
+  code: "reauthentication_required",
+};
+/** The one answer for an accepted email change, also for another account's address. */
+const EMAIL_CHANGE_ACCEPTED = {
+  success: true,
+  message:
+    "If the new address can be used, a confirmation link is on its way to it and to your current address. The change completes once both links are opened.",
+};
+/** Where an opened email change link lands: the profile's Account tab. */
+const EMAIL_CHANGE_LANDING = (url: URL) =>
+  url.origin === APP_ORIGIN && url.pathname === "/dashboard/profile" && url.hash === "#account";
 /** A reset link's session asking for a password change or setup. */
 const RECOVERY_SESSION = {
   error: "Use the reset link from your email to set a new password",
@@ -328,6 +353,40 @@ function storedEmail(id: string) {
   return queryTestCopy(
     `select email || '|' || coalesce(email_change, '') from auth.users where id = '${id}';`
   );
+}
+
+/** The local Auth sessions an account has (opening a link must add none). */
+function sessionCount(id: string) {
+  return queryTestCopy(`select count(*) from auth.sessions where user_id = '${id}';`);
+}
+
+/** The profile page's email change, as a member does it. Returns the reply. */
+async function requestEmailChange(page: Page, guarded: Guarded, newEmail: string) {
+  const before = guarded.reply(EMAIL_CHANGE_PATH).length;
+  await openProfileTab(page, "Account");
+  await page.getByRole("button", { name: "Change", exact: true }).click();
+  await page.getByPlaceholder("New email address").fill(newEmail);
+  await page.getByRole("button", { name: "Send confirmation" }).click();
+  await expect
+    .poll(() => guarded.reply(EMAIL_CHANGE_PATH).length, { timeout: 20_000 })
+    .toBe(before + 1);
+  // The restored page sends only the new address.
+  expect(guarded.sentTo(EMAIL_CHANGE_PATH).at(-1)?.fields.join()).toBe("newEmail");
+  return guarded.reply(EMAIL_CHANGE_PATH).at(-1)!;
+}
+
+/** The profile page's Account tab, which shows the sign-in address. */
+function accountTab(page: Page) {
+  return page.getByRole("tabpanel", { name: "Account" });
+}
+
+/** Opens an email change link from the mail catcher; it lands on the Account tab. */
+async function openEmailChangeLink(page: Page, link: URL) {
+  expect(link.searchParams.get("type")).toBe("email_change");
+  openedLinks.add(link.href);
+  await page.goto(link.href);
+  await page.waitForURL(EMAIL_CHANGE_LANDING);
+  await expect(page.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
 }
 
 // Made in beforeAll, never at import time: listing specs must not touch the copy.
@@ -688,55 +747,128 @@ test.describe("account recovery and self-service", () => {
     expectNoProviderSince(mark);
   });
 
+  test("an email change needs a recent sign-in and says nothing about other accounts", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    const newEmail = mover.email.replace(/^mover-/, "moved-");
+    // Signed in with the password 61 minutes ago; the session is still live.
+    const old = await sessionCookies(
+      readTestCopy(),
+      await signIn(readTestCopy(), mover, { signInAgeSeconds: 61 * 60 })
+    );
+    expect(old.accountId).toBe(mover.id);
+    await context.addCookies(old.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    const refused = await requestEmailChange(page, guarded, newEmail);
+    expect(refused).toEqual({
+      method: "POST",
+      path: EMAIL_CHANGE_PATH,
+      status: 403,
+      body: EMAIL_SIGN_IN_AGAIN,
+    });
+    // The page shows the reason in its existing failure toast; nothing is sent.
+    await expect(toast(page, "Email change failed")).toBeVisible();
+    await expect(page.getByText(EMAIL_SIGN_IN_AGAIN.error).first()).toBeVisible();
+    expect(storedEmail(mover.id)).toBe(`${mover.email}|`);
+    expect(await mailCountTo(newEmail)).toBe(0);
+    // Signed in again: an address that belongs to another account gets the
+    // usual answer, and no email reaches either address.
+    await context.clearCookies({ name: /^sb-/ });
+    await signInBrowser(context, mover);
+    const before = {
+      current: await mailCountTo(mover.email),
+      taken: await mailCountTo(resetter.email),
+    };
+    const taken = await requestEmailChange(page, guarded, resetter.email);
+    expect(taken).toEqual({
+      method: "POST",
+      path: EMAIL_CHANGE_PATH,
+      status: 200,
+      body: EMAIL_CHANGE_ACCEPTED,
+    });
+    await expect(toast(page, "Confirmation sent")).toBeVisible();
+    // Local Auth sends synchronously; leave the catcher a moment anyway.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(await mailCountTo(mover.email)).toBe(before.current);
+    expect(await mailCountTo(resetter.email)).toBe(before.taken);
+    expect(storedEmail(mover.id)).toBe(`${mover.email}|`);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
   test("a member completes an email change after confirming both addresses", async ({
     context,
     page,
   }) => {
     test.setTimeout(120_000);
-    test.fail(true, SEC03_EMAIL);
-    await characterise(SEC03_EMAIL, async () => {
-      const mark = readOutboundAttempts().length;
-      const guarded = await guard(context);
-      await signInBrowser(context, mover);
-      const newEmail = mover.email.replace(/^mover-/, "moved-");
-      const mailBefore = await mailCountTo(mover.email);
-      await openProfileTab(page, "Account");
-      await page.getByRole("button", { name: "Change" }).click();
-      await page.getByPlaceholder("New email address").fill(newEmail);
-      const requestedAfter = Date.now() - 1000;
-      await page.getByRole("button", { name: "Send confirmation" }).click();
-      await expect.poll(() => guarded.reply(EMAIL_CHANGE_PATH).length, { timeout: 20_000 }).toBe(1);
-      const requested = guarded.reply(EMAIL_CHANGE_PATH)[0];
-      if (
-        requested.status === 500 &&
-        sameJson(requested.body, { error: "Internal server error" }) &&
-        guarded.sentTo(EMAIL_CHANGE_PATH)[0].fields.join() === "newEmail"
-      ) {
-        // SEC-03 as recorded: the route fails before local Auth is asked, so
-        // nothing changes and no confirmation is sent to either address.
-        await expect(toast(page, "Email change failed")).toBeVisible();
-        expect(storedEmail(mover.id)).toBe(`${mover.email}|`);
-        expect(await mailCountTo(newEmail)).toBe(0);
-        expect(await mailCountTo(mover.email)).toBe(mailBefore);
-        expectContained(guarded);
-        expectNoProviderSince(mark);
-        throw new KnownBreak(
-          `${SEC03_EMAIL}: the email change route fails (500) before a confirmation is sent`
-        );
-      }
-      // Promised (M1.5): the current and the new address each get a
-      // confirmation; once both are opened, the new address signs in and the
-      // old one no longer does.
-      expect(requested).toMatchObject({ status: 200 });
-      await expect(toast(page, "Confirmation sent")).toBeVisible();
-      for (const address of [mover.email, newEmail])
-        await page.goto((await authLinkFor(address, requestedAfter)).href);
-      await expect.poll(() => storedEmail(mover.id)).toBe(`${newEmail}|`);
-      expect(await canSignIn(newEmail, mover.password)).toBe(true);
-      expect(await canSignIn(mover.email, mover.password)).toBe(false);
-      expectContained(guarded);
-      expectNoProviderSince(mark);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    const session = await signIn(readTestCopy(), mover);
+    const signedIn = await sessionCookies(readTestCopy(), session);
+    expect(signedIn.accountId).toBe(mover.id);
+    await context.addCookies(signedIn.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    const newEmail = mover.email.replace(/^mover-/, "moved-");
+    const before = { current: await mailCountTo(mover.email), next: await mailCountTo(newEmail) };
+    const requestedAfter = Date.now() - 1000;
+    const requested = await requestEmailChange(page, guarded, newEmail);
+    expect(requested).toEqual({
+      method: "POST",
+      path: EMAIL_CHANGE_PATH,
+      status: 200,
+      body: EMAIL_CHANGE_ACCEPTED,
     });
+    await expect(toast(page, "Confirmation sent")).toBeVisible();
+    // One confirmation link to each address; nothing has changed yet.
+    const current = await authLinkFor(mover.email, requestedAfter);
+    const next = await authLinkFor(newEmail, requestedAfter);
+    expect(current.href).not.toBe(next.href);
+    expect(await mailCountTo(mover.email)).toBe(before.current + 1);
+    expect(await mailCountTo(newEmail)).toBe(before.next + 1);
+    expect(storedEmail(mover.id)).toBe(`${mover.email}|${newEmail}`);
+    // The current address's link is accepted, but the change waits for the
+    // other one: the old address still signs in, the new one does not.
+    let sessions = sessionCount(mover.id);
+    await openEmailChangeLink(page, current);
+    expect(sessionCount(mover.id)).toBe(sessions);
+    await expect(accountTab(page).getByText(mover.email, { exact: true })).toBeVisible();
+    expect(storedEmail(mover.id)).toBe(`${mover.email}|${newEmail}`);
+    expect(await canSignIn(mover.email, mover.password)).toBe(true);
+    expect(await canSignIn(newEmail, mover.password)).toBe(false);
+    // The new address's link completes it: now only the new address signs in.
+    sessions = sessionCount(mover.id);
+    await openEmailChangeLink(page, next);
+    expect(sessionCount(mover.id)).toBe(sessions);
+    await expect(accountTab(page).getByText(newEmail, { exact: true })).toBeVisible();
+    expect(storedEmail(mover.id)).toBe(`${newEmail}|`);
+    expect(await canSignIn(newEmail, mover.password)).toBe(true);
+    expect(await canSignIn(mover.email, mover.password)).toBe(false);
+    // Opening the links signed nobody in and nobody out: this browser's
+    // session is the member's original one and is still live.
+    expect(await sessionIsLive(readTestCopy(), session.token)).toBe(true);
+    // The website's server logged no address, password or token, and the
+    // route no longer reaches the retired backend.
+    expect(
+      serverLogMentions([
+        mover.email,
+        newEmail,
+        mover.password,
+        session.token,
+        session.refreshToken,
+        current.searchParams.get("token") ?? "",
+        next.searchParams.get("token") ?? "",
+      ])
+    ).toEqual([]);
+    expect(
+      readServerLogEntries("legacy_client_in_foundation").filter(
+        (entry) => entry.meta?.route === EMAIL_CHANGE_PATH
+      )
+    ).toEqual([]);
+    mover.email = newEmail;
+    expectContained(guarded);
+    expectNoProviderSince(mark);
   });
 
   test("a member saves communication choices and they stay saved after a reload", async ({

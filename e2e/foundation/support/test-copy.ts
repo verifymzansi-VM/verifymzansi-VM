@@ -269,9 +269,14 @@ export function retiredTableRead(copy: TestCopy, table: string) {
  * How a staff session is made (M0.9d): `passwordOnly` stops after the password
  * (no authenticator step, as a person who has not entered a code yet);
  * `authenticatorAgeSeconds` makes the authenticator step that many seconds old
- * (see ageSessionStep).
+ * (see ageSessionStep). `signInAgeSeconds` makes the password sign-in of a
+ * person without an authenticator that many seconds old (M1.5).
  */
-export type SessionOptions = { passwordOnly?: boolean; authenticatorAgeSeconds?: number };
+export type SessionOptions = {
+  passwordOnly?: boolean;
+  authenticatorAgeSeconds?: number;
+  signInAgeSeconds?: number;
+};
 
 /** The steps local Auth records in a session (its `amr` claim) that can be aged. */
 const SESSION_STEPS = {
@@ -324,12 +329,20 @@ export async function signIn(copy: TestCopy, person: Person, options: SessionOpt
   });
   if (login.status !== 200) throw new Error(`Sign-in failed for ${key} (${login.status})`);
   const factor = options.passwordOnly ? null : authenticatorOf(person);
-  if (!factor)
-    return {
-      token: login.data.access_token as string,
-      refreshToken: login.data.refresh_token as string,
-      aal: "aal1",
-    };
+  if (!factor) {
+    let token = login.data.access_token as string;
+    let refreshToken = login.data.refresh_token as string;
+    if (options.signInAgeSeconds)
+      ({ token, refreshToken } = await ageSessionStep(
+        copy,
+        token,
+        refreshToken,
+        options.signInAgeSeconds,
+        "sign-in"
+      ));
+    return { token, refreshToken, aal: "aal1" };
+  }
+  if (options.signInAgeSeconds) throw new Error("Sign-in ageing is for people without a factor");
   const challenge = await request(copy, `/auth/v1/factors/${factor.factorId}/challenge`, {
     token: login.data.access_token,
   });
@@ -527,6 +540,15 @@ export type ServerLogEntry = {
   message?: string;
   meta?: Record<string, unknown>;
 };
+
+/** Which of `values` (compared without case) appear anywhere in the copy's
+ * website server output. Used to prove the server logs no addresses or tokens. */
+export function serverLogMentions(values: readonly string[]): string[] {
+  const full = path.resolve(process.cwd(), SERVER_LOG_FILE);
+  if (!existsSync(full)) throw new Error("The copy's server log is missing");
+  const text = readFileSync(full, "utf8").toLowerCase();
+  return values.filter((value) => value && text.includes(value.toLowerCase()));
+}
 
 /** Structured (JSON) lines the copy's website server logged with this message.
  * Other output, and a line still being written, is skipped. */
