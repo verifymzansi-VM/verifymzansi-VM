@@ -25,3 +25,16 @@ export function foundationRecoveryClaim(
   }
   return issuedAt === null ? null : { sessionId, issuedAt };
 }
+
+/** Whether this GoTrue-verified session was opened by a reset link at all, at
+ * any age. Such a session sets a password only through the reset page, where
+ * the link's binding is checked; GoTrue keeps the method for the session's life. */
+export function foundationRecoveryOpened(amr: unknown) {
+  return (
+    Array.isArray(amr) &&
+    amr.some((entry: unknown) => {
+      if (!entry || typeof entry !== "object") return false;
+      return (entry as Record<string, unknown>).method === "recovery";
+    })
+  );
+}

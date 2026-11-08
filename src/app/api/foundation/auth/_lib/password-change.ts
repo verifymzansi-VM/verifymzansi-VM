@@ -47,6 +47,19 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
     };
     await limit(getClientRateLimitIdentity(request).key);
     const caller = await context.authenticateCaller();
+    // A session opened by a reset link sets a password only on the reset page,
+    // where that link's binding is checked; here it could skip that check
+    // (whether a wrong current password is refused depends on Auth settings).
+    if (caller.recovery || caller.openedByRecovery)
+      return context.respond(
+        NextResponse.json(
+          {
+            error: "Use the reset link from your email to set a new password",
+            reason: "recovery_session",
+          },
+          { status: 403, headers: foundationNoStore }
+        )
+      );
     const account = await readFoundationAccountContext(caller.api);
     if (account.account_id !== caller.accountId)
       throw new FoundationPasswordUpdateError(503, "unavailable");

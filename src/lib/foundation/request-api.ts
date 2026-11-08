@@ -17,7 +17,7 @@ import {
   createFoundationPasswordUpdater,
   createFoundationPasswordResetter,
 } from "./password-update";
-import { foundationRecoveryClaim } from "./recovery-claims";
+import { foundationRecoveryClaim, foundationRecoveryOpened } from "./recovery-claims";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
@@ -155,6 +155,8 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
       sessionId: claims.session_id,
       user: verified.data.user,
       recovery: foundationRecoveryClaim(claims.session_id, claims.amr),
+      /** Opened by a reset link at any age (see foundationRecoveryOpened). */
+      openedByRecovery: foundationRecoveryOpened(claims.amr),
     };
   } catch {
     // Never include cookie contents, tokens or provider error bodies.

@@ -91,6 +91,26 @@ it.each([
   expect(context).not.toHaveBeenCalled();
   expect(update).not.toHaveBeenCalled();
 });
+it.each([
+  ["a live recovery session", { recovery: { sessionId: id, issuedAt: 1 } }],
+  ["a session opened by a reset link over an hour ago", { recovery: null, openedByRecovery: true }],
+])("refuses %s before any password check", async (_label, session) => {
+  authenticate.mockResolvedValue({ ...(await authenticate()), ...session });
+  const response = await POST(request({ ...payload, currentPassword: "synthetic-wrong" }));
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({
+    error: "Use the reset link from your email to set a new password",
+    reason: "recovery_session",
+  });
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+  expect(readAccount).not.toHaveBeenCalled();
+  expect(breach).not.toHaveBeenCalled();
+  expect(update).not.toHaveBeenCalled();
+  expect(notice).not.toHaveBeenCalled();
+  // The older password URL refuses it the same way.
+  expect((await compatibilityPOST(request())).status).toBe(403);
+  expect(update).not.toHaveBeenCalled();
+});
 it("requires a verified account session", async () => {
   authenticate.mockRejectedValue(new FoundationSessionError(401));
   expect((await POST(request())).status).toBe(401);

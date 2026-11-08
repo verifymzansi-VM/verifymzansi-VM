@@ -97,13 +97,22 @@ it("derives recovery only from the exact GoTrue-verified token, never cookie use
     fetcher
   );
   expect(recovery.recovery).toEqual({ sessionId: sid, issuedAt: now });
+  expect(recovery.openedByRecovery).toBe(true);
+  // Past the hour the recovery claim lapses, but the session stays marked.
+  const old = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "recovery", timestamp: now - 7200 }] }))),
+    fetcher
+  );
+  expect(old.recovery).toBeNull();
+  expect(old.openedByRecovery).toBe(true);
   const forgedCookie = {
     ...session(token()),
     user: { ...user(1), amr: [{ method: "recovery", timestamp: now }], recovery: true },
   };
-  expect(
-    (await readFoundationRequestCaller(config, cookieAdapter(forgedCookie), fetcher)).recovery
-  ).toBeNull();
+  const forged = await readFoundationRequestCaller(config, cookieAdapter(forgedCookie), fetcher);
+  expect(forged.recovery).toBeNull();
+  expect(forged.openedByRecovery).toBe(false);
 });
 
 it("reads a near-expiry page token without consuming its refresh token or writing cookies", async () => {
