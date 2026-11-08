@@ -71,6 +71,18 @@ export const CHECKS: Check[] = [
       timeoutMs: 120_000,
     }
   ),
+  check(
+    "frontend-freeze",
+    ["check:frontend-freeze"],
+    "restored frontend scope versus commit 0b562f42; every difference listed in FRONTEND-CHANGES.md",
+    local,
+    {
+      dependencies: ["pnpm frozen install", "git; fetches commit 0b562f42 when the clone lacks it"],
+      tests: ["scripts/frontend-freeze.test.mjs"],
+      evidence: ["FRONTEND-CHANGES.md", "per-run frontend-freeze.log"],
+      timeoutMs: 120_000,
+    }
+  ),
   check("duplication", ["jscpd:check"], "src, scripts, workers executable code", local, {
     exclusions: ".jscpd.json: tests, generated/vendor, reviewed aliases",
     evidence: ["tmp/jscpd/jscpd-report.json", "scripts/audit-baselines/duplication.json"],

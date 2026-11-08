@@ -107,7 +107,7 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Shared static policy
-        run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,legacy-surface,db-static,secrets,licenses,dependencies
+        run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,legacy-surface,frontend-freeze,db-static,secrets,licenses,dependencies
       - name: Preserve audit evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -443,8 +443,9 @@ jobs:
   # for home, pricing and login, compared with approved Linux pictures. Runs in
   # the pinned Playwright image (same browser build and fonts as when the
   # pictures were made). Not a required check yet: today's code still differs
-  # from the chosen frontend on some screens, and M0.13 sorts those out and
-  # then makes this job required. Until then continue-on-error keeps a
+  # from the chosen frontend on some screens (the phone and tablet filter,
+  # listed in FRONTEND-CHANGES.md for the owner's decision). Once those are
+  # resolved this job becomes required. Until then continue-on-error keeps a
   # difference from failing the workflow (deploy needs a green CI run) while
   # the job itself still shows red and lists every difference.
   visual-regression:
