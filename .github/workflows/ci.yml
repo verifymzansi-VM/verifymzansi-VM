@@ -107,7 +107,7 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Shared static policy
-        run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,db-static,secrets,licenses,dependencies
+        run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,legacy-surface,db-static,secrets,licenses,dependencies
       - name: Preserve audit evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

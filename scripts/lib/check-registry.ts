@@ -60,6 +60,17 @@ export const CHECKS: Check[] = [
     exclusions: "knip.jsonc: generated declarations, output and reviewed ignoreIssues",
   }),
   check("imports", ["depcruise"], "src, scripts, workers import boundaries"),
+  check(
+    "legacy-surface",
+    ["check:legacy-surface"],
+    "src, workers: old-backend switches, retired client imports, command names and table reads; may only go down",
+    local,
+    {
+      tests: ["scripts/legacy-surface.test.mjs"],
+      evidence: ["scripts/legacy-surface-baseline.json", "per-run legacy-surface.log"],
+      timeoutMs: 120_000,
+    }
+  ),
   check("duplication", ["jscpd:check"], "src, scripts, workers executable code", local, {
     exclusions: ".jscpd.json: tests, generated/vendor, reviewed aliases",
     evidence: ["tmp/jscpd/jscpd-report.json", "scripts/audit-baselines/duplication.json"],
