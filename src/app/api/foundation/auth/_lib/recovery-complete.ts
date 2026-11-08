@@ -13,8 +13,17 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
+import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
+import {
+  readRecoveryBinding,
+  recoveryBindingCookieName,
+  recoveryBindingCookieOptions,
+  recoveryPageMarker,
+  recoveryPageMatches,
+} from "@/lib/foundation/recovery-binding";
 import { foundationAuthPrivateResponse } from "./attempt-route";
 const log = createLogger("FoundationRecovery");
+const SESSION_CHANGED = "Your recovery session changed. Check the link again.";
 export async function handleFoundationRecoveryCompletion(request: NextRequest, mutate: boolean) {
   const reply = (body: unknown, status = 200) =>
     foundationAuthPrivateResponse(NextResponse.json(body, { status }));
@@ -54,6 +63,28 @@ export async function handleFoundationRecoveryCompletion(request: NextRequest, m
           mutate ? 401 : 200
         )
       );
+    // The recovery session this browser's reset link opened (set by the
+    // callback). It supplies the session id the restored page does not send.
+    const origin = resolveAppOrigin(request);
+    const bindingCookie = recoveryBindingCookieName(origin);
+    const binding = readRecoveryBinding(request.cookies.get(bindingCookie)?.value);
+    if (!binding)
+      return context.respond(
+        reply(
+          mutate ? { error: "Request a new recovery link" } : { valid: false },
+          mutate ? 401 : 200
+        )
+      );
+    // Another link opened since (another session or account), or this page
+    // belongs to an earlier opening of a link in this browser.
+    if (
+      binding.session !== caller.recovery.sessionId ||
+      binding.account !== caller.accountId ||
+      !recoveryPageMatches(binding, recoveryPageMarker(request.headers.get("referer"), origin))
+    )
+      return context.respond(
+        reply(mutate ? { error: SESSION_CHANGED } : { valid: false }, mutate ? 401 : 200)
+      );
     const guard = await caller.api.rpc("get_my_profile", {}, { get: false });
     if (guard.error?.code === "42501") throw new FoundationSessionError(401);
     if (guard.error || !foundationAccountProfileSchema.safeParse(guard.data).success)
@@ -72,10 +103,10 @@ export async function handleFoundationRecoveryCompletion(request: NextRequest, m
     );
     if (!parsed.success)
       return context.respond(reply({ error: "Use matching passwords of 12–128 characters" }, 400));
-    if (parsed.data.recoverySessionId !== caller.recovery.sessionId)
-      return context.respond(
-        reply({ error: "Your recovery session changed. Check the link again." }, 401)
-      );
+    // A client may still send the id it was given; otherwise the server-side
+    // binding supplies it. Either way it must be the live recovery session.
+    if ((parsed.data.recoverySessionId ?? binding.session) !== caller.recovery.sessionId)
+      return context.respond(reply({ error: SESSION_CHANGED }, 401));
     let breached: boolean;
     try {
       breached = await isPwnedPassword(parsed.data.password);
@@ -97,6 +128,8 @@ export async function handleFoundationRecoveryCompletion(request: NextRequest, m
     const response = await context.respond(
       reply({ success: true, signOutComplete: result.signOutComplete })
     );
+    // One opened link completes at most one reset.
+    response.cookies.set(bindingCookie, "", recoveryBindingCookieOptions(origin, 0));
     if (result.signOutComplete) {
       const base = `sb-${new URL(config.url).hostname.split(".")[0]}-auth-token`;
       for (const name of new Set(

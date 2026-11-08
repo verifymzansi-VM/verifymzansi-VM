@@ -12,6 +12,13 @@ import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { recordRestoredAcquisitionCookie } from "@/lib/foundation/partners";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import {
+  RECOVERY_LINK_PARAM,
+  RECOVERY_PAGE_PATH,
+  recoveryBindingCookieName,
+  recoveryBindingCookieOptions,
+  sealRecoveryBinding,
+} from "@/lib/foundation/recovery-binding";
 
 /** PKCE protects this top-level email navigation; it cannot require the
  * mutation CSRF header used by in-app POSTs. The flow id selects one verifier.
@@ -27,6 +34,7 @@ export async function handleFoundationConfirmation(
   let success = false;
   let sessionName: string | undefined;
   let retryAfter: number | undefined;
+  let binding: ReturnType<typeof sealRecoveryBinding> | undefined;
   try {
     if (
       process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha" ||
@@ -68,7 +76,7 @@ export async function handleFoundationConfirmation(
       throw new Error();
     }
     const values = new Map(request.cookies.getAll().map(({ name, value }) => [name, value]));
-    const api = await confirmFoundationAccount(
+    const { api, accountId, recovery } = await confirmFoundationAccount(
       config,
       { code: query.get("code"), flowId: query.get("sb_flow_id") },
       {
@@ -81,7 +89,14 @@ export async function handleFoundationConfirmation(
       undefined,
       purpose
     );
-    success = true;
+    // Remember, in this browser only, which verified recovery session this
+    // link opened; the reset page completes only with that session.
+    if (purpose === "recovery") {
+      if (!recovery) throw new Error();
+      binding = sealRecoveryBinding({ accountId, ...recovery });
+    }
+    // A recovery success always carries its binding (set just above).
+    success = purpose !== "recovery" || binding !== undefined;
     if (purpose !== "recovery") {
       const cookie = request.headers
         .get("cookie")
@@ -101,7 +116,7 @@ export async function handleFoundationConfirmation(
       new URL(
         success
           ? purpose === "recovery"
-            ? "/reset-password"
+            ? `${RECOVERY_PAGE_PATH}?${RECOVERY_LINK_PARAM}=${binding?.marker}`
             : purpose === "google"
               ? sanitizeReturnUrl(request.nextUrl.searchParams.get("next"))
               : FOUNDATION_POST_SIGNUP_PATH
@@ -120,5 +135,11 @@ export async function handleFoundationConfirmation(
       sessionName && name.startsWith(sessionName + "-") && /-code-verifier(?:\.\d+)?$/.test(name);
     if (success || verifierOnly) response.cookies.set(name, value, options);
   }
+  if (success && binding)
+    response.cookies.set(
+      recoveryBindingCookieName(origin),
+      binding.value,
+      recoveryBindingCookieOptions(origin, binding.maxAge)
+    );
   return response;
 }

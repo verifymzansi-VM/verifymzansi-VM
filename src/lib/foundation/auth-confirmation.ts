@@ -29,6 +29,8 @@ class FoundationConfirmationError extends Error {
  * session bridge sees the newly exchanged session, never the incoming one.
  * Recovery requires a signed provider AMR and a live owner profile; a mutable
  * redirect type, query marker or cookie user object cannot authorize it.
+ * Returns the verified caller's API, account id and (recovery only) the
+ * GoTrue-verified recovery session.
  */
 export async function confirmFoundationAccount(
   connection: unknown,
@@ -36,7 +38,11 @@ export async function confirmFoundationAccount(
   cookies: FoundationAuthCookies,
   fetcher: typeof fetch = createTimeoutFetch(),
   purpose: "signup" | "recovery" | "google" = "signup"
-): Promise<FoundationAuthenticatedApi> {
+): Promise<{
+  api: FoundationAuthenticatedApi;
+  accountId: string;
+  recovery: { sessionId: string; issuedAt: number } | null;
+}> {
   const parsed = exchange.safeParse(input);
   if (!parsed.success) throw new FoundationConfirmationError(401);
   try {
@@ -69,7 +75,11 @@ export async function confirmFoundationAccount(
       if (!caller.recovery) throw new FoundationConfirmationError(401);
       await readFoundationAccountProfile(caller.api);
     }
-    return caller.api;
+    return {
+      api: caller.api,
+      accountId: caller.accountId,
+      recovery: purpose === "recovery" ? caller.recovery : null,
+    };
   } catch (error) {
     if (error instanceof FoundationConfirmationError) throw error;
     if (error instanceof FoundationSessionError)
