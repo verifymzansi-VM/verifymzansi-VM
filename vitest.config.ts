@@ -2,6 +2,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 import path from "path";
 import react from "@vitejs/plugin-react";
 import { availableParallelism } from "node:os";
+import { LEGACY_BACKEND_SUITES } from "./src/test/legacy-backend-suites";
 
 const strictCoverage = process.env.STRICT_COVERAGE === "true";
 const vitestLane = process.env.VITEST_LANE ?? "blocking";
@@ -14,6 +15,12 @@ const coverageSensitiveTests = [
   "src/app/verification/page.test.tsx",
   "src/app/post/edit-listing/[id]/page.test.tsx",
 ];
+const laneExclude = coverageCoreLane
+  ? [...configDefaults.exclude, ...coverageSensitiveTests]
+  : configDefaults.exclude;
+// Test file paths contain glob characters such as [id] and (marketplace).
+const literalGlob = (file: string) => file.replace(/[[\]()]/g, (char) => `\\${char}`);
+const legacyBackendGlobs = LEGACY_BACKEND_SUITES.map(literalGlob);
 
 export default defineConfig({
   plugins: [react()],
@@ -22,8 +29,9 @@ export default defineConfig({
     // Unit tests must never inherit the workstation's production database.
     // Tests of production detection explicitly stub their target/settings.
     env: {
-      // Source suites use synthetic fixtures; foundation suites opt in explicitly.
-      NEXT_PUBLIC_DATA_BACKEND: "source",
+      // Production runs foundation, so new tests do too. Old-backend suites are
+      // listed in src/test/legacy-backend-suites.ts and run in their own project.
+      NEXT_PUBLIC_DATA_BACKEND: "foundation",
       NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "test-public-anon",
       ENVIRONMENT: "test",
@@ -36,10 +44,28 @@ export default defineConfig({
     // V8 instrumentation makes cold WASM database setup slower than assertions.
     // Keep coverage setup bounded without changing the assertion deadline.
     hookTimeout: coverageCoreLane ? 30_000 : 10_000,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-    exclude: coverageCoreLane
-      ? [...configDefaults.exclude, ...coverageSensitiveTests]
-      : configDefaults.exclude,
+    // include/exclude are set per project only: a project's arrays are merged
+    // with (not replaced by) the root's.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "foundation",
+          include: ["src/**/*.{test,spec}.{ts,tsx}"],
+          exclude: [...laneExclude, ...legacyBackendGlobs],
+          env: { NEXT_PUBLIC_DATA_BACKEND: "foundation" },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "legacy-backend",
+          include: legacyBackendGlobs,
+          exclude: laneExclude,
+          env: { NEXT_PUBLIC_DATA_BACKEND: "source" },
+        },
+      },
+    ],
     coverage: {
       provider: "v8",
       include: ["src/lib/**", "src/app/api/**", "src/hooks/**", "src/stores/**"],
