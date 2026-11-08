@@ -8,10 +8,6 @@
  */
 export const DOCUMENTED_SKIPS: readonly { reason: string; why: string }[] = [
   {
-    reason: "Visual regression baselines are platform-specific — skipped in CI",
-    why: "No Linux baseline pictures exist yet (check A0-08). Roadmap M0.12 builds and approves them and removes this skip.",
-  },
-  {
     reason: "Video mode is for phones and tablets",
     why: "Video mode is a touch layout; desktop projects have no such page.",
   },

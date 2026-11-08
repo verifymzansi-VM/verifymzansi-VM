@@ -1,33 +1,49 @@
 import { test, expect, type Page } from "@playwright/test";
-import { existsSync } from "node:fs";
 import { PLAYWRIGHT_HIDE_FIXTURES_COOKIE } from "@/lib/supabase/playwright-visual-fixtures";
 
 /**
- * Visual regression tests — captures key page screenshots and compares
- * against baseline snapshots.
+ * Picture checks for the frontend the owner chose (commit 0b562f42, restored
+ * on 27 October 2026). Each screen is compared with an approved Linux picture
+ * in visual-regression.spec.ts-snapshots/ (`*-chromium-linux.png`).
  *
- * Refresh baselines:
- *   pnpm exec playwright test e2e/visual-regression.spec.ts --update-snapshots
+ * The pictures are only meaningful inside the pinned Playwright container
+ * (see the "visual-regression" job in .github/workflows/ci.yml): the same
+ * browser build and fonts as when the baselines were made. Other operating
+ * systems render text differently, so the checks skip there.
+ *
+ * Never refresh the pictures from today's code to make the check pass. A new
+ * picture needs the owner's approval on its pull request (roadmap M0.12/M0.13).
  */
 
-const publicRoutes = [
-  {
-    name: "homepage",
-    path: "/",
-    readySelector: "main:visible",
-  },
+type Screen = {
+  name: string;
+  path: string;
+  readySelector: string;
+  /** Extra condition that must hold before the picture is taken. */
+  settled?: string;
+};
+
+const screens: readonly Screen[] = [
+  { name: "home", path: "/", readySelector: "main:visible" },
   {
     name: "mzansi-market",
     path: "/mzansi-market",
     readySelector:
       '[data-testid="mzansi-market-grid-ready"], [data-testid="mzansi-market-grid-empty"]',
+    settled: '[data-testid="mzansi-market-grid-loading"]',
   },
   {
     name: "mzansi-business",
     path: "/mzansi-business",
     readySelector:
       '[data-testid="mzansi-business-grid-ready"], [data-testid="mzansi-business-grid-empty"]',
+    settled: '[data-testid="mzansi-business-grid-loading"]',
   },
+  { name: "tourism-events", path: "/tourism-events", readySelector: "main:visible" },
+  // A post address. The test stand-in holds no posts until a test creates one,
+  // so this is the page every missing or removed post shows.
+  { name: "post-not-found", path: "/listing/e2e-missing-listing", readySelector: "main:visible" },
+  { name: "pricing", path: "/pricing", readySelector: "main:visible" },
   {
     name: "login",
     path: "/login",
@@ -38,13 +54,44 @@ const publicRoutes = [
     path: "/register",
     readySelector: 'form:visible, h1:has-text("Create your account"):visible',
   },
-  { name: "pricing", path: "/pricing", readySelector: "main:visible" },
   { name: "contact", path: "/contact", readySelector: "main:visible" },
-  { name: "privacy", path: "/privacy", readySelector: "main:visible" },
-  { name: "terms", path: "/terms", readySelector: "main:visible" },
+  { name: "trust-safety", path: "/trust-safety", readySelector: "main:visible" },
+];
+
+/** Phone, tablet and desktop widths agreed for the chosen frontend (OD-04). */
+const widths = [
+  { label: "375", viewport: { width: 375, height: 812 } },
+  { label: "800", viewport: { width: 800, height: 1024 } },
+  { label: "1280", viewport: { width: 1280, height: 800 } },
 ] as const;
 
-async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)[number]) {
+const darkScreens = ["home", "pricing", "login"] as const;
+
+/**
+ * Same browser, fonts and build produce the same pixels, so the allowance only
+ * covers anti-aliasing noise at glyph and image edges: each pixel may differ
+ * slightly in colour (threshold 0.2 is Playwright's default perceptual
+ * distance), and at most 0.1% of a picture may differ beyond that. One changed
+ * button or heading colour affects far more pixels and fails the check.
+ */
+const PICTURE_OPTIONS = {
+  fullPage: true,
+  animations: "disabled",
+  caret: "hide",
+  threshold: 0.2,
+  maxDiffPixelRatio: 0.001,
+  timeout: 20_000,
+} as const;
+
+function skipOutsideTheContainer(projectName: string) {
+  test.skip(
+    process.platform !== "linux",
+    "Visual baselines are Linux pictures; run them in the pinned Playwright container"
+  );
+  test.skip(projectName !== "chromium", "Chromium snapshots are the baseline for this suite.");
+}
+
+async function openSettledScreen(page: Page, screen: Screen) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.context().addCookies([
     {
@@ -53,34 +100,14 @@ async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)
       url: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3100",
     },
   ]);
-  await page.goto(route.path, { waitUntil: "domcontentloaded" });
-  await page.locator("body").waitFor({ state: "visible" });
-  await page.locator(route.readySelector).first().waitFor({ state: "visible" });
-
-  if (route.name === "mzansi-market") {
-    await page.waitForFunction(() => {
-      return (
-        !document.querySelector('[data-testid="mzansi-market-grid-loading"]') &&
-        !!document.querySelector(
-          '[data-testid="mzansi-market-grid-ready"], [data-testid="mzansi-market-grid-empty"]'
-        )
-      );
-    });
+  await page.goto(screen.path, { waitUntil: "load" });
+  await page.locator(screen.readySelector).first().waitFor({ state: "visible" });
+  if (screen.settled) {
+    await expect(page.locator(screen.settled)).toHaveCount(0);
   }
-
-  if (route.name === "mzansi-business") {
-    await page.waitForFunction(() => {
-      return (
-        !document.querySelector('[data-testid="mzansi-business-grid-loading"]') &&
-        !!document.querySelector(
-          '[data-testid="mzansi-business-grid-ready"], [data-testid="mzansi-business-grid-empty"]'
-        )
-      );
-    });
-  }
+  await page.waitForLoadState("networkidle");
 
   await page.evaluate(async () => {
-    // Wait for fonts to be ready
     if (document.fonts) {
       await document.fonts.ready;
     }
@@ -101,110 +128,36 @@ async function gotoAndWaitForStablePage(page: Page, route: (typeof publicRoutes)
         });
       })
     );
-    // Pause all video elements and reset to frame 0 for deterministic captures
-    const videos = document.querySelectorAll("video");
-    for (const video of videos) {
+    for (const video of document.querySelectorAll("video")) {
       video.pause();
       video.currentTime = 0;
     }
-    // Disable CSS animations/transitions for stable screenshots
-    const style = document.createElement("style");
-    style.textContent = `*, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }`;
-    document.head.appendChild(style);
   });
-  // Small settle wait after pausing media and disabling animations
-  await page.waitForTimeout(300);
 }
 
-test.describe("Visual Regression — Desktop", () => {
-  for (const route of publicRoutes) {
-    test(`${route.name}`, async ({ page }, testInfo) => {
-      const isUpdatingSnapshots = testInfo.config.updateSnapshots !== "none";
-      test.skip(
-        !!process.env.CI,
-        "Visual regression baselines are platform-specific — skipped in CI"
-      );
-      test.skip(
-        testInfo.project.name !== "chromium",
-        "Chromium snapshots are the baseline for this suite."
-      );
-      const snapshotPath = testInfo.snapshotPath(`${route.name}-desktop.png`);
-      test.skip(
-        !isUpdatingSnapshots && !existsSync(snapshotPath),
-        `Missing baseline snapshot: ${snapshotPath}`
-      );
-      await gotoAndWaitForStablePage(page, route);
+for (const width of widths) {
+  test.describe(`Chosen frontend at ${width.label} px`, { tag: "@visual" }, () => {
+    test.use({ viewport: width.viewport });
 
-      await expect(page).toHaveScreenshot(`${route.name}-desktop.png`, {
-        fullPage: true,
-        maxDiffPixelRatio: route.name === "homepage" ? 0.1 : 0.01,
-        timeout: 15_000,
+    for (const screen of screens) {
+      test(screen.name, async ({ page }, testInfo) => {
+        skipOutsideTheContainer(testInfo.project.name);
+        await openSettledScreen(page, screen);
+        await expect(page).toHaveScreenshot(`${screen.name}-${width.label}.png`, PICTURE_OPTIONS);
       });
-    });
-  }
-});
+    }
+  });
+}
 
-test.describe("Visual Regression — Mobile", () => {
-  test.use({ viewport: { width: 390, height: 844 } });
+test.describe("Chosen frontend in dark mode at 1280 px", { tag: "@visual" }, () => {
+  test.use({ colorScheme: "dark", viewport: { width: 1280, height: 800 } });
 
-  const mobilePages = publicRoutes.filter((r) =>
-    ["homepage", "login", "mzansi-market", "mzansi-business", "pricing"].includes(r.name)
-  );
-
-  for (const route of mobilePages) {
-    test(`${route.name}`, async ({ page }, testInfo) => {
-      const isUpdatingSnapshots = testInfo.config.updateSnapshots !== "none";
-      test.skip(
-        !!process.env.CI,
-        "Visual regression baselines are platform-specific — skipped in CI"
-      );
-      test.skip(
-        testInfo.project.name !== "chromium",
-        "Chromium snapshots are the baseline for this suite."
-      );
-      const snapshotPath = testInfo.snapshotPath(`${route.name}-mobile.png`);
-      test.skip(
-        !isUpdatingSnapshots && !existsSync(snapshotPath),
-        `Missing baseline snapshot: ${snapshotPath}`
-      );
-      await gotoAndWaitForStablePage(page, route);
-
-      await expect(page).toHaveScreenshot(`${route.name}-mobile.png`, {
-        fullPage: true,
-        maxDiffPixelRatio: 0.01,
-        timeout: 15_000,
-      });
-    });
-  }
-});
-
-test.describe("Visual Regression — Dark Mode", () => {
-  test.use({ colorScheme: "dark" });
-
-  for (const name of ["homepage", "login", "pricing"]) {
-    const route = publicRoutes.find((r) => r.name === name)!;
-    test(`${route.name}`, async ({ page }, testInfo) => {
-      const isUpdatingSnapshots = testInfo.config.updateSnapshots !== "none";
-      test.skip(
-        !!process.env.CI,
-        "Visual regression baselines are platform-specific — skipped in CI"
-      );
-      test.skip(
-        testInfo.project.name !== "chromium",
-        "Chromium snapshots are the baseline for this suite."
-      );
-      const snapshotPath = testInfo.snapshotPath(`${route.name}-dark.png`);
-      test.skip(
-        !isUpdatingSnapshots && !existsSync(snapshotPath),
-        `Missing baseline snapshot: ${snapshotPath}`
-      );
-      await gotoAndWaitForStablePage(page, route);
-
-      await expect(page).toHaveScreenshot(`${route.name}-dark.png`, {
-        fullPage: true,
-        maxDiffPixelRatio: 0.01,
-        timeout: 15_000,
-      });
+  for (const name of darkScreens) {
+    const screen = screens.find((item) => item.name === name)!;
+    test(screen.name, async ({ page }, testInfo) => {
+      skipOutsideTheContainer(testInfo.project.name);
+      await openSettledScreen(page, screen);
+      await expect(page).toHaveScreenshot(`${screen.name}-dark-1280.png`, PICTURE_OPTIONS);
     });
   }
 });

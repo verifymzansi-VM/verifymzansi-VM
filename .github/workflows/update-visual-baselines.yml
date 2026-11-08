@@ -1,5 +1,10 @@
 name: Update Visual Baselines
 
+# Makes new Linux pictures for e2e/visual-regression.spec.ts from the chosen
+# branch, in the same pinned Playwright image as the CI visual-regression job.
+# A picture records how the owner's chosen frontend should look: only run this
+# for a screen change the owner has approved, and let the owner review every
+# new picture on its pull request. Never run it to make a red check green.
 on:
   workflow_dispatch:
 
@@ -13,20 +18,21 @@ jobs:
     # Repo default token is read-only; this job commits refreshed baselines.
     permissions:
       contents: write
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f # secret-scan: allow image digest
+      options: --ipc=host
     env:
+      NODE_OPTIONS: --max-old-space-size=4096
       PLAYWRIGHT_TEST_MODE: "1"
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
+      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
       SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
       - name: Generate/update Chromium Linux baselines
         run: pnpm exec playwright test e2e/visual-regression.spec.ts --project=chromium --update-snapshots
       # `main` only changes through a reviewed pull request, so baselines are
@@ -35,6 +41,7 @@ jobs:
         env:
           BASELINE_BRANCH: bot/visual-baselines-${{ github.run_id }}
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add "e2e/visual-regression.spec.ts-snapshots/*-chromium-linux.png"
