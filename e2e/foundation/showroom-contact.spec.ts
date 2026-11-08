@@ -23,13 +23,8 @@ import {
 // private test copy. Browse the showroom, open a post from its card, reveal the
 // seller's number (CAPTCHA in the site's own test mode), send an enquiry; the
 // seller sees it in Leads, one run of the email job emails the seller, and the
-// email lands in the copy's local mail catcher.
-//
-// Sending an enquiry is broken today (UX-01): the dialog posts to /api/contact,
-// which still reads the retired tables, so the visitor is told the post was not
-// found and nothing is saved. That test is marked test.fail() and pinned to
-// that exact symptom (see characterise below). Every other outcome, including
-// the enquiry starting to work while the mark is still there, fails the run.
+// email lands in the copy's local mail catcher. The enquiry dialog posts to
+// /api/contact, whose foundation branch sends it to api.submit_enquiry (M1.2).
 //
 // Browser HTTP(S) requests are checked against an allowlist: the copy's website
 // and its local database gateway continue; anything else is aborted and fails
@@ -42,9 +37,6 @@ const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const POST_TITLE = "Fixture Soweto Craft Market";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const UX01 = "UX-01, fixed by M1.2";
-/** What /api/contact answers today for an event post (UX-01). */
-const UX01_REPLY = { status: 404, body: { error: "Tourism & Events post not found" } };
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
@@ -116,31 +108,6 @@ async function runEmailJob(request: APIRequestContext) {
   });
   expect(response.status()).toBe(200);
   return (await response.json()) as { claimed: number; succeeded: number; retrying: number };
-}
-
-/** Thrown only when the exact UX-01 symptom is observed. */
-class KnownBreak extends Error {
-  override name = "KnownBreak";
-}
-
-/**
- * Pins an expected failure to its known cause. While the test is marked
- * test.fail(), only a KnownBreak may fail it; any other failure (a setup error,
- * a changed page) is recorded and swallowed, so the test passes and Playwright
- * reports "expected to fail, but passed": the run turns red. The same happens
- * when the break is fixed but the mark is still there. Once the mark is
- * removed, every failure is reported as usual.
- */
-async function characterise(body: () => Promise<void>) {
-  const expectingFailure = test.info().expectedStatus === "failed";
-  try {
-    await body();
-  } catch (error) {
-    if (!expectingFailure || (error instanceof Error && error.name === "KnownBreak")) throw error;
-    const message = error instanceof Error ? error.message.split("\n")[0] : String(error);
-    test.info().annotations.push({ type: "not the known break", description: message });
-    console.error(`[${UX01}] failed for another reason, so the run must turn red: ${message}`);
-  }
 }
 
 // Read in beforeAll, never at import time: listing specs must not touch the copy.
@@ -222,80 +189,64 @@ test.describe("showroom to contact the seller", () => {
     page,
     request,
   }) => {
-    test.fail(true, UX01);
-    await characterise(async () => {
-      const { outside, replies } = await guardAndCapture(context);
-      // Nothing older waits in the email job, so the next run handles this enquiry.
-      for (let run = 0; run < 10 && dueOutboxCount() > 0; run++) await runEmailJob(request);
-      expect(dueOutboxCount()).toBe(0);
-      const saved = enquiryCount(post.id);
+    const { outside, replies } = await guardAndCapture(context);
+    // Nothing older waits in the email job, so the next run handles this enquiry.
+    for (let run = 0; run < 10 && dueOutboxCount() > 0; run++) await runEmailJob(request);
+    expect(dueOutboxCount()).toBe(0);
+    const saved = enquiryCount(post.id);
 
-      await openPostFromShowroom(page, post);
-      await page.getByRole("button", { name: "Send an enquiry" }).filter({ visible: true }).click();
-      const dialog = page.getByRole("dialog");
-      await expect(dialog.getByRole("heading", { name: "Send a Message" })).toBeVisible();
-      // A new reply address per run keeps reruns inside the database's flood
-      // limits; the reference finds this run's enquiry among earlier ones.
-      const reference = crypto.randomUUID().slice(0, 8);
-      const buyerEmail = `visitor-${reference}@verifymzansi.test`;
-      const message = `Hello, is the craft market open on Sunday mornings? Ref ${reference}`;
-      await dialog.getByLabel("Your name").fill("Thabo Visitor");
-      await dialog.getByLabel("Reply email").fill(buyerEmail);
-      await dialog.getByLabel("Your message").fill(message);
-      await dialog.getByRole("button", { name: "Send message" }).click();
-      await expect.poll(() => replies.contact.length).toBe(1);
-      const [reply] = replies.contact;
-      expect(reply.request).toMatchObject({
-        promotionId: post.id,
-        buyerEmail,
-        message,
-        contactMethod: "form",
-        turnstileToken: "dev-turnstile-bypass",
-      });
-
-      if (reply.status === UX01_REPLY.status) {
-        // UX-01 as recorded: "not found" for a post the visitor is looking at,
-        // shown in the dialog, and nothing saved. Only this is the known break.
-        expect(reply.body).toEqual(UX01_REPLY.body);
-        await expect(dialog.getByRole("alert")).toHaveText(UX01_REPLY.body.error);
-        expect(enquiryCount(post.id)).toBe(saved);
-        throw new KnownBreak(`${UX01}: /api/contact answered 404 "${UX01_REPLY.body.error}"`);
-      }
-      expect(reply).toMatchObject({ status: 200 });
-      await expect(dialog.getByText("Enquiry saved!")).toBeVisible();
-      expect(enquiryCount(post.id)).toBe(saved + 1);
-      const [enquiryId, outboxId] = queryTestCopy(
-        "select e.id, o.id from private.enquiries e join private.outbox_events o " +
-          "on o.kind = 'enquiry_received' and o.subject_id = e.id " +
-          `where e.post_id = '${post.id}' and e.buyer_email = '${buyerEmail}';`
-      ).split("|");
-      expect(enquiryId).toMatch(UUID);
-      expect(outboxId).toMatch(UUID);
-
-      // The seller signs in and finds the enquiry in Leads.
-      await context.clearCookies();
-      const seller = await browserSessionCookies(readTestCopy(), "verifiedMember");
-      expect(seller.accountId).toBe(sellerId);
-      await context.addCookies(seller.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
-      await page.goto("/dashboard/leads");
-      const lead = page.getByRole("listitem").filter({ hasText: message });
-      await expect(lead).toHaveCount(1);
-      await expect(lead).toBeVisible();
-      await expect(lead).toContainText("Thabo Visitor");
-      await expect(lead).toContainText(`Re: ${post.title}`);
-
-      // One run of the email job sends the seller's notice to the mail catcher.
-      expect(await runEmailJob(request)).toEqual({ claimed: 1, succeeded: 1, retrying: 0 });
-      expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
-      const mail = await caughtMailFor(
-        people.verifiedMember.email,
-        `foundation-outbox/${outboxId}`
-      );
-      expect(mail.subject).toBe("New enquiry");
-      expect(mail.text).toMatch(
-        /^Sign in to view the details: https:\/\/\S+\/dashboard\/leads\s*$/m
-      );
-      expect(outside).toEqual([]);
+    await openPostFromShowroom(page, post);
+    await page.getByRole("button", { name: "Send an enquiry" }).filter({ visible: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Send a Message" })).toBeVisible();
+    // A new reply address per run keeps reruns inside the database's flood
+    // limits; the reference finds this run's enquiry among earlier ones.
+    const reference = crypto.randomUUID().slice(0, 8);
+    const buyerEmail = `visitor-${reference}@verifymzansi.test`;
+    const message = `Hello, is the craft market open on Sunday mornings? Ref ${reference}`;
+    await dialog.getByLabel("Your name").fill("Thabo Visitor");
+    await dialog.getByLabel("Reply email").fill(buyerEmail);
+    await dialog.getByLabel("Your message").fill(message);
+    await dialog.getByRole("button", { name: "Send message" }).click();
+    await expect.poll(() => replies.contact.length).toBe(1);
+    const [reply] = replies.contact;
+    expect(reply.request).toMatchObject({
+      promotionId: post.id,
+      buyerEmail,
+      message,
+      contactMethod: "form",
+      turnstileToken: "dev-turnstile-bypass",
     });
+
+    expect(reply).toMatchObject({ status: 200, body: { success: true } });
+    await expect(dialog.getByText("Enquiry saved!")).toBeVisible();
+    expect(enquiryCount(post.id)).toBe(saved + 1);
+    const [enquiryId, outboxId] = queryTestCopy(
+      "select e.id, o.id from private.enquiries e join private.outbox_events o " +
+        "on o.kind = 'enquiry_received' and o.subject_id = e.id " +
+        `where e.post_id = '${post.id}' and e.buyer_email = '${buyerEmail}';`
+    ).split("|");
+    expect(enquiryId).toMatch(UUID);
+    expect(outboxId).toMatch(UUID);
+
+    // The seller signs in and finds the enquiry in Leads.
+    await context.clearCookies();
+    const seller = await browserSessionCookies(readTestCopy(), "verifiedMember");
+    expect(seller.accountId).toBe(sellerId);
+    await context.addCookies(seller.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto("/dashboard/leads");
+    const lead = page.getByRole("listitem").filter({ hasText: message });
+    await expect(lead).toHaveCount(1);
+    await expect(lead).toBeVisible();
+    await expect(lead).toContainText("Thabo Visitor");
+    await expect(lead).toContainText(`Re: ${post.title}`);
+
+    // One run of the email job sends the seller's notice to the mail catcher.
+    expect(await runEmailJob(request)).toEqual({ claimed: 1, succeeded: 1, retrying: 0 });
+    expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
+    const mail = await caughtMailFor(people.verifiedMember.email, `foundation-outbox/${outboxId}`);
+    expect(mail.subject).toBe("New enquiry");
+    expect(mail.text).toMatch(/^Sign in to view the details: https:\/\/\S+\/dashboard\/leads\s*$/m);
+    expect(outside).toEqual([]);
   });
 });
