@@ -160,8 +160,9 @@ async function verifyIdentity(copy: TestCopy, ownerId: string, token: string) {
   if (reviewed.status !== "accepted") throw new Error("The identity review was not accepted");
 }
 
-/** The phone proof the website records after a matching SMS code. */
-async function verifyPhone(ownerId: string) {
+/** The phone proof the website records after a matching SMS code (the
+ * member pages open only for members with a verified phone). */
+export async function verifyPhone(ownerId: string) {
   const phone = `+2773${randomInt(1_000_000, 10_000_000)}`;
   const hash = randomBytes(32).toString("hex");
   const challenge = await serviceCall("create_verification_phone_challenge", {
@@ -187,6 +188,29 @@ async function verifyPhone(ownerId: string) {
  * review spec sends the ID and selfie photos through the website itself).
  */
 export async function registerUnreviewedMember(label: string): Promise<VerifiedMember> {
+  const member = await registerConfirmedMember(label);
+  const copy = readTestCopy();
+  const session = await signIn(copy, member);
+  const profile = await call(copy, "get_my_profile", {}, session.token);
+  await call(
+    copy,
+    "save_my_legal_name",
+    {
+      p_expected_revision: profile.revision,
+      p_first_name: member.firstName,
+      p_last_name: member.lastName,
+    },
+    session.token
+  );
+  await verifyPhone(member.id);
+  return member;
+}
+
+/**
+ * A new member who signed up (invited) and confirmed the email, and nothing
+ * else (M0.9e: account recovery and self-service need no verification).
+ */
+export async function registerConfirmedMember(label: string): Promise<VerifiedMember> {
   if (!/^[a-z]{3,20}$/.test(label)) throw new Error("Unexpected label");
   const copy = readTestCopy();
   const ref = randomUUID().slice(0, 8);
@@ -197,19 +221,10 @@ export async function registerUnreviewedMember(label: string): Promise<VerifiedM
   const suffix = [...ref].map((c) => "abcdefghijklmnop"[parseInt(c, 16)]).join("");
   const lastName = `${label[0].toUpperCase()}${label.slice(1)}-${suffix}`;
   await register(copy, email, password, `Naledi ${lastName}`);
-  const session = await signIn(copy, { email, password });
   const id = queryTestCopy(
     `select id from auth.users where email = '${email}' and email_confirmed_at is not null;`
   );
   if (!UUID.test(id)) throw new Error("The new member was not confirmed");
-  const profile = await call(copy, "get_my_profile", {}, session.token);
-  await call(
-    copy,
-    "save_my_legal_name",
-    { p_expected_revision: profile.revision, p_first_name: "Naledi", p_last_name: lastName },
-    session.token
-  );
-  await verifyPhone(id);
   return { id, email, password, firstName: "Naledi", lastName };
 }
 

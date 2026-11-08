@@ -232,6 +232,16 @@ export function rpc(copy: TestCopy, name: string, body: unknown, token?: string)
 
 let secretKey: string | undefined;
 
+/** The copy's own secret key, read from the local CLI status (never from a file). */
+function copySecretKey() {
+  if (!secretKey) {
+    const status = readStatus(openFixture());
+    if (status.apiUrl !== API_ORIGIN) throw new Error("Unexpected test copy gateway");
+    secretKey = status.secretKey as string;
+  }
+  return secretKey;
+}
+
 /**
  * Calls a service-only production command through the local gateway with the
  * copy's own secret key (read from the local CLI status, never from a file),
@@ -239,12 +249,7 @@ let secretKey: string | undefined;
  */
 export function serviceRpc(name: string, body: unknown) {
   if (!/^[a-z_]+$/.test(name)) throw new Error("Unexpected command name");
-  if (!secretKey) {
-    const status = readStatus(openFixture());
-    if (status.apiUrl !== API_ORIGIN) throw new Error("Unexpected test copy gateway");
-    secretKey = status.secretKey as string;
-  }
-  return request({ publishableKey: secretKey, posts: [] }, `/rest/v1/rpc/${name}`, {
+  return request({ publishableKey: copySecretKey(), posts: [] }, `/rest/v1/rpc/${name}`, {
     body,
     headers: { "Content-Profile": "api", "Accept-Profile": "api" },
   });
@@ -347,7 +352,49 @@ export async function browserSessionCookies(
   options: SessionOptions = {}
 ) {
   const key = typeof person === "string" ? person : "a registered test person";
-  const session = await signIn(copy, person, options);
+  return sessionCookies(copy, await signIn(copy, person, options), key);
+}
+
+/** Trusted local step (copy only): a call to local Auth's admin API with the
+ * copy's own secret key. */
+export async function authAdmin(pathname: `/auth/v1/admin/${string}`, body?: unknown) {
+  if (!/^\/auth\/v1\/admin\/[a-z_/0-9-]+$/.test(pathname)) throw new Error("Unexpected path");
+  return request({ publishableKey: copySecretKey(), posts: [] }, pathname, {
+    body,
+    method: body === undefined ? "GET" : "POST",
+  });
+}
+
+/**
+ * Trusted local step (copy only): a real local Auth session for a test person
+ * who has no password to sign in with (a Google member, whose sign-in goes
+ * through Google, which the copy cannot reach). Local Auth's admin API makes a
+ * one-time sign-in link (generate_link) and local Auth itself redeems it
+ * (verify), exactly as when the person opens that link: nothing about the
+ * account changes (no password, no new identity).
+ */
+export async function linkSession(copy: TestCopy, email: string) {
+  const link = await authAdmin("/auth/v1/admin/generate_link", { type: "magiclink", email });
+  const tokenHash = link.data?.hashed_token;
+  if (link.status !== 200 || typeof tokenHash !== "string")
+    throw new Error(`Sign-in link refused (${link.status})`);
+  const verified = await request(copy, "/auth/v1/verify", {
+    body: { type: "magiclink", token_hash: tokenHash },
+  });
+  if (verified.status !== 200) throw new Error(`Sign-in link failed (${verified.status})`);
+  return {
+    token: verified.data.access_token as string,
+    refreshToken: verified.data.refresh_token as string,
+  };
+}
+
+/** The website's session cookies for an existing local Auth session (written
+ * by @supabase/ssr, as in browserSessionCookies). */
+export async function sessionCookies(
+  copy: TestCopy,
+  session: { token: string; refreshToken: string },
+  key = "a registered test person"
+) {
   const cookies: { name: string; value: string }[] = [];
   const auth = createServerClient(API_ORIGIN, copy.publishableKey, {
     cookies: {
