@@ -60,6 +60,9 @@ export const LOCAL_OZOW_SITE_CODE = "local-fixture-ozow-site";
  * it would have sent, and every request it tried to send off this machine. */
 export const TEST_SMS_SINK_FILE = "tmp/foundation-e2e/sms-sink.jsonl";
 export const OUTBOUND_LOG_FILE = "tmp/foundation-e2e/outbound.jsonl";
+/** The website's own server output (stdout and stderr) for this run, so specs
+ * can check its structured log lines. */
+export const SERVER_LOG_FILE = "tmp/foundation-e2e/server.log";
 
 /** Hosted projects this copy must never reach (production, the retired source
  * project and the other known hosted refs from src/lib/foundation/connection.ts). */

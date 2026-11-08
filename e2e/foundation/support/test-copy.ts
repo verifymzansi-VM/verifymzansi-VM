@@ -11,6 +11,7 @@ import people from "../fixture/people.json";
 import {
   E2E_FIXTURE,
   OUTBOUND_LOG_FILE,
+  SERVER_LOG_FILE,
   TEST_SMS_SINK_FILE,
   assertLocalFoundationTarget,
 } from "../../../scripts/lib/foundation-e2e-target.mjs";
@@ -497,4 +498,31 @@ export type OutboundAttempt = {
  * the copy's fence answered the password breach check and refused the rest. */
 export function readOutboundAttempts(): OutboundAttempt[] {
   return readJsonLines<OutboundAttempt>(OUTBOUND_LOG_FILE);
+}
+
+export type ServerLogEntry = {
+  timestamp?: string;
+  level?: string;
+  context?: string;
+  message?: string;
+  meta?: Record<string, unknown>;
+};
+
+/** Structured (JSON) lines the copy's website server logged with this message.
+ * Other output, and a line still being written, is skipped. */
+export function readServerLogEntries(message: string): ServerLogEntry[] {
+  const full = path.resolve(process.cwd(), SERVER_LOG_FILE);
+  if (!existsSync(full)) return [];
+  const entries: ServerLogEntry[] = [];
+  for (const line of readFileSync(full, "utf8").split(/\r?\n/)) {
+    const start = line.indexOf("{");
+    if (start < 0 || !line.includes(message)) continue;
+    try {
+      const entry = JSON.parse(line.slice(start)) as ServerLogEntry;
+      if (entry.message === message) entries.push(entry);
+    } catch {
+      // Not a complete JSON log line.
+    }
+  }
+  return entries;
 }
