@@ -42,14 +42,14 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 
 ## Summary for the owner
 
-| Group                                     |   Files | Proposed            | What visitors notice                                                             |
-| ----------------------------------------- | ------: | ------------------- | -------------------------------------------------------------------------------- |
-| 1. Phone and tablet filter                |       3 | put back            | The round Filters button on phones covers the first card; tablets have no filter |
-| 2. Member and public wording or behaviour |      12 | 11 keep, 1 put back | Billing, contact, dashboard, privacy and help texts                              |
-| 3. Staff screens only                     |      14 | keep                | Nothing; staff screens follow the new backend's review rules                     |
-| 4. Rewiring only                          |      80 | keep                | Nothing; the same pages read from the new backend                                |
-| 5. Tests and helpers                      |      15 | keep                | Nothing; not part of any page                                                    |
-| **Total**                                 | **124** |                     |                                                                                  |
+| Group                                     |          Files | Proposed            | What visitors notice                                         |
+| ----------------------------------------- | -------------: | ------------------- | ------------------------------------------------------------ |
+| 1. Phone and tablet filter                | 0 (3 put back) | put back            | The right-edge Filters tab is back on phones and tablets     |
+| 2. Member and public wording or behaviour |             12 | 11 keep, 1 put back | Billing, contact, dashboard, privacy and help texts          |
+| 3. Staff screens only                     |             14 | keep                | Nothing; staff screens follow the new backend's review rules |
+| 4. Rewiring only                          |             80 | keep                | Nothing; the same pages read from the new backend            |
+| 5. Tests and helpers                      |             15 | keep                | Nothing; not part of any page                                |
+| **Total**                                 |        **121** |                     |                                                              |
 
 Questions for the owner:
 
@@ -57,7 +57,7 @@ Questions for the owner:
    Mzansi Business and Tourism & Events show a round Filters button at the
    bottom centre of the phone screen, and tablets have no filter at all. The
    chosen version had a Filters tab on the right edge on phones and tablets. Was
-   the round button your choice? If not, it is put back.
+   the round button your choice? Answered: it was not, and the tab is put back.
 2. **Member and public wording (group 2).** Did you approve these changes made
    after 27 October? Each row says what visitors see differently.
 3. **Groups 3 to 5** change nothing visitors see. They can be approved as a
@@ -69,11 +69,7 @@ Questions for the owner:
 
 ### 1. Phone and tablet filter (visual)
 
-| File                                                  | Kind   | Reason                                                                                                                                                                                             | What changes on screen                                                                                                                                                                                                                                                   | Proposed                                             | Owner decision | Date       | Version      |
-| ----------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- | -------------- | ---------- | ------------ |
-| `src/components/listings/business-filter-drawer.tsx`  | visual | Changed during the restore: the right-edge Filters tab was replaced by an older round button; Business Sponsor filter removed, Business Type select added back, labels and location chips changed. | Mzansi Business on phones: the same round button covering the first card; no filter on tablets; no Business Sponsor filter; labels read 'Subcategory' and 'City'; location chips read 'Province › City'. Chosen version: right-edge Filters tab with the sponsor filter. | put back (right-edge Filters tab and sponsor filter) | awaiting owner | 2026-11-08 | 4ec017a1ba25 |
-| `src/components/listings/listing-filter-drawer.tsx`   | visual | Changed during the restore: the right-edge Filters tab was replaced by an older round button; smaller labels, new placeholders and chip labels.                                                    | Mzansi Market on phones: a round Filters button sits bottom-centre above the tab bar and can cover the first card's title and price. On tablets (768-1023 px) there is no way to open filters. Chosen version: a Filters tab on the right edge on phones and tablets.    | put back (right-edge Filters tab)                    | awaiting owner | 2026-11-08 | cbb0c02e9b8c |
-| `src/components/listings/promotion-filter-drawer.tsx` | visual | Changed during the restore: the right-edge Filters tab was replaced by an older round button; drawer title and chip labels changed.                                                                | Tourism & Events on phones: the same round button covering the first card; no filter on tablets; drawer title 'Filter Tourism & Events'. Chosen version: right-edge Filters tab.                                                                                         | put back (right-edge Filters tab)                    | awaiting owner | 2026-11-08 | de5e3d78cce3 |
+None left: the three filter files were put back to `0b562f42` (see "Put back").
 
 ### 2. Member and public wording or behaviour
 
@@ -223,5 +219,8 @@ Questions for the owner:
 Files returned to `0b562f42`, kept as a record. The check does not read this
 section.
 
-| File | Put back on | How |
-| ---- | ----------- | --- |
+| File                                                  | Put back on                                                                                              | How                                                                                                         |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `src/components/listings/business-filter-drawer.tsx`  | Prepared 2026-11-08; live when the owner merges "Owner choice: put back the phone and tablet filter tab" | put back (owner merged): `git checkout 0b562f42`; right-edge Filters tab and Business Sponsor filter return |
+| `src/components/listings/listing-filter-drawer.tsx`   | 2026-11-08, same change                                                                                  | put back (owner merged): `git checkout 0b562f42`; right-edge Filters tab returns                            |
+| `src/components/listings/promotion-filter-drawer.tsx` | 2026-11-08, same change                                                                                  | put back (owner merged): `git checkout 0b562f42`; right-edge Filters tab returns                            |
