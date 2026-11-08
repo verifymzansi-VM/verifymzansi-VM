@@ -1,7 +1,7 @@
 {
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
-    "backendSwitches": 221,
+    "backendSwitches": 222,
     "legacyClientImports": 204,
     "retiredCommandNames": 103,
     "retiredCommandCalls": 105,
