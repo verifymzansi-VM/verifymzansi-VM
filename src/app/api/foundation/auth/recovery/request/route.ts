@@ -6,9 +6,18 @@ import {
 import { foundationAuthEmail } from "@/lib/foundation/auth-input";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { parseJsonRequest } from "@/lib/utils/api";
 import { handleFoundationAuthAttempt } from "../../_lib/attempt-route";
+import {
+  handleFoundationPasswordSetup,
+  isFoundationPasswordSetupInput,
+} from "../../_lib/password-setup";
 
-export function POST(request: NextRequest) {
+export async function POST(request: NextRequest) {
+  // The profile page's "Set Password" (signed in, no CAPTCHA token) has its
+  // own checks; every other request is a forgot-password request.
+  const probe = await parseJsonRequest(request.clone(), { maxBytes: 4096 });
+  if (isFoundationPasswordSetupInput(probe)) return handleFoundationPasswordSetup(request, probe);
   return handleFoundationAuthAttempt({
     request,
     action: "auth:forgot-password",

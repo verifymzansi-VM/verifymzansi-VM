@@ -12,6 +12,7 @@ const inputSchema = z.strictObject({
   email: foundationAuthEmail,
   turnstileToken: foundationCaptchaToken,
 });
+const secretKey = z.string().regex(/^sb_secret_[A-Za-z0-9_-]+$/);
 export class FoundationRecoveryRequestError extends Error {
   constructor(readonly status: 400 | 429 | 503) {
     super("Password recovery could not be requested");
@@ -55,5 +56,44 @@ export async function requestFoundationPasswordRecovery(
   } catch (error) {
     if (error instanceof FoundationRecoveryRequestError) throw error;
     throw new FoundationRecoveryRequestError(503);
+  }
+}
+
+export class FoundationPasswordSetupEmailError extends Error {
+  constructor(readonly status: 429 | 503) {
+    super("The password setup email could not be requested");
+  }
+}
+
+/**
+ * Trusted server step for a signed-in member who has no password (the
+ * password setup route checks session, recent sign-in, account and limits
+ * first). Asks Auth to send the usual reset link, with a selected PKCE flow as
+ * for recovery, to that member's own verified address: never pass an address
+ * taken from the request body.
+ *
+ * The request carries the project's secret key. Auth's CAPTCHA check skips
+ * requests with admin credentials (GoTrue verifyCaptcha), so the restored
+ * profile page needs no CAPTCHA widget; the route's checks take its place.
+ * Only the address's own inbox receives the link.
+ */
+export async function requestFoundationPasswordSetupEmail(
+  connection: unknown,
+  email: string,
+  redirectTo: string,
+  cookies: FoundationAuthCookies,
+  environment: NodeJS.ProcessEnv = process.env,
+  fetcher: typeof fetch = createTimeoutFetch()
+) {
+  const key = secretKey.safeParse(environment.FOUNDATION_SUPABASE_SECRET_KEY);
+  if (!key.success) throw new FoundationPasswordSetupEmailError(503);
+  try {
+    const attempt = createFoundationAuthAttempt(connection, cookies, fetcher, key.data);
+    const { error } = await attempt.auth.resetPasswordForEmail(email, { redirectTo });
+    if (attempt.cookieAccessFailed()) throw new FoundationPasswordSetupEmailError(503);
+    if (error) throw new FoundationPasswordSetupEmailError(error.status === 429 ? 429 : 503);
+  } catch (error) {
+    if (error instanceof FoundationPasswordSetupEmailError) throw error;
+    throw new FoundationPasswordSetupEmailError(503);
   }
 }

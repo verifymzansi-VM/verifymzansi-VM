@@ -17,6 +17,7 @@ import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-lim
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
+import { openedByResetLink, RECOVERY_SESSION_REFUSAL } from "./recovery-session";
 
 const log = createLogger("FoundationPasswordChange");
 export async function handleFoundationPasswordChange(request: NextRequest) {
@@ -50,15 +51,9 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
     // A session opened by a reset link sets a password only on the reset page,
     // where that link's binding is checked; here it could skip that check
     // (whether a wrong current password is refused depends on Auth settings).
-    if (caller.recovery || caller.openedByRecovery)
+    if (openedByResetLink(caller))
       return context.respond(
-        NextResponse.json(
-          {
-            error: "Use the reset link from your email to set a new password",
-            reason: "recovery_session",
-          },
-          { status: 403, headers: foundationNoStore }
-        )
+        NextResponse.json(RECOVERY_SESSION_REFUSAL, { status: 403, headers: foundationNoStore })
       );
     const account = await readFoundationAccountContext(caller.api);
     if (account.account_id !== caller.accountId)

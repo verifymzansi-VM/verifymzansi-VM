@@ -115,6 +115,50 @@ it("derives recovery only from the exact GoTrue-verified token, never cookie use
   expect(forged.openedByRecovery).toBe(false);
 });
 
+it("derives the sign-in time only from the exact GoTrue-verified token", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const fetcher = vi.fn<typeof fetch>(async () => Response.json(user(1)));
+  const signedIn = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(
+      session(
+        token(1, {
+          amr: [
+            { method: "totp", timestamp: now - 5 },
+            { method: "oauth", timestamp: now - 900 },
+          ],
+        })
+      )
+    ),
+    fetcher
+  );
+  expect(signedIn.signedInAt).toBe(now - 900);
+  expect(signedIn.signedInWithPassword).toBe(false);
+  const withPassword = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "password", timestamp: now - 7200 }] }))),
+    fetcher
+  );
+  expect(withPassword.signedInWithPassword).toBe(true);
+  expect(withPassword.signedInAt).toBe(now - 7200);
+  // A recovery link is no sign-in, and a cookie's user object is no proof.
+  const recovery = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "recovery", timestamp: now }] }))),
+    fetcher
+  );
+  expect(recovery.signedInAt).toBeNull();
+  const forged = await readFoundationRequestCaller(
+    config,
+    cookieAdapter({
+      ...session(token()),
+      user: { ...user(1), amr: [{ method: "oauth", timestamp: now }] },
+    }),
+    fetcher
+  );
+  expect(forged.signedInAt).toBeNull();
+});
+
 it("reads a near-expiry page token without consuming its refresh token or writing cookies", async () => {
   const expires = Math.floor(Date.now() / 1000) + 30;
   const candidate = token(1, { exp: expires });

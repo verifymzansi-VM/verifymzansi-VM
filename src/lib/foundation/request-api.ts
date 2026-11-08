@@ -18,6 +18,7 @@ import {
   createFoundationPasswordResetter,
 } from "./password-update";
 import { foundationRecoveryClaim, foundationRecoveryOpened } from "./recovery-claims";
+import { foundationLatestSignIn, foundationSignedInWithPassword } from "./sign-in-claims";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
@@ -157,6 +158,10 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
       recovery: foundationRecoveryClaim(claims.session_id, claims.amr),
       /** Opened by a reset link at any age (see foundationRecoveryOpened). */
       openedByRecovery: foundationRecoveryOpened(claims.amr),
+      /** When this session last signed in (seconds), or null (sign-in-claims.ts). */
+      signedInAt: foundationLatestSignIn(claims.amr),
+      /** Signed in with a password in this session (so the account has one). */
+      signedInWithPassword: foundationSignedInWithPassword(claims.amr),
     };
   } catch {
     // Never include cookie contents, tokens or provider error bodies.
