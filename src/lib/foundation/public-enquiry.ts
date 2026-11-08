@@ -11,6 +11,8 @@ import {
   submitFoundationEnquiry,
 } from "@/lib/foundation/owner-inbox";
 import { inboxRefusal } from "@/lib/foundation/inbox-refusal";
+import { searchFoundationPresentedCards } from "@/lib/foundation/public-cards";
+import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import { foundationNoStore, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { verifyPublicTurnstile } from "@/lib/utils/public-mutation-route";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
@@ -23,6 +25,37 @@ const unavailable = () =>
     { error: "Messages are temporarily unavailable" },
     { status: 503, headers: foundationNoStore }
   );
+
+/**
+ * A business owner can turn the enquiry form off (the form's contact methods,
+ * stored with the business's public presentation). The restored page then
+ * hides "Send an enquiry", and the old route refused such enquiries; the
+ * database accepts enquiries for every live business, so the website checks it
+ * here. Only the public card read is used; a failed read refuses (503), never
+ * passes. Posts that are not public businesses are left to the database.
+ */
+async function businessTurnedOffEnquiries(postId: string) {
+  let cards: Awaited<ReturnType<typeof searchFoundationPresentedCards>>;
+  try {
+    cards = await searchFoundationPresentedCards(foundationServerPublicApi(), {
+      post_id: postId,
+      offset: 0,
+      limit: 1,
+    });
+  } catch {
+    throw new FoundationInboxError("unavailable");
+  }
+  const card = cards.items[0];
+  if (!card || card.kind !== "business") return false;
+  const details = card.presentation.frontend?.data.category_details;
+  const methods =
+    details && typeof details === "object"
+      ? (details as { contact_methods?: unknown }).contact_methods
+      : undefined;
+  return (
+    Array.isArray(methods) && !methods.some((method) => method === "form" || method === "in_app")
+  );
+}
 
 // Placeholder that only satisfies the input schema; it is replaced before the
 // command is sent.
@@ -60,7 +93,8 @@ export async function derivedEnquiryRequestId(command: EnquiryCommand, now = new
  * body parsing. Here: Turnstile, then the GoTrue-verified sender (or none for a
  * signed-out visitor; never taken from the body), then the per-sender or
  * per-client rate limit (blocking when the limiter is degraded), then exactly
- * one command. SQL rechecks the post, its contact choice, the sender account
+ * one command (after checking that a business has not turned enquiries
+ * off). SQL rechecks the post, its contact choice, the sender account
  * and flood limits, and derives whether the reply email is confirmed.
  *
  * `enquiry` holds the command fields (request_id, post_id, buyer_name,
@@ -126,6 +160,17 @@ export async function submitPublicEnquiry({
     );
     if (deriveRequestId)
       command = { ...command, p_request_id: await derivedEnquiryRequestId(command) };
+    if (await businessTurnedOffEnquiries(command.p_post_id))
+      return context.respond(
+        NextResponse.json(
+          {
+            error:
+              "This recipient has not enabled enquiries. Please use the contact options on the post.",
+            reason: "enquiries_disabled",
+          },
+          { status: 403 }
+        )
+      );
     const service = createFoundationServiceApi();
     try {
       await submitFoundationEnquiry(service, command);

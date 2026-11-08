@@ -13,6 +13,7 @@ import { createNotification } from "@/lib/notifications";
 import { sendContactFormNotification } from "@/lib/services/email";
 import { verifyPublicTurnstile } from "@/lib/utils/public-mutation-route";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { searchFoundationPresentedCards } from "@/lib/foundation/public-cards";
 
 // The restored "Send an enquiry" dialog posts here. Production runs the
 // foundation backend (the vitest default), so this route must reach
@@ -23,6 +24,8 @@ vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: vi.fn(),
 }));
 vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn() }));
+vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: vi.fn(() => ({})) }));
+vi.mock("@/lib/foundation/public-cards", () => ({ searchFoundationPresentedCards: vi.fn() }));
 vi.mock("@/lib/utils/public-mutation-route", () => ({
   verifyPublicTurnstile: vi.fn(),
   enforcePublicMutationPrelude: vi.fn(() => {
@@ -76,6 +79,23 @@ function request(
     },
   });
 }
+/** The public card read for the post: its kind and stored form presentation. */
+function cardsFor(kind: "listing" | "business" | "event", categoryDetails?: unknown) {
+  return {
+    items: [
+      {
+        id: post,
+        kind,
+        presentation: {
+          frontend: {
+            data: categoryDetails === undefined ? {} : { category_details: categoryDetails },
+            media: [],
+          },
+        },
+      },
+    ],
+  } as never;
+}
 const sent = () => service.mock.calls.map(([name, args]) => ({ name, args }));
 
 beforeEach(() => {
@@ -90,6 +110,7 @@ beforeEach(() => {
   service.mockResolvedValue({ data: { id: account, reused: false }, error: null });
   vi.mocked(createFoundationServiceApi).mockReturnValue({ rpc: service } as never);
   authenticateCaller.mockRejectedValue(new FoundationSessionError(401));
+  vi.mocked(searchFoundationPresentedCards).mockResolvedValue(cardsFor("event"));
   vi.mocked(createFoundationRouteContext).mockReturnValue({
     authenticate: vi.fn(),
     authenticateCaller,
@@ -320,5 +341,100 @@ describe("POST /api/contact on the foundation backend", () => {
       sendContactFormNotification,
     ])
       expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/contact on the foundation backend: business enquiry choice", () => {
+  const { promotionId: _event, ...rest } = dialog;
+  const business = { ...rest, businessId: post };
+
+  it("refuses with 403 when the business turned the enquiry form off, writing nothing", async () => {
+    vi.mocked(searchFoundationPresentedCards).mockResolvedValue(
+      cardsFor("business", { contact_methods: ["call", "whatsapp"] })
+    );
+    const response = await POST(request(business));
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error:
+        "This recipient has not enabled enquiries. Please use the contact options on the post.",
+      reason: "enquiries_disabled",
+    });
+    expect(service).not.toHaveBeenCalled();
+    expect(vi.mocked(searchFoundationPresentedCards).mock.calls[0][1]).toEqual({
+      post_id: post,
+      offset: 0,
+      limit: 1,
+    });
+  });
+
+  it("sends when the business offers the form or in-app messages, or never chose", async () => {
+    for (const details of [
+      { contact_methods: ["call", "form"] },
+      { contact_methods: ["in_app"] },
+      { customer_access: { methods: ["online"] } },
+      undefined,
+    ]) {
+      vi.mocked(searchFoundationPresentedCards).mockResolvedValueOnce(
+        cardsFor("business", details)
+      );
+      expect((await POST(request(business))).status).toBe(200);
+    }
+    expect(service).toHaveBeenCalledTimes(4);
+  });
+
+  it("leaves non-business posts and posts without a public card to the database", async () => {
+    vi.mocked(searchFoundationPresentedCards).mockResolvedValueOnce(
+      cardsFor("event", { contact_methods: ["call"] })
+    );
+    expect((await POST(request(dialog))).status).toBe(200);
+    vi.mocked(searchFoundationPresentedCards).mockResolvedValueOnce({ items: [] } as never);
+    service.mockResolvedValueOnce({ data: null, error: { details: "post_unavailable" } });
+    expect((await POST(request(business))).status).toBe(404);
+  });
+
+  it("answers 503 and writes nothing when the business choice cannot be read", async () => {
+    vi.mocked(searchFoundationPresentedCards).mockRejectedValueOnce(new Error("outage"));
+    const response = await POST(request(business));
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toBe("Messages are temporarily unavailable");
+    expect(service).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/contact on the foundation backend: limits and races", () => {
+  it("replays the first answer when an identical request wins the race for the request id", async () => {
+    service
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "23505",
+          details: "Key (request_id)=(x) already exists.",
+          message: "duplicate key value violates unique constraint enquiries_request_id_key",
+        },
+      })
+      .mockResolvedValueOnce({ data: { id: account, reused: true }, error: null });
+    const response = await POST(request(dialog));
+    expect(response.status).toBe(200);
+    const [first, second] = sent().map(({ args }) => args);
+    expect(second).toEqual(first);
+  });
+
+  it("does not retry other unique violations", async () => {
+    service.mockResolvedValueOnce({
+      data: null,
+      error: { code: "23505", details: "Key (dedupe_key)=(x) already exists.", message: "dup" },
+    });
+    expect((await POST(request(dialog))).status).toBe(503);
+    expect(service).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a body over 8192 bytes and a CAPTCHA token over 4096 characters", async () => {
+    const big = await POST(request({ ...dialog, padding: "x".repeat(8200) }));
+    expect(big.status).toBe(400);
+    const token = await POST(request({ ...dialog, turnstileToken: "t".repeat(4097) }));
+    expect(token.status).toBe(400);
+    expect(await token.json()).toEqual({ error: "Complete the CAPTCHA" });
+    expect(verifyPublicTurnstile).not.toHaveBeenCalled();
+    expect(service).not.toHaveBeenCalled();
   });
 });

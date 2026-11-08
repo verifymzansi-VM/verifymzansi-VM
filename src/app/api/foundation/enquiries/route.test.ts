@@ -8,12 +8,15 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { verifyPublicTurnstile } from "@/lib/utils/public-mutation-route";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { searchFoundationPresentedCards } from "@/lib/foundation/public-cards";
 
 vi.mock("@/lib/foundation/request-route", () => ({ createFoundationRouteContext: vi.fn() }));
 vi.mock("@/lib/foundation/runtime-connection", () => ({
   readFoundationRuntimeConnection: vi.fn(),
 }));
 vi.mock("@/lib/foundation/service-api", () => ({ createFoundationServiceApi: vi.fn() }));
+vi.mock("@/lib/foundation/server-public", () => ({ foundationServerPublicApi: vi.fn(() => ({})) }));
+vi.mock("@/lib/foundation/public-cards", () => ({ searchFoundationPresentedCards: vi.fn() }));
 vi.mock("@/lib/utils/public-mutation-route", () => ({ verifyPublicTurnstile: vi.fn() }));
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
@@ -64,6 +67,7 @@ beforeEach(() => {
   service.mockResolvedValue({ data: { id: account, reused: false }, error: null });
   vi.mocked(createFoundationServiceApi).mockReturnValue({ rpc: service } as never);
   authenticateCaller.mockRejectedValue(new FoundationSessionError(401));
+  vi.mocked(searchFoundationPresentedCards).mockResolvedValue({ items: [] } as never);
   rpc.mockResolvedValue({ data: { items: [], unread_count: 0, next_cursor: null }, error: null });
   vi.mocked(createFoundationRouteContext).mockReturnValue({
     authenticate: async () => ({ rpc }),
@@ -152,4 +156,57 @@ it("lists and updates only through the owner commands", async () => {
   rpc.mockResolvedValueOnce({ data: null, error: null });
   expect((await PATCH(request("PATCH", { id: account, status: "read" }))).status).toBe(404);
   expect((await PATCH(request("PATCH", { id: account, status: "new" }))).status).toBe(400);
+});
+
+it("accepts only random (version 4) request ids from clients", async () => {
+  const derivedShape = "bbbbbbbb-bbbb-8bbb-8bbb-bbbbbbbbbbbb";
+  const refused = await POST(request("POST", { ...enquiry, request_id: derivedShape }));
+  expect(refused.status).toBe(400);
+  expect(service).not.toHaveBeenCalled();
+  expect((await POST(request("POST", enquiry))).status).toBe(200);
+  expect(service.mock.calls[0][1].p_request_id).toBe(enquiry.request_id);
+});
+
+it("answers 409 for a reused request id and never resends it under another id", async () => {
+  service.mockResolvedValueOnce({ data: null, error: { details: "enquiry_request_conflict" } });
+  const response = await POST(request("POST", enquiry));
+  expect(response.status).toBe(409);
+  expect(service).toHaveBeenCalledTimes(1);
+});
+
+it("refuses business enquiries the owner turned off, and fails closed when unreadable", async () => {
+  const card = (details: unknown) =>
+    ({
+      items: [
+        {
+          id: post,
+          kind: "business",
+          presentation: { frontend: { data: { category_details: details }, media: [] } },
+        },
+      ],
+    }) as never;
+  vi.mocked(searchFoundationPresentedCards).mockResolvedValueOnce(
+    card({ contact_methods: ["whatsapp"] })
+  );
+  const off = await POST(request("POST", enquiry));
+  expect(off.status).toBe(403);
+  expect((await off.json()).error).toBe(
+    "This recipient has not enabled enquiries. Please use the contact options on the post."
+  );
+  vi.mocked(searchFoundationPresentedCards).mockResolvedValueOnce(
+    card({ contact_methods: ["form"] })
+  );
+  expect((await POST(request("POST", enquiry))).status).toBe(200);
+  vi.mocked(searchFoundationPresentedCards).mockRejectedValueOnce(new Error("outage"));
+  expect((await POST(request("POST", enquiry))).status).toBe(503);
+  expect(service).toHaveBeenCalledTimes(1);
+});
+
+it("refuses a body over 8192 bytes and a CAPTCHA token over 4096 characters", async () => {
+  expect((await POST(request("POST", { ...enquiry, padding: "x".repeat(8200) }))).status).toBe(400);
+  const token = await POST(request("POST", { ...enquiry, turnstile_token: "t".repeat(4097) }));
+  expect(token.status).toBe(400);
+  expect(await token.json()).toEqual({ error: "Complete the CAPTCHA" });
+  expect(verifyPublicTurnstile).not.toHaveBeenCalled();
+  expect(service).not.toHaveBeenCalled();
 });
