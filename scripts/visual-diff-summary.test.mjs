@@ -46,8 +46,14 @@ test("each differing screen is listed with the size of its difference", () => {
     ])
   );
   assert.match(text, /4 screens compared, 3 differ, 0 flaky, 1 skipped/);
-  assert.match(text, /\| Chosen frontend at 375 px › pricing \| 1234 pixels differ \(2\.00%\) \|/);
-  assert.match(text, /login \| 5 pixels differ/);
+  assert.match(text, /\| Chosen frontend at 375 px › pricing \| 1234 pixels differ \|/);
+  assert.match(text, /login \| 5 pixels differ \|/);
+  assert.match(
+    summarise(
+      report([["home", "unexpected", "Failed to take two consecutive stable screenshots."]])
+    ),
+    /home \| the screen kept changing/
+  );
   assert.match(text, /contact \| no approved picture \|/);
   assert.doesNotMatch(text, /visual-regression\.spec\.ts ›/);
 });

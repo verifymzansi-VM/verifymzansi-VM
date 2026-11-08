@@ -24,8 +24,12 @@ function collect(suite, titles, out) {
 /** @param {string} message */
 function describeFailure(message) {
   const text = message.replace(ESCAPES, "");
-  const ratio = text.match(/(\d+) pixels \(ratio ([\d.]+) of all image pixels\) are different/);
-  if (ratio) return `${ratio[1]} pixels differ (${(Number(ratio[2]) * 100).toFixed(2)}%)`;
+  // Playwright rounds the ratio up to two decimals, so only the count is exact.
+  const pixels = text.match(/(\d+) pixels \(ratio [\d.]+ of all image pixels\) are different/);
+  if (pixels) return `${pixels[1]} pixels differ`;
+  if (/Failed to take two consecutive stable screenshots/.test(text)) {
+    return "the screen kept changing (no stable picture)";
+  }
   if (/Expected an image \d+px by \d+px, received \d+px by \d+px/.test(text)) {
     const size = text.match(/Expected an image (\d+px by \d+px), received (\d+px by \d+px)/);
     return `page size changed (${size?.[1]} approved, ${size?.[2]} now)`;
