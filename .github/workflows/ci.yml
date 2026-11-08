@@ -436,33 +436,42 @@ jobs:
             test-results/
           if-no-files-found: warn
 
-  perf-baseline:
+  # Decides once whether a staging address exists. The jobs that need one test
+  # this output in their job-level `if:`, so without it they show as skipped
+  # in the run summary instead of a success that measured nothing.
+  staging-config:
+    name: Staging address configured
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: e2e-full-matrix
+    timeout-minutes: 2
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
     steps:
-      - name: Check staging URL is configured
-        id: check-url
-        run: |
-          if [ -z "$STAGING_URL" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "STAGING_APP_URL not set, skipping perf baseline"
-          fi
+      - name: Check STAGING_APP_URL
+        id: check
         env:
           STAGING_URL: ${{ secrets.STAGING_APP_URL }}
+        run: |
+          if [ -n "$STAGING_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::STAGING_APP_URL is not set: perf-baseline and k6-advisory are skipped."
+          fi
+
+  perf-baseline:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.staging-config.outputs.configured == 'true'
+    needs: [e2e-full-matrix, staging-config]
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.check-url.outputs.skip != 'true'
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        if: steps.check-url.outputs.skip != 'true'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: steps.check-url.outputs.skip != 'true'
         with:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-        if: steps.check-url.outputs.skip != 'true'
       - name: Run performance baseline check
-        if: steps.check-url.outputs.skip != 'true'
         env:
           PERF_BASE_URL: ${{ secrets.STAGING_APP_URL }}
           PERF_REQUESTS: "80"
@@ -473,23 +482,12 @@ jobs:
 
   k6-advisory:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.staging-config.outputs.configured == 'true'
     continue-on-error: true
-    needs: perf-baseline
+    needs: [perf-baseline, staging-config]
     steps:
-      - name: Check staging URL is configured
-        id: check-url
-        run: |
-          if [ -z "$STAGING_URL" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "STAGING_APP_URL not set, skipping k6 advisory"
-          fi
-        env:
-          STAGING_URL: ${{ secrets.STAGING_APP_URL }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.check-url.outputs.skip != 'true'
       - name: Run k6 advisory profile
-        if: steps.check-url.outputs.skip != 'true'
         env:
           STAGING_URL: ${{ secrets.STAGING_APP_URL }}
         run: |
@@ -503,7 +501,7 @@ jobs:
             -w /workspace \
             grafana/k6:latest run --summary-export /workspace/tmp/k6/summary.json scripts/load-test.js
       - name: Upload k6 summary
-        if: always() && steps.check-url.outputs.skip != 'true'
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: k6-advisory-${{ github.run_id }}-${{ github.run_attempt }}
@@ -559,7 +557,10 @@ jobs:
           path: tmp/lighthouse/**
           if-no-files-found: warn
 
+  # Writes the plan of the safety gate (which checks would run) as an artifact.
+  # It executes none of them, so its green tick proves nothing about the code.
   safety-gate-snapshot:
+    name: "safety-gate-snapshot: plan only (runs no checks)"
     runs-on: ubuntu-latest
     needs: lint-type-security
     env:
@@ -573,7 +574,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Run safety gate (CI mode)
+      - name: List the planned safety-gate checks (dry run; runs none)
         run: pnpm run safety:ci-review -- --dry-run
       - name: Upload safety gate artifacts
         if: always()
