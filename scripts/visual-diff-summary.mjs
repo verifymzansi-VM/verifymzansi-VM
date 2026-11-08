@@ -51,6 +51,16 @@ export function summarise(report) {
     `${tests.length} screens compared, ${failed.length} differ, ${flaky.length} flaky, ${skipped} skipped.`
   );
   lines.push("");
+  const runErrors = (report.errors ?? []).map((error) => describeFailure(error.message ?? ""));
+  if (runErrors.length > 0 || tests.length === 0) {
+    lines.push(
+      "**The check did not complete:** " +
+        (runErrors.length > 0 ? runErrors.join("; ") : "no screen was compared") +
+        ". See the job log."
+    );
+    if (failed.length === 0) return `${lines.join("\n")}\n`;
+    lines.push("");
+  }
   if (failed.length === 0) {
     lines.push("Every screen matches its approved picture.");
   } else {

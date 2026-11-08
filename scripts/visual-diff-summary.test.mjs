@@ -52,6 +52,17 @@ test("each differing screen is listed with the size of its difference", () => {
   assert.doesNotMatch(text, /visual-regression\.spec\.ts ›/);
 });
 
+test("a run that compared nothing never reads as a pass", () => {
+  const broken = {
+    suites: [],
+    errors: [{ message: "Error: Process from config.webServer was not able to start." }],
+  };
+  const text = summarise(broken);
+  assert.match(text, /did not complete:\*\* Error: Process from config.webServer/);
+  assert.doesNotMatch(text, /Every screen matches/);
+  assert.match(summarise({ suites: [] }), /no screen was compared/);
+});
+
 test("a page whose size changed is reported as such", () => {
   const text = summarise(
     report([["home", "unexpected", "Expected an image 375px by 812px, received 375px by 900px."]])
