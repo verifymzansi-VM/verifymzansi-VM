@@ -134,6 +134,7 @@ it("derives the sign-in time only from the exact GoTrue-verified token", async (
   );
   expect(signedIn.signedInAt).toBe(now - 900);
   expect(signedIn.signedInWithPassword).toBe(false);
+  expect(signedIn.authenticatorAt).toBe(now - 5);
   const withPassword = await readFoundationRequestCaller(
     config,
     cookieAdapter(session(token(1, { amr: [{ method: "password", timestamp: now - 7200 }] }))),

@@ -11,15 +11,17 @@ import {
 } from "@/lib/foundation/account-context";
 import { foundationAuthEmail } from "@/lib/foundation/auth-input";
 import {
-  foundationVerificationCookies,
+  foundationVerifierCookieWrites,
   type FoundationAuthCookies,
 } from "@/lib/foundation/auth-attempt";
 import {
   FoundationPasswordSetupEmailError,
+  hasFoundationPasswordSetupKey,
   requestFoundationPasswordSetupEmail,
 } from "@/lib/foundation/password-recovery";
 import {
   foundationAccountHasNoPassword,
+  foundationAuthenticatorStepRecent,
   foundationSignedInRecently,
 } from "@/lib/foundation/sign-in-claims";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
@@ -33,18 +35,6 @@ const log = createLogger("FoundationPasswordSetup");
 const UNAVAILABLE = "Password setup is temporarily unavailable";
 const inputSchema = z.strictObject({ email: foundationAuthEmail });
 
-/** The restored profile page's "Set Password" sends only the member's email
- * (no CAPTCHA token); the forgot-password page always sends a token field. */
-export function isFoundationPasswordSetupInput(input: unknown) {
-  return (
-    !!input &&
-    typeof input === "object" &&
-    !Array.isArray(input) &&
-    Object.keys(input).length === 1 &&
-    Object.hasOwn(input, "email")
-  );
-}
-
 class SetupRefusal extends Error {
   constructor(
     readonly status: number,
@@ -57,6 +47,11 @@ class SetupRefusal extends Error {
 const refuse = {
   limited: () =>
     new SetupRefusal(429, { error: "Too many attempts; try again shortly", code: "rate_limited" }),
+  emails: () =>
+    new SetupRefusal(429, {
+      error: "Too many password emails; try again later",
+      code: "rate_limited",
+    }),
   unavailable: () => new SetupRefusal(503, { error: UNAVAILABLE }),
 };
 
@@ -74,6 +69,11 @@ const refuse = {
  * cannot say whether a Google member added a password later; for such a
  * member signed in with Google this only emails a reset link to their own
  * inbox, as the forgot-password page would (see sign-in-claims.ts).
+ *
+ * Budgets: the member's own account (hourly and daily) and a platform-wide one
+ * for these CAPTCHA-less emails. The forgot-password page's per-address budget
+ * is charged only after a sent email and never refuses here, so nobody else
+ * can use it up to block this request.
  */
 export async function handleFoundationPasswordSetup(request: NextRequest, input: unknown) {
   const reply = (status: number, body: Record<string, string | boolean>) =>
@@ -81,7 +81,8 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
   if (
     process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha" ||
     process.env.FOUNDATION_RECOVERY_ENABLED !== "true" ||
-    process.env.FOUNDATION_AUTH_CALLBACK_ENABLED !== "true"
+    process.env.FOUNDATION_AUTH_CALLBACK_ENABLED !== "true" ||
+    !hasFoundationPasswordSetupKey()
   )
     return reply(503, { error: UNAVAILABLE });
   const blocked = enforceMutationRequest(request, log);
@@ -136,24 +137,24 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
       });
     const account = await readFoundationAccountContext(caller.api);
     if (account.account_id !== caller.accountId) throw refuse.unavailable();
-    if (account.staff && !account.staff.can_access)
+    // Staff add a sign-in method only right after their authenticator step,
+    // as for the database's sensitive staff capabilities.
+    if (
+      account.staff &&
+      (!account.staff.can_access || !foundationAuthenticatorStepRecent(caller.authenticatorAt))
+    )
       throw new SetupRefusal(403, {
         error: "Confirm your authenticator code before setting a password",
         code: "mfa_required",
       });
-    // The same per-address budget as the forgot-password page, so the two
-    // together cannot flood one inbox. The member hears about the limit.
-    const recipient = await checkRateLimit({
-      key: own.data,
-      action: "auth:forgot-password-email",
-      degradedMode: "block",
-    });
-    if (recipient.degraded) throw refuse.unavailable();
-    if (recipient.limited)
-      throw new SetupRefusal(429, {
-        error: "Too many password emails; try again later",
-        code: "rate_limited",
-      });
+    for (const budget of [
+      { key: "account:" + caller.accountId, action: "auth:password-setup" },
+      { key: "global", action: "auth:password-setup:global" },
+    ]) {
+      const result = await checkRateLimit({ ...budget, degradedMode: "block" });
+      if (result.degraded) throw refuse.unavailable();
+      if (result.limited) throw refuse.emails();
+    }
     const callback = new URL(buildAuthCallbackUrl(request, "/reset-password"));
     callback.searchParams.set("backend", "foundation");
     callback.searchParams.set("recovery", "1");
@@ -164,10 +165,17 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
         writes.push(...items);
       },
     });
+    // A sent email counts towards the address's forgot-password budget too
+    // (its outcome no longer matters here).
+    await checkRateLimit({
+      key: own.data,
+      action: "auth:forgot-password-email",
+      degradedMode: "block",
+    });
     const response = await context.respond(reply(200, { ok: true }));
-    // Only the link's sign-in verifier (the callback needs it); the member's
-    // own session cookies are left as they are.
-    for (const { name, value, options } of foundationVerificationCookies(writes))
+    // Only the sign-in verifier cookies (the link's slot, and removals of
+    // slots the SDK evicted); the member's session cookies are left alone.
+    for (const { name, value, options } of foundationVerifierCookieWrites(writes))
       response.cookies.set(name, value, options);
     return response;
   } catch (error) {
@@ -189,7 +197,7 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
     } else if (error instanceof FoundationPasswordSetupEmailError) {
       if (error.status === 429) {
         status = 429;
-        body = { error: "Too many password emails; try again later", code: "rate_limited" };
+        body = { ...refuse.emails().body };
       } else log.warn("Password setup email unavailable");
     } else log.error("Foundation password setup unavailable");
     const response = reply(status, body);

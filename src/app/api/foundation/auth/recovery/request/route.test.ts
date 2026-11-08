@@ -93,8 +93,60 @@ it.each(["dev-turnstile-bypass", "turnstile-unavailable", ""])(
       (await POST(request({ email: "member@example.invalid", turnstileToken: token }))).status
     ).toBe(400);
     expect(fetcher).not.toHaveBeenCalled();
+    // Refused before the address's budget is even looked at.
+    expect(vi.mocked(checkRateLimit)).toHaveBeenCalledTimes(1);
   }
 );
+it.each([
+  ["no token", { email: "victim@example.invalid" }],
+  ["an extra field", { email: "victim@example.invalid", turnstileToken: "x", extra: 1 }],
+  ["a malformed address", { email: "not-an-address", turnstileToken: "x" }],
+])("spends no address budget on a request with %s", async (_label, body) => {
+  // A body with only an email is password setup, which needs a session and
+  // the server key (absent here).
+  const response = await POST(request(body));
+  expect([400, 503]).toContain(response.status);
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(
+    vi
+      .mocked(checkRateLimit)
+      .mock.calls.some(([options]) => options.action === "auth:forgot-password-email")
+  ).toBe(false);
+});
+it("checks the address budget without charging it, and charges it only after Auth accepts", async () => {
+  const response = await POST(request());
+  expect(response.status).toBe(200);
+  const calls = vi.mocked(checkRateLimit).mock.calls.map(([options]) => options);
+  expect(calls).toEqual([
+    { key: "recovery-ip", action: "auth:forgot-password", degradedMode: "block" },
+    {
+      key: "member@example.invalid",
+      action: "auth:forgot-password-email",
+      degradedMode: "block",
+      readOnly: true,
+    },
+    { key: "member@example.invalid", action: "auth:forgot-password-email", degradedMode: "block" },
+  ]);
+  const charged = vi.mocked(checkRateLimit).mock.invocationCallOrder[2];
+  expect(fetcher.mock.invocationCallOrder[0]).toBeLessThan(charged);
+});
+it.each([
+  ["a refused CAPTCHA", 400, { error_code: "captcha_failed" }, 400],
+  ["an Auth limit", 429, { error_code: "over_email_send_rate_limit" }, 429],
+  ["an Auth failure", 500, { error_code: "unexpected_failure" }, 503],
+  ["a hidden address refusal", 422, { error_code: "email_address_invalid" }, 200],
+])("does not charge the address budget after %s", async (_label, status, body, answer) => {
+  fetcher.mockResolvedValue(Response.json(body, { status }));
+  expect((await POST(request())).status).toBe(answer);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(
+    vi
+      .mocked(checkRateLimit)
+      .mock.calls.filter(
+        ([options]) => options.action === "auth:forgot-password-email" && !options.readOnly
+      )
+  ).toEqual([]);
+});
 it("fails closed when shared protection is degraded", async () => {
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: true, degraded: true });
   expect((await POST(request())).status).toBe(503);
@@ -104,8 +156,15 @@ it("uses a generic success for a recipient limit without sending another message
   vi.mocked(checkRateLimit)
     .mockResolvedValueOnce({ limited: false })
     .mockResolvedValueOnce({ limited: true });
-  expect((await POST(request())).status).toBe(200);
+  const response = await POST(request());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    ok: true,
+    message: "If this address has an account, check your inbox for the next step.",
+  });
   expect(fetcher).not.toHaveBeenCalled();
+  expect(vi.mocked(checkRateLimit).mock.calls[1][0]).toMatchObject({ readOnly: true });
+  expect(vi.mocked(checkRateLimit)).toHaveBeenCalledTimes(2);
 });
 it("does not expose an address-specific provider refusal or discard its random verifier state", async () => {
   fetcher.mockResolvedValue(

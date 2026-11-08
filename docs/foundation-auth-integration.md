@@ -163,24 +163,32 @@ completion.
 
 The profile page's "Set Password" (shown to members who signed up with Google)
 posts only the member's email to the same recovery URL, without a CAPTCHA token.
-A body of exactly `{ "email" }` is handled as password setup: same-origin proof,
-the shared network and per-address recovery limits, a GoTrue-verified session
-that was not opened by a reset link, a sign-in within the last hour (the
-session's `amr` claim; a second factor or refresh does not count), a live
-account (staff need their current authenticator step), a confirmed address equal
-to the page's, and no password yet. "No password" is read from GoTrue's
-identities and app metadata, never from user metadata, and from the session's
-own sign-in: an `email` or `phone` identity, a password sign-in, or anything
-unreadable is refused with "Use Change password instead". GoTrue does not report
-a password a Google member added later (it adds no email identity by default);
-for such a member signed in with Google the request only emails a reset link to
-their own address, as the forgot-password page would.
+A body of exactly `{ "email" }` is handled as password setup (the
+forgot-password page always sends a token field): the secret key binding,
+same-origin proof, the shared network limit, a GoTrue-verified session that was
+not opened by a reset link, a sign-in within the last hour (the session's `amr`
+claim; a second factor or refresh does not count), a live account (staff need an
+authenticator step within 15 minutes), a confirmed address equal to the page's,
+no password yet, and its own budgets: per account (3 an hour, 5 a day) and
+platform-wide. "No password" is read from GoTrue's identities and app metadata,
+never from user metadata, and from the session's own sign-in: an `email` or
+`phone` identity, a password sign-in, or anything unreadable is refused with
+"Use Change password instead". GoTrue does not report a password a Google member
+added later (it adds no email identity by default); for such a member signed in
+with Google the request only emails a reset link to their own address, as the
+forgot-password page would.
 
 The server then asks Auth, with the project's secret key, to email the usual
 reset link to the verified address; Auth does not ask for a CAPTCHA token on
-that server request. The link opens the reset page, which sets the password with
-its existing checks (binding, breach check) and signs every session out. Without
-the secret key binding the request stays unavailable.
+that server request. A sent email also counts towards the address's
+forgot-password budget, which never refuses password setup. The link opens the
+reset page, which sets the password with its existing checks (binding, breach
+check) and signs every session out.
+
+The forgot-password request checks its whole body before looking at the
+address's budget, and charges that budget only after Auth (which verifies the
+CAPTCHA) accepts the request, so unsolved requests cannot use it up. Its reply
+stays the same for every address.
 
 ## Current-password changes
 

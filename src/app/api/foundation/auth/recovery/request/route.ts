@@ -1,17 +1,15 @@
 import type { NextRequest } from "next/server";
 import {
+  parseFoundationRecoveryInput,
   requestFoundationPasswordRecovery,
   FoundationRecoveryRequestError,
 } from "@/lib/foundation/password-recovery";
-import { foundationAuthEmail } from "@/lib/foundation/auth-input";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { handleFoundationAuthAttempt } from "../../_lib/attempt-route";
-import {
-  handleFoundationPasswordSetup,
-  isFoundationPasswordSetupInput,
-} from "../../_lib/password-setup";
+import { isFoundationPasswordSetupInput } from "@/lib/foundation/password-setup-input";
+import { handleFoundationPasswordSetup } from "../../_lib/password-setup";
 
 export async function POST(request: NextRequest) {
   // The profile page's "Set Password" (signed in, no CAPTCHA token) has its
@@ -26,21 +24,22 @@ export async function POST(request: NextRequest) {
       process.env.FOUNDATION_AUTH_CALLBACK_ENABLED === "true",
     unavailableMessage: "Password recovery is temporarily unavailable",
     async operation(connection, input, cookies) {
-      const email = foundationAuthEmail.safeParse(
-        input && typeof input === "object" && "email" in input ? input.email : null
-      );
-      if (!email.success) throw new FoundationRecoveryRequestError(400);
-      const rate = await checkRateLimit({
-        key: email.data,
-        action: "auth:forgot-password-email",
-        degradedMode: "block",
-      });
+      // The whole request is checked before the address's budget is looked
+      // at, and the budget is only charged once Auth (which verifies the
+      // CAPTCHA) accepts it, so requests without a solved CAPTCHA cannot use
+      // up an address's emails (the profile page's password setup shares it).
+      const { email } = parseFoundationRecoveryInput(input);
+      const recipient = { key: email, action: "auth:forgot-password-email" } as const;
+      const rate = await checkRateLimit({ ...recipient, degradedMode: "block", readOnly: true });
       if (rate.degraded) throw new FoundationRecoveryRequestError(503);
       if (!rate.limited) {
         const callback = new URL(buildAuthCallbackUrl(request, "/reset-password"));
         callback.searchParams.set("backend", "foundation");
         callback.searchParams.set("recovery", "1");
-        await requestFoundationPasswordRecovery(connection, input, callback.toString(), cookies);
+        if (
+          await requestFoundationPasswordRecovery(connection, input, callback.toString(), cookies)
+        )
+          await checkRateLimit({ ...recipient, degradedMode: "block" });
       }
       return {
         ok: true,

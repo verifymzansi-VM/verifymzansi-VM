@@ -9,10 +9,13 @@ const SIGN_IN_METHODS = new Set(["oauth", "password", "otp", "magiclink"]);
  * resetter in password-update.ts). */
 export const RECENT_SIGN_IN_SECONDS = 3600;
 
-/** Call only after GoTrue has verified this exact JWT. The time (seconds) of
- * the session's latest sign-in, or null. GoTrue stamps each method when it is
- * used in the session; refreshing the session does not move the stamp. */
-export function foundationLatestSignIn(amr: unknown, now = Math.floor(Date.now() / 1000)) {
+/** How recent a staff member's authenticator step must be for adding a
+ * password: the 15 minutes the database requires for sensitive staff
+ * capabilities (requires_recent_mfa). */
+export const RECENT_AUTHENTICATOR_SECONDS = 900;
+
+/** The latest valid stamp among `methods` in a verified `amr` claim. */
+function latestStamp(amr: unknown, methods: ReadonlySet<string>, now: number) {
   if (!Array.isArray(amr)) return null;
   let latest: number | null = null;
   for (const raw of amr as unknown[]) {
@@ -20,7 +23,7 @@ export function foundationLatestSignIn(amr: unknown, now = Math.floor(Date.now()
     const { method, timestamp } = raw as Record<string, unknown>;
     if (
       typeof method === "string" &&
-      SIGN_IN_METHODS.has(method) &&
+      methods.has(method) &&
       typeof timestamp === "number" &&
       Number.isSafeInteger(timestamp) &&
       timestamp > 0 &&
@@ -31,12 +34,38 @@ export function foundationLatestSignIn(amr: unknown, now = Math.floor(Date.now()
   return latest;
 }
 
+/** Call only after GoTrue has verified this exact JWT. The time (seconds) of
+ * the session's latest sign-in, or null. GoTrue stamps each method when it is
+ * used in the session; refreshing the session does not move the stamp. */
+export function foundationLatestSignIn(amr: unknown, now = Math.floor(Date.now() / 1000)) {
+  return latestStamp(amr, SIGN_IN_METHODS, now);
+}
+
+const AUTHENTICATOR_METHODS = new Set(["totp"]);
+
+/** Call only after GoTrue has verified this exact JWT. The time (seconds) of
+ * the session's latest authenticator-app step, or null. */
+export function foundationLatestAuthenticatorStep(
+  amr: unknown,
+  now = Math.floor(Date.now() / 1000)
+) {
+  return latestStamp(amr, AUTHENTICATOR_METHODS, now);
+}
+
 /** Whether that sign-in is recent enough (see RECENT_SIGN_IN_SECONDS). */
 export function foundationSignedInRecently(
   signedInAt: number | null,
   now = Math.floor(Date.now() / 1000)
 ) {
   return signedInAt !== null && now - signedInAt <= RECENT_SIGN_IN_SECONDS;
+}
+
+/** Whether that authenticator step is recent enough (RECENT_AUTHENTICATOR_SECONDS). */
+export function foundationAuthenticatorStepRecent(
+  stepAt: number | null,
+  now = Math.floor(Date.now() / 1000)
+) {
+  return stepAt !== null && now - stepAt <= RECENT_AUTHENTICATOR_SECONDS;
 }
 
 /** Call only after GoTrue has verified this exact JWT. Whether this session

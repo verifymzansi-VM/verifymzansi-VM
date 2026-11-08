@@ -18,15 +18,26 @@ export class FoundationRecoveryRequestError extends Error {
     super("Password recovery could not be requested");
   }
 }
+
+/** The forgot-password request exactly as accepted: an address and a CAPTCHA
+ * token that is not a placeholder. Check it before spending any budget. */
+export function parseFoundationRecoveryInput(input: unknown) {
+  const parsed = inputSchema.safeParse(input);
+  if (!parsed.success) throw new FoundationRecoveryRequestError(400);
+  return parsed.data;
+}
+
+/** Returns whether Auth accepted the request (it then sends the link if the
+ * address has an account). An address-specific refusal is hidden: it returns
+ * false and the caller still answers as for any address. */
 export async function requestFoundationPasswordRecovery(
   connection: unknown,
   input: unknown,
   redirectTo: string,
   cookies: FoundationAuthCookies,
   fetcher: typeof fetch = createTimeoutFetch()
-) {
-  const parsed = inputSchema.safeParse(input);
-  if (!parsed.success) throw new FoundationRecoveryRequestError(400);
+): Promise<boolean> {
+  const data = parseFoundationRecoveryInput(input);
   const verification: Parameters<FoundationAuthCookies["setAll"]>[0] = [];
   try {
     const attempt = createFoundationAuthAttempt(
@@ -40,9 +51,9 @@ export async function requestFoundationPasswordRecovery(
       },
       fetcher
     );
-    const { error } = await attempt.auth.resetPasswordForEmail(parsed.data.email, {
+    const { error } = await attempt.auth.resetPasswordForEmail(data.email, {
       redirectTo,
-      captchaToken: parsed.data.turnstileToken,
+      captchaToken: data.turnstileToken,
     });
     if (attempt.cookieAccessFailed()) throw new FoundationRecoveryRequestError(503);
     if (error) {
@@ -52,11 +63,18 @@ export async function requestFoundationPasswordRecovery(
         throw new FoundationRecoveryRequestError(503);
       // A refusal must not expose address existence by deleting its random slot.
       await cookies.setAll(verification, {});
+      return false;
     }
+    return true;
   } catch (error) {
     if (error instanceof FoundationRecoveryRequestError) throw error;
     throw new FoundationRecoveryRequestError(503);
   }
+}
+
+/** Whether the server's secret key binding (needed for password setup) is set. */
+export function hasFoundationPasswordSetupKey(environment: NodeJS.ProcessEnv = process.env) {
+  return secretKey.safeParse(environment.FOUNDATION_SUPABASE_SECRET_KEY).success;
 }
 
 export class FoundationPasswordSetupEmailError extends Error {

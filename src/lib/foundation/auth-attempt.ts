@@ -16,6 +16,15 @@ export function foundationVerificationCookies(
   );
 }
 
+/** Every write to a sign-in verifier cookie (a flow's slot, the slot index,
+ * the fixed verifier and their chunks), deletions included, so slots the SDK
+ * evicts are removed in the browser too. Session cookie names never match. */
+export function foundationVerifierCookieWrites(
+  items: Parameters<FoundationAuthCookies["setAll"]>[0]
+) {
+  return items.filter((item) => /-code-verifier(?:\.\d+)?$/.test(item.name));
+}
+
 /** A fresh Auth operation. Existing sessions cannot start INITIAL_SESSION
  * refreshes here; their names remain available for stale cookie chunk cleanup.
  * This is distinct from the verified-session bridge used by protected commands.

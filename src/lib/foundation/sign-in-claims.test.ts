@@ -4,6 +4,9 @@ import {
   foundationLatestSignIn,
   foundationSignedInRecently,
   foundationSignedInWithPassword,
+  foundationLatestAuthenticatorStep,
+  foundationAuthenticatorStepRecent,
+  RECENT_AUTHENTICATOR_SECONDS,
   RECENT_SIGN_IN_SECONDS,
 } from "./sign-in-claims";
 
@@ -69,6 +72,35 @@ describe("foundationSignedInRecently", () => {
     [null, false],
   ])("signed in at %s: %s", (signedInAt, recent) => {
     expect(foundationSignedInRecently(signedInAt, now)).toBe(recent);
+  });
+});
+
+describe("foundationLatestAuthenticatorStep", () => {
+  it("takes only authenticator-app steps", () => {
+    expect(
+      foundationLatestAuthenticatorStep(
+        [
+          { method: "oauth", timestamp: now - 5 },
+          { method: "totp", timestamp: now - 300 },
+          { method: "mfa/phone", timestamp: now - 1 },
+        ],
+        now
+      )
+    ).toBe(now - 300);
+    expect(
+      foundationLatestAuthenticatorStep([{ method: "oauth", timestamp: now }], now)
+    ).toBeNull();
+    expect(
+      foundationLatestAuthenticatorStep([{ method: "totp", timestamp: now + 31 }], now)
+    ).toBeNull();
+    expect(foundationLatestAuthenticatorStep(undefined, now)).toBeNull();
+  });
+
+  it("uses the database's 15 minutes for sensitive staff steps", () => {
+    expect(RECENT_AUTHENTICATOR_SECONDS).toBe(900);
+    expect(foundationAuthenticatorStepRecent(now - 900, now)).toBe(true);
+    expect(foundationAuthenticatorStepRecent(now - 901, now)).toBe(false);
+    expect(foundationAuthenticatorStepRecent(null, now)).toBe(false);
   });
 });
 

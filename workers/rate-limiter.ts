@@ -127,6 +127,16 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 3, ttl: 600 }, // 3 per 10 minutes per email
     { limit: 5, ttl: 3600 }, // 5 per hour per email
   ],
+  // Password setup emails for signed-in members without a password (no
+  // CAPTCHA): per account, plus a platform-wide budget like the logins above.
+  "auth:password-setup": [
+    { limit: 3, ttl: 3600 }, // 3 per hour per account
+    { limit: 5, ttl: 86400 }, // 5 per day per account
+  ],
+  "auth:password-setup:global": [
+    { limit: 30, ttl: 60 },
+    { limit: 300, ttl: 3600 },
+  ],
   "auth:resend-confirmation": [
     { limit: 5, ttl: 60 }, // 5 per minute per IP
     { limit: 15, ttl: 3600 }, // 15 per hour per IP

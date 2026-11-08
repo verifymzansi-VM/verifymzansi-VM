@@ -5,7 +5,7 @@ import { POST } from "@/app/api/foundation/auth/recovery/request/route";
 import { POST as compatibilityPOST } from "@/app/api/auth/forgot-password/route";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { FoundationAccountContextError } from "@/lib/foundation/account-context";
-import { isFoundationPasswordSetupInput } from "./password-setup";
+import { isFoundationPasswordSetupInput } from "@/lib/foundation/password-setup-input";
 
 const { authenticate, context, readAccount, limit, legacy } = vi.hoisted(() => ({
   authenticate: vi.fn(),
@@ -60,6 +60,7 @@ const caller = (overrides: Record<string, unknown> = {}) => ({
   openedByRecovery: false,
   signedInAt: now() - 60,
   signedInWithPassword: false,
+  authenticatorAt: null,
   ...overrides,
 });
 
@@ -167,19 +168,76 @@ describe("password setup for a member without a password", () => {
     const cookies = response.cookies.getAll();
     expect(cookies.some((cookie) => /-code-verifier/.test(cookie.name) && cookie.value)).toBe(true);
     expect(cookies.every((cookie) => /-code-verifier/.test(cookie.name))).toBe(true);
-    // Both shared budgets: the network and the verified address.
-    expect(limit).toHaveBeenNthCalledWith(1, {
-      key: "synthetic-ip",
-      action: "auth:forgot-password",
-      degradedMode: "block",
-    });
-    expect(limit).toHaveBeenNthCalledWith(2, {
-      key: "member@example.invalid",
-      action: "auth:forgot-password-email",
-      degradedMode: "block",
-    });
+    // Budgets in order: the network, the account, the platform; the address's
+    // forgot-password budget is only charged after the email was requested.
+    expect(limit.mock.calls.map(([options]) => options)).toEqual([
+      { key: "synthetic-ip", action: "auth:forgot-password", degradedMode: "block" },
+      { key: "account:" + id, action: "auth:password-setup", degradedMode: "block" },
+      { key: "global", action: "auth:password-setup:global", degradedMode: "block" },
+      {
+        key: "member@example.invalid",
+        action: "auth:forgot-password-email",
+        degradedMode: "block",
+      },
+    ]);
+    expect(fetcher.mock.invocationCallOrder[0]).toBeLessThan(limit.mock.invocationCallOrder[3]);
     expect(readAccount).toHaveBeenCalledTimes(1);
     expect(legacy).not.toHaveBeenCalled();
+  });
+
+  it("is not blocked by a used-up forgot-password budget for the address", async () => {
+    // Others can spend that budget (with solved CAPTCHAs); it never refuses here.
+    limit.mockImplementation(async (options: { action: string }) =>
+      options.action === "auth:forgot-password-email" ? { limited: true } : { limited: false }
+    );
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not charge the address budget when the email could not be requested", async () => {
+    fetcher.mockResolvedValue(Response.json({ error_code: "unexpected_failure" }, { status: 500 }));
+    expect((await POST(request())).status).toBe(503);
+    expect(
+      limit.mock.calls.some(([options]) => options.action === "auth:forgot-password-email")
+    ).toBe(false);
+  });
+
+  it("publishes removals of verifier slots the SDK evicts, never session cookies", async () => {
+    const session = `sb-${host}-auth-token`;
+    const flows = ["a", "b", "c", "d", "e"].map((c) => c.repeat(32));
+    const index = "base64-" + Buffer.from(JSON.stringify(flows)).toString("base64url");
+    const slot = (flow: string) => `${session}-flow-${flow}-code-verifier`;
+    const full = new NextRequest("https://verifymzansi.com/api/auth/forgot-password", {
+      method: "POST",
+      headers: {
+        origin: "https://verifymzansi.com",
+        "content-type": "application/json",
+        cookie: [
+          `vm_csrf=${csrf}`,
+          `${session}=base64-synthetic-session`,
+          `${session}-flows-code-verifier=${index}`,
+          ...flows.map((flow) => `${slot(flow)}=base64-synthetic-verifier`),
+        ].join("; "),
+        "x-csrf-token": csrf,
+      },
+      body: JSON.stringify({ email: "member@example.invalid" }),
+    });
+    const response = await POST(full);
+    expect(response.status).toBe(200);
+    const written = response.cookies.getAll();
+    // The oldest pending slot is removed in the browser too.
+    expect(written.find((cookie) => cookie.name === slot(flows[0]))).toMatchObject({
+      value: "",
+      maxAge: 0,
+    });
+    // The new slot, the index and the fixed verifier are set.
+    expect(
+      written.filter((cookie) => cookie.value && /-code-verifier$/.test(cookie.name)).length
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      written.filter((cookie) => cookie.name === session || cookie.name.startsWith(`${session}.`))
+    ).toEqual([]);
   });
 
   it("leaves the member's session cookies alone", async () => {
@@ -379,38 +437,59 @@ describe("password setup for a member without a password", () => {
     expectNothingSent();
   });
 
-  it("asks staff without a fresh authenticator step to confirm it first", async () => {
-    readAccount.mockResolvedValue({ account_id: id, staff: { can_access: false } });
+  it.each([
+    ["staff whose session may not use staff tools", { can_access: false }, now() - 60],
+    ["staff without an authenticator step in this session", { can_access: true }, null],
+    ["staff whose authenticator step is over 15 minutes old", { can_access: true }, now() - 901],
+  ])("asks %s to confirm the authenticator first", async (_label, staff, authenticatorAt) => {
+    readAccount.mockResolvedValue({ account_id: id, staff });
+    authenticate.mockResolvedValue(caller({ authenticatorAt }));
     const response = await POST(request());
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe("mfa_required");
+    expect(limit.mock.calls.some(([options]) => options.action === "auth:password-setup")).toBe(
+      false
+    );
     expectNothingSent();
   });
 
+  it("lets staff with a fresh authenticator step ask", async () => {
+    readAccount.mockResolvedValue({ account_id: id, staff: { can_access: true } });
+    authenticate.mockResolvedValue(caller({ authenticatorAt: now() - 600 }));
+    expect((await POST(request())).status).toBe(200);
+  });
+
   it.each([
-    [{ limited: true }, 429],
-    [{ limited: true, degraded: true }, 503],
-  ])("tells the member about the address limit: %j", async (result, status) => {
-    limit.mockResolvedValueOnce({ limited: false }).mockResolvedValueOnce(result);
+    ["the account's", "auth:password-setup", { limited: true }, 429],
+    ["the account's", "auth:password-setup", { limited: true, degraded: true }, 503],
+    ["the platform's", "auth:password-setup:global", { limited: true }, 429],
+    ["the platform's", "auth:password-setup:global", { limited: false, degraded: true }, 503],
+  ])("refuses at %s budget (%s): %j", async (_label, action, result, status) => {
+    limit.mockImplementation(async (options: { action: string }) =>
+      options.action === action ? result : { limited: false }
+    );
     const response = await POST(request());
     expect(response.status).toBe(status);
-    if (status === 429)
+    if (status === 429) {
       expect(await response.json()).toEqual({
         error: "Too many password emails; try again later",
         code: "rate_limited",
       });
+      expect(response.headers.get("retry-after")).toBe("60");
+    }
     expectNothingSent();
   });
 
-  it("stays closed without the server key", async () => {
-    vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "");
-    expect((await POST(request())).status).toBe(503);
-    expectNothingSent();
-  });
-
-  it("refuses a non-secret server key rather than sending the publishable one", async () => {
-    vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "sb_publishable_synthetic");
-    expect((await POST(request())).status).toBe(503);
+  it.each([
+    ["missing", ""],
+    ["not a secret key", "sb_publishable_synthetic"],
+  ])("stays closed, before any budget, while the server key is %s", async (_label, value) => {
+    vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", value);
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Password setup is temporarily unavailable" });
+    expect(context).not.toHaveBeenCalled();
+    expect(limit).not.toHaveBeenCalled();
     expectNothingSent();
   });
 
