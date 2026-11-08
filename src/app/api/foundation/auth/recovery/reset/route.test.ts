@@ -2,7 +2,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "./route";
-import { FoundationPasswordUpdateError } from "@/lib/foundation/password-update";
+import {
+  FoundationPasswordResetUncertainError,
+  FoundationPasswordUpdateError,
+} from "@/lib/foundation/password-update";
 import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { PWNED_PASSWORD_ERROR } from "@/lib/security/pwned-passwords";
 import { sealRecoveryBinding } from "@/lib/foundation/recovery-binding";
@@ -119,7 +122,8 @@ function check(options?: Parameters<typeof request>[3]) {
 }
 it("returns a private binding only for signed, live recovery", async () => {
   const response = await GET(check());
-  expect(await response.json()).toEqual({ valid: true, recoverySessionId: sid, accountId: id });
+  // Only the answer: no session or account id reaches the page.
+  expect(await response.json()).toEqual({ valid: true });
   expect(reset).not.toHaveBeenCalled();
 });
 it("refuses an ordinary session even with client recovery markers", async () => {
@@ -224,6 +228,11 @@ it.each([
     `${APP}/reset-password?link=AAAAAAAAAAAAAAAAAAAAAA&link=BBBBBBBBBBBBBBBBBBBBBB`,
   ],
   ["a malformed marker", `${APP}/reset-password?link=x`],
+  ["no marker", `${APP}/reset-password`],
+  ["another page", `${APP}/login?link=AAAAAAAAAAAAAAAAAAAAAA`],
+  ["another site", "https://other.example/reset-password?link=AAAAAAAAAAAAAAAAAAAAAA"],
+  ["an unreadable address", "not a url"],
+  ["an address that is too long", `${APP}/reset-password?pad=${"x".repeat(2100)}`],
 ])("refuses a reset page with %s", async (_label, referer) => {
   const response = await POST(request(payload, APP, true, { referer }));
   expect(response.status).toBe(401);
@@ -232,11 +241,64 @@ it.each([
 });
 it.each([
   ["no page address", null],
-  ["a stripped page address", `${APP}/`],
-  ["the reset page without a marker", `${APP}/reset-password`],
+  ["a page address trimmed to the bare origin", `${APP}/`],
 ])("falls back to the session binding when the browser sends %s", async (_label, referer) => {
   expect((await POST(request(payload, APP, true, { referer }))).status).toBe(200);
   expect(reset).toHaveBeenCalledTimes(1);
+});
+it("accepts the reset page with a trailing slash and on the request's own host", async () => {
+  expect(
+    (
+      await POST(
+        request(payload, APP, true, { referer: `${APP}/reset-password/?link=${link.marker}` })
+      )
+    ).status
+  ).toBe(200);
+  const www = "https://www.verifymzansi.com";
+  const post = request(payload, www, true, {
+    referer: `${www}/reset-password?link=${link.marker}`,
+  });
+  const response = await POST(
+    new NextRequest(`${www}/api/foundation/auth/recovery/reset`, {
+      method: "POST",
+      headers: post.headers,
+      body: JSON.stringify(payload),
+    })
+  );
+  expect(response.status).toBe(200);
+  expect(reset).toHaveBeenCalledTimes(2);
+});
+it.each([
+  [true, "We could not confirm your new password. Try signing in with it, or request a new link."],
+  [false, "We could not confirm your new password. Please try again."],
+] as const)(
+  "signs out and tells the member when a reset's outcome is unknown (signed out: %s)",
+  async (signedOut, message) => {
+    reset.mockRejectedValue(new FoundationPasswordResetUncertainError(signedOut));
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: message, code: "recovery_unconfirmed" });
+    // The owner is told about a change that may have happened.
+    expect(notice).toHaveBeenCalledTimes(1);
+    if (signedOut) {
+      // The session is gone, so the link is spent.
+      expect(response.cookies.get(BINDING)?.maxAge).toBe(0);
+      expect(response.cookies.get("sb-gntzjtuncsyefujajmjy-auth-token.0")?.maxAge).toBe(0);
+    } else {
+      // The same form can be sent again with the same link.
+      expect(response.cookies.getAll()).toHaveLength(0);
+    }
+    expect(reset).toHaveBeenCalledTimes(1);
+  }
+);
+it("completes when a retry finds the new password already in force", async () => {
+  reset.mockResolvedValue({ signOutComplete: true, alreadyCurrent: true });
+  const response = await POST(request());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ success: true, signOutComplete: true });
+  expect(response.cookies.get(BINDING)?.maxAge).toBe(0);
+  expect(response.cookies.get("sb-gntzjtuncsyefujajmjy-auth-token.0")?.maxAge).toBe(0);
+  expect(notice).toHaveBeenCalledTimes(1);
 });
 
 it("one opened link completes at most one reset", async () => {

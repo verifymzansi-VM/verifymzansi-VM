@@ -1,4 +1,5 @@
 /** @vitest-environment node */
+import { createHmac, hkdfSync } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   readRecoveryBinding,
@@ -17,7 +18,8 @@ const session = "00000000-0000-4000-8000-000000000002";
 const now = 1_800_000_000;
 const app = "https://verifymzansi.com";
 
-beforeEach(() => vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4)));
+const SECRET = "0123456789abcdef".repeat(4);
+beforeEach(() => vi.stubEnv("HMAC_SECRET", SECRET));
 afterEach(() => vi.unstubAllEnvs());
 
 const seal = (issuedAt = now, at = now) =>
@@ -75,6 +77,29 @@ it("refuses a binding whose payload or signature was changed", () => {
     expect(readRecoveryBinding(candidate, now)).toBeNull();
 });
 
+it("signs with a key derived by HKDF-SHA256 for this purpose only, never the raw secret", () => {
+  const { value } = seal();
+  const [payload, mac] = value.split(".");
+  const derived = Buffer.from(
+    hkdfSync(
+      "sha256",
+      Buffer.from(SECRET, "hex"),
+      Buffer.alloc(0),
+      "foundation-recovery-binding-v1",
+      32
+    )
+  );
+  expect(mac).toBe(createHmac("sha256", derived).update(payload).digest("base64url"));
+  expect(mac).not.toBe(
+    createHmac("sha256", Buffer.from(SECRET, "hex")).update(payload).digest("base64url")
+  );
+  // A key derived for another purpose does not verify it.
+  const other = Buffer.from(
+    hkdfSync("sha256", Buffer.from(SECRET, "hex"), Buffer.alloc(0), "another-purpose", 32)
+  );
+  expect(mac).not.toBe(createHmac("sha256", other).update(payload).digest("base64url"));
+});
+
 it("refuses a binding signed for another purpose or with another key", () => {
   const { value } = seal();
   vi.stubEnv("HMAC_SECRET", "fedcba9876543210".repeat(4));
@@ -106,22 +131,40 @@ it("uses a host-only, script-hidden, same-site cookie", () => {
   expect(recoveryBindingCookieOptions("http://127.0.0.1:55450", 0).secure).toBe(false);
 });
 
+const M = "AAAAAAAAAAAAAAAAAAAAAA";
+const preview = "https://preview.verifymzansi.workers.dev";
 it.each([
-  [`${app}/reset-password?link=AAAAAAAAAAAAAAAAAAAAAA`, "AAAAAAAAAAAAAAAAAAAAAA"],
-  [
-    `${app}/reset-password?vmzAuthCacheReset=1&link=AAAAAAAAAAAAAAAAAAAAAA`,
-    "AAAAAAAAAAAAAAAAAAAAAA",
-  ],
-  [`${app}/reset-password?link=AAAAAAAAAAAAAAAAAAAAAA&link=BBBBBBBBBBBBBBBBBBBBBB`, null],
+  // The reset page an opened link leads to.
+  [`${app}/reset-password?link=${M}`, M],
+  [`${app}/reset-password/?link=${M}`, M],
+  [`${app}/reset-password?vmzAuthCacheReset=1&link=${M}`, M],
+  // The request's own host (www/apex, preview) counts as the site too.
+  [`${preview}/reset-password?link=${M}`, M],
+  // No page address, or one the browser trimmed to the bare origin.
+  [null, undefined],
+  ["", undefined],
+  [`${app}/`, undefined],
+  [`${preview}/`, undefined],
+  // Anything no opening produced is refused.
+  [`${app}/reset-password?link=${M}&link=BBBBBBBBBBBBBBBBBBBBBB`, null],
   [`${app}/reset-password?link=short`, null],
   [`${app}/reset-password?link=`, null],
-  [`${app}/reset-password`, undefined],
-  [`${app}/login?link=AAAAAAAAAAAAAAAAAAAAAA`, undefined],
-  ["https://other.example/reset-password?link=AAAAAAAAAAAAAAAAAAAAAA", undefined],
-  ["not a url", undefined],
-  [null, undefined],
+  [`${app}/reset-password`, null],
+  [`${app}/reset-password//?link=${M}`, null],
+  [`${app}/?link=${M}`, null],
+  [`${app}/login?link=${M}`, null],
+  [`https://other.example/reset-password?link=${M}`, null],
+  [`https://other.example/`, null],
+  [`http://verifymzansi.com/reset-password?link=${M}`, null],
+  ["not a url", null],
+  [`${app}/reset-password?link=${M}&pad=${"x".repeat(2048)}`, null],
 ])("reads the reset page's link marker from %j", (referer, expected) => {
-  expect(recoveryPageMarker(referer, app)).toBe(expected);
+  expect(recoveryPageMarker(referer, [app, preview])).toBe(expected);
+});
+
+it("ignores an origin list entry that is not a URL", () => {
+  expect(recoveryPageMarker(`${app}/reset-password?link=${M}`, ["not a url", app])).toBe(M);
+  expect(recoveryPageMarker(`${app}/reset-password?link=${M}`, ["not a url"])).toBeNull();
 });
 
 it("matches only the page opened by the latest link, or a page that sent no marker", () => {

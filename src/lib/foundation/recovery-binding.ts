@@ -11,7 +11,8 @@ import { z } from "zod";
  * the two password fields).
  *
  * - Cookie: HttpOnly, SameSite=Strict, Path=/, `__Host-` prefixed and Secure on
- *   https, signed with a purpose-bound HMAC, at most 30 minutes and never past
+ *   https, signed (HMAC-SHA256) with a key derived for this purpose only
+ *   (HKDF from HMAC_SECRET), at most 30 minutes and never past
  *   the hour in which GoTrue accepts the recovery method. Cleared after a
  *   successful reset, so one opened link completes at most one reset.
  * - Bound to the GoTrue-verified account and session id: another account,
@@ -22,7 +23,8 @@ import { z } from "zod";
  *   jar, so only the page address tells an older reset page from a newer one:
  *   the browser sends it with the page's own requests (Referer, under the
  *   site's strict-origin-when-cross-origin policy). A page whose marker is not
- *   the latest opening's is refused ("your recovery session changed").
+ *   the latest opening's is refused ("your recovery session changed"), and so
+ *   is any page address that no opening produced.
  *
  * The marker is not a secret and grants nothing on its own; the signed cookie
  * and the recovery session cookies are both required.
@@ -35,7 +37,8 @@ const LIFETIME_SECONDS = 30 * 60;
 /** The same window foundationRecoveryClaim and the password resetter accept. */
 const RECOVERY_WINDOW_SECONDS = 60 * 60;
 const MARKER = /^[A-Za-z0-9_-]{22}$/;
-const PURPOSE = "foundation-recovery-binding-v1\0";
+/** HKDF info: the binding key is derived for this purpose only. */
+const KEY_INFO = "foundation-recovery-binding-v1";
 
 const binding = z.strictObject({
   v: z.literal(1),
@@ -55,11 +58,22 @@ export class RecoveryBindingUnavailable extends Error {
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
-function signature(payload: string): Buffer {
+/** HKDF-SHA256 (RFC 5869) with an empty salt and one 32-byte block: a key used
+ * for nothing else, derived from the shared HMAC_SECRET. Built on createHmac,
+ * which every runtime this site uses provides. */
+function bindingKey(): Buffer {
   const secret = process.env.HMAC_SECRET;
   if (!secret || !/^[0-9a-f]{64}$/i.test(secret) || new Set(secret.toLowerCase()).size < 8)
     throw new RecoveryBindingUnavailable();
-  return createHmac("sha256", Buffer.from(secret, "hex")).update(PURPOSE).update(payload).digest();
+  const prk = createHmac("sha256", Buffer.alloc(32)).update(Buffer.from(secret, "hex")).digest();
+  return createHmac("sha256", prk)
+    .update(KEY_INFO)
+    .update(Buffer.from([1]))
+    .digest();
+}
+
+function signature(payload: string): Buffer {
+  return createHmac("sha256", bindingKey()).update(payload).digest();
 }
 
 /** `__Host-` only on https: the prefix requires Secure, which plain-http local
@@ -132,29 +146,40 @@ export function readRecoveryBinding(
 
 /**
  * Which opening the requesting reset page belongs to, from the page address
- * the browser sent (Referer):
+ * the browser sent (Referer). `origins` are the site's own: the configured app
+ * origin and the request's (www/apex and preview hosts).
  * - a marker: the reset page opened by that link;
- * - null: a reset page address with a repeated or malformed marker, which no
- *   opening produced;
- * - undefined: no reset page address (no Referer, a stripped one, or the reset
- *   page opened without a marker), so tabs cannot be told apart and only the
- *   session binding applies.
+ * - undefined: no page address at all, or one the browser's privacy settings
+ *   trimmed to the bare origin. Tabs cannot be told apart, so only the
+ *   session binding applies;
+ * - null (refused): anything else, i.e. an address that is too long,
+ *   unreadable, from another origin or another page, or the reset page with a
+ *   missing, repeated or malformed marker. No opening produced such a page.
  */
 export function recoveryPageMarker(
   referer: string | null,
-  appOrigin: string
+  origins: readonly string[]
 ): string | null | undefined {
-  if (!referer || referer.length > 2048) return undefined;
+  if (referer === null || referer === "") return undefined;
+  if (referer.length > 2048) return null;
   let page: URL;
   try {
     page = new URL(referer);
   } catch {
-    return undefined;
+    return null;
   }
-  if (page.origin !== new URL(appOrigin).origin || page.pathname !== RECOVERY_PAGE_PATH)
-    return undefined;
+  const own = origins.flatMap((origin) => {
+    try {
+      return [new URL(origin).origin];
+    } catch {
+      return [];
+    }
+  });
+  if (!own.includes(page.origin)) return null;
+  if (page.pathname === "/" && !page.search && !page.hash) return undefined;
+  const path = page.pathname.endsWith("/") ? page.pathname.slice(0, -1) : page.pathname;
+  if (path !== RECOVERY_PAGE_PATH) return null;
   const markers = page.searchParams.getAll(RECOVERY_LINK_PARAM);
-  if (markers.length === 0) return undefined;
   return markers.length === 1 && MARKER.test(markers[0]) ? markers[0] : null;
 }
 
