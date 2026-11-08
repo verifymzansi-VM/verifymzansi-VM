@@ -7,6 +7,7 @@
  * Run: pnpm exec playwright test e2e/auth-qa-audit.spec.ts --project=chromium
  */
 import { test, expect, type Page } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { signInAccount } from "./support/test-account";
@@ -86,7 +87,7 @@ async function prepareTurnstile(page: Page) {
 const account = signInAccount();
 let registeredEmail = "";
 // A fresh strong password each run, so the breach check never refuses it.
-const registeredPassword = `Qa-${Math.random().toString(36).slice(2, 10)}-Pass9!`;
+const registeredPassword = `Qa-${randomBytes(6).toString("hex")}-Pass9!`;
 
 // ── Test config ──────────────────────────────────────────────
 test.use({ trace: "on" });
