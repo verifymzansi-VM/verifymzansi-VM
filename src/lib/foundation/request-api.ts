@@ -17,6 +17,7 @@ import {
   createFoundationPasswordUpdater,
   createFoundationPasswordResetter,
 } from "./password-update";
+import { createFoundationEmailChanger } from "./email-change";
 import { foundationRecoveryClaim, foundationRecoveryOpened } from "./recovery-claims";
 import {
   foundationLatestAuthenticatorStep,
@@ -111,6 +112,8 @@ export async function createFoundationRequestCaller(
     return {
       ...verified,
       updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher),
+      /** Starts an email change for this same session (email-change.ts). */
+      changeEmail: createFoundationEmailChanger(config, token, verified.accountId, fetcher),
       resetPassword: verified.recovery
         ? createFoundationPasswordResetter(
             config,

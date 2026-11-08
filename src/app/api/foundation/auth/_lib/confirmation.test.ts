@@ -8,6 +8,7 @@ import { POST as register } from "../register/route";
 import { POST as requestRecovery } from "../recovery/request/route";
 import { readRecoveryBinding } from "@/lib/foundation/recovery-binding";
 import { handleFoundationGoogleOAuth } from "./google-oauth";
+import { handleFoundationConfirmation } from "./confirmation";
 import { createClient as legacyClient } from "@/lib/supabase/server";
 import { createAdminClient as legacyAdmin } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
@@ -523,4 +524,49 @@ it("never binds recovery for sign-up confirmations or refused recovery links", a
   const replay = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
   expect(replay.headers.get("location")).toContain("recovery_failed");
   expect(replay.cookies.get(BINDING)).toBeUndefined();
+});
+
+it("an email change selector never turns a sign-up or recovery code into a session", async () => {
+  vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+  vi.stubEnv("HMAC_SECRET", "0123456789abcdef".repeat(4));
+  const jar = new Map([["vm_csrf", csrf]]);
+  const signup = await begin(jar);
+  const recovery = await beginRecovery(jar, 2);
+  fetcher.mockClear();
+  for (const url of [
+    link(signup, "&email_change=1"),
+    link(recovery, "&recovery=1&email_change=1"),
+    // The landing's own shape (no flow selector), with a real sign-up code.
+    `https://verifymzansi.com/auth/callback?backend=foundation&email_change=1&code=${signup.code}`,
+  ]) {
+    const response = await GET(new NextRequest(url, { headers: headers(jar) }));
+    expect(response.status).toBe(303);
+    // Only a page is chosen: no exchange, no session, no binding, no verifier change.
+    expect(response.cookies.getAll()).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+  expect(signup.used).toBe(false);
+  expect(recovery.used).toBe(false);
+  // Even handed straight to the session handler, such a link opens nothing.
+  for (const [url, purpose] of [
+    [link(signup, "&email_change=1"), "signup"],
+    [link(recovery, "&recovery=1&email_change=1"), "recovery"],
+  ] as const) {
+    const direct = await handleFoundationConfirmation(
+      new NextRequest(url, { headers: headers(jar) }),
+      purpose
+    );
+    expect(direct.headers.get("location")).toMatch(/auth_callback_failed|recovery_failed/);
+    expect(direct.cookies.getAll().filter((item) => item.value)).toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+  // The same links without the selector still work as before.
+  const confirmed = await GET(new NextRequest(link(signup), { headers: headers(jar) }));
+  expect(confirmed.headers.get("location")).toContain("/dashboard/complete-profile");
+  const opened = await GET(
+    new NextRequest(link(recovery, "&recovery=1"), { headers: headers(jar) })
+  );
+  expect(opened.cookies.get(BINDING)).toBeDefined();
+  expect(legacyClient).not.toHaveBeenCalled();
+  expect(legacyAdmin).not.toHaveBeenCalled();
 });

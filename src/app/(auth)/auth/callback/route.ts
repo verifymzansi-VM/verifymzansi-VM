@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { handleFoundationConfirmation } from "@/app/api/foundation/auth/_lib/confirmation";
+import {
+  EMAIL_CHANGE_LANDING_PARAM,
+  handleFoundationEmailChangeLanding,
+} from "@/app/api/foundation/auth/_lib/email-change-landing";
 import { recordAcquisitionFromCookie } from "@/lib/analytics/record-acquisition";
 import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -115,6 +119,9 @@ async function finalizePendingEmailChange(userId: string, confirmedEmail: string
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  // Email change links only pick a page; they never reach the session handlers.
+  if (searchParams.get("backend") === "foundation" && searchParams.has(EMAIL_CHANGE_LANDING_PARAM))
+    return handleFoundationEmailChangeLanding(request);
   if (searchParams.get("backend") === "foundation")
     return handleFoundationConfirmation(
       request,

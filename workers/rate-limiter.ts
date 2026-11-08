@@ -246,6 +246,20 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 3, ttl: 60 }, // 3 per minute
     { limit: 5, ttl: 3600 }, // 5 per hour
   ],
+  // Foundation email changes (each sends two emails, no CAPTCHA): per
+  // account, per new address and platform-wide, as for password setup.
+  "account:email-change:account": [
+    { limit: 3, ttl: 3600 }, // 3 per hour per account
+    { limit: 5, ttl: 86400 }, // 5 per day per account
+  ],
+  "account:email-change:recipient": [
+    { limit: 3, ttl: 3600 }, // 3 per hour per new address
+    { limit: 5, ttl: 86400 }, // 5 per day per new address
+  ],
+  "account:email-change:global": [
+    { limit: 30, ttl: 60 },
+    { limit: 300, ttl: 3600 },
+  ],
 
   // ── Billing / webhooks ───────────────────────────────
   "billing:checkout": [{ limit: 10, ttl: 60 }],

@@ -8,6 +8,7 @@ import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { foundationAuthPrivateResponse } from "./attempt-route";
+import { EMAIL_CHANGE_LANDING_PARAM } from "./email-change-landing";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { recordRestoredAcquisitionCookie } from "@/lib/foundation/partners";
@@ -51,7 +52,9 @@ export async function handleFoundationConfirmation(
       query.getAll("code").length !== 1 ||
       query.getAll("sb_flow_id").length !== 1 ||
       query.has("token_hash") ||
-      query.has("error")
+      query.has("error") ||
+      // Email change links are handled apart and never open a session.
+      query.has(EMAIL_CHANGE_LANDING_PARAM)
     )
       throw new Error();
     if (

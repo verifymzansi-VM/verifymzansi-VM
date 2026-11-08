@@ -255,6 +255,29 @@ describe("rate-limiter worker", () => {
     ).toBe(429);
   });
 
+  it.each(["account:email-change:account", "account:email-change:recipient"])(
+    "caps email changes at three an hour per key without blocking another key (%s)",
+    async (action) => {
+      const { env } = createWorkerEnv();
+      const send = (key: string) =>
+        rateLimiterWorker.fetch(createWorkerRequest(action, key), env as never);
+      for (let attempt = 0; attempt < 3; attempt++) expect((await send("key-1")).status).toBe(200);
+      expect((await send("key-1")).status).toBe(429);
+      expect((await send("key-2")).status).toBe(200);
+    }
+  );
+
+  it("keeps a platform-wide budget for email changes", async () => {
+    const { env } = createWorkerEnv();
+    const send = () =>
+      rateLimiterWorker.fetch(
+        createWorkerRequest("account:email-change:global", "global"),
+        env as never
+      );
+    for (let attempt = 0; attempt < 30; attempt++) expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(429);
+  });
+
   it("caps manual location at ten attempts per account without blocking another account", async () => {
     const { env } = createWorkerEnv();
     for (let attempt = 0; attempt < 10; attempt++) {

@@ -205,6 +205,37 @@ contain no credentials or provider diagnostics, and an unavailable notification
 does not repeat an already committed password update. Native Auth must be
 enabled before this route accepts commands.
 
+## Email change
+
+The profile page posts `{ newEmail }` to `/api/account/email/change`; in
+foundation mode that URL is handled by `_lib/email-change.ts` and never reaches
+the retired tables. It requires same-origin proof, the network limit, a
+GoTrue-verified session not opened by a reset link, a confirmed current address,
+a valid new address that differs from it, a sign-in within the last hour (the
+session's `amr` claim), a live account (staff need an authenticator step within
+15 minutes) and its budgets: per account (3 an hour, 5 a day), per new address
+(the same) and platform-wide. Budgets are charged before Auth is asked, whatever
+it answers.
+
+The server then calls Auth's `PUT /user` with the member's own token (never the
+secret key). With secure email change on, Auth emails a confirmation link to the
+current and to the new address and changes the address only once both are
+opened; members with an authenticator also need a two-step session there. The
+request names a PKCE challenge whose verifier is dropped at once, so the code on
+the last link can never become a session: opening a link confirms and signs
+nobody in. An address that belongs to another account gets the same answer as
+any accepted request.
+
+Links return to `/auth/callback?backend=foundation&email_change=1`, which only
+picks the page: the profile's Account tab after either link, the usual failure
+page for a used or expired link. It reads and writes no cookies, so recovery
+bindings and sign-in flows are unaffected, and other selectors on such a link
+make it a failed link. Other sessions stay signed in after the change; the
+password is unchanged and the change needs both mailboxes.
+
+Secure email change must stay on in hosted Auth: that setting is what makes Auth
+ask both addresses, for this page and for any other client of Auth.
+
 ## Phone completion
 
 The foundation account-completion screen uses `POST /api/foundation/phone/send`

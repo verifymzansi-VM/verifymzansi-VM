@@ -87,6 +87,30 @@ it("pins password updates to the verified MFA token even if cookie state changes
   expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
 });
 
+it("pins email changes to the verified token even if cookie state changes afterwards", async () => {
+  const candidate = token(1);
+  const jar = cookieAdapter(session(candidate));
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    expect(new URL(String(url)).pathname).toBe("/auth/v1/user");
+    expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${candidate}`);
+    return Response.json(user(1));
+  });
+  const caller = await createFoundationRequestCaller(config, jar, fetcher);
+  await jar.setAll(
+    [
+      {
+        name: "sb-abcdefghijklmnopqrst-auth-token",
+        value: "base64-" + Buffer.from(JSON.stringify(session(token(2), 2))).toString("base64url"),
+      },
+    ],
+    {}
+  );
+  await caller.changeEmail("next@example.invalid", "https://verifymzansi.com/auth/callback");
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
+  expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body)).email).toBe("next@example.invalid");
+});
+
 it("derives recovery only from the exact GoTrue-verified token, never cookie user metadata", async () => {
   const now = Math.floor(Date.now() / 1000);
   const sid = id(101);
