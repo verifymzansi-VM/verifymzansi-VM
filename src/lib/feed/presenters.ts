@@ -863,7 +863,7 @@ export function presentEventSlide(
       initials: initialsOf(linkedBusiness?.business_name || advertiser?.display_name, "E"),
       trustLevel: trustOf(advertiser),
       // The position is the advertiser's only when they own the linked business.
-      ...(linkedBusiness && linkedBusiness.owner_id === promotion.owner_id
+      ...(linkedBusiness?.owner_id && linkedBusiness.owner_id === promotion.owner_id
         ? {
             position: linkedBusiness.owner_position_title ?? null,
             positionSource: linkedBusiness.owner_verified_role ?? null,
