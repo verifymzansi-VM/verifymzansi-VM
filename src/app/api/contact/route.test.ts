@@ -63,6 +63,12 @@ vi.mock("@/lib/utils/csrf", () => ({
   enforceCsrfToken: vi.fn(() => null),
 }));
 
+// legacy-backend: this whole file covers the old ("source") backend path and runs in
+// the foundation vitest project with getDataBackend mocked. Delete it together with
+// the old backend (see src/test/legacy-backend-suites.ts). The foundation path is
+// tested in route.foundation.test.ts.
+vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "source" }));
+
 import { POST } from "./route";
 
 function createMockRequest(body: Record<string, unknown>) {

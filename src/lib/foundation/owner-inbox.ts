@@ -4,9 +4,10 @@ import type { FoundationServiceApi } from "./service-api";
 import { normalizeSaPhone } from "../utils/phone";
 
 // Same character rule as internal.plain_text_valid: no control (except newline
-// in multiline text), zero-width or bidirectional override characters.
+// in multiline text), zero-width or bidirectional override characters. NUL is
+// refused here too: PostgreSQL text cannot hold it, so SQL would fail instead.
 const UNSAFE: [number, number][] = [
-  [1, 9],
+  [0, 9],
   [11, 31],
   [127, 159],
   [173, 173],
