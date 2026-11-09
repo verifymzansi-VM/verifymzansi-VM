@@ -537,12 +537,16 @@ try {
       "select 1 from private.posts p where status='paused' and not exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null)"
     );
     const holds = count("select 1 from private.frontend_content_holds where released_at is null");
+    const reported = count(
+      "select 1 from private.posts p where p.status in('expired','sold','archived') and exists(select 1 from private.reports r where r.post_id=p.id and r.status='open')"
+    );
     assert.equal(
       rows[0][3],
       `${ended} ended posts get a deletion date at least 3 days away (${notices} new notices); ` +
         `${events} events get their end as deletion date (${over} already over); ` +
         `${ran} paused posts with a slot whose run has ended expire at the first run; ` +
-        `${paused} paused posts without a slot keep the idle rule; ${holds} open staff holds`
+        `${paused} paused posts without a slot keep the idle rule; ` +
+        `${reported} ended posts with an open report; ${holds} open staff holds`
     );
     const write = database.psql(
       `${RULES_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
@@ -595,7 +599,7 @@ try {
     );
     assert.equal(
       scalar(
-        "select to_regprocedure('internal.ended_post_decision(private.posts)') is null and to_regclass('private.post_deletion_extensions') is null;"
+        "select to_regprocedure('internal.ended_post_decision(private.posts)') is null and to_regclass('private.post_deletion_extensions') is null and to_regclass('private.payments_owner_plan_created_idx') is null and to_regclass('private.reports_open_post_idx') is null;"
       ),
       "t"
     );
@@ -689,6 +693,18 @@ try {
       );
       job();
       assert.equal(exists(cutOverEvent) && exists(cutOverDraft), true);
+      // A later change of state keeps those 3 days.
+      const granted = row(cutOverEvent).deletes_at;
+      q(
+        member(
+          dana,
+          `select api.set_post_state('${cutOverEvent}',${row(cutOverEvent).revision},'pause');`
+        )
+      );
+      assert.equal(row(cutOverEvent).status, "paused");
+      assert.equal(row(cutOverEvent).deletes_at, granted);
+      job();
+      assert.equal(exists(cutOverEvent), true);
     }
   );
   await check(
@@ -1346,9 +1362,15 @@ try {
       const extended = row(listing).deletes_at;
       job();
       assert.equal(row(listing).deletes_at, extended, "extended only once");
-      // The payment fails: the post goes at once.
+      // The payment fails: the 24 hours are still waited out, since a failed
+      // payment can be confirmed late; then the post goes.
       q(
         `update private.payments set status='failed',status_changed_at=clock_timestamp() where id='${pay}';`
+      );
+      job();
+      assert.equal(exists(listing), true, "deleted before its extension ended");
+      q(
+        `update private.posts set deletes_at=clock_timestamp()-interval '1 second' where id='${listing}';`
       );
       job();
       assert.equal(exists(listing), false);
@@ -1370,12 +1392,22 @@ try {
     job();
     assert.equal(exists(listing), false);
   });
-  await check("late payment: a payment started before the post expired does not extend it", () => {
-    const { owner, listing } = expiredSlotPost("thabo");
+  await check(
+    "late payment: a payment started more than a day before the post expired does not extend it",
+    () => {
+      const { owner, listing } = expiredSlotPost("thabo");
+      graceEnds(listing);
+      payment(owner, "clock_timestamp()-interval '4 days 1 hour'");
+      job();
+      assert.equal(exists(listing), false);
+    }
+  );
+  await check("late payment: a renewal started just before the post expired counts", () => {
+    const { owner, listing } = expiredSlotPost("themba");
     graceEnds(listing);
-    payment(owner, "clock_timestamp()-interval '4 days'");
-    job();
-    assert.equal(exists(listing), false);
+    payment(owner, "clock_timestamp()-interval '3 days 2 hours'");
+    assert.equal(job().extended, 1);
+    assert.equal(exists(listing), true);
   });
   await check(
     "late payment: reactivating during the extension keeps the post and clears the extension",
@@ -1436,21 +1468,35 @@ try {
     }
   );
   await check(
-    "late payment: a failed payment does not delete the post while another is still being confirmed",
+    "late payment: a payment cancelled and retried during the extension keeps the post once confirmed",
     () => {
       const { owner, listing } = expiredSlotPost("dumi");
       graceEnds(listing);
       const first = payment(owner, "clock_timestamp()-interval '1 hour'");
       assert.equal(job().extended, 1);
-      const second = payment(owner, "clock_timestamp()", 1);
       fail(first);
       job();
-      assert.equal(exists(listing), true);
-      fail(second);
+      assert.equal(exists(listing), true, "the extension is waited out");
+      const retry = payment(owner, "clock_timestamp()", 1);
       job();
-      assert.equal(exists(listing), false);
+      assert.equal(exists(listing), true);
+      confirm(retry);
+      assert.equal(job().kept, 1);
+      assert.equal(keptFor(listing, retry), "true");
+      assert.equal(outbox(listing, "post_kept"), 1);
     }
   );
+  await check("late payment: a late confirmation of the failed payment keeps the post too", () => {
+    const { owner, listing } = expiredSlotPost("dudu");
+    graceEnds(listing);
+    const pay = payment(owner, "clock_timestamp()-interval '1 hour'");
+    job();
+    fail(pay);
+    job();
+    confirm(pay); // the provider confirms it after all
+    assert.equal(job().kept, 1);
+    assert.equal(keptFor(listing, pay), "true");
+  });
   await check(
     "late payment: a confirmed payment still being reconciled counts as being confirmed",
     () => {
@@ -1558,6 +1604,31 @@ try {
       setState(fana, listing, "sold");
       job();
     }
+    assert.equal(outbox(listing, "post_sold"), 1);
+  });
+  await check("sold: plan payments neither extend nor keep a sold post", () => {
+    const kwame = user("kwame");
+    const ent = slot(kwame);
+    const listing = slotPost(kwame, ent);
+    setState(kwame, listing, "sold");
+    graceEnds(listing);
+    payment(kwame, "clock_timestamp()-interval '1 hour'");
+    const paid = payment(kwame, "clock_timestamp()-interval '2 hours'", 1);
+    confirm(paid, "fulfilled", "clock_timestamp()-interval '30 minutes'");
+    job();
+    assert.equal(exists(listing), false);
+    assert.equal(outbox(listing, "post_kept"), 0);
+  });
+  await check("sold notice: once per sale, even when a refund later frees the slot", () => {
+    const lindo = user("lindo");
+    const { pay, ent } = paidSlot(lindo);
+    const listing = slotPost(lindo, ent);
+    setState(lindo, listing, "sold");
+    job();
+    assert.equal(outbox(listing, "post_sold"), 1);
+    q(`select internal.reverse_payment('${pay}','refunded','Synthetic refund for the check');`);
+    assert.equal(openSlot(listing), "");
+    job();
     assert.equal(outbox(listing, "post_sold"), 1);
   });
   await check(
@@ -1692,6 +1763,42 @@ try {
     }
   );
 
+  const openReport = (post_, owner) =>
+    scalar(`set session_replication_role=replica;
+      insert into private.reports(post_id,subject_account_id,category,description,reporter_ip_hmac)
+        values('${post_}','${owner.id}','scam','Synthetic open report for the check',
+          substr(md5(gen_random_uuid()::text)||md5(gen_random_uuid()::text),1,43))
+        returning id;`);
+  await check(
+    "reports: an open report keeps a post due for deletion until it is handled, at most 7 days",
+    () => {
+      const mandla = user("mandla");
+      const reported = post(mandla, "listing", "expired");
+      const report = openReport(reported, mandla);
+      graceEnds(reported);
+      job();
+      assert.equal(exists(reported), true, "deleted with an open report");
+      q(`set session_replication_role=replica;
+       update private.reports set status='resolved',resolved_at=now(),resolved_by='${staff.id}',
+         resolution_note='Synthetic review done' where id='${report}';`);
+      job();
+      assert.equal(exists(reported), false);
+      // Never more than 7 days past the deletion date.
+      const stale = post(mandla, "listing", "expired");
+      openReport(stale, mandla);
+      q(
+        `update private.posts set ended_at=now()-interval '10 days 1 minute',deletes_at=now()-interval '7 days 1 minute' where id='${stale}';`
+      );
+      job();
+      assert.equal(exists(stale), false);
+      // An event that has ended waits the same way.
+      const event = liveEvent(mandla);
+      openReport(event, mandla);
+      eventEnds(event);
+      job();
+      assert.equal(exists(event), true);
+    }
+  );
   // ------------------------------------------------------------ 9. holds
   await check("holds: a held post neither expires with its plan nor is deleted at its end", () => {
     const hlengiwe = user("hlengiwe");

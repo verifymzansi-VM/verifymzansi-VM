@@ -46,7 +46,8 @@ begin
   -- invalidates the captured revision first. The expiry notice keys on
   -- ended_at, which edits do not move; its ':3d' suffix gives posts that ended
   -- before this update one notice of the 3-day rule. The sold notice keys on
-  -- the slot the post holds, so undoing and redoing "sold" does not repeat it.
+  -- the slot the post was sold in (its last activation, released or not), so
+  -- neither a refund freeing the slot nor undoing and redoing "sold" repeats it.
   -- A post already due for deletion gets the deletion notice instead. A held
   -- post is not warned about a deletion that will not happen; an idle post's
   -- clock counts from the release of its last staff hold. A paused post that
@@ -59,7 +60,7 @@ begin
       union all
       select 'post_sold',p.id,p.owner_id,p.revision,p.ended_at,
         'post_sold:'||p.id||':'||coalesce((select a.id::text from private.post_activations a
-          where a.post_id=p.id and a.released_at is null),'none')
+          where a.post_id=p.id and a.activated_at<=p.ended_at order by a.activated_at desc,a.id desc limit 1),'none')
       from private.posts p where p.status='sold' and p.deletes_at>clock_timestamp()
       union all
       select 'draft_deletion_warning',p.id,p.owner_id,p.revision,i.idle_since+interval '45 days',
@@ -84,11 +85,18 @@ begin
   end loop;
   -- 3. Deletion: ended runs at their deletion date (moved by the late-payment
   -- rule, internal.ended_post_decision), events that have ended, and idle
-  -- drafts, rejected posts and paused posts without a slot. Deleting a post
-  -- releases its slot (posts_release_activation).
+  -- drafts, rejected posts and paused posts without a slot, unless an open
+  -- report keeps the post a little longer (internal.post_report_deferred).
+  -- Deleting a post releases its slot (posts_release_activation). The payment
+  -- rule is evaluated only for posts that are due or whose owner has confirmed
+  -- a recent plan payment.
   for r in
     select p.id,p.owner_id from private.posts p
-    where ((p.status in('expired','sold','archived') and internal.ended_post_decision(p) is not null)
+    where ((p.status in('expired','sold','archived') and (p.deletes_at<=clock_timestamp()
+          or (p.status='expired' and p.kind<>'event' and exists(select 1 from private.payments pay
+            where pay.owner_id=p.owner_id and pay.product_kind='plan' and pay.created_at>=p.ended_at-interval '24 hours'
+              and pay.status='complete' and pay.fulfillment_status='fulfilled')))
+          and internal.ended_post_decision(p) is not null)
         or (p.kind='event' and p.edit_of is null and p.status not in('expired','sold','archived')
           and p.deletes_at<=clock_timestamp() and exists(select 1 from private.event_details e
             where e.post_id=p.id and e.ends_at<=clock_timestamp()))
@@ -96,6 +104,7 @@ begin
           and internal.post_idle_deletion_due(p)))
       and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
       and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+      and not internal.post_report_deferred(p)
     order by coalesce(p.deletes_at,p.status_changed_at),p.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
@@ -127,6 +136,7 @@ begin
       or internal.post_idle_deletion_due(post)) then
       continue;
     end if;
+    if internal.post_report_deferred(post) then continue; end if;
     insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
       values('post_deleted',post.id,post.owner_id,'post_deleted:'||post.id) on conflict(dedupe_key) do nothing;
     delete from private.posts where id=post.id;

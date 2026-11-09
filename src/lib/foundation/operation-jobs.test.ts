@@ -220,6 +220,32 @@ it("claims the earlier kinds from a database that does not know the newer ones",
   expect(claims[1][1].p_supported_kinds).not.toContain("post_sold");
   expect(claims[1][1].p_supported_kinds).not.toContain("post_kept");
 });
+it("claims the earlier kinds when the earlier database refuses the list's length", async () => {
+  let first = true;
+  rpc.mockImplementation(async (name) => {
+    if (name === "claim_supported_notification_outbox" && first) {
+      first = false;
+      return { data: null, error: { code: "22023", message: "supported mail kinds required" } };
+    }
+    return { data: name === "claim_supported_notification_outbox" ? [] : {}, error: null };
+  });
+  expect(await runFoundationOperationJobs(service, deliver)).toMatchObject({ claimed: 0 });
+  const claims = rpc.mock.calls.filter(([name]) => name === "claim_supported_notification_outbox");
+  expect(claims.map(([, args]) => args.p_supported_kinds.length)).toEqual([19, 17]);
+});
+it("does not retry the claim after another invalid-parameter refusal", async () => {
+  rpc.mockImplementation(async (name) =>
+    name === "claim_supported_notification_outbox"
+      ? { data: null, error: { code: "22023", message: "invalid limit" } }
+      : { data: {}, error: null }
+  );
+  await expect(runFoundationOperationJobs(service, deliver)).rejects.toThrow(
+    "could not be claimed"
+  );
+  expect(
+    rpc.mock.calls.filter(([name]) => name === "claim_supported_notification_outbox")
+  ).toHaveLength(1);
+});
 it("does not retry the claim after another failure", async () => {
   rpc.mockImplementation(async (name) =>
     name === "claim_supported_notification_outbox"

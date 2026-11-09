@@ -32,6 +32,14 @@ const kind = z.enum([
 // not accept: against such a database the job claims the earlier list.
 const laterKinds = new Set(["post_sold", "post_kept"]);
 const lifecycleKinds = new Set(["post_expired", "post_sold", "post_kept"]);
+// That database refuses the longer list for its length or for an unknown
+// kind; any other refusal is reported, not retried.
+function refusedNewerKinds(error: { code?: string; message?: string } | null) {
+  return (
+    error?.code === "22023" &&
+    (error.message === "supported mail kinds required" || error.message === "unsupported mail kind")
+  );
+}
 const jobs = z
   .array(
     z
@@ -78,7 +86,7 @@ export async function runFoundationOperationJobs(
     p_limit: 1,
     p_supported_kinds: kind.options,
   });
-  if (claimed.error?.code === "22023")
+  if (refusedNewerKinds(claimed.error))
     claimed = await service.rpc("claim_supported_notification_outbox", {
       p_limit: 1,
       p_supported_kinds: kind.options.filter((k) => !laterKinds.has(k)),

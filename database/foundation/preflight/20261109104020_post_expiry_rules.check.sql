@@ -20,8 +20,10 @@
 -- those have already ended (deleted 3 days after the update); how many paused
 -- posts still hold a slot whose run has already ended (they expire at the
 -- lifecycle job's first run, then follow the 3-day rule); how many paused
--- posts hold no slot and keep the 45/60-day idle rule; and how many staff
--- holds are open (those posts are not expired or deleted while held).
+-- posts hold no slot and keep the 45/60-day idle rule; how many ended posts
+-- have an open report (kept until it is handled, at most 7 days longer); and
+-- how many staff holds are open (those posts are not expired or deleted while
+-- held).
 do $$
 declare
   r record;
@@ -50,7 +52,8 @@ select * from (
     format('%s ended posts get a deletion date at least 3 days away (%s new notices); '
       || '%s events get their end as deletion date (%s already over); '
       || '%s paused posts with a slot whose run has ended expire at the first run; '
-      || '%s paused posts without a slot keep the idle rule; %s open staff holds',
+      || '%s paused posts without a slot keep the idle rule; '
+      || '%s ended posts with an open report; %s open staff holds',
       (select count(*) from private.posts where status in ('expired', 'sold', 'archived')),
       (select count(*) from private.posts where (status = 'expired' and kind <> 'event') or status = 'sold'),
       (select count(*) from private.posts p join private.event_details e on e.post_id = p.id
@@ -65,6 +68,8 @@ select * from (
          and not exists (select 1 from private.frontend_content_holds h where h.post_id = p.id and h.released_at is null)),
       (select count(*) from private.posts p where p.status = 'paused'
          and not exists (select 1 from private.post_activations a where a.post_id = p.id and a.released_at is null)),
+      (select count(*) from private.posts p where p.status in ('expired', 'sold', 'archived')
+         and exists (select 1 from private.reports r where r.post_id = p.id and r.status = 'open')),
       (select count(*) from private.frontend_content_holds where released_at is null)) as detail
   union all
   select 1, 'deferred check: exactly one detail row', p.id::text, p.kind || ', ' || p.status

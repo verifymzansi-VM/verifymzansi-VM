@@ -25,10 +25,11 @@ begin
       delete from private.post_deletion_extensions x where x.post_id=new.id;
     end if;
     -- Outside an ended run only an event has a deletion date: its end (an
-    -- edit copy goes with its original).
+    -- edit copy goes with its original), or the later date the cutover gave
+    -- an event already over. A changed end is followed by event_deletion_clock.
     if new.ended_at is null then
       new.deletes_at:=case when new.kind='event' and new.edit_of is null
-        then (select e.ends_at from private.event_details e where e.post_id=new.id) end;
+        then greatest((select e.ends_at from private.event_details e where e.post_id=new.id),new.deletes_at) end;
     end if;
   end if;
   return new;

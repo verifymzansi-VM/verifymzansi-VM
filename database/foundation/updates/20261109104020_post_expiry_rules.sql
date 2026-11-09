@@ -8,7 +8,9 @@
 --    can buy a plan and reactivate it; then the lifecycle job deletes it with
 --    its media. The 7- and 21-day reminders are no longer queued.
 -- 2. A sold post keeps its slot until it is deleted, 3 days after it was
---    marked sold (notice post_sold, once per slot). Its owner can delete it
+--    marked sold (notice post_sold, once per sale and slot, even when a
+--    refund later frees the slot, and not again when "sold" is undone and
+--    redone with the same slot). Its owner can delete it
 --    earlier to reuse the slot, or reactivate it within the 3 days: it then
 --    runs for the slot's remaining days while that slot is still valid.
 --    api.release_post no longer frees the slot of a paused or sold post.
@@ -16,8 +18,9 @@
 --    releases the slot at once and is deleted 3 days later, without a notice.
 -- 3. An event is deleted when it ends (event_details.ends_at), whatever its
 --    state (draft, under review, rejected, live or paused), with no grace
---    period and no expiry notice. Its end can only be set or moved to a time
---    still ahead. Its place in the limit of 10 free events per 30 days returns
+--    period and no expiry notice (the 3 days that item 6 gives an event already
+--    over stay through later changes of its state). Its end can only be set or
+--    moved to a time still ahead. Its place in the limit of 10 free events per 30 days returns
 --    only when its owner deletes it before it ends; deletion by the job never
 --    returns it.
 -- 4. Pausing keeps the slot and does not stop the run's clock: a paused post
@@ -25,13 +28,20 @@
 --    further activation. A paused post holding a slot is not deleted as idle;
 --    paused posts without a slot (paused before this update, or held by staff
 --    when their plan was reversed) keep the 45/60-day idle rule.
--- 5. Late payment. A plan payment the owner started during the 3 days that is
---    still being confirmed when they end (a confirmed one still being
---    reconciled counts) extends the deletion date once, by 24 hours. Once a
---    plan payment started during the 3 days is confirmed, the post is kept
---    until 3 days after that payment (notice post_kept) for its owner to
---    reactivate it. It is deleted early only when every plan payment started
---    since it ended has failed.
+-- 5. Late payment, for an expired Market or Business post (a sold or
+--    archived post goes at its date). Plan payments count when they were
+--    started from 24 hours before the post expired (a last-minute renewal)
+--    until its deletion date. One still being confirmed when the 3 days end (a
+--    confirmed one still being reconciled counts) extends the deletion date
+--    once, by 24 hours, and a payment started during that extension counts
+--    too. Once such a payment is confirmed, the post is kept until 3 days after
+--    that payment (notice post_kept) for its owner to reactivate it. The 24
+--    hours are always waited out: a failed, cancelled or expired payment can
+--    still be confirmed late by the provider. A payment confirmed only after
+--    the post was deleted is a refund case for staff.
+-- 5b. A post with an open report (not yet handled by staff) is kept until the
+--    report is handled, for at most 7 days after its deletion date; staff can
+--    place a hold to keep it longer.
 -- 6. Nothing that has already ended is deleted sooner than 3 days after this
 --    update: expired, sold and archived posts get the later of now + 3 days
 --    and ended_at + 3 days, and their owners get the new notice once (expired
@@ -72,9 +82,10 @@ end$$;
 -- Every table lock this update needs, taken first and in one fixed order,
 -- without waiting: if any of these tables is busy the update stops at once,
 -- holding nothing, and can simply be run again. Until it commits (well under
--- a second) no post, event detail, payment or notification can be written.
+-- a second) no post, event detail, payment, report or notification can be
+-- written.
 lock table private.posts in exclusive mode nowait;
-lock table private.event_details,private.payments in share row exclusive mode nowait;
+lock table private.event_details,private.payments,private.reports in share row exclusive mode nowait;
 lock table private.outbox_events in access exclusive mode nowait;
 
 -- The sold and kept notices join the closed list of notification kinds.
@@ -84,6 +95,11 @@ alter table private.outbox_events drop constraint outbox_events_kind_check,
     'draft_deletion_warning'::text,'post_deleted'::text,'verification_phone_confirmed'::text,'identity_accepted'::text,
     'enquiry_received'::text,'account_warning'::text,'content_hidden'::text,'account_suspended'::text,
     'account_banned'::text,'appeal_decided'::text,'business_check_update'::text,'post_sold'::text,'post_kept'::text]));
+
+-- 5. The lifecycle job looks up an owner's recent plan payments every minute.
+create index payments_owner_plan_created_idx on private.payments(owner_id,created_at) where product_kind='plan';
+-- 5b. ... and whether a post due for deletion has an open report.
+create index reports_open_post_idx on private.reports(post_id) where status='open';
 
 -- 5. The late-payment state of an ended run: one 24-hour extension, and the
 -- confirmed payment that keeps the post. Removed with the post, and cleared
@@ -122,10 +138,11 @@ begin
       delete from private.post_deletion_extensions x where x.post_id=new.id;
     end if;
     -- Outside an ended run only an event has a deletion date: its end (an
-    -- edit copy goes with its original).
+    -- edit copy goes with its original), or the later date the cutover gave
+    -- an event already over. A changed end is followed by event_deletion_clock.
     if new.ended_at is null then
       new.deletes_at:=case when new.kind='event' and new.edit_of is null
-        then (select e.ends_at from private.event_details e where e.post_id=new.id) end;
+        then greatest((select e.ends_at from private.event_details e where e.post_id=new.id),new.deletes_at) end;
     end if;
   end if;
   return new;
@@ -151,51 +168,57 @@ create trigger event_deletion_clock after insert or update of ends_at on private
 -- "grace_ended_at","deletes_at"}, or null when nothing is due yet.
 create function internal.ended_post_decision(p_post private.posts)
 returns jsonb language plpgsql set search_path=pg_catalog as $$
-declare ext private.post_deletion_extensions; grace_end timestamptz; paid record; waiting record; started record;
+declare ext private.post_deletion_extensions; window_end timestamptz; paid record; started record;
 begin
   if p_post.status not in('expired','sold','archived') then return null; end if;
-  if p_post.kind='event' or p_post.status='archived' then
+  -- Only an expired Market or Business post waits for a plan payment.
+  if p_post.kind='event' or p_post.status<>'expired' then
     return case when p_post.deletes_at<=clock_timestamp() then jsonb_build_object('action','delete') end;
   end if;
   select * into ext from private.post_deletion_extensions x where x.post_id=p_post.id and x.ended_at=p_post.ended_at;
-  grace_end:=coalesce(ext.grace_ended_at,p_post.deletes_at);
-  -- A plan payment the owner started during the 3 days has been confirmed:
-  -- the post is kept until 3 days after that payment.
+  -- Plan payments count when started from 24 hours before the post expired
+  -- until its deletion date, the 24-hour extension included.
+  window_end:=coalesce(ext.grace_ended_at+interval '24 hours',p_post.deletes_at);
+  -- One has been confirmed: the post is kept until 3 days after that payment.
   select pay.id,pay.completed_at into paid from private.payments pay
     where pay.owner_id=p_post.owner_id and pay.product_kind='plan' and pay.status='complete'
-      and pay.fulfillment_status='fulfilled' and pay.created_at>=p_post.ended_at and pay.created_at<=grace_end
+      and pay.fulfillment_status='fulfilled' and pay.created_at>=p_post.ended_at-interval '24 hours'
+      and pay.created_at<=window_end
     order by pay.completed_at desc,pay.id limit 1;
   if paid.completed_at+interval '3 days'>p_post.deletes_at then
-    return jsonb_build_object('action','keep','payment_id',paid.id,'grace_ended_at',grace_end,
-      'deletes_at',paid.completed_at+interval '3 days');
+    return jsonb_build_object('action','keep','payment_id',paid.id,
+      'grace_ended_at',coalesce(ext.grace_ended_at,p_post.deletes_at),'deletes_at',paid.completed_at+interval '3 days');
   end if;
-  -- Plan payments started since the post ended that are still being
-  -- confirmed (a confirmed payment still being reconciled counts).
-  select pay.id into waiting from private.payments pay
-    where pay.owner_id=p_post.owner_id and pay.product_kind='plan' and pay.created_at>=p_post.ended_at
-      and (pay.status='pending' or (pay.status='complete' and pay.fulfillment_status='needs_reconciliation'))
-    order by pay.created_at desc,pay.id limit 1;
-  if p_post.deletes_at<=clock_timestamp() then
-    -- Due: one 24-hour extension when such a payment started during the 3 days.
+  if p_post.deletes_at>clock_timestamp() then return null; end if;
+  -- Due: one 24-hour extension while such a payment is still being confirmed
+  -- (a confirmed payment still being reconciled counts). The extension is
+  -- always waited out; after it the post goes.
+  if ext.post_id is null then
     select pay.id into started from private.payments pay
-      where pay.owner_id=p_post.owner_id and pay.product_kind='plan' and pay.created_at>=p_post.ended_at
-        and pay.created_at<=p_post.deletes_at
+      where pay.owner_id=p_post.owner_id and pay.product_kind='plan'
+        and pay.created_at>=p_post.ended_at-interval '24 hours' and pay.created_at<=p_post.deletes_at
         and (pay.status='pending' or (pay.status='complete' and pay.fulfillment_status='needs_reconciliation'))
       order by pay.created_at desc,pay.id limit 1;
-    if ext.post_id is null and started.id is not null then
+    if started.id is not null then
       return jsonb_build_object('action','extend','payment_id',started.id,'grace_ended_at',p_post.deletes_at,
         'deletes_at',p_post.deletes_at+interval '24 hours');
     end if;
-    return jsonb_build_object('action','delete');
   end if;
-  -- Extended and not yet due: deleted early once every plan payment since the
-  -- post ended has failed.
-  if ext.post_id is not null and ext.kept_at is null and waiting.id is null and paid.id is null then
-    return jsonb_build_object('action','delete');
-  end if;
-  return null;
+  return jsonb_build_object('action','delete');
 end$$;
 revoke all on function internal.ended_post_decision(private.posts) from public,anon,authenticated,service_role;
+
+-- 5b. A post with an open report is kept until the report is handled, for at
+-- most 7 days after the date it would otherwise be deleted (its deletion date,
+-- or 60 days after an idle post's last change).
+create function internal.post_report_deferred(p_post private.posts)
+returns boolean language sql set search_path=pg_catalog as $$
+  select exists(select 1 from private.reports r where r.post_id=p_post.id and r.status='open')
+    and clock_timestamp()<coalesce(p_post.deletes_at,greatest(p_post.content_updated_at,p_post.status_changed_at,
+      (select max(h.released_at) from private.frontend_content_holds h where h.post_id=p_post.id))+interval '60 days')
+      +interval '7 days';
+$$;
+revoke all on function internal.post_report_deferred(private.posts) from public,anon,authenticated,service_role;
 
 -- 4. An idle draft, rejected post or paused post without a slot, 60 days
 -- after its last change (or the release of its last staff hold), unless a
@@ -254,7 +277,8 @@ begin
   -- invalidates the captured revision first. The expiry notice keys on
   -- ended_at, which edits do not move; its ':3d' suffix gives posts that ended
   -- before this update one notice of the 3-day rule. The sold notice keys on
-  -- the slot the post holds, so undoing and redoing "sold" does not repeat it.
+  -- the slot the post was sold in (its last activation, released or not), so
+  -- neither a refund freeing the slot nor undoing and redoing "sold" repeats it.
   -- A post already due for deletion gets the deletion notice instead. A held
   -- post is not warned about a deletion that will not happen; an idle post's
   -- clock counts from the release of its last staff hold. A paused post that
@@ -267,7 +291,7 @@ begin
       union all
       select 'post_sold',p.id,p.owner_id,p.revision,p.ended_at,
         'post_sold:'||p.id||':'||coalesce((select a.id::text from private.post_activations a
-          where a.post_id=p.id and a.released_at is null),'none')
+          where a.post_id=p.id and a.activated_at<=p.ended_at order by a.activated_at desc,a.id desc limit 1),'none')
       from private.posts p where p.status='sold' and p.deletes_at>clock_timestamp()
       union all
       select 'draft_deletion_warning',p.id,p.owner_id,p.revision,i.idle_since+interval '45 days',
@@ -292,11 +316,18 @@ begin
   end loop;
   -- 3. Deletion: ended runs at their deletion date (moved by the late-payment
   -- rule, internal.ended_post_decision), events that have ended, and idle
-  -- drafts, rejected posts and paused posts without a slot. Deleting a post
-  -- releases its slot (posts_release_activation).
+  -- drafts, rejected posts and paused posts without a slot, unless an open
+  -- report keeps the post a little longer (internal.post_report_deferred).
+  -- Deleting a post releases its slot (posts_release_activation). The payment
+  -- rule is evaluated only for posts that are due or whose owner has confirmed
+  -- a recent plan payment.
   for r in
     select p.id,p.owner_id from private.posts p
-    where ((p.status in('expired','sold','archived') and internal.ended_post_decision(p) is not null)
+    where ((p.status in('expired','sold','archived') and (p.deletes_at<=clock_timestamp()
+          or (p.status='expired' and p.kind<>'event' and exists(select 1 from private.payments pay
+            where pay.owner_id=p.owner_id and pay.product_kind='plan' and pay.created_at>=p.ended_at-interval '24 hours'
+              and pay.status='complete' and pay.fulfillment_status='fulfilled')))
+          and internal.ended_post_decision(p) is not null)
         or (p.kind='event' and p.edit_of is null and p.status not in('expired','sold','archived')
           and p.deletes_at<=clock_timestamp() and exists(select 1 from private.event_details e
             where e.post_id=p.id and e.ends_at<=clock_timestamp()))
@@ -304,6 +335,7 @@ begin
           and internal.post_idle_deletion_due(p)))
       and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
       and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
+      and not internal.post_report_deferred(p)
     order by coalesce(p.deletes_at,p.status_changed_at),p.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
@@ -335,6 +367,7 @@ begin
       or internal.post_idle_deletion_due(post)) then
       continue;
     end if;
+    if internal.post_report_deferred(post) then continue; end if;
     insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
       values('post_deleted',post.id,post.owner_id,'post_deleted:'||post.id) on conflict(dedupe_key) do nothing;
     delete from private.posts where id=post.id;

@@ -20,15 +20,17 @@
 --   reminders, whose keys differ from this update's.
 -- - Event ends in the past can be saved again, and refunds, chargebacks and
 --   sponsorship ends leave paused posts paused, without their slot.
+-- - Open reports no longer keep a post past its deletion date, and a
+--   confirmed late payment no longer keeps an expired post.
 begin;
 set local lock_timeout='5s';
 
 -- Preconditions: only the bodies this update installed are rolled back.
 do $$begin
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.run_post_lifecycle(integer)'::regprocedure)<>'8dab8e97fe7ff5b8c8d5b1066bf5a5c0' then raise exception 'rollback precondition: internal.run_post_lifecycle(integer) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.run_post_lifecycle(integer)'::regprocedure)<>'e902328043d024a4ba16e38eeabb1b73' then raise exception 'rollback precondition: internal.run_post_lifecycle(integer) is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.set_post_state(uuid,integer,text)'::regprocedure)<>'98119b54e6b1f0de84c7ddfdc20d2e35' then raise exception 'rollback precondition: internal.set_post_state(uuid,integer,text) is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.delete_post(uuid,integer)'::regprocedure)<>'2aa04c741c9dee2e414be6ae1f03f73d' then raise exception 'rollback precondition: internal.delete_post(uuid,integer) is not the post expiry rules body';end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.post_lifecycle_clock()'::regprocedure)<>'fa7bdb5ed8d48850ad9a456deceaab8b' then raise exception 'rollback precondition: internal.post_lifecycle_clock() is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.post_lifecycle_clock()'::regprocedure)<>'c8ce23f30b5a3fa8f391b4e02f9e1107' then raise exception 'rollback precondition: internal.post_lifecycle_clock() is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)<>'039b1e461ee382e1e2ae7afc31f9d304' then raise exception 'rollback precondition: internal.claim_supported_notification_outbox(text[],integer) is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.reverse_payment(uuid,text,text)'::regprocedure)<>'1beb792cd6681782bcb75d4ee8d207a0' then raise exception 'rollback precondition: internal.reverse_payment(uuid,text,text) is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.release_sponsorship_entitlement(uuid)'::regprocedure)<>'22d1448929ddae6b57c5bc6f859a5ce2' then raise exception 'rollback precondition: internal.release_sponsorship_entitlement(uuid) is not the post expiry rules body';end if;
@@ -40,7 +42,7 @@ end$$;
 -- Dropping the trigger and the extension table needs exclusive locks on the
 -- tables they belong to or reference; take them all first, without waiting.
 lock table private.posts in access exclusive mode nowait;
-lock table private.event_details,private.payments,private.outbox_events in access exclusive mode nowait;
+lock table private.event_details,private.payments,private.reports,private.outbox_events in access exclusive mode nowait;
 
 -- Everything the update added. Table changes come before the data changes
 -- below, whose deferred checks would otherwise block them.
@@ -530,6 +532,9 @@ grant execute on function internal.create_core_draft(text,text,text,jsonb,text) 
 
 drop function internal.ended_post_decision(private.posts);
 drop function internal.post_idle_deletion_due(private.posts);
+drop function internal.post_report_deferred(private.posts);
+drop index private.payments_owner_plan_created_idx;
+drop index private.reports_open_post_idx;
 drop table private.post_deletion_extensions;
 
 -- The data under the earlier rules.

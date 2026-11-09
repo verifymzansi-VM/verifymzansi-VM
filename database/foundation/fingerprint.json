@@ -57,20 +57,20 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 743,
-      "fingerprint": "039897e4a2b3c0897c99dc1d8d1b9608"
+      "items": 744,
+      "fingerprint": "98ea26681bf7aa779dac305b953d8e54"
     },
     "function_grants": {
       "items": 599,
       "fingerprint": "40a5a0cca5e07f24c91344a13ab1f133"
     },
     "function_metadata": {
-      "items": 743,
-      "fingerprint": "b4ef0a18ef62d0a108643b595cc73052"
+      "items": 744,
+      "fingerprint": "39dc03829b4f874efc4ded2e582f33d0"
     },
     "indexes": {
-      "items": 370,
-      "fingerprint": "060920afaa7370505c8e55ca6e0705e0"
+      "items": 372,
+      "fingerprint": "5540f22bd7df996596b99adfb401c769"
     },
     "policies": {
       "items": 1,
