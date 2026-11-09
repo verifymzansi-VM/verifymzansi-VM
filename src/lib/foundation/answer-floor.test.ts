@@ -39,23 +39,43 @@ describe("holding an answer for a minimum time", () => {
     expect(await settledAfter(holdAnswer(start, { floorMs: 3000, jitterMs: 1000 }), 0)).toBe(true);
   });
 
-  it("adds a random extra wait of at most the jitter", async () => {
-    const waits: number[] = [];
-    // The random 32-bit value scaled to 0..1000 ms: lowest, a quarter, half, highest.
-    for (const random of [0, 2 ** 30, 2 ** 31, 4_294_967_295]) {
-      vi.spyOn(crypto, "getRandomValues").mockImplementationOnce((array) => {
-        (array as Uint32Array)[0] = random;
+  /** Feeds these 16-bit values to the random source, one per draw. */
+  function randomValues(...values: number[]) {
+    const spy = vi.spyOn(crypto, "getRandomValues");
+    for (const value of values)
+      spy.mockImplementationOnce((array) => {
+        (array as Uint16Array)[0] = value;
         return array;
       });
-      const start = Date.now();
-      const hold = holdAnswer(start, { floorMs: 100, jitterMs: 1000 });
-      let waited = 0;
-      while (!(await settledAfter(hold, 50))) waited += 50;
-      waits.push(waited + 50);
+    return spy;
+  }
+
+  /** How long a hold with a 100 ms floor and 1000 ms jitter takes, in 50 ms steps. */
+  async function heldFor() {
+    const hold = holdAnswer(Date.now(), { floorMs: 100, jitterMs: 1000 });
+    let waited = 50;
+    while (!(await settledAfter(hold, 50))) waited += 50;
+    return waited;
+  }
+
+  it("adds a random extra wait from 0 to the jitter, from 10 random bits", async () => {
+    const waits: number[] = [];
+    // The low 10 bits are used: 0, 250, 1000, and 1000 again from 0xfbe8.
+    for (const value of [0, 250, 1000, 0xfbe8]) {
+      randomValues(value);
+      waits.push(await heldFor());
     }
-    // floor(random / 2^32 * 1001): 0, 250, 500, 1000.
-    const expected = [0, 250, 500, 1000].map((extra) => Math.ceil((100 + extra) / 50) * 50);
-    expect(waits).toEqual(expected);
-    for (const wait of waits) expect(wait).toBeLessThanOrEqual(1100 + 50);
+    expect(waits).toEqual([100, 350, 1100, 1100]);
+  });
+
+  it("draws again instead of folding values above the jitter onto low ones", async () => {
+    // 1001 and 1023 are above 1000, so they are dropped; then 7 is used.
+    const spy = randomValues(1001, 1023, 7);
+    expect(await heldFor()).toBe(Math.ceil((100 + 7) / 50) * 50);
+    expect(spy).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([-1, 1.5, 1024])("refuses an unsupported jitter of %s ms", async (jitterMs) => {
+    await expect(holdAnswer(Date.now(), { floorMs: 100, jitterMs })).rejects.toThrow(RangeError);
   });
 });
