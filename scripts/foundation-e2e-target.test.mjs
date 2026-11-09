@@ -222,6 +222,8 @@ test("the website runs in foundation mode against the copy only, with the existi
     process.env.PLAYWRIGHT_E2E_AUTH = "1";
     process.env.OZOW_CLIENT_SECRET = "caller-provider-secret";
     process.env.SENTRY_DSN = "https://caller@example.invalid/1";
+    // The caller cannot open paid add-on sales in the copy: production keeps them paused.
+    process.env.ADDON_SALES_ENABLED = "true";
     // An empty folder: no .env files to neutralise in this test.
     const env = foundationWebsiteEnv(status, {
       root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
@@ -234,6 +236,7 @@ test("the website runs in foundation mode against the copy only, with the existi
     assert.equal(env.PLAYWRIGHT_E2E_AUTH, undefined);
     assert.equal(env.OZOW_CLIENT_SECRET, undefined);
     assert.equal(env.SENTRY_DSN, undefined);
+    assert.equal(env.ADDON_SALES_ENABLED, "false");
     assert.equal(env.PLAYWRIGHT_SUPABASE_MODE, undefined);
     assert.equal(env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE, undefined);
     // Reused switches from scripts/start-playwright-server.cjs.
