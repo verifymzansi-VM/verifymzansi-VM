@@ -426,8 +426,9 @@ async function expireElapsedPosts(
 
 const worker: ScheduledWorker<Env | FoundationJobEnv> = {
   /**
-   * Cron trigger: runs daily at 03:00 UTC
-   * Processes all unprocessed records in r2_cleanup_queue.
+   * Foundation: every 5 minutes; the app's journal-backed cleanup does the
+   * work (src/lib/foundation/retention-jobs.ts).
+   * Source backend: daily at 03:00 UTC, processing r2_cleanup_queue.
    */
   async scheduled(_event, env, _ctx) {
     if (env.DATA_BACKEND === "foundation") {
@@ -713,7 +714,7 @@ const worker: ScheduledWorker<Env | FoundationJobEnv> = {
       JSON.stringify({
         worker: "verifymzansi-retention-cleanup",
         status: "healthy",
-        schedule: env.DATA_BACKEND === "foundation" ? "0 * * * *" : "0 3 * * *",
+        schedule: env.DATA_BACKEND === "foundation" ? "*/5 * * * *" : "0 3 * * *",
       }),
       { headers: { "Content-Type": "application/json" } }
     );

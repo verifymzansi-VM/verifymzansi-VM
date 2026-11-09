@@ -1,20 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Use vi.hoisted so mock references are available when vi.mock factories run
-const { mockSend, mockGetSignedUrl, mockEncryptFile, mockDecryptFile, mockS3ClientConfigs } =
-  vi.hoisted(() => ({
-    mockSend: vi.fn().mockResolvedValue({}),
-    mockGetSignedUrl: vi.fn().mockResolvedValue("https://signed-url.example.com"),
-    mockEncryptFile: vi.fn().mockResolvedValue(Buffer.from("encrypted-data")),
-    mockDecryptFile: vi.fn().mockReturnValue(Buffer.from("decrypted-data")),
-    mockS3ClientConfigs: [] as unknown[],
-  }));
+const {
+  mockSend,
+  mockGetSignedUrl,
+  mockEncryptFile,
+  mockDecryptFile,
+  mockS3ClientConfigs,
+  mockSendClientConfigs,
+} = vi.hoisted(() => ({
+  mockSend: vi.fn().mockResolvedValue({}),
+  mockGetSignedUrl: vi.fn().mockResolvedValue("https://signed-url.example.com"),
+  mockEncryptFile: vi.fn().mockResolvedValue(Buffer.from("encrypted-data")),
+  mockDecryptFile: vi.fn().mockReturnValue(Buffer.from("decrypted-data")),
+  mockS3ClientConfigs: [] as unknown[],
+  /** The constructor config of the client behind each send, in call order. */
+  mockSendClientConfigs: [] as unknown[],
+}));
 
 vi.mock("@aws-sdk/client-s3", () => {
   class MockS3Client {
-    send = mockSend;
+    send: typeof mockSend;
     constructor(config?: unknown) {
       mockS3ClientConfigs.push(config);
+      this.send = ((...args: unknown[]) => {
+        mockSendClientConfigs.push(config);
+        return mockSend(...args);
+      }) as typeof mockSend;
     }
   }
   return {
@@ -23,6 +35,10 @@ vi.mock("@aws-sdk/client-s3", () => {
       constructor(public params: unknown) {}
     },
     DeleteObjectCommand: class {
+      constructor(public params: unknown) {}
+    },
+    DeleteObjectsCommand: class {
+      readonly batch = true;
       constructor(public params: unknown) {}
     },
     GetObjectCommand: class {
@@ -47,6 +63,7 @@ import {
   uploadToR2,
   generateStorageKey,
   deleteFromR2,
+  deleteManyFromR2,
   generatePresignedUploadUrl,
   generatePresignedDownloadUrl,
   uploadKycDocument,
@@ -202,6 +219,114 @@ describe("storage service", () => {
     it("sends DeleteObjectCommand", async () => {
       await deleteFromR2("my-bucket", "some/key.jpg");
       expect(mockSend).toHaveBeenCalled();
+    });
+
+    it("single-attempt deletes use a client without SDK retries; ordinary deletes keep them", async () => {
+      process.env.R2_ACCOUNT_ID = "attempts-account";
+      mockSendClientConfigs.length = 0;
+      await deleteFromR2("my-bucket", "some/key.jpg");
+      await deleteFromR2("my-bucket", "some/key.jpg", { attempts: "single-attempt" });
+      await deleteFromR2("my-bucket", "some/key.jpg", { attempts: "single-attempt" });
+      expect(mockSendClientConfigs).toHaveLength(3);
+      expect(mockSendClientConfigs[0]).not.toHaveProperty("maxAttempts");
+      expect(mockSendClientConfigs[1]).toMatchObject({
+        maxAttempts: 1,
+        requestChecksumCalculation: "WHEN_REQUIRED",
+      });
+      // Both clients are cached: no new client for the repeated call.
+      expect(mockSendClientConfigs[2]).toBe(mockSendClientConfigs[1]);
+    });
+
+    it("single-attempt deletes honour the caller's signal and report busy storage", async () => {
+      const caller = new AbortController();
+      const slowDown = () => Object.assign(new Error("slow"), { name: "SlowDown", $metadata: {} });
+      let signalled = false;
+      mockSend.mockImplementationOnce(async (_command, options) => {
+        caller.abort();
+        signalled = options.abortSignal.aborted;
+        throw slowDown();
+      });
+      await expect(
+        deleteFromR2("my-bucket", "some/key.jpg", {
+          attempts: "single-attempt",
+          signal: caller.signal,
+        })
+      ).rejects.toMatchObject({ retryLater: true, name: "StorageRetryLaterError" });
+      expect(signalled).toBe(true);
+      // Ordinary deletes keep the original error.
+      mockSend.mockRejectedValueOnce(slowDown());
+      await expect(deleteFromR2("my-bucket", "some/key.jpg")).rejects.toMatchObject({
+        name: "SlowDown",
+      });
+    });
+  });
+
+  describe("deleteManyFromR2", () => {
+    const keys = ["media/a", "media/a.w400.webp", "media/a.w800.webp"];
+    const allDeleted = { Deleted: keys.map((Key) => ({ Key })) };
+
+    it("deletes the keys with one DeleteObjects request that lists them, and no SDK retries", async () => {
+      process.env.R2_ACCOUNT_ID = "batch-account";
+      mockSendClientConfigs.length = 0;
+      mockSend.mockResolvedValue(allDeleted);
+      expect(await deleteManyFromR2("my-bucket", keys)).toEqual([]);
+      expect(mockSend).toHaveBeenCalledOnce();
+      const [command, options] = mockSend.mock.calls[0]!;
+      expect(command).toMatchObject({
+        batch: true,
+        params: {
+          Bucket: "my-bucket",
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: false },
+        },
+      });
+      expect(options?.abortSignal).toBeInstanceOf(AbortSignal);
+      expect(mockSendClientConfigs[0]).toMatchObject({ maxAttempts: 1 });
+    });
+
+    it("passes the caller's signal to the request", async () => {
+      const caller = new AbortController();
+      let signalled = false;
+      mockSend.mockImplementationOnce(async (_command, options) => {
+        caller.abort();
+        signalled = options.abortSignal.aborted;
+        throw Object.assign(new Error("aborted"), { name: "AbortError" });
+      });
+      await expect(
+        deleteManyFromR2("my-bucket", keys, { signal: caller.signal })
+      ).rejects.toMatchObject({ retryLater: true });
+      expect(signalled).toBe(true);
+    });
+
+    it("lets a failed request throw so the caller can retry or fall back", async () => {
+      mockSend.mockRejectedValue(new Error("network unavailable"));
+      await expect(deleteManyFromR2("my-bucket", keys)).rejects.toThrow("network unavailable");
+    });
+
+    it("refuses oversized, duplicated or unsafe batches before any request", async () => {
+      const tooMany = Array.from({ length: 1001 }, (_, index) => `media/${index}`);
+      await expect(deleteManyFromR2("my-bucket", tooMany)).rejects.toThrow();
+      await expect(deleteManyFromR2("my-bucket", ["media/a", "media/a"])).rejects.toThrow();
+      await expect(deleteManyFromR2("my-bucket", ["media/a", "../private"])).rejects.toThrow();
+      expect(await deleteManyFromR2("my-bucket", [])).toEqual([]);
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("accepts exactly 1,000 keys in one request", async () => {
+      const limit = Array.from({ length: 1000 }, (_, index) => `media/${index}`);
+      mockSend.mockResolvedValue({ Deleted: limit.map((Key) => ({ Key })) });
+      expect(await deleteManyFromR2("my-bucket", limit)).toEqual([]);
+      expect(mockSend).toHaveBeenCalledOnce();
+    });
+
+    it("uses one native binding call when the bucket is bound", async () => {
+      const remove = vi.fn().mockResolvedValue(undefined);
+      (globalThis as Record<string, unknown>).__env__ = {
+        PUBLIC_BUCKET: { put: vi.fn(), get: vi.fn(), head: vi.fn(), delete: remove },
+      };
+      const bucket = process.env.R2_PUBLIC_BUCKET || "verifymzansi-public";
+      expect(await deleteManyFromR2(bucket, keys)).toEqual([]);
+      expect(remove).toHaveBeenCalledExactlyOnceWith(keys);
+      expect(mockSend).not.toHaveBeenCalled();
     });
   });
 

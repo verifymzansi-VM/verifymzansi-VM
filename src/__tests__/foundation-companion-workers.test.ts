@@ -1,4 +1,6 @@
 /** @vitest-environment node */
+import { readFileSync } from "node:fs";
+import { parse } from "smol-toml";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import payment from "../../workers/payment-cleanup";
 import retention from "../../workers/retention-cleanup";
@@ -82,6 +84,20 @@ for (const [worker, path] of [
     expect(external).not.toHaveBeenCalled();
   });
 }
+
+it("retention runs every 5 minutes, as configured and as its health reply says", async () => {
+  // A run the app cannot finish leaves 5-minute claims; the next run picks them up.
+  const config = parse(readFileSync("wrangler.retention-cleanup.toml", "utf8")) as {
+    triggers: { crons: string[] };
+  };
+  expect(config.triggers.crons).toEqual(["*/5 * * * *"]);
+  const health = await retention.fetch!(
+    new Request("https://worker.example.invalid/"),
+    env,
+    context
+  );
+  expect(await health.json()).toMatchObject({ schedule: config.triggers.crons[0] });
+});
 
 it("operations awaits its bound app job without sending the scoped key through public HTTP", async () => {
   const publicFetch = vi.fn();
