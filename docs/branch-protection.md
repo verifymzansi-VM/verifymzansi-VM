@@ -11,6 +11,7 @@ pull request whose required checks pass.
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-10-02 | Ruleset "Protect main" (id 24360296) blocks deleting `main` and force pushes. Pull requests and status checks are **not** required.                                           |
 | 2026-11-07 | Reviewed ruleset file `.github/rulesets/protect-main.json` prepared. It adds "require a pull request" and the required checks below. Not enforced until the owner applies it. |
+| 2026-11-10 | Ruleset file adds `Visual regression (chosen frontend)` and `foundation-native` to the required checks. Not enforced until the owner applies it.                              |
 
 Update this table when GitHub's enforced ruleset changes. Verify at any time,
 read-only:
@@ -61,6 +62,12 @@ such a check would block every pull request.
   - `db-rls`.
   - `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`,
     and `e2e-full-matrix` (chromium, firefox, mobile-chrome).
+  - `Visual regression (chosen frontend)`: compares the main public screens with
+    the approved pictures of the chosen frontend.
+  - `foundation-native` (workflow "Foundation native"): the native database
+    suite. It starts on every pull request to `main`; when a pull request does
+    not touch the suite's inputs the job ends green without starting Docker, so
+    the check never waits forever.
 - **"Require branches to be up to date" is off.** Turning it on would force a
   rebase and a fresh CI run (about 48 minutes) after every merge. It is safe to
   leave off because the deploy also requires a successful CI run on the merge
@@ -75,8 +82,9 @@ no checks). This keeps `main` deployable: the deploy needs the whole CI run on
 `main` and cannot be required on pull requests; when no staging address
 (`STAGING_APP_URL`) is configured they show as skipped, not as a success
 (`Staging address configured` decides this in a job-level condition). Later
-slices add their jobs here and to the ruleset file (native database suite,
-foundation browser tests, picture checks, frontend ledger).
+slices add their jobs here and to the ruleset file (foundation browser tests,
+frontend ledger). `e2e-foundation` (workflow "E2E foundation") runs on every
+pull request but stays optional until it has five green nights in a row.
 
 ## How the owner applies it
 
