@@ -1,5 +1,29 @@
+// Frozen list of files that still import the retired Supabase clients
+// (roadmap M0.11). It may only shrink: pnpm check:legacy-surface fails when a
+// listed file stops importing them until the list is lowered with --update.
+const { legacyClientImporters } = require("./scripts/legacy-surface-baseline.json");
+
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const frozenLegacyImporters = `^(?:${legacyClientImporters.map(escapeRegExp).join("|")})$`;
+
 module.exports = {
   forbidden: [
+    {
+      name: "no-new-legacy-supabase-client",
+      severity: "error",
+      comment:
+        "Production runs the foundation backend. The retired clients @/lib/supabase/{admin,server,client} reach an empty schema there; use the foundation adapters in src/lib/foundation. Only the frozen importers in scripts/legacy-surface-baseline.json may still use them.",
+      from: {
+        path: "^(?:src|scripts|workers)/",
+        pathNot: [
+          "(^scripts/test-contract\\.ts$|^src/test/|/__tests__/|\\.(test|spec)\\.(ts|tsx|mjs)$)",
+          frozenLegacyImporters,
+        ],
+      },
+      to: {
+        path: "^src/lib/supabase/(?:admin|server|client)\\.ts$",
+      },
+    },
     {
       name: "no-circular",
       severity: "error",

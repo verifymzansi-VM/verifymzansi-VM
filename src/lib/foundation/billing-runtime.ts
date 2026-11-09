@@ -316,16 +316,27 @@ export async function applyFoundationOzowNotification(
 const isMockCheckout = (requestId: string) =>
   isMockOzowEnabled() || requestId.startsWith(MOCK_OZOW_REQUEST_PREFIX);
 
+/** Whether reconciliation may ask a provider about a stored request. Without
+ * the test copy (production): only real requests, never in mock mode, exactly
+ * as before. In the test copy (mock mode only): only its own mock requests,
+ * which its loopback stand-in answers (ozow.ts); never a real request id. */
+const canAskProvider = (requestId: string) =>
+  testCheckout() !== null
+    ? requestId.startsWith(MOCK_OZOW_REQUEST_PREFIX)
+    : !isMockCheckout(requestId);
+
 export async function reconcileFoundationPayment(
   paymentId: string,
   service = createFoundationServiceApi()
 ) {
-  // No provider to ask in mock mode: leave the stored state as it is.
-  if (isMockOzowEnabled()) return { checked: false, pendingTransaction: false };
+  // No provider to ask in mock mode (except the test copy's stand-in): leave
+  // the stored state as it is.
+  if (isMockOzowEnabled() && testCheckout() === null)
+    return { checked: false, pendingTransaction: false };
   const raw = await command(service, "claim_payment_reconciliation", { p_payment_id: paymentId });
   if (raw === null) return { checked: false, pendingTransaction: false };
   const pay = foundationPaymentSchema.parse(raw);
-  if (!pay.provider_request_id || isMockCheckout(pay.provider_request_id))
+  if (!pay.provider_request_id || !canAskProvider(pay.provider_request_id))
     return { checked: false, pendingTransaction: false };
   const transactions = await listOzowPaymentTransactions(pay.provider_request_id, pay.created_at);
   for (const transaction of transactions)

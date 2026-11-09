@@ -30,9 +30,10 @@ jobs:
   e2e-foundation:
     name: e2e-foundation
     runs-on: ubuntu-latest
-    # Roadmap budget: chromium and mobile-chrome together under 25 minutes.
-    # The step limits below (5 + 10 + 9) are ceilings; a normal run takes far
-    # less (the browser tests about 4 minutes for both projects).
+    # Roadmap budget: chromium and mobile-chrome together under 25 minutes
+    # (this job limit). The step limits below (5 + 10 + 14) are ceilings for
+    # each step; a normal run takes less (the stack about 1 minute, the
+    # build about 4 and the browser tests about 10 for both projects).
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,7 +53,7 @@ jobs:
         timeout-minutes: 10
         run: node --import tsx scripts/foundation-e2e.mjs build
       - name: Browser tests (chromium and mobile-chrome)
-        timeout-minutes: 9
+        timeout-minutes: 14
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
         run: >-

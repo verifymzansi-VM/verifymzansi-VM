@@ -1,0 +1,819 @@
+import { randomUUID } from "node:crypto";
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
+import {
+  E2E_FIXTURE,
+  LOCAL_INTERNAL_JOBS_SECRET,
+  LOCAL_OPS_JOBS_SECRET,
+} from "../../scripts/lib/foundation-e2e-target.mjs";
+import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
+import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
+import {
+  browserSessionCookies,
+  caughtMailFor,
+  outboxState,
+  queryTestCopy,
+  readOutboundAttempts,
+  readTestCopy,
+  rpc,
+  serviceRpc,
+  signIn,
+  type TestCopy,
+} from "./support/test-copy";
+import { registerVerifiedMember, type VerifiedMember } from "./support/verified-member";
+
+// Critical-flow test (M0.9c): the money journey on the restored website in
+// foundation mode against the private test copy. A new verified member per
+// run (no plan, no trial) chooses a plan, pays through mock Ozow, and the
+// signed notification settles it; the plan becomes active and a post uses its
+// slot; a lost notification is settled by the 10-minute status check; a
+// payment declined at the bank can be paid again; the receipt email arrives;
+// an Urgent add-on is bought; a failed first attempt is retried.
+//
+// Three steps are broken today and are marked test.fail(), each pinned to its
+// exact known symptom (characterise, support/known-break.ts); any other
+// outcome turns the run red:
+// - "the receipt email ... payment details": PAY-06, fixed by M3.7. The
+//   "Payment received" email has no amount, date, plan, bank reference or
+//   invoice number, and sends the member to Billing for an invoice.
+// - "an Urgent add-on ... shows its label": BL-05, paused by M1.9 and fixed by
+//   M1.10. The purchase settles and the owner sees "Already urgent", but
+//   visitors see no Urgent label. (M1.9 pauses sales: that step must then show
+//   its message instead.)
+// - "a failed first attempt ... retried later": PAY-03, fixed by M3.1. The
+//   retry reuses the expired payment window and the same idempotency key.
+// The tests share one member and run in order; a failure skips the rest, so
+// the marked steps come after the working flows.
+//
+// The provider is the copy's mock (support/mock-ozow.ts): its payment page is
+// served here, paying sends a notice signed with the copy's synthetic secret to
+// the website's real notification route (real signature check), and its
+// lookup stand-in on 127.0.0.1 answers the status checks. Ozow is never
+// contacted: browser requests may only reach the copy's website, its database
+// gateway and the mock payment page (anything else is aborted and fails the
+// test), and the website's own server runs behind the copy's outbound fence,
+// whose log must show no new request at all.
+//
+// The member's business post goes to the website route its form posts to
+// (POST /api/businesses, as in member-post-publish.spec.ts: the form page
+// cannot open until M1.1), and a moderator approves it through the production
+// commands (the staff screens are M0.9d).
+
+const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
+const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const PAY06 = "PAY-06, fixed by M3.7";
+const BL05 = "BL-05, paused by M1.9 and fixed by M1.10";
+const PAY03 = "PAY-03, fixed by M3.1";
+const URGENT_BUTTON = "Mark this business profile as urgent (R10 for 7 days)";
+/** Today's "Payment received" email body (src/lib/services/email.ts). */
+const RECEIPT_TODAY =
+  /^Payment received\s+Your payment has been recorded\. View your posting allowance and invoice in Billing\.\s+Sign in to view the details: https:\/\/\S+\/billing\s*$/;
+
+// A service worker could fetch outside page routing; the allowlist must see every request.
+test.use({ serviceWorkers: "block" });
+test.describe.configure({ mode: "serial" });
+
+type Plan = { id: string; code: string; label: string; price_cents: string };
+type Reply = { method: string; path: string; status: number; body: unknown };
+type Payment = { id: string; requestId: string; merchantReference: string };
+
+const ozow = new MockOzow();
+
+/** Lets only the copy's website, its gateway and the mock payment page through,
+ * serves the mock payment page, and records the website's API replies. */
+async function guard(context: BrowserContext) {
+  const outside: string[] = [];
+  const failures: string[] = [];
+  const replies: Reply[] = [];
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.origin === MOCK_PAYMENT_ORIGIN) {
+      try {
+        const served = await ozow.handle(url);
+        return await route.fulfill(served);
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : String(error));
+        return route.fulfill({ status: 500, body: "Mock provider failure" });
+      }
+    }
+    if (url.origin !== APP_ORIGIN && url.origin !== API_ORIGIN) {
+      outside.push(url.origin);
+      return route.abort("blockedbyclient");
+    }
+    if (
+      url.origin !== APP_ORIGIN ||
+      !url.pathname.startsWith("/api/") ||
+      request.method() === "GET"
+    )
+      return route.continue();
+    let response;
+    let bytes: Buffer;
+    try {
+      response = await route.fetch({ maxRedirects: 0 });
+      bytes = await response.body();
+    } catch (error) {
+      // The test already ended (its page closed mid-request); nothing to record.
+      if (/disposed|closed/i.test(String(error))) return;
+      // Recorded, not thrown: every step checks `failures`, and an error in a
+      // route handler would otherwise fail a marked test outside its pin.
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${request.method()} ${url.pathname}: ${message.slice(0, 200)}`);
+      return route.abort("failed").catch(() => undefined);
+    }
+    let body: unknown = `${bytes.length} bytes`;
+    if (/json/i.test(response.headers()["content-type"] ?? ""))
+      try {
+        body = JSON.parse(bytes.toString("utf8"));
+      } catch {
+        // Malformed JSON; keep the size only.
+      }
+    replies.push({ method: request.method(), path: url.pathname, status: response.status(), body });
+    return route.fulfill({ response, body: bytes });
+  });
+  const reply = (pathname: string) => replies.filter((entry) => entry.path === pathname);
+  return { outside, failures, reply };
+}
+
+/** The website's server tried nothing off this machine since `mark` (the
+ * copy's outbound fence records every such attempt, by origin). */
+function expectNoOutboundSince(mark: number) {
+  expect(readOutboundAttempts().slice(mark)).toEqual([]);
+}
+
+async function signInBrowser(context: BrowserContext, person: VerifiedMember) {
+  const session = await browserSessionCookies(readTestCopy(), person);
+  expect(session.accountId).toBe(person.id);
+  await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+}
+
+function paymentRow(id: string) {
+  const [status, fulfilment, kind, amount, request, transaction] = queryTestCopy(
+    "select status, fulfillment_status, product_kind, amount_cents, coalesce(provider_request_id, ''), " +
+      `coalesce(provider_transaction_id, '') from private.payments where id = '${id}';`
+  ).split("|");
+  return { status, fulfilment, kind, amount, request, transaction };
+}
+
+/** Every entitlement a payment created: source, area, status, slots, days. */
+function entitlementsOf(paymentId: string) {
+  return queryTestCopy(
+    "select source, area, status, slot_capacity, " +
+      "round(extract(epoch from ends_at - starts_at) / 86400) from private.entitlements " +
+      `where payment_id = '${paymentId}';`
+  )
+    .split("\n")
+    .filter(Boolean);
+}
+
+/** The posting allowance the member's posting forms read. */
+async function allowance(page: Page, area: "MZANSI_BUSINESS" | "MZANSI_MARKET") {
+  return page.evaluate(async (section) => {
+    const response = await fetch(`/api/billing/allowance?area=${section}`, { cache: "no-store" });
+    return { status: response.status, body: await response.json() };
+  }, area);
+}
+
+/** From the confirmation page to the mock payment page; a new quote each time. */
+async function checkoutToMockPage(page: Page, reply: (path: string) => Reply[], plan: Plan) {
+  await page.goto(`/billing/checkout?plan=${plan.id}`);
+  await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+  await expect(page.getByText(plan.label, { exact: true })).toBeVisible();
+  const before = reply("/api/billing/create-checkout").length;
+  await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
+  await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+  await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
+  const created = reply("/api/billing/create-checkout").slice(before);
+  expect(created).toEqual([expect.objectContaining({ status: 200 })]);
+  const id = (created[0].body as { paymentId: string }).paymentId;
+  expect(id).toMatch(UUID);
+  expect(new URL(page.url()).searchParams.get("paymentId")).toBe(id);
+  expect(paymentRow(id)).toMatchObject({
+    status: "pending",
+    kind: "plan",
+    amount: plan.price_cents,
+    request: `mock-${id}`,
+  });
+  return paymentOf(id);
+}
+
+function paymentOf(id: string): Payment {
+  const [requestId, merchantReference] = queryTestCopy(
+    `select provider_request_id, merchant_reference from private.payments where id = '${id}';`
+  ).split("|");
+  return { id, requestId, merchantReference };
+}
+
+/** Runs the website's job route once, as the ops-jobs Worker does every minute. */
+async function runOpsJob(request: APIRequestContext) {
+  const response = await request.post("/api/webhooks/ops-jobs", {
+    headers: { Authorization: `Bearer ${LOCAL_OPS_JOBS_SECRET}` },
+    maxRedirects: 0,
+  });
+  expect(response.status()).toBe(200);
+  return (await response.json()) as { claimed: number; succeeded: number; retrying: number };
+}
+
+async function call(copy: TestCopy, name: string, body: unknown, token?: string) {
+  const result = await rpc(copy, name, body, token);
+  if (result.status !== 200) throw new Error(`Command ${name} answered ${result.status}`);
+  return result.data;
+}
+
+function postExists(id: string) {
+  return queryTestCopy(`select count(*) from private.posts where id = '${id}';`) !== "0";
+}
+
+/** Deletes the member's post with the command the website's Delete button uses. */
+async function deleteByCommand(id: string) {
+  const session = await signIn(copy, member);
+  const revision = Number(queryTestCopy(`select revision from private.posts where id = '${id}';`));
+  await call(
+    copy,
+    "execute_my_frontend_post_action",
+    {
+      p_request: randomUUID(),
+      p_post: id,
+      p_expected_revision: revision,
+      p_action: "delete",
+      p_kind: "business",
+      p_area: "business",
+    },
+    session.token
+  );
+}
+
+// Made in beforeAll, never at import time: listing specs must not touch the copy.
+let copy: TestCopy;
+let member: VerifiedMember;
+let plans: Record<"business" | "market" | "tourism" | "retry", Plan>;
+let planPayment: Payment;
+let business: { name: string; id: string };
+
+test.describe("checkout to fulfilment", () => {
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    copy = readTestCopy();
+    const catalogue = await rpc(copy, "billing_catalogue", {});
+    expect(catalogue.status).toBe(200);
+    const byCode = (code: string) => {
+      const plan = (catalogue.data.plans as Plan[]).find((entry) => entry.code === code);
+      if (!plan) throw new Error(`The catalogue has no plan ${code}`);
+      return plan;
+    };
+    plans = {
+      business: byCode("business_30d"),
+      market: byCode("market_30d"),
+      tourism: byCode("tourism_30d"),
+      retry: byCode("business_90d"),
+    };
+    member = await registerVerifiedMember("payer");
+    business = { name: `Paid Studio ${member.lastName.slice(-8)}`, id: "" };
+    await ozow.start();
+  });
+
+  // A marked step may fail only through its known break (support/known-break.ts).
+  test.afterEach(({}, testInfo) => requireOnlyKnownBreak(testInfo));
+
+  test.afterAll(async () => {
+    try {
+      // Leave no public post behind when a step failed before the member
+      // deleted it: the copy's showroom is shared with the other specs.
+      if (business?.id && postExists(business.id)) await deleteByCommand(business.id);
+    } finally {
+      await ozow.stop();
+    }
+  });
+
+  test("a member chooses a plan, pays at mock Ozow, and the signed notification activates it", async ({
+    context,
+    page,
+  }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    await signInBrowser(context, member);
+    const shortcut = page
+      .getByRole("region", { name: "Shortcuts" })
+      .getByRole("link", { name: /Plans and billing/ });
+    await page.goto("/dashboard");
+    await expect(shortcut).toContainText("No paid plan yet");
+
+    planPayment = await checkoutToMockPage(page, reply, plans.business);
+    await page.getByRole("button", { name: "Pay with the test bank" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${planPayment.id}`);
+    await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
+
+    // One signed notice, accepted by the real route and settled in SQL.
+    expect(ozow.notifications.filter((entry) => entry.paymentId === planPayment.id)).toEqual([
+      {
+        paymentId: planPayment.id,
+        transactionId: expect.stringMatching(UUID),
+        status: 200,
+        body: {
+          success: true,
+          result: {
+            outcome: "completed",
+            payment_id: planPayment.id,
+            fulfillment_status: "fulfilled",
+          },
+        },
+      },
+    ]);
+    const { transactionId } = ozow.notifications.at(-1)!;
+    expect(paymentRow(planPayment.id)).toEqual({
+      status: "complete",
+      fulfilment: "fulfilled",
+      kind: "plan",
+      amount: plans.business.price_cents,
+      request: planPayment.requestId,
+      transaction: transactionId,
+    });
+    expect(entitlementsOf(planPayment.id)).toEqual(["retail_paid|business|active|1|30"]);
+
+    // The plan is active for the member: dashboard shortcut and posting allowance.
+    await page.goto("/dashboard");
+    await expect(shortcut).toContainText(plans.business.label);
+    expect(await allowance(page, "MZANSI_BUSINESS")).toMatchObject({
+      status: 200,
+      body: { capacity: 1, used: 0, hasPaidPlan: true, sources: ["retail_paid"] },
+    });
+
+    // The real signature check: a replayed notice changes nothing, a notice
+    // signed with another secret is refused.
+    const notice = ozow.lastNotice!;
+    expect(await ozow.post(notice)).toMatchObject({
+      status: 200,
+      body: { success: true, result: { outcome: "duplicate_event", payment_id: planPayment.id } },
+    });
+    const forged = await ozow.notify(
+      JSON.parse(notice.body).data,
+      `whsec_${Buffer.from("not the copy's notification secret").toString("base64")}`
+    );
+    expect(forged).toEqual({ status: 401, body: { error: "Invalid webhook signature" } });
+    expect(entitlementsOf(planPayment.id)).toHaveLength(1);
+
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a business post uses the paid plan's slot and goes live after review", async ({
+    context,
+    page,
+  }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    await signInBrowser(context, member);
+    // Any member page gives the browser the CSRF cookie the form would use.
+    await page.goto("/dashboard");
+    const submitted = await page.evaluate(
+      async ({ name, slug }) => {
+        const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+        const terms = await fetch("/api/foundation/posting-terms", { cache: "no-store" }).then(
+          (response) => response.json()
+        );
+        const response = await fetch("/api/businesses", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "x-csrf-token": token },
+          body: JSON.stringify({
+            postRequestId: crypto.randomUUID(),
+            postingTerms: { version: terms.version, document_hash: terms.document_hash },
+            business_name: name,
+            slug,
+            business_type: "online_only",
+            category: "general_other",
+            description: "Hand-printed posters and frames, ordered online and delivered.",
+            location_province: "KwaZulu-Natal",
+            location_city: "Richards Bay",
+            contact_methods: ["form"],
+            category_details: {
+              customer_access: { version: 2, methods: ["online"], publishAddress: false },
+            },
+            termsAccepted: true,
+          }),
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { name: business.name, slug: `paid-studio-${member.lastName.slice(-8)}` }
+    );
+    expect(submitted).toMatchObject({
+      status: 200,
+      body: { success: true, pendingReview: true, status: "pending_moderation" },
+    });
+    business.id = (submitted.body as { id: string }).id;
+    expect(business.id).toMatch(UUID);
+
+    // The submission took the paid plan's slot (the member has nothing else).
+    expect(
+      queryTestCopy(
+        "select e.source, e.payment_id from private.post_activations a " +
+          "join private.entitlements e on e.id = a.entitlement_id " +
+          `where a.post_id = '${business.id}' and a.released_at is null;`
+      )
+    ).toBe(`retail_paid|${planPayment.id}`);
+    expect(await allowance(page, "MZANSI_BUSINESS")).toMatchObject({
+      status: 200,
+      body: { capacity: 1, used: 1, hasPaidPlan: true },
+    });
+
+    // A moderator approves it (production commands; the staff screens are M0.9d).
+    const moderator = await signIn(copy, "moderator");
+    const revision = Number(
+      queryTestCopy(`select revision from private.posts where id = '${business.id}';`)
+    );
+    const lease = await call(
+      copy,
+      "claim_queue_item",
+      { p_subject: "post", p_id: business.id },
+      moderator.token
+    );
+    await call(
+      copy,
+      "moderate_post",
+      {
+        p_post_id: business.id,
+        p_expected_revision: revision,
+        p_decision: "approve",
+        p_reason: null,
+        p_claim_generation: lease.claim_generation,
+        p_claim_nonce: lease.claim_nonce,
+      },
+      moderator.token
+    );
+    expect(queryTestCopy(`select status from private.posts where id = '${business.id}';`)).toBe(
+      "live"
+    );
+    await context.clearCookies();
+    await page.goto(`/mzansi-business/${business.id}`);
+    await expect(page.getByText(business.name).filter({ visible: true }).first()).toBeVisible();
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a payment whose notification is lost is settled by the 10-minute status check", async ({
+    context,
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    await signInBrowser(context, member);
+    const lost = await checkoutToMockPage(page, reply, plans.market);
+    // The member pays; neither the notice nor the member comes back.
+    ozow.sendNotifications = false;
+    ozow.memberReturns = false;
+    try {
+      await page.getByRole("button", { name: "Pay with the test bank" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Payment made at the test bank" })
+      ).toBeVisible();
+    } finally {
+      ozow.sendNotifications = true;
+      ozow.memberReturns = true;
+    }
+    await page.close();
+    expect(ozow.notifications.filter((entry) => entry.paymentId === lost.id)).toEqual([]);
+    expect(paymentRow(lost.id).status).toBe("pending");
+    expect(entitlementsOf(lost.id)).toEqual([]);
+
+    // The status check: the payment-cleanup Worker calls this route every 10
+    // minutes with the job secret. Without it the route refuses.
+    const job = (secret: string) =>
+      request.post("/api/internal/payments/reconcile", {
+        headers: { Authorization: `Bearer ${secret}` },
+        maxRedirects: 0,
+      });
+    expect((await job("not-the-job-secret")).status()).toBe(401);
+    const lookups = ozow.lookups.length;
+    // Each run checks up to 20 payments, the never-checked first (oldest
+    // first), so earlier runs' leftovers can take a run or two.
+    for (let run = 0; run < 5 && paymentRow(lost.id).status === "pending"; run++) {
+      const response = await job(LOCAL_INTERNAL_JOBS_SECRET);
+      expect(response.status()).toBe(200);
+      expect(await response.json()).toMatchObject({ failures: 0 });
+    }
+    const made = ozow.made.filter((entry) => entry.paymentId === lost.id);
+    expect(made).toEqual([
+      { paymentId: lost.id, transactionId: expect.stringMatching(UUID), status: "Successful" },
+    ]);
+    expect(paymentRow(lost.id)).toEqual({
+      status: "complete",
+      fulfilment: "fulfilled",
+      kind: "plan",
+      amount: plans.market.price_cents,
+      request: lost.requestId,
+      transaction: made[0].transactionId,
+    });
+    expect(entitlementsOf(lost.id)).toEqual(["retail_paid|market|active|1|30"]);
+    // It asked the copy's stand-in about exactly this request, with no
+    // credentials, and never Ozow (the fence saw nothing).
+    const asked = ozow.lookups
+      .slice(lookups)
+      .filter((entry) => entry.path === `/v1/payments/${lost.requestId}/transactions`);
+    expect(asked).toEqual([
+      {
+        method: "GET",
+        path: `/v1/payments/${lost.requestId}/transactions`,
+        query: expect.stringMatching(
+          /^\?fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}&limit=50&offset=0$/
+        ),
+        credentials: false,
+      },
+    ]);
+    expect(ozow.lookups.filter((entry) => entry.credentials)).toEqual([]);
+
+    // The member comes back later and sees it confirmed.
+    const later = await context.newPage();
+    await later.goto(`/billing/success?payment=${lost.id}`);
+    await expect(later.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a payment declined at the bank can be paid again", async ({ context, page }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    await signInBrowser(context, member);
+    const declined = await checkoutToMockPage(page, reply, plans.tourism);
+    await page.getByRole("button", { name: "Decline at the test bank" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${declined.id}`);
+    await expect(page.getByRole("heading", { name: "Payment didn't go through" })).toBeVisible();
+    expect(ozow.notifications.at(-1)).toMatchObject({
+      paymentId: declined.id,
+      status: 200,
+      body: { success: true, result: { outcome: "not_paid", payment_id: declined.id } },
+    });
+    expect(paymentRow(declined.id).status).toBe("failed");
+    expect(entitlementsOf(declined.id)).toEqual([]);
+
+    // Again: a new quote, paid this time.
+    const paid = await checkoutToMockPage(page, reply, plans.tourism);
+    expect(paid.id).not.toBe(declined.id);
+    await page.getByRole("button", { name: "Pay with the test bank" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${paid.id}`);
+    await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
+    expect(paymentRow(paid.id)).toMatchObject({ status: "complete", fulfilment: "fulfilled" });
+    expect(entitlementsOf(paid.id)).toEqual(["retail_paid|tourism_events|active|1|30"]);
+    expect(paymentRow(declined.id).status).toBe("failed");
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("the receipt email arrives with the payment details", async ({ request }) => {
+    test.fail(true, PAY06);
+    // Generous; characterise gives up 15 s before this limit (a test timeout
+    // would count as the expected failure).
+    test.setTimeout(180_000);
+    await characterise(PAY06, async () => {
+      const mark = readOutboundAttempts().length;
+      const outboxId = queryTestCopy(
+        "select id from private.outbox_events where kind = 'payment_completed' " +
+          `and subject_id = '${planPayment.id}';`
+      );
+      expect(outboxId).toMatch(UUID);
+      // Each run of the job sends at most one email, oldest first.
+      for (let run = 0; run < 20 && !outboxState(outboxId).processed; run++)
+        expect((await runOpsJob(request)).retrying).toBe(0);
+      expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
+      const mail = await caughtMailFor(member.email, `foundation-outbox/${outboxId}`);
+      expect(mail.subject).toBe("Payment received");
+      expectNoOutboundSince(mark);
+
+      const [invoiceNumber, issued] = queryTestCopy(
+        "select invoice_number, to_char(issued_at at time zone 'Africa/Johannesburg', 'YYYY-MM-DD') " +
+          `from private.invoices where payment_id = '${planPayment.id}';`
+      ).split("|");
+      expect(invoiceNumber).toMatch(/^INV-\d{8}-[0-9A-F]{10}$/);
+      const [year, month, day] = issued.split("-").map(Number);
+      const monthName = new Date(Date.UTC(year, month - 1, 15)).toLocaleString("en-ZA", {
+        month: "long",
+        timeZone: "UTC",
+      });
+      // What a receipt shows (M3.7): amount, date, plan, the reference on the
+      // bank statement (the provider reference field, 14 characters) and the
+      // invoice number.
+      const amount = (Number(plans.business.price_cents) / 100).toFixed(2);
+      const shows = (...forms: string[]) => forms.some((form) => mail.text.includes(form));
+      const wanted: Record<string, boolean> = {
+        amount: shows(`R ${amount}`, `R${amount}`),
+        date: shows(issued, `${day} ${monthName} ${year}`, `0${day} ${monthName} ${year}`),
+        plan: shows(plans.business.label),
+        "bank reference": shows(planPayment.merchantReference.slice(0, 14)),
+        "invoice number": shows(invoiceNumber),
+      };
+      const missing = Object.keys(wanted).filter((name) => !wanted[name]);
+      if (missing.length === Object.keys(wanted).length && RECEIPT_TODAY.test(mail.text)) {
+        // PAY-06 as recorded: the email confirms only that a payment was
+        // recorded and sends the member to Billing, which lists no invoices.
+        throw new KnownBreak(
+          `${PAY06}: "Payment received" has no ${missing.join(", ")} and points to Billing for the invoice`
+        );
+      }
+      expect(missing).toEqual([]);
+      expect(mail.text).not.toContain("invoice in Billing");
+    });
+  });
+
+  test("an Urgent add-on bought through mock Ozow shows its label", async ({ context, page }) => {
+    test.fail(true, BL05);
+    // Generous; characterise gives up 15 s before this limit (a test timeout
+    // would count as the expected failure).
+    test.setTimeout(180_000);
+    await characterise(BL05, async () => {
+      const mark = readOutboundAttempts().length;
+      const { outside, failures, reply } = await guard(context);
+      await signInBrowser(context, member);
+      await page.goto("/dashboard/listings");
+      const item = page
+        .getByRole("listitem")
+        .filter({ hasText: business.name })
+        .filter({ has: page.getByRole("button", { name: URGENT_BUTTON }) });
+      await expect(item).toHaveCount(1);
+      await item.getByRole("button", { name: URGENT_BUTTON }).click();
+      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+      const created = reply(`/api/businesses/${business.id}/urgent`);
+      expect(created).toEqual([expect.objectContaining({ status: 200 })]);
+      const addon = paymentOf((created[0].body as { paymentId: string }).paymentId);
+      expect(paymentRow(addon.id)).toMatchObject({
+        status: "pending",
+        kind: "addon",
+        amount: "1000",
+        request: `mock-${addon.id}`,
+      });
+
+      await page.getByRole("button", { name: "Pay with the test bank" }).click();
+      await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${addon.id}`);
+      await expect(page.getByRole("heading", { name: "Payment confirmed" })).toBeVisible();
+      expect(ozow.notifications.at(-1)).toMatchObject({
+        paymentId: addon.id,
+        status: 200,
+        body: { result: { outcome: "completed", fulfillment_status: "fulfilled" } },
+      });
+      // Seven Urgent days on this post, paid by this payment.
+      expect(
+        queryTestCopy(
+          "select kind, round(extract(epoch from ends_at - starts_at) / 86400), " +
+            "starts_at <= now() and ends_at > now() from private.post_addon_windows " +
+            `where post_id = '${business.id}' and payment_id = '${addon.id}' and revoked_at is null;`
+        )
+      ).toBe("urgent|7|t");
+
+      // The owner sees it on My posts.
+      await page.goto("/dashboard/listings");
+      await expect(
+        page
+          .getByRole("listitem")
+          .filter({ hasText: business.name })
+          .getByRole("button", { name: "Already urgent" })
+      ).toBeVisible();
+
+      // Visitors: the post page.
+      await context.clearCookies();
+      await page.goto(`/mzansi-business/${business.id}`);
+      await expect(page.getByText(business.name).filter({ visible: true }).first()).toBeVisible();
+      const label = page.getByText("Urgent", { exact: true }).filter({ visible: true });
+      if ((await label.count()) === 0) {
+        // BL-05 as recorded: paid and active, shown to the owner, invisible to visitors.
+        expect(failures).toEqual([]);
+        expect(outside).toEqual([]);
+        expectNoOutboundSince(mark);
+        throw new KnownBreak(
+          `${BL05}: the paid Urgent window is active and the owner sees "Already urgent", but the post page shows no Urgent label`
+        );
+      }
+      await expect(label.first()).toBeVisible();
+      // And on its card in search (the only result for its unique name).
+      await page.goto(`/search?q=${encodeURIComponent(business.name)}`);
+      await expect(
+        page.getByRole("link", { name: business.name, exact: true }).first()
+      ).toBeVisible();
+      await expect(
+        page.getByText("Urgent", { exact: true }).filter({ visible: true }).first()
+      ).toBeVisible();
+      expect(failures).toEqual([]);
+      expect(outside).toEqual([]);
+      expectNoOutboundSince(mark);
+    });
+  });
+
+  test("the member deletes the post, which frees the plan's slot", async ({ context, page }) => {
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    await signInBrowser(context, member);
+    await page.goto("/dashboard/listings");
+    const item = page
+      .getByRole("listitem")
+      .filter({ hasText: business.name })
+      .filter({ has: page.getByRole("group", { name: "Promote this post" }) });
+    await expect(item).toHaveCount(1);
+    await item.getByRole("button", { name: "Delete", exact: true }).click();
+    await item
+      .getByRole("group", { name: "Delete this post?" })
+      .getByRole("button", { name: "Yes, delete" })
+      .click();
+    await expect
+      .poll(() => reply("/api/content/delete").map((entry) => entry.status))
+      .toEqual([200]);
+    expect(postExists(business.id)).toBe(false);
+    // The plan's slot is free again for the rest of the plan. (Capacity is not
+    // checked: the email job's trial sweep has by now also given the member
+    // the introductory allowance, BL-03.)
+    expect(
+      queryTestCopy(
+        "select count(*) from private.post_activations a " +
+          "join private.entitlements e on e.id = a.entitlement_id " +
+          `where e.payment_id = '${planPayment.id}' and a.released_at is null;`
+      )
+    ).toBe("0");
+    expect(await allowance(page, "MZANSI_BUSINESS")).toMatchObject({
+      status: 200,
+      body: { used: 0, hasPaidPlan: true },
+    });
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a failed first attempt to open the payment page can be retried later", async ({
+    context,
+    page,
+  }) => {
+    test.fail(true, PAY03);
+    test.setTimeout(180_000);
+    await characterise(PAY03, async () => {
+      const mark = readOutboundAttempts().length;
+      const { outside, failures, reply } = await guard(context);
+      // Arranged (trusted local step): the state a failed first attempt leaves.
+      // The website's own two commands ran (the member's quote, the server's
+      // claim) and then the provider call failed, so no request was stored.
+      const session = await signIn(copy, member);
+      const quote = await call(
+        copy,
+        "start_checkout",
+        { p_product_id: plans.retry.id, p_target_post: null },
+        session.token
+      );
+      const failedId = String(quote.payment_id);
+      const claimed = await serviceRpc("claim_checkout_request", {
+        p_payment_id: failedId,
+        p_owner_id: member.id,
+      });
+      expect(claimed).toMatchObject({
+        status: 200,
+        data: { status: "pending", provider_request_id: null, checkout_url: null },
+      });
+      const failedKey = String(claimed.data.idempotency_key);
+      expect(failedKey).toMatch(UUID);
+      // 31 minutes later (the stored times move back; nothing else changes).
+      queryTestCopy(
+        "update private.payments set checkout_claim_until = checkout_claim_until - interval '31 minutes', " +
+          "checkout_expires_at = checkout_expires_at - interval '31 minutes' " +
+          `where id = '${failedId}' and status = 'pending' and provider_request_id is null;`
+      );
+
+      // The member tries again.
+      await signInBrowser(context, member);
+      await page.goto(`/billing/checkout?plan=${plans.retry.id}`);
+      await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+      await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
+      await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(1);
+      const [created] = reply("/api/billing/create-checkout");
+      expect(created.status).toBe(200);
+      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+      const retriedId = (created.body as { paymentId: string }).paymentId;
+      const [secondsLeft, key] = queryTestCopy(
+        "select floor(extract(epoch from checkout_expires_at - now())), provider_idempotency_key " +
+          `from private.payments where id = '${retriedId}';`
+      ).split("|");
+      if (retriedId === failedId && Number(secondsLeft) < 0 && key === failedKey) {
+        // PAY-03 as recorded: the provider would be asked for a payment that
+        // expired before it was created, under the failed attempt's key.
+        expect(failures).toEqual([]);
+        expect(outside).toEqual([]);
+        expectNoOutboundSince(mark);
+        throw new KnownBreak(
+          `${PAY03}: the retry reused the payment window that ended ${-Number(secondsLeft)} s ago and the same idempotency key`
+        );
+      }
+      // Promised (M3.1): a fresh window and a new key (or a new payment, the
+      // stale one closed).
+      expect(Number(secondsLeft)).toBeGreaterThan(25 * 60);
+      expect(key).not.toBe(failedKey);
+      if (retriedId !== failedId) expect(paymentRow(failedId).status).not.toBe("pending");
+      expect(failures).toEqual([]);
+      expect(outside).toEqual([]);
+      expectNoOutboundSince(mark);
+    });
+  });
+});

@@ -5,6 +5,7 @@ import {
   type LaunchValidationMode,
 } from "../src/lib/config/launch-validation";
 import { _resetEnvCacheForTesting, validateEnv } from "../src/lib/config/env";
+import { testFixtureSecretFindings } from "./lib/test-fixture-secrets.mjs";
 
 loadEnvConfig(process.cwd());
 
@@ -44,8 +45,16 @@ async function main(): Promise<void> {
     schemaError = error instanceof Error ? error.message : "Unknown env validation error";
   }
 
+  // Test-only secrets (browser test suites, the foundation test copy) are
+  // public by design and must never be production settings.
+  const testSecrets = mode === "production" ? testFixtureSecretFindings(process.env) : [];
+  if (testSecrets.length > 0)
+    console.log(
+      `  ✗ Test-only secrets: ${testSecrets.join(", ")} use a value from the test suites`
+    );
+
   console.log("");
-  if (!summary.isValid || schemaError) {
+  if (!summary.isValid || schemaError || testSecrets.length > 0) {
     if (schemaError) {
       console.error(schemaError);
     }

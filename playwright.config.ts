@@ -22,7 +22,16 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : Math.min(4, availableParallelism()),
-  reporter: "html",
+  // The skip guard lists every skip and, in CI, fails on any that is not a
+  // documented platform skip (e2e/support/skip-policy.ts).
+  // PLAYWRIGHT_JSON_REPORT adds a JSON report (the visual job summarises it).
+  reporter: [
+    ["html"],
+    ["./e2e/support/skip-guard-reporter.ts"],
+    ...(process.env.PLAYWRIGHT_JSON_REPORT
+      ? [["json", { outputFile: process.env.PLAYWRIGHT_JSON_REPORT }] as const]
+      : []),
+  ],
   timeout: process.env.CI ? 90_000 : 60_000,
   use: {
     baseURL: PLAYWRIGHT_BASE_URL,

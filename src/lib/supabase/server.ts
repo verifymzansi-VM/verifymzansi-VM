@@ -7,11 +7,13 @@ import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
+import { noteLegacyClientCreated } from "@/lib/supabase/legacy-client-signal";
 
 const logger = createLogger("Supabase");
 
 /** Anonymous public reads: never inherit auth cookies into a shared cache. */
 export function createPublicClient(): SupabaseClient {
+  noteLegacyClientCreated("public");
   if (isPlaywrightSupabaseStubMode()) {
     return createPlaywrightStubSupabaseClient() as unknown as SupabaseClient;
   }
@@ -29,6 +31,7 @@ export function createPublicClient(): SupabaseClient {
  * Reads/writes auth cookies via the Next.js `cookies()` API.
  */
 export async function createClient(): Promise<SupabaseClient> {
+  noteLegacyClientCreated("server");
   const cookieStore = await getOptionalCookieStore();
 
   if (isPlaywrightSupabaseStubMode()) {

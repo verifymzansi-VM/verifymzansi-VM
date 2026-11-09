@@ -1,0 +1,623 @@
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
+import {
+  googleMemberSession,
+  registerGoogleMember,
+  type GoogleMember,
+} from "./support/google-member";
+import {
+  browserSessionCookies,
+  latestMailTo,
+  mailCountTo,
+  queryTestCopy,
+  readOutboundAttempts,
+  readTestCopy,
+  sessionCookies,
+  signIn,
+} from "./support/test-copy";
+import {
+  registerConfirmedMember,
+  verifyPhone,
+  type VerifiedMember,
+} from "./support/verified-member";
+
+// Critical-flow test (M0.9e): account recovery and self-service on the
+// restored website in foundation mode against the private test copy. New
+// members per run (each flow that changes or ends an account has its own):
+//   - a member asks for a reset link on the forgot-password page, finds it in
+//     the local mail catcher and opens it: the reset page accepts the
+//     recovery session; an unknown address gets the same answer and no email;
+//     a used link cannot be opened again;
+//   - a member saves a new password from that link and signs in with it;
+//   - a Google member (no password) sets a password from the profile page;
+//   - a member changes the sign-in email (both addresses confirm);
+//   - a member saves a communication choice, which stays saved;
+//   - a member deletes the account and cannot sign in again.
+//
+// Five steps are broken today and are marked test.fail(), each pinned to its
+// exact known symptom (characterise, support/known-break.ts); any other
+// outcome turns the run red:
+// - "a member resets a forgotten password ...": SEC-03, fixed by M1.3. The
+//   reset page sends only the two password fields; the server also needs the
+//   recovery session id and answers 400, so the password never changes.
+// - "a Google member sets a password ...": SEC-03, fixed by M1.4. "Set
+//   Password" sends no CAPTCHA token; the recovery request is refused (400)
+//   and no email is sent.
+// - "... email change ...": SEC-03, fixed by M1.5. The email change route
+//   reads a table of the retired backend and answers 500 before local Auth is
+//   asked; nothing changes and no confirmation is sent.
+// - "... communication choices ...": SEC-09, fixed by M1.7. Saving a choice
+//   writes a table of the retired backend and answers 500 with the database's
+//   own refusal; reading the choices hides the same failure and shows every
+//   choice "off", and the email history beside them fails on every visit.
+// - "delete my account ...": SEC-02, fixed by M1.6c. The delete route reads a
+//   table of the retired backend after re-checking the password and answers
+//   500; the account stays and can still sign in.
+// The tests run in order; a failure skips the rest, so the marked steps come
+// after the working flow.
+//
+// Emails: local Auth sends its own emails (reset links) through its SMTP
+// setting straight to the copy's mail catcher (Mailpit); the website's emails
+// go through the copy's relay to the same catcher (.test recipients only).
+// Nothing is delivered. Network: browser requests may only reach the copy's
+// website and its local database gateway (anything else is aborted and fails
+// the test), and the website's own server runs behind the copy's outbound
+// fence, whose log may show only the password breach check it answers itself.
+//
+// The CAPTCHA: the site's test mode hands forms the bypass token, which the
+// foundation recovery request refuses by design (production Auth verifies real
+// tokens). The test therefore swaps that one token in the forgot-password
+// request for a stand-in token (as member-post-publish.spec.ts does for
+// sign-up); the copy's local Auth has no CAPTCHA secret and accepts it, as
+// hosted Auth accepts a real widget token. A request without a token is passed
+// on unchanged.
+//
+// The Google member is made the way local Auth stores a Google sign-up and
+// signs in through a one-time local Auth link (support/google-member.ts).
+
+const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
+const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SEC03_RESET = "SEC-03 (password reset), fixed by M1.3";
+const SEC03_GOOGLE = "SEC-03 (Set a password), fixed by M1.4";
+const SEC03_EMAIL = "SEC-03 (email change), fixed by M1.5";
+const SEC09 = "SEC-09, fixed by M1.7";
+const SEC02 = "SEC-02, fixed by M1.6c";
+const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
+const RESET_PATH = "/api/auth/reset-password";
+const RECOVERY_PATH = "/api/auth/forgot-password";
+const EMAIL_CHANGE_PATH = "/api/account/email/change";
+const PREFERENCES_PATH = "/api/communications/preferences";
+const EMAIL_ACTIVITY_PATH = "/api/communications/email-activity";
+const DELETE_PATH = "/api/account/delete";
+/** The recovery request's answer, the same for every address. */
+const RECOVERY_ANSWER = {
+  ok: true,
+  message: "If this address has an account, check your inbox for the next step.",
+};
+/** A link to local Auth, as it appears in a caught email. */
+const AUTH_LINK = /http:\/\/127\.0\.0\.1:\d+\/auth\/v1\/verify\?[^\s)\]>"]+/;
+
+// A service worker could fetch outside page routing; the allowlist must see every request.
+test.use({ serviceWorkers: "block" });
+test.describe.configure({ mode: "serial" });
+
+type Reply = { method: string; path: string; status: number; body: unknown };
+/** What a request sent: its JSON field names only (never values such as
+ * passwords), and on the recovery request the CAPTCHA token the page sent. */
+type Sent = { method: string; path: string; fields: string[]; captcha?: unknown };
+
+/** Lets only the copy's website and its gateway through, records the website's
+ * API replies and the field names each request sent, and swaps the CAPTCHA
+ * test-mode token on the recovery request (see above). */
+async function guard(context: BrowserContext) {
+  const outside: string[] = [];
+  const failures: string[] = [];
+  const replies: Reply[] = [];
+  const sent: Sent[] = [];
+  await context.route("**/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.origin !== APP_ORIGIN && url.origin !== API_ORIGIN) {
+      outside.push(url.origin);
+      return route.abort("blockedbyclient");
+    }
+    if (url.origin !== APP_ORIGIN || !url.pathname.startsWith("/api/")) return route.continue();
+    let postData: string | undefined;
+    if (request.method() !== "GET") {
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(request.postData() || "{}");
+      } catch {
+        // Not JSON; no fields to record.
+      }
+      sent.push({
+        method: request.method(),
+        path: url.pathname,
+        fields: Object.keys(body).sort(),
+        ...(url.pathname === RECOVERY_PATH ? { captcha: body.turnstileToken } : {}),
+      });
+      // Only the site's test-mode token is swapped; anything else goes as sent.
+      if (url.pathname === RECOVERY_PATH && body.turnstileToken === "dev-turnstile-bypass")
+        postData = JSON.stringify({ ...body, turnstileToken: CAPTCHA_STAND_IN });
+    }
+    let response;
+    let bytes: Buffer;
+    try {
+      response = await route.fetch({ maxRedirects: 0, ...(postData ? { postData } : {}) });
+      bytes = await response.body();
+    } catch (error) {
+      // The test already ended (its page closed mid-request); nothing to record.
+      if (/disposed|closed/i.test(String(error))) return;
+      // Recorded, not thrown: every step checks `failures`, and an error in a
+      // route handler would otherwise fail a marked test outside its pin.
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${request.method()} ${url.pathname}: ${message.slice(0, 200)}`);
+      return route.abort("failed").catch(() => undefined);
+    }
+    let body: unknown = `${bytes.length} bytes`;
+    if (/json/i.test(response.headers()["content-type"] ?? ""))
+      try {
+        body = JSON.parse(bytes.toString("utf8"));
+      } catch {
+        // Malformed JSON; keep the size only.
+      }
+    replies.push({ method: request.method(), path: url.pathname, status: response.status(), body });
+    return route.fulfill({ response, body: bytes });
+  });
+  const reply = (pathname: string, method = "POST") =>
+    replies.filter((entry) => entry.path === pathname && entry.method === method);
+  const sentTo = (pathname: string, method = "POST") =>
+    sent.filter((entry) => entry.path === pathname && entry.method === method);
+  return { outside, failures, reply, sentTo };
+}
+
+type Guarded = Awaited<ReturnType<typeof guard>>;
+
+/** No request left the browser's allowlist and no route handler failed. */
+function expectContained(guarded: Pick<Guarded, "outside" | "failures">) {
+  expect(guarded.failures).toEqual([]);
+  expect(guarded.outside).toEqual([]);
+}
+
+/** The website's server contacted nothing off this machine since `mark`: the
+ * only entry the copy's fence may have recorded is the password breach check
+ * it answers itself. */
+function expectNoProviderSince(mark: number) {
+  expect(
+    readOutboundAttempts()
+      .slice(mark)
+      .filter(
+        (entry) =>
+          entry.outcome !== "answered-locally" || entry.origin !== "https://api.pwnedpasswords.com"
+      )
+  ).toEqual([]);
+}
+
+/** The same as a reply's body, compared as JSON (for exact pins). */
+function sameJson(actual: unknown, expected: unknown) {
+  return JSON.stringify(actual) === JSON.stringify(expected);
+}
+
+async function signInBrowser(context: BrowserContext, member: VerifiedMember) {
+  const session = await browserSessionCookies(readTestCopy(), member);
+  await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+  expect(session.accountId).toBe(member.id);
+}
+
+/** Whether local Auth accepts this email and password (a real sign-in). */
+async function canSignIn(email: string, password: string) {
+  return signIn(readTestCopy(), { email, password }).then(
+    () => true,
+    () => false
+  );
+}
+
+/** The local Auth link in the newest email to `address` since `after`. */
+async function authLinkFor(address: string, after: number) {
+  const mail = await latestMailTo(address, { after });
+  const link = mail.text.match(AUTH_LINK)?.[0];
+  if (!link) throw new Error("The email has no local Auth link");
+  const url = new URL(link.replaceAll("&amp;", "&"));
+  if (url.origin !== API_ORIGIN) throw new Error("Auth links stay on the local gateway");
+  return url;
+}
+
+/**
+ * The forgot-password page: asks for a reset link for `email`, as a visitor
+ * does. Returns when the page confirms (the same answer for every address).
+ */
+async function requestResetLink(page: Page, guarded: Guarded, email: string) {
+  const before = guarded.reply(RECOVERY_PATH).length;
+  await page.goto("/forgot-password");
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect.poll(() => guarded.reply(RECOVERY_PATH).length).toBe(before + 1);
+  expect(guarded.reply(RECOVERY_PATH).at(-1)).toMatchObject({ status: 200, body: RECOVERY_ANSWER });
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+}
+
+/**
+ * Asks for a reset link for the member and opens it from the mail catcher in
+ * the same browser (which holds the sign-in verifier the link needs). Returns
+ * the link once the reset page has accepted the recovery session.
+ */
+async function openResetLink(page: Page, guarded: Guarded, member: VerifiedMember) {
+  const sentAfter = Date.now() - 1000;
+  await requestResetLink(page, guarded, member.email);
+  const link = await authLinkFor(member.email, sentAfter);
+  await page.goto(link.href);
+  await page.waitForURL(`${APP_ORIGIN}/reset-password`);
+  await expect(page.getByRole("heading", { name: "Set a new password" })).toBeVisible({
+    timeout: 20_000,
+  });
+  const check = guarded.reply(RESET_PATH, "GET").at(-1);
+  expect(check?.status).toBe(200);
+  expect(check?.body).toMatchObject({ valid: true, accountId: member.id });
+  expect(String((check?.body as { recoverySessionId?: unknown }).recoverySessionId)).toMatch(UUID);
+  return link;
+}
+
+/** Opens one tab of the profile page. */
+async function openProfileTab(page: Page, tab: "Security" | "Account") {
+  await page.goto("/dashboard/profile");
+  await page.getByRole("tab", { name: tab }).click();
+  await expect(page.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
+}
+
+/** The toast the page shows for an outcome, by its title. */
+function toast(page: Page, title: string) {
+  return page.getByText(title, { exact: true }).first();
+}
+
+/** The member's sign-in email and any email change local Auth holds open. */
+function storedEmail(id: string) {
+  return queryTestCopy(
+    `select email || '|' || coalesce(email_change, '') from auth.users where id = '${id}';`
+  );
+}
+
+// Made in beforeAll, never at import time: listing specs must not touch the copy.
+let resetter: VerifiedMember;
+let google: GoogleMember;
+let mover: VerifiedMember;
+let chooser: VerifiedMember;
+let leaver: VerifiedMember;
+
+test.describe("account recovery and self-service", () => {
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    // The reset pages need no more than a confirmed email; the member pages
+    // (profile, communication) open only once the phone is verified. The
+    // last member is made only to be deleted.
+    const withPhone = async <T extends { id: string }>(member: T) => {
+      await verifyPhone(member.id);
+      return member;
+    };
+    resetter = await registerConfirmedMember("resetter");
+    google = await withPhone(await registerGoogleMember("google"));
+    mover = await withPhone(await registerConfirmedMember("mover"));
+    chooser = await withPhone(await registerConfirmedMember("chooser"));
+    leaver = await withPhone(await registerConfirmedMember("leaver"));
+  });
+
+  // A marked step may fail only through its known break (support/known-break.ts).
+  test.afterEach(({}, testInfo) => requireOnlyKnownBreak(testInfo));
+
+  test("a member asks for a reset link and opens it from the mail catcher", async ({
+    browser,
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    // An address without an account gets the same answer and no email.
+    const unknown = `unknown-${resetter.lastName.slice(-8)}@verifymzansi.test`;
+    await requestResetLink(await context.newPage(), guarded, unknown);
+    const link = await openResetLink(page, guarded, resetter);
+    // The page sent the site's test-mode CAPTCHA token (swapped above).
+    expect(guarded.sentTo(RECOVERY_PATH).map((entry) => entry.captcha)).toEqual([
+      "dev-turnstile-bypass",
+      "dev-turnstile-bypass",
+    ]);
+    expect(await mailCountTo(unknown)).toBe(0);
+    // The link works once: opened again, local Auth itself refuses it as used
+    // ("otp_expired", after "#") and the website sends the visitor back to ask
+    // for a new one.
+    const other = await browser.newContext({ serviceWorkers: "block" });
+    try {
+      const otherGuard = await guard(other);
+      const again = await other.newPage();
+      await again.goto(link.href);
+      await again.waitForURL(
+        (url) =>
+          url.origin === APP_ORIGIN &&
+          url.pathname === "/forgot-password" &&
+          url.search === "?error=recovery_failed"
+      );
+      expect(new URL(again.url()).hash).toContain("error_code=otp_expired");
+      // The visitor can ask for a new link there (the page does not say why).
+      await expect(again.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
+      expectContained(otherGuard);
+    } finally {
+      await other.close();
+    }
+    // Opening the link changed nothing yet: the password still works.
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
+  test("a member resets a forgotten password and signs in with the new one", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    test.fail(true, SEC03_RESET);
+    await characterise(SEC03_RESET, async () => {
+      const mark = readOutboundAttempts().length;
+      const guarded = await guard(context);
+      await openResetLink(page, guarded, resetter);
+      const newPassword = `${resetter.password}-new`;
+      const changedAfter = Date.now() - 1000;
+      await page.getByLabel("New password", { exact: true }).fill(newPassword);
+      await page.getByLabel("Confirm password", { exact: true }).fill(newPassword);
+      await page.getByRole("button", { name: "Save password" }).click();
+      await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+      const saved = guarded.reply(RESET_PATH)[0];
+      if (
+        saved.status === 400 &&
+        sameJson(saved.body, { error: "Use matching passwords of 12–128 characters" }) &&
+        guarded.sentTo(RESET_PATH)[0].fields.join() === "confirmPassword,password"
+      ) {
+        // SEC-03 as recorded: the page sends no recovery session id, the
+        // server refuses the form, and the password does not change.
+        await expect(toast(page, "Password reset failed")).toBeVisible();
+        await expect(page).toHaveURL(`${APP_ORIGIN}/reset-password`);
+        expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
+        expect(await canSignIn(resetter.email, newPassword)).toBe(false);
+        expectContained(guarded);
+        expectNoProviderSince(mark);
+        throw new KnownBreak(
+          `${SEC03_RESET}: the reset page sends no recovery session id and the new password is refused (400)`
+        );
+      }
+      // Promised (M1.3): saved, the member is sent to sign in, the new password
+      // works and the old one fails, and a notice of the change is emailed.
+      expect(saved).toMatchObject({ status: 200, body: { success: true } });
+      await page.waitForURL(`${APP_ORIGIN}/login`);
+      expect(await canSignIn(resetter.email, newPassword)).toBe(true);
+      expect(await canSignIn(resetter.email, resetter.password)).toBe(false);
+      await latestMailTo(resetter.email, { after: changedAfter });
+      resetter.password = newPassword;
+      expectContained(guarded);
+      expectNoProviderSince(mark);
+    });
+  });
+
+  test("a Google member sets a password from the security tab", async ({ context, page }) => {
+    test.setTimeout(120_000);
+    test.fail(true, SEC03_GOOGLE);
+    await characterise(SEC03_GOOGLE, async () => {
+      const mark = readOutboundAttempts().length;
+      const guarded = await guard(context);
+      const session = await sessionCookies(readTestCopy(), await googleMemberSession(google));
+      expect(session.accountId).toBe(google.id);
+      await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+      await openProfileTab(page, "Security");
+      // The page knows the account has no password.
+      await expect(
+        page.getByText("Set a password so you can also sign in with email.")
+      ).toBeVisible();
+      const requestedAfter = Date.now() - 1000;
+      await page.getByRole("button", { name: "Set Password" }).click();
+      await expect.poll(() => guarded.reply(RECOVERY_PATH).length, { timeout: 20_000 }).toBe(1);
+      const requested = guarded.reply(RECOVERY_PATH)[0];
+      if (
+        requested.status === 400 &&
+        sameJson(requested.body, { error: "Password recovery could not be requested" }) &&
+        guarded.sentTo(RECOVERY_PATH)[0].fields.join() === "email"
+      ) {
+        // SEC-03 as recorded: no CAPTCHA token, so the request is refused and
+        // no email is sent.
+        await expect(toast(page, "Password setup failed")).toBeVisible();
+        expect(await mailCountTo(google.email)).toBe(0);
+        expectContained(guarded);
+        expectNoProviderSince(mark);
+        throw new KnownBreak(
+          `${SEC03_GOOGLE}: "Set Password" sends no CAPTCHA token and the request is refused (400)`
+        );
+      }
+      // Promised (M1.4): the setup email arrives; its link opens the reset
+      // page, the new password is saved and works for email sign-in.
+      expect(requested).toMatchObject({ status: 200 });
+      await expect(toast(page, "Password setup email sent")).toBeVisible();
+      const link = await authLinkFor(google.email, requestedAfter);
+      await page.goto(link.href);
+      await page.waitForURL(`${APP_ORIGIN}/reset-password`);
+      const password = `Local-fixture-google-${google.id.slice(0, 8)}`;
+      await page.getByLabel("New password", { exact: true }).fill(password);
+      await page.getByLabel("Confirm password", { exact: true }).fill(password);
+      await page.getByRole("button", { name: "Save password" }).click();
+      await page.waitForURL(`${APP_ORIGIN}/login`);
+      expect(await canSignIn(google.email, password)).toBe(true);
+      expectContained(guarded);
+      expectNoProviderSince(mark);
+    });
+  });
+
+  test("a member completes an email change after confirming both addresses", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    test.fail(true, SEC03_EMAIL);
+    await characterise(SEC03_EMAIL, async () => {
+      const mark = readOutboundAttempts().length;
+      const guarded = await guard(context);
+      await signInBrowser(context, mover);
+      const newEmail = mover.email.replace(/^mover-/, "moved-");
+      const mailBefore = await mailCountTo(mover.email);
+      await openProfileTab(page, "Account");
+      await page.getByRole("button", { name: "Change" }).click();
+      await page.getByPlaceholder("New email address").fill(newEmail);
+      const requestedAfter = Date.now() - 1000;
+      await page.getByRole("button", { name: "Send confirmation" }).click();
+      await expect.poll(() => guarded.reply(EMAIL_CHANGE_PATH).length, { timeout: 20_000 }).toBe(1);
+      const requested = guarded.reply(EMAIL_CHANGE_PATH)[0];
+      if (
+        requested.status === 500 &&
+        sameJson(requested.body, { error: "Internal server error" }) &&
+        guarded.sentTo(EMAIL_CHANGE_PATH)[0].fields.join() === "newEmail"
+      ) {
+        // SEC-03 as recorded: the route fails before local Auth is asked, so
+        // nothing changes and no confirmation is sent to either address.
+        await expect(toast(page, "Email change failed")).toBeVisible();
+        expect(storedEmail(mover.id)).toBe(`${mover.email}|`);
+        expect(await mailCountTo(newEmail)).toBe(0);
+        expect(await mailCountTo(mover.email)).toBe(mailBefore);
+        expectContained(guarded);
+        expectNoProviderSince(mark);
+        throw new KnownBreak(
+          `${SEC03_EMAIL}: the email change route fails (500) before a confirmation is sent`
+        );
+      }
+      // Promised (M1.5): the current and the new address each get a
+      // confirmation; once both are opened, the new address signs in and the
+      // old one no longer does.
+      expect(requested).toMatchObject({ status: 200 });
+      await expect(toast(page, "Confirmation sent")).toBeVisible();
+      for (const address of [mover.email, newEmail])
+        await page.goto((await authLinkFor(address, requestedAfter)).href);
+      await expect.poll(() => storedEmail(mover.id)).toBe(`${newEmail}|`);
+      expect(await canSignIn(newEmail, mover.password)).toBe(true);
+      expect(await canSignIn(mover.email, mover.password)).toBe(false);
+      expectContained(guarded);
+      expectNoProviderSince(mark);
+    });
+  });
+
+  test("a member saves communication choices and they stay saved after a reload", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    test.fail(true, SEC09);
+    await characterise(SEC09, async () => {
+      const mark = readOutboundAttempts().length;
+      const guarded = await guard(context);
+      await signInBrowser(context, chooser);
+      // "Analytics": M1.7 may hide the marketing switches until consent can be
+      // stored; this choice is not a marketing one.
+      const openChoice = async () => {
+        await page.goto("/dashboard/communication");
+        await page.getByRole("tab", { name: "Preferences" }).click();
+        return page.getByRole("switch", { name: "Analytics" });
+      };
+      const choice = await openChoice();
+      await expect(choice).toHaveAttribute("aria-checked", "false");
+      await choice.click();
+      await expect
+        .poll(() => guarded.reply(PREFERENCES_PATH, "PATCH").length, { timeout: 20_000 })
+        .toBe(1);
+      const saved = guarded.reply(PREFERENCES_PATH, "PATCH")[0];
+      const allOff = {
+        preferences: {
+          marketing_email: false,
+          marketing_sms: false,
+          analytics: false,
+          third_party_sharing: false,
+        },
+      };
+      if (
+        saved.status === 500 &&
+        sameJson(saved.body, { error: "Invalid schema: public" }) &&
+        guarded.sentTo(PREFERENCES_PATH, "PATCH")[0].fields.join() === "analytics"
+      ) {
+        // SEC-09 as recorded: the choice goes to a table of the retired
+        // backend and the database's own refusal reaches the member; reading
+        // hides the same failure (every choice "off"), and the email history
+        // fails on every visit.
+        await expect(toast(page, "Unable to update preference")).toBeVisible();
+        const reloaded = await openChoice();
+        await expect(reloaded).toHaveAttribute("aria-checked", "false");
+        await expect.poll(() => guarded.reply(PREFERENCES_PATH, "GET").length).toBe(2);
+        await expect.poll(() => guarded.reply(EMAIL_ACTIVITY_PATH, "GET").length).toBe(2);
+        for (const read of guarded.reply(PREFERENCES_PATH, "GET"))
+          expect(read).toMatchObject({ status: 200, body: allOff });
+        for (const read of guarded.reply(EMAIL_ACTIVITY_PATH, "GET"))
+          expect(read).toMatchObject({
+            status: 500,
+            body: { error: "Failed to load email activity" },
+          });
+        expectContained(guarded);
+        expectNoProviderSince(mark);
+        throw new KnownBreak(
+          `${SEC09}: saving a communication choice fails (500) and every choice reads as off`
+        );
+      }
+      // Promised (M1.7): saved, still on after a reload, and the email
+      // history loads.
+      expect(saved).toMatchObject({ status: 200 });
+      const reloaded = await openChoice();
+      await expect(reloaded).toHaveAttribute("aria-checked", "true");
+      await expect.poll(() => guarded.reply(EMAIL_ACTIVITY_PATH, "GET").length).toBe(2);
+      for (const read of guarded.reply(EMAIL_ACTIVITY_PATH, "GET")) expect(read.status).toBe(200);
+      expectContained(guarded);
+      expectNoProviderSince(mark);
+    });
+  });
+
+  test("delete my account: the member is signed out and cannot sign in again", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    test.fail(true, SEC02);
+    await characterise(SEC02, async () => {
+      const mark = readOutboundAttempts().length;
+      const guarded = await guard(context);
+      await signInBrowser(context, leaver);
+      await openProfileTab(page, "Account");
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Confirm account deletion" });
+      await dialog.getByLabel("Current password").fill(leaver.password);
+      await dialog.getByLabel("Type DELETE to confirm").fill("DELETE");
+      await dialog.getByRole("button", { name: "Continue" }).click();
+      await expect.poll(() => guarded.reply(DELETE_PATH).length, { timeout: 20_000 }).toBe(1);
+      const deleted = guarded.reply(DELETE_PATH)[0];
+      if (
+        deleted.status === 500 &&
+        sameJson(deleted.body, { error: "Unable to delete account right now" }) &&
+        guarded.sentTo(DELETE_PATH)[0].fields.join() === "confirmation,currentPassword"
+      ) {
+        // SEC-02 as recorded: nothing is deleted; the account and its profile
+        // stay, and the password still signs in.
+        await expect(toast(page, "Account deletion failed")).toBeVisible();
+        expect(
+          queryTestCopy(
+            `select count(*) from auth.users u join private.profiles p on p.account_id = u.id where u.id = '${leaver.id}';`
+          )
+        ).toBe("1");
+        expect(await canSignIn(leaver.email, leaver.password)).toBe(true);
+        expectContained(guarded);
+        expectNoProviderSince(mark);
+        throw new KnownBreak(
+          `${SEC02}: the delete route fails (500) and the account stays and can still sign in`
+        );
+      }
+      // Promised (M1.6c): deleted, signed out and sent home; the password no
+      // longer signs in and the member pages send the visitor to sign in.
+      expect(deleted).toMatchObject({ status: 200 });
+      await expect(toast(page, "Account deleted")).toBeVisible();
+      await page.waitForURL(`${APP_ORIGIN}/`);
+      expect(await canSignIn(leaver.email, leaver.password)).toBe(false);
+      await page.goto("/dashboard");
+      await page.waitForURL((url) => url.pathname === "/login");
+      expectContained(guarded);
+      expectNoProviderSince(mark);
+    });
+  });
+});
