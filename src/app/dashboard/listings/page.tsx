@@ -823,7 +823,7 @@ function ItemMeta({ item }: { item: DashboardItem }) {
         <span>{getViewCountLabel(item.view_count)}</span>
       </span>
       <span>Posted {formatRelativeTime(item.created_at || new Date().toISOString())}</span>
-      {item.deletes_at ? <span>Deleted on {formatSaLongDate(item.deletes_at)}</span> : null}
+      {item.deletes_at ? <span>Will be deleted on {formatSaLongDate(item.deletes_at)}</span> : null}
     </div>
   );
 }

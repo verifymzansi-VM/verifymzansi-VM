@@ -69,7 +69,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it("shows 'Deleted on' with the date for posts that have a deletion date", async () => {
+it("shows 'Will be deleted on' with the date for posts that have a deletion date", async () => {
   vi.mocked(readRestoredPostManager).mockResolvedValue({
     responses: [
       {
@@ -110,8 +110,8 @@ it("shows 'Deleted on' with the date for posts that have a deletion date", async
   } as unknown as Awaited<ReturnType<typeof readRestoredPostManager>>);
   render(await ListingsPage({ searchParams: Promise.resolve({}) }));
   expect(screen.getByText("Sold bicycle")).toBeInTheDocument();
-  expect(screen.getByText("Deleted on 12 November 2026")).toBeInTheDocument();
+  expect(screen.getByText("Will be deleted on 12 November 2026")).toBeInTheDocument();
   // 22:30 UTC is the next day in South Africa.
-  expect(screen.getByText("Deleted on 11 November 2026")).toBeInTheDocument();
-  expect(screen.getAllByText(/^Deleted on /)).toHaveLength(2);
+  expect(screen.getByText("Will be deleted on 11 November 2026")).toBeInTheDocument();
+  expect(screen.getAllByText(/^Will be deleted on /)).toHaveLength(2);
 });

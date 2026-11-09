@@ -302,7 +302,7 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                       </span>
                       <span suppressHydrationWarning>{dateStr}</span>
                       {post.deletes_at ? (
-                        <span>Deleted on {formatSaLongDate(post.deletes_at)}</span>
+                        <span>Will be deleted on {formatSaLongDate(post.deletes_at)}</span>
                       ) : null}
                     </div>
                     {showExpiry ? (

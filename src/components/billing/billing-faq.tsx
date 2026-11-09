@@ -4,6 +4,17 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { DEFAULT_COMMERCIAL_SETTINGS, type CommercialSettings } from "@/lib/commercial/settings";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
+import { RETAIL_OFFERS, formatDurationDays, formatPlanPrice } from "@/lib/constants/pricing";
+
+/** "R50 / 30 days, R140 / 90 days or R250 / 180 days", from the retail price ladder. */
+const RETAIL_PRICES = (() => {
+  const prices = RETAIL_OFFERS.map(
+    (offer) => `${formatPlanPrice(offer.priceCents)} / ${formatDurationDays(offer.durationDays)}`
+  );
+  return prices.length > 1
+    ? `${prices.slice(0, -1).join(", ")} or ${prices[prices.length - 1]}`
+    : (prices[0] ?? "");
+})();
 
 function FaqItem({
   id,
@@ -102,8 +113,7 @@ export function BillingFaq({
           <p>
             Trial posts have standard placement: no boosts, featured placement or urgent badge.
             There is no automatic charge and no repeated free renewal. When the trial ends your post
-            is hidden; reactivate it within 3 days for R50 / 30 days, R140 / 90 days or R250 / 180
-            days, or it is deleted.
+            is hidden; reactivate it within 3 days for {RETAIL_PRICES}, or it is deleted.
           </p>
           <p>
             The offer is tied to your verified identity. Previous free-post usage counts; deleting a
