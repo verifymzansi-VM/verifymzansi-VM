@@ -38,6 +38,10 @@ import {
 //     link A is refused ("Your recovery session changed. Check the link
 //     again."), while the form from link B still works;
 //   - a known-breached password is refused on the reset page;
+//   - saving the password the member already has completes the reset (local
+//     Auth answers "same_password", which the reset treats as in force);
+//   - a reset link's token redeemed straight at local Auth's verify endpoint
+//     (an `otp` session, no PKCE check) can use no sensitive command;
 //   - without the link's binding, the reset link's session can set no
 //     password: not on the reset page, not through the profile page's
 //     password change (even with a wrong current password) and not by asking
@@ -52,7 +56,8 @@ import {
 //   - a member whose sign-in is over an hour old is asked to sign in again
 //     before an email change sends anything; signed in again, asking for an
 //     address that belongs to another account gets the usual answer and no
-//     email reaches anyone;
+//     email reaches anyone; right after a change, a taken and a free address
+//     get the same answer, no sooner than the answer floor;
 //   - a member changes the sign-in email: the current and the new address
 //     each get a confirmation link; until both are opened the old address
 //     still signs in and the new one does not, then only the new one does;
@@ -107,7 +112,9 @@ import {
 // on unchanged.
 //
 // The Google member is made the way local Auth stores a Google sign-up and
-// signs in through a one-time local Auth link (support/google-member.ts).
+// signs in through a one-time local Auth link whose session is then recorded
+// as the Google (`oauth`) sign-in it stands for (support/google-member.ts,
+// linkSession in support/test-copy.ts).
 
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
@@ -147,6 +154,13 @@ const EMAIL_SIGN_IN_AGAIN = {
   error: "For your security, sign out and sign in again before changing your email address.",
   code: "reauthentication_required",
 };
+/** An email change from a reset link's (or other emailed link's) session. */
+const EMAIL_RECOVERY_SESSION = {
+  error: "Finish resetting your password, then sign in again to change your email address",
+  reason: "recovery_session",
+};
+/** The minimum time an accepted email change answer takes (email-change.ts). */
+const EMAIL_CHANGE_ANSWER_FLOOR_MS = 3000;
 /** The one answer for an accepted email change, also for another account's address. */
 const EMAIL_CHANGE_ACCEPTED = {
   success: true,
@@ -441,6 +455,11 @@ test.describe("account recovery and self-service", () => {
     try {
       const otherGuard = await guard(other);
       const again = await other.newPage();
+      const callbacks: URL[] = [];
+      again.on("request", (sent) => {
+        const url = new URL(sent.url());
+        if (url.origin === APP_ORIGIN && url.pathname === "/auth/callback") callbacks.push(url);
+      });
       await again.goto(link.href);
       await again.waitForURL(
         (url) =>
@@ -448,7 +467,10 @@ test.describe("account recovery and self-service", () => {
           url.pathname === "/forgot-password" &&
           url.search === "?error=recovery_failed"
       );
-      expect(new URL(again.url()).hash).toContain("error_code=otp_expired");
+      expect(callbacks.map((url) => url.searchParams.get("error_code"))).toEqual(["otp_expired"]);
+      // The failure page's address carries an empty fragment, so the one local
+      // Auth put on the refused link (its error details) is not kept.
+      expect(new URL(again.url()).hash).toBe("");
       // The visitor can ask for a new link there (the page does not say why).
       await expect(again.getByRole("heading", { name: "Forgot your password?" })).toBeVisible();
       expectContained(otherGuard);
@@ -577,6 +599,30 @@ test.describe("account recovery and self-service", () => {
     expectNoProviderSince(mark);
   });
 
+  test("saving the password the member already has completes the reset", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    await openResetLink(page, guarded, resetter);
+    // Local Auth refuses it as the current password ("same_password"), which
+    // the reset treats as already in force: done, and every session signed out.
+    await page.getByLabel("New password", { exact: true }).fill(resetter.password);
+    await page.getByLabel("Confirm password", { exact: true }).fill(resetter.password);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect.poll(() => guarded.reply(RESET_PATH).length, { timeout: 20_000 }).toBe(1);
+    expect(guarded.reply(RESET_PATH)[0]).toMatchObject({
+      status: 200,
+      body: { success: true, signOutComplete: true },
+    });
+    await page.waitForURL(`${APP_ORIGIN}/login`);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
   test("a reset link's session cannot set a password without its binding", async ({
     context,
     page,
@@ -624,6 +670,74 @@ test.describe("account recovery and self-service", () => {
       body: { error: "Request a new recovery link" },
     });
     await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
+    expect(await canSignIn(resetter.email, attempt)).toBe(false);
+    expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
+  test("a reset link's token redeemed straight at local Auth opens no sensitive command", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    // Someone holding the reset email (not this browser's sign-in verifier)
+    // redeems its token at local Auth's verify endpoint, which skips the
+    // link's PKCE check and records the session as `otp`, not `recovery`.
+    const sentAfter = Date.now() - 1000;
+    await requestResetLink(page, guarded, resetter.email);
+    const link = await authLinkFor(resetter.email, sentAfter);
+    openedLinks.add(link.href);
+    const copy = readTestCopy();
+    const redeemed = await fetch(`${API_ORIGIN}/auth/v1/verify`, {
+      method: "POST",
+      redirect: "error",
+      headers: { apikey: copy.publishableKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "recovery", token_hash: link.searchParams.get("token") }),
+    });
+    expect(redeemed.status).toBe(200);
+    const session = (await redeemed.json()) as { access_token: string; refresh_token: string };
+    const amr = JSON.parse(
+      Buffer.from(session.access_token.split(".")[1], "base64url").toString("utf8")
+    ).amr as { method: string }[];
+    expect(amr.map((entry) => entry.method)).toEqual(["otp"]);
+    const cookies = await sessionCookies(copy, {
+      token: session.access_token,
+      refreshToken: session.refresh_token,
+    });
+    expect(cookies.accountId).toBe(resetter.id);
+    await context.addCookies(cookies.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto("/");
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    expect(csrf?.value).toMatch(/^[a-f0-9]{64}$/i);
+    const post = (pathname: string, data: unknown) =>
+      page.request.post(`${APP_ORIGIN}${pathname}`, {
+        headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+        data,
+        maxRedirects: 0,
+      });
+    // The website treats it like a reset link's session: no password change
+    // (even with a wrong current password), no password setup link and no
+    // email change, and it is not a recent sign-in.
+    const attempt = `${resetter.password}-from-token`;
+    const changed = await post("/api/auth/change-password", {
+      currentPassword: "not-the-current-password",
+      newPassword: attempt,
+      confirmNewPassword: attempt,
+    });
+    expect(changed.status()).toBe(403);
+    expect(await changed.json()).toEqual(RECOVERY_SESSION);
+    const setup = await post(RECOVERY_PATH, { email: resetter.email });
+    expect(setup.status()).toBe(403);
+    expect(await setup.json()).toEqual(RECOVERY_SESSION);
+    const moved = await post(EMAIL_CHANGE_PATH, {
+      newEmail: resetter.email.replace(/^resetter-/, "taken-over-"),
+    });
+    expect(moved.status()).toBe(403);
+    expect(await moved.json()).toEqual(EMAIL_RECOVERY_SESSION);
+    expect(storedEmail(resetter.id)).toBe(`${resetter.email}|`);
     expect(await canSignIn(resetter.email, attempt)).toBe(false);
     expect(await canSignIn(resetter.email, resetter.password)).toBe(true);
     expectContained(guarded);
@@ -795,6 +909,53 @@ test.describe("account recovery and self-service", () => {
     expect(await mailCountTo(mover.email)).toBe(before.current);
     expect(await mailCountTo(resetter.email)).toBe(before.taken);
     expect(storedEmail(mover.id)).toBe(`${mover.email}|`);
+    // Probe: right after a change to a free address A (inside the minute in
+    // which hosted Auth would refuse another email to this account), a taken
+    // address and a free address B get the same answer, each no sooner than
+    // the answer floor, with timings that do not tell them apart. Local Auth
+    // waits only 1 s between emails, so here its interval never answers; the
+    // website's own one-per-120-s account budget covers hosted Auth (unit
+    // tested; the copy's limiter stand-in allows every request).
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    const timed = async (newEmail: string) => {
+      const started = Date.now();
+      const answer = await page.request.post(`${APP_ORIGIN}${EMAIL_CHANGE_PATH}`, {
+        headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+        data: { newEmail },
+        maxRedirects: 0,
+      });
+      return { status: answer.status(), body: await answer.json(), ms: Date.now() - started };
+    };
+    const freeA = mover.email.replace(/^mover-/, "probe-a-");
+    const freeB = mover.email.replace(/^mover-/, "probe-b-");
+    const probe = {
+      freeA: await timed(freeA),
+      taken: await timed(resetter.email),
+      freeB: await timed(freeB),
+    };
+    // Recorded for the report (statuses and timings only).
+    const timings = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(probe).map(([name, answer]) => [
+          name,
+          { status: answer.status, ms: answer.ms },
+        ])
+      )
+    );
+    test.info().annotations.push({ type: "email-change-probe", description: timings });
+    process.stdout.write(`email-change-probe ${timings}\n`);
+    for (const answer of Object.values(probe)) {
+      expect(answer).toMatchObject({ status: 200, body: EMAIL_CHANGE_ACCEPTED });
+      expect(answer.ms).toBeGreaterThanOrEqual(EMAIL_CHANGE_ANSWER_FLOOR_MS);
+    }
+    expect(Math.abs(probe.taken.ms - probe.freeB.ms)).toBeLessThan(2000);
+    // Only the free addresses (and the current one, twice) were emailed.
+    expect(await mailCountTo(freeA)).toBe(1);
+    expect(await mailCountTo(freeB)).toBe(1);
+    expect(await mailCountTo(resetter.email)).toBe(before.taken);
+    expect(await mailCountTo(mover.email)).toBe(before.current + 2);
+    // The last request replaced the pending change; nothing changed yet.
+    expect(storedEmail(mover.id)).toBe(`${mover.email}|${freeB}`);
     expectContained(guarded);
     expectNoProviderSince(mark);
   });

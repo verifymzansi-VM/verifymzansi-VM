@@ -14,7 +14,8 @@
 // Local Auth's own admin view of the user is then checked: exactly one
 // identity, provider google, and password sign-in is refused. The member signs
 // in through a one-time local Auth link (linkSession), which changes nothing
-// about the account.
+// about the account; that session is recorded as a Google (`oauth`) sign-in,
+// since the website does not count a link redeemed at Auth as a sign-in.
 import { randomInt, randomUUID } from "node:crypto";
 import { authAdmin, queryTestCopy, readTestCopy, signIn, linkSession } from "./test-copy";
 

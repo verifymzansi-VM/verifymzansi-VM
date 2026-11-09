@@ -393,9 +393,13 @@ export async function authAdmin(pathname: `/auth/v1/admin/${string}`, body?: unk
  * who has no password to sign in with (a Google member, whose sign-in goes
  * through Google, which the copy cannot reach). Local Auth's admin API makes a
  * one-time sign-in link (generate_link) and local Auth itself redeems it
- * (verify), exactly as when the person opens that link: nothing about the
- * account changes (no password, no new identity). `signInAgeSeconds` makes
- * that sign-in that many seconds old (see ageSessionStep).
+ * (verify): nothing about the account changes (no password, no new identity).
+ * Local Auth records such a session's sign-in as `otp`, which the website does
+ * not accept as a sign-in (a link redeemed straight at Auth); a Google sign-in
+ * is recorded as `oauth`. So the session's recorded method is then set to
+ * `oauth` and the session refreshed, so local Auth itself issues the token a
+ * Google sign-in would carry. `signInAgeSeconds` makes that sign-in that many
+ * seconds old (see ageSessionStep).
  */
 export async function linkSession(copy: TestCopy, email: string, signInAgeSeconds?: number) {
   const link = await authAdmin("/auth/v1/admin/generate_link", { type: "magiclink", email });
@@ -406,13 +410,41 @@ export async function linkSession(copy: TestCopy, email: string, signInAgeSecond
     body: { type: "magiclink", token_hash: tokenHash },
   });
   if (verified.status !== 200) throw new Error(`Sign-in link failed (${verified.status})`);
-  const session = {
-    token: verified.data.access_token as string,
-    refreshToken: verified.data.refresh_token as string,
-  };
+  const session = await recordGoogleSignIn(
+    copy,
+    verified.data.access_token as string,
+    verified.data.refresh_token as string
+  );
   return signInAgeSeconds
     ? ageSessionStep(copy, session.token, session.refreshToken, signInAgeSeconds, "sign-in")
     : session;
+}
+
+/** Trusted local step (copy only): records a link session's sign-in as the
+ * `oauth` method a Google sign-in has, then refreshes it (see linkSession). */
+async function recordGoogleSignIn(copy: TestCopy, token: string, refreshToken: string) {
+  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  const sessionId = String(claims.session_id);
+  if (!UUID.test(sessionId)) throw new Error("Unexpected session id");
+  const changed = queryTestCopy(
+    `update auth.mfa_amr_claims set authentication_method = 'oauth' ` +
+      `where session_id = '${sessionId}' and authentication_method in ('otp', 'magiclink') returning id;`
+  );
+  if (!UUID.test(changed.split("\n")[0] ?? ""))
+    throw new Error("The link session has no sign-in step to record");
+  const refreshed = await request(copy, "/auth/v1/token?grant_type=refresh_token", {
+    body: { refresh_token: refreshToken },
+  });
+  if (refreshed.status !== 200) throw new Error(`Session refresh failed (${refreshed.status})`);
+  const amr = JSON.parse(
+    Buffer.from(String(refreshed.data.access_token).split(".")[1], "base64url").toString("utf8")
+  ).amr as { method: string }[];
+  if (!amr.some((entry) => entry.method === "oauth") || amr.some((e) => e.method === "otp"))
+    throw new Error("The refreshed session does not show a Google sign-in");
+  return {
+    token: refreshed.data.access_token as string,
+    refreshToken: refreshed.data.refresh_token as string,
+  };
 }
 
 /** Whether local Auth still accepts the session behind this access token (a
