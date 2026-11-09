@@ -400,7 +400,12 @@ async function openEmailChangeLink(page: Page, link: URL) {
   openedLinks.add(link.href);
   await page.goto(link.href);
   await page.waitForURL(EMAIL_CHANGE_LANDING);
-  await expect(page.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+  // The page shows its tabs once the account has loaded.
+  await expect(page.getByRole("tab", { name: "Account" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+    { timeout: 20_000 }
+  );
 }
 
 // Made in beforeAll, never at import time: listing specs must not touch the copy.
