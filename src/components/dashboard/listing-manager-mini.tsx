@@ -9,7 +9,7 @@ import { ExpiryCountdownBadge } from "@/components/dashboard/expiry-countdown-ba
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
-import { formatSaShortDate } from "@/lib/utils/format";
+import { formatSaLongDate, formatSaShortDate } from "@/lib/utils/format";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -23,6 +23,8 @@ export interface MiniListingPost {
   photos?: string[] | null;
   view_count?: number | null;
   expires_at?: string | null;
+  /** When the post is deleted (new backend only). */
+  deletes_at?: string | null;
   created_at: string;
   updated_at?: string | null;
 }
@@ -299,6 +301,9 @@ export function ListingManagerMini({ posts, limit = 5 }: ListingManagerMiniProps
                         <span className="sr-only">views</span>
                       </span>
                       <span suppressHydrationWarning>{dateStr}</span>
+                      {post.deletes_at ? (
+                        <span>Deleted on {formatSaLongDate(post.deletes_at)}</span>
+                      ) : null}
                     </div>
                     {showExpiry ? (
                       <ExpiryCountdownBadge

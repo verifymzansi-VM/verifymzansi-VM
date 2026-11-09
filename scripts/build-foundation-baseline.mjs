@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { FIXTURE_MIGRATIONS } from "./lib/foundation-native-isolation.mjs";
 import { assertFixturePath } from "./lib/foundation-native-paths.mjs";
 import { assertUnreleasedBaselineGuard } from "./lib/foundation-baseline-guard.mjs";
-import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
+import { readBaselinePostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 
 // Local assembly only. No CLI/network/DB execution and no environment loading.
 // A passing prototype run establishes input provenance, not baseline acceptance.
@@ -141,7 +141,7 @@ for (const [, file] of Object.entries(FIXTURE_MIGRATIONS).sort(([a], [b]) => a.l
   }
   modules.push(`-- Source: ${file}\n${sql.trim()}\n`);
 }
-const postingTermsCatalogue = readPostingTermsCatalogue();
+const postingTermsCatalogue = readBaselinePostingTermsCatalogue();
 modules.push(
   "-- Immutable published document metadata only; no account acceptance data.\n" +
     postingTermsCatalogue.sql

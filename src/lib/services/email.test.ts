@@ -234,6 +234,11 @@ describe("email service", () => {
       expect(call.html).toContain("24 May 2026");
       expect(call.html).toContain("do not auto-renew");
       expect(call.html).not.toContain("renew automatically");
+      // Post lifecycle rules (9 November 2026): ended posts are deleted after 3 days.
+      for (const body of [call.html, call.text])
+        expect(body).toContain(
+          "When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them."
+        );
       expect(call.text).toContain("24 May 2026");
       expect(call.text).not.toContain("renew automatically");
     });

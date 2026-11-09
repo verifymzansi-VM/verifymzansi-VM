@@ -8,7 +8,10 @@ import { assertFixturePath } from "./lib/foundation-native-paths.mjs";
 import { assertUnreleasedBaselineGuard } from "./lib/foundation-baseline-guard.mjs";
 import { generateCleanApiContracts } from "./lib/foundation-api-contracts.mjs";
 import { proveBaselineHttp } from "./lib/foundation-baseline-http.mjs";
-import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
+import {
+  assertPostingTermsCatalogueSinceBaseline,
+  readFoundationUpdatesSql,
+} from "./lib/foundation-posting-terms-catalogue.mjs";
 
 // SQL, scoped HTTP and generated-contract feasibility in a fresh owned local database.
 // This does not prove target GoTrue/CLI deployment or bypass the guarded migration.
@@ -90,8 +93,10 @@ try {
   const identityBytes = readFileSync("database/foundation/catalogue-identities.json");
   assert.equal(hash(identityBytes), manifest.catalogueSeedIdentitiesHash);
   assert.deepEqual(JSON.parse(identityBytes), manifest.catalogueSeedIdentities);
-  const postingTerms = readPostingTermsCatalogue();
-  assert.deepEqual(postingTerms, manifest.postingTermsCatalogue);
+  const postingTerms = assertPostingTermsCatalogueSinceBaseline(
+    manifest.postingTermsCatalogue,
+    readFoundationUpdatesSql()
+  );
   assert.equal(hash(guard), manifest.deploymentGuardHash);
   const candidate = readFileSync("database/foundation/candidate.sql", "utf8");
   assert.equal(hash(candidate), manifest.candidateHash);

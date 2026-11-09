@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { assertFixturePath } from "./foundation-native-paths.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("base64url");
@@ -39,4 +39,80 @@ export function readPostingTermsCatalogue() {
       .join("\n") +
     `\ninsert into private.posting_terms_current(version) values('${manifest.active_version}');\n`;
   return { activeVersion: manifest.active_version, documents, sourceHashes: paths, sql };
+}
+
+const SET_CURRENT = "update private.posting_terms_current set version='";
+
+/**
+ * The clean baseline seeds the catalogue recorded in assembly.json when it was
+ * built. Versions published since then reach the database through reviewed
+ * files in database/foundation/updates. This checks that every recorded
+ * version document is unchanged (published terms are never rewritten), that
+ * each later version is inserted by an update with its catalogue hash, and that
+ * the catalogue's active version is the one the last update makes current. It
+ * returns the recorded baseline catalogue.
+ * @param {ReturnType<typeof readPostingTermsCatalogue>} recorded
+ * @param {string} updatesSql
+ * @returns {ReturnType<typeof readPostingTermsCatalogue>}
+ */
+export function assertPostingTermsCatalogueSinceBaseline(recorded, updatesSql) {
+  const current = readPostingTermsCatalogue();
+  for (const document of recorded.documents)
+    assert.deepEqual(
+      current.documents.find((entry) => entry.version === document.version),
+      document,
+      `Published posting terms changed: ${document.version}`
+    );
+  for (const [file, digest] of Object.entries(recorded.sourceHashes))
+    if (!file.endsWith("/catalogue.json"))
+      assert.equal(
+        current.sourceHashes[file],
+        digest,
+        `Published posting terms rewritten: ${file}`
+      );
+  const recordedVersions = new Set(recorded.documents.map((document) => document.version));
+  for (const document of current.documents)
+    if (!recordedVersions.has(document.version))
+      assert.ok(
+        updatesSql.includes(`values('${document.version}','${document.document_hash}')`),
+        `Posting terms ${document.version} is not published by a database update`
+      );
+  const last = updatesSql.lastIndexOf(SET_CURRENT);
+  const madeCurrent =
+    last === -1
+      ? recorded.activeVersion
+      : updatesSql.slice(
+          last + SET_CURRENT.length,
+          updatesSql.indexOf("'", last + SET_CURRENT.length)
+        );
+  assert.equal(
+    current.activeVersion,
+    madeCurrent,
+    "The active posting terms differ from the version the database updates make current"
+  );
+  return recorded;
+}
+
+/** All reviewed database updates, in the order the replay applies them. */
+export function readFoundationUpdatesSql() {
+  const folder = "database/foundation/updates";
+  return readdirSync(folder)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .map((name) => {
+      assertFixturePath(process.cwd(), `${folder}/${name}`, { type: "file" });
+      return readFileSync(`${folder}/${name}`, "utf8");
+    })
+    .join("\n");
+}
+
+/** The catalogue the clean baseline (candidate.sql) seeds, after checking that
+ * the shipped catalogue only extends it through reviewed database updates. */
+export function readBaselinePostingTermsCatalogue() {
+  const file = "database/foundation/assembly.json";
+  assertFixturePath(process.cwd(), file, { type: "file" });
+  return assertPostingTermsCatalogueSinceBaseline(
+    JSON.parse(readFileSync(file, "utf8")).postingTermsCatalogue,
+    readFoundationUpdatesSql()
+  );
 }

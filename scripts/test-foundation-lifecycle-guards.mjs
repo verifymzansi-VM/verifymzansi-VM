@@ -39,12 +39,16 @@ import { buildRestoredPostInput } from "../src/lib/foundation/restored-post-inpu
 
 const GUARDS = "20261109073519_post_lifecycle_guards.sql";
 const RULES = "20261109104020_post_expiry_rules.sql";
+const TERMS_V3 = "20261109173012_posting_terms_v3.sql";
 const companion = (folder, update, suffix) =>
   readFileSync(`database/foundation/${folder}/${update.replace(/\.sql$/, suffix)}`, "utf8");
 const GUARDS_PREFLIGHT = companion("preflight", GUARDS, ".check.sql");
 const GUARDS_ROLLBACK = companion("rollback", GUARDS, ".down.sql");
 const RULES_PREFLIGHT = companion("preflight", RULES, ".check.sql");
 const RULES_ROLLBACK = companion("rollback", RULES, ".down.sql");
+const TERMS_V3_PREFLIGHT = companion("preflight", TERMS_V3, ".check.sql");
+const TERMS_V3_ROLLBACK = companion("rollback", TERMS_V3, ".down.sql");
+const CATALOGUE = JSON.parse(readFileSync("src/lib/legal/terms-documents/catalogue.json", "utf8"));
 const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const TERMS = {
   version: "posting-v1",
@@ -124,7 +128,8 @@ try {
         values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
       insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
       insert into private.posting_terms_acceptances(owner_id,version,document_hash)
-        values(uid,'${TERMS.version}','${TERMS.document_hash}');
+        select uid,v.version,v.document_hash from private.posting_terms_current c
+          join private.posting_terms_versions v using(version) where c.singleton;
       return jsonb_build_object('id',uid,'session',sid);
     end$$;
     create function vmtest.media(p_owner uuid) returns uuid language plpgsql as $$
@@ -618,6 +623,41 @@ try {
   );
   applySteps(database, steps.slice(rulesIndex + 1));
   console.log(`Applied ${GUARDS}, ${RULES} and any later updates.`);
+  await check("posting terms v3: current after the expiry rules, rollback and re-apply", () => {
+    const termsStep = steps.find((step) => step.label === TERMS_V3);
+    assert.ok(termsStep && steps.indexOf(termsStep) > rulesIndex, `${TERMS_V3} is missing`);
+    const currentTerms = () =>
+      json(
+        "select jsonb_build_object('version',v.version,'document_hash',v.document_hash) from private.posting_terms_current c join private.posting_terms_versions v using(version) where c.singleton;"
+      );
+    const v3 = { version: "posting-v3", document_hash: CATALOGUE.versions["posting-v3"] };
+    assert.equal(CATALOGUE.active_version, "posting-v3");
+    assert.deepEqual(currentTerms(), v3);
+    const after = fingerprint();
+    const summary = preflight(TERMS_V3_PREFLIGHT);
+    assert.equal(summary.length, 1);
+    assert.equal(summary[0][0], "summary");
+    applySteps(database, [{ label: "terms v3 rollback", sql: TERMS_V3_ROLLBACK }]);
+    assert.deepEqual(currentTerms(), TERMS);
+    assert.deepEqual(
+      preflight(TERMS_V3_PREFLIGHT).map((line) => line[0]),
+      ["summary"]
+    );
+    applySteps(database, [termsStep]);
+    assert.deepEqual(currentTerms(), v3);
+    applySteps(database, [termsStep]);
+    assert.equal(fingerprint(), after, "re-applying gives the same schema");
+    // Published versions stay immutable.
+    fails(
+      "update private.posting_terms_versions set document_hash=document_hash where version='posting-v3';",
+      "23514"
+    );
+    // Members created so far accepted posting-v1; they accept posting-v3 now.
+    Object.assign(TERMS, v3);
+    q(
+      `insert into private.posting_terms_acceptances(owner_id,version,document_hash) select u.id,'${v3.version}','${v3.document_hash}' from auth.users u on conflict do nothing;`
+    );
+  });
   q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
       language sql set search_path=pg_catalog as $$
       select 'fixture-identity'::text where exists(select 1 from private.current_account_access a where a.id=p_owner) $$;`);

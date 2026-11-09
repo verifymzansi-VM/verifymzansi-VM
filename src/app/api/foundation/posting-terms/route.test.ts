@@ -16,7 +16,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
   getClientRateLimitIdentity: () => ({ key: "synthetic-ip" }),
 }));
-const published = getPublishedPostingTerms("posting-v1")!;
+const published = getPublishedPostingTerms("posting-v3")!;
 const document = {
   version: published.version,
   document_hash: published.document_hash,
@@ -70,6 +70,19 @@ it("reads only the verified caller's current-version status with no shared cachi
   expect(await response.json()).toEqual(document);
   expect(response.headers.get("Cache-Control")).toContain("no-store");
   expect(rpc).toHaveBeenCalledExactlyOnceWith("get_owner_posting_terms", {}, { get: false });
+});
+it("keeps serving posting-v1 while the database has not yet made posting-v3 current", async () => {
+  const earlier = getPublishedPostingTerms("posting-v1")!;
+  const v1 = {
+    version: earlier.version,
+    document_hash: earlier.document_hash,
+    document_path: "/terms/versions/posting-v1",
+    accepted_at: null,
+  };
+  rpc.mockResolvedValueOnce({ data: v1, error: null });
+  const response = await GET(request());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(v1);
 });
 it("records explicit current-version acceptance and returns its exact receipt", async () => {
   const response = await POST(

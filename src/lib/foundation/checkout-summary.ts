@@ -32,6 +32,6 @@ export async function readFoundationCheckoutSummary(planId: string) {
     monthlyActivationLimit: plan.activations_per_period,
     administrators: plan.slot_capacity > 1 ? ENTERPRISE_ADMINS_INCLUDED : null,
     expiryNotice:
-      "Posts become inactive. Renew within 30 days before the post and its media are deleted.",
+      "Posts are hidden. Buy a plan within 3 days to reactivate them, or they are deleted with their media.",
   };
 }

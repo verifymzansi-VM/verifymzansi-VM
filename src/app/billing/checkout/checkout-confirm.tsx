@@ -214,7 +214,7 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
                 <SummaryRow label="Expires" value={formatSaLongDate(expiry)} />
                 <SummaryRow
                   label="Active posting slots"
-                  value={`${summary.slotCapacity} at a time, reusable when a post sells or ends`}
+                  value={`${summary.slotCapacity} at a time, reusable once its post is deleted`}
                 />
                 {summary.monthlyActivationLimit ? (
                   <SummaryRow

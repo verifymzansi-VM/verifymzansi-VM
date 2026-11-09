@@ -22,6 +22,55 @@ establish that a hosted project has received it.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Posting Terms v3, 9 November 2026
+
+`20261109173012_posting_terms_v3.sql` is **not applied yet**. It needs
+`20261109104020_post_expiry_rules.sql` first and refuses to run without it. It
+publishes posting terms version `posting-v3`
+(`src/lib/legal/terms-documents/posting-v3.json`, canonical hash
+`p2X2YRoaYDOwYDtYhTiFcznVghgyGzRmTJ6BexfhkQE`) and makes it current. It changes
+no function or table.
+
+`posting-v3` is `posting-v1` with three paragraphs changed to state the rules of
+the post expiry rules update: a slot is reused once its post is deleted and a
+new post in it runs for the plan's remaining days; when a plan ends (or a refund
+or chargeback withdraws it) its posts are hidden, the owner is emailed and has 3
+days to buy a plan and reactivate, then the post and its media are deleted (up
+to 24 hours more while a payment is being confirmed; a confirmed payment keeps
+the post for 3 days after it); a sold post is deleted 3 days after it was marked
+sold, keeps its slot until then and can be undone within the 3 days; a paused
+post keeps its slot and its plan's period keeps running; an event is deleted
+when it ends; the records linked to a post are deleted with it. `posting-v2`
+(seeded by the baseline, never current, absent from production) is untouched.
+
+Members accept `posting-v3` once before their next submission or edit (the
+submission guard and the edit-consent check compare with the current version);
+`/post/create` shows the acceptance step. `posting-v1` promises at least 14
+days' notice of a material change; the owner decided on 9 November 2026 to start
+now (there are no member posts yet), with a legal review of `posting-v3` to
+follow.
+
+`pnpm check:foundation-api` (run by every build) checks that the published
+version files recorded in `../assembly.json` are unchanged, that every later
+version in `catalogue.json` is inserted by an update with its hash, and that the
+catalogue's active version is the one the last update makes current.
+`pnpm db:foundation:lifecycle-test` applies this update after the expiry rules,
+runs its preflight, rolls it back and applies it twice more.
+
+**Applying.** After the post expiry rules update, and with or after the website
+release that contains `posting-v3.json` (that release serves either version, so
+deploy it first):
+
+1. Run `../preflight/20261109173012_posting_terms_v3.check.sql` unchanged in the
+   SQL editor. Continue only if its result is the single "summary" row.
+2. Run the update. It waits at most 5 seconds for the posting terms row and
+   stops without changing anything if it is busy; run it again.
+3. Open `/terms`: it shows "Posting terms · posting-v3".
+
+The reviewed rollback is `../rollback/20261109173012_posting_terms_v3.down.sql`
+(only with the owner's decision, and only together with the post expiry rules
+rollback; prefer a new version).
+
 ## Post expiry rules, 9 November 2026
 
 `20261109104020_post_expiry_rules.sql` is **not applied yet**. It needs

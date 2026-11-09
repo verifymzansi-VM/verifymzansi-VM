@@ -481,9 +481,9 @@ export async function sendPaymentReceiptEmail(
         ["Status", "Active"],
         ...(expiryDate ? ([["Active until", expiryDate]] as [string, string][]) : []),
       ])}
-      ${paragraph("Plans do not auto-renew. You can renew from your billing page when your plan ends.")}
+      ${paragraph("Plans do not auto-renew. When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them.")}
     `;
-    textBody = `Hi ${accountName},\n\nThank you for your payment. ${activeUntilLine}\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${expiryDate ? `\nActive until: ${expiryDate}` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nPlans do not auto-renew. You can renew from your billing page when your plan ends.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
+    textBody = `Hi ${accountName},\n\nThank you for your payment. ${activeUntilLine}\n\nPlan: ${planName}\nAmount: R ${amount.toFixed(2)}\nStatus: Active${expiryDate ? `\nActive until: ${expiryDate}` : ""}${safeInvoiceUrl ? `\nInvoice: ${safeInvoiceUrl}` : ""}\n\nPlans do not auto-renew. When your plan ends, its posts are hidden and deleted 3 days later unless you buy a new plan and reactivate them.\n\nThis receipt was sent because a payment was processed for your VerifyMzansi account.`;
   }
 
   const html = brandedEmail({

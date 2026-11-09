@@ -95,7 +95,7 @@ export default async function TermsPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="Terms of Service"
-          meta={published ? `Posting terms · ${published.version}` : "Updated October 2026"}
+          meta={published ? `Posting terms · ${published.version}` : "Updated November 2026"}
           description="Governed by South African law."
           breadcrumbs={[{ label: "Terms of Service" }]}
           sections={sections}

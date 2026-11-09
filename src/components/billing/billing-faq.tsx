@@ -79,7 +79,7 @@ export function BillingFaq({
         <FaqItem question="What happens when my plan ends?">
           <p>
             {getDataBackend() === "foundation"
-              ? "Your posts are hidden from the public. Expired, sold and archived posts are kept for 30 days before deletion, with their media removed through scheduled cleanup. Renew before that deadline if you want to keep a post."
+              ? "Your posts are hidden from the public and we email you. You then have 3 days to buy a plan and reactivate a post; after that it is deleted with its photos and videos. If your payment is still being confirmed, we wait up to 24 hours more, and once it is confirmed we keep the post for 3 days from your payment."
               : "Your posts are hidden from the public but stay saved in your dashboard. Choose a plan again at any time to reactivate them. You won't need to start from scratch."}
           </p>
         </FaqItem>
@@ -87,8 +87,9 @@ export function BillingFaq({
         <FaqItem question="Can I have more than one post live?">
           <p>
             Each plan gives you one active posting slot. Buy another plan to keep more posts live at
-            the same time. When an item sells or you deactivate a post, the slot frees up for
-            something new.
+            the same time. A sold post keeps its slot until it is deleted 3 days later; delete it
+            yourself to free the slot sooner. A deactivated post keeps its slot, and the plan&apos;s
+            time keeps running. A new post in a freed slot runs for the plan&apos;s remaining days.
           </p>
         </FaqItem>
 
@@ -101,7 +102,8 @@ export function BillingFaq({
           <p>
             Trial posts have standard placement: no boosts, featured placement or urgent badge.
             There is no automatic charge and no repeated free renewal. When the trial ends your post
-            stays saved, ready to reactivate for R50 / 30 days, R140 / 90 days or R250 / 180 days.
+            is hidden; reactivate it within 3 days for R50 / 30 days, R140 / 90 days or R250 / 180
+            days, or it is deleted.
           </p>
           <p>
             The offer is tied to your verified identity. Previous free-post usage counts; deleting a
@@ -130,8 +132,9 @@ export function BillingFaq({
 
         <FaqItem question="Are events really free?">
           <p>
-            Yes. Events don&apos;t need a trial or a plan and stay live until the event is over.
-            They&apos;re still moderated, with fair-use limits on how many you can run at once.
+            Yes. Events don&apos;t need a trial or a plan and stay live until the event is over;
+            then they are deleted. They&apos;re still moderated, with fair-use limits on how many
+            you can run at once.
           </p>
         </FaqItem>
 

@@ -7,6 +7,8 @@ import {
   dashboardVerificationSteps,
   dashboardPosts,
 } from "./owner-dashboard";
+import { readRestoredOwnerPost } from "./restored-owner-posts";
+import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
 export const readRestoredOwnerDashboard = cache(async (accountId: string) => {
   const current = await readFoundationServerSession();
@@ -16,9 +18,25 @@ export const readRestoredOwnerDashboard = cache(async (accountId: string) => {
     snapshot,
     profile: presentedDashboardProfile(snapshot, current.account, current.user),
     verificationSteps: dashboardVerificationSteps(snapshot),
-    posts: dashboardPosts(snapshot),
+    posts: await withDeletionDates(current.api, dashboardPosts(snapshot)),
   };
 });
+// The dashboard snapshot has no deletion date. Only an ended Market post (the
+// snapshot lists at most 10 Market posts) has one, so read it for those from
+// the owner's own post read. Without it the row shows no date.
+const ENDED = new Set(["expired", "sold", "archived"]);
+async function withDeletionDates<T extends { id: string; status: string }>(
+  api: FoundationAuthenticatedApi,
+  posts: T[]
+): Promise<(T & { deletes_at: string | null })[]> {
+  return Promise.all(
+    posts.map(async (post) => {
+      if (!ENDED.has(post.status)) return { ...post, deletes_at: null };
+      const owned = await readRestoredOwnerPost(api, post.id).catch(() => null);
+      return { ...post, deletes_at: owned?.deletes_at ?? null };
+    })
+  );
+}
 const fulfilled = <T>(data: T, count: number | null = null) => ({
   status: "fulfilled" as const,
   value: { data, count, error: null, status: 200, statusText: "OK" },

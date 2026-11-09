@@ -130,3 +130,33 @@ test("new or removed migration sources cannot retain an apparently current old b
   assert.throws(() => assertCompleteFoundationSources({ a: "digest" }, ["a", "new_migration"]));
   assert.throws(() => assertCompleteFoundationSources({ a: "digest", removed: "digest" }, ["a"]));
 });
+
+test("posting terms published after the baseline must come from a database update", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { assertPostingTermsCatalogueSinceBaseline: check } =
+    await import("./lib/foundation-posting-terms-catalogue.mjs");
+  const recorded = JSON.parse(
+    readFileSync("database/foundation/assembly.json", "utf8")
+  ).postingTermsCatalogue;
+  const update = readFileSync(
+    "database/foundation/updates/20261109173012_posting_terms_v3.sql",
+    "utf8"
+  );
+  assert.equal(check(recorded, update), recorded);
+  assert.throws(() => check(recorded, ""), /posting-v3 is not published by a database update/);
+  assert.throws(
+    () => check(recorded, update.replaceAll("p2X2YRoa", "q2X2YRoa")),
+    /posting-v3 is not published by a database update/
+  );
+  assert.throws(
+    () =>
+      check(
+        recorded,
+        `${update}\nupdate private.posting_terms_current set version='posting-v1' where singleton;`
+      ),
+    /differ from the version the database updates make current/
+  );
+  const rewritten = structuredClone(recorded);
+  rewritten.sourceHashes["src/lib/legal/terms-documents/posting-v1.json"] = "A".repeat(43);
+  assert.throws(() => check(rewritten, update), /Published posting terms rewritten/);
+});

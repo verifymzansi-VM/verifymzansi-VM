@@ -31,14 +31,15 @@
     },
     "pendingApplication": [
       "20261109073519_post_lifecycle_guards.sql",
-      "20261109104020_post_expiry_rules.sql"
+      "20261109104020_post_expiry_rules.sql",
+      "20261109173012_posting_terms_v3.sql"
     ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2 while production holds only posting-v1; a later reviewed change resolves this."
   ],
-  "updateCount": 51,
-  "lastUpdate": "20261109104020_post_expiry_rules.sql",
+  "updateCount": 52,
+  "lastUpdate": "20261109173012_posting_terms_v3.sql",
   "categories": {
     "column_grants": {
       "items": 2,

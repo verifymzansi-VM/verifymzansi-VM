@@ -129,7 +129,8 @@ export default function PrivacyPolicyPage() {
       navLabel: "Retention & deletion",
       title: "Data retention and deletion",
       content: [
-        "We retain account and listing data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
+        "We retain account data while your account is active. After account deletion, some records may be retained for fraud prevention, accounting, dispute handling, legal obligations, or platform integrity before deletion or anonymisation.",
+        "Posts are deleted 3 days after their plan ends or after you mark them sold, and events when they end, together with their photos, videos and enquiries. A pending payment, an open report or a legal hold can delay deletion.",
         foundation
           ? evidenceRetention
           : "ID and selfie files are deleted 30 days after an approved review, and 30 days after upload if rejected; unfinished uploads are deleted after 90 days. A fraud, dispute, security or legal hold can pause deletion.",
@@ -251,7 +252,7 @@ export default function PrivacyPolicyPage() {
       <main id="main-content" className="flex-1">
         <LegalDocument
           title="Privacy Policy"
-          meta="Updated October 2026"
+          meta="Updated November 2026"
           description="How we collect, use and protect your personal information under POPIA."
           breadcrumbs={[{ label: "Privacy Policy" }]}
           sections={sections}
