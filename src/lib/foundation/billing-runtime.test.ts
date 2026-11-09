@@ -1,4 +1,6 @@
 /** @vitest-environment node */
+import { readFileSync } from "node:fs";
+import { parse } from "smol-toml";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
@@ -15,6 +17,7 @@ import {
   cancelFoundationPendingPayment,
   readFoundationBilling,
   reconcileFoundationPayment,
+  runFoundationPaymentReconciliation,
   startFoundationCheckout,
 } from "./billing-runtime";
 vi.mock("server-only", () => ({}));
@@ -125,7 +128,10 @@ beforeEach(() => {
   // Production: mock Ozow is never enabled.
   vi.mocked(isMockOzowEnabled).mockReturnValue(false);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 it("uses the server quote and durable provider keys, then attaches only with its claim", async () => {
   expect(
     await startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
@@ -299,6 +305,136 @@ it("with mock Ozow off, cancels a real checkout through the provider as before",
     p_payment_id: payment,
     p_status: "cancelled",
   });
+});
+// In the private test copy only, mock checkouts are asked about at the copy's
+// loopback stand-in (src/lib/payments/ozow.ts), so its status check can settle
+// them (M0.9c). Production settings keep the rules above.
+const COPY_ENV: Record<string, string> = {
+  NODE_ENV: "production",
+  ENVIRONMENT: "test",
+  VERIFYMZANSI_RUNTIME_MODE: "e2e",
+  PLAYWRIGHT_TEST_MODE: "1",
+  ENABLE_MOCK_OZOW: "true",
+  OZOW_ENV: "staging",
+  NEXT_PUBLIC_DATA_BACKEND: "foundation",
+  FOUNDATION_PROJECT_REF: "local-foundation",
+  FOUNDATION_SUPABASE_URL: "http://127.0.0.1:55443",
+};
+function stubSettings(values: Record<string, string | undefined>) {
+  vi.stubGlobal("window", undefined);
+  vi.stubGlobal("document", undefined);
+  for (const [key, value] of Object.entries(values)) vi.stubEnv(key, value);
+}
+const mockRequest = `mock-${payment}`;
+const mockCheckout = () => ({ ...paymentDto(), provider_request_id: mockRequest });
+const standInTransaction = (): NormalizedOzowWebhook => ({
+  eventType: "transaction.complete",
+  merchantReference: quote.merchant_reference,
+  providerPaymentId: mockRequest,
+  transactionId,
+  siteCode: "synthetic-site",
+  isTest: null,
+  format: "api",
+  status: "Successful",
+  amount: "50",
+  currencyCode: "ZAR",
+  rawPayload: {},
+});
+it("in the test copy, settles a mock checkout from the stand-in's transaction", async () => {
+  stubSettings(COPY_ENV);
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  machine.mockResolvedValueOnce({ data: mockCheckout(), error: null });
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValueOnce([standInTransaction()]);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+    settled: true,
+  });
+  expect(listOzowPaymentTransactions).toHaveBeenCalledExactlyOnceWith(
+    mockRequest,
+    paymentDto().created_at
+  );
+  expect(machine).toHaveBeenLastCalledWith("apply_provider_event", {
+    p_event: expect.objectContaining({
+      merchant_reference: quote.merchant_reference,
+      provider_request_id: mockRequest,
+      provider_transaction_id: transactionId,
+      status: "complete",
+      amount_cents: 5000,
+    }),
+  });
+});
+it("in the test copy, leaves an open mock checkout with no transaction pending", async () => {
+  stubSettings(COPY_ENV);
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  machine.mockResolvedValueOnce({ data: mockCheckout(), error: null });
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Created");
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+  });
+  expect(getOzowPaymentRequestStatus).toHaveBeenCalledExactlyOnceWith(mockRequest);
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+});
+it("in the test copy, never asks about a real request id", async () => {
+  stubSettings(COPY_ENV);
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: false,
+    pendingTransaction: false,
+  });
+  expect(listOzowPaymentTransactions).not.toHaveBeenCalled();
+  expect(getOzowPaymentRequestStatus).not.toHaveBeenCalled();
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+});
+it("in the test copy, the status-check job settles a mock checkout", async () => {
+  stubSettings(COPY_ENV);
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  machine
+    .mockResolvedValueOnce({ data: [mockCheckout()], error: null })
+    .mockResolvedValueOnce({ data: mockCheckout(), error: null });
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValueOnce([standInTransaction()]);
+  expect(await runFoundationPaymentReconciliation(service)).toEqual({ checked: 1, failures: 0 });
+  expect(machine.mock.calls.map(([name]) => name)).toEqual([
+    "list_reconcilable_payments",
+    "claim_payment_reconciliation",
+    "apply_provider_event",
+  ]);
+});
+it("with the copy's settings but mock Ozow off, reconciles exactly as production", async () => {
+  stubSettings(COPY_ENV);
+  machine.mockResolvedValueOnce({ data: mockCheckout(), error: null });
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: false,
+    pendingTransaction: false,
+  });
+  expect(listOzowPaymentTransactions).not.toHaveBeenCalled();
+  // A real request is asked about at the provider, as before.
+  expect(await reconcileFoundationPayment(payment, service)).toMatchObject({ checked: true });
+  expect(listOzowPaymentTransactions).toHaveBeenCalledExactlyOnceWith(
+    requestId,
+    paymentDto().created_at
+  );
+});
+it("with production settings and every test switch leaked in, mock mode still asks nothing", async () => {
+  const toml = parse(readFileSync("wrangler.toml", "utf8")) as {
+    env: { production: { vars: Record<string, string> } };
+  };
+  stubSettings({
+    ...toml.env.production.vars,
+    OZOW_ENV: "production",
+    VERIFYMZANSI_RUNTIME_MODE: "e2e",
+    PLAYWRIGHT_TEST_MODE: "1",
+    ENABLE_MOCK_OZOW: "true",
+  });
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  machine.mockResolvedValue({ data: mockCheckout(), error: null });
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: false,
+    pendingTransaction: false,
+  });
+  expect(machine).not.toHaveBeenCalled();
+  expect(listOzowPaymentTransactions).not.toHaveBeenCalled();
 });
 it("parses only the caller's bounded billing projection", async () => {
   expect(await readFoundationBilling(api)).toEqual({

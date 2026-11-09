@@ -11,6 +11,7 @@ import people from "../fixture/people.json";
 import {
   E2E_FIXTURE,
   OUTBOUND_LOG_FILE,
+  SERVER_LOG_FILE,
   TEST_SMS_SINK_FILE,
   assertLocalFoundationTarget,
 } from "../../../scripts/lib/foundation-e2e-target.mjs";
@@ -230,6 +231,31 @@ export function rpc(copy: TestCopy, name: string, body: unknown, token?: string)
   });
 }
 
+let secretKey: string | undefined;
+
+/** The copy's own secret key, read from the local CLI status (never from a file). */
+function copySecretKey() {
+  if (!secretKey) {
+    const status = readStatus(openFixture());
+    if (status.apiUrl !== API_ORIGIN) throw new Error("Unexpected test copy gateway");
+    secretKey = status.secretKey as string;
+  }
+  return secretKey;
+}
+
+/**
+ * Calls a service-only production command through the local gateway with the
+ * copy's own secret key (read from the local CLI status, never from a file),
+ * as the website's server does.
+ */
+export function serviceRpc(name: string, body: unknown) {
+  if (!/^[a-z_]+$/.test(name)) throw new Error("Unexpected command name");
+  return request({ publishableKey: copySecretKey(), posts: [] }, `/rest/v1/rpc/${name}`, {
+    body,
+    headers: { "Content-Profile": "api", "Accept-Profile": "api" },
+  });
+}
+
 /** A read the retired backend's clients make: a table in schema public. */
 export function retiredTableRead(copy: TestCopy, table: string) {
   if (!/^[a-z_]+$/.test(table)) throw new Error("Unexpected table name");
@@ -239,15 +265,56 @@ export function retiredTableRead(copy: TestCopy, table: string) {
   });
 }
 
+/**
+ * How a staff session is made (M0.9d): `passwordOnly` stops after the password
+ * (no authenticator step, as a person who has not entered a code yet);
+ * `authenticatorAgeSeconds` makes the authenticator step that many seconds old
+ * (see ageAuthenticatorStep).
+ */
+export type SessionOptions = { passwordOnly?: boolean; authenticatorAgeSeconds?: number };
+
+/**
+ * Trusted local step (copy only): moves the time local Auth recorded for a
+ * session's authenticator step back by `seconds`, then refreshes the session,
+ * so local Auth itself issues a token whose authenticator time is that old (as
+ * after waiting that long). Nothing else about the session changes.
+ */
+async function ageAuthenticatorStep(
+  copy: TestCopy,
+  token: string,
+  refreshToken: string,
+  seconds: number
+) {
+  if (!Number.isSafeInteger(seconds) || seconds < 1 || seconds > 7 * 86_400)
+    throw new Error("Unexpected authenticator age");
+  const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
+  const sessionId = String(claims.session_id);
+  if (!UUID.test(sessionId)) throw new Error("Unexpected session id");
+  const moved = queryTestCopy(
+    `update auth.mfa_amr_claims set created_at = least(created_at, now() - interval '${seconds} seconds'), ` +
+      `updated_at = now() - interval '${seconds} seconds' ` +
+      `where session_id = '${sessionId}' and authentication_method = 'totp' returning id;`
+  );
+  if (!UUID.test(moved)) throw new Error("The session has no authenticator step to age");
+  const refreshed = await request(copy, "/auth/v1/token?grant_type=refresh_token", {
+    body: { refresh_token: refreshToken },
+  });
+  if (refreshed.status !== 200) throw new Error(`Session refresh failed (${refreshed.status})`);
+  return {
+    token: refreshed.data.access_token as string,
+    refreshToken: refreshed.data.refresh_token as string,
+  };
+}
+
 /** Real local GoTrue password sign-in; with an authenticator, the second step too. */
-export async function signIn(copy: TestCopy, person: Person) {
+export async function signIn(copy: TestCopy, person: Person, options: SessionOptions = {}) {
   const { email, password } = credentialsOf(person);
   const key = typeof person === "string" ? person : "a registered test person";
   const login = await request(copy, "/auth/v1/token?grant_type=password", {
     body: { email, password },
   });
   if (login.status !== 200) throw new Error(`Sign-in failed for ${key} (${login.status})`);
-  const factor = authenticatorOf(person);
+  const factor = options.passwordOnly ? null : authenticatorOf(person);
   if (!factor)
     return {
       token: login.data.access_token as string,
@@ -262,9 +329,17 @@ export async function signIn(copy: TestCopy, person: Person) {
     body: { challenge_id: challenge.data.id, code: totpCode(factor.secret) },
   });
   if (verified.status !== 200) throw new Error(`Authenticator step failed for ${key}`);
-  const token = verified.data.access_token as string;
+  let token = verified.data.access_token as string;
+  let refreshToken = verified.data.refresh_token as string;
+  if (options.authenticatorAgeSeconds)
+    ({ token, refreshToken } = await ageAuthenticatorStep(
+      copy,
+      token,
+      refreshToken,
+      options.authenticatorAgeSeconds
+    ));
   const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
-  return { token, refreshToken: verified.data.refresh_token as string, aal: claims.aal as string };
+  return { token, refreshToken, aal: claims.aal as string };
 }
 
 /**
@@ -272,9 +347,55 @@ export async function signIn(copy: TestCopy, person: Person) {
  * @supabase/ssr itself writes them (name, chunking, encoding), as the website's
  * own sign-in would; its only request goes to the local gateway.
  */
-export async function browserSessionCookies(copy: TestCopy, person: Person) {
+export async function browserSessionCookies(
+  copy: TestCopy,
+  person: Person,
+  options: SessionOptions = {}
+) {
   const key = typeof person === "string" ? person : "a registered test person";
-  const session = await signIn(copy, person);
+  return sessionCookies(copy, await signIn(copy, person, options), key);
+}
+
+/** Trusted local step (copy only): a call to local Auth's admin API with the
+ * copy's own secret key. */
+export async function authAdmin(pathname: `/auth/v1/admin/${string}`, body?: unknown) {
+  if (!/^\/auth\/v1\/admin\/[a-z_/0-9-]+$/.test(pathname)) throw new Error("Unexpected path");
+  return request({ publishableKey: copySecretKey(), posts: [] }, pathname, {
+    body,
+    method: body === undefined ? "GET" : "POST",
+  });
+}
+
+/**
+ * Trusted local step (copy only): a real local Auth session for a test person
+ * who has no password to sign in with (a Google member, whose sign-in goes
+ * through Google, which the copy cannot reach). Local Auth's admin API makes a
+ * one-time sign-in link (generate_link) and local Auth itself redeems it
+ * (verify), exactly as when the person opens that link: nothing about the
+ * account changes (no password, no new identity).
+ */
+export async function linkSession(copy: TestCopy, email: string) {
+  const link = await authAdmin("/auth/v1/admin/generate_link", { type: "magiclink", email });
+  const tokenHash = link.data?.hashed_token;
+  if (link.status !== 200 || typeof tokenHash !== "string")
+    throw new Error(`Sign-in link refused (${link.status})`);
+  const verified = await request(copy, "/auth/v1/verify", {
+    body: { type: "magiclink", token_hash: tokenHash },
+  });
+  if (verified.status !== 200) throw new Error(`Sign-in link failed (${verified.status})`);
+  return {
+    token: verified.data.access_token as string,
+    refreshToken: verified.data.refresh_token as string,
+  };
+}
+
+/** The website's session cookies for an existing local Auth session (written
+ * by @supabase/ssr, as in browserSessionCookies). */
+export async function sessionCookies(
+  copy: TestCopy,
+  session: { token: string; refreshToken: string },
+  key = "a registered test person"
+) {
   const cookies: { name: string; value: string }[] = [];
   const auth = createServerClient(API_ORIGIN, copy.publishableKey, {
     cookies: {
@@ -377,4 +498,31 @@ export type OutboundAttempt = {
  * the copy's fence answered the password breach check and refused the rest. */
 export function readOutboundAttempts(): OutboundAttempt[] {
   return readJsonLines<OutboundAttempt>(OUTBOUND_LOG_FILE);
+}
+
+export type ServerLogEntry = {
+  timestamp?: string;
+  level?: string;
+  context?: string;
+  message?: string;
+  meta?: Record<string, unknown>;
+};
+
+/** Structured (JSON) lines the copy's website server logged with this message.
+ * Other output, and a line still being written, is skipped. */
+export function readServerLogEntries(message: string): ServerLogEntry[] {
+  const full = path.resolve(process.cwd(), SERVER_LOG_FILE);
+  if (!existsSync(full)) return [];
+  const entries: ServerLogEntry[] = [];
+  for (const line of readFileSync(full, "utf8").split(/\r?\n/)) {
+    const start = line.indexOf("{");
+    if (start < 0 || !line.includes(message)) continue;
+    try {
+      const entry = JSON.parse(line.slice(start)) as ServerLogEntry;
+      if (entry.message === message) entries.push(entry);
+    } catch {
+      // Not a complete JSON log line.
+    }
+  }
+  return entries;
 }

@@ -19,6 +19,10 @@ export const E2E_FIXTURE = Object.freeze({
   mailRelayPort: 55451,
   /** Mock payment page (HTTPS, served by the browser tests themselves; nothing listens). */
   mockPaymentPort: 55455,
+  /** Stand-in for the payment provider's lookup API, run by the checkout
+   * browser tests themselves (M0.9c); nothing listens there otherwise. Outside
+   * 55450-55459, which the stack's config fills. */
+  providerPort: 55448,
   appPort: 3110,
   /** The website's connection guard accepts only this marker for a local stack. */
   projectRef: "local-foundation",
@@ -40,10 +44,25 @@ function localFixtureKey(label) {
  * the copy only (the website refuses keys with fewer than 8 distinct digits). */
 export const LOCAL_PHONE_OTP_KEY = localFixtureKey("phone-otp");
 export const LOCAL_ID_ENCRYPTION_KEY = localFixtureKey("id-encryption");
+/** Synthetic secret for the website's payment status-check job route
+ * (/api/internal/payments/reconcile), which the checkout browser tests call as
+ * the every-10-minutes Worker does. Exists only in the copy. */
+export const LOCAL_INTERNAL_JOBS_SECRET = localFixtureKey("internal-jobs");
+/** Synthetic payment-notification signing secret, in the provider's
+ * whsec_<base64> form: the copy's website verifies notifications with it and
+ * the checkout browser tests sign their mock notifications with it. */
+export const LOCAL_OZOW_WEBHOOK_SECRET = `whsec_${createHash("sha256")
+  .update("vm-foundation-e2e ozow-webhook")
+  .digest("base64")}`;
+/** Synthetic payment-provider site code; exists only in the copy. */
+export const LOCAL_OZOW_SITE_CODE = "local-fixture-ozow-site";
 /** Files the website writes in the copy (git-ignored, reset on `up`): the SMS
  * it would have sent, and every request it tried to send off this machine. */
 export const TEST_SMS_SINK_FILE = "tmp/foundation-e2e/sms-sink.jsonl";
 export const OUTBOUND_LOG_FILE = "tmp/foundation-e2e/outbound.jsonl";
+/** The website's own server output (stdout and stderr) for this run, so specs
+ * can check its structured log lines. */
+export const SERVER_LOG_FILE = "tmp/foundation-e2e/server.log";
 
 /** Hosted projects this copy must never reach (production, the retired source
  * project and the other known hosted refs from src/lib/foundation/connection.ts). */

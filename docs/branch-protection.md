@@ -68,12 +68,15 @@ such a check would block every pull request.
   fails and nothing is deployed.
 
 Every CI job that runs on a pull request is required, except
-`lighthouse-advisory` (advisory, `continue-on-error`) and `safety-gate-snapshot`
-(a dry-run plan that executes no checks). This keeps `main` deployable: the
-deploy needs the whole CI run on `main` to succeed. `perf-baseline` and
-`k6-advisory` run only after a push to `main` and cannot be required on pull
-requests. Later slices add their jobs here and to the ruleset file (native
-database suite, foundation browser tests, picture checks, frontend ledger).
+`lighthouse-advisory` (advisory, `continue-on-error`) and
+`safety-gate-snapshot: plan only (runs no checks)` (a dry-run plan that executes
+no checks). This keeps `main` deployable: the deploy needs the whole CI run on
+`main` to succeed. `perf-baseline` and `k6-advisory` run only after a push to
+`main` and cannot be required on pull requests; when no staging address
+(`STAGING_APP_URL`) is configured they show as skipped, not as a success
+(`Staging address configured` decides this in a job-level condition). Later
+slices add their jobs here and to the ruleset file (native database suite,
+foundation browser tests, picture checks, frontend ledger).
 
 ## How the owner applies it
 

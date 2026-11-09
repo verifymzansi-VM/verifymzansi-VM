@@ -580,10 +580,41 @@ export async function createOzowHostedPayment(
   }
 }
 
-async function ozowRequest(path: string, method = "GET"): Promise<Response> {
-  // Mock mode never contacts Ozow: lookups and cancellations fail closed instead.
-  if (isMockOzowEnabled())
+/**
+ * A lookup while mock Ozow is enabled. Ozow itself is never contacted. Only the
+ * private foundation test copy (testCopyCheckout) has a provider to ask: the
+ * stand-in its browser tests run at one fixed loopback address, sent no token
+ * and no credentials. Every other mock setting refuses before any request.
+ */
+async function testCopyProviderRequest(path: string, method: string): Promise<Response> {
+  const origin = testCopyCheckout()?.providerOrigin;
+  if (!origin)
     throw new OzowConfigurationError("Ozow requests are disabled while mock Ozow is enabled");
+  const url = new URL(path, origin);
+  if (url.origin !== origin || !url.pathname.startsWith("/v1/")) {
+    throw new OzowProviderError("Invalid Ozow pagination link");
+  }
+  let response: Response;
+  try {
+    // A redirect is refused, never followed.
+    response = await fetchWithoutRedirects(url, {
+      method,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new OzowProviderError("Ozow payment lookup or cancellation failed");
+  }
+  if (!response.ok)
+    throw new OzowProviderError("Ozow payment lookup or cancellation failed", {
+      status: response.status,
+    });
+  return response;
+}
+
+async function ozowRequest(path: string, method = "GET"): Promise<Response> {
+  // Mock mode never contacts Ozow: lookups and cancellations fail closed
+  // instead, except in the test copy, which answers lookups locally.
+  if (isMockOzowEnabled()) return testCopyProviderRequest(path, method);
   const { baseUrl } = getOzowBaseUrlContext();
   const scope = env("OZOW_PAYMENT_OAUTH_SCOPE") || DEFAULT_OZOW_PAYMENT_OAUTH_SCOPE;
   const url = new URL(path, baseUrl);

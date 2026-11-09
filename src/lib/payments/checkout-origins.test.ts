@@ -105,6 +105,7 @@ describe("testCopyCheckout", () => {
       appOrigin: "http://127.0.0.1:3110",
       databaseUrl: "http://127.0.0.1:55443",
       mockPaymentOrigin: "https://127.0.0.1:55455",
+      providerOrigin: "http://127.0.0.1:55448",
     });
     expect(Object.isFrozen(TEST_COPY_CHECKOUT)).toBe(true);
     for (const value of Object.values(TEST_COPY_CHECKOUT))

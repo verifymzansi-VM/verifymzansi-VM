@@ -28,7 +28,10 @@ test.describe("Dashboard verification state", () => {
 
   test.describe("desktop", () => {
     test("verified dashboard shows no verification warning banners", async ({ page }, testInfo) => {
-      test.skip(testInfo.project.name !== "chromium");
+      test.skip(
+        testInfo.project.name !== "chromium",
+        "The desktop dashboard check runs once, in the chromium project."
+      );
 
       const errors = collectDashboardErrors(page);
 
@@ -50,7 +53,10 @@ test.describe("Dashboard verification state", () => {
     test("mobile dashboard renders without verification regressions", async ({
       page,
     }, testInfo) => {
-      test.skip(testInfo.project.name !== "mobile-chrome");
+      test.skip(
+        testInfo.project.name !== "mobile-chrome",
+        "The mobile dashboard check runs once, in the mobile-chrome project."
+      );
 
       const errors = collectDashboardErrors(page);
 

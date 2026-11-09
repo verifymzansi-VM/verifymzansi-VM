@@ -52,6 +52,26 @@ test.describe("foundation test copy", () => {
     expect(await image.getAttribute("src")).not.toContain("media.verifymzansi.com");
   });
 
+  test("the home showroom's front post card is a comfortable tap target", async ({ page }) => {
+    // Moved from mobile-ux-smoke.spec.ts, whose source-mode harness has no
+    // posts in the home showroom. The carousel has no dot controls and its
+    // arrows show only on wide screens, so on a phone the front card is the
+    // control.
+    await page.goto("/");
+    const showroom = page.locator("section", {
+      has: page.locator("#home-showroom-title"),
+    });
+    const activeCard = showroom.locator('[data-showroom-layer="active"]').first();
+    await expect(activeCard).toBeAttached();
+    const cardLink = activeCard.locator("xpath=descendant-or-self::a[@href][1]");
+    await cardLink.scrollIntoViewIfNeeded();
+    await expect(cardLink).toBeVisible();
+    const box = await cardLink.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  });
+
   test("the test people exist, staff with an authenticator app", async ({}, testInfo) => {
     test.skip(
       testInfo.project.name !== "chromium",

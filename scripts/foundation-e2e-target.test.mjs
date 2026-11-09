@@ -4,7 +4,10 @@ import {
   E2E_FIXTURE,
   HOSTED_PROJECT_REFS,
   LOCAL_ID_ENCRYPTION_KEY,
+  LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
+  LOCAL_OZOW_SITE_CODE,
+  LOCAL_OZOW_WEBHOOK_SECRET,
   LOCAL_PHONE_OTP_KEY,
   OUTBOUND_LOG_FILE,
   assertLocalFoundationTarget,
@@ -19,7 +22,6 @@ import {
   LOCAL_LIMITER_URL,
   LOCAL_MAIL_RELAY_KEY,
   LOCAL_MAIL_RELAY_URL,
-  LOCAL_OZOW_SITE_CODE,
   assertBuildIsCopy,
   envFileKeyNames,
   foundationWebsiteEnv,
@@ -27,6 +29,8 @@ import {
   writeBuildStamp,
 } from "./lib/foundation-e2e-website.mjs";
 import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
+import { testFixtureSecretFindings } from "./lib/test-fixture-secrets.mjs";
+import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
 import {
   IDEMPOTENCY_HEADER,
   startLocalMailRelay,
@@ -439,6 +443,7 @@ test("the copy's website settings switch on test checkout at exactly the copy's 
     appOrigin: E2E_APP_URL,
     databaseUrl: API,
     mockPaymentOrigin: `https://127.0.0.1:${E2E_FIXTURE.mockPaymentPort}`,
+    providerOrigin: `http://127.0.0.1:${E2E_FIXTURE.providerPort}`,
   });
   const env = foundationWebsiteEnv(LOCAL_STATUS, {
     root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
@@ -454,7 +459,7 @@ test("the copy's website settings switch on test checkout at exactly the copy's 
     for (const key of Object.keys(process.env)) delete process.env[key];
     Object.assign(process.env, saved);
   }
-  // Nothing else in the copy uses the mock payment or limiter ports.
+  // Nothing else in the copy uses the mock payment, provider or limiter ports.
   const ports = [
     E2E_FIXTURE.apiPort,
     E2E_FIXTURE.dbPort,
@@ -463,6 +468,7 @@ test("the copy's website settings switch on test checkout at exactly the copy's 
     E2E_FIXTURE.limiterPort,
     E2E_FIXTURE.mockPaymentPort,
     E2E_FIXTURE.mailRelayPort,
+    E2E_FIXTURE.providerPort,
   ];
   assert.equal(new Set(ports).size, ports.length);
   assert.equal(LOCAL_LIMITER_URL, `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/check`);
@@ -523,6 +529,55 @@ test("the copy's website emails go to the local relay, never the provider", () =
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);
   }
+});
+
+test("the copy's notification and status-check secrets are its own synthetic ones", () => {
+  const saved = { ...process.env };
+  try {
+    // A caller's own values are replaced, not forwarded (in any letter case).
+    process.env.OZOW_WEBHOOK_SECRET = "caller-webhook-value";
+    process.env.Internal_Jobs_Secret = "caller-internal-jobs-value";
+    const env = foundationWebsiteEnv(LOCAL_STATUS, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
+    assert.equal(env.OZOW_WEBHOOK_SECRET, LOCAL_OZOW_WEBHOOK_SECRET);
+    assert.equal(env.INTERNAL_JOBS_SECRET, LOCAL_INTERNAL_JOBS_SECRET);
+    assert.equal(env.Internal_Jobs_Secret, undefined);
+    assert.equal(env.OZOW_SITE_CODE, LOCAL_OZOW_SITE_CODE);
+    // The signing library's form (whsec_ and 32 bytes in base64), derived at
+    // runtime from a public label; the job secret is 64 hex characters.
+    assert.match(LOCAL_OZOW_WEBHOOK_SECRET, /^whsec_[A-Za-z0-9+/]{43}=$/);
+    assert.equal(Buffer.from(LOCAL_OZOW_WEBHOOK_SECRET.slice(6), "base64").length, 32);
+    assert.match(LOCAL_INTERNAL_JOBS_SECRET, /^[a-f0-9]{64}$/);
+    assert.notEqual(LOCAL_INTERNAL_JOBS_SECRET, LOCAL_OPS_JOBS_SECRET);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the production launch check refuses the test suites' secrets", () => {
+  // Production-shaped settings with fresh random values: nothing to refuse.
+  const production = createCloudflareStartupFixture();
+  assert.deepEqual(testFixtureSecretFindings(production), []);
+  const require = createRequire(import.meta.url);
+  const stub = require("./start-playwright-server.cjs").createDeterministicEnv();
+  const cases = [
+    ["OZOW_WEBHOOK_SECRET", LOCAL_OZOW_WEBHOOK_SECRET],
+    ["OZOW_WEBHOOK_SECRET", stub.OZOW_WEBHOOK_SECRET],
+    ["INTERNAL_JOBS_SECRET", LOCAL_INTERNAL_JOBS_SECRET],
+    ["OPS_JOBS_SECRET", LOCAL_OPS_JOBS_SECRET],
+    ["FOUNDATION_PHONE_OTP_KEY", LOCAL_PHONE_OTP_KEY],
+    ["ID_ENCRYPTION_KEY", LOCAL_ID_ENCRYPTION_KEY],
+    // Under another name, or with stray spaces, it is still refused.
+    ["KYC_WEBHOOK_SECRET", ` ${LOCAL_INTERNAL_JOBS_SECRET} `],
+  ];
+  for (const [name, value] of cases)
+    assert.deepEqual(testFixtureSecretFindings({ ...production, [name]: value }), [name], name);
+  // The validator runs the check in production mode and fails on a finding.
+  const source = readFileSync("scripts/validate-launch-env.ts", "utf8");
+  assert.ok(source.includes('mode === "production" ? testFixtureSecretFindings(process.env) : []'));
+  assert.ok(source.includes("if (!summary.isValid || schemaError || testSecrets.length > 0)"));
 });
 
 test("the relay translates provider requests and keeps mail on the reserved .test domain", () => {

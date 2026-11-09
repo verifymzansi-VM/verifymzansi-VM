@@ -11,7 +11,10 @@ import path from "node:path";
 import {
   E2E_FIXTURE,
   LOCAL_ID_ENCRYPTION_KEY,
+  LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
+  LOCAL_OZOW_SITE_CODE,
+  LOCAL_OZOW_WEBHOOK_SECRET,
   LOCAL_PHONE_OTP_KEY,
   assertLocalFoundationTarget,
 } from "./foundation-e2e-target.mjs";
@@ -36,9 +39,6 @@ const DROPPED = new RegExp(
     "HEALTH_DIAGNOSTIC_TOKEN$|SITE_MONITOR_API_KEY$)",
   "i"
 );
-
-/** Synthetic Ozow site code; exists only in the copy. */
-export const LOCAL_OZOW_SITE_CODE = "local-fixture-ozow-site";
 
 /**
  * Key NAMES (never values) defined in the root .env* files. `next build` and
@@ -119,10 +119,12 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     // Ozow: mock mode (the stub suite's ENABLE_MOCK_OZOW) against the test
     // system, with synthetic values only. The base URL is the code's own
     // default for staging and a valid URL (the runtime rejects ""); mock Ozow
-    // never contacts it (src/lib/payments/ozow.ts refuses provider requests).
+    // never contacts it (src/lib/payments/ozow.ts refuses provider requests;
+    // in the copy, lookups go to the tests' loopback stand-in instead). The
+    // notification secret is the copy's own, which the tests sign with.
     OZOW_ENV: "staging",
     OZOW_SITE_CODE: LOCAL_OZOW_SITE_CODE,
-    OZOW_WEBHOOK_SECRET: inherited.OZOW_WEBHOOK_SECRET,
+    OZOW_WEBHOOK_SECRET: LOCAL_OZOW_WEBHOOK_SECRET,
     OZOW_API_BASE_URL: "https://stagingone.ozow.com",
     NEXT_PUBLIC_CF_IMAGE_RESIZING: "false",
     // Emails: the provider SDK's address is the copy's loopback relay, which
@@ -131,6 +133,8 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     RESEND_API_KEY: LOCAL_MAIL_RELAY_KEY,
     // The email job route refuses to run without a secret; a synthetic one.
     OPS_JOBS_SECRET: LOCAL_OPS_JOBS_SECRET,
+    // So does the payment status-check job route; a synthetic one.
+    INTERNAL_JOBS_SECRET: LOCAL_INTERNAL_JOBS_SECRET,
   };
   // A name in another letter case beside its all-capitals form (a parent's
   // "Kyc_Provider" next to KYC_PROVIDER) is dropped, so the copy's value wins.

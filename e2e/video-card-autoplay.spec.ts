@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { requireTestData } from "./support/test-data";
 
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
 const WEBKIT_SKIP_MSG =
@@ -160,9 +161,7 @@ async function stubCardApiWithVideoData(page: Page, routeName: string) {
 async function assertVisibleCardVideoAutoplays(page: Page) {
   const videos = page.locator('video[aria-label$="video preview"], video[aria-label*=" video"]');
   const count = await videos.count();
-  if (count === 0) {
-    test.skip(true, "No video cards available in current fixture data for autoplay assertion.");
-  }
+  requireTestData(count > 0, "video cards for the autoplay assertion");
 
   const firstVideo = videos.first();
   await firstVideo.scrollIntoViewIfNeeded();
@@ -276,9 +275,10 @@ test.describe("Card video autoplay", () => {
 
       await gotoReady(page, route);
 
-      if (route.emptySelector && (await page.locator(route.emptySelector).count()) > 0) {
-        test.skip(true, `${route.name} is empty in current fixture data.`);
-      }
+      requireTestData(
+        !route.emptySelector || (await page.locator(route.emptySelector).count()) === 0,
+        `cards on ${route.name}`
+      );
 
       if (testInfo.project.name === "mobile-chrome") {
         const card = page

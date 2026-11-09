@@ -16,7 +16,15 @@
 // It takes no connection settings: every address comes from the local CLI
 // and must pass the loopback guard (scripts/lib/foundation-e2e-target.mjs).
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -37,6 +45,7 @@ import { startLocalMailRelay } from "./lib/foundation-e2e-mail-relay.mjs";
 import {
   E2E_FIXTURE,
   OUTBOUND_LOG_FILE,
+  SERVER_LOG_FILE,
   TEST_SMS_SINK_FILE,
 } from "./lib/foundation-e2e-target.mjs";
 import {
@@ -63,7 +72,7 @@ function readState(fixture, status) {
 }
 
 /** Files the copy writes outside the stack (all git-ignored). */
-const RUN_FILES = [TEST_SMS_SINK_FILE, OUTBOUND_LOG_FILE];
+const RUN_FILES = [TEST_SMS_SINK_FILE, OUTBOUND_LOG_FILE, SERVER_LOG_FILE];
 function removeLocalArtifacts(root) {
   for (const file of [E2E_FIXTURE.stateFile, ...RUN_FILES])
     rmSync(path.join(root, file), { force: true });
@@ -170,14 +179,28 @@ async function serve(env) {
     ],
     {
       env: { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS ?? ""} --import=${fence}`.trim() },
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
       windowsHide: true,
     }
   );
+  // Show the server output as before and keep a copy for specs that check its
+  // structured log lines (for example legacy_client_in_foundation, M0.11).
+  const serverLogFile = path.resolve(SERVER_LOG_FILE);
+  mkdirSync(path.dirname(serverLogFile), { recursive: true });
+  const serverLog = createWriteStream(serverLogFile, { flags: "w" });
+  server.stdout.on("data", (chunk) => {
+    process.stdout.write(chunk);
+    serverLog.write(chunk);
+  });
+  server.stderr.on("data", (chunk) => {
+    process.stderr.write(chunk);
+    serverLog.write(chunk);
+  });
   const stop = (signal) => !server.killed && server.kill(signal);
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   server.on("exit", (code) => {
+    serverLog.end();
     limiter.close();
     mailRelay.close();
     process.exit(code ?? 0);

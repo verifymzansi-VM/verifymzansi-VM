@@ -5,8 +5,9 @@ export const PRODUCTION_CHECKOUT_ORIGIN = "https://verifymzansi.com";
 
 /**
  * The private local foundation test copy (roadmap M0.7): the website, its
- * database gateway and the mock payment page, all on this machine. Exact
- * addresses, never patterns. The values match scripts/lib/foundation-e2e-target.mjs
+ * database gateway, the mock payment page and the provider stand-in, all on
+ * this machine. Exact addresses, never patterns. The values match
+ * scripts/lib/foundation-e2e-target.mjs
  * (checked by scripts/foundation-e2e-target.test.mjs).
  */
 export const TEST_COPY_CHECKOUT = Object.freeze({
@@ -15,6 +16,10 @@ export const TEST_COPY_CHECKOUT = Object.freeze({
   /** HTTPS because stored checkout URLs must be HTTPS; nothing listens there
    * outside the browser tests, which serve the page themselves. */
   mockPaymentOrigin: "https://127.0.0.1:55455",
+  /** Stand-in for the provider's lookup API (payment request status and its
+   * transactions), run by the browser tests themselves; nothing listens there
+   * otherwise. Only mock-mode lookups in the copy go here (ozow.ts). */
+  providerOrigin: "http://127.0.0.1:55448",
 });
 
 // Staging (roadmap M0.15b, then M3.5) does not exist yet and has no profile

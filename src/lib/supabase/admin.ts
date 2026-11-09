@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
 import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
+import { noteLegacyClientCreated } from "@/lib/supabase/legacy-client-signal";
 
 /**
  * Service-role Supabase client for server-only operations.
@@ -17,6 +18,7 @@ let cachedUrl: string | null = null;
 let cachedKey: string | null = null;
 
 export function createAdminClient(): SupabaseClient {
+  noteLegacyClientCreated("admin");
   if (isPlaywrightSupabaseStubMode()) {
     return createPlaywrightStubSupabaseClient() as unknown as SupabaseClient;
   }

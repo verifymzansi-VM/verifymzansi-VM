@@ -1,10 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { signInAccount } from "./support/test-account";
 
 const WEBKIT_SKIP = ["webkit", "mobile-safari"];
 const WEBKIT_SKIP_MSG =
   "WebKit rendering under headless CI is unreliable for page-navigation tests.";
-
-const hasAuthCreds = Boolean(process.env.E2E_EMAIL && process.env.E2E_PASSWORD);
 
 test.describe("Critical Platform Flows", () => {
   test("critical API guardrails return non-2xx for unauthorized requests", async ({ request }) => {
@@ -27,12 +26,12 @@ test.describe("Critical Platform Flows", () => {
   test("critical auth flow: login and dashboard access with seeded user", async ({
     page,
   }, testInfo) => {
-    test.skip(!hasAuthCreds, "Set E2E_EMAIL and E2E_PASSWORD to enable auth critical flow");
     test.skip(WEBKIT_SKIP.includes(testInfo.project.name), WEBKIT_SKIP_MSG);
 
+    const account = signInAccount();
     await page.goto("/login");
-    await page.fill("input[type='email'], input[name='email']", process.env.E2E_EMAIL!);
-    await page.fill("input[type='password'], input[name='password']", process.env.E2E_PASSWORD!);
+    await page.fill("input[type='email'], input[name='email']", account.email);
+    await page.fill("input[type='password'], input[name='password']", account.password);
 
     await Promise.all([
       page.waitForURL((url) => url.pathname === "/"),
