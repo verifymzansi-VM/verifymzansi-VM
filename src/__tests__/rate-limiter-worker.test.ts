@@ -224,6 +224,69 @@ describe("rate-limiter worker", () => {
     });
   });
 
+  it("caps password setup emails at three an hour per account without blocking another account", async () => {
+    const { env } = createWorkerEnv();
+    const send = (key: string) =>
+      rateLimiterWorker.fetch(createWorkerRequest("auth:password-setup", key), env as never);
+    for (let attempt = 0; attempt < 3; attempt++)
+      expect((await send("account:user-1")).status).toBe(200);
+    expect((await send("account:user-1")).status).toBe(429);
+    expect((await send("account:user-2")).status).toBe(200);
+  });
+
+  it("keeps a platform-wide budget for password setup emails", async () => {
+    const { env } = createWorkerEnv();
+    for (let attempt = 0; attempt < 30; attempt++)
+      expect(
+        (
+          await rateLimiterWorker.fetch(
+            createWorkerRequest("auth:password-setup:global", "global"),
+            env as never
+          )
+        ).status
+      ).toBe(200);
+    expect(
+      (
+        await rateLimiterWorker.fetch(
+          createWorkerRequest("auth:password-setup:global", "global"),
+          env as never
+        )
+      ).status
+    ).toBe(429);
+  });
+
+  it.each([
+    // One per 120 s per account: longer than Auth's own interval between emails.
+    ["account:email-change:account", 1],
+    ["account:email-change:recipient", 3],
+    ["account:email-change:address", 10],
+  ] as const)("caps %s at %i per key without blocking another key", async (action, allowed) => {
+    const { env } = createWorkerEnv();
+    const send = (key: string) =>
+      rateLimiterWorker.fetch(createWorkerRequest(action, key), env as never);
+    for (let attempt = 0; attempt < allowed; attempt++)
+      expect((await send("key-1")).status).toBe(200);
+    const refused = await send("key-1");
+    expect(refused.status).toBe(429);
+    if (action === "account:email-change:account") {
+      const { retryAfter } = (await refused.json()) as { retryAfter: number };
+      expect(retryAfter).toBeGreaterThan(60);
+      expect(retryAfter).toBeLessThanOrEqual(120);
+    }
+    expect((await send("key-2")).status).toBe(200);
+  });
+
+  it("keeps a platform-wide budget for email changes", async () => {
+    const { env } = createWorkerEnv();
+    const send = () =>
+      rateLimiterWorker.fetch(
+        createWorkerRequest("account:email-change:global", "global"),
+        env as never
+      );
+    for (let attempt = 0; attempt < 30; attempt++) expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(429);
+  });
+
   it("caps manual location at ten attempts per account without blocking another account", async () => {
     const { env } = createWorkerEnv();
     for (let attempt = 0; attempt < 10; attempt++) {

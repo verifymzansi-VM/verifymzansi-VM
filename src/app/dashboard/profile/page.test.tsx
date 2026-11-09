@@ -390,6 +390,31 @@ describe("ProfilePage", () => {
     );
   });
 
+  it("says both the current and the new address get a confirmation email", async () => {
+    window.location.hash = "#account";
+    render(<ProfilePage />);
+    fireEvent.click(await screen.findByRole("button", { name: /^Change$/ }));
+    fireEvent.change(screen.getByPlaceholderText("New email address"), {
+      target: { value: "new@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send confirmation" }));
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Confirmation sent",
+        description: "Check both your current and new email inboxes to complete the change.",
+        variant: "success",
+      })
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/account/email/change",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ newEmail: "new@example.com" }),
+      })
+    );
+    window.location.hash = "";
+  });
+
   it("does not require a current password before deleting Google-only accounts", async () => {
     window.location.hash = "#account";
     mockGetUser.mockResolvedValue({

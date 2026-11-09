@@ -17,7 +17,13 @@ import {
   createFoundationPasswordUpdater,
   createFoundationPasswordResetter,
 } from "./password-update";
-import { foundationRecoveryClaim } from "./recovery-claims";
+import { createFoundationEmailChanger } from "./email-change";
+import { foundationRecoveryClaim, foundationRecoveryOpened } from "./recovery-claims";
+import {
+  foundationLatestAuthenticatorStep,
+  foundationLatestSignIn,
+  foundationSignedInWithPassword,
+} from "./sign-in-claims";
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
@@ -106,6 +112,8 @@ export async function createFoundationRequestCaller(
     return {
       ...verified,
       updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher),
+      /** Starts an email change for this same session (email-change.ts). */
+      changeEmail: createFoundationEmailChanger(config, token, verified.accountId, fetcher),
       resetPassword: verified.recovery
         ? createFoundationPasswordResetter(
             config,
@@ -155,6 +163,15 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
       sessionId: claims.session_id,
       user: verified.data.user,
       recovery: foundationRecoveryClaim(claims.session_id, claims.amr),
+      /** Opened by a reset link, or another emailed link redeemed straight at
+       * Auth, at any age (see foundationRecoveryOpened). */
+      openedByRecovery: foundationRecoveryOpened(claims.amr),
+      /** When this session last signed in (seconds), or null (sign-in-claims.ts). */
+      signedInAt: foundationLatestSignIn(claims.amr),
+      /** Signed in with a password in this session (so the account has one). */
+      signedInWithPassword: foundationSignedInWithPassword(claims.amr),
+      /** When this session last used its authenticator app (seconds), or null. */
+      authenticatorAt: foundationLatestAuthenticatorStep(claims.amr),
     };
   } catch {
     // Never include cookie contents, tokens or provider error bodies.

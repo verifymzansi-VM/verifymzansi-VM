@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getDataBackend } from "@/lib/data-backend";
+import { postFoundationContactEnquiry } from "@/lib/foundation/contact-enquiry-route";
 import {
   getOwnerColumn,
   normalizeOwnerRecord,
@@ -43,6 +45,7 @@ function isContactTargetRow(record: unknown): record is ContactTargetRow {
 }
 
 export async function POST(request: NextRequest) {
+  if (getDataBackend() === "foundation") return postFoundationContactEnquiry(request);
   try {
     const parsedBody = await parseAndValidateJsonRequest(request, contactAccountHolderSchema, {
       invalidJsonMessage: "Invalid JSON payload",

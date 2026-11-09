@@ -444,3 +444,93 @@ it("parses only the caller's bounded billing projection", async () => {
   });
   expect(rpc).toHaveBeenCalledExactlyOnceWith("get_my_billing", {});
 });
+
+// Paid add-on sales are paused unless switched on (../billing/addon-sales.ts).
+const post = uuid(10);
+const addonPaused = {
+  status: 403,
+  message: "Add-ons open soon. You have not been charged.",
+  code: "addon_sales_paused",
+};
+const addonClaim = () => ({ ...claimDto(), product_kind: "addon", target_post_id: post });
+const addonCheckout = (target: string | null = post) =>
+  startFoundationCheckout(api, owner, product, target, "https://verifymzansi.com", service);
+it("refuses an add-on before its quote while add-on sales are paused", async () => {
+  await expect(addonCheckout()).rejects.toMatchObject(addonPaused);
+  expect(rpc).not.toHaveBeenCalled();
+  expect(machine).not.toHaveBeenCalled();
+  expect(createOzowHostedPayment).not.toHaveBeenCalled();
+});
+it.each(["", "false", "TRUE", "1", "yes", " true"])(
+  "keeps add-ons paused when the switch is %j",
+  async (value) => {
+    vi.stubEnv("ADDON_SALES_ENABLED", value);
+    await expect(addonCheckout()).rejects.toMatchObject(addonPaused);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  }
+);
+it("never sends an add-on payment to the provider while paused, whatever the quote was for", async () => {
+  machine.mockResolvedValueOnce({ data: addonClaim(), error: null });
+  await expect(addonCheckout(null)).rejects.toMatchObject(addonPaused);
+  expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_checkout_request"]);
+});
+it("never hands back a stored add-on checkout address while paused", async () => {
+  machine.mockResolvedValueOnce({
+    data: { ...addonClaim(), claim_token: null, checkout_url: checkoutUrl },
+    error: null,
+  });
+  await expect(addonCheckout(null)).rejects.toMatchObject(addonPaused);
+  expect(createOzowHostedPayment).not.toHaveBeenCalled();
+});
+it("starts an add-on checkout once add-on sales are switched on", async () => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+  machine.mockImplementationOnce(async () => ({ data: addonClaim(), error: null }));
+  expect(await addonCheckout()).toEqual({ paymentId: payment, checkoutUrl });
+  expect(rpc).toHaveBeenCalledExactlyOnceWith("start_checkout", {
+    p_product_id: product,
+    p_target_post: post,
+  });
+  expect(createOzowHostedPayment).toHaveBeenCalledTimes(1);
+});
+it("still settles an add-on payment that already exists while sales are paused", async () => {
+  machine.mockImplementation(async (name) => ({
+    data:
+      name === "get_checkout_payment"
+        ? { ...paymentDto(), product_kind: "addon", target_post_id: post }
+        : { outcome: "completed" },
+    error: null,
+  }));
+  expect(await applyFoundationOzowNotification(notification(), "signed add-on", service)).toEqual({
+    success: true,
+    result: { outcome: "completed" },
+  });
+  expect(machine).toHaveBeenLastCalledWith(
+    "apply_provider_event",
+    expect.objectContaining({ p_event: expect.objectContaining({ status: "complete" }) })
+  );
+});
+it("still reconciles an add-on payment that already exists while sales are paused", async () => {
+  machine.mockImplementation(async (name) => ({
+    data:
+      name === "claim_payment_reconciliation"
+        ? { ...paymentDto(), product_kind: "addon", target_post_id: post }
+        : true,
+    error: null,
+  }));
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValue([notification()]);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+    settled: true,
+  });
+});
+it("keeps add-on sales paused with the default and production settings", () => {
+  const toml = parse(readFileSync("wrangler.toml", "utf8")) as {
+    vars: Record<string, string>;
+    env: Record<string, { vars: Record<string, string> }>;
+  };
+  for (const vars of [toml.vars, toml.env.production.vars])
+    expect(vars.ADDON_SALES_ENABLED).toBe("false");
+});

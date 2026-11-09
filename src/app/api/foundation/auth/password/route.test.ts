@@ -91,6 +91,26 @@ it.each([
   expect(context).not.toHaveBeenCalled();
   expect(update).not.toHaveBeenCalled();
 });
+it.each([
+  ["a live recovery session", { recovery: { sessionId: id, issuedAt: 1 } }],
+  ["a session opened by a reset link over an hour ago", { recovery: null, openedByRecovery: true }],
+])("refuses %s before any password check", async (_label, session) => {
+  authenticate.mockResolvedValue({ ...(await authenticate()), ...session });
+  const response = await POST(request({ ...payload, currentPassword: "synthetic-wrong" }));
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({
+    error: "Use the reset link from your email to set a new password",
+    reason: "recovery_session",
+  });
+  expect(response.headers.get("Cache-Control")).toContain("no-store");
+  expect(readAccount).not.toHaveBeenCalled();
+  expect(breach).not.toHaveBeenCalled();
+  expect(update).not.toHaveBeenCalled();
+  expect(notice).not.toHaveBeenCalled();
+  // The older password URL refuses it the same way.
+  expect((await compatibilityPOST(request())).status).toBe(403);
+  expect(update).not.toHaveBeenCalled();
+});
 it("requires a verified account session", async () => {
   authenticate.mockRejectedValue(new FoundationSessionError(401));
   expect((await POST(request())).status).toBe(401);
@@ -138,8 +158,53 @@ it("blocks when the shared protection is degraded", async () => {
 });
 it("preserves the provider MFA refusal", async () => {
   update.mockRejectedValue(new FoundationPasswordUpdateError(403, "mfa_required"));
-  expect((await POST(request())).status).toBe(403);
+  const response = await POST(request());
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({
+    error: "Confirm your authenticator code before changing your password",
+    reason: "mfa_required",
+    code: "mfa_required",
+  });
   expect(notice).not.toHaveBeenCalled();
+});
+it("tells the profile page to offer a fresh sign-in when Auth asks for reauthentication", async () => {
+  update.mockRejectedValue(new FoundationPasswordUpdateError(401, "reauthentication"));
+  for (const send of [POST, compatibilityPOST]) {
+    const response = await send(request());
+    expect(response.status).toBe(401);
+    // `code` is what the restored page reads; `reason` stays for other callers.
+    expect(await response.json()).toEqual({
+      error: "Sign out, then sign in again before changing your password",
+      reason: "reauthentication",
+      code: "reauthentication_required",
+    });
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+  }
+  expect(update).toHaveBeenCalledTimes(2);
+  expect(notice).not.toHaveBeenCalled();
+});
+it("asks staff without a fresh authenticator step for it in the page's terms", async () => {
+  readAccount.mockResolvedValueOnce({ account_id: id, staff: { can_access: false } });
+  const response = await POST(request());
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({
+    error: "Confirm your authenticator code before changing your password",
+    reason: "mfa_required",
+    code: "mfa_required",
+  });
+  expect(update).not.toHaveBeenCalled();
+});
+it.each([
+  [new FoundationPasswordUpdateError(400, "current_password"), 400, "current_password"],
+  [new FoundationPasswordUpdateError(400, "password_policy"), 400, "password_policy"],
+  [new FoundationPasswordUpdateError(503, "unavailable"), 503, "unavailable"],
+])("adds no page code to other refusals (%s)", async (error, status, reason) => {
+  update.mockRejectedValue(error);
+  const response = await POST(request());
+  expect(response.status).toBe(status);
+  const body = await response.json();
+  expect(body.reason).toBe(reason);
+  expect(body).not.toHaveProperty("code");
 });
 it("does not repeat a committed update when its security notification is unavailable", async () => {
   notice.mockRejectedValue(new Error("unavailable"));

@@ -14,6 +14,11 @@ import {
   type NormalizedOzowWebhook,
 } from "../payments/ozow";
 import { validateOzowConfirmation } from "../payments/confirmation";
+import {
+  ADDON_SALES_PAUSED_CODE,
+  ADDON_SALES_PAUSED_MESSAGE,
+  areAddonSalesOpen,
+} from "../billing/addon-sales";
 import { PRODUCTION_CHECKOUT_ORIGIN, testCopyCheckout } from "../payments/checkout-origins";
 import type { PaymentRecordShape } from "../payments/types";
 
@@ -112,11 +117,14 @@ export type FoundationBilling = z.infer<typeof billingSchema>;
 export class FoundationBillingError extends Error {
   constructor(
     readonly status: 400 | 403 | 404 | 409 | 503,
-    message = "Billing could not be completed"
+    message = "Billing could not be completed",
+    readonly code?: string
   ) {
     super(message);
   }
 }
+const addonSalesPaused = () =>
+  new FoundationBillingError(403, ADDON_SALES_PAUSED_MESSAGE, ADDON_SALES_PAUSED_CODE);
 async function command(
   api: FoundationAuthenticatedApi | FoundationServiceApi,
   name: BillingRpcName,
@@ -215,6 +223,10 @@ export async function startFoundationCheckout(
     app.password
   )
     throw new FoundationBillingError(503);
+  // Only add-ons take a target post (internal.start_checkout refuses a plan
+  // with one and an add-on without one), so this refuses every add-on before
+  // its payment row exists while sales are paused (../billing/addon-sales.ts).
+  if (targetPostId !== null && !areAddonSalesOpen()) throw addonSalesPaused();
   const quote = quoteSchema.parse(
     await command(api, "start_checkout", {
       p_product_id: z.uuid().parse(productId),
@@ -233,6 +245,9 @@ export async function startFoundationCheckout(
     pay.amount_cents !== quote.amount_cents
   )
     throw new FoundationBillingError(503);
+  // Whatever the quote was for, an add-on payment never reaches the provider
+  // (nor gets a stored checkout address back) while sales are paused.
+  if (pay.product_kind === "addon" && !areAddonSalesOpen()) throw addonSalesPaused();
   if (pay.checkout_url)
     return { paymentId: pay.id, checkoutUrl: checkoutRedirect(pay.checkout_url) };
   if (!pay.claim_token || !pay.checkout_expires_at) throw new FoundationBillingError(503);

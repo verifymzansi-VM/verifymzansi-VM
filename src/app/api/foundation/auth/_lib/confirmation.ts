@@ -8,10 +8,18 @@ import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { foundationAuthPrivateResponse } from "./attempt-route";
+import { EMAIL_CHANGE_LANDING_PARAM } from "./email-change-landing";
 import { sanitizeReturnUrl } from "@/lib/utils/navigation";
 import { ACQUISITION_COOKIE } from "@/lib/analytics/acquisition";
 import { recordRestoredAcquisitionCookie } from "@/lib/foundation/partners";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
+import {
+  RECOVERY_LINK_PARAM,
+  RECOVERY_PAGE_PATH,
+  recoveryBindingCookieName,
+  recoveryBindingCookieOptions,
+  sealRecoveryBinding,
+} from "@/lib/foundation/recovery-binding";
 
 /** PKCE protects this top-level email navigation; it cannot require the
  * mutation CSRF header used by in-app POSTs. The flow id selects one verifier.
@@ -27,6 +35,7 @@ export async function handleFoundationConfirmation(
   let success = false;
   let sessionName: string | undefined;
   let retryAfter: number | undefined;
+  let binding: ReturnType<typeof sealRecoveryBinding> | undefined;
   try {
     if (
       process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha" ||
@@ -43,7 +52,9 @@ export async function handleFoundationConfirmation(
       query.getAll("code").length !== 1 ||
       query.getAll("sb_flow_id").length !== 1 ||
       query.has("token_hash") ||
-      query.has("error")
+      query.has("error") ||
+      // Email change links are handled apart and never open a session.
+      query.has(EMAIL_CHANGE_LANDING_PARAM)
     )
       throw new Error();
     if (
@@ -68,7 +79,7 @@ export async function handleFoundationConfirmation(
       throw new Error();
     }
     const values = new Map(request.cookies.getAll().map(({ name, value }) => [name, value]));
-    const api = await confirmFoundationAccount(
+    const { api, accountId, recovery } = await confirmFoundationAccount(
       config,
       { code: query.get("code"), flowId: query.get("sb_flow_id") },
       {
@@ -81,7 +92,14 @@ export async function handleFoundationConfirmation(
       undefined,
       purpose
     );
-    success = true;
+    // Remember, in this browser only, which verified recovery session this
+    // link opened; the reset page completes only with that session.
+    if (purpose === "recovery") {
+      if (!recovery) throw new Error();
+      binding = sealRecoveryBinding({ accountId, ...recovery });
+    }
+    // A recovery success always carries its binding (set just above).
+    success = purpose !== "recovery" || binding !== undefined;
     if (purpose !== "recovery") {
       const cookie = request.headers
         .get("cookie")
@@ -101,13 +119,15 @@ export async function handleFoundationConfirmation(
       new URL(
         success
           ? purpose === "recovery"
-            ? "/reset-password"
+            ? `${RECOVERY_PAGE_PATH}?${RECOVERY_LINK_PARAM}=${binding?.marker}`
             : purpose === "google"
               ? sanitizeReturnUrl(request.nextUrl.searchParams.get("next"))
               : FOUNDATION_POST_SIGNUP_PATH
-          : purpose === "recovery"
-            ? "/forgot-password?error=recovery_failed"
-            : "/login?error=auth_callback_failed",
+          : // The empty fragment replaces the one Auth put on a refused link
+            // (its error details), which browsers otherwise carry along.
+            purpose === "recovery"
+            ? "/forgot-password?error=recovery_failed#"
+            : "/login?error=auth_callback_failed#",
         origin
       ),
       303
@@ -120,5 +140,11 @@ export async function handleFoundationConfirmation(
       sessionName && name.startsWith(sessionName + "-") && /-code-verifier(?:\.\d+)?$/.test(name);
     if (success || verifierOnly) response.cookies.set(name, value, options);
   }
+  if (success && binding)
+    response.cookies.set(
+      recoveryBindingCookieName(origin),
+      binding.value,
+      recoveryBindingCookieOptions(origin, binding.maxAge)
+    );
   return response;
 }

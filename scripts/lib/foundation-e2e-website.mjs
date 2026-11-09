@@ -102,6 +102,7 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
     FOUNDATION_RECOVERY_ENABLED: "true",
     FOUNDATION_PHONE_VERIFICATION_ENABLED: "true",
+    ADDON_SALES_ENABLED: "false",
     KYC_PROVIDER: "manual",
     // Phone codes and ID numbers: synthetic keys in the shape the website
     // requires (the stub suite's ID key repeats one digit and is refused).

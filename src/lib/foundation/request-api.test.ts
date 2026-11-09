@@ -87,6 +87,30 @@ it("pins password updates to the verified MFA token even if cookie state changes
   expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
 });
 
+it("pins email changes to the verified token even if cookie state changes afterwards", async () => {
+  const candidate = token(1);
+  const jar = cookieAdapter(session(candidate));
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    expect(new URL(String(url)).pathname).toBe("/auth/v1/user");
+    expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${candidate}`);
+    return Response.json(user(1));
+  });
+  const caller = await createFoundationRequestCaller(config, jar, fetcher);
+  await jar.setAll(
+    [
+      {
+        name: "sb-abcdefghijklmnopqrst-auth-token",
+        value: "base64-" + Buffer.from(JSON.stringify(session(token(2), 2))).toString("base64url"),
+      },
+    ],
+    {}
+  );
+  await caller.changeEmail("next@example.invalid", "https://verifymzansi.com/auth/callback");
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
+  expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body)).email).toBe("next@example.invalid");
+});
+
 it("derives recovery only from the exact GoTrue-verified token, never cookie user metadata", async () => {
   const now = Math.floor(Date.now() / 1000);
   const sid = id(101);
@@ -97,13 +121,67 @@ it("derives recovery only from the exact GoTrue-verified token, never cookie use
     fetcher
   );
   expect(recovery.recovery).toEqual({ sessionId: sid, issuedAt: now });
+  expect(recovery.openedByRecovery).toBe(true);
+  // Past the hour the recovery claim lapses, but the session stays marked.
+  const old = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "recovery", timestamp: now - 7200 }] }))),
+    fetcher
+  );
+  expect(old.recovery).toBeNull();
+  expect(old.openedByRecovery).toBe(true);
   const forgedCookie = {
     ...session(token()),
     user: { ...user(1), amr: [{ method: "recovery", timestamp: now }], recovery: true },
   };
-  expect(
-    (await readFoundationRequestCaller(config, cookieAdapter(forgedCookie), fetcher)).recovery
-  ).toBeNull();
+  const forged = await readFoundationRequestCaller(config, cookieAdapter(forgedCookie), fetcher);
+  expect(forged.recovery).toBeNull();
+  expect(forged.openedByRecovery).toBe(false);
+});
+
+it("derives the sign-in time only from the exact GoTrue-verified token", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const fetcher = vi.fn<typeof fetch>(async () => Response.json(user(1)));
+  const signedIn = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(
+      session(
+        token(1, {
+          amr: [
+            { method: "totp", timestamp: now - 5 },
+            { method: "oauth", timestamp: now - 900 },
+          ],
+        })
+      )
+    ),
+    fetcher
+  );
+  expect(signedIn.signedInAt).toBe(now - 900);
+  expect(signedIn.signedInWithPassword).toBe(false);
+  expect(signedIn.authenticatorAt).toBe(now - 5);
+  const withPassword = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "password", timestamp: now - 7200 }] }))),
+    fetcher
+  );
+  expect(withPassword.signedInWithPassword).toBe(true);
+  expect(withPassword.signedInAt).toBe(now - 7200);
+  // A recovery link is no sign-in, and a cookie's user object is no proof.
+  const recovery = await readFoundationRequestCaller(
+    config,
+    cookieAdapter(session(token(1, { amr: [{ method: "recovery", timestamp: now }] }))),
+    fetcher
+  );
+  expect(recovery.signedInAt).toBeNull();
+  const forged = await readFoundationRequestCaller(
+    config,
+    cookieAdapter({
+      ...session(token()),
+      user: { ...user(1), amr: [{ method: "oauth", timestamp: now }] },
+    }),
+    fetcher
+  );
+  expect(forged.signedInAt).toBeNull();
 });
 
 it("reads a near-expiry page token without consuming its refresh token or writing cookies", async () => {

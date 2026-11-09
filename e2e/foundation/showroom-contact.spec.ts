@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   expect,
   test,
@@ -16,6 +17,10 @@ import {
   queryTestCopy,
   queueMailCheckNotice,
   readTestCopy,
+  rpc,
+  serviceRpc,
+  signIn,
+  type TestCopy,
 } from "./support/test-copy";
 
 // Critical-flow test (M0.9a): a visitor's journey from the home showroom to
@@ -23,13 +28,8 @@ import {
 // private test copy. Browse the showroom, open a post from its card, reveal the
 // seller's number (CAPTCHA in the site's own test mode), send an enquiry; the
 // seller sees it in Leads, one run of the email job emails the seller, and the
-// email lands in the copy's local mail catcher.
-//
-// Sending an enquiry is broken today (UX-01): the dialog posts to /api/contact,
-// which still reads the retired tables, so the visitor is told the post was not
-// found and nothing is saved. That test is marked test.fail() and pinned to
-// that exact symptom (see characterise below). Every other outcome, including
-// the enquiry starting to work while the mark is still there, fails the run.
+// email lands in the copy's local mail catcher. The enquiry dialog posts to
+// /api/contact, whose foundation branch sends it to api.submit_enquiry (M1.2).
 //
 // Browser HTTP(S) requests are checked against an allowlist: the copy's website
 // and its local database gateway continue; anything else is aborted and fails
@@ -41,10 +41,9 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const POST_TITLE = "Fixture Soweto Craft Market";
+/** The seller's seeded live business (fixture/posts.json). */
+const HOST_TITLE = "Fixture Mzansi Motor Workshop";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const UX01 = "UX-01, fixed by M1.2";
-/** What /api/contact answers today for an event post (UX-01). */
-const UX01_REPLY = { status: 404, body: { error: "Tourism & Events post not found" } };
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
@@ -108,6 +107,13 @@ async function openPostFromShowroom(page: Page, post: { id: string; title: strin
   await expect(page.getByText(post.title).filter({ visible: true }).first()).toBeVisible();
 }
 
+/** A production command through the copy's local gateway; refuses any non-200 reply. */
+async function command(copy: TestCopy, name: string, body: unknown, token?: string) {
+  const result = await rpc(copy, name, body, token);
+  if (result.status !== 200) throw new Error(`Command ${name} answered ${result.status}`);
+  return result.data;
+}
+
 /** Runs the website's email job once, as the ops-jobs Worker does every minute. */
 async function runEmailJob(request: APIRequestContext) {
   const response = await request.post("/api/webhooks/ops-jobs", {
@@ -116,31 +122,6 @@ async function runEmailJob(request: APIRequestContext) {
   });
   expect(response.status()).toBe(200);
   return (await response.json()) as { claimed: number; succeeded: number; retrying: number };
-}
-
-/** Thrown only when the exact UX-01 symptom is observed. */
-class KnownBreak extends Error {
-  override name = "KnownBreak";
-}
-
-/**
- * Pins an expected failure to its known cause. While the test is marked
- * test.fail(), only a KnownBreak may fail it; any other failure (a setup error,
- * a changed page) is recorded and swallowed, so the test passes and Playwright
- * reports "expected to fail, but passed": the run turns red. The same happens
- * when the break is fixed but the mark is still there. Once the mark is
- * removed, every failure is reported as usual.
- */
-async function characterise(body: () => Promise<void>) {
-  const expectingFailure = test.info().expectedStatus === "failed";
-  try {
-    await body();
-  } catch (error) {
-    if (!expectingFailure || (error instanceof Error && error.name === "KnownBreak")) throw error;
-    const message = error instanceof Error ? error.message.split("\n")[0] : String(error);
-    test.info().annotations.push({ type: "not the known break", description: message });
-    console.error(`[${UX01}] failed for another reason, so the run must turn red: ${message}`);
-  }
 }
 
 // Read in beforeAll, never at import time: listing specs must not touch the copy.
@@ -222,80 +203,196 @@ test.describe("showroom to contact the seller", () => {
     page,
     request,
   }) => {
-    test.fail(true, UX01);
-    await characterise(async () => {
-      const { outside, replies } = await guardAndCapture(context);
-      // Nothing older waits in the email job, so the next run handles this enquiry.
-      for (let run = 0; run < 10 && dueOutboxCount() > 0; run++) await runEmailJob(request);
-      expect(dueOutboxCount()).toBe(0);
-      const saved = enquiryCount(post.id);
+    const { outside, replies } = await guardAndCapture(context);
+    // Nothing older waits in the email job, so the next run handles this enquiry.
+    for (let run = 0; run < 10 && dueOutboxCount() > 0; run++) await runEmailJob(request);
+    expect(dueOutboxCount()).toBe(0);
+    const saved = enquiryCount(post.id);
 
-      await openPostFromShowroom(page, post);
-      await page.getByRole("button", { name: "Send an enquiry" }).filter({ visible: true }).click();
-      const dialog = page.getByRole("dialog");
-      await expect(dialog.getByRole("heading", { name: "Send a Message" })).toBeVisible();
-      // A new reply address per run keeps reruns inside the database's flood
-      // limits; the reference finds this run's enquiry among earlier ones.
-      const reference = crypto.randomUUID().slice(0, 8);
-      const buyerEmail = `visitor-${reference}@verifymzansi.test`;
-      const message = `Hello, is the craft market open on Sunday mornings? Ref ${reference}`;
-      await dialog.getByLabel("Your name").fill("Thabo Visitor");
-      await dialog.getByLabel("Reply email").fill(buyerEmail);
-      await dialog.getByLabel("Your message").fill(message);
-      await dialog.getByRole("button", { name: "Send message" }).click();
-      await expect.poll(() => replies.contact.length).toBe(1);
-      const [reply] = replies.contact;
-      expect(reply.request).toMatchObject({
-        promotionId: post.id,
-        buyerEmail,
-        message,
-        contactMethod: "form",
-        turnstileToken: "dev-turnstile-bypass",
-      });
-
-      if (reply.status === UX01_REPLY.status) {
-        // UX-01 as recorded: "not found" for a post the visitor is looking at,
-        // shown in the dialog, and nothing saved. Only this is the known break.
-        expect(reply.body).toEqual(UX01_REPLY.body);
-        await expect(dialog.getByRole("alert")).toHaveText(UX01_REPLY.body.error);
-        expect(enquiryCount(post.id)).toBe(saved);
-        throw new KnownBreak(`${UX01}: /api/contact answered 404 "${UX01_REPLY.body.error}"`);
-      }
-      expect(reply).toMatchObject({ status: 200 });
-      await expect(dialog.getByText("Enquiry saved!")).toBeVisible();
-      expect(enquiryCount(post.id)).toBe(saved + 1);
-      const [enquiryId, outboxId] = queryTestCopy(
-        "select e.id, o.id from private.enquiries e join private.outbox_events o " +
-          "on o.kind = 'enquiry_received' and o.subject_id = e.id " +
-          `where e.post_id = '${post.id}' and e.buyer_email = '${buyerEmail}';`
-      ).split("|");
-      expect(enquiryId).toMatch(UUID);
-      expect(outboxId).toMatch(UUID);
-
-      // The seller signs in and finds the enquiry in Leads.
-      await context.clearCookies();
-      const seller = await browserSessionCookies(readTestCopy(), "verifiedMember");
-      expect(seller.accountId).toBe(sellerId);
-      await context.addCookies(seller.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
-      await page.goto("/dashboard/leads");
-      const lead = page.getByRole("listitem").filter({ hasText: message });
-      await expect(lead).toHaveCount(1);
-      await expect(lead).toBeVisible();
-      await expect(lead).toContainText("Thabo Visitor");
-      await expect(lead).toContainText(`Re: ${post.title}`);
-
-      // One run of the email job sends the seller's notice to the mail catcher.
-      expect(await runEmailJob(request)).toEqual({ claimed: 1, succeeded: 1, retrying: 0 });
-      expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
-      const mail = await caughtMailFor(
-        people.verifiedMember.email,
-        `foundation-outbox/${outboxId}`
-      );
-      expect(mail.subject).toBe("New enquiry");
-      expect(mail.text).toMatch(
-        /^Sign in to view the details: https:\/\/\S+\/dashboard\/leads\s*$/m
-      );
-      expect(outside).toEqual([]);
+    await openPostFromShowroom(page, post);
+    await page.getByRole("button", { name: "Send an enquiry" }).filter({ visible: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Send a Message" })).toBeVisible();
+    // A new reply address per run keeps reruns inside the database's flood
+    // limits; the reference finds this run's enquiry among earlier ones.
+    const reference = crypto.randomUUID().slice(0, 8);
+    const buyerEmail = `visitor-${reference}@verifymzansi.test`;
+    const message = `Hello, is the craft market open on Sunday mornings? Ref ${reference}`;
+    await dialog.getByLabel("Your name").fill("Thabo Visitor");
+    await dialog.getByLabel("Reply email").fill(buyerEmail);
+    await dialog.getByLabel("Your message").fill(message);
+    await dialog.getByRole("button", { name: "Send message" }).click();
+    await expect.poll(() => replies.contact.length).toBe(1);
+    const [reply] = replies.contact;
+    expect(reply.request).toMatchObject({
+      promotionId: post.id,
+      buyerEmail,
+      message,
+      contactMethod: "form",
+      turnstileToken: "dev-turnstile-bypass",
     });
+
+    expect(reply).toMatchObject({ status: 200, body: { success: true } });
+    await expect(dialog.getByText("Enquiry saved!")).toBeVisible();
+    expect(enquiryCount(post.id)).toBe(saved + 1);
+    const [enquiryId, outboxId] = queryTestCopy(
+      "select e.id, o.id from private.enquiries e join private.outbox_events o " +
+        "on o.kind = 'enquiry_received' and o.subject_id = e.id " +
+        `where e.post_id = '${post.id}' and e.buyer_email = '${buyerEmail}';`
+    ).split("|");
+    expect(enquiryId).toMatch(UUID);
+    expect(outboxId).toMatch(UUID);
+
+    // The seller signs in and finds the enquiry in Leads.
+    await context.clearCookies();
+    const seller = await browserSessionCookies(readTestCopy(), "verifiedMember");
+    expect(seller.accountId).toBe(sellerId);
+    await context.addCookies(seller.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto("/dashboard/leads");
+    const lead = page.getByRole("listitem").filter({ hasText: message });
+    await expect(lead).toHaveCount(1);
+    await expect(lead).toBeVisible();
+    await expect(lead).toContainText("Thabo Visitor");
+    await expect(lead).toContainText(`Re: ${post.title}`);
+
+    // One run of the email job sends the seller's notice to the mail catcher.
+    expect(await runEmailJob(request)).toEqual({ claimed: 1, succeeded: 1, retrying: 0 });
+    expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
+    const mail = await caughtMailFor(people.verifiedMember.email, `foundation-outbox/${outboxId}`);
+    expect(mail.subject).toBe("New enquiry");
+    expect(mail.text).toMatch(/^Sign in to view the details: https:\/\/\S+\/dashboard\/leads\s*$/m);
+    expect(outside).toEqual([]);
+  });
+
+  test("an event linked to its poster's live business shows the host business card", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    const copy = readTestCopy();
+    const host = copy.posts.find((entry) => entry.title === HOST_TITLE);
+    if (!host) throw new Error(`The test copy has no post "${HOST_TITLE}"`);
+    expect(queryTestCopy(`select owner_id from private.posts where id = '${host.id}';`)).toBe(
+      sellerId
+    );
+    const { outside } = await guardAndCapture(context);
+
+    // A fresh cover image record for the event (the bytes are not needed to show
+    // the host card; the database only accepts the seller's own recent uploads).
+    const sellerSession = await signIn(copy, "verifiedMember");
+    const upload = (await command(
+      copy,
+      "begin_media_upload",
+      { p_kind: "image", p_bytes: 4096 },
+      sellerSession.token
+    )) as { object_id: string; object_key: string };
+    const finalized = await serviceRpc("finalize_media", {
+      p_object_id: upload.object_id,
+      p_size: 4096,
+      p_sha256: createHash("sha256").update(upload.object_id).digest("hex"),
+      p_mime: "image/jpeg",
+      p_width: 800,
+      p_height: 600,
+    });
+    expect(finalized.status).toBe(200);
+
+    // The seller posts an event through the website's own route, naming their
+    // live business as host (the create form sends business_id the same way).
+    const seller = await browserSessionCookies(copy, "verifiedMember");
+    await context.addCookies(seller.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto("/dashboard");
+    const title = `Fixture Workshop Open Day ${crypto.randomUUID().slice(0, 8)}`;
+    const submitted = await page.evaluate(
+      async ({ title, businessId, image }) => {
+        const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+        const terms = await fetch("/api/foundation/posting-terms", { cache: "no-store" }).then(
+          (response) => response.json()
+        );
+        const response = await fetch("/api/promotions", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "x-csrf-token": token },
+          body: JSON.stringify({
+            postRequestId: crypto.randomUUID(),
+            postingTerms: { version: terms.version, document_hash: terms.document_hash },
+            title,
+            description:
+              "Synthetic open day at the workshop, used by the foundation browser tests.",
+            promotion_type: "event",
+            province: "Gauteng",
+            city: "Johannesburg",
+            images: [image],
+            contact_methods: ["form"],
+            start_date: new Date(Date.now() + 86_400_000).toISOString(),
+            end_date: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+            event_details: { event_type: "festival_concert" },
+            business_id: businessId,
+            termsAccepted: true,
+          }),
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { title, businessId: host.id, image: `${APP_ORIGIN}/api/media/serve/${upload.object_key}` }
+    );
+    expect(submitted).toMatchObject({ status: 200, body: { success: true } });
+    const eventId = (submitted.body as { id: string }).id;
+    expect(eventId).toMatch(UUID);
+
+    try {
+      // A moderator publishes it (production commands; staff screens are tested elsewhere).
+      const moderator = await signIn(copy, "moderator");
+      const revision = Number(
+        queryTestCopy(`select revision from private.posts where id = '${eventId}';`)
+      );
+      const lease = await command(
+        copy,
+        "claim_queue_item",
+        { p_subject: "post", p_id: eventId },
+        moderator.token
+      );
+      await command(
+        copy,
+        "moderate_post",
+        {
+          p_post_id: eventId,
+          p_expected_revision: revision,
+          p_decision: "approve",
+          p_reason: null,
+          p_claim_generation: lease.claim_generation,
+          p_claim_nonce: lease.claim_nonce,
+        },
+        moderator.token
+      );
+      expect(queryTestCopy(`select status from private.posts where id = '${eventId}';`)).toBe(
+        "live"
+      );
+
+      // A visitor opens the event: the host business card links to the business.
+      await context.clearCookies();
+      await page.goto(`/tourism-events/${eventId}`);
+      await expect(page.getByText(title).filter({ visible: true }).first()).toBeVisible();
+      const card = page.locator(`a[href="/mzansi-business/${host.id}"]`).filter({ visible: true });
+      await expect(card.first()).toBeVisible();
+      await expect(card.first()).toContainText(HOST_TITLE);
+      expect(outside).toEqual([]);
+    } finally {
+      // Leave the seller's event count as seeded for the other specs.
+      const session = await signIn(copy, "verifiedMember");
+      await command(
+        copy,
+        "execute_my_frontend_post_action",
+        {
+          p_request: crypto.randomUUID(),
+          p_post: eventId,
+          p_expected_revision: Number(
+            queryTestCopy(`select revision from private.posts where id = '${eventId}';`)
+          ),
+          p_action: "delete",
+          p_kind: "event",
+          p_area: "tourism_events",
+        },
+        session.token
+      );
+    }
   });
 });

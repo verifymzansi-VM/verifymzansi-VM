@@ -4,9 +4,10 @@ import type { FoundationServiceApi } from "./service-api";
 import { normalizeSaPhone } from "../utils/phone";
 
 // Same character rule as internal.plain_text_valid: no control (except newline
-// in multiline text), zero-width or bidirectional override characters.
+// in multiline text), zero-width or bidirectional override characters. NUL is
+// refused here too: PostgreSQL text cannot hold it, so SQL would fail instead.
 const UNSAFE: [number, number][] = [
-  [1, 9],
+  [0, 9],
   [11, 31],
   [127, 159],
   [173, 173],
@@ -90,7 +91,10 @@ const refusals = new Map<string, FoundationInboxError["reason"]>([
   ["enquiry_limit", "limited"],
   ["enquiry_request_conflict", "conflict"],
 ]);
-type InboxRpc = PromiseLike<{ data: unknown; error: { details?: string | null } | null }>;
+type InboxRpc = PromiseLike<{
+  data: unknown;
+  error: { code?: string | null; details?: string | null; message?: string | null } | null;
+}>;
 /** One request, no automatic retry after an uncertain reply. */
 async function settle<T>(request: InboxRpc, schema: z.ZodType<T>) {
   const { data, error } = await Promise.resolve(request).then(
@@ -106,8 +110,11 @@ async function settle<T>(request: InboxRpc, schema: z.ZodType<T>) {
   return parsed.data;
 }
 
+// Client request ids must be random (version 4). Version 8 ids are derived by
+// the server from an enquiry's content (public-enquiry.ts), so a client cannot
+// submit one to probe whether someone else's enquiry exists.
 const enquiryInput = z.strictObject({
-  request_id: z.uuid(),
+  request_id: z.uuidv4(),
   post_id: z.uuid(),
   buyer_name: plain(2, 80, false).optional(),
   buyer_email: email,
@@ -132,11 +139,30 @@ export function buildFoundationEnquiry(input: unknown, sender: string | null) {
   };
 }
 const submitted = z.strictObject({ id: z.uuid(), reused: z.boolean() });
+/** Two identical requests at once: the second insert hits the unique request
+ * id and fails. The first is committed by then, so one more call replays it. */
+function lostRequestIdRace(error: {
+  code?: string | null;
+  details?: string | null;
+  message?: string | null;
+}) {
+  return (
+    error.code === "23505" && /request_id/.test(`${error.details ?? ""} ${error.message ?? ""}`)
+  );
+}
 export async function submitFoundationEnquiry(
   api: FoundationServiceApi,
   command: ReturnType<typeof buildFoundationEnquiry>
 ) {
-  return settle(api.rpc("submit_enquiry", command), submitted);
+  const first = await Promise.resolve(api.rpc("submit_enquiry", command)).then(
+    (result) => result,
+    () => {
+      throw new FoundationInboxError("unavailable");
+    }
+  );
+  if (first.error && lostRequestIdRace(first.error))
+    return settle(api.rpc("submit_enquiry", command), submitted);
+  return settle(Promise.resolve(first), submitted);
 }
 
 const enquiryStatus = z.enum(["new", "read", "contacted", "closed"]);

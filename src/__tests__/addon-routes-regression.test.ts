@@ -16,7 +16,7 @@ vi.mock("@/lib/billing/trial-addon-access", () => ({
  *
  * These scenarios were previously missing from the test suite.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { NextRequest } from "next/server";
 import { resetOwnerColumnCacheForTesting } from "@/lib/account/compat";
 
@@ -79,6 +79,15 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 import { POST as FeaturedPOST } from "@/app/api/listings/[id]/featured/route";
 import { POST as UrgentPOST } from "@/app/api/listings/[id]/urgent/route";
 import { POST as BoostPOST } from "@/app/api/listings/[id]/boost/route";
+
+// Paid add-on sales are paused unless switched on (src/lib/billing/addon-sales.ts);
+// these cases cover the checkout that runs once they are open.
+beforeEach(() => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ── Helpers ────────────────────────────────────────────────────
 const UUID = "00000000-0000-0000-0000-000000000001";

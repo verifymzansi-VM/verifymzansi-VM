@@ -563,7 +563,14 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "Refused. Paid add-on sales are paused (code addon_sales_paused, error \"Add-ons open soon. You have not been charged.\"; no payment is created), this add-on is not offered for this post (code addon_unavailable), or the caller may not boost this listing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddonCheckoutError"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1052,6 +1059,20 @@
         "properties": {
           "error": {
             "type": "string"
+          }
+        }
+      },
+      "AddonCheckoutError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "enum": ["addon_sales_paused", "addon_unavailable"],
+            "description": "addon_sales_paused: paid add-on sales are paused (the reply is the same for every caller and request). addon_unavailable: this add-on is not offered for this post."
           }
         }
       }

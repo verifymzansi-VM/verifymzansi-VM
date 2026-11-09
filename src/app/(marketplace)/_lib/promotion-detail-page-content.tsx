@@ -1,6 +1,10 @@
 import { publicPersonName } from "@/lib/account/public-name";
 import { getDataBackend } from "@/lib/data-backend";
-import { restoredEventDetail, restoredPublicDetail } from "@/lib/foundation/marketplace-server";
+import {
+  restoredEventDetail,
+  restoredEventHostBusiness,
+  restoredPublicDetail,
+} from "@/lib/foundation/marketplace-server";
 import { publicPageMetadata } from "@/lib/sharing/page-metadata";
 import { notFound } from "next/navigation";
 import { ContactActionTracker } from "@/components/analytics/contact-action-tracker";
@@ -92,19 +96,21 @@ export async function PromotionDetailPageContent({ id }: { id: string }) {
           .maybeSingle()
       : { data: null };
 
-  const linkedBusinessRow = promotion.business_id
-    ? (
-        await applyVisibleExpiryFilter(
-          supabase
-            .from("businesses")
-            .select(
-              `id, owner_id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
-            )
-            .eq("id", promotion.business_id)
-            .eq("status", "live")
-        ).maybeSingle()
-      ).data
-    : null;
+  const linkedBusinessRow = !promotion.business_id
+    ? null
+    : foundation
+      ? await restoredEventHostBusiness(promotion.business_id)
+      : (
+          await applyVisibleExpiryFilter(
+            supabase
+              .from("businesses")
+              .select(
+                `id, owner_id, business_name, logo_url, ${CARD_STICKER_COLUMNS}, owner_verified_role, owner_position_title`
+              )
+              .eq("id", promotion.business_id)
+              .eq("status", "live")
+          ).maybeSingle()
+        ).data;
   const linkedBusiness = linkedBusinessRow ? toPublicVerification(linkedBusinessRow) : null;
   const cookieStore = await getOptionalCookieStore();
   const {

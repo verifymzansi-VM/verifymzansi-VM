@@ -25,12 +25,13 @@ const seen = z.strictObject({
   method,
   city: z.string().max(80).nullable(),
 });
-async function readPublicBusinessSeen(api: FoundationPublicApi, ids: string[]) {
+async function readPublicBusinessSeen(api: FoundationPublicApi, ids: string[], withExpiry = false) {
   if (!ids.length)
     return new Map<
       string,
       {
         seen_verified_at: string;
+        seen_expires_at?: string;
         seen_method: "video" | "visit";
         seen_city: string | null;
       }
@@ -64,6 +65,7 @@ async function readPublicBusinessSeen(api: FoundationPublicApi, ids: string[]) {
       item.business_id,
       {
         seen_verified_at: item.verified_at,
+        ...(withExpiry ? { seen_expires_at: item.expires_at } : {}),
         seen_method: item.method,
         seen_city: item.city,
       },
@@ -71,11 +73,18 @@ async function readPublicBusinessSeen(api: FoundationPublicApi, ids: string[]) {
   );
 }
 
-export async function readPublicBusinessStickers(api: FoundationPublicApi, ids: string[]) {
+/** Current public CIPC and Seen stickers per business. `withExpiry` also returns
+ * cipc_expires_at and seen_expires_at, for callers that recheck expiry with
+ * toPublicVerification. */
+export async function readPublicBusinessStickers(
+  api: FoundationPublicApi,
+  ids: string[],
+  { withExpiry = false }: { withExpiry?: boolean } = {}
+) {
   if (!ids.length) return new Map<string, object>();
   const allowed = new Set(z.array(z.uuid()).max(100).parse(ids));
   const [seen, cipc] = await Promise.all([
-    readPublicBusinessSeen(api, [...allowed]),
+    readPublicBusinessSeen(api, [...allowed], withExpiry),
     api.rpc("get_public_frontend_business_cipc", { p_post_ids: [...allowed] }, { get: false }),
   ]);
   if (cipc.error) throw new Error("Current CIPC stickers could not be loaded");
@@ -104,6 +113,7 @@ export async function readPublicBusinessStickers(api: FoundationPublicApi, ids: 
     results.set(item.business_id, {
       ...results.get(item.business_id),
       cipc_verified_at: item.verified_at,
+      ...(withExpiry ? { cipc_expires_at: item.expires_at } : {}),
       cipc_registration_number: item.registration_number,
       cipc_registered_name: item.registered_name,
       cipc_registered_office: item.office,

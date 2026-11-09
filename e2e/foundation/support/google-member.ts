@@ -14,7 +14,8 @@
 // Local Auth's own admin view of the user is then checked: exactly one
 // identity, provider google, and password sign-in is refused. The member signs
 // in through a one-time local Auth link (linkSession), which changes nothing
-// about the account.
+// about the account; that session is recorded as a Google (`oauth`) sign-in,
+// since the website does not count a link redeemed at Auth as a sign-in.
 import { randomInt, randomUUID } from "node:crypto";
 import { authAdmin, queryTestCopy, readTestCopy, signIn, linkSession } from "./test-copy";
 
@@ -96,7 +97,8 @@ export async function registerGoogleMember(label: string): Promise<GoogleMember>
   }
 }
 
-/** A real local Auth session for the Google member (see linkSession). */
-export function googleMemberSession(member: GoogleMember) {
-  return linkSession(readTestCopy(), member.email);
+/** A real local Auth session for the Google member (see linkSession), signed
+ * in now or `signInAgeSeconds` ago. */
+export function googleMemberSession(member: GoogleMember, signInAgeSeconds?: number) {
+  return linkSession(readTestCopy(), member.email, signInAgeSeconds);
 }

@@ -47,6 +47,9 @@ async function main() {
     FOUNDATION_AUTH_CALLBACK_ENABLED: "true",
     FOUNDATION_RECOVERY_ENABLED: "true",
     FOUNDATION_PHONE_VERIFICATION_ENABLED: "true",
+    // Paid add-on sales stay paused (src/lib/billing/addon-sales.ts); the slice
+    // that makes add-ons deliver changes this together with wrangler.toml.
+    ADDON_SALES_ENABLED: "false",
   };
   await check(
     "Local production configuration",

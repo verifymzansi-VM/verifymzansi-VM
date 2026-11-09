@@ -513,7 +513,7 @@ export default function ProfilePage() {
       setEmailCooldownUntil(new Date(Date.now() + EMAIL_CHANGE_COOLDOWN_MS));
       toast({
         title: "Confirmation sent",
-        description: "Check your new email address to complete the change.",
+        description: "Check both your current and new email inboxes to complete the change.",
         variant: "success",
       });
     } catch {

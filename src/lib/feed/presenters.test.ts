@@ -218,4 +218,23 @@ describe("presentEventSlide", () => {
     expect(slide.targetType).toBe("promotion");
     expect(slide.contact.phone).toBeNull();
   });
+
+  it("shows the host business's verified position only for its known owner", () => {
+    const host = {
+      id: "00000000-0000-4000-8000-000000000009",
+      business_name: "Host Kitchen",
+      logo_url: null,
+      owner_position_title: "Director",
+      owner_verified_role: "director",
+    };
+    const owned = presentEventSlide(event, owner, { ...host, owner_id: "y" }, engagement);
+    expect(owned.owner).toMatchObject({ name: "Host Kitchen", position: "Director" });
+    // An unknown owner (the new backend hides owner ids) never matches.
+    const hidden = { ...event, owner_id: "" } as PromotionDetailRecord;
+    for (const owner_id of [null, ""]) {
+      const slide = presentEventSlide(hidden, owner, { ...host, owner_id }, engagement);
+      expect(slide.owner.href).toBe(`/mzansi-business/${host.id}`);
+      expect(slide.owner).not.toHaveProperty("position");
+    }
+  });
 });

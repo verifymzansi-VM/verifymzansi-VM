@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { addonSalesPausedResponse, areAddonSalesOpen } from "../billing/addon-sales";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { FoundationSessionError } from "./request-api";
@@ -47,6 +48,8 @@ export async function handleFoundationBillingRoute(
   operation: Operation,
   addon?: { postId: string; kind: "boost" | "featured" | "urgent"; days: number }
 ) {
+  // Second check behind the add-on routes' own (src/lib/billing/addon-sales.ts).
+  if (addon && !areAddonSalesOpen()) return addonSalesPausedResponse("foundation_billing");
   const mutate = !["payment-status", "overview", "allowance"].includes(operation);
   if (mutate) {
     const blocked = enforceMutationRequest(request, log);
@@ -206,7 +209,11 @@ export async function handleFoundationBillingRoute(
           : status === 400
             ? "Check the billing details"
             : "Billing is temporarily unavailable";
-    const response = NextResponse.json({ error: message }, { status, headers: noStore });
+    const code = error instanceof FoundationBillingError ? error.code : undefined;
+    const response = NextResponse.json(code ? { error: message, code } : { error: message }, {
+      status,
+      headers: noStore,
+    });
     return context ? context.respond(response) : response;
   }
 }

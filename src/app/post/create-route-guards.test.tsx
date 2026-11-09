@@ -10,11 +10,17 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+// legacy-backend: this whole file covers the old ("source") backend path and runs in
+// the foundation vitest project with getDataBackend mocked. Delete it together with
+// the old backend (see src/test/legacy-backend-suites.ts). The foundation check is
+// tested in src/app/post/_lib/require-verified-post-access.test.ts.
+vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "source" }));
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => mockCreateClient(),
 }));
 
-describe("create route guards", () => {
+describe("create route guards (source backend)", () => {
   const layoutLoaders = {
     listing: () => import("@/app/post/create-listing/layout"),
     business: () => import("@/app/post/create-business/layout"),

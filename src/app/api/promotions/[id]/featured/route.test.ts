@@ -1,7 +1,7 @@
 vi.mock("@/lib/billing/trial-addon-access", () => ({
   getTrialAddonBlock: vi.fn().mockResolvedValue(null),
 }));
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "@/lib/utils/csrf";
 
@@ -79,6 +79,15 @@ vi.mock("@/lib/config/env", () => ({
 }));
 
 import { POST } from "./route";
+
+// Paid add-on sales are paused unless switched on (src/lib/billing/addon-sales.ts);
+// these cases cover the checkout that runs once they are open.
+beforeEach(() => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const VALID_CSRF_TOKEN = "a".repeat(64);
 

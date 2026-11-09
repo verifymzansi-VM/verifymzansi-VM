@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   E2E_FIXTURE,
   HOSTED_PROJECT_REFS,
+  KNOWN_BREACHED_PASSWORD,
   LOCAL_ID_ENCRYPTION_KEY,
   LOCAL_INTERNAL_JOBS_SECRET,
   LOCAL_OPS_JOBS_SECRET,
@@ -184,6 +185,8 @@ test("the website runs in foundation mode against the copy only, with the existi
     process.env.PLAYWRIGHT_E2E_AUTH = "1";
     process.env.OZOW_CLIENT_SECRET = "caller-provider-secret";
     process.env.SENTRY_DSN = "https://caller@example.invalid/1";
+    // The caller cannot open paid add-on sales in the copy: production keeps them paused.
+    process.env.ADDON_SALES_ENABLED = "true";
     // An empty folder: no .env files to neutralise in this test.
     const env = foundationWebsiteEnv(status, {
       root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
@@ -196,6 +199,7 @@ test("the website runs in foundation mode against the copy only, with the existi
     assert.equal(env.PLAYWRIGHT_E2E_AUTH, undefined);
     assert.equal(env.OZOW_CLIENT_SECRET, undefined);
     assert.equal(env.SENTRY_DSN, undefined);
+    assert.equal(env.ADDON_SALES_ENABLED, "false");
     assert.equal(env.PLAYWRIGHT_SUPABASE_MODE, undefined);
     assert.equal(env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE, undefined);
     // Reused switches from scripts/start-playwright-server.cjs.
@@ -779,6 +783,8 @@ test("the outbound fence forwards only loopback requests and records the others 
     assert.equal(await (await fetch(new URL("http://localhost:55443/x"))).text(), "ok");
     // The website's real breach-check parser reads the stand-in reply as "not found".
     assert.equal(await getPwnedPasswordCount("Local-fixture-password-0"), 0);
+    // Except the one known-breached test password, which the copy refuses.
+    assert.equal(await getPwnedPasswordCount(KNOWN_BREACHED_PASSWORD), 1000);
     await assert.rejects(
       fetch("https://api.africastalking.com/version1/messaging?secret=1", { method: "POST" }),
       TypeError
@@ -792,6 +798,7 @@ test("the outbound fence forwards only loopback requests and records the others 
     assert.deepEqual(
       log.map(({ origin, outcome }) => ({ origin, outcome })),
       [
+        { origin: "https://api.pwnedpasswords.com", outcome: "answered-locally" },
         { origin: "https://api.pwnedpasswords.com", outcome: "answered-locally" },
         { origin: "https://api.africastalking.com", outcome: "blocked" },
         { origin: "https://api.resend.com", outcome: "blocked" },

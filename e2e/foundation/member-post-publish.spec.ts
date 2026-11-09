@@ -30,20 +30,22 @@ import {
 //   form, submitting, a moderator's approval, the post in the showroom and in
 //   search, and the free week.
 //
-// Two steps are broken today and are marked test.fail(), each pinned to its
-// exact known symptom (characterise below); any other outcome turns the run red:
-// - "open the create form": BL-01, fixed by M1.1. The form's page check asks
-//   the retired backend, so an accepted member is sent back to /verification.
+// One step is broken today and is marked test.fail(), pinned to its exact
+// known symptom (characterise below); any other outcome turns the run red:
 // - "free week starts at approval": BL-03, fixed by M2.3. The every-minute job
 //   starts the 7-day trial as soon as verification completes, before any post.
 //
-// Because the form cannot open, "submit, approve, showroom and search" sends
-// the business post to the website route the form itself posts to
+// The create forms' page check asks the database for the member's readiness:
+// a member waiting for review is sent to /verification, an accepted member
+// sees the form ("open the create form").
+//
+// "submit, approve, showroom and search" does not fill in the form yet: it
+// sends the business post to the website route the form itself posts to
 // (POST /api/businesses, from the member's browser with the page's CSRF
-// token). Only the form's page is bypassed; the staff approval, showroom and
-// search steps use the real pages. When M1.1 lands, that step should switch to
-// the form. (On the copy the form page's posting-plan step shows the site's
-// browser-test placeholder, not the member's real allowance.)
+// token). The staff approval, showroom and search steps use the real pages.
+// Submitting through the form's own steps is not covered by this test yet; a
+// later change adds it. (On the copy the form page's posting-plan step shows
+// the site's browser-test placeholder, not the member's real allowance.)
 //
 // Network: browser requests may only reach the copy's website and its local
 // database gateway; anything else is aborted and fails the test. The website's
@@ -63,7 +65,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const BL01 = "BL-01, fixed by M1.1";
 const BL03 = "BL-03, fixed by M2.3";
 const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 const SEVEN_DAYS_S = 7 * 86_400;
@@ -463,6 +464,15 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
         `select count(*) from private.accepted_identity_facts where owner_id = '${member.id}';`
       )
     ).toBe("0");
+
+    // Phone and area done, ID still waiting for review: the create forms'
+    // page check sends the member to /verification, which keeps the way back.
+    for (const path of ["/post/create-business", "/post/create-listing", "/post/create-tourism"]) {
+      await page.goto(path);
+      await page.waitForURL((url) => url.pathname === "/verification", { timeout: 20_000 });
+      expect(new URL(page.url()).searchParams.get("returnUrl")).toBe(path);
+    }
+    await expect(page.getByRole("heading", { name: "Choose how you want to post" })).toHaveCount(0);
     expect(outside).toEqual([]);
   });
 
@@ -561,51 +571,32 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
   });
 
   test("open the create form", async ({ context, page }) => {
-    test.fail(true, BL01);
-    await characterise(BL01, async () => {
-      const { outside } = await guard(context);
-      await signInBrowser(context, member);
-      await page.goto("/post/create-business");
-      // The page streams, so a redirect from its layout happens in the browser
-      // after the first bytes: wait until either the form page or /verification shows.
-      // The form page opens with its posting-plan step, then the form itself.
+    const { outside } = await guard(context);
+    await signInBrowser(context, member);
+    expect(
+      queryTestCopy(
+        "select count(*) from private.accepted_identity_facts " +
+          `where owner_id = '${member.id}' and revoked_at is null;`
+      )
+    ).toBe("1");
+    // Each form page opens with its posting-plan step (shared by the three
+    // forms), then the form itself. The page streams, so a redirect from its
+    // layout would happen in the browser after the first bytes: the form must
+    // show, and the address must still be the form's.
+    for (const [path, formText] of [
+      ["/post/create-business", "Add your business"],
+      ["/post/create-listing", "Post an item"],
+      ["/post/create-tourism", "List a stay or experience"],
+    ] as const) {
+      await page.goto(path);
       const form = page
         .getByRole("heading", { name: "Choose how you want to post" })
-        .or(page.getByText("Add your business"))
+        .or(page.getByText(formText))
         .first();
-      await Promise.race([
-        page.waitForURL((url) => url.pathname === "/verification", { timeout: 20_000 }),
-        form.waitFor({ timeout: 20_000 }),
-      ]).catch(() => undefined);
-      const landed = new URL(page.url());
-      if (landed.pathname === "/verification") {
-        // BL-01 as recorded: the form's page check reads the retired backend,
-        // finds nothing and sends an accepted member to /verification, which
-        // shows them as approved and links straight back to the form.
-        expect(landed.searchParams.get("returnUrl")).toBe("/post/create-business");
-        expect(
-          queryTestCopy(
-            "select count(*) from private.accepted_identity_facts " +
-              `where owner_id = '${member.id}' and revoked_at is null;`
-          )
-        ).toBe("1");
-        // The page loads the status after its first paint; allow a slow machine.
-        await expect(page.getByRole("heading", { name: "Verification approved" })).toBeVisible({
-          timeout: 20_000,
-        });
-        await expect(page.getByRole("link", { name: "Return to posting" })).toHaveAttribute(
-          "href",
-          "/post/create-business"
-        );
-        expect(outside).toEqual([]);
-        throw new KnownBreak(
-          `${BL01}: /post/create-business sent an accepted member to /verification`
-        );
-      }
-      expect(landed.pathname).toBe("/post/create-business");
-      await expect(form).toBeVisible();
-      expect(outside).toEqual([]);
-    });
+      await expect(form, `${path} opens for an accepted member`).toBeVisible({ timeout: 20_000 });
+      expect(new URL(page.url()).pathname).toBe(path);
+    }
+    expect(outside).toEqual([]);
   });
 
   test("submit, approve, showroom and search (the form's own route; the form page is bypassed)", async ({

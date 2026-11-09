@@ -48,6 +48,12 @@ vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => mockLogger,
 }));
 
+// legacy-backend: this whole file covers the old ("source") backend path and runs in
+// the foundation vitest project with getDataBackend mocked. Delete it together with
+// the old backend (see src/test/legacy-backend-suites.ts). The foundation path is
+// tested in src/app/api/foundation/auth/_lib/email-change.test.ts.
+vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "source" }));
+
 import { POST } from "./route";
 
 function createRequest(body: unknown): NextRequest {

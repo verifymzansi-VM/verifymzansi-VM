@@ -1,14 +1,22 @@
 import type { NextRequest } from "next/server";
 import {
+  parseFoundationRecoveryInput,
   requestFoundationPasswordRecovery,
   FoundationRecoveryRequestError,
 } from "@/lib/foundation/password-recovery";
-import { foundationAuthEmail } from "@/lib/foundation/auth-input";
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
+import { parseJsonRequest } from "@/lib/utils/api";
 import { handleFoundationAuthAttempt } from "../../_lib/attempt-route";
+import { isFoundationPasswordSetupInput } from "@/lib/foundation/password-setup-input";
+import { handleFoundationPasswordSetup } from "../../_lib/password-setup";
+import { limiterAddressKey } from "@/lib/foundation/limiter-key";
 
-export function POST(request: NextRequest) {
+export async function POST(request: NextRequest) {
+  // The profile page's "Set Password" (signed in, no CAPTCHA token) has its
+  // own checks; every other request is a forgot-password request.
+  const probe = await parseJsonRequest(request.clone(), { maxBytes: 4096 });
+  if (isFoundationPasswordSetupInput(probe)) return handleFoundationPasswordSetup(request, probe);
   return handleFoundationAuthAttempt({
     request,
     action: "auth:forgot-password",
@@ -17,21 +25,25 @@ export function POST(request: NextRequest) {
       process.env.FOUNDATION_AUTH_CALLBACK_ENABLED === "true",
     unavailableMessage: "Password recovery is temporarily unavailable",
     async operation(connection, input, cookies) {
-      const email = foundationAuthEmail.safeParse(
-        input && typeof input === "object" && "email" in input ? input.email : null
-      );
-      if (!email.success) throw new FoundationRecoveryRequestError(400);
-      const rate = await checkRateLimit({
-        key: email.data,
+      // The whole request is checked before the address's budget is looked
+      // at, and the budget is only charged once Auth (which verifies the
+      // CAPTCHA) accepts it, so requests without a solved CAPTCHA cannot use
+      // up an address's emails (the profile page's password setup shares it).
+      const { email } = parseFoundationRecoveryInput(input);
+      const recipient = {
+        key: await limiterAddressKey(email),
         action: "auth:forgot-password-email",
-        degradedMode: "block",
-      });
+      } as const;
+      const rate = await checkRateLimit({ ...recipient, degradedMode: "block", readOnly: true });
       if (rate.degraded) throw new FoundationRecoveryRequestError(503);
       if (!rate.limited) {
         const callback = new URL(buildAuthCallbackUrl(request, "/reset-password"));
         callback.searchParams.set("backend", "foundation");
         callback.searchParams.set("recovery", "1");
-        await requestFoundationPasswordRecovery(connection, input, callback.toString(), cookies);
+        if (
+          await requestFoundationPasswordRecovery(connection, input, callback.toString(), cookies)
+        )
+          await checkRateLimit({ ...recipient, degradedMode: "block" });
       }
       return {
         ok: true,

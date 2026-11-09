@@ -10,6 +10,7 @@ import {
   emailCooldown,
 } from "@/lib/account/identity-policy";
 import { enforceAuthenticatedMutationRequest } from "@/lib/utils/authenticated-mutation-route";
+import { getDataBackend } from "@/lib/data-backend";
 
 const log = createLogger("EmailChange");
 const ACCOUNT_EMAIL_IN_USE_ERROR = "That email address is already in use by another account.";
@@ -25,6 +26,13 @@ const emailChangeSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // The restored profile page posts here; foundation mode never reaches the
+  // retired tables below.
+  if (getDataBackend() === "foundation") {
+    const { handleFoundationEmailChange } =
+      await import("@/app/api/foundation/auth/_lib/email-change");
+    return handleFoundationEmailChange(request);
+  }
   try {
     const prelude = await enforceAuthenticatedMutationRequest({
       request,
