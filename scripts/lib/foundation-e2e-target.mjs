@@ -12,6 +12,10 @@ export const E2E_FIXTURE = Object.freeze({
   apiPort: 55443,
   dbPort: 55452,
   mailPort: 55454,
+  /** The local rate limiter stub that `serve` runs (scripts/lib/foundation-e2e-limiter.mjs). */
+  limiterPort: 55456,
+  /** Mock payment page (HTTPS, served by the browser tests themselves; nothing listens). */
+  mockPaymentPort: 55455,
   appPort: 3110,
   /** The website's connection guard accepts only this marker for a local stack. */
   projectRef: "local-foundation",
@@ -93,19 +97,21 @@ export function assertLocalFoundationTarget({ apiUrl, dbUrl, env = {} }) {
       allowUserInfo: true,
     });
   }
+  // Names in any letter case: Windows treats "Supabase_Url" as SUPABASE_URL.
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined || value === "") continue;
-    if (/SUPABASE_URL$/.test(key) && value !== api.origin) refuse(key);
-    if (/(DATABASE|POSTGRES|DB)_URL$/.test(key))
+    if (/SUPABASE_URL$/i.test(key) && value !== api.origin) refuse(key);
+    if (/(DATABASE|POSTGRES|DB)_URL$/i.test(key))
       assertLoopbackUrl(value, {
         what: key,
         protocols: ["postgresql:", "postgres:"],
         port: E2E_FIXTURE.dbPort,
         allowUserInfo: true,
       });
-    if (/PROJECT_REF$/.test(key) && value !== E2E_FIXTURE.projectRef) refuse(key);
+    if (/PROJECT_REF$/i.test(key) && value !== E2E_FIXTURE.projectRef) refuse(key);
+    if (/^ENVIRONMENT$/i.test(key) && String(value).toLowerCase() === "production")
+      refuse("ENVIRONMENT");
   }
-  if (env.ENVIRONMENT === "production") refuse("ENVIRONMENT");
   return api.origin;
 }
 

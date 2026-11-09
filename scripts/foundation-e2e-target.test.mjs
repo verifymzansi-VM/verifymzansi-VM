@@ -10,12 +10,18 @@ import {
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import {
   BUILD_STAMP,
+  E2E_APP_URL,
+  LOCAL_LIMITER_KEY,
+  LOCAL_LIMITER_URL,
+  LOCAL_OZOW_SITE_CODE,
   assertBuildIsCopy,
   envFileKeyNames,
   foundationWebsiteEnv,
   hostedMarkersIn,
   writeBuildStamp,
 } from "./lib/foundation-e2e-website.mjs";
+import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
+import { TEST_COPY_CHECKOUT, testCopyCheckout } from "../src/lib/payments/checkout-origins.ts";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -260,9 +266,109 @@ test("no value from .env files reaches the website, as Next loads them", () => {
     assert.equal(loaded.FOUNDATION_SUPABASE_URL, API);
     assert.equal(loaded.NEXT_PUBLIC_SUPABASE_URL, API);
     assert.equal(loaded.OTP_RATE_LIMITER_URL, "http://127.0.0.1:55456/check");
-    assert.equal(loaded.RATE_LIMITER_API_KEY, "local-fixture-limiter-key-unused");
+    assert.equal(loaded.RATE_LIMITER_API_KEY, LOCAL_LIMITER_KEY);
     assert.equal(loaded.OZOW_CLIENT_SECRET, "");
     assert.equal(loaded.PLAYWRIGHT_E2E_AUTH, "");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("inherited settings in any letter case never reach the website (Windows reads names case-insensitively)", () => {
+  const saved = { ...process.env };
+  try {
+    Object.assign(process.env, {
+      Ozow_Client_Id: "caller-ozow-client",
+      ozow_client_secret: "caller-ozow-secret",
+      Ozow_Api_Base_Url: "https://proxy.example.invalid",
+      Ozow_Site_Code: "caller-site-code",
+      Ozow_Env: "production",
+      Ozow_Payment_Oauth_Scope: "caller-scope",
+      Supabase_Url: "https://gntzjtuncsyefujajmjy.supabase.co",
+      Foundation_Project_Ref: "gntzjtuncsyefujajmjy",
+      Kyc_Provider: "stub",
+      Environment: "production",
+    });
+    const env = foundationWebsiteEnv(LOCAL_STATUS, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
+    const spellings = (name) => Object.entries(env).filter(([key]) => key.toUpperCase() === name);
+    for (const name of [
+      "OZOW_CLIENT_ID",
+      "OZOW_CLIENT_SECRET",
+      "OZOW_PAYMENT_OAUTH_SCOPE",
+      "SUPABASE_URL",
+    ])
+      assert.deepEqual(spellings(name), [], name);
+    assert.deepEqual(spellings("OZOW_ENV"), [["OZOW_ENV", "staging"]]);
+    assert.deepEqual(spellings("OZOW_SITE_CODE"), [["OZOW_SITE_CODE", LOCAL_OZOW_SITE_CODE]]);
+    assert.deepEqual(spellings("OZOW_API_BASE_URL"), [
+      ["OZOW_API_BASE_URL", "https://stagingone.ozow.com"],
+    ]);
+    assert.deepEqual(spellings("FOUNDATION_PROJECT_REF"), [
+      ["FOUNDATION_PROJECT_REF", E2E_FIXTURE.projectRef],
+    ]);
+    assert.deepEqual(spellings("KYC_PROVIDER"), [["KYC_PROVIDER", "manual"]]);
+    assert.deepEqual(spellings("ENVIRONMENT"), [["ENVIRONMENT", "test"]]);
+    for (const value of Object.values(env))
+      assert.equal(/caller-|proxy\.example|gntzjtuncsyefujajmjy/.test(String(value)), false);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the target guard reads setting names in any letter case", () => {
+  for (const env of [
+    { Supabase_Url: "https://gntzjtuncsyefujajmjy.supabase.co" },
+    { next_public_supabase_url: "http://127.0.0.1:55441" },
+    { Foundation_Project_Ref: "gntzjtuncsyefujajmjy" },
+    { Database_Url: "postgresql://postgres@db.example.invalid:5432/postgres" },
+    { Environment: "production" },
+    { ENVIRONMENT: "Production" },
+  ])
+    assert.throws(() => assertLocalFoundationTarget({ apiUrl: API, env }), refused);
+});
+
+test(".env names spelled in another case are blanked or left to the copy's own value", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "vm-env-case-"));
+  try {
+    writeFileSync(
+      path.join(dir, ".env.local"),
+      ["ozow_client_id=hostile-lower", "Ozow_Env=production", "node_env=development"]
+        .map((line) => `${line}${EOL}`)
+        .join("")
+    );
+    const saved = Object.fromEntries(
+      ["ozow_client_id", "Ozow_Env", "node_env"].map((name) => [name, process.env[name]])
+    );
+    let env;
+    try {
+      for (const name of Object.keys(saved)) delete process.env[name];
+      env = foundationWebsiteEnv(LOCAL_STATUS, { root: dir });
+    } finally {
+      for (const [name, value] of Object.entries(saved))
+        if (value !== undefined) process.env[name] = value;
+    }
+    assert.equal(env.ozow_client_id, "");
+    assert.equal(env.Ozow_Env, "");
+    assert.equal(env.OZOW_ENV, "staging");
+    assert.equal("node_env" in env, false);
+    const nextEnv = createRequire(import.meta.url).resolve("@next/env");
+    const probe = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        `require(${JSON.stringify(nextEnv)}).loadEnvConfig(${JSON.stringify(dir)}, false, { info() {}, error() {} });` +
+          "process.stdout.write(JSON.stringify({ozow: process.env.OZOW_CLIENT_ID ?? null, env: process.env.OZOW_ENV, all: Object.values(process.env).join(' ')}));",
+      ],
+      { env: { ...env, NODE_ENV: "production" }, encoding: "utf8" }
+    );
+    assert.equal(probe.status, 0, probe.stderr);
+    const loaded = JSON.parse(probe.stdout);
+    assert.equal(/hostile/.test(loaded.all), false);
+    assert.equal(loaded.env, "staging");
+    assert.notEqual(loaded.ozow, "hostile-lower");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -299,6 +405,74 @@ test("serving refuses a .next folder not built for the copy", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the copy's website settings switch on test checkout at exactly the copy's addresses", () => {
+  // The website's guard (src/lib/payments/checkout-origins.ts) and the copy
+  // must name the same addresses, and the copy's settings must satisfy it.
+  assert.deepEqual(TEST_COPY_CHECKOUT, {
+    appOrigin: E2E_APP_URL,
+    databaseUrl: API,
+    mockPaymentOrigin: `https://127.0.0.1:${E2E_FIXTURE.mockPaymentPort}`,
+  });
+  const env = foundationWebsiteEnv(LOCAL_STATUS, {
+    root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+  });
+  const saved = { ...process.env };
+  try {
+    for (const key of Object.keys(process.env)) delete process.env[key];
+    Object.assign(process.env, env, { NODE_ENV: "production" });
+    assert.equal(testCopyCheckout(), TEST_COPY_CHECKOUT);
+    process.env.ENVIRONMENT = "production";
+    assert.equal(testCopyCheckout(), null);
+  } finally {
+    for (const key of Object.keys(process.env)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+  // Nothing else in the copy uses the mock payment or limiter ports.
+  const ports = [
+    E2E_FIXTURE.apiPort,
+    E2E_FIXTURE.dbPort,
+    E2E_FIXTURE.mailPort,
+    E2E_FIXTURE.appPort,
+    E2E_FIXTURE.limiterPort,
+    E2E_FIXTURE.mockPaymentPort,
+  ];
+  assert.equal(new Set(ports).size, ports.length);
+  assert.equal(LOCAL_LIMITER_URL, `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/check`);
+});
+
+test("the local limiter stub allows well-formed requests on loopback only", async () => {
+  const server = await startLocalLimiter({ port: 0, apiKey: LOCAL_LIMITER_KEY });
+  try {
+    const address = server.address();
+    assert.equal(address.address, "127.0.0.1");
+    const url = `http://127.0.0.1:${address.port}`;
+    const call = (pathname, init = {}) =>
+      fetch(`${url}${pathname}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOCAL_LIMITER_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ key: "account:ip", action: "billing:checkout" }),
+        ...init,
+      });
+    const allowed = await call("/check");
+    assert.equal(allowed.status, 200);
+    assert.deepEqual(await allowed.json(), { allowed: true });
+    assert.equal(
+      (await call("/check", { headers: { Authorization: "Bearer wrong" } })).status,
+      401
+    );
+    assert.equal((await call("/other")).status, 404);
+    assert.equal((await call("/check", { method: "GET", body: undefined })).status, 405);
+    assert.equal((await call("/check", { body: "{" })).status, 400);
+    assert.equal((await call("/check", { body: JSON.stringify({ key: 1 }) })).status, 400);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+  assert.throws(() => startLocalLimiter({ port: 1, apiKey: "short" }), /Invalid limiter key/);
 });
 
 test("hosted markers are found, the local key is not", () => {
