@@ -653,7 +653,8 @@ try {
       "23514"
     );
     // Members created so far accepted posting-v1; they accept posting-v3 now.
-    Object.assign(TERMS, v3);
+    TERMS.version = v3.version;
+    TERMS.document_hash = v3.document_hash;
     q(
       `insert into private.posting_terms_acceptances(owner_id,version,document_hash) select u.id,'${v3.version}','${v3.document_hash}' from auth.users u on conflict do nothing;`
     );
