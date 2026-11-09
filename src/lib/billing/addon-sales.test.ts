@@ -71,14 +71,26 @@ describe("paused reply", () => {
     expect(ADDON_SALES_PAUSED_MESSAGE).toBe("Add-ons open soon. You have not been charged.");
   });
 
-  it("logs only the fixed entry-point name", () => {
-    vi.stubEnv("LOG_LEVEL", "info");
+  it("logs only the fixed entry-point name, and only at debug level", () => {
+    vi.stubEnv("LOG_LEVEL", "debug");
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     addonSalesPausedResponse("foundation_addon");
-    expect(info).toHaveBeenCalledTimes(1);
-    const line = String(info.mock.calls[0][0]);
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(info).not.toHaveBeenCalled();
+    const line = String(debug.mock.calls[0][0]);
     expect(line).toContain("foundation_addon");
     expect(line).toContain("Paid add-on checkout refused while add-on sales are paused");
     expect(line).not.toMatch(/@|[0-9a-f]{8}-[0-9a-f]{4}-/i);
+  });
+
+  it("writes nothing at production's default level, however often it is asked", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("LOG_LEVEL", "");
+    const calls = (["debug", "info", "warn", "error", "log"] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation(() => undefined)
+    );
+    for (let request = 0; request < 50; request++) addonSalesPausedResponse("urgent");
+    for (const call of calls) expect(call).not.toHaveBeenCalled();
   });
 });

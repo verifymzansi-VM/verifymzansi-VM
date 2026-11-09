@@ -669,29 +669,10 @@ test.describe("checkout to fulfilment", () => {
     expect(ozow.made).toHaveLength(before.made);
     expect(ozow.notifications).toHaveLength(before.notifications);
     expect(ozow.lookups).toHaveLength(before.lookups);
-    // The server logged each refusal by entry point only: no person, post or address.
-    await expect
-      .poll(() => readServerLogEntries(ADDONS_PAUSED_LOG).length - logged)
-      .toBeGreaterThanOrEqual(7);
-    const entries = readServerLogEntries(ADDONS_PAUSED_LOG).slice(logged);
-    expect(
-      entries
-        .map((entry) => entry.meta)
-        .sort((a, b) => String(a?.entry).localeCompare(String(b?.entry)))
-    ).toEqual(
-      [
-        "boost_business",
-        "featured_business",
-        "foundation_addon",
-        "foundation_addon",
-        "urgent",
-        "urgent_business",
-        "urgent_promotion",
-      ].map((entry) => ({ entry }))
-    );
-    for (const entry of entries)
-      for (const value of [member.id, member.email, member.lastName, business.id, business.name])
-        expect(JSON.stringify(entry)).not.toContain(value);
+    // The refusal logs at debug level only, which production's level drops,
+    // so these requests added nothing to the server log; nor does it hold
+    // the member's address, password or name.
+    expect(readServerLogEntries(ADDONS_PAUSED_LOG)).toHaveLength(logged);
     expect(serverLogMentions([member.email, member.password, member.lastName])).toEqual([]);
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);

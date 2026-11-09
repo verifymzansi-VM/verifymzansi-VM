@@ -29,10 +29,12 @@ export function areAddonSalesOpen(env: Record<string, string | undefined> = proc
 /**
  * The reply every add-on checkout entry point gives while sales are paused.
  * `entry` names the entry point (fixed by the code, never request data), so
- * the log line carries no personal data.
+ * the log line carries no personal data. The refusal comes before sign-in
+ * and is not rate limited, so it logs at debug level only: production's
+ * default level (info) drops it and requests cannot inflate the logs.
  */
 export function addonSalesPausedResponse(entry: string): NextResponse {
-  log.info("Paid add-on checkout refused while add-on sales are paused", { entry });
+  log.debug("Paid add-on checkout refused while add-on sales are paused", { entry });
   return NextResponse.json(
     { error: ADDON_SALES_PAUSED_MESSAGE, code: ADDON_SALES_PAUSED_CODE },
     { status: 403, headers: { "Cache-Control": "private, no-store" } }
