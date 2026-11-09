@@ -7,9 +7,14 @@
 // Always: private and internal are not exposed and GraphQL answers no queries.
 // Before cutover api is not exposed either; at cutover it is the only exposed
 // schema. Always: Auth's public settings show mailer_autoconfirm off, so
-// sign-ups and email changes need their confirmation links (with secure email
-// change, an email change needs both addresses; that setting is not public and
-// is checked in the dashboard).
+// sign-ups and email changes need their confirmation links, and anonymous
+// sign-ins off (no code uses them).
+//
+// Not checked here: "Secure email change", "Secure password change" and
+// "Require current password when updating". Auth's public settings do not
+// include them (GoTrue v2.197.0 lists only providers, disable_signup,
+// mailer_autoconfirm, phone_autoconfirm, sms_provider, saml_enabled and
+// passkeys_enabled), so they are checked in the dashboard before each deploy.
 import assert from "node:assert/strict";
 
 const stage = process.argv.find((arg) => arg.startsWith("--stage="))?.slice(8);
@@ -61,7 +66,11 @@ const report = {
   stage,
   schemas: results,
   graphql: { status: graphql.status, answered: Boolean(graphqlBody?.data) },
-  auth: { status: settings.status, mailerAutoconfirm: settingsBody?.mailer_autoconfirm ?? null },
+  auth: {
+    status: settings.status,
+    mailerAutoconfirm: settingsBody?.mailer_autoconfirm ?? null,
+    anonymousUsers: settingsBody?.external?.anonymous_users ?? null,
+  },
 };
 process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 
@@ -78,4 +87,5 @@ assert.equal(
   false,
   "Auth must not confirm addresses or email changes without a link (mailer_autoconfirm)"
 );
+assert.equal(report.auth.anonymousUsers, false, "Auth must not allow anonymous sign-ins");
 process.stdout.write(`PASS ${stage}: exposure matches the reviewed policy\n`);

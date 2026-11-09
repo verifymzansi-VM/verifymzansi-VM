@@ -20,6 +20,11 @@ import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { openedByResetLink, RECOVERY_SESSION_REFUSAL } from "./recovery-session";
 
 const log = createLogger("FoundationPasswordChange");
+/** The codes the restored profile page acts on (src/app/dashboard/profile/page.tsx). */
+const PAGE_CODES: Partial<Record<FoundationPasswordUpdateError["reason"], string>> = {
+  reauthentication: "reauthentication_required",
+  mfa_required: "mfa_required",
+};
 export async function handleFoundationPasswordChange(request: NextRequest) {
   const reply = (status: number, error: string) =>
     NextResponse.json({ error }, { status, headers: foundationNoStore });
@@ -110,9 +115,12 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
                 : error.status === 429
                   ? "Too many attempts; try again later"
                   : "Password change could not be confirmed";
+      // The restored profile page reads `code` (as the older route sends it)
+      // to show its "Sign in again" link or its authenticator step.
+      const code = PAGE_CODES[error.reason];
       return context.respond(
         NextResponse.json(
-          { error: message, reason: error.reason },
+          { error: message, reason: error.reason, ...(code ? { code } : {}) },
           { status: error.status, headers: foundationNoStore }
         )
       );
