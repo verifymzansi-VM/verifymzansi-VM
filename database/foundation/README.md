@@ -6,6 +6,32 @@ digest, live public/service API contracts, credentials and hidden schemas. It
 never installs or changes the database. The default preflight still refuses an
 unreleased clean assembly, and its SQL installation guard remains intact.
 
+## Replay gate (CI job `foundation-replay`)
+
+`pnpm db:foundation:replay` rebuilds the production schema from this folder
+alone, in an embedded Postgres (PGlite) that cannot reach any hosted database:
+
+1. `replay/platform-prelude.sql`: stand-ins for what Supabase provides (API
+   roles, the Auth schema and helpers, the extensions schema);
+2. `candidate.sql`, the reviewed baseline;
+3. every file in `updates/` in filename order, with
+   `replay/baseline-supplement.sql` applied just before
+   `20261103154538_owner_signup_access.sql` (production received that hook
+   outside the repository; the supplement recreates its accepted body).
+
+It then runs `fingerprint.sql` (read-only catalogue queries: function bodies and
+metadata, columns, constraints, indexes, triggers, policies, grants, row level
+security, the event trigger) and compares the result with `fingerprint.json`. CI
+fails on any difference, including a new update whose fingerprint was not
+recorded. When a reviewed update intentionally changes the schema, run
+`pnpm db:foundation:replay -- --write` and commit the new `fingerprint.json` in
+the same pull request.
+
+To compare production, the owner runs `fingerprint.sql` unchanged in the
+Supabase SQL editor (it reads only the catalogue) and checks each row against
+`fingerprint.json`. Function bodies, columns, constraints, indexes and triggers
+matched production on 6 November 2026.
+
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
 export belong to the retired source schema. Their wrappers refuse foundation
 targets. Do not replay that tree into the new project. Use reviewed additive
@@ -29,8 +55,9 @@ execution eligibility remains distinct from business authorization.
 
 The single CLI-created migration deliberately raises an exception. The candidate
 is not a deployable migration, and this checkout must not be linked to the
-current hosted source. Deployment, hosted configuration, complete
-application/provider workflows and recovery acceptance remain outstanding.
+retired source project. Changes to the live London project are reviewed files in
+`updates/`, applied by the owner after merge and before the code that needs them
+is deployed (see `updates/README.md` and `AGENTS.md`).
 
 candidate.sql is assembled from allowlisted prototype SQL modules. assembly.json
 records source and candidate hashes. Generated API types, role aliases and role
@@ -69,8 +96,8 @@ document hash only, with no account acceptance data. Authenticated users must
 explicitly accept the current version once; SQL blocks submission without that
 acceptance. A new version requires a separately shipped snapshot and renewed
 acceptance. Existing version files must never be rewritten after publication.
-Keep the explicit FOUNDATION_* application bindings unset until target Auth,
-schema, application workflows and release acceptance are ready.
+Production sets the FOUNDATION_* application bindings (`wrangler.toml`) and
+serves the website from this backend.
 
 Account profiles hold the display name, bio, avatar and an unreviewed legal-name
 claim. Identity registration snapshots that claim; an accepted review locks
@@ -142,8 +169,9 @@ src/lib/foundation/request-route.ts. Construct it once per request, enforce the
 route's origin/CSRF and input checks, then await authenticate() before calling a
 domain adapter. Return both success and error responses through respond() to
 preserve refresh/clear cookies and private browser/CDN cache headers. No client
-or context may be shared across requests. These bridges do not switch existing
-routes or provision target Auth accounts. A bounded local transport check is
-available with node --conditions=react-server --import tsx
+or context may be shared across requests. Existing routes use these bridges when
+the data backend is `foundation`, as it is in production; they do not provision
+Auth accounts. A bounded local transport check is available with node
+--conditions=react-server --import tsx
 scripts/probe-foundation-staff-adapter.mjs --request-session after preparing the
 owned native fixture; it never targets hosted projects.

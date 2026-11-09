@@ -44,8 +44,28 @@ const isolatedStaging = {
 const withStaging = (staging: object) => ({ ...production, env: { staging } });
 
 describe("staging isolation preflight", () => {
-  it("rejects the checked-in staging block while it shares production resources", () => {
-    const failures = checkStagingIsolation(parse(readFileSync("wrangler.toml", "utf8")));
+  it("keeps no checked-in Worker environment besides production", () => {
+    const config = parse(readFileSync("wrangler.toml", "utf8")) as { env?: object };
+    expect(Object.keys(config.env ?? {})).toEqual(["production"]);
+    expect(checkStagingIsolation(config)).toEqual([]);
+    expect(checkStagingIsolation(config, { requireStaging: true })).toEqual([
+      "No [env.staging] section exists",
+    ]);
+  });
+
+  it("rejects the former staging block that shared production resources", () => {
+    const failures = checkStagingIsolation(
+      withStaging({
+        name: "verifymzansi-staging",
+        kv_namespaces: [{ binding: "OTP_RATE_LIMITS", id: "prod-kv" }],
+        vars: {
+          ...production.vars,
+          NODE_ENV: "production",
+          NEXT_PUBLIC_APP_URL: "https://staging.verifymzansi.com",
+          VERIFYMZANSI_RUNTIME_MODE: "development",
+        },
+      })
+    );
     expect(failures.join("\n")).toMatch(/production Supabase project/);
     expect(failures.join("\n")).toMatch(/production bucket "verifymzansi-private"/);
     expect(failures.join("\n")).toMatch(/KV namespace .* shared with production/);

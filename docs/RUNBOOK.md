@@ -2,6 +2,11 @@
 
 > Operational procedures for maintaining and operating the VerifyMzansi
 > platform.
+>
+> Production runs the foundation backend (`database/foundation/`); browsers have
+> no table access and every read and write goes through `api.*` functions.
+> Sections marked "Historical" describe the retired source backend. Merging into
+> `main` is a production release. Read [AGENTS.md](../AGENTS.md) first.
 
 ---
 
@@ -85,6 +90,12 @@ Use separate tokens by workflow instead of one catch-all token.
 ---
 
 ## Supabase Access Boundaries
+
+Historical: describes the retired source backend. On foundation, server code
+calls `api.*` functions through `src/lib/foundation/` (request-scoped for the
+signed-in caller, trusted service commands only where the function requires
+them). New code must not use the `@/lib/supabase/*` table clients described
+below.
 
 Use the narrowest Supabase client that matches the workflow.
 
@@ -353,8 +364,11 @@ province and city and receive automatic location approval.
 
 ### Toggling a Flag (Legacy)
 
+Historical: describes the retired source backend (its `feature_flags` table and
+the old `pages.dev` address no longer exist).
+
 ```bash
-curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
+curl -X POST https://verifymzansi.com/api/admin/feature-flags/toggle \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{"key": "kyc_v2_flow", "enabled": true}'
@@ -492,15 +506,21 @@ limiter, cleanup and operations Workers receive their matching shared keys. The
 live deployment is tagged with the Git commit for traceability. Candidate
 uploads remain manual and inactive; their successful upload is not a release.
 
-For the 30 September 2026 audit changes, run `pnpm test:kyc:db`,
-`pnpm test:staff-roles:db` and `pnpm test:commercial:db`, then apply the pending
-migrations through `pnpm supabase:db:push:safe` before deploying the
-application. `20260930170000_atomic_kyc_provider_webhook.sql` supplies the
-callback RPC; `20260930180000_role_predicates_security_invoker.sql` removes
-unnecessary elevation from three caller-scoped predicates while preserving their
-grants. The latter requires the preceding staff MFA and organisation
-column-privacy migrations. After rollout, rerun both strict Supabase advisors
-and the production smoke checks; retained findings still require review.
+Database updates are not part of the deploy. A foundation update is a new file
+in `database/foundation/updates/` that travels in the same pull request as its
+code; the owner applies it after the merge and before that code is deployed
+([AGENTS.md](../AGENTS.md#database-changes)).
+
+Historical: describes the retired source backend. For the 30 September 2026
+audit changes, run `pnpm test:kyc:db`, `pnpm test:staff-roles:db` and
+`pnpm test:commercial:db`, then apply the pending migrations through
+`pnpm supabase:db:push:safe` before deploying the application.
+`20260930170000_atomic_kyc_provider_webhook.sql` supplies the callback RPC;
+`20260930180000_role_predicates_security_invoker.sql` removes unnecessary
+elevation from three caller-scoped predicates while preserving their grants. The
+latter requires the preceding staff MFA and organisation column-privacy
+migrations. After rollout, rerun both strict Supabase advisors and the
+production smoke checks; retained findings still require review.
 
 ```bash
 # 1. Run the blocking launch gate
