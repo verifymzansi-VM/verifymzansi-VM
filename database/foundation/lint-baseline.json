@@ -1,14 +1,7 @@
 {
   "tool": "plpgsql_check 2.8 in public.ecr.aws/supabase/postgres:17.11.0.004 (pnpm db:foundation:lint)",
   "rules": "Errors fail unless listed in knownErrors with a reason. Warnings fail when they exceed the counts below. Entries that no longer occur fail too, so this file can only shrink: run pnpm db:foundation:lint -- --write-baseline.",
-  "knownErrors": [
-    {
-      "function": "internal.consume_frontend_post_command(uuid)",
-      "sqlstate": "42725",
-      "message": "operator is not unique: unknown - unknown",
-      "reason": "Live since update 20261104002445_restored_post_commands.sql: input->'detail'-'contact_channels' parses as input->('detail'-'contact_channels') because - binds tighter than ->, so the branch for commands with a target_id raises at run time. Recorded so the gate can start; the fix needs its own reviewed update."
-    }
-  ],
+  "knownErrors": [],
   "warnings": [
     {
       "function": "internal.apply_provider_event(jsonb)",

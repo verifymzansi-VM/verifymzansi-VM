@@ -62,7 +62,7 @@ begin
     changed:=internal.save_business_event_context(post.id,rev,jsonb_build_object('business_type',input->'business_type'));
     rev:=(changed->>'revision')::integer;
   elsif input ? 'target_id' then
-    changed:=internal.save_business_event_context(post.id,rev,jsonb_build_object('event_window',input->'detail'-'contact_channels'));
+    changed:=internal.save_business_event_context(post.id,rev,jsonb_build_object('event_window',(input->'detail')-'contact_channels'));
     rev:=(changed->>'revision')::integer;
   end if;
   if post.kind in('listing','event') then

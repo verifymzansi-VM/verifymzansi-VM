@@ -33,6 +33,55 @@ establish that a hosted project has received it.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Post commands with a target post, 9 November 2026
+
+`20261109224337_fix_post_command_target.sql` is **not applied yet**. It fixes
+saving an edit of an existing event. `internal.consume_frontend_post_command`
+(from `20261104002445_restored_post_commands.sql`) built the edited event window
+with `input->'detail'-'contact_channels'`; `-` binds tighter than `->`, so
+PostgreSQL read `input->('detail'-'contact_channels')` and every command that
+reached that line failed with 42725 ("operator is not unique"). That line runs
+only for an event command with a `target_id`, which the website sends when a
+member saves an edit of an existing event (`PUT /api/promotions/<id>`), in any
+state the edit flow allows: draft, rejected, paused, expired or live (a live
+event's edit becomes a review copy). Creating an event and editing a listing or
+business never reach it. The SQL lint gate found it (`../lint-baseline.json`
+recorded it as its only known error until this update).
+
+The update replaces that function with the same body and one change, the
+parentheses: `(input->'detail')-'contact_channels'` (the event's start, end and
+time zone). No table, grant, owner or API signature changes, and no data is
+touched. It refuses to run unless the live body is the reviewed one or already
+the fixed one, so a repeated run changes nothing.
+
+`pnpm db:foundation:lifecycle-test` proves, on the throwaway database, that
+draft, rejected, paused and live event edits fail with 42725 before the update
+and save the new window after it (a live event's edit becomes a review copy and
+the public event is unchanged), that an edit staged before the update and sent
+again is saved once, that the preflight is read only and reports a body it does
+not expect, that the update and the rollback refuse an unexpected body, and that
+apply, rollback and re-apply return the same fingerprints.
+
+**Applying.** Apply it after `20261109173012_posting_terms_v3.sql` (filename
+order, so the fingerprint record moves forward one update at a time):
+
+1. Run `../preflight/20261109224337_fix_post_command_target.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed live body, fix not applied" (it also counts
+   unexpired event edits that were staged without a result; a member who sends
+   the unchanged form again from the same page before it expires has it saved
+   after the update).
+2. Run the update. It waits at most 5 seconds for anything it needs and stops
+   without changing anything if it cannot; run it again.
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   move `matchedThroughUpdate` and `matchedFingerprints` forward.
+
+The reviewed rollback is
+`../rollback/20261109224337_fix_post_command_target.down.sql` (only with the
+owner's decision; it brings the failure back, so prefer a forward fix).
+
 ## Posting Terms v3, 9 November 2026
 
 `20261109173012_posting_terms_v3.sql` is **not applied yet**. It needs
