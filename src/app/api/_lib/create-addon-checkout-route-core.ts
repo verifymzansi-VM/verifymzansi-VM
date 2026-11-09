@@ -3,6 +3,7 @@ import {
   ADDON_UNAVAILABLE_CODE,
   ADDON_UNAVAILABLE_MESSAGE,
 } from "@/lib/billing/addon-availability";
+import { addonSalesPausedResponse, areAddonSalesOpen } from "@/lib/billing/addon-sales";
 import { NextResponse, type NextRequest } from "next/server";
 import type { ZodType } from "zod";
 
@@ -145,6 +146,9 @@ export function createAddonCheckoutRouteCore<
   PaymentType extends string,
 >(config: CoreConfig<Params, Entity, PaymentType>) {
   return async function POST(request: NextRequest, { params }: { params: Promise<Params> }) {
+    // Paused add-on sales (src/lib/billing/addon-sales.ts) apply to either
+    // backend and stop here, before any session, table or provider work.
+    if (!areAddonSalesOpen()) return addonSalesPausedResponse(config.paymentType);
     if (getDataBackend() === "foundation") {
       const parsed = parseAndValidateRouteParams(await params, config.paramsSchema, {
         validationErrorMessage: config.validationErrorMessage,

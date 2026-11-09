@@ -1,7 +1,7 @@
 vi.mock("@/lib/billing/trial-addon-access", () => ({
   getTrialAddonBlock: vi.fn().mockResolvedValue(null),
 }));
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 /* ── hoisted mocks ─────────────────────────────────────── */
@@ -73,6 +73,15 @@ vi.mock("@/lib/account/compat", () => ({
 }));
 
 import { POST } from "@/app/api/promotions/[id]/urgent/route";
+
+// Paid add-on sales are paused unless switched on (src/lib/billing/addon-sales.ts);
+// these cases cover the checkout that runs once they are open.
+beforeEach(() => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const USER = { id: "user-1", email: "test@test.com" };
 const PROMOTION_ID = "550e8400-e29b-41d4-a716-446655440000";

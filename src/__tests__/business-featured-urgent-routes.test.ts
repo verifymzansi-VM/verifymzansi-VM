@@ -1,7 +1,7 @@
 vi.mock("@/lib/billing/trial-addon-access", () => ({
   getTrialAddonBlock: vi.fn().mockResolvedValue(null),
 }));
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 const {
@@ -90,6 +90,15 @@ vi.mock("@/lib/account/compat", () => ({
 
 import { POST as postBusinessFeatured } from "@/app/api/businesses/[id]/featured/route";
 import { POST as postBusinessUrgent } from "@/app/api/businesses/[id]/urgent/route";
+
+// Paid add-on sales are paused unless switched on (src/lib/billing/addon-sales.ts);
+// these cases cover the checkout that runs once they are open.
+beforeEach(() => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const BUSINESS_ID = "00000000-0000-0000-0000-000000000123";
 const USER_ID = "user-1";

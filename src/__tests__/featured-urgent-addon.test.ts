@@ -2,7 +2,7 @@ import type * as Pricing from "@/lib/constants/pricing";
 vi.mock("@/lib/billing/trial-addon-access", () => ({
   getTrialAddonBlock: vi.fn().mockResolvedValue(null),
 }));
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { NextRequest } from "next/server";
 
 const { mockCreateClient, mockCreateAdminClient, mockLogAuditEvent, mockClientFrom } = vi.hoisted(
@@ -63,6 +63,15 @@ vi.mock("@/lib/constants/pricing", async (importOriginal) => {
 import { POST as FeaturedPOST } from "@/app/api/listings/[id]/featured/route";
 import { POST as UrgentPOST } from "@/app/api/listings/[id]/urgent/route";
 import { POST as BoostPOST } from "@/app/api/listings/[id]/boost/route";
+
+// Paid add-on sales are paused unless switched on (src/lib/billing/addon-sales.ts);
+// these cases cover the checkout that runs once they are open.
+beforeEach(() => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function createRequest(url: string, body?: unknown) {
   return {

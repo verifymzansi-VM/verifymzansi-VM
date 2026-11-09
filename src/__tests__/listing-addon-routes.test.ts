@@ -12,7 +12,7 @@ vi.mock("@/lib/billing/trial-addon-access", () => ({
  * already-active guard, entitlement gating, payment creation,
  * amount conversion (cents→ZAR), audit area casing, and happy path.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
 // ── Mock all external dependencies ────────────────────────────
@@ -99,6 +99,15 @@ import { POST as featuredPOST } from "@/app/api/listings/[id]/featured/route";
 import { POST as boostPOST } from "@/app/api/listings/[id]/boost/route";
 import { POST as urgentPOST } from "@/app/api/listings/[id]/urgent/route";
 import { env } from "@/lib/config/env";
+
+// Paid add-on sales are paused unless switched on (src/lib/billing/addon-sales.ts);
+// these cases cover the checkout that runs once they are open.
+beforeEach(() => {
+  vi.stubEnv("ADDON_SALES_ENABLED", "true");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -188,6 +197,7 @@ describe.each([{ name: "urgent", handler: () => urgentPOST, addonField: "urgent_
     beforeEach(() => {
       vi.clearAllMocks();
       vi.unstubAllEnvs();
+      vi.stubEnv("ADDON_SALES_ENABLED", "true");
       vi.mocked(env).mockImplementation((key: string) => {
         const envMap: Record<string, string> = {
           NEXT_PUBLIC_APP_URL: "https://verifymzansi.com",
