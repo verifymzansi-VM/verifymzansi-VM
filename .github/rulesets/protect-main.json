@@ -1,0 +1,57 @@
+{
+  "name": "Protect main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "allowed_merge_methods": ["squash", "merge"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          { "context": "lint-type-security", "integration_id": 15368 },
+          { "context": "knip", "integration_id": 15368 },
+          { "context": "Duplication budget", "integration_id": 15368 },
+          { "context": "Secret scan (Gitleaks)", "integration_id": 15368 },
+          { "context": "Semgrep static analysis", "integration_id": 15368 },
+          { "context": "Dependency vulnerabilities (OSV-Scanner)", "integration_id": 15368 },
+          { "context": "Foundation Worker runtime", "integration_id": 15368 },
+          { "context": "unit-api-contract", "integration_id": 15368 },
+          { "context": "payment-kyc-regressions", "integration_id": 15368 },
+          { "context": "audit-tooling-platforms (ubuntu-latest)", "integration_id": 15368 },
+          { "context": "audit-tooling-platforms (windows-latest)", "integration_id": 15368 },
+          { "context": "build-route-verify", "integration_id": 15368 },
+          { "context": "bundle-analysis", "integration_id": 15368 },
+          { "context": "db-rls", "integration_id": 15368 },
+          { "context": "e2e-smoke (chromium)", "integration_id": 15368 },
+          { "context": "e2e-smoke (mobile-chrome)", "integration_id": 15368 },
+          { "context": "launch-flows-bundle", "integration_id": 15368 },
+          { "context": "e2e-full-matrix (chromium)", "integration_id": 15368 },
+          { "context": "e2e-full-matrix (firefox)", "integration_id": 15368 },
+          { "context": "e2e-full-matrix (mobile-chrome)", "integration_id": 15368 },
+          { "context": "Analyze (javascript-typescript)", "integration_id": 15368 }
+        ]
+      }
+    }
+  ]
+}
