@@ -450,6 +450,14 @@ export interface components {
     Error: {
       error: string;
     };
+    AddonCheckoutError: {
+      error: string;
+      /**
+       * @description addon_sales_paused: paid add-on sales are paused (the reply is the same for every caller and request). addon_unavailable: this add-on is not offered for this post.
+       * @enum {string}
+       */
+      code?: "addon_sales_paused" | "addon_unavailable";
+    };
   };
   responses: {
     /** @description Invalid request parameters */
@@ -907,7 +915,15 @@ export interface operations {
         content?: never;
       };
       401: components["responses"]["Unauthorized"];
-      403: components["responses"]["Forbidden"];
+      /** @description Refused. Paid add-on sales are paused (code addon_sales_paused, error "Add-ons open soon. You have not been charged."; no payment is created), this add-on is not offered for this post (code addon_unavailable), or the caller may not boost this listing. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AddonCheckoutError"];
+        };
+      };
       404: components["responses"]["NotFound"];
     };
   };
