@@ -1,3 +1,7 @@
+> Historical: describes the retired source backend. It records the 27 September
+> 2026 source-backend baseline; foundation staff authority is enforced inside
+> the `api.*` functions.
+
 # Admin access inventory
 
 Baseline taken on 27 September 2026 (Phase 0 of the admin rebuild). It lists
