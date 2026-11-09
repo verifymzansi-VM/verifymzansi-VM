@@ -6,13 +6,25 @@ retained for integration work. Start with
 [FRONTEND-RESTORE.md](FRONTEND-RESTORE.md) before following the setup or
 deployment instructions below.
 
+**Current state, in short** (details in [AGENTS.md](AGENTS.md)):
+
+- Production runs the **foundation** backend: the London Supabase project, with
+  its SQL in `database/foundation/` (baseline `candidate.sql` plus `updates/`).
+  Browsers reach data only through `api.*` database functions.
+- The **source** backend (`supabase/migrations/`, tables in schema `public`) is
+  retired and empty in production. Sections below marked "Historical" describe
+  it.
+- **Merging into `main` releases to production.** Changes reach `main` only
+  through pull requests that the owner merges
+  ([docs/branch-protection.md](docs/branch-protection.md)).
+
 South African marketplace built on Next.js, Supabase, and Cloudflare. The
 platform has exactly three marketplace areas: `Mzansi Market`,
 `Mzansi Business`, and `Tourism & Events`. Legacy `business-ads`, `mall-shops`,
 and standalone `promotions` surfaces have been removed; their old URLs
 permanently redirect to the canonical area.
 
-[![CI](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi/verifymzansi/actions/workflows/ci.yml)
+[![CI](https://github.com/verifymzansi-VM/verifymzansi-VM/actions/workflows/ci.yml/badge.svg)](https://github.com/verifymzansi-VM/verifymzansi-VM/actions/workflows/ci.yml)
 
 ## Overview
 
@@ -105,9 +117,9 @@ docker compose up -d --build --force-recreate --renew-anon-volumes --no-deps app
 Docker keeps `node_modules` and `.next` in separate container volumes so Linux
 dependencies and compiler caches are not mixed with native Windows builds.
 
-Production deployment is currently manual through the Deploy workflow. Pushing
-`main` runs CI only. Review the security assessment and apply the required
-database changes in isolated staging before approving a production rollout.
+Production deployment is automatic: when CI passes on `main`, the Deploy
+workflow releases that commit. Merging a pull request into `main` is therefore a
+release; see [Deployment](#deployment).
 
 ## Environment Modes
 
@@ -157,12 +169,17 @@ Some Supabase security controls are dashboard-only and are not represented in
   Supabase Management API field `password_hibp_enabled`. Supabase only allows
   that setting on Pro plans and above, so the related Security Advisor warning
   is expected while the project remains on the free plan.
-- The `avatars` storage bucket is intentionally public because the profile
-  avatar upload flow stores a persistent public URL in `avatar_url`. Keep the
-  bucket public for direct object delivery, but do not add a broad public
-  `SELECT` policy on `storage.objects`; that re-enables bucket listing.
+- Historical: describes the retired source backend. The `avatars` storage bucket
+  was intentionally public because the profile avatar upload flow stores a
+  persistent public URL in `avatar_url`. Keep the bucket public for direct
+  object delivery, but do not add a broad public `SELECT` policy on
+  `storage.objects`; that re-enables bucket listing.
 
 ### Supabase CLI From Workspace Env
+
+Historical: describes the retired source backend. These wrappers refuse
+foundation targets; foundation changes follow
+[AGENTS.md](AGENTS.md#database-changes).
 
 The repo includes an env-aware Supabase CLI wrapper so linked remote commands do
 not depend on manually exporting `SUPABASE_ACCESS_TOKEN` and
@@ -183,6 +200,10 @@ pnpm supabase:db:push
 ```
 
 ### Free-plan backups
+
+Historical: describes the retired source backend. Production backups are made by
+`.github/workflows/database-backup.yml`
+([docs/RUNBOOK.md](docs/RUNBOOK.md#database-backups)).
 
 Free Supabase projects do not include automated database backups. Before every
 remote migration, use the safe command below; it exports public-table data and
@@ -622,24 +643,28 @@ Notes:
 
 ## Deployment
 
-Canonical release path: push to `master` and let GitHub Actions deploy from
-Ubuntu using Node `22.x`.
+Merging a pull request into `main` releases it. Nobody pushes to `main`
+directly; the owner merges reviewed pull requests whose required checks pass
+([docs/branch-protection.md](docs/branch-protection.md)).
 
-```bash
-git push origin master
-```
+What happens after a merge (`.github/workflows/deploy.yml`):
 
-The deploy workflow now:
+1. CI runs on the new `main` commit.
+2. When that CI run succeeds, the Deploy workflow starts for exactly that
+   commit. It refuses commits without a successful `main` CI run.
+3. It validates the production configuration and the foundation runtime
+   contracts, builds the OpenNext Cloudflare Worker on Ubuntu with Node 22, and
+   deploys the site monitor, the main `verifymzansi` Worker and the helper
+   Workers (rate limiter, retention clean-up, payment clean-up, operations
+   jobs).
+4. It checks production health and smoke pages after the deploy. Today a failed
+   health check rolls back only the main Worker; see
+   [docs/RUNBOOK.md](docs/RUNBOOK.md#rollback-on-failure).
 
-1. Validates the full production env contract with
-   `scripts/validate-launch-env.ts`
-2. Runs the blocking launch gate: `pnpm lint`, `pnpm typecheck`,
-   `pnpm test:blocking`, `pnpm preflight`, `pnpm secret-scan`,
-   `pnpm security:audit`, `pnpm licenses:check`, `pnpm build`, and Playwright
-   smoke
-3. Builds the Cloudflare bundle on Ubuntu
-4. Deploys the Pages app plus supporting Workers
-5. Fails if `/api/health` comes back degraded after deploy
+A manual run of the Deploy workflow (Actions → Deploy → Run workflow) releases
+the current `main` commit and also requires its successful CI run. Database
+updates are not part of the deploy: the owner applies them before the code that
+needs them is merged ([AGENTS.md](AGENTS.md#database-changes)).
 
 ## Startup Failures
 
@@ -661,7 +686,7 @@ Local `pnpm build:cloudflare`, `pnpm preview:cloudflare`, and `pnpm deploy` are
 not supported on native Windows because Wrangler/OpenNext emits filenames that
 Windows cannot materialize. Use one of:
 
-- GitHub Actions on `master`
+- GitHub Actions (CI on pull requests and `main`)
 - Ubuntu
 - WSL on an ext4-backed workspace such as `~/verifymzansi`
 
@@ -692,7 +717,8 @@ src/
   test/                shared test setup
 scripts/               preflight, validation, security, and release tooling
 docs/                  runbooks, playbooks, audits, and operator references
-supabase/              migrations and schema assets
+database/foundation/   live backend SQL: baseline, updates and generated API contracts
+supabase/              retired source-backend migrations (historical; never replay on foundation)
 workers/               Cloudflare Workers
 e2e/                   Playwright suites
 ```

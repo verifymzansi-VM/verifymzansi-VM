@@ -1,3 +1,9 @@
+> Historical: describes the retired source backend. Production runs the
+> foundation backend; read [AGENTS.md](../AGENTS.md) and
+> [database/foundation/README.md](../database/foundation/README.md) first. Page
+> paths below may still help; the database, RLS and migration descriptions do
+> not apply.
+
 # VerifyMzansi Architecture Map
 
 VerifyMzansi is a Next.js marketplace application for South African listings,
