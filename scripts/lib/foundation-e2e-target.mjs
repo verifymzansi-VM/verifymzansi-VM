@@ -154,31 +154,8 @@ export function assertLocalFoundationTarget({ apiUrl, dbUrl, env = {} }) {
   return api.origin;
 }
 
-const WINDOWS_ENGINE = "npipe:////./pipe/dockerDesktopLinuxEngine";
-const LINUX_SOCKET = "unix:///var/run/docker.sock";
-
-/**
- * Docker must be this machine's own engine, so 127.0.0.1 ports really are on
- * this machine: Windows Docker Desktop's Linux engine (context desktop-linux),
- * or the standard local socket on Linux/macOS. DOCKER_HOST or DOCKER_CONTEXT
- * pointing anywhere else is refused. Returns the context to pin.
- */
-export function localDockerContext({ platform, env, inspect }) {
-  const fail = () => {
-    throw new Error("Foundation test copy refused: Docker must be this machine's local engine");
-  };
-  if (platform === "win32") {
-    if (env.DOCKER_HOST !== undefined && env.DOCKER_HOST !== WINDOWS_ENGINE) fail();
-    if (env.DOCKER_CONTEXT !== undefined && env.DOCKER_CONTEXT !== "desktop-linux") fail();
-    if (inspect("desktop-linux") !== WINDOWS_ENGINE) fail();
-    return "desktop-linux";
-  }
-  if (platform !== "linux" && platform !== "darwin") fail();
-  if (env.DOCKER_HOST !== undefined && env.DOCKER_HOST !== LINUX_SOCKET) fail();
-  if (env.DOCKER_CONTEXT !== undefined && env.DOCKER_CONTEXT !== "default") fail();
-  if (inspect("default") !== LINUX_SOCKET) fail();
-  return "default";
-}
+// Docker must be this machine's own engine: the copy shares the native
+// fixture's guard (localDockerEnvironment in foundation-native-isolation.mjs).
 
 /** Throwaway workspace path, inside the repository's ignored tmp/ folder. */
 export function fixtureWorkdir(root = process.cwd()) {

@@ -75,10 +75,14 @@ function productionIdentity(config) {
   };
 }
 
-/** Returns a list of isolation failures; an empty list means staging is separate. */
-export function checkStagingIsolation(config) {
+/**
+ * Returns a list of isolation failures; an empty list means staging is separate.
+ * Without a staging section there is nothing that can reach production, which
+ * passes unless `requireStaging` is set (once a separate staging copy exists).
+ */
+export function checkStagingIsolation(config, { requireStaging = false } = {}) {
   const staging = config.env?.staging;
-  if (!staging) return ["No [env.staging] section exists"];
+  if (!staging) return requireStaging ? ["No [env.staging] section exists"] : [];
   const prod = productionIdentity(config);
   const vars = staging.vars ?? {};
   const failures = [];
@@ -124,12 +128,19 @@ export function checkStagingIsolation(config) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const file = process.argv[2] ?? "wrangler.toml";
-  const failures = checkStagingIsolation(parse(readFileSync(file, "utf8")));
+  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+  const requireStaging = args.includes("--require-staging");
+  const file = args.find((arg) => !arg.startsWith("--")) ?? "wrangler.toml";
+  const config = parse(readFileSync(file, "utf8"));
+  const failures = checkStagingIsolation(config, { requireStaging });
   if (failures.length) {
     console.error(`Staging is NOT isolated from production (${file}):`);
     for (const failure of failures) console.error(`  - ${failure}`);
     process.exit(1);
   }
-  console.log("Staging configuration uses no production resource identifiers.");
+  console.log(
+    config.env?.staging
+      ? "Staging configuration uses no production resource identifiers."
+      : "No staging environment is configured, so none can reach production."
+  );
 }
