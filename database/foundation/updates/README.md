@@ -33,6 +33,255 @@ establish that a hosted project has received it.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Posting Terms v3, 9 November 2026
+
+`20261109173012_posting_terms_v3.sql` is **not applied yet**. It needs
+`20261109104020_post_expiry_rules.sql` first and refuses to run without it. It
+publishes posting terms version `posting-v3`
+(`src/lib/legal/terms-documents/posting-v3.json`, canonical hash
+`p2X2YRoaYDOwYDtYhTiFcznVghgyGzRmTJ6BexfhkQE`) and makes it current. It changes
+no function or table.
+
+`posting-v3` is `posting-v1` with three paragraphs changed to state the rules of
+the post expiry rules update: a slot is reused once its post is deleted and a
+new post in it runs for the plan's remaining days; when a plan ends (or a refund
+or chargeback withdraws it) its posts are hidden, the owner is emailed and has 3
+days to buy a plan and reactivate, then the post and its media are deleted (up
+to 24 hours more while a payment is being confirmed; a confirmed payment keeps
+the post for 3 days after it); a sold post is deleted 3 days after it was marked
+sold, keeps its slot until then and can be undone within the 3 days; a paused
+post keeps its slot and its plan's period keeps running; an event is deleted
+when it ends; the records linked to a post are deleted with it. `posting-v2`
+(seeded by the baseline, never current, absent from production) is untouched.
+
+Members accept `posting-v3` once before their next submission or edit (the
+submission guard and the edit-consent check compare with the current version);
+`/post/create` shows the acceptance step. `posting-v1` promises at least 14
+days' notice of a material change; the owner decided on 9 November 2026 to start
+now (there are no member posts yet), with a legal review of `posting-v3` to
+follow.
+
+`pnpm check:foundation-api` (run by every build) checks that the published
+version files recorded in `../assembly.json` are unchanged, that every later
+version in `catalogue.json` is inserted by an update with its hash, and that the
+catalogue's active version is the one the last update makes current.
+`pnpm db:foundation:lifecycle-test` applies this update after the expiry rules,
+runs its preflight, rolls it back and applies it twice more.
+
+**Applying.** After the post expiry rules update, and with or after the website
+release that contains `posting-v3.json` (that release serves either version, so
+deploy it first):
+
+1. Run `../preflight/20261109173012_posting_terms_v3.check.sql` unchanged in the
+   SQL editor. Continue only if its result is the single "summary" row.
+2. Run the update. It waits at most 5 seconds for the posting terms row and
+   stops without changing anything if it is busy; run it again.
+3. Open `/terms`: it shows "Posting terms · posting-v3".
+
+The reviewed rollback is `../rollback/20261109173012_posting_terms_v3.down.sql`
+(only with the owner's decision, and only together with the post expiry rules
+rollback; prefer a new version).
+
+## Post expiry rules, 9 November 2026
+
+`20261109104020_post_expiry_rules.sql` is applied: the owner applied it to
+production on 9 November 2026, after the post lifecycle guards update and after
+its preflight returned only the summary row. Production's fingerprint then
+matched the replay through this update (`../fingerprint.json`,
+`productionCheck`). It needs `20261109073519_post_lifecycle_guards.sql` first
+and refuses to run without it. It sets the deletion rules decided on 9 November
+2026:
+
+- **Market and Business posts** hold a plan slot. When a post's paid run ends
+  (its `visible_until`, or a refund, chargeback or sponsorship end of the plan
+  that funds it), the post expires, releases the slot and its owner gets
+  `post_expired`. The post stays hidden for 3 days (`deletes_at` = `ended_at` +
+  3 days), during which its owner can buy a plan and reactivate it; then the
+  lifecycle job deletes it with its media. The 7- and 21-day reminders are no
+  longer queued.
+- **Sold.** A sold post keeps its slot until it is deleted, 3 days after it was
+  marked sold; its owner gets `post_sold` (once per sale and slot: neither a
+  refund that later frees the slot nor undoing and redoing "sold" repeats it),
+  can delete it earlier to reuse the slot, or reactivate it within the 3 days
+  (it then runs for the slot's remaining days while that slot is still valid,
+  with no new activation). `api.release_post` no longer frees the slot of a
+  paused or sold post.
+- **Archived.** Archiving is not offered by the website (only by
+  `api.set_post_state`) and is not part of the decided rules. It keeps its
+  earlier behaviour of releasing the slot at once, and the post is deleted 3
+  days later like other ended posts, without a notice: the owner chose to take
+  it down, and the deletion date is in the owner reads.
+- **Events.** An event is deleted when it ends (`event_details.ends_at`,
+  followed through edits by the `event_deletion_clock` trigger), whatever its
+  state (draft, under review, rejected, live or paused), with no grace period
+  and no expiry notice (an event already over at the update keeps its 3 days
+  through later changes of state). An event's end can only be set or moved to a
+  time still ahead (`create_core_draft`, `save_business_event_context`;
+  approving an edit already refuses an ended window). Its place in the limit of
+  10 free events per 30 days returns only when its owner deletes it before it
+  ends; deletion by the job never returns it. The owner-delete release is one
+  statement in `internal.delete_post`, kept as decided (DEC-32) and easy to
+  remove if that decision changes.
+- **Paused.** Pausing keeps the slot and does not stop the run's clock: a paused
+  post that holds a slot expires like a live one, and reactivating it spends no
+  further activation. Such a post is not deleted as idle. Paused posts without a
+  slot (paused before this update, or held by staff when their plan was
+  reversed) keep the 45/60-day idle rule.
+- **Late payment** (`internal.ended_post_decision`,
+  `private.post_deletion_extensions`), for an expired Market or Business post
+  only (a sold or archived post goes at its date). Plan payments count when they
+  were started from 24 hours before the post expired (a last-minute renewal)
+  until its deletion date, the extension included. One still being confirmed
+  when the 3 days end (a confirmed payment still being reconciled counts) moves
+  the deletion date once, by 24 hours. Once such a payment is confirmed, the
+  post is kept until 3 days after that payment and the owner gets `post_kept`,
+  so a member who has paid always has time to reactivate. The 24 hours are
+  always waited out: a failed, cancelled or expired payment can still be
+  confirmed late by the provider, and a member may retry. A payment confirmed
+  only after the post was deleted is a refund case for staff.
+- **Open reports.** A post with an open report (not yet handled by staff) is
+  kept until the report is handled, for at most 7 days after the date it would
+  otherwise be deleted (`internal.post_report_deferred`); staff can place a hold
+  to keep it longer.
+- **Notices.** The mail claim now returns each post's deletion date and whether
+  it still holds a slot, so the expiry, sold and kept emails give the date. A
+  post already due for deletion gets the deletion notice instead of a late
+  expiry notice (for example when its date passed during a legal hold; it is
+  deleted at the first run after the hold is released). Member actions cannot
+  flood the queue: the expiry notice is once per run, the sold notice once per
+  sale and slot, the kept notice once per run, the idle warning once per idle
+  period and the deletion notice once per post.
+- **Cutover.** Nothing that has already ended is deleted sooner than 3 days
+  after the update: expired, sold and archived posts get the later of now + 3
+  days and `ended_at` + 3 days, and their owners get the new notice once
+  (expired events and archived posts excepted). Events that have not ended their
+  run get their end, or now + 3 days when it has already passed.
+- **Owner reads.** `api.get_my_frontend_post_v2` and
+  `api.list_my_frontend_posts_v2` return the original owner post data plus
+  `deletes_at`. The original reads are unchanged.
+- Recent edit copies no longer keep an ended post or an ended event from being
+  deleted (they can never be approved); they still keep idle drafts, rejected
+  and paused posts, as before.
+- Deleting a post also deletes what is linked to it: its enquiries and their
+  notifications, business check requests, organisation applications and
+  affiliations, offline review records, trial claims and queue claims. Reports
+  and CIPC reviews are kept with the link cleared.
+
+Staff content holds and legal holds keep protecting posts as before: a held post
+neither expires nor is deleted. There is no dispute state: to keep a refunded or
+charged-back post during a dispute, staff place a legal hold.
+
+**Website compatibility.** The website release with this update works with the
+database before or after it: the owner reads fall back to the original reads
+when the `_v2` reads are missing, and the mail job claims the earlier list of
+kinds when the database refuses the new ones. The release before it keeps
+working once the update is applied (the original reads are unchanged and the
+earlier list of kinds is still accepted).
+
+`pnpm db:foundation:lifecycle-test` covers both lifecycle updates: for this one
+it runs the preflight (including rows it must report), applies the update, rolls
+it back and applies it again, checks the cutover dates and notices, and then
+each rule through the production API commands: the 3-day edges, deletion and
+reactivation during the grace period, sold and paused slots, slots lost by a
+refund or sponsorship end, the late-payment window, extension and keeping
+(including a payment retried during the extension), open reports, events in
+every state at their end and their places, past event ends refused, held posts,
+the owner reads, the mail claim, and races between the job and a new post or an
+undo of "sold".
+
+**Applying.** After the post lifecycle guards update. Deploy the website first
+(recommended: the expiry and sold notices queued at the lifecycle job's first
+run are then sent with their dates), then:
+
+1. Run `../preflight/20261109104020_post_expiry_rules.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row; the summary says how many posts get a new deletion date and
+   how many will change state at the lifecycle job's first run.
+2. At a quiet time, run the update. It first takes its table locks without
+   waiting: `private.posts` (exclusive: reads go on, writes wait),
+   `private.event_details`, `private.payments` and `private.reports` (no writes
+   until it commits) and `private.outbox_events` (exclusive). If any is busy it
+   stops at once and changes nothing; run it again.
+3. Run `../fingerprint.sql` and compare with `../fingerprint.json` (this update
+   is listed under `productionCheck.pendingApplication`).
+
+The reviewed rollback is `../rollback/20261109104020_post_expiry_rules.down.sql`
+(only with the owner's decision; prefer a forward fix). Its header lists what a
+rollback changes.
+
+## Post lifecycle guards, 9 November 2026
+
+`20261109073519_post_lifecycle_guards.sql` is applied: the owner applied it to
+production on 9 November 2026, after its preflight returned only the summary
+row. It changes no member-facing rule and adds no new deletion; it prepares the
+deletion rules that follow it.
+
+- **Staff content holds block deletion.** While a hold from the Hide action is
+  open, the lifecycle job neither deletes the post nor sends a deletion warning,
+  the owner cannot mark it sold, archive it or delete it (the same
+  `PT423 staff_visibility_hold` refusal as for resubmission; the website now
+  says "This post is hidden while our team reviews it. You can't republish, sell
+  or delete it until the review is finished."), and a trigger refuses any other
+  delete of the post row. The media the post showed when it was hidden are
+  recorded against the hold, so media cleanup leaves them alone until that hold
+  is released. After the last release, an idle post's 45/60-day clock counts
+  from the release. Legal holds behave as before.
+- **A stable deletion clock.** `posts.ended_at` records when a post's public run
+  ended (expired, sold or archived) and `posts.deletes_at` when the lifecycle
+  job may delete it (today `ended_at` + 30 days). Publication or a new
+  submission for review clears both. The edit flow passes an ended post through
+  `paused` inside one transaction; that no longer moves the deletion date or
+  re-sends `post_expired` and its reminders, whose keys now use `ended_at`.
+  Existing ended posts are backfilled from `status_changed_at`, so their dates
+  and notice keys do not change. Approval digests leave both columns out.
+- **Kept free-event submissions.** `private.event_submissions` records each
+  submission of an original free event. The limit of 10 per rolling 30 days
+  counts distinct events from it, so an event removed by the lifecycle job or
+  any other path keeps its place. As decided by the owner, deleting one's own
+  event still returns the place; the five-active limit is unchanged. The table
+  is append-only apart from that one release; rows leave it only once they are
+  older than the window (purged by the lifecycle job) or with their erased
+  account. The backfill copies each original event's latest submission from the
+  last 31 days. The rows are part of the member's privacy export (dataset
+  `event_submissions`; the export route accepts 32 or 33 datasets until
+  production has this update).
+
+`pnpm db:foundation:lifecycle-test` (CI step in `foundation-sql-lint`) replays
+this folder into the throwaway Postgres 17 container, runs the read-only
+preflight (including rows it must report), seeds synthetic members and posts
+before the update, applies it, rolls it back with the rollback file and applies
+it again (the schema fingerprint returns to the same values each time), and then
+checks the backfills, each guard through the production API commands, and races
+between a hide and an owner delete, mark-sold, the lifecycle job, and two event
+submissions at the limit. The Hide action and most releases are mirrored in SQL
+with the same rows and lock order; one release runs the real staff command, with
+a synthetic staff session, and restores a hidden event. The only stand-in is
+`internal.current_verified_identity`, so free events reach the fair-use check.
+
+**Applying.** Apply it before any application release that depends on it:
+
+1. Run `../preflight/20261109073519_post_lifecycle_guards.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row; any other row is a post the backfill would refuse, or an open
+   staff hold on an ended post to review first.
+2. At a quiet time, run the update. It first takes every table lock it needs, in
+   one fixed order and without waiting: `private.posts` (exclusive), then
+   `private.frontend_content_holds`, `private.media_objects` and `auth.users`
+   (no writes, including sign-in bookkeeping, until it commits, which takes well
+   under a second). If any of them is busy it stops at once with a lock error
+   and changes nothing; run it again.
+3. Run `../fingerprint.sql` and compare with `../fingerprint.json`, which lists
+   this update under `productionCheck.pendingApplication`. Once production's
+   fingerprint matches again, move `matchedThroughUpdate` and
+   `matchedFingerprints` forward (`scripts/foundation-replay.test.mjs` checks
+   them).
+
+The reviewed rollback is
+`../rollback/20261109073519_post_lifecycle_guards.down.sql` (only with the
+owner's decision; prefer a forward fix). Its header lists what a rollback loses,
+including possible repeat expiry emails for posts edited while the update was in
+place.
+
 ## Staff content holds, 5 November 2026
 
 `20261105043010_native_report_content_holds.sql` is applied. The selected Hide

@@ -27,7 +27,7 @@ export interface PlanDefinition {
   /** Retail plan code shared by all areas, e.g. RETAIL_90D. */
   planCode?: string;
   durationDays: number;
-  /** Simultaneous active posts. Slots are reusable when a post is sold or deactivated. */
+  /** Simultaneous active posts. A slot is reusable once its post is deleted. */
   slotCapacity: number;
   promoLabel?: string;
   /** Price of the same period bought as separate 30-day plans. */
@@ -354,7 +354,7 @@ export function getPlanFeatureItems(
 
   push(
     plan.slotCapacity === 1
-      ? "1 active posting slot — reuse it when an item sells"
+      ? "1 active posting slot — reuse it once its post is deleted"
       : `${plan.slotCapacity} active posting slots`
   );
   push(`${formatDurationDays(plan.durationDays)} of visibility`);

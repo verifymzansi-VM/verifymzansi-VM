@@ -34,4 +34,6 @@ CREATE INDEX frontend_content_holds_post_reference_idx ON private.frontend_conte
 CREATE INDEX frontend_content_holds_releaser_idx ON private.frontend_content_holds USING btree (released_by);
 CREATE INDEX frontend_content_holds_reporter_idx ON private.frontend_content_holds USING btree (reporter_id);
 CREATE TRIGGER publish_frontend_hidden_notice AFTER INSERT ON private.frontend_content_holds FOR EACH ROW EXECUTE FUNCTION internal.publish_frontend_moderation_notice();
+CREATE TRIGGER release_frontend_content_hold_media AFTER UPDATE OF released_at ON private.frontend_content_holds FOR EACH ROW EXECUTE FUNCTION internal.release_frontend_content_hold_media();
+CREATE TRIGGER snapshot_frontend_content_hold_media AFTER INSERT ON private.frontend_content_holds FOR EACH ROW EXECUTE FUNCTION internal.snapshot_frontend_content_hold_media();
 revoke all on private.frontend_content_holds from public;

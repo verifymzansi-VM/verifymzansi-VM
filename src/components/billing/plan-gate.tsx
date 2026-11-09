@@ -151,7 +151,7 @@ const AREA_COUNT_TARGETS: Record<MarketplaceArea, { table: string; area?: Market
 function planFeatureList(plan: PlanDefinition): { text: string; enabled: boolean }[] {
   const f = plan.features;
   return [
-    { text: "1 active posting slot, reusable when an item sells", enabled: true },
+    { text: "1 active posting slot, reusable once its post is deleted", enabled: true },
     { text: `${f.maxPhotos} photos and ${f.maxVideos ?? 1} video per post`, enabled: true },
     { text: "Optional Urgent label add-on", enabled: f.urgentAllowed },
     { text: "No automatic renewal", enabled: true },

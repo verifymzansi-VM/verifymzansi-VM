@@ -1632,6 +1632,11 @@ commit;`);
     const releasedSnapshot = sql(
       `select jsonb_agg(to_jsonb(a) order by a.id)::text from private.post_activations a where post_id='${activated[0]}';`
     );
+    // This suite builds the prototype schema, where a paused post's slot was
+    // already released. Update 20261109104020_post_expiry_rules.sql keeps the
+    // slot of a paused post and refuses release_post for it (22023); its
+    // behaviour is checked by scripts/test-foundation-lifecycle-guards.mjs.
+    // Change this expectation if this suite moves to the replayed updates.
     for (let retry = 0; retry < 2; retry++) {
       const released = await rpc("release_post", { p_post_id: activated[0] }, other.token);
       assert.equal(released.status, 200);

@@ -47,11 +47,19 @@ export function replaySteps(root = process.cwd()) {
 
 /**
  * Applies replaySteps() in an embedded Postgres, then any extra SQL. Returns
- * the open database; the caller closes it.
+ * the open database; the caller closes it. With `through`, the replay stops
+ * after that update (for example the last update production has received).
  */
-export async function replayFoundation({ root = process.cwd(), extraSql = [] } = {}) {
+export async function replayFoundation({ root = process.cwd(), extraSql = [], through } = {}) {
   const started = Date.now();
-  const { updates, steps } = replaySteps(root);
+  const replay = replaySteps(root);
+  let { updates, steps } = replay;
+  if (through !== undefined) {
+    const last = steps.findIndex((step) => step.label === through);
+    if (last < 0 || !updates.includes(through)) throw new Error(`Unknown update ${through}`);
+    steps = steps.slice(0, last + 1);
+    updates = updates.slice(0, updates.indexOf(through) + 1);
+  }
   const db = new PGlite({ extensions: { pg_trgm } });
   const apply = async (label, sql) => {
     try {

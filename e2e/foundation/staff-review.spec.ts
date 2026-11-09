@@ -349,8 +349,14 @@ test.describe("staff review with an authenticator", () => {
     // Leave no public or waiting post behind: the copy's showroom and staff
     // queues are shared with the other specs.
     for (const post of [posts.approved, posts.waiting])
-      if (post.owner && post.id && postStatus(post.id) !== "deleted")
+      if (post.owner && post.id && postStatus(post.id) !== "deleted") {
+        // An open staff hold refuses deletion; close the spec's own hide first.
+        queryTestCopy(
+          "update private.frontend_content_holds set version = version + 1, released_at = now(), " +
+            `release_reason = 'Test copy clean-up' where post_id = '${post.id}' and released_at is null;`
+        );
         await deleteByCommand(post.owner, post.id);
+      }
   });
 
   test("a staff action without a fresh authenticator code is refused", async ({
@@ -768,6 +774,64 @@ test.describe("staff review with an authenticator", () => {
       "resolved"
     );
     expect(postStatus(posts.approved.id)).not.toBe("live");
+    // While the hold is open the owner cannot delete the hidden post.
+    const owner = await signIn(copy, poster);
+    const refused = await rpc(
+      copy,
+      "execute_my_frontend_post_action",
+      {
+        p_request: randomUUID(),
+        p_post: posts.approved.id,
+        p_expected_revision: Number(
+          queryTestCopy(`select revision from private.posts where id = '${posts.approved.id}';`)
+        ),
+        p_action: "delete",
+        p_kind: "business",
+        p_area: "business",
+      },
+      owner.token
+    );
+    expect(refused.status).toBe(423);
+    // The website's Delete route explains the hold to the owner.
+    const ownerBrowser = await otherBrowser(browser, poster);
+    try {
+      await ownerBrowser.page.goto("/dashboard");
+      const routed = await ownerBrowser.page.evaluate(
+        async ({ id, revision }) => {
+          const token = document.cookie.match(/(?:^|; )vm_csrf=([a-f0-9]{64})/)?.[1] ?? "";
+          const response = await fetch("/api/content/delete", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "x-csrf-token": token },
+            body: JSON.stringify({
+              itemId: id,
+              area: "MZANSI_BUSINESS",
+              contentType: "business",
+              operationId: crypto.randomUUID(),
+              expectedRevision: revision,
+            }),
+          });
+          return { status: response.status, body: await response.json() };
+        },
+        {
+          id: posts.approved.id,
+          revision: Number(
+            queryTestCopy(`select revision from private.posts where id = '${posts.approved.id}';`)
+          ),
+        }
+      );
+      expect(routed).toEqual({
+        status: 409,
+        body: {
+          error:
+            "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.",
+          reason: "staff_visibility_hold",
+        },
+      });
+    } finally {
+      await ownerBrowser.context.close();
+    }
+    expect(postStatus(posts.approved.id)).toBe("paused");
     // The owner is told the post was hidden.
     expect(
       queryTestCopy(

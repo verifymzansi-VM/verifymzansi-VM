@@ -23,6 +23,8 @@ create table private.posts (
   status_reason text,
   edit_of uuid,
   status_changed_at timestamp with time zone default statement_timestamp() not null,
+  ended_at timestamp with time zone,
+  deletes_at timestamp with time zone,
   constraint core_post_detail TRIGGER DEFERRABLE INITIALLY DEFERRED,
   constraint core_post_price_category TRIGGER DEFERRABLE INITIALLY DEFERRED,
   constraint listing_attributes_category TRIGGER DEFERRABLE INITIALLY DEFERRED,
@@ -35,6 +37,7 @@ create table private.posts (
   constraint posts_description_check CHECK (description IS NULL OR length(description) <= 5000),
   constraint posts_edit_copy_state CHECK (edit_of IS NULL OR edit_of <> id AND (status = ANY (ARRAY['draft'::text, 'pending_moderation'::text, 'rejected'::text]))),
   constraint posts_edit_of_fkey FOREIGN KEY (edit_of) REFERENCES private.posts(id) ON DELETE CASCADE,
+  constraint posts_ended_deletion_clock CHECK ((status <> ALL (ARRAY['expired'::text, 'sold'::text, 'archived'::text])) OR ended_at IS NOT NULL AND deletes_at IS NOT NULL),
   constraint posts_id_kind_key UNIQUE (id, kind),
   constraint posts_kind_check CHECK (kind = ANY (ARRAY['listing'::text, 'business'::text, 'event'::text])),
   constraint posts_live_has_window CHECK (status <> 'live'::text OR published_at IS NOT NULL AND visible_until IS NOT NULL AND visible_until > published_at),
@@ -50,6 +53,7 @@ create table private.posts (
 alter table private.posts owner to postgres;
 alter table private.posts enable row level security;
 CREATE INDEX posts_active_event_owner_idx ON private.posts USING btree (owner_id) WHERE ((kind = 'event'::text) AND (status = ANY (ARRAY['pending_moderation'::text, 'live'::text])));
+CREATE INDEX posts_deletion_due_idx ON private.posts USING btree (deletes_at) WHERE (deletes_at IS NOT NULL);
 CREATE INDEX posts_lifecycle_idx ON private.posts USING btree (status, status_changed_at);
 CREATE UNIQUE INDEX posts_one_open_edit_idx ON private.posts USING btree (edit_of) WHERE (edit_of IS NOT NULL);
 CREATE INDEX posts_owner_draft_idx ON private.posts USING btree (owner_id, status);
@@ -59,9 +63,11 @@ CREATE CONSTRAINT TRIGGER core_post_detail AFTER INSERT OR DELETE OR UPDATE ON p
 CREATE CONSTRAINT TRIGGER core_post_price_category AFTER INSERT OR UPDATE ON private.posts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION internal.core_listing_price_guard();
 CREATE TRIGGER frontend_edit_copy_created AFTER INSERT ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.frontend_edit_copy_created();
 CREATE TRIGGER guard_frontend_content_hold BEFORE INSERT OR UPDATE ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.guard_frontend_content_hold();
+CREATE TRIGGER guard_frontend_content_hold_delete BEFORE DELETE ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.guard_frontend_content_hold_delete();
 CREATE CONSTRAINT TRIGGER listing_attributes_category AFTER INSERT OR UPDATE ON private.posts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION internal.listing_attributes_category_guard();
 CREATE TRIGGER post_activity_guard BEFORE INSERT OR UPDATE OF category_key, activity_key ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.post_activity_guard();
 CREATE TRIGGER post_edit_link BEFORE INSERT OR UPDATE ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.post_edit_guard();
+CREATE TRIGGER post_lifecycle_clock BEFORE INSERT OR UPDATE OF status ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.post_lifecycle_clock();
 CREATE TRIGGER post_status_clock BEFORE UPDATE OF status ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.post_status_clock();
 CREATE TRIGGER posting_terms_submission_guard BEFORE INSERT OR UPDATE OF status ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.guard_posting_terms_submission();
 CREATE TRIGGER posts_release_activation BEFORE DELETE ON private.posts FOR EACH ROW EXECUTE FUNCTION internal.release_activation_on_post_delete();

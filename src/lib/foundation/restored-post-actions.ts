@@ -16,6 +16,10 @@ const lifecycle = z.strictObject({
   id: z.uuid(),
   action: z.enum(["deactivate", "mark_sold", "reactivate"]),
 });
+/** Every owner action on a post hidden by staff (delete, resubmit, deactivate,
+ * mark sold, reactivate) is refused until an independent release. */
+const STAFF_HOLD_MESSAGE =
+  "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.";
 class ActionRefusal extends Error {
   constructor(readonly refusal: FoundationRefusal) {
     super(refusal.error);
@@ -69,8 +73,7 @@ export function handleRestoredPostAction(
         if (code === "PT423")
           throw new ActionRefusal({
             status: 409,
-            error:
-              "This content is hidden for staff review. Staff must release the hold before it can be submitted or reactivated.",
+            error: STAFF_HOLD_MESSAGE,
             reason: "staff_visibility_hold",
           });
         if (code === "42501")

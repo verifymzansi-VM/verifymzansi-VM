@@ -117,7 +117,7 @@ export function IntroductoryTrialCard() {
               </h2>
               <p className="text-sm leading-6 text-muted-foreground">
                 {claim?.activated_at
-                  ? `Visible until ${claim.expires_at ? formatSaLongDate(claim.expires_at) : "soon"}. Your post stays saved.`
+                  ? `Visible until ${claim.expires_at ? formatSaLongDate(claim.expires_at) : "soon"}. Then you have 3 days to reactivate it with a plan before it is deleted.`
                   : claim?.admin_granted
                     ? `In review. Your ${claim.duration_days} free days start when approved.`
                     : "In review. The trial starts when approved."}

@@ -12,8 +12,15 @@ begin
   perform internal.assert_post_revision(p_expected_revision);
   next_status := case p_action when 'pause' then 'paused' when 'sold' then 'sold' when 'archive' then 'archived' end;
   if next_status is null then raise exception 'unknown action' using errcode = '22023'; end if;
+  -- Match hold placement ordering: account subject before post rows.
+  perform internal.lock_evidence_subject(actor);
   select * into post from private.posts p where p.id = p_post_id and p.owner_id = actor for update;
   if not found then raise exception 'post not found' using errcode = '22023'; end if;
+  -- While a staff hold is open the owner cannot change the post's state here:
+  -- sold or archived would start its deletion clock.
+  if exists (select 1 from private.frontend_content_holds h where h.post_id = post.id and h.released_at is null) then
+    raise exception 'staff visibility hold requires independent release' using errcode = 'PT423', detail = 'staff_visibility_hold';
+  end if;
   if post.status not in ('live', 'paused') or (p_action = 'sold' and post.kind <> 'listing')
     or (p_action = 'pause' and post.status <> 'live') then
     raise exception 'action not available for this post' using errcode = '22023';
@@ -24,9 +31,13 @@ begin
   end if;
   update private.posts set status = next_status, revision = revision + 1 where id = post.id returning revision into rev;
   update private.post_search_documents set is_visible = false where post_id = post.id;
-  update private.post_activations set released_at = statement_timestamp(),
-    release_reason = case when p_action = 'sold' then 'sold' else 'owner' end
-  where post_id = post.id and released_at is null;
+  -- A paused post keeps its slot (its run's clock keeps going, and reactivating
+  -- it reuses the slot); a sold post holds its slot until it is deleted, 3
+  -- days later or earlier by its owner. Archiving releases the slot now.
+  if p_action = 'archive' then
+    update private.post_activations set released_at = statement_timestamp(), release_reason = 'owner'
+    where post_id = post.id and released_at is null;
+  end if;
   perform internal.price_draft_actor(); -- final live owner/session check after all waits
   return jsonb_build_object('id', post.id, 'status', next_status, 'revision', rev);
 end;

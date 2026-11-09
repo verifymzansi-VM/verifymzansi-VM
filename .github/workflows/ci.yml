@@ -95,6 +95,8 @@ jobs:
         run: docker pull "$(node -e "import('./scripts/lib/foundation-sql-lint.mjs').then((m) => console.log(m.LINT_IMAGE))")"
       - name: Lint the replayed foundation SQL with plpgsql_check
         run: pnpm db:foundation:lint
+      - name: Post lifecycle guard behaviour on the replayed schema
+        run: pnpm db:foundation:lifecycle-test
 
   lint-type-security:
     runs-on: ubuntu-latest

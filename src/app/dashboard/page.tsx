@@ -348,6 +348,7 @@ export default async function DashboardPage({
       photos?: string[] | null;
       view_count?: number | null;
       expires_at?: string | null;
+      deletes_at?: string | null;
       created_at: string;
       updated_at?: string | null;
     }) => ({
@@ -358,6 +359,7 @@ export default async function DashboardPage({
       photos: l.photos,
       view_count: listingViewCounts.data.get(l.id) ?? l.view_count ?? null,
       expires_at: l.expires_at,
+      deletes_at: l.deletes_at ?? null,
       created_at: l.created_at,
       updated_at: l.updated_at,
     })

@@ -19,5 +19,6 @@ alter table private.event_details owner to postgres;
 alter table private.event_details enable row level security;
 CREATE CONSTRAINT TRIGGER core_event_detail AFTER INSERT OR DELETE OR UPDATE ON private.event_details DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION internal.core_detail_guard();
 CREATE TRIGGER core_event_no_truncate BEFORE TRUNCATE ON private.event_details FOR EACH STATEMENT EXECUTE FUNCTION internal.core_no_detail_truncate();
+CREATE TRIGGER event_deletion_clock AFTER INSERT OR UPDATE OF ends_at ON private.event_details FOR EACH ROW EXECUTE FUNCTION internal.event_deletion_clock();
 CREATE TRIGGER post_edit_event_frozen BEFORE INSERT OR DELETE OR UPDATE ON private.event_details FOR EACH ROW EXECUTE FUNCTION internal.post_edit_guard();
 revoke all on private.event_details from public;

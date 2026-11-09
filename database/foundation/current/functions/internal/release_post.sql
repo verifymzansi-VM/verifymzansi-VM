@@ -14,6 +14,9 @@ begin
   if not found or post.status in ('live','pending_moderation') then
     raise exception 'use the revision-fenced post lifecycle to release published funding' using errcode='22023';
   end if;
+  if post.status in ('paused','sold') then
+    raise exception 'a paused or sold post keeps its slot until it is deleted' using errcode='22023';
+  end if;
   update private.post_activations a set released_at = statement_timestamp(), release_reason = p_reason
   where a.post_id = p_post_id and a.owner_id = actor and a.released_at is null;
   released:=found;

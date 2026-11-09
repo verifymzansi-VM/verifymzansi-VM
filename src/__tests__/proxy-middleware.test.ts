@@ -47,6 +47,8 @@ describe("proxy — immutable posting terms versions", () => {
     "/terms/versions/not-a-published-version",
     "/terms/versions/constructor",
     "/terms/versions/posting-v1/extra",
+    "/terms/versions/posting-v3/extra",
+    "/terms/versions/posting-v4",
     "/terms/versions",
   ])("rejects unpublished paths before streaming or Auth: %s", async (path) => {
     const response = await routeRequest(createMockRequest(path));
@@ -56,7 +58,11 @@ describe("proxy — immutable posting terms versions", () => {
   });
 
   it("allows the exact archived document and ignores unrelated path prefixes", async () => {
-    for (const path of ["/terms/versions/posting-v1?from=terms", "/terms/versions-extra/example"])
+    for (const path of [
+      "/terms/versions/posting-v1?from=terms",
+      "/terms/versions/posting-v3",
+      "/terms/versions-extra/example",
+    ])
       expect((await routeRequest(createMockRequest(path))).headers.get("x-middleware-next")).toBe(
         "1"
       );

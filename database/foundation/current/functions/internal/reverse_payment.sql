@@ -36,8 +36,10 @@ begin
   )
   select coalesce(array_agg(post_id), '{}') into v_post_ids from released_rows;
   released := cardinality(v_post_ids);
-  update private.posts set status = 'expired', status_reason = 'Payment ' || p_kind, revision = revision + 1
-    where id = any (v_post_ids) and status in ('live', 'pending_moderation');
+  update private.posts p set status = 'expired', status_reason = 'Payment ' || p_kind, revision = revision + 1
+    where p.id = any (v_post_ids) and (p.status in ('live', 'pending_moderation')
+      or (p.status = 'paused' and not exists (select 1 from private.frontend_content_holds h
+        where h.post_id = p.id and h.released_at is null)));
   update private.post_search_documents set is_visible = false where post_id = any (v_post_ids);
   update private.post_addon_windows set revoked_at = statement_timestamp() where payment_id = pay.id and revoked_at is null;
   insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)

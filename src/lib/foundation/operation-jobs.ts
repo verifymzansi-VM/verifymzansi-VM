@@ -1,7 +1,11 @@
 import "server-only";
 import { z } from "zod";
 import { createFoundationServiceApi, type FoundationServiceApi } from "./service-api";
-import { sendPlatformNotice, type PlatformNoticeKind } from "../services/email";
+import {
+  sendPlatformNotice,
+  type PlatformNoticeKind,
+  type PostLifecycleDetails,
+} from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 const kind = z.enum([
   "payment_completed",
@@ -21,7 +25,21 @@ const kind = z.enum([
   "account_banned",
   "appeal_decided",
   "business_check_update",
+  "post_sold",
+  "post_kept",
 ]);
+// Kinds a database without update 20261109104020_post_expiry_rules.sql does
+// not accept: against such a database the job claims the earlier list.
+const laterKinds = new Set(["post_sold", "post_kept"]);
+const lifecycleKinds = new Set(["post_expired", "post_sold", "post_kept"]);
+// That database refuses the longer list for its length or for an unknown
+// kind; any other refusal is reported, not retried.
+function refusedNewerKinds(error: { code?: string; message?: string } | null) {
+  return (
+    error?.code === "22023" &&
+    (error.message === "supported mail kinds required" || error.message === "unsupported mail kind")
+  );
+}
 const jobs = z
   .array(
     z
@@ -32,6 +50,8 @@ const jobs = z
         locked_until: z.iso.datetime({ offset: true }),
         recipient: z.email().nullable(),
         notice_reason: z.string().min(10).max(500).nullable().optional(),
+        deletes_at: z.iso.datetime({ offset: true }).nullable().optional(),
+        holds_slot: z.boolean().nullable().optional(),
       })
       .refine(
         (job) =>
@@ -45,7 +65,8 @@ type Delivery = (
   recipient: string,
   event: PlatformNoticeKind,
   key: string,
-  reason?: string
+  reason?: string,
+  details?: PostLifecycleDetails
 ) => Promise<{ success: boolean }>;
 export async function runFoundationOperationJobs(
   service: FoundationServiceApi = createFoundationServiceApi(),
@@ -61,10 +82,15 @@ export async function runFoundationOperationJobs(
     const result = await service.rpc(name, args);
     if (result.error) throw new Error("A scheduled foundation transaction failed");
   }
-  const claimed = await service.rpc("claim_supported_notification_outbox", {
+  let claimed = await service.rpc("claim_supported_notification_outbox", {
     p_limit: 1,
     p_supported_kinds: kind.options,
   });
+  if (refusedNewerKinds(claimed.error))
+    claimed = await service.rpc("claim_supported_notification_outbox", {
+      p_limit: 1,
+      p_supported_kinds: kind.options.filter((k) => !laterKinds.has(k)),
+    });
   if (claimed.error) throw new Error("Notification jobs could not be claimed");
   const batch = jobs.parse(claimed.data);
   const result = { claimed: batch.length, succeeded: 0, retrying: 0 };
@@ -80,7 +106,12 @@ export async function runFoundationOperationJobs(
         success = (
           job.kind === "account_warning" && job.notice_reason
             ? await deliver(job.recipient, job.kind, key, job.notice_reason)
-            : await deliver(job.recipient, job.kind, key)
+            : lifecycleKinds.has(job.kind)
+              ? await deliver(job.recipient, job.kind, key, undefined, {
+                  deletesAt: job.deletes_at ?? null,
+                  holdsSlot: job.holds_slot ?? null,
+                })
+              : await deliver(job.recipient, job.kind, key)
         ).success;
       }
     } catch {

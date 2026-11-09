@@ -77,3 +77,30 @@ it("preserves ownership and stale/funding refusals without replaying an uncertai
   expect((await handleRestoredPostAction(request(), "delete")).status).toBe(503);
   expect(rpc).toHaveBeenCalledTimes(3);
 });
+it("explains a staff hold the same way for every owner action", async () => {
+  const held = {
+    status: 409,
+    body: {
+      error:
+        "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.",
+      reason: "staff_visibility_hold",
+    },
+  };
+  const reply = async (response: Response) => ({
+    status: response.status,
+    body: await response.json(),
+  });
+  for (const mode of ["delete", "resubmit"] as const) {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "PT423" } });
+    expect(await reply(await handleRestoredPostAction(request(), mode))).toEqual(held);
+  }
+  for (const action of ["deactivate", "mark_sold", "reactivate"]) {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: "PT423" } });
+    const response = await handleRestoredPostAction(
+      request({ itemId: undefined, id, action }),
+      "lifecycle"
+    );
+    expect(await reply(response)).toEqual(held);
+  }
+  expect(rpc).toHaveBeenCalledTimes(5);
+});

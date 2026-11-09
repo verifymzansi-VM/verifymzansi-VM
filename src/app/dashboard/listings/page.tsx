@@ -38,7 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatRelativeTime, formatZAR } from "@/lib/utils/format";
+import { formatRelativeTime, formatSaLongDate, formatZAR } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { isAddonOffered } from "@/lib/billing/addon-availability";
 import { BoostButton } from "@/components/listings/boost-button";
@@ -101,6 +101,8 @@ type DashboardItem = {
   featured_until?: string | null;
   urgent_until?: string | null;
   expires_at?: string | null;
+  /** When the post is deleted (new backend only): 3 days after it ends, or an event's end. */
+  deletes_at?: string | null;
   status_reason?: string | null;
   promotion_type?: string | null;
   start_date?: string | null;
@@ -124,6 +126,7 @@ type BusinessDashboardRow = {
   featured_until?: string | null;
   urgent_until?: string | null;
   expires_at?: string | null;
+  deletes_at?: string | null;
   status_reason?: string | null;
   view_count?: number | null;
 };
@@ -547,6 +550,7 @@ export default async function ListingsPage({
       featured_until: business.featured_until,
       status_reason: business.status_reason,
       expires_at: business.expires_at ?? null,
+      deletes_at: business.deletes_at ?? null,
       price_cents: null,
       view_count: business.view_count ?? null,
       urgent_until: business.urgent_until ?? null,
@@ -745,7 +749,8 @@ export default async function ListingsPage({
               planTiers={planTiers}
               empty={{
                 title: `No ended posts${inArea}`,
-                description: "Sold, expired and paused posts. Reactivate any time.",
+                description:
+                  "Sold, expired and paused posts. Sold and expired posts are deleted after 3 days.",
               }}
             />
           </TabsContent>
@@ -818,6 +823,7 @@ function ItemMeta({ item }: { item: DashboardItem }) {
         <span>{getViewCountLabel(item.view_count)}</span>
       </span>
       <span>Posted {formatRelativeTime(item.created_at || new Date().toISOString())}</span>
+      {item.deletes_at ? <span>Will be deleted on {formatSaLongDate(item.deletes_at)}</span> : null}
     </div>
   );
 }
@@ -1097,7 +1103,7 @@ function StatusBadges({ item }: { item: DashboardItem }) {
   );
 }
 
-/** Slot actions: free a slot (sold / deactivate) or reactivate saved content. */
+/** Slot actions: mark sold / deactivate, or reactivate an ended post before it is deleted. */
 function LifecycleActions({ item }: { item: DashboardItem }) {
   const isLive = item.status === "active" || item.status === "live";
   const isFreeEvent = item.source === "promotion" && item.promotion_type === "event";

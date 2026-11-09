@@ -9,7 +9,7 @@ import {
   acceptFoundationPostingTerms,
   readFoundationOwnerPostingTerms,
 } from "../src/lib/foundation/posting-terms";
-import { readPostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
+import { readBaselinePostingTermsCatalogue } from "./lib/foundation-posting-terms-catalogue.mjs";
 import { nativeTotp } from "./lib/foundation-native-totp.mjs";
 
 // Parent owns both processes and the disposable clean database. Credentials stay
@@ -171,7 +171,7 @@ async function run() {
       /^Error: A verified foundation account session is required$/
     );
     const current = await readFoundationOwnerPostingTerms(api);
-    const catalogue = readPostingTermsCatalogue();
+    const catalogue = readBaselinePostingTermsCatalogue();
     const published = catalogue.documents.find((d) => d.version === catalogue.activeVersion)!;
     assert.deepEqual(current, {
       ...published,
