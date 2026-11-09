@@ -41,7 +41,8 @@ describe("holding an answer for a minimum time", () => {
 
   it("adds a random extra wait of at most the jitter", async () => {
     const waits: number[] = [];
-    for (const random of [0, 250, 1000, 1001, 4_294_967_295]) {
+    // The random 32-bit value scaled to 0..1000 ms: lowest, a quarter, half, highest.
+    for (const random of [0, 2 ** 30, 2 ** 31, 4_294_967_295]) {
       vi.spyOn(crypto, "getRandomValues").mockImplementationOnce((array) => {
         (array as Uint32Array)[0] = random;
         return array;
@@ -52,10 +53,8 @@ describe("holding an answer for a minimum time", () => {
       while (!(await settledAfter(hold, 50))) waited += 50;
       waits.push(waited + 50);
     }
-    // random % 1001 extra: 0, 250, 1000, 0, 4294967295 % 1001.
-    const expected = [0, 250, 1000, 0, 4_294_967_295 % 1001].map(
-      (extra) => Math.ceil((100 + extra) / 50) * 50
-    );
+    // floor(random / 2^32 * 1001): 0, 250, 500, 1000.
+    const expected = [0, 250, 500, 1000].map((extra) => Math.ceil((100 + extra) / 50) * 50);
     expect(waits).toEqual(expected);
     for (const wait of waits) expect(wait).toBeLessThanOrEqual(1100 + 50);
   });

@@ -9,7 +9,12 @@ export async function holdAnswer(
   { floorMs, jitterMs }: { floorMs: number; jitterMs: number },
   now: () => number = Date.now
 ) {
-  const jitter = jitterMs > 0 ? crypto.getRandomValues(new Uint32Array(1))[0] % (jitterMs + 1) : 0;
+  // A uniform whole number of milliseconds from 0 to jitterMs: the random
+  // 32-bit value scaled to [0, 1), not reduced with a modulo.
+  const jitter =
+    jitterMs > 0
+      ? Math.floor((crypto.getRandomValues(new Uint32Array(1))[0] / 0x1_0000_0000) * (jitterMs + 1))
+      : 0;
   const wait = startedAt + floorMs + jitter - now();
   if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
 }
