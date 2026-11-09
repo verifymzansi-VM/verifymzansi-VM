@@ -1,3 +1,8 @@
+> Historical: describes the retired source backend. Superseded by
+> `docs/mobile-app-build-spec.md`. Any mobile build must use the foundation
+> backend's `api.*` functions, not tables, RLS clients or
+> `supabase/migrations/`; read [AGENTS.md](../AGENTS.md) first.
+
 # VerifyMzansi: complete AI-agent build instructions
 
 Prepared 2 October 2026. Copy this entire document into the implementation
