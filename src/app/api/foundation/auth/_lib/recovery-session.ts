@@ -8,7 +8,8 @@ export const RECOVERY_SESSION_REFUSAL = {
   reason: "recovery_session",
 } as const;
 
-/** Whether the GoTrue-verified caller's session was opened by a reset link. */
+/** Whether the GoTrue-verified caller's session was opened by a reset link
+ * (or by another emailed link redeemed straight at Auth; recovery-claims.ts). */
 export function openedByResetLink(caller: { recovery: unknown; openedByRecovery: boolean }) {
   return Boolean(caller.recovery) || caller.openedByRecovery;
 }

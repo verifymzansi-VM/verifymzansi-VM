@@ -9,7 +9,9 @@ export const EMAIL_CHANGE_LANDING_PARAM = "email_change";
 /** Where a member lands after opening either link: the profile's Account tab,
  * which shows the sign-in address Auth currently holds. */
 const EMAIL_CHANGE_LANDING_PATH = "/dashboard/profile#account";
-const FAILED_PATH = "/login?error=auth_callback_failed";
+/** The existing failure page. The empty fragment replaces the one Auth put on
+ * a refused link (its error details), which browsers otherwise carry along. */
+const FAILED_PATH = "/login?error=auth_callback_failed#";
 
 /**
  * `/auth/callback?backend=foundation&email_change=1`, where Auth sends a member

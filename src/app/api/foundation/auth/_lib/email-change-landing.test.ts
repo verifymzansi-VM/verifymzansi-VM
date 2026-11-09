@@ -17,7 +17,8 @@ const target = "gntzjtuncsyefujajmjy";
 const session = `sb-${target}-auth-token`;
 const fetcher = vi.fn<typeof fetch>();
 const PROFILE = "https://verifymzansi.com/dashboard/profile#account";
-const FAILED = "https://verifymzansi.com/login?error=auth_callback_failed";
+/** The existing failure page; the empty fragment drops the one Auth put on a refused link. */
+const FAILED = "https://verifymzansi.com/login?error=auth_callback_failed#";
 const BASE =
   "https://verifymzansi.com/auth/callback?next=%2Fdashboard%2Fprofile&backend=foundation&email_change=1";
 /** Auth's own message after the first of the two links. */

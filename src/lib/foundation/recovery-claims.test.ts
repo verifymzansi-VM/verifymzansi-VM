@@ -28,6 +28,9 @@ it("expires recovery independently of a refreshed access token", () => {
 });
 it("knows a session opened by a reset link at any age, and nothing else", () => {
   expect(foundationRecoveryOpened([{ method: "recovery", timestamp: 1 }])).toBe(true);
+  // Any emailed link redeemed straight at Auth (a reset link shows otp there).
+  expect(foundationRecoveryOpened([{ method: "otp", timestamp: 1 }])).toBe(true);
+  expect(foundationRecoveryOpened([{ method: "magiclink", timestamp: 1 }])).toBe(true);
   expect(
     foundationRecoveryOpened([
       { method: "password", timestamp: 1 },
@@ -40,6 +43,9 @@ it("knows a session opened by a reset link at any age, and nothing else", () => 
     [],
     "recovery",
     [{ method: "password" }],
+    [{ method: "oauth", timestamp: 1 }],
+    [{ method: "totp", timestamp: 1 }],
+    [{ method: "email/signup", timestamp: 1 }],
     [null],
     ["recovery"],
   ])

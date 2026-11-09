@@ -35,7 +35,7 @@ async function refusal(promise: Promise<unknown>) {
 describe("starting an email change with the member's own session", () => {
   it("asks Auth once, with the member's token and a challenge nobody can answer", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => pending());
-    expect(await changer(fetcher)("next@example.invalid", landing)).toEqual({ applied: false });
+    expect(await changer(fetcher)("next@example.invalid", landing)).toBe("requested");
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [url, init] = fetcher.mock.calls[0];
     const target = new URL(String(url));
@@ -73,14 +73,14 @@ describe("starting an email change with the member's own session", () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       Response.json({ user: { id: subject, email: "current@example.invalid" } })
     );
-    expect(await changer(fetcher)("next@example.invalid", landing)).toEqual({ applied: false });
+    expect(await changer(fetcher)("next@example.invalid", landing)).toBe("requested");
   });
 
   it("reports an address changed at once (no confirmation at all)", async () => {
     const fetcher = vi.fn<typeof fetch>(async () =>
       Response.json({ id: subject, email: "Next@Example.invalid" })
     );
-    expect(await changer(fetcher)("next@example.invalid", landing)).toEqual({ applied: true });
+    expect(await changer(fetcher)("next@example.invalid", landing)).toBe("applied");
   });
 
   it.each([
@@ -93,18 +93,35 @@ describe("starting an email change with the member's own session", () => {
     ["user_already_exists", { code: "user_already_exists", message: "PRIVATE_PROVIDER_DETAIL" }],
   ])("answers an address of another account (%s) like an accepted request", async (_l, reply) => {
     const fetcher = vi.fn<typeof fetch>(async () => Response.json(reply, { status: 422 }));
-    expect(await changer(fetcher)("taken@example.invalid", landing)).toEqual({ applied: false });
+    expect(await changer(fetcher)("taken@example.invalid", landing)).toBe("requested");
     expect(new Headers(fetcher.mock.calls[0][1]?.headers).get("x-supabase-api-version")).toBe(
       "2024-01-01"
     );
   });
 
   it.each([
+    [429, "over_email_send_rate_limit"],
+    [400, "over_email_send_rate_limit"],
+    [400, "over_request_rate_limit"],
+    [429, "unexpected_failure"],
+  ] as const)(
+    "reports Auth's email limit refusal %s %s as limited, not as an error",
+    async (status, code) => {
+      for (const reply of [
+        { code, message: "PRIVATE_PROVIDER_DETAIL" },
+        { code: status, error_code: code, msg: "PRIVATE_PROVIDER_DETAIL" },
+      ]) {
+        const fetcher = vi.fn<typeof fetch>(async () => Response.json(reply, { status }));
+        expect(await changer(fetcher)("next@example.invalid", landing)).toBe("limited");
+      }
+      const empty = vi.fn<typeof fetch>(async () => new Response(null, { status: 429 }));
+      expect(await changer(empty)("next@example.invalid", landing)).toBe("limited");
+    }
+  );
+
+  it.each([
     [403, "insufficient_aal", 403, "mfa_required"],
     [400, "email_address_invalid", 400, "invalid_email"],
-    [429, "over_email_send_rate_limit", 429, "rate_limited"],
-    [400, "over_request_rate_limit", 429, "rate_limited"],
-    [429, "unexpected_failure", 429, "rate_limited"],
     [401, "unexpected_failure", 401, "session"],
     [403, "bad_jwt", 401, "session"],
     [403, "session_not_found", 401, "session"],

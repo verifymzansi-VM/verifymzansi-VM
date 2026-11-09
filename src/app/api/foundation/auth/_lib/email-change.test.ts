@@ -1,4 +1,5 @@
 /** @vitest-environment node */
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/account/email/change/route";
@@ -9,15 +10,18 @@ import {
   FoundationEmailChangeError,
 } from "@/lib/foundation/email-change";
 
-const { authenticate, context, respond, readAccount, limit, legacy, logged } = vi.hoisted(() => ({
-  authenticate: vi.fn(),
-  context: vi.fn(),
-  respond: vi.fn(),
-  readAccount: vi.fn(),
-  limit: vi.fn(),
-  legacy: vi.fn(),
-  logged: vi.fn(),
-}));
+const { authenticate, context, respond, readAccount, limit, legacy, logged, hold } = vi.hoisted(
+  () => ({
+    hold: vi.fn(),
+    authenticate: vi.fn(),
+    context: vi.fn(),
+    respond: vi.fn(),
+    readAccount: vi.fn(),
+    limit: vi.fn(),
+    legacy: vi.fn(),
+    logged: vi.fn(),
+  })
+);
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => "foundation" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: legacy, createPublicClient: legacy }));
@@ -32,6 +36,7 @@ vi.mock("@/lib/utils/rate-limit", () => ({
   getClientRateLimitIdentity: () => ({ key: "synthetic-ip" }),
   getClientIp: () => "synthetic-ip",
 }));
+vi.mock("@/lib/foundation/answer-floor", () => ({ holdAnswer: hold }));
 vi.mock("@/lib/utils/logger", () => {
   const logger = {
     debug: (...args: unknown[]) => logged("debug", ...args),
@@ -69,6 +74,11 @@ const MFA_REQUIRED = {
 const TOO_MANY = { error: "Too many email change requests; try again later", code: "rate_limited" };
 const UNAVAILABLE = { error: "Email change is temporarily unavailable" };
 const INVALID = { error: "Enter a valid email address", code: "invalid_email" };
+const ANSWER_TIME = { floorMs: 3000, jitterMs: 1000 };
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+/** Limiter keys: digests, never the address itself (limiter-key.ts). */
+const PAIR_KEY = "account-email:" + sha256(`account-email\n${id}\n${NEXT}`);
+const ADDRESS_KEY = "email:" + sha256(`email\n${NEXT}`);
 
 const memberUser = () => ({
   id,
@@ -109,9 +119,10 @@ beforeEach(() => {
   respond.mockImplementation(async (response: Response) => response);
   context.mockReturnValue({ authenticateCaller: authenticate, respond });
   authenticate.mockResolvedValue(caller());
-  readAccount.mockResolvedValue({ account_id: id, staff: null });
+  readAccount.mockResolvedValue({ account_id: id, staff: null, totp_enrolled: false });
   limit.mockResolvedValue({ limited: false });
-  changeEmail.mockResolvedValue({ applied: false });
+  changeEmail.mockResolvedValue("requested");
+  hold.mockResolvedValue(undefined);
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -135,6 +146,7 @@ function request(
 
 function expectNothingAsked() {
   expect(changeEmail).not.toHaveBeenCalled();
+  expect(hold).not.toHaveBeenCalled();
 }
 
 /** Budgets charged so far, by action. */
@@ -155,17 +167,26 @@ describe("email change on the foundation backend", () => {
     expect(landing.searchParams.get("backend")).toBe("foundation");
     expect(landing.searchParams.get("email_change")).toBe("1");
     expect(landing.searchParams.has("recovery")).toBe(false);
-    // Budgets in order (network, account, new address, platform), all before
-    // Auth is asked and all failing closed.
+    // Budgets in order (network, account, account and new address, new
+    // address, platform), all before Auth is asked and all failing closed.
     expect(limit.mock.calls.map(([options]) => options)).toEqual([
       { key: "synthetic-ip", action: "account:email-change", degradedMode: "block" },
       { key: "account:" + id, action: "account:email-change:account", degradedMode: "block" },
-      { key: NEXT, action: "account:email-change:recipient", degradedMode: "block" },
+      { key: PAIR_KEY, action: "account:email-change:recipient", degradedMode: "block" },
+      { key: ADDRESS_KEY, action: "account:email-change:address", degradedMode: "block" },
       { key: "global", action: "account:email-change:global", degradedMode: "block" },
     ]);
+    expect(JSON.stringify(limit.mock.calls)).not.toContain(NEXT);
     expect(changeEmail.mock.invocationCallOrder[0]).toBeGreaterThan(
-      limit.mock.invocationCallOrder[3]
+      limit.mock.invocationCallOrder[4]
     );
+    // The answer waits for its minimum time, counted from the Auth request.
+    expect(hold).toHaveBeenCalledTimes(1);
+    expect(hold.mock.calls[0][1]).toEqual(ANSWER_TIME);
+    expect(hold.mock.invocationCallOrder[0]).toBeGreaterThan(
+      changeEmail.mock.invocationCallOrder[0]
+    );
+    expect(respond.mock.invocationCallOrder[0]).toBeGreaterThan(hold.mock.invocationCallOrder[0]);
     expect(readAccount).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
     // The retired backend's clients are never created.
@@ -175,11 +196,13 @@ describe("email change on the foundation backend", () => {
   it("normalises the new address before every check", async () => {
     expect((await POST(request({ newEmail: "  Next@Example.INVALID " }))).status).toBe(200);
     expect(changeEmail.mock.calls[0][0]).toBe(NEXT);
-    expect(limit.mock.calls[2][0].key).toBe(NEXT);
+    expect(limit.mock.calls[2][0].key).toBe(PAIR_KEY);
+    expect(limit.mock.calls[3][0].key).toBe(ADDRESS_KEY);
   });
 
-  it("gives an address of another account exactly the accepted answer", async () => {
-    // Real Auth replies through the real command: accepted vs. address taken.
+  it("gives an address of another account, or Auth's email limit, exactly the accepted answer", async () => {
+    // Real Auth replies through the real command: accepted, address taken,
+    // and Auth's own email limits (which it checks after the address).
     const answer = async (reply: Response) => {
       const fetcher = vi.fn<typeof fetch>(async () => reply);
       authenticate.mockResolvedValue(
@@ -199,19 +222,59 @@ describe("email change on the foundation backend", () => {
     const taken = await answer(
       Response.json({ code: "email_exists", message: "PRIVATE_PROVIDER_DETAIL" }, { status: 422 })
     );
+    const limited = await answer(
+      Response.json(
+        { code: "over_email_send_rate_limit", message: "PRIVATE_PROVIDER_DETAIL" },
+        { status: 429 }
+      )
+    );
+    const projectLimited = await answer(new Response(null, { status: 429 }));
     expect(taken).toEqual(accepted);
+    expect(limited).toEqual(accepted);
+    expect(projectLimited).toEqual(accepted);
     expect(accepted.status).toBe(200);
+    // Each waited for the same minimum time.
+    expect(hold.mock.calls.map(([, time]) => time)).toEqual([
+      ANSWER_TIME,
+      ANSWER_TIME,
+      ANSWER_TIME,
+      ANSWER_TIME,
+    ]);
+    expect(logged).toHaveBeenCalledWith("warn", "Email change held back by Auth's email limits");
     expect(JSON.stringify(logged.mock.calls)).not.toContain("PRIVATE_PROVIDER_DETAIL");
   });
 
-  it("logs, without details, an address Auth changed without confirmation", async () => {
-    changeEmail.mockResolvedValue({ applied: true });
+  it("refuses, and logs without details, an address Auth changed without confirmation", async () => {
+    changeEmail.mockResolvedValue("applied");
     const response = await POST(request());
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(ACCEPTED);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual(UNAVAILABLE);
     expect(logged).toHaveBeenCalledWith(
       "error",
       "Email change applied without confirmation; check Auth email settings"
+    );
+    expect(hold).not.toHaveBeenCalled();
+  });
+
+  it("logs, without details, an Auth step slower than the answer time", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      changeEmail.mockImplementation(async () => {
+        vi.setSystemTime(Date.now() + ANSWER_TIME.floorMs + 1);
+        return "requested";
+      });
+      expect((await POST(request())).status).toBe(200);
+      expect(logged).toHaveBeenCalledWith("warn", "Email change took longer than its answer time");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not log a slow step when Auth answered within the answer time", async () => {
+    expect((await POST(request())).status).toBe(200);
+    expect(logged).not.toHaveBeenCalledWith(
+      "warn",
+      "Email change took longer than its answer time"
     );
   });
 
@@ -388,18 +451,47 @@ describe("email change on the foundation backend", () => {
   });
 
   it("lets staff with a fresh authenticator step ask", async () => {
-    readAccount.mockResolvedValue({ account_id: id, staff: { can_access: true } });
+    readAccount.mockResolvedValue({
+      account_id: id,
+      staff: { can_access: true },
+      totp_enrolled: true,
+    });
     authenticate.mockResolvedValue(caller({ authenticatorAt: now() - 600 }));
+    expect((await POST(request())).status).toBe(200);
+  });
+
+  it("asks a member with an authenticator to use it before any budget is spent", async () => {
+    // Auth would refuse a one-step session of such a member anyway.
+    readAccount.mockResolvedValue({ account_id: id, staff: null, totp_enrolled: true });
+    authenticate.mockResolvedValue(caller({ authenticatorAt: null }));
+    const response = await POST(request());
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual(MFA_REQUIRED);
+    expect(charged()).toEqual(["account:email-change"]);
+    expectNothingAsked();
+  });
+
+  it("lets a member with an authenticator ask from a two-step session", async () => {
+    // Members (not staff) need the two-step session, not a recent step.
+    readAccount.mockResolvedValue({ account_id: id, staff: null, totp_enrolled: true });
+    authenticate.mockResolvedValue(caller({ authenticatorAt: now() - 7200 }));
     expect((await POST(request())).status).toBe(200);
   });
 
   it.each([
     ["the account's", "account:email-change:account", { limited: true }, 429],
     ["the account's", "account:email-change:account", { limited: true, degraded: true }, 503],
-    ["the new address's", "account:email-change:recipient", { limited: true }, 429],
+    ["the account and address", "account:email-change:recipient", { limited: true }, 429],
     [
-      "the new address's",
+      "the account and address",
       "account:email-change:recipient",
+      { limited: false, degraded: true },
+      503,
+    ],
+    ["the new address's daily", "account:email-change:address", { limited: true }, 429],
+    [
+      "the new address's daily",
+      "account:email-change:address",
       { limited: false, degraded: true },
       503,
     ],
@@ -417,7 +509,6 @@ describe("email change on the foundation backend", () => {
   });
 
   it.each([
-    [new FoundationEmailChangeError(429, "rate_limited"), 429, TOO_MANY],
     [new FoundationEmailChangeError(403, "mfa_required"), 403, MFA_REQUIRED],
     [
       new FoundationEmailChangeError(401, "session"),
@@ -436,13 +527,14 @@ describe("email change on the foundation backend", () => {
     const response = await POST(request());
     expect(response.status).toBe(status);
     expect(await response.json()).toEqual(body);
-    if (status === 429) expect(response.headers.get("retry-after")).toBe("60");
     expect(respond).toHaveBeenCalledTimes(1);
+    expect(hold).not.toHaveBeenCalled();
   });
 
   it("never logs an address, the request body or a token", async () => {
     for (const setup of [
-      () => changeEmail.mockResolvedValue({ applied: true }),
+      () => changeEmail.mockResolvedValue("applied"),
+      () => changeEmail.mockResolvedValue("limited"),
       () => changeEmail.mockRejectedValue(new FoundationEmailChangeError(503, "unavailable")),
       () => changeEmail.mockRejectedValue(new Error(`synthetic ${NEXT}`)),
       () => readAccount.mockRejectedValue(new FoundationAccountContextError("unavailable")),

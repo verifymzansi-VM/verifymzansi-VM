@@ -10,6 +10,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { handleFoundationAuthAttempt } from "../../_lib/attempt-route";
 import { isFoundationPasswordSetupInput } from "@/lib/foundation/password-setup-input";
 import { handleFoundationPasswordSetup } from "../../_lib/password-setup";
+import { limiterAddressKey } from "@/lib/foundation/limiter-key";
 
 export async function POST(request: NextRequest) {
   // The profile page's "Set Password" (signed in, no CAPTCHA token) has its
@@ -29,7 +30,10 @@ export async function POST(request: NextRequest) {
       // CAPTCHA) accepts it, so requests without a solved CAPTCHA cannot use
       // up an address's emails (the profile page's password setup shares it).
       const { email } = parseFoundationRecoveryInput(input);
-      const recipient = { key: email, action: "auth:forgot-password-email" } as const;
+      const recipient = {
+        key: await limiterAddressKey(email),
+        action: "auth:forgot-password-email",
+      } as const;
       const rate = await checkRateLimit({ ...recipient, degradedMode: "block", readOnly: true });
       if (rate.degraded) throw new FoundationRecoveryRequestError(503);
       if (!rate.limited) {

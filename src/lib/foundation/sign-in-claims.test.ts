@@ -13,11 +13,14 @@ import {
 const now = 1_800_000_000;
 
 describe("foundationLatestSignIn", () => {
-  it.each(["oauth", "password", "otp", "magiclink"])("counts a %s sign-in", (method) => {
+  it.each(["oauth", "password"])("counts a %s sign-in", (method) => {
     expect(foundationLatestSignIn([{ method, timestamp: now - 10 }], now)).toBe(now - 10);
   });
 
   it.each([
+    // A link's token redeemed straight at Auth, never issued by the website.
+    "otp",
+    "magiclink",
     "totp",
     "recovery",
     "token_refresh",

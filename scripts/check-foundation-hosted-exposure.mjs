@@ -6,7 +6,10 @@
 // Reads FOUNDATION_SUPABASE_URL and FOUNDATION_SUPABASE_PUBLISHABLE_KEY.
 // Always: private and internal are not exposed and GraphQL answers no queries.
 // Before cutover api is not exposed either; at cutover it is the only exposed
-// schema.
+// schema. Always: Auth's public settings show mailer_autoconfirm off, so
+// sign-ups and email changes need their confirmation links (with secure email
+// change, an email change needs both addresses; that setting is not public and
+// is checked in the dashboard).
 import assert from "node:assert/strict";
 
 const stage = process.argv.find((arg) => arg.startsWith("--stage="))?.slice(8);
@@ -47,11 +50,18 @@ const graphql = await fetch(new URL("/graphql/v1", url), {
   signal: AbortSignal.timeout(10000),
 });
 const graphqlBody = await graphql.json().catch(() => null);
+const settings = await fetch(new URL("/auth/v1/settings", url), {
+  headers: { apikey: key },
+  redirect: "error",
+  signal: AbortSignal.timeout(10000),
+});
+const settingsBody = await settings.json().catch(() => null);
 const report = {
   checkedAt: new Date().toISOString(),
   stage,
   schemas: results,
   graphql: { status: graphql.status, answered: Boolean(graphqlBody?.data) },
+  auth: { status: settings.status, mailerAutoconfirm: settingsBody?.mailer_autoconfirm ?? null },
 };
 process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 
@@ -62,4 +72,10 @@ for (const result of results.filter((r) => r.schema !== "api"))
     assert.equal(exposed(result), false, `${result.schema} must not be exposed`);
 assert.equal(exposed(results[0]), stage === "cutover", "api exposure does not match the stage");
 assert.equal(report.graphql.answered, false, "GraphQL must stay off");
+assert.equal(report.auth.status, 200, "Auth settings must be readable");
+assert.equal(
+  report.auth.mailerAutoconfirm,
+  false,
+  "Auth must not confirm addresses or email changes without a link (mailer_autoconfirm)"
+);
 process.stdout.write(`PASS ${stage}: exposure matches the reviewed policy\n`);

@@ -123,9 +123,11 @@ export async function handleFoundationConfirmation(
             : purpose === "google"
               ? sanitizeReturnUrl(request.nextUrl.searchParams.get("next"))
               : FOUNDATION_POST_SIGNUP_PATH
-          : purpose === "recovery"
-            ? "/forgot-password?error=recovery_failed"
-            : "/login?error=auth_callback_failed",
+          : // The empty fragment replaces the one Auth put on a refused link
+            // (its error details), which browsers otherwise carry along.
+            purpose === "recovery"
+            ? "/forgot-password?error=recovery_failed#"
+            : "/login?error=auth_callback_failed#",
         origin
       ),
       303

@@ -2,6 +2,7 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "./route";
+import { createHash } from "node:crypto";
 import { checkRateLimit } from "@/lib/utils/rate-limit";
 vi.mock("@/lib/utils/rate-limit", () => ({
   checkRateLimit: vi.fn(),
@@ -10,6 +11,9 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 const host = "gntzjtuncsyefujajmjy";
 const fetcher = vi.fn<typeof fetch>();
 const csrf = "f".repeat(64);
+/** The address's limiter key: a digest, never the address (limiter-key.ts). */
+const ADDRESS_KEY =
+  "email:" + createHash("sha256").update("email\nmember@example.invalid").digest("hex");
 beforeEach(() => {
   vi.clearAllMocks();
   for (const [name, value] of Object.entries({
@@ -120,13 +124,14 @@ it("checks the address budget without charging it, and charges it only after Aut
   expect(calls).toEqual([
     { key: "recovery-ip", action: "auth:forgot-password", degradedMode: "block" },
     {
-      key: "member@example.invalid",
+      key: ADDRESS_KEY,
       action: "auth:forgot-password-email",
       degradedMode: "block",
       readOnly: true,
     },
-    { key: "member@example.invalid", action: "auth:forgot-password-email", degradedMode: "block" },
+    { key: ADDRESS_KEY, action: "auth:forgot-password-email", degradedMode: "block" },
   ]);
+  expect(JSON.stringify(calls)).not.toContain("member@example.invalid");
   const charged = vi.mocked(checkRateLimit).mock.invocationCallOrder[2];
   expect(fetcher.mock.invocationCallOrder[0]).toBeLessThan(charged);
 });

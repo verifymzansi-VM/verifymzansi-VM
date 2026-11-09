@@ -255,17 +255,26 @@ describe("rate-limiter worker", () => {
     ).toBe(429);
   });
 
-  it.each(["account:email-change:account", "account:email-change:recipient"])(
-    "caps email changes at three an hour per key without blocking another key (%s)",
-    async (action) => {
-      const { env } = createWorkerEnv();
-      const send = (key: string) =>
-        rateLimiterWorker.fetch(createWorkerRequest(action, key), env as never);
-      for (let attempt = 0; attempt < 3; attempt++) expect((await send("key-1")).status).toBe(200);
-      expect((await send("key-1")).status).toBe(429);
-      expect((await send("key-2")).status).toBe(200);
+  it.each([
+    // One per 120 s per account: longer than Auth's own interval between emails.
+    ["account:email-change:account", 1],
+    ["account:email-change:recipient", 3],
+    ["account:email-change:address", 10],
+  ] as const)("caps %s at %i per key without blocking another key", async (action, allowed) => {
+    const { env } = createWorkerEnv();
+    const send = (key: string) =>
+      rateLimiterWorker.fetch(createWorkerRequest(action, key), env as never);
+    for (let attempt = 0; attempt < allowed; attempt++)
+      expect((await send("key-1")).status).toBe(200);
+    const refused = await send("key-1");
+    expect(refused.status).toBe(429);
+    if (action === "account:email-change:account") {
+      const { retryAfter } = (await refused.json()) as { retryAfter: number };
+      expect(retryAfter).toBeGreaterThan(60);
+      expect(retryAfter).toBeLessThanOrEqual(120);
     }
-  );
+    expect((await send("key-2")).status).toBe(200);
+  });
 
   it("keeps a platform-wide budget for email changes", async () => {
     const { env } = createWorkerEnv();

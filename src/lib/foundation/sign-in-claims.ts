@@ -1,8 +1,12 @@
 /** Methods in a session's `amr` claim that are a sign-in by the member: Google
- * (oauth), a password, or a one-time email code or link. A second factor
- * (totp), a reset link (recovery), confirmation links and refreshes are not
- * sign-ins here. */
-const SIGN_IN_METHODS = new Set(["oauth", "password", "otp", "magiclink"]);
+ * (oauth) or a password, the only two ways the website signs members in. A
+ * second factor (totp), a reset link (recovery), confirmation links and
+ * refreshes are not sign-ins here. Nor are `otp` and `magiclink`: the website
+ * never issues them, and Auth gives them to a session made by redeeming an
+ * emailed link's token straight at its verify endpoint, which skips the
+ * link's PKCE check (a reset link redeemed that way shows `otp`, not
+ * `recovery`); see foundationRecoveryOpened. */
+const SIGN_IN_METHODS = new Set(["oauth", "password"]);
 
 /** How long a sign-in counts as recent for adding a password: the same hour
  * in which a reset link's session may set one (recovery-claims.ts and the

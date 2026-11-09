@@ -163,7 +163,8 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
       sessionId: claims.session_id,
       user: verified.data.user,
       recovery: foundationRecoveryClaim(claims.session_id, claims.amr),
-      /** Opened by a reset link at any age (see foundationRecoveryOpened). */
+      /** Opened by a reset link, or another emailed link redeemed straight at
+       * Auth, at any age (see foundationRecoveryOpened). */
       openedByRecovery: foundationRecoveryOpened(claims.amr),
       /** When this session last signed in (seconds), or null (sign-in-claims.ts). */
       signedInAt: foundationLatestSignIn(claims.amr),

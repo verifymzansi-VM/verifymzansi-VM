@@ -167,16 +167,16 @@ A body of exactly `{ "email" }` is handled as password setup (the
 forgot-password page always sends a token field): the secret key binding,
 same-origin proof, the shared network limit, a GoTrue-verified session that was
 not opened by a reset link, a sign-in within the last hour (the session's `amr`
-claim; a second factor or refresh does not count), a live account (staff need an
-authenticator step within 15 minutes), a confirmed address equal to the page's,
-no password yet, and its own budgets: per account (3 an hour, 5 a day) and
-platform-wide. "No password" is read from GoTrue's identities and app metadata,
-never from user metadata, and from the session's own sign-in: an `email` or
-`phone` identity, a password sign-in, or anything unreadable is refused with
-"Use Change password instead". GoTrue does not report a password a Google member
-added later (it adds no email identity by default); for such a member signed in
-with Google the request only emails a reset link to their own address, as the
-forgot-password page would.
+claim; a second factor, a refresh or a link redeemed straight at Auth does not
+count), a live account (staff need an authenticator step within 15 minutes), a
+confirmed address equal to the page's, no password yet, and its own budgets: per
+account (3 an hour, 5 a day) and platform-wide. "No password" is read from
+GoTrue's identities and app metadata, never from user metadata, and from the
+session's own sign-in: an `email` or `phone` identity, a password sign-in, or
+anything unreadable is refused with "Use Change password instead". GoTrue does
+not report a password a Google member added later (it adds no email identity by
+default); for such a member signed in with Google the request only emails a
+reset link to their own address, as the forgot-password page would.
 
 The server then asks Auth, with the project's secret key, to email the usual
 reset link to the verified address; Auth does not ask for a CAPTCHA token on
@@ -209,32 +209,41 @@ enabled before this route accepts commands.
 
 The profile page posts `{ newEmail }` to `/api/account/email/change`; in
 foundation mode that URL is handled by `_lib/email-change.ts` and never reaches
-the retired tables. It requires same-origin proof, the network limit, a
-GoTrue-verified session not opened by a reset link, a confirmed current address,
-a valid new address that differs from it, a sign-in within the last hour (the
-session's `amr` claim), a live account (staff need an authenticator step within
-15 minutes) and its budgets: per account (3 an hour, 5 a day), per new address
-(the same) and platform-wide. Budgets are charged before Auth is asked, whatever
-it answers.
+the retired tables.
+
+The controls that protect the account are Auth's: with secure email change on,
+Auth emails a confirmation link to the current and to the new address and
+changes the address only once both are opened, and members with an authenticator
+need a two-step session. They apply to every client of Auth, so both settings
+must stay on in hosted Auth (`mailer_autoconfirm` must also stay off). The
+website's own checks are defence in depth on top of them.
+
+Those checks: same-origin proof, the network limit, a GoTrue-verified session
+not opened by a reset link (or another emailed link redeemed straight at Auth),
+a confirmed current address, a valid new address that differs from it, a
+password or Google sign-in within the last hour (the session's `amr` claim), a
+live account (staff need an authenticator step within 15 minutes; other members
+with an authenticator need a two-step session), and budgets: per account (one
+per 120 seconds, longer than Auth's own interval between emails, then 3 an hour
+and 5 a day), per account and new address (3 an hour), per new address (10 a
+day) and platform-wide. Address budgets are keyed by a SHA-256 digest of the
+address. Budgets are charged before Auth is asked, whatever it answers.
 
 The server then calls Auth's `PUT /user` with the member's own token (never the
-secret key). With secure email change on, Auth emails a confirmation link to the
-current and to the new address and changes the address only once both are
-opened; members with an authenticator also need a two-step session there. The
-request names a PKCE challenge whose verifier is dropped at once, so the code on
-the last link can never become a session: opening a link confirms and signs
-nobody in. An address that belongs to another account gets the same answer as
-any accepted request.
+secret key). The request names a PKCE challenge whose verifier is dropped at
+once, so the website never exchanges the code on the last link and opening a
+link in a browser signs nobody in. An address that belongs to another account,
+and a refusal for Auth's own email limits, get the same answer as any accepted
+request, and every accepted answer waits at least 3 seconds (plus up to 1 second
+at random) after Auth was asked. If Auth changes the address without any
+confirmation, the request is answered as unavailable and logged.
 
 Links return to `/auth/callback?backend=foundation&email_change=1`, which only
 picks the page: the profile's Account tab after either link, the usual failure
-page for a used or expired link. It reads and writes no cookies, so recovery
-bindings and sign-in flows are unaffected, and other selectors on such a link
-make it a failed link. Other sessions stay signed in after the change; the
-password is unchanged and the change needs both mailboxes.
-
-Secure email change must stay on in hosted Auth: that setting is what makes Auth
-ask both addresses, for this page and for any other client of Auth.
+page (with an empty fragment) for a used or expired link. It reads and writes no
+cookies, so recovery bindings and sign-in flows are unaffected, and other
+selectors on such a link make it a failed link. Other sessions stay signed in
+after the change; the password is unchanged and the change needs both mailboxes.
 
 ## Phone completion
 

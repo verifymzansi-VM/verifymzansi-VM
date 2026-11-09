@@ -1,4 +1,5 @@
 /** @vitest-environment node */
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/foundation/auth/recovery/request/route";
@@ -175,7 +176,8 @@ describe("password setup for a member without a password", () => {
       { key: "account:" + id, action: "auth:password-setup", degradedMode: "block" },
       { key: "global", action: "auth:password-setup:global", degradedMode: "block" },
       {
-        key: "member@example.invalid",
+        // A digest of the address, never the address (limiter-key.ts).
+        key: "email:" + createHash("sha256").update("email\nmember@example.invalid").digest("hex"),
         action: "auth:forgot-password-email",
         degradedMode: "block",
       },

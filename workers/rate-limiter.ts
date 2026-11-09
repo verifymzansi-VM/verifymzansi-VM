@@ -247,14 +247,22 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 3600 }, // 5 per hour
   ],
   // Foundation email changes (each sends two emails, no CAPTCHA): per
-  // account, per new address and platform-wide, as for password setup.
+  // account, per account and new address, per new address and platform-wide.
+  // Address keys are SHA-256 digests (src/lib/foundation/limiter-key.ts).
   "account:email-change:account": [
+    // One request per 120 s: longer than Auth's own minimum interval between
+    // emails to one account (hosted default 60 s) plus the request's own
+    // duration, so Auth's interval never answers a request the website sends.
+    // Raise this with that Auth setting.
+    { limit: 1, ttl: 120 },
     { limit: 3, ttl: 3600 }, // 3 per hour per account
     { limit: 5, ttl: 86400 }, // 5 per day per account
   ],
   "account:email-change:recipient": [
-    { limit: 3, ttl: 3600 }, // 3 per hour per new address
-    { limit: 5, ttl: 86400 }, // 5 per day per new address
+    { limit: 3, ttl: 3600 }, // 3 per hour per account and new address
+  ],
+  "account:email-change:address": [
+    { limit: 10, ttl: 86400 }, // 10 per day per new address, from all accounts
   ],
   "account:email-change:global": [
     { limit: 30, ttl: 60 },

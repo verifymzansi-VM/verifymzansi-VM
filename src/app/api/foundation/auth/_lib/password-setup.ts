@@ -30,6 +30,7 @@ import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
 import { openedByResetLink, RECOVERY_SESSION_REFUSAL } from "./recovery-session";
+import { limiterAddressKey } from "@/lib/foundation/limiter-key";
 
 const log = createLogger("FoundationPasswordSetup");
 const UNAVAILABLE = "Password setup is temporarily unavailable";
@@ -168,7 +169,7 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
     // A sent email counts towards the address's forgot-password budget too
     // (its outcome no longer matters here).
     await checkRateLimit({
-      key: own.data,
+      key: await limiterAddressKey(own.data),
       action: "auth:forgot-password-email",
       degradedMode: "block",
     });

@@ -299,7 +299,7 @@ it("a client recovery selector cannot turn a signup code into password-recovery 
   );
   const response = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
   expect(response.headers.get("location")).toBe(
-    "https://verifymzansi.com/forgot-password?error=recovery_failed"
+    "https://verifymzansi.com/forgot-password?error=recovery_failed#"
   );
   expect(
     response.cookies
@@ -403,6 +403,27 @@ it.each(["missing-flow", "duplicate-code", "token-hash"])(
     expect(legacyClient).not.toHaveBeenCalled();
   }
 );
+it.each([
+  ["sign-up", "", "https://verifymzansi.com/login?error=auth_callback_failed#"],
+  ["recovery", "&recovery=1", "https://verifymzansi.com/forgot-password?error=recovery_failed#"],
+])(
+  "sends a refused %s link to its failure page with an empty fragment",
+  async (_label, selector, location) => {
+    vi.stubEnv("FOUNDATION_RECOVERY_ENABLED", "true");
+    // Auth's own refusal: error details in the query (and in a fragment the
+    // browser would otherwise keep).
+    const response = await GET(
+      new NextRequest(
+        `https://verifymzansi.com/auth/callback?backend=foundation${selector}&error=access_denied&error_code=otp_expired`
+      )
+    );
+    expect(response.headers.get("location")).toBe(location);
+    expect(new URL(response.headers.get("location")!).hash).toBe("");
+    expect(response.headers.get("location")!.endsWith("#")).toBe(true);
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+);
+
 it("stays closed without the callback flag and blocks degraded shared protection", async () => {
   const jar = new Map([["vm_csrf", csrf]]);
   const flow = await begin(jar);
@@ -494,7 +515,7 @@ it("publishes no recovery session when the binding cannot be signed", async () =
   const flow = await beginRecovery(jar);
   const response = await GET(new NextRequest(link(flow, "&recovery=1"), { headers: headers(jar) }));
   expect(response.headers.get("location")).toBe(
-    "https://verifymzansi.com/forgot-password?error=recovery_failed"
+    "https://verifymzansi.com/forgot-password?error=recovery_failed#"
   );
   expect(response.cookies.get(BINDING)).toBeUndefined();
   expect(
