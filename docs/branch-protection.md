@@ -36,6 +36,9 @@ such a check would block every pull request.
   approve their own pull request. Merge methods: squash or merge commit.
 - **No force pushes, no deletion** of `main`.
 - **Required checks** (GitHub Actions only, `integration_id` 15368):
+  - `foundation-replay`: rebuilds the production database schema from
+    `database/foundation/` and compares its fingerprint
+    (`database/foundation/README.md`).
   - `lint-type-security`: lint, typecheck, OpenAPI/import checks, secrets,
     dependencies, licences and database invariants.
   - `knip`: dead code and dependencies.
@@ -65,9 +68,8 @@ Every CI job that runs on a pull request is required, except
 (a dry-run plan that executes no checks). This keeps `main` deployable: the
 deploy needs the whole CI run on `main` to succeed. `perf-baseline` and
 `k6-advisory` run only after a push to `main` and cannot be required on pull
-requests. Later slices add their jobs here and to the ruleset file (database
-replay, native database suite, foundation browser tests, picture checks,
-frontend ledger).
+requests. Later slices add their jobs here and to the ruleset file (native
+database suite, foundation browser tests, picture checks, frontend ledger).
 
 ## How the owner applies it
 
