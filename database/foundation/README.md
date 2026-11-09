@@ -104,6 +104,21 @@ Local reproduction creates its own ignored evidence:
 5. Run node scripts/check-foundation-api-contracts.mjs and maintained review
    gates.
 
+The native suite also runs in CI: the `foundation-native` job
+(`.github/workflows/foundation-native.yml`) prepares the fixture, starts the
+local stack with the pinned Supabase CLI and runs `pnpm test:foundation:native`
+on an ubuntu-latest runner, then uploads the redacted `results.json` (and the
+staff-read probe record) as the `foundation-native-results` run artifact. It
+runs nightly, on manual dispatch and on every pull request; when a pull request
+does not touch `database/foundation/`, `docs/backend-foundation/prototypes/`,
+`src/lib/`, `src/types/`, `src/app/api/`, the native scripts or the
+dependencies, the job passes without starting Docker. The fixture's Docker guard
+(`localDockerContext` in `scripts/lib/foundation-native-isolation.mjs`) accepts
+only Docker Desktop's local Linux engine pipe on Windows, or the default context
+on the local socket `/var/run/docker.sock` of a GitHub-hosted runner; it refuses
+TCP, SSH and other remote endpoints, other contexts and Linux outside
+GitHub-hosted CI.
+
 If replay changes generated types captured by the native run, repeat steps 2–4
 with the refreshed inputs. The final native source hashes and clean replay must
 match the same working bytes; an earlier passing record remains historical.
