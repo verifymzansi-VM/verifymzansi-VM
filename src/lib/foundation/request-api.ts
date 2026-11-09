@@ -128,6 +128,7 @@ export async function createFoundationRequestCaller(
       updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher, {
         email: verified.user.email,
         authenticatorStepMissing: verified.authenticatorStepMissing,
+        signedInAt: verified.signedInAt,
       }),
       /** Starts an email change for this same session (email-change.ts). */
       changeEmail: createFoundationEmailChanger(config, token, verified.accountId, fetcher),

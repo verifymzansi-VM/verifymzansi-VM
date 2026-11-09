@@ -92,7 +92,14 @@ export interface FoundationPasswordCheck {
   /** The account has a verified authenticator that this session has not
    * used (GoTrue `aal1`); Auth then refuses the change (insufficient_aal). */
   authenticatorStepMissing: boolean;
+  /** When this session signed in (seconds; sign-in-claims.ts), or null. */
+  signedInAt: number | null;
 }
+
+/** Auth asks a session older than this to sign in again before a password
+ * change when its "secure password change" setting is on (GoTrue UserUpdate:
+ * 24 hours after the session began). */
+const REAUTHENTICATION_SECONDS = 24 * 3600;
 
 /** True when `accessToken` names a session. Auth signs out EVERY session of
  * a token without one (GoTrue Logout), so only such a token may be used. */
@@ -170,9 +177,16 @@ async function confirmCurrentPassword(
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     // Auth answers a wrong password, and an account without one, alike.
-    if (authErrorCode(body) === "invalid_credentials")
+    const code = authErrorCode(body);
+    if (code === "invalid_credentials")
       throw new FoundationPasswordUpdateError(400, "current_password");
-    throw new FoundationPasswordUpdateError(response.status === 429 ? 429 : 503, "unavailable");
+    // Auth's own limit on sign-ins is per network address, and every server
+    // check comes from the website's address: not the member's attempts.
+    log.error("Password check refused", {
+      status: response.status,
+      code: code && /^[a-z_]{1,64}$/.test(code) ? code : "other",
+    });
+    throw new FoundationPasswordUpdateError(503, "unavailable");
   }
   const reply = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   if (!(await endVerificationSession(connection, reply.access_token, fetcher)))
@@ -184,8 +198,10 @@ async function confirmCurrentPassword(
 
 /**
  * The change-password command (current password known). In order: Auth's
- * authenticator-step rule (GoTrue checks it before any password, so a session
- * without the step learns nothing about the password), the caller's budget
+ * authenticator-step and fresh-session rules (GoTrue checks both before any
+ * password, so a session refused by either learns nothing about the
+ * password; the second is applied whether or not Auth's setting is on), the
+ * caller's budget
  * for password checks (`chargeCheck`, which throws when spent), this server's
  * own check of the current password, then the update, which still sends the
  * current password so Auth checks it too when its setting is on.
@@ -207,6 +223,9 @@ export function createFoundationPasswordUpdater(
   ): Promise<void> => {
     if (check.authenticatorStepMissing)
       throw new FoundationPasswordUpdateError(403, "mfa_required");
+    const now = Math.floor(Date.now() / 1000);
+    if (check.signedInAt === null || now - check.signedInAt > REAUTHENTICATION_SECONDS)
+      throw new FoundationPasswordUpdateError(401, "reauthentication");
     const key = secretKey.safeParse(environment.FOUNDATION_SUPABASE_SECRET_KEY);
     if (!key.success || typeof check.email !== "string" || !check.email)
       throw new FoundationPasswordUpdateError(503, "unavailable");

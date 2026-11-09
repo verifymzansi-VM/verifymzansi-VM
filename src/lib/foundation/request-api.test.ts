@@ -86,7 +86,13 @@ const paths = (fetcher: ReturnType<typeof vi.fn<typeof fetch>>) =>
 it("pins password updates to the verified MFA token even if cookie state changes afterwards", async () => {
   vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "sb_secret_synthetic_unit_only");
   try {
-    const candidate = token(1, { aal: "aal2" });
+    const candidate = token(1, {
+      aal: "aal2",
+      amr: [
+        { method: "password", timestamp: Math.floor(Date.now() / 1000) - 600 },
+        { method: "totp", timestamp: Math.floor(Date.now() / 1000) - 590 },
+      ],
+    });
     const jar = cookieAdapter({
       ...session(candidate),
       user: { ...session(candidate).user, email: "cookie-claim@example.invalid" },
@@ -140,7 +146,8 @@ it.each([
   async (_label, aal, status, allowed) => {
     vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "sb_secret_synthetic_unit_only");
     try {
-      const candidate = token(1, aal ? { aal } : {});
+      const amr = [{ method: "password", timestamp: Math.floor(Date.now() / 1000) - 600 }];
+      const candidate = token(1, aal ? { aal, amr } : { amr });
       const fetcher = passwordAuth(
         {
           ...user(1),
@@ -174,6 +181,38 @@ it.each([
     }
   }
 );
+
+it.each([
+  [
+    "signed in with a password over 24 hours ago",
+    [{ method: "password", timestamp: -24 * 3600 - 60 }],
+  ],
+  ["opened without a sign-in method", [{ method: "otp", timestamp: -60 }]],
+  ["without a readable sign-in record", undefined],
+] as const)("asks a session %s to sign in again before any password check", async (_label, amr) => {
+  vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "sb_secret_synthetic_unit_only");
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const candidate = token(
+      1,
+      amr ? { amr: amr.map((entry) => ({ ...entry, timestamp: now + entry.timestamp })) } : {}
+    );
+    const fetcher = passwordAuth({ ...user(1), email: "member@example.invalid" }, candidate);
+    const caller = await createFoundationRequestCaller(
+      config,
+      cookieAdapter(session(candidate)),
+      fetcher
+    );
+    const charge = vi.fn(() => Promise.resolve());
+    await expect(
+      caller.updatePassword("synthetic-current-password", "synthetic-next-password", charge)
+    ).rejects.toMatchObject({ status: 401, reason: "reauthentication" });
+    expect(charge).not.toHaveBeenCalled();
+    expect(paths(fetcher)).toEqual(["GET /auth/v1/user"]);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
 
 it("pins email changes to the verified token even if cookie state changes afterwards", async () => {
   const candidate = token(1);

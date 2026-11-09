@@ -142,7 +142,11 @@ const env: NodeJS.ProcessEnv = {
   NODE_ENV: "test",
   FOUNDATION_SUPABASE_SECRET_KEY: "sb_secret_synthetic_unit_only",
 };
-const memberCheck = { email: "member@example.invalid", authenticatorStepMissing: false };
+const memberCheck = {
+  email: "member@example.invalid",
+  authenticatorStepMissing: false,
+  signedInAt: Math.floor(Date.now() / 1000) - 60,
+};
 /** An access token for the session the check's sign-in creates. */
 const checkToken = (claims: Record<string, unknown> = { session_id: id.replace(/1$/, "9") }) =>
   [
@@ -171,7 +175,11 @@ const sent = (fetcher: ReturnType<typeof vi.fn<typeof fetch>>, path: string) =>
   fetcher.mock.calls.filter((call) => new URL(String(call[0])).pathname === path);
 const change = (
   fetcher: typeof fetch,
-  check: { email: string | undefined; authenticatorStepMissing: boolean } = memberCheck,
+  check: {
+    email: string | undefined;
+    authenticatorStepMissing: boolean;
+    signedInAt: number | null;
+  } = memberCheck,
   charge: () => Promise<void> = async () => {},
   environment: NodeJS.ProcessEnv = env
 ) =>
@@ -256,6 +264,35 @@ it("asks for the authenticator step before any password check, as Auth does", as
   expect(charge).not.toHaveBeenCalled();
   expect(fetcher).not.toHaveBeenCalled();
 });
+it.each([
+  ["signed in over 24 hours ago", Math.floor(Date.now() / 1000) - 24 * 3600 - 60],
+  ["with no sign-in on record", null],
+] as const)(
+  "asks a session %s to sign in again before any password check, as Auth's secure setting does",
+  async (_label, signedInAt) => {
+    const fetcher = auth();
+    const charge = vi.fn(async () => {});
+    await expect(change(fetcher, { ...memberCheck, signedInAt }, charge)).rejects.toMatchObject({
+      status: 401,
+      reason: "reauthentication",
+    });
+    expect(charge).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+  }
+);
+it("checks a session signed in just under 24 hours ago", async () => {
+  const fetcher = auth();
+  const signedInAt = Math.floor(Date.now() / 1000) - 24 * 3600 + 60;
+  await expect(change(fetcher, { ...memberCheck, signedInAt })).resolves.toBeUndefined();
+  expect(sent(fetcher, "/auth/v1/token")).toHaveLength(1);
+});
+it("asks for the authenticator step first when both rules apply, as Auth does", async () => {
+  const fetcher = auth();
+  await expect(
+    change(fetcher, { ...memberCheck, authenticatorStepMissing: true, signedInAt: null })
+  ).rejects.toMatchObject({ status: 403, reason: "mfa_required" });
+  expect(fetcher).not.toHaveBeenCalled();
+});
 it("spends the check budget before the sign-in and stops when it is spent", async () => {
   const fetcher = auth();
   const spent = new Error("budget spent");
@@ -279,8 +316,9 @@ it.each([
 it.each([
   [
     "Auth's rate limit",
+    // Per network address: the website's, not the member's attempts.
     async () => Response.json({ code: "over_request_rate_limit" }, { status: 429 }),
-    429,
+    503,
   ],
   [
     "a CAPTCHA refusal",
