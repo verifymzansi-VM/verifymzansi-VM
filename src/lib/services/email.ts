@@ -72,13 +72,20 @@ const platformNotices = {
     "Your introductory posting allowance is ready",
     "Your eligible introductory allowance is now recorded on your account.",
   ],
+  // The three post lifecycle notices below are worded with the deletion date
+  // when the notification job knows it (postLifecycleIntro); these texts are
+  // the fallback without a date.
   post_expired: [
     "Your post has expired",
-    "One of your posts has reached the end of its plan and is no longer shown. It will be deleted, with its photos and videos, in 3 days. To keep it, buy a plan and reactivate it from your posts before then.",
+    "One of your posts is no longer shown because the plan that paid for it has ended or was cancelled. Buy a plan and reactivate it from your posts to keep it; otherwise it will be deleted, with its photos and videos.",
   ],
   post_sold: [
     "Your post is marked as sold",
-    "You marked one of your posts as sold. It will be deleted, with its photos and videos, in 3 days, and its plan slot will then be free again. To reuse the slot sooner, delete the post yourself. Marked it by mistake? Reactivate it from your posts before then.",
+    "You marked one of your posts as sold. It will be deleted, with its photos and videos, shortly. Marked it by mistake? Reactivate it from your posts soon.",
+  ],
+  post_kept: [
+    "Your post is kept after your payment",
+    "Your payment is confirmed, so your expired post is kept for a few more days. Reactivate it from your posts to show it again.",
   ],
   post_expiry_reminder: [
     "A post is approaching its visibility end date",
@@ -106,18 +113,45 @@ const platformNotices = {
   ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
+/** What the notification job knows about the post a lifecycle notice is about. */
+export type PostLifecycleDetails = { deletesAt?: string | null; holdsSlot?: boolean | null };
+function deletionTime(iso: string | null | undefined): string | null {
+  const ms = iso ? Date.parse(iso) : Number.NaN;
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleString("en-ZA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Africa/Johannesburg",
+  });
+}
+function postLifecycleIntro(kind: PlatformNoticeKind, details?: PostLifecycleDetails) {
+  const when = deletionTime(details?.deletesAt);
+  if (!when) return null;
+  if (kind === "post_expired")
+    return `One of your posts is no longer shown because the plan that paid for it has ended or was cancelled. It will be deleted, with its photos and videos, on ${when} (South African time). To keep it, buy a plan and reactivate it from your posts before then.`;
+  if (kind === "post_sold")
+    return `You marked one of your posts as sold. It will be deleted, with its photos and videos, on ${when} (South African time).${details?.holdsSlot ? " Its plan slot stays in use until then; delete the post yourself to free the slot sooner." : ""} Marked it by mistake? Reactivate it from your posts before then.`;
+  if (kind === "post_kept")
+    return `Your payment is confirmed, so your expired post is kept until ${when} (South African time). Reactivate it from your posts before then to show it again; otherwise it will be deleted, with its photos and videos.`;
+  return null;
+}
 export async function sendPlatformNotice(
   to: string,
   kind: PlatformNoticeKind,
   idempotencyKey: string,
-  noticeReason?: string
+  noticeReason?: string,
+  details?: PostLifecycleDetails
 ): Promise<SendEmailResult> {
   if (
     kind === "account_warning" &&
     (!noticeReason || noticeReason.length < 10 || noticeReason.length > 500)
   )
     throw new Error("Account warning details unavailable");
-  const [subject, intro] = platformNotices[kind];
+  const [subject, fallbackIntro] = platformNotices[kind];
+  const intro = postLifecycleIntro(kind, details) ?? fallbackIntro;
   const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
   const moderation = [
     "content_hidden",

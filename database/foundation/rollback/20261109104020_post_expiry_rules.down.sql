@@ -1,32 +1,40 @@
 -- Reviewed rollback for updates/20261109104020_post_expiry_rules.sql.
 -- Not part of the replay. Run it only if that update must be undone, after
--- the owner has decided so; prefer a forward fix. Roll the website back first
--- to a release that does not read get_my_frontend_post_v2 or
--- list_my_frontend_posts_v2 and does not declare the post_sold notice. This
--- file restores the five function bodies the update replaced (exactly as
--- after 20261109073519_post_lifecycle_guards.sql), drops everything the
--- update added and puts the data back under the earlier rules.
+-- the owner has decided so; prefer a forward fix. If the website release that
+-- reads get_my_frontend_post_v2 is live, it falls back to the earlier reads
+-- on its own. This file restores the ten function bodies the update replaced
+-- (five exactly as after 20261109073519_post_lifecycle_guards.sql, five as
+-- before it), drops everything the update added and puts the data back under
+-- the earlier rules.
 --
 -- What is lost or changes on rollback:
 -- - Ended posts get their earlier deletion date back (ended_at + 30 days), so
---   they are kept longer; live and paused events lose their deletion date and
---   expire at their end again.
+--   they are kept longer; events that have not ended their run lose their
+--   deletion date (live ones expire at their end again, others follow the
+--   idle rule).
 -- - Paused posts (except those hidden by staff) and sold posts release their
 --   slots now, as the earlier rules did when they were paused or sold.
--- - Sold notices (post_sold), queued or sent, are deleted; payment extensions
---   are dropped. Posts that expired while the update was in place can get a
---   second post_expired email and the 7- and 21-day reminders, whose keys
---   differ from this update's.
+-- - Sold and kept notices (post_sold, post_kept), queued or sent, are deleted;
+--   payment extensions are dropped. Posts that expired while the update was
+--   in place can get a second post_expired email and the 7- and 21-day
+--   reminders, whose keys differ from this update's.
+-- - Event ends in the past can be saved again, and refunds, chargebacks and
+--   sponsorship ends leave paused posts paused, without their slot.
 begin;
 set local lock_timeout='5s';
 
 -- Preconditions: only the bodies this update installed are rolled back.
 do $$begin
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.run_post_lifecycle(integer)'::regprocedure)<>'3a4bd5f21957cda6acd06cd6c1b19655' then raise exception 'rollback precondition: internal.run_post_lifecycle(integer) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.run_post_lifecycle(integer)'::regprocedure)<>'8dab8e97fe7ff5b8c8d5b1066bf5a5c0' then raise exception 'rollback precondition: internal.run_post_lifecycle(integer) is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.set_post_state(uuid,integer,text)'::regprocedure)<>'98119b54e6b1f0de84c7ddfdc20d2e35' then raise exception 'rollback precondition: internal.set_post_state(uuid,integer,text) is not the post expiry rules body';end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.delete_post(uuid,integer)'::regprocedure)<>'2aa04c741c9dee2e414be6ae1f03f73d' then raise exception 'rollback precondition: internal.delete_post(uuid,integer) is not the post expiry rules body';end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.post_lifecycle_clock()'::regprocedure)<>'89e028ae43b37977cd39c060adc65c20' then raise exception 'rollback precondition: internal.post_lifecycle_clock() is not the post expiry rules body';end if;
-  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)<>'04e8ce800583aefd164a49840cb24748' then raise exception 'rollback precondition: internal.claim_supported_notification_outbox(text[],integer) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.post_lifecycle_clock()'::regprocedure)<>'fa7bdb5ed8d48850ad9a456deceaab8b' then raise exception 'rollback precondition: internal.post_lifecycle_clock() is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)<>'039b1e461ee382e1e2ae7afc31f9d304' then raise exception 'rollback precondition: internal.claim_supported_notification_outbox(text[],integer) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.reverse_payment(uuid,text,text)'::regprocedure)<>'1beb792cd6681782bcb75d4ee8d207a0' then raise exception 'rollback precondition: internal.reverse_payment(uuid,text,text) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.release_sponsorship_entitlement(uuid)'::regprocedure)<>'22d1448929ddae6b57c5bc6f859a5ce2' then raise exception 'rollback precondition: internal.release_sponsorship_entitlement(uuid) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.release_post(uuid,text)'::regprocedure)<>'3651f27e30cf1c88dfb2da1e3a4c6ac3' then raise exception 'rollback precondition: internal.release_post(uuid,text) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.save_business_event_context(uuid,integer,jsonb)'::regprocedure)<>'8258515286151f1f631d27d486967d12' then raise exception 'rollback precondition: internal.save_business_event_context(uuid,integer,jsonb) is not the post expiry rules body';end if;
+  if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.create_core_draft(text,text,text,jsonb,text)'::regprocedure)<>'9f10647ba49984c56a47b99af6c71360' then raise exception 'rollback precondition: internal.create_core_draft(text,text,text,jsonb,text) is not the post expiry rules body';end if;
 end$$;
 
 -- Dropping the trigger and the extension table needs exclusive locks on the
@@ -43,7 +51,7 @@ drop function internal.get_my_frontend_post_v2(uuid);
 drop function api.list_my_frontend_posts_v2(text,text,integer,integer);
 drop function internal.list_my_frontend_posts_v2(text,text,integer,integer);
 drop function internal.frontend_owner_post_v2(uuid,uuid);
-delete from private.outbox_events where kind='post_sold';
+delete from private.outbox_events where kind in('post_sold','post_kept');
 alter table private.outbox_events drop constraint outbox_events_kind_check,
   add constraint outbox_events_kind_check check(kind=any(array['payment_completed'::text,'payment_reversed'::text,
     'payment_reconciliation_required'::text,'trial_started'::text,'post_expired'::text,'post_expiry_reminder'::text,
@@ -272,6 +280,256 @@ $function$;
 revoke all on function internal.claim_supported_notification_outbox(text[],integer) from public,anon,authenticated,service_role;
 grant execute on function internal.claim_supported_notification_outbox(text[],integer) to service_role;
 
+CREATE OR REPLACE FUNCTION internal.reverse_payment(p_payment_id uuid, p_kind text, p_reason text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare pay private.payments; released integer := 0; v_post_ids uuid[]; payment_owner uuid;
+begin
+  if p_kind not in ('refunded', 'chargeback') or length(btrim(coalesce(p_reason, ''))) not between 5 and 500 then
+    raise exception 'reversal kind and audit reason required' using errcode = '22023';
+  end if;
+  select p.owner_id into payment_owner from private.payments p where p.id=p_payment_id;
+  if payment_owner is not null then perform internal.lock_evidence_subject(payment_owner); end if;
+  select * into pay from private.payments p where p.id = p_payment_id for update;
+  if not found or pay.status <> 'complete' then
+    raise exception 'only completed payments can be reversed' using errcode = '22023';
+  end if;
+  begin
+    perform e.id from private.entitlements e where e.payment_id=pay.id order by e.id for update nowait;
+    perform p.id from private.posts p where p.id=pay.target_post_id or p.id in
+      (select a.post_id from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
+        where e.payment_id=pay.id and a.released_at is null)
+      order by p.id for update of p nowait;
+  exception when lock_not_available then
+    raise exception 'funded posts are busy; retry reversal' using errcode='PT409';
+  end;
+  update private.payments set status = p_kind, fulfillment_status='reversed', status_changed_at = statement_timestamp() where id = pay.id;
+  update private.entitlements set status = 'revoked', revoked_reason = 'payment_' || p_kind where payment_id = pay.id;
+  with released_rows as (
+    update private.post_activations a set released_at = statement_timestamp(), release_reason = 'payment_reversed'
+    from private.entitlements e where e.id = a.entitlement_id and e.payment_id = pay.id and a.released_at is null
+    returning a.post_id
+  )
+  select coalesce(array_agg(post_id), '{}') into v_post_ids from released_rows;
+  released := cardinality(v_post_ids);
+  update private.posts set status = 'expired', status_reason = 'Payment ' || p_kind, revision = revision + 1
+    where id = any (v_post_ids) and status in ('live', 'pending_moderation');
+  update private.post_search_documents set is_visible = false where post_id = any (v_post_ids);
+  update private.post_addon_windows set revoked_at = statement_timestamp() where payment_id = pay.id and revoked_at is null;
+  insert into private.outbox_events (kind, subject_id, owner_id, dedupe_key)
+  values ('payment_reversed', pay.id, pay.owner_id, 'payment_reversed:' || pay.id);
+  return jsonb_build_object('status', p_kind, 'released_activations', released);
+end;
+$function$;
+revoke all on function internal.reverse_payment(uuid,text,text) from public,anon,authenticated,service_role;
+grant execute on function internal.reverse_payment(uuid,text,text) to service_role;
+
+CREATE OR REPLACE FUNCTION internal.release_sponsorship_entitlement(p_entitlement uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare v_post_ids uuid[];
+begin
+  if p_entitlement is null then return 0; end if;
+  perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+  perform e.id from private.entitlements e where e.id=p_entitlement for update nowait;
+  -- Re-read after the entitlement lock: an activation may have committed
+  -- since the first post scan. Never wait on a newly discovered post here.
+  perform p.id from private.posts p where p.id in(select a.post_id from private.post_activations a
+    where a.entitlement_id=p_entitlement and a.released_at is null) order by p.id for update of p nowait;
+  update private.entitlements set status='revoked',revoked_reason='sponsorship_ended'
+    where id=p_entitlement and status<>'revoked';
+  with released as (
+    update private.post_activations a set released_at=statement_timestamp(),release_reason='entitlement_ended'
+    where a.entitlement_id=p_entitlement and a.released_at is null returning a.post_id)
+  select coalesce(array_agg(post_id) filter(where post_id is not null),'{}') into v_post_ids from released;
+  update private.posts set status='expired',status_reason='Sponsorship ended',revision=revision+1
+    where id=any(v_post_ids) and status in('live','pending_moderation');
+  update private.post_search_documents set is_visible=false where post_id=any(v_post_ids);
+  return cardinality(v_post_ids);
+exception when lock_not_available then
+  raise exception 'sponsorship is busy; retry the operation' using errcode='PT409',detail='sponsorship_busy';
+end;
+$function$;
+revoke all on function internal.release_sponsorship_entitlement(uuid) from public,anon,authenticated,service_role;
+
+CREATE OR REPLACE FUNCTION internal.release_post(p_post_id uuid, p_reason text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid := internal.price_draft_actor(); post private.posts; released boolean;
+begin
+  if p_reason is null or p_reason not in ('owner', 'sold') then raise exception 'invalid release reason' using errcode = '22023'; end if;
+  select p.* into post from private.posts p where p.id=p_post_id and p.owner_id=actor for update;
+  if not found or post.status in ('live','pending_moderation') then
+    raise exception 'use the revision-fenced post lifecycle to release published funding' using errcode='22023';
+  end if;
+  update private.post_activations a set released_at = statement_timestamp(), release_reason = p_reason
+  where a.post_id = p_post_id and a.owner_id = actor and a.released_at is null;
+  released:=found;
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return released;
+end;
+$function$;
+revoke all on function internal.release_post(uuid,text) from public,anon,authenticated,service_role;
+grant execute on function internal.release_post(uuid,text) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.save_business_event_context(p_post_id uuid, p_expected_revision integer, p_patch jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.price_draft_actor(); post private.posts; c jsonb:=p_patch; w jsonb;
+  activity text; starts timestamptz; ends timestamptz; zone text; rev integer;
+begin
+  -- The original precedes its copy, matching content, moderation and discard.
+  perform original.id from private.posts original join private.posts copy on copy.edit_of=original.id
+    where copy.id=p_post_id and copy.owner_id=actor for update of original;
+  perform internal.assert_post_revision(p_expected_revision);
+  if jsonb_typeof(c) is distinct from 'object' or octet_length(c::text)>1024 or c='{}'::jsonb
+    or not(array(select jsonb_object_keys(c)) <@ array['activity_key','event_window','business_type']) then
+    raise exception 'invalid context patch' using errcode='22023';
+  end if;
+  select * into post from private.posts p where p.id=p_post_id and p.owner_id=actor for update;
+  if not found or post.kind not in ('business','event') then
+    raise exception 'business or event not found' using errcode='22023';
+  end if;
+  if post.status not in ('draft','rejected','paused') then
+    raise exception 'this context cannot be edited now' using errcode='22023';
+  end if;
+  if post.revision<>p_expected_revision then raise exception 'post changed' using errcode='PT409'; end if;
+  if c ? 'business_type' then
+    if post.kind<>'business' or jsonb_typeof(c->'business_type') not in ('string','null')
+      or (c->>'business_type' is not null and c->>'business_type' not in
+        ('mall_store','standalone_shop','home_business','mobile_service','online_only','market_stall')) then
+      raise exception 'invalid business type' using errcode='22023';
+    end if;
+    update private.business_details set business_type=c->>'business_type' where post_id=post.id;
+    if not found then raise exception 'business detail not found' using errcode='22023'; end if;
+  end if;
+  activity:=post.activity_key;
+  if c ? 'activity_key' then
+    if jsonb_typeof(c->'activity_key') not in ('string','null')
+      or (c->>'activity_key' is not null and (c->>'activity_key') !~ '^[a-z][a-z0-9_]{0,79}$') then
+      raise exception 'invalid activity' using errcode='22023';
+    end if;
+    activity:=c->>'activity_key';
+    if activity is null and exists(select 1 from private.categories k where k.key=post.category_key and k.activity_required)
+      or activity is not null and not exists(select 1 from private.category_activities a where a.category_key=post.category_key and a.key=activity) then
+      raise exception 'activity does not meet the category rules' using errcode='22023';
+    end if;
+  end if;
+  if c ? 'event_window' then
+    w:=c->'event_window';
+    if post.kind<>'event' or jsonb_typeof(w) is distinct from 'object' or octet_length(w::text)>512
+      or not(array(select jsonb_object_keys(w)) <@ array['starts_at','ends_at','timezone'])
+      or jsonb_typeof(w->'starts_at') is distinct from 'string' or jsonb_typeof(w->'ends_at') is distinct from 'string'
+      or jsonb_typeof(w->'timezone') is distinct from 'string'
+      or (w->>'starts_at') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,3})?(Z|[+-](0[0-9]|1[0-4]):[0-5][0-9])$'
+      or (w->>'ends_at') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,3})?(Z|[+-](0[0-9]|1[0-4]):[0-5][0-9])$' then
+      raise exception 'complete event window required' using errcode='22023';
+    end if;
+    begin
+      starts:=(w->>'starts_at')::timestamptz; ends:=(w->>'ends_at')::timestamptz;
+    exception when invalid_datetime_format or datetime_field_overflow then
+      raise exception 'invalid event instant' using errcode='22023';
+    end;
+    zone:=w->>'timezone';
+    if not isfinite(starts) or not isfinite(ends)
+      or extract(year from starts at time zone 'UTC') not between 1 and 9999
+      or extract(year from ends at time zone 'UTC') not between 1 and 9999
+      or starts<>date_trunc('milliseconds',starts) or ends<>date_trunc('milliseconds',ends)
+      or ends<=starts or ends-starts>interval '90 days'
+      or not exists(select 1 from private.post_event_timezones z where z.name=zone) then
+      raise exception 'invalid event window' using errcode='22023';
+    end if;
+    update private.event_details set starts_at=starts,ends_at=ends,timezone=zone where post_id=post.id;
+    if not found then raise exception 'event detail not found' using errcode='22023'; end if;
+  end if;
+  update private.posts set activity_key=activity,revision=revision+1,content_updated_at=statement_timestamp()
+    where id=post.id returning revision into rev;
+  perform internal.price_draft_actor();
+  return jsonb_build_object('id',post.id,'revision',rev);
+end;
+$function$;
+revoke all on function internal.save_business_event_context(uuid,integer,jsonb) from public,anon,authenticated,service_role;
+grant execute on function internal.save_business_event_context(uuid,integer,jsonb) to authenticated;
+
+CREATE OR REPLACE FUNCTION internal.create_core_draft(p_kind text, p_area text, p_category_key text, p_detail jsonb, p_activity_key text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog'
+AS $function$
+declare actor uuid:=internal.price_draft_actor(); post uuid; starts timestamptz; ends timestamptz; tz text; stored_activity text;
+begin
+  if not exists(select 1 from private.post_category_contracts c where c.category_key=p_category_key and c.kind=p_kind and c.area=p_area) then
+    raise exception 'invalid kind area category' using errcode='22023';
+  end if;
+  if exists(select 1 from private.categories c where c.key=p_category_key and c.activity_required)
+    and p_activity_key is null then
+    raise exception 'activity required for this category' using errcode='22023';
+  end if;
+  if p_activity_key is not null and not exists(select 1 from private.category_activities a
+    where a.category_key=p_category_key and a.key=p_activity_key) then
+    raise exception 'activity does not belong to this category' using errcode='22023';
+  end if;
+  if jsonb_typeof(p_detail) is distinct from 'object' or octet_length(p_detail::text)>512 then
+    raise exception 'invalid detail payload' using errcode='22023';
+  end if;
+  if p_kind='event' then
+    if not(array(select jsonb_object_keys(p_detail)) <@ array['starts_at','ends_at','timezone','contact_channels'])
+      or jsonb_typeof(p_detail->'starts_at') is distinct from 'string' or jsonb_typeof(p_detail->'ends_at') is distinct from 'string'
+      or jsonb_typeof(p_detail->'timezone') is distinct from 'string'
+      or (p_detail->>'starts_at') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,3})?(Z|[+-](0[0-9]|1[0-4]):[0-5][0-9])$'
+      or (p_detail->>'ends_at') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]{1,3})?(Z|[+-](0[0-9]|1[0-4]):[0-5][0-9])$' then
+      raise exception 'explicit event window required' using errcode='22023';
+    end if;
+    starts:=(p_detail->>'starts_at')::timestamptz; ends:=(p_detail->>'ends_at')::timestamptz; tz:=p_detail->>'timezone';
+    if not exists(select 1 from private.post_event_timezones z where z.name=tz) then
+      raise exception 'supported IANA timezone required' using errcode='22023';
+    end if;
+  elsif p_kind='business' and p_detail<>'{}'::jsonb then
+    raise exception 'business detail fields are not implemented' using errcode='22023';
+  elsif p_kind='listing' and p_detail-'contact_channels'<>'{}'::jsonb then raise exception 'detail fields not implemented in this identity fixture' using errcode='22023';
+  end if;
+  if p_detail ? 'contact_channels' then
+    perform internal.canonical_post_channels(p_detail->'contact_channels');
+  end if;
+  -- Draft allowance (DEC-29): 5 plus 1 per post in the owner's current
+  -- packages (internal.draft_allowance in publication.sql). Edit copies are
+  -- not counted. Never accept a caller-provided limit.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text,417));
+  if (select count(*) from private.posts p where p.owner_id=actor and p.status='draft' and p.edit_of is null)
+      >=internal.draft_allowance(actor) then
+    raise exception 'draft limit reached' using errcode='PT429';
+  end if;
+  insert into private.posts(owner_id,kind,area,category_key,activity_key) values(actor,p_kind,p_area,p_category_key,p_activity_key) returning id,activity_key into post,stored_activity;
+  if p_kind='listing' then insert into private.listing_details(post_id) values(post);
+  elsif p_kind='business' then insert into private.business_details(post_id) values(post);
+  else insert into private.event_details(post_id,starts_at,ends_at,timezone) values(post,starts,ends,tz); end if;
+  if p_detail ? 'contact_channels' then
+    insert into private.post_contacts(post_id,post_kind,channels)
+      values(post,p_kind,internal.canonical_post_channels(p_detail->'contact_channels'));
+  end if;
+  perform internal.price_draft_actor(); -- final live owner/session check after all waits
+  return jsonb_build_object('id',post,'kind',p_kind,'area',p_area,'category_key',p_category_key,'status','draft','revision',1)
+    || case when stored_activity is not null then jsonb_build_object('activity_key',stored_activity) else '{}'::jsonb end;
+end;
+$function$;
+revoke all on function internal.create_core_draft(text,text,text,jsonb,text) from public,anon,authenticated,service_role;
+grant execute on function internal.create_core_draft(text,text,text,jsonb,text) to authenticated;
+
+drop function internal.ended_post_decision(private.posts);
+drop function internal.post_idle_deletion_due(private.posts);
 drop table private.post_deletion_extensions;
 
 -- The data under the earlier rules.

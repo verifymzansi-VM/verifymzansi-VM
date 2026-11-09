@@ -35,6 +35,9 @@ begin
     if not exists(select 1 from private.post_event_timezones z where z.name=tz) then
       raise exception 'supported IANA timezone required' using errcode='22023';
     end if;
+    if ends<=clock_timestamp() then
+      raise exception 'event end must be in the future' using errcode='22023';
+    end if;
   elsif p_kind='business' and p_detail<>'{}'::jsonb then
     raise exception 'business detail fields are not implemented' using errcode='22023';
   elsif p_kind='listing' and p_detail-'contact_channels'<>'{}'::jsonb then raise exception 'detail fields not implemented in this identity fixture' using errcode='22023';

@@ -492,6 +492,17 @@ try {
        ends_at=date_trunc('milliseconds',now()-interval '1 hour') where post_id='${cutOverEvent}';
      update private.posts set visible_until=(select ends_at from private.event_details where post_id='${cutOverEvent}')
        where id='${cutOverEvent}';`);
+  const cutDraftEvent = post(dana, "event", "draft");
+  const cutPendingEvent = post(dana, "event", "pending_moderation", 0, 1);
+  const cutOverDraft = post(dana, "event", "draft");
+  q(`update private.event_details set starts_at=date_trunc('milliseconds',now()-interval '3 hours'),
+       ends_at=date_trunc('milliseconds',now()-interval '2 hours') where post_id='${cutOverDraft}';`);
+  // A paused post that still holds a slot whose run has ended (a staff hold
+  // released without restoring it leaves one like this).
+  const cutPausedSlotEnt = scalar(`select vmtest.slot('${dana.id}','${staff.id}');`);
+  const cutPausedSlot = scalar(`select vmtest.slot_post('${dana.id}','${cutPausedSlotEnt}');`);
+  q(`update private.posts set status='paused' where id='${cutPausedSlot}';
+     select vmtest.end_slot('${cutPausedSlotEnt}');`);
   const cutSlot = scalar(`select vmtest.slot('${dana.id}','${staff.id}',2);`);
   const cutSold = scalar(`select vmtest.slot_post('${dana.id}','${cutSlot}');`);
   const cutPaused = scalar(`select vmtest.slot_post('${dana.id}','${cutSlot}');`);
@@ -513,9 +524,15 @@ try {
     const notices = count(
       "select 1 from private.posts where (status='expired' and kind<>'event') or status='sold'"
     );
-    const events = count(
-      "select 1 from private.posts where kind='event' and status in('live','paused') and ended_at is null"
+    const unended =
+      "select 1 from private.posts p join private.event_details e on e.post_id=p.id where p.kind='event' and p.edit_of is null and p.ended_at is null and p.status not in('expired','sold','archived')";
+    const events = count(unended);
+    const over = count(`${unended} and e.ends_at<=now()`);
+    assert.equal(over, 2);
+    const ran = count(
+      "select 1 from private.posts p where p.status='paused' and p.kind<>'event' and p.visible_until<=now() and exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)"
     );
+    assert.equal(ran, 1);
     const paused = count(
       "select 1 from private.posts p where status='paused' and not exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null)"
     );
@@ -523,7 +540,8 @@ try {
     assert.equal(
       rows[0][3],
       `${ended} ended posts get a deletion date at least 3 days away (${notices} new notices); ` +
-        `${events} live or paused events get their end as deletion date (1 already over); ` +
+        `${events} events get their end as deletion date (${over} already over); ` +
+        `${ran} paused posts with a slot whose run has ended expire at the first run; ` +
         `${paused} paused posts without a slot keep the idle rule; ${holds} open staff holds`
     );
     const write = database.psql(
@@ -571,7 +589,16 @@ try {
       0
     );
     assert.equal(row(cutLiveEvent).deletes_at, null);
-    assert.equal(count("select 1 from private.outbox_events where kind='post_sold'"), 0);
+    assert.equal(
+      count("select 1 from private.outbox_events where kind in('post_sold','post_kept')"),
+      0
+    );
+    assert.equal(
+      scalar(
+        "select to_regprocedure('internal.ended_post_decision(private.posts)') is null and to_regclass('private.post_deletion_extensions') is null;"
+      ),
+      "t"
+    );
     assert.equal(
       scalar("select to_regprocedure('api.get_my_frontend_post_v2(uuid)') is null;"),
       "t"
@@ -615,7 +642,8 @@ try {
         "true"
       );
       job();
-      assert.deepEqual(endedRows(), before);
+      const after = new Map(endedRows().map((r) => [r.id, r.deletes_at]));
+      for (const r of before) assert.equal(after.get(r.id), r.deletes_at, r.id);
     }
   );
   await check(
@@ -643,9 +671,9 @@ try {
     }
   );
   await check(
-    "cutover: live and paused events are dated at their end; one already over gets 3 days",
+    "cutover: events that have not ended their run are dated at their end; those already over get 3 days",
     () => {
-      for (const id of [cutLiveEvent, cutPausedEvent]) {
+      for (const id of [cutLiveEvent, cutPausedEvent, cutDraftEvent, cutPendingEvent]) {
         assert.equal(
           scalar(
             `select (p.deletes_at=e.ends_at)::text from private.posts p join private.event_details e on e.post_id=p.id where p.id='${id}';`
@@ -655,12 +683,24 @@ try {
       }
       assert.equal(
         scalar(
-          `select (abs(extract(epoch from deletes_at-('${cutover}'::timestamptz+interval '3 days')))<5)::text from private.posts where id='${cutOverEvent}';`
+          `select bool_and(abs(extract(epoch from deletes_at-('${cutover}'::timestamptz+interval '3 days')))<5)::text from private.posts where id in('${cutOverEvent}','${cutOverDraft}');`
         ),
         "true"
       );
       job();
-      assert.equal(exists(cutOverEvent), true);
+      assert.equal(exists(cutOverEvent) && exists(cutOverDraft), true);
+    }
+  );
+  await check(
+    "cutover: a paused post holding a slot whose run has ended expires at the first run",
+    () => {
+      // The rollback above released its slot, as the earlier rules do; the
+      // slot is given back to recreate the state the preflight counted.
+      q(`insert into private.post_activations(post_id,entitlement_id,owner_id)
+           values('${cutPausedSlot}','${cutPausedSlotEnt}','${dana.id}');`);
+      job();
+      assert.equal(row(cutPausedSlot).status, "expired");
+      assert.equal(outbox(cutPausedSlot, "post_expired"), 1);
     }
   );
   await check(
@@ -1257,11 +1297,22 @@ try {
   });
 
   // -------------------------------------------------------- 7. late payment
-  const payment = (owner, created) =>
+  const payment = (owner, created, version = 0) =>
     scalar(`set session_replication_role=replica;
       insert into private.payments(owner_id,product_kind,plan_version_id,amount_cents,currency,snapshot,created_at)
-        values('${owner.id}','plan',(select id from private.plan_versions order by created_at,id limit 1),10000,'ZAR','{}'::jsonb,${created})
+        values('${owner.id}','plan',(select id from private.plan_versions order by created_at,id offset ${version} limit 1),10000,'ZAR','{}'::jsonb,${created})
         returning id;`);
+  const confirm = (pay, fulfilment = "fulfilled", at = "clock_timestamp()") =>
+    q(`update private.payments set status='complete',fulfillment_status='${fulfilment}',completed_at=${at},
+         provider_transaction_id='synthetic-'||gen_random_uuid(),status_changed_at=clock_timestamp() where id='${pay}';`);
+  const fail = (pay) =>
+    q(
+      `update private.payments set status='failed',status_changed_at=clock_timestamp() where id='${pay}';`
+    );
+  const keptFor = (listing, pay) =>
+    scalar(
+      `select (p.deletes_at=pay.completed_at+interval '3 days')::text from private.posts p, private.payments pay where p.id='${listing}' and pay.id='${pay}';`
+    );
   const expiredSlotPost = (label) => {
     const owner = user(label);
     const ent = slot(owner);
@@ -1342,6 +1393,187 @@ try {
       assert.equal(row(listing).deletes_at, null);
     }
   );
+  await check(
+    "late payment: once the payment is confirmed the post is kept 3 days after it, and the owner is told",
+    () => {
+      const { owner, listing } = expiredSlotPost("bongani");
+      graceEnds(listing);
+      const pay = payment(owner, "clock_timestamp()-interval '1 hour'");
+      assert.equal(job().extended, 1);
+      confirm(pay);
+      assert.equal(job().kept, 1);
+      assert.equal(exists(listing), true);
+      assert.equal(keptFor(listing, pay), "true");
+      assert.equal(outbox(listing, "post_kept"), 1);
+      assert.equal(
+        scalar(
+          `select kept_at is not null from private.post_deletion_extensions where post_id='${listing}';`
+        ),
+        "t"
+      );
+      job();
+      assert.equal(outbox(listing, "post_kept"), 1, "told once");
+      assert.equal(keptFor(listing, pay), "true");
+      // 3 days after the payment.
+      q(`update private.payments set completed_at=clock_timestamp()-interval '3 days 1 second' where id='${pay}';
+         update private.posts set deletes_at=(select completed_at+interval '3 days' from private.payments where id='${pay}')
+           where id='${listing}';`);
+      job();
+      assert.equal(exists(listing), false, "not reactivated within the 3 days after paying");
+    }
+  );
+  await check(
+    "late payment: a payment confirmed during the 3 days keeps the post 3 days after it",
+    () => {
+      const { owner, listing } = expiredSlotPost("cebo");
+      graceEnds(listing);
+      const pay = payment(owner, "clock_timestamp()-interval '2 hours'");
+      confirm(pay, "fulfilled", "clock_timestamp()-interval '1 hour'");
+      job();
+      assert.equal(exists(listing), true);
+      assert.equal(keptFor(listing, pay), "true");
+      assert.equal(outbox(listing, "post_kept"), 1);
+    }
+  );
+  await check(
+    "late payment: a failed payment does not delete the post while another is still being confirmed",
+    () => {
+      const { owner, listing } = expiredSlotPost("dumi");
+      graceEnds(listing);
+      const first = payment(owner, "clock_timestamp()-interval '1 hour'");
+      assert.equal(job().extended, 1);
+      const second = payment(owner, "clock_timestamp()", 1);
+      fail(first);
+      job();
+      assert.equal(exists(listing), true);
+      fail(second);
+      job();
+      assert.equal(exists(listing), false);
+    }
+  );
+  await check(
+    "late payment: a confirmed payment still being reconciled counts as being confirmed",
+    () => {
+      const { owner, listing } = expiredSlotPost("eli");
+      graceEnds(listing);
+      const pay = payment(owner, "clock_timestamp()-interval '1 hour'");
+      confirm(pay, "needs_reconciliation");
+      assert.equal(job().extended, 1);
+      assert.equal(exists(listing), true);
+      assert.equal(outbox(listing, "post_kept"), 0);
+    }
+  );
+
+  // ------------------------------------- 7b. slots lost by refund or sponsorship
+  const paidSlot = (owner) => {
+    const pay = scalar(`set session_replication_role=replica;
+      insert into private.payments(owner_id,product_kind,plan_version_id,amount_cents,currency,snapshot,status,
+          fulfillment_status,completed_at,provider_transaction_id)
+        values('${owner.id}','plan',(select id from private.plan_versions order by created_at,id limit 1),10000,'ZAR','{}'::jsonb,
+          'complete','fulfilled',now(),'synthetic-'||gen_random_uuid())
+        returning id;`);
+    const ent =
+      scalar(`insert into private.entitlements(owner_id,source,payment_id,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+        values('${owner.id}','retail_paid','${pay}',2,10,1,now()-interval '1 day',now()+interval '20 days') returning id;`);
+    return { pay, ent };
+  };
+  const idleFor = (id, days) =>
+    q(
+      `update private.posts set status_changed_at=now()-make_interval(days=>${days}),content_updated_at=now()-make_interval(days=>${days}) where id='${id}';`
+    );
+  await check(
+    "refund: a paused post funded by a refunded plan expires with the 3-day rule; a held one stays paused",
+    () => {
+      const yanga = user("yanga");
+      const { pay, ent } = paidSlot(yanga);
+      const paused = slotPost(yanga, ent);
+      const held = slotPost(yanga, ent);
+      setState(yanga, paused, "pause");
+      idleFor(paused, 70); // paused long ago: the idle rule alone would delete it now
+      scalar(`select vmtest.hide('${held}','${staff.id}');`);
+      q(`select internal.reverse_payment('${pay}','refunded','Synthetic refund for the check');`);
+      const after = row(paused);
+      assert.equal(after.status, "expired");
+      assert.equal(after.status_reason, "Payment refunded");
+      assert.equal(threeDays(paused), "true");
+      assert.equal(openSlot(paused), "");
+      assert.equal(row(held).status, "paused");
+      job();
+      assert.equal(exists(paused), true, "deleted without its 3 days");
+      assert.equal(outbox(paused, "post_expired"), 1);
+      assert.equal(outbox(paused, "draft_deletion_warning"), 0);
+    }
+  );
+  await check("sponsorship end: a paused post in the ended place expires the same way", () => {
+    const zola = user("zola");
+    const ent = slot(zola);
+    const paused = slotPost(zola, ent);
+    setState(zola, paused, "pause");
+    idleFor(paused, 70);
+    q(`select internal.release_sponsorship_entitlement('${ent}');`);
+    assert.equal(row(paused).status, "expired");
+    assert.equal(row(paused).status_reason, "Sponsorship ended");
+    assert.equal(threeDays(paused), "true");
+    job();
+    assert.equal(exists(paused), true);
+  });
+  await check("release: the slot of a paused or sold post cannot be released by hand", () => {
+    const amahle = user("amahle");
+    const ent = slot(amahle, 2);
+    const paused = slotPost(amahle, ent);
+    const sold = slotPost(amahle, ent);
+    setState(amahle, paused, "pause");
+    setState(amahle, sold, "sold");
+    for (const id of [paused, sold]) {
+      const message = fails(member(amahle, `select api.release_post('${id}','owner');`), "22023");
+      assert.match(message, /keeps its slot until it is deleted/);
+      assert.notEqual(openSlot(id), "");
+    }
+  });
+  await check(
+    "archive: archiving releases the slot at once and the post goes 3 days later, without a notice",
+    () => {
+      const jabu = user("jabu");
+      const ent = slot(jabu);
+      const listing = slotPost(jabu, ent);
+      const activation = openSlot(listing);
+      setState(jabu, listing, "archive");
+      assert.equal(releaseReason(activation), "owner");
+      assert.equal(threeDays(listing), "true");
+      job();
+      assert.equal(outbox(listing, "post_expired") + outbox(listing, "post_sold"), 0);
+      graceEnds(listing);
+      job();
+      assert.equal(exists(listing), false);
+    }
+  );
+  await check("sold notice: undoing and redoing sold sends it once for the slot", () => {
+    const fana = user("fana");
+    const ent = slot(fana);
+    const listing = slotPost(fana, ent);
+    setState(fana, listing, "sold");
+    job();
+    for (let n = 0; n < 3; n++) {
+      assert.equal(json(member(fana, action(fana, listing, "reactivate"))).status, "live");
+      setState(fana, listing, "sold");
+      job();
+    }
+    assert.equal(outbox(listing, "post_sold"), 1);
+  });
+  await check(
+    "notices: an ended post already due gets the deletion notice, not a late expiry notice",
+    () => {
+      const ian = user("ian");
+      const listing = post(ian, "listing", "expired");
+      q(
+        `update private.posts set ended_at=now()-interval '4 days',deletes_at=now()-interval '1 second' where id='${listing}';`
+      );
+      job();
+      assert.equal(exists(listing), false);
+      assert.equal(outbox(listing, "post_expired"), 0);
+      assert.equal(outbox(listing, "post_deleted"), 1);
+    }
+  );
 
   // ---------------------------------------------------------------- 8. events
   const liveEvent = (owner) => {
@@ -1375,6 +1607,67 @@ try {
       assert.equal(place(event), "kept");
     }
   );
+  await check(
+    "events: a draft, pending or rejected event is deleted at its end; a held one is kept",
+    () => {
+      const hope = user("hope");
+      const drafted = draft(hope);
+      const pending = draft(hope);
+      q(submit(hope, pending));
+      const rejected = draft(hope);
+      q(submit(hope, rejected));
+      q(
+        `update private.posts set status='rejected',status_reason='Synthetic rejection' where id='${rejected}';`
+      );
+      const held = liveEvent(hope);
+      scalar(`select vmtest.hide('${held}','${staff.id}');`);
+      for (const id of [drafted, pending, rejected, held]) {
+        assert.equal(datedAtEnd(id), "true", id);
+        eventEnds(id);
+      }
+      job();
+      for (const id of [drafted, pending, rejected]) assert.equal(exists(id), false, id);
+      assert.equal(exists(held), true);
+    }
+  );
+  await check("events: an end in the past is refused when an event is created or edited", () => {
+    const gabi = user("gabi");
+    const at = (hours) =>
+      new Date(Math.floor(Date.now() / 1000) * 1000 + hours * 3_600_000).toISOString();
+    const past = { starts_at: at(-3), ends_at: at(-1), timezone: "Africa/Johannesburg" };
+    const activity = scalar(
+      "select coalesce((select a.key from private.category_activities a join private.categories c on c.key=a.category_key where a.category_key='events' and c.activity_required order by a.key limit 1),'')"
+    );
+    const created = fails(
+      member(
+        gabi,
+        `select api.create_core_draft('event','tourism_events','events','${JSON.stringify(past)}'::jsonb,${activity ? `'${activity}'` : "null"});`
+      ),
+      "22023"
+    );
+    assert.match(created, /event end must be in the future/);
+    const event = liveEvent(gabi);
+    setState(gabi, event, "pause");
+    const before = endsAt(event);
+    const edited = fails(
+      member(
+        gabi,
+        `select api.save_business_event_context('${event}',${row(event).revision},'${JSON.stringify({ event_window: past })}'::jsonb);`
+      ),
+      "22023"
+    );
+    assert.match(edited, /event end must be in the future/);
+    assert.equal(endsAt(event), before);
+    const future = { starts_at: at(48), ends_at: at(50), timezone: "Africa/Johannesburg" };
+    q(
+      member(
+        gabi,
+        `select api.save_business_event_context('${event}',${row(event).revision},'${JSON.stringify({ event_window: future })}'::jsonb);`
+      )
+    );
+    assert.equal(datedAtEnd(event), "true", "the deletion date follows the moved end");
+    assert.equal(Date.parse(endsAt(event)), Date.parse(future.ends_at));
+  });
   await check("events: a paused event is deleted at its end too", () => {
     const fezeka = user("fezeka");
     const event = liveEvent(fezeka);
@@ -1435,11 +1728,21 @@ try {
       const listed = json(member(vusi, "select api.list_my_frontend_posts_v2('listing');"));
       assert.equal(listed.total, 1);
       assert.equal(listed.items[0].deletes_at, due);
+      assert.equal(
+        json(member(vusi, "select api.list_my_frontend_posts('listing');")).items[0].deletes_at,
+        undefined
+      );
       const event = liveEvent(vusi);
       const eventRead = json(member(vusi, `select api.get_my_frontend_post_v2('${event}');`));
       assert.equal(eventRead.deletes_at, endsAt(event));
-      const draftRead = json(member(vusi, `select api.get_my_frontend_post_v2('${draft(vusi)}');`));
-      assert.equal(draftRead.deletes_at, null);
+      const draftEvent = draft(vusi);
+      const draftRead = json(member(vusi, `select api.get_my_frontend_post_v2('${draftEvent}');`));
+      assert.equal(draftRead.deletes_at, endsAt(draftEvent));
+      const draftListing = post(vusi, "listing", "draft");
+      assert.equal(
+        json(member(vusi, `select api.get_my_frontend_post_v2('${draftListing}');`)).deletes_at,
+        null
+      );
       // Another member sees nothing.
       assert.equal(
         scalar(member(alice, `select api.get_my_frontend_post_v2('${listing}') is null;`)),
@@ -1454,36 +1757,51 @@ try {
       fails(member(vusi, "select api.list_my_frontend_posts_v2('listing',null,101);"), "22023");
     }
   );
-  await check("notices: the mail claim accepts the sold notice and the earlier kind list", () => {
-    const earlier = [
-      "payment_completed",
-      "payment_reversed",
-      "payment_reconciliation_required",
-      "trial_started",
-      "post_expired",
-      "post_expiry_reminder",
-      "draft_deletion_warning",
-      "post_deleted",
-      "verification_phone_confirmed",
-      "identity_accepted",
-      "enquiry_received",
-      "account_warning",
-      "content_hidden",
-      "account_suspended",
-      "account_banned",
-      "appeal_decided",
-      "business_check_update",
-    ];
-    const claim = (kinds) =>
-      service(
-        `select api.claim_supported_notification_outbox(array[${kinds.map((k) => `'${k}'`).join(",")}],50);`
+  await check(
+    "notices: the mail claim accepts the new kinds and the earlier list, with dates",
+    () => {
+      const earlier = [
+        "payment_completed",
+        "payment_reversed",
+        "payment_reconciliation_required",
+        "trial_started",
+        "post_expired",
+        "post_expiry_reminder",
+        "draft_deletion_warning",
+        "post_deleted",
+        "verification_phone_confirmed",
+        "identity_accepted",
+        "enquiry_received",
+        "account_warning",
+        "content_hidden",
+        "account_suspended",
+        "account_banned",
+        "appeal_decided",
+        "business_check_update",
+      ];
+      const claim = (kinds) =>
+        service(
+          `select api.claim_supported_notification_outbox(array[${kinds.map((k) => `'${k}'`).join(",")}],50);`
+        );
+      const sold = json(claim(["post_sold"]));
+      const earlierSold = sold.find((item) => item.post_id === soldListing);
+      assert.ok(earlierSold, "the sold notice is claimed");
+      assert.equal(earlierSold.deletes_at, row(soldListing).deletes_at);
+      assert.equal(
+        earlierSold.holds_slot,
+        false,
+        "sold before the update: its slot is already free"
       );
-    const sold = json(claim(["post_sold"]));
-    assert.ok(sold.some((item) => item.kind === "post_sold" && item.post_id === soldListing));
-    q(claim(earlier)); // the list of the application deployed before this update
-    q(claim([...earlier, "post_sold"]));
-    fails(claim([...earlier, "post_sold", "post_sold"]), "22023");
-  });
+      const holding = sold.find((item) => item.holds_slot === true);
+      assert.ok(holding, "a post sold under these rules still holds its slot");
+      assert.equal(holding.deletes_at, row(holding.post_id).deletes_at);
+      q(claim(["post_kept"]));
+      q(claim(earlier)); // the list of the application deployed before this update
+      q(claim([...earlier, "post_sold"]));
+      q(claim([...earlier, "post_sold", "post_kept"]));
+      fails(claim([...earlier, "post_sold", "post_kept", "post_kept"]), "22023");
+    }
+  );
 
   // ----------------------------------------------------------- concurrency
   const session = (sql) =>

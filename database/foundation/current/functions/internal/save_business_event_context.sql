@@ -71,6 +71,9 @@ begin
       or not exists(select 1 from private.post_event_timezones z where z.name=zone) then
       raise exception 'invalid event window' using errcode='22023';
     end if;
+    if ends<=clock_timestamp() then
+      raise exception 'event end must be in the future' using errcode='22023';
+    end if;
     update private.event_details set starts_at=starts,ends_at=ends,timezone=zone where post_id=post.id;
     if not found then raise exception 'event detail not found' using errcode='22023'; end if;
   end if;

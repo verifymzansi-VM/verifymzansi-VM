@@ -158,11 +158,78 @@ it("declares and delivers the sold-post notice within the database's kind limit"
   }));
   expect(await runFoundationOperationJobs(service, deliver)).toMatchObject({ succeeded: 1 });
   const claimArgs = rpc.mock.calls.find(([name]) => name === "claim_supported_notification_outbox");
-  expect(claimArgs?.[1].p_supported_kinds).toContain("post_sold");
-  expect(claimArgs?.[1].p_supported_kinds).toHaveLength(18);
+  expect(claimArgs?.[1].p_supported_kinds).toEqual(
+    expect.arrayContaining(["post_sold", "post_kept"])
+  );
+  expect(claimArgs?.[1].p_supported_kinds).toHaveLength(19);
   expect(deliver).toHaveBeenCalledExactlyOnceWith(
     "synthetic@example.invalid",
     "post_sold",
-    `foundation-outbox/${id}`
+    `foundation-outbox/${id}`,
+    undefined,
+    { deletesAt: null, holdsSlot: null }
   );
+});
+it("passes the deletion date and slot of a lifecycle notice to the email", async () => {
+  rpc.mockImplementation(async (name) => ({
+    data:
+      name === "claim_supported_notification_outbox"
+        ? [
+            {
+              ...job(),
+              kind: "post_expired",
+              deletes_at: "2026-11-12T08:30:00+00:00",
+              holds_slot: false,
+            },
+          ]
+        : name === "complete_notification_outbox"
+          ? true
+          : {},
+    error: null,
+  }));
+  expect(await runFoundationOperationJobs(service, deliver)).toMatchObject({ succeeded: 1 });
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "post_expired",
+    `foundation-outbox/${id}`,
+    undefined,
+    { deletesAt: "2026-11-12T08:30:00+00:00", holdsSlot: false }
+  );
+});
+it("claims the earlier kinds from a database that does not know the newer ones", async () => {
+  let first = true;
+  rpc.mockImplementation(async (name) => {
+    if (name === "claim_supported_notification_outbox" && first) {
+      first = false;
+      return { data: null, error: { code: "22023", message: "unsupported mail kind" } };
+    }
+    return {
+      data:
+        name === "claim_supported_notification_outbox"
+          ? [job()]
+          : name === "complete_notification_outbox"
+            ? true
+            : {},
+      error: null,
+    };
+  });
+  expect(await runFoundationOperationJobs(service, deliver)).toMatchObject({ succeeded: 1 });
+  const claims = rpc.mock.calls.filter(([name]) => name === "claim_supported_notification_outbox");
+  expect(claims).toHaveLength(2);
+  expect(claims[1][1].p_supported_kinds).toHaveLength(17);
+  expect(claims[1][1].p_supported_kinds).not.toContain("post_sold");
+  expect(claims[1][1].p_supported_kinds).not.toContain("post_kept");
+});
+it("does not retry the claim after another failure", async () => {
+  rpc.mockImplementation(async (name) =>
+    name === "claim_supported_notification_outbox"
+      ? { data: null, error: { code: "42501", message: "denied" } }
+      : { data: {}, error: null }
+  );
+  await expect(runFoundationOperationJobs(service, deliver)).rejects.toThrow(
+    "could not be claimed"
+  );
+  expect(
+    rpc.mock.calls.filter(([name]) => name === "claim_supported_notification_outbox")
+  ).toHaveLength(1);
 });

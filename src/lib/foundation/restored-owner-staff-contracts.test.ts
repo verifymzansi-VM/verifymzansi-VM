@@ -109,6 +109,32 @@ it("requires the deletion date on the owner's reads and keeps the staff form wit
   expect(restoredOwnerPostRow(parseRestoredOwnerPost(staffForm)!, caller).deletes_at).toBeNull();
 });
 
+it("falls back to the original owner reads on a database without the deletion date", async () => {
+  const { deletes_at: _, ...earlier } = listing;
+  const missing = { data: null, error: { code: "PGRST202", message: "not found" } };
+  const { api, rpc } = fixture(earlier);
+  rpc.mockResolvedValueOnce(missing);
+  const post = await readRestoredOwnerPost(api, id);
+  expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+    "get_my_frontend_post_v2",
+    "get_my_frontend_post",
+  ]);
+  expect(restoredOwnerPostRow(post!, caller).deletes_at).toBeNull();
+  rpc.mockClear();
+  rpc.mockResolvedValueOnce(missing);
+  rpc.mockResolvedValueOnce(ok({ items: [earlier], total: 1, limit: 100, offset: 0 }));
+  await expect(listRestoredOwnerPosts(api, "listing")).resolves.toHaveLength(1);
+  expect(rpc.mock.calls.map(([name]) => name)).toEqual([
+    "list_my_frontend_posts_v2",
+    "list_my_frontend_posts",
+  ]);
+  // Any other failure is not a reason to read the original form.
+  rpc.mockClear();
+  rpc.mockResolvedValueOnce({ data: null, error: { code: "42501", message: "denied" } });
+  await expect(readRestoredOwnerPost(api, id)).rejects.toThrow("could not be loaded");
+  expect(rpc).toHaveBeenCalledTimes(1);
+});
+
 it("rejects duplicate posts and pending edits from the top-level owner collection", async () => {
   const { api, rpc } = fixture({ items: [listing], total: 1, limit: 100, offset: 0 });
   await expect(listRestoredOwnerPosts(api, "listing", "market")).resolves.toHaveLength(1);

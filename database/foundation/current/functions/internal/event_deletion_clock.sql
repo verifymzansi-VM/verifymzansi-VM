@@ -8,8 +8,8 @@ CREATE OR REPLACE FUNCTION internal.event_deletion_clock()
 AS $function$
 begin
   update private.posts p set deletes_at=new.ends_at
-    where p.id=new.post_id and p.kind='event' and p.status in('live','paused') and p.ended_at is null
-      and p.deletes_at is distinct from new.ends_at;
+    where p.id=new.post_id and p.kind='event' and p.edit_of is null and p.ended_at is null
+      and p.status not in('expired','sold','archived') and p.deletes_at is distinct from new.ends_at;
   return null;
 end$function$;
 alter function internal.event_deletion_clock() owner to postgres;

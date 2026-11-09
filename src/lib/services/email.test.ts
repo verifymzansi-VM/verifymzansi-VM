@@ -50,17 +50,46 @@ describe("email service", () => {
     ).rejects.toThrow("details unavailable");
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
-  it("tells owners of expired and sold posts about the 3-day deletion", async () => {
-    await sendPlatformNotice("owner@example.invalid", "post_expired", "foundation-outbox/expired");
-    await sendPlatformNotice("owner@example.invalid", "post_sold", "foundation-outbox/sold");
-    const [expired, sold] = mockSend.mock.calls.map(([message]) => message);
+  it("tells owners of expired, sold and kept posts when they will be deleted", async () => {
+    const deletesAt = "2026-11-12T08:30:00Z"; // 10:30 in South Africa
+    await sendPlatformNotice("owner@example.invalid", "post_expired", "outbox/expired", undefined, {
+      deletesAt,
+      holdsSlot: false,
+    });
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/sold", undefined, {
+      deletesAt,
+      holdsSlot: true,
+    });
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/early", undefined, {
+      deletesAt,
+      holdsSlot: false,
+    });
+    await sendPlatformNotice("owner@example.invalid", "post_kept", "outbox/kept", undefined, {
+      deletesAt,
+    });
+    const [expired, sold, soldEarlier, kept] = mockSend.mock.calls.map(([message]) => message);
     expect(expired.subject).toBe("Your post has expired");
-    expect(expired.text).toContain("deleted, with its photos and videos, in 3 days");
+    expect(expired.text).toMatch(/deleted, with its photos and videos, on 12 November 2026.*10:30/);
+    expect(expired.text).toContain("ended or was cancelled");
     expect(expired.text).toContain("buy a plan and reactivate it");
     expect(sold.subject).toBe("Your post is marked as sold");
-    expect(sold.text).toContain("in 3 days");
-    expect(sold.text).toContain("delete the post yourself");
+    expect(sold.text).toMatch(/on 12 November 2026/);
+    expect(sold.text).toContain("delete the post yourself to free the slot sooner");
+    expect(soldEarlier.text).not.toContain("slot");
+    expect(kept.subject).toBe("Your post is kept after your payment");
+    expect(kept.text).toMatch(/kept until 12 November 2026/);
     expect(sold.text).toContain("/dashboard");
+  });
+  it("words lifecycle notices without a date when the job does not know it", async () => {
+    await sendPlatformNotice("owner@example.invalid", "post_expired", "outbox/expired");
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/sold", undefined, {
+      deletesAt: "not a date",
+    });
+    const [expired, sold] = mockSend.mock.calls.map(([message]) => message);
+    expect(expired.text).not.toMatch(/ on [0-9]/);
+    expect(expired.text).toContain("otherwise it will be deleted");
+    expect(sold.text).toContain("deleted, with its photos and videos, shortly");
+    expect(`${expired.text}${sold.text}`).not.toMatch(/3 days|30 days/);
   });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({

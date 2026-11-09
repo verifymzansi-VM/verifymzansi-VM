@@ -22,8 +22,10 @@ begin
     update private.post_activations a set released_at=statement_timestamp(),release_reason='entitlement_ended'
     where a.entitlement_id=p_entitlement and a.released_at is null returning a.post_id)
   select coalesce(array_agg(post_id) filter(where post_id is not null),'{}') into v_post_ids from released;
-  update private.posts set status='expired',status_reason='Sponsorship ended',revision=revision+1
-    where id=any(v_post_ids) and status in('live','pending_moderation');
+  update private.posts p set status='expired',status_reason='Sponsorship ended',revision=revision+1
+    where p.id=any(v_post_ids) and (p.status in('live','pending_moderation')
+      or (p.status='paused' and not exists(select 1 from private.frontend_content_holds h
+        where h.post_id=p.id and h.released_at is null)));
   update private.post_search_documents set is_visible=false where post_id=any(v_post_ids);
   return cardinality(v_post_ids);
 exception when lock_not_available then

@@ -206,11 +206,24 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
     ...Object.fromEntries(Object.entries(extras).filter(([k]) => k !== "attributes")),
   };
 }
+// The owner's reads with the deletion date come with database update
+// 20261109104020_post_expiry_rules.sql. Against a database without it, the
+// original reads answer and the deletion date is null.
+function missingRead(error: { code?: string } | null) {
+  return error?.code === "PGRST202" || error?.code === "42883";
+}
 export async function readRestoredOwnerPost(api: FoundationAuthenticatedApi, id: string) {
   const normalized = z.uuid().parse(id).toLowerCase();
+  let parsed: RestoredOwnerPost | null;
   const result = await api.rpc("get_my_frontend_post_v2", { p_id: normalized }, { get: false });
-  if (result.error) throw new Error("Your post could not be loaded");
-  const parsed = result.data === null ? null : ownedWithDeletion.parse(result.data);
+  if (missingRead(result.error)) {
+    const earlier = await api.rpc("get_my_frontend_post", { p_id: normalized }, { get: false });
+    if (earlier.error) throw new Error("Your post could not be loaded");
+    parsed = parseRestoredOwnerPost(earlier.data);
+  } else {
+    if (result.error) throw new Error("Your post could not be loaded");
+    parsed = result.data === null ? null : ownedWithDeletion.parse(result.data);
+  }
   if (parsed && parsed.id !== normalized) throw new Error("Post changed");
   return parsed;
 }
@@ -220,16 +233,26 @@ export async function listRestoredOwnerPosts(
   area?: string
 ) {
   const items: RestoredOwnerPost[] = [];
+  let withDeletion = true;
   for (let offset = 0; offset <= 10000; offset += 100) {
-    const result = await api.rpc(
-      "list_my_frontend_posts_v2",
-      { p_kind: kind, ...(area ? { p_area: area } : {}), p_limit: 100, p_offset: offset },
-      { get: false }
-    );
+    const args = {
+      p_kind: kind,
+      ...(area ? { p_area: area } : {}),
+      p_limit: 100,
+      p_offset: offset,
+    };
+    let result = withDeletion
+      ? await api.rpc("list_my_frontend_posts_v2", args, { get: false })
+      : await api.rpc("list_my_frontend_posts", args, { get: false });
+    if (withDeletion && missingRead(result.error)) {
+      withDeletion = false;
+      result = await api.rpc("list_my_frontend_posts", args, { get: false });
+    }
     if (result.error) throw new Error("Your posts could not be loaded");
+    const item: z.ZodType<RestoredOwnerPost> = withDeletion ? ownedWithDeletion : owned;
     const page = z
       .strictObject({
-        items: z.array(ownedWithDeletion).max(100),
+        items: z.array(item).max(100),
         total: z.number().int().nonnegative(),
         limit: z.literal(100),
         offset: z.number().int().nonnegative(),

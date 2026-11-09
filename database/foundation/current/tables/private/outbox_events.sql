@@ -17,7 +17,7 @@ create table private.outbox_events (
   constraint outbox_events_dedupe_key_key UNIQUE (dedupe_key),
   constraint outbox_events_delivery_attempts_check CHECK (delivery_attempts >= 0 AND delivery_attempts <= 20),
   constraint outbox_events_delivery_error_check CHECK (delivery_error IS NULL OR delivery_error ~ '^[a-z_]{1,80}$'::text),
-  constraint outbox_events_kind_check CHECK (kind = ANY (ARRAY['payment_completed'::text, 'payment_reversed'::text, 'payment_reconciliation_required'::text, 'trial_started'::text, 'post_expired'::text, 'post_expiry_reminder'::text, 'draft_deletion_warning'::text, 'post_deleted'::text, 'verification_phone_confirmed'::text, 'identity_accepted'::text, 'enquiry_received'::text, 'account_warning'::text, 'content_hidden'::text, 'account_suspended'::text, 'account_banned'::text, 'appeal_decided'::text, 'business_check_update'::text, 'post_sold'::text])),
+  constraint outbox_events_kind_check CHECK (kind = ANY (ARRAY['payment_completed'::text, 'payment_reversed'::text, 'payment_reconciliation_required'::text, 'trial_started'::text, 'post_expired'::text, 'post_expiry_reminder'::text, 'draft_deletion_warning'::text, 'post_deleted'::text, 'verification_phone_confirmed'::text, 'identity_accepted'::text, 'enquiry_received'::text, 'account_warning'::text, 'content_hidden'::text, 'account_suspended'::text, 'account_banned'::text, 'appeal_decided'::text, 'business_check_update'::text, 'post_sold'::text, 'post_kept'::text])),
   constraint outbox_events_pkey PRIMARY KEY (id)
 );
 alter table private.outbox_events owner to postgres;

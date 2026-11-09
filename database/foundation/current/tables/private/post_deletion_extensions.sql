@@ -7,6 +7,7 @@ create table private.post_deletion_extensions (
   grace_ended_at timestamp with time zone not null,
   payment_id uuid not null,
   extended_at timestamp with time zone default statement_timestamp() not null,
+  kept_at timestamp with time zone,
   constraint post_deletion_extensions_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE CASCADE,
   constraint post_deletion_extensions_pkey PRIMARY KEY (post_id),
   constraint post_deletion_extensions_post_id_fkey FOREIGN KEY (post_id) REFERENCES private.posts(id) ON DELETE CASCADE
