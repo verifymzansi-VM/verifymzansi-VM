@@ -62,8 +62,9 @@ again is saved once, that the preflight is read only and reports a body it does
 not expect, that the update and the rollback refuse an unexpected body, and that
 apply, rollback and re-apply return the same fingerprints.
 
-**Applying.** Apply it after `20261109173012_posting_terms_v3.sql` (filename
-order, so the fingerprint record moves forward one update at a time):
+**Applying.** Production already has every earlier update (the last,
+`20261109173012_posting_terms_v3.sql`, was applied on 9 November 2026), and no
+website release depends on this one:
 
 1. Run `../preflight/20261109224337_fix_post_command_target.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
@@ -84,7 +85,11 @@ owner's decision; it brings the failure back, so prefer a forward fix).
 
 ## Posting Terms v3, 9 November 2026
 
-`20261109173012_posting_terms_v3.sql` is **not applied yet**. It needs
+`20261109173012_posting_terms_v3.sql` is applied: the owner applied it to
+production on 9 November 2026, after the post expiry rules update and after its
+preflight returned only the summary row. Production's current posting terms are
+now `posting-v3` with the hash below, and its fingerprint matches the replay
+through this update (`../fingerprint.json`, `productionCheck`). It needs
 `20261109104020_post_expiry_rules.sql` first and refuses to run without it. It
 publishes posting terms version `posting-v3`
 (`src/lib/legal/terms-documents/posting-v3.json`, canonical hash
@@ -292,8 +297,7 @@ deletion rules that follow it.
   older than the window (purged by the lifecycle job) or with their erased
   account. The backfill copies each original event's latest submission from the
   last 31 days. The rows are part of the member's privacy export (dataset
-  `event_submissions`; the export route accepts 32 or 33 datasets until
-  production has this update).
+  `event_submissions`; the export route requires all 33 datasets).
 
 `pnpm db:foundation:lifecycle-test` (CI step in `foundation-sql-lint`) replays
 this folder into the throwaway Postgres 17 container, runs the read-only
