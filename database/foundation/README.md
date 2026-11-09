@@ -72,9 +72,11 @@ public and a fingerprint equal to `fingerprint.json`. It then adds
 the sign-up hook is switched on) and seeds the test people and posts from
 `e2e/foundation/fixture/` through the real local Auth, the mail catcher and the
 production API commands. Every entry point refuses any database address that is
-not this local stack. `reset` rebuilds the copy; `down` deletes the stack, its
-data and the files the copy wrote (`tmp/foundation-e2e/state.json`, the fake SMS
-sink, `public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
+not this local stack, and the copy uses the native fixture's Docker guard (see
+below), so it runs only on Docker Desktop on Windows or a GitHub-hosted Linux
+runner. `reset` rebuilds the copy; `down` deletes the stack, its data and the
+files the copy wrote (`tmp/foundation-e2e/state.json`, the fake SMS sink,
+`public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
 
 The website environment blanks every key named in the root `.env*` files, so
 Next cannot refill real settings from them; `build` stamps `.next` with a hash
@@ -139,11 +141,12 @@ runs nightly, on manual dispatch and on every pull request; when a pull request
 does not touch `database/foundation/`, `docs/backend-foundation/prototypes/`,
 `src/lib/`, `src/types/`, `src/app/api/`, the native scripts or the
 dependencies, the job passes without starting Docker. The fixture's Docker guard
-(`localDockerContext` in `scripts/lib/foundation-native-isolation.mjs`) accepts
-only Docker Desktop's local Linux engine pipe on Windows, or the default context
-on the local socket `/var/run/docker.sock` of a GitHub-hosted runner; it refuses
-TCP, SSH and other remote endpoints, other contexts and Linux outside
-GitHub-hosted CI.
+(`localDockerContext` in `scripts/lib/foundation-native-isolation.mjs`, also
+used by the browser test copy through `localDockerEnvironment`) accepts only
+Docker Desktop's local Linux engine pipe on Windows, or the default context on
+the local socket `/var/run/docker.sock` of a GitHub-hosted runner; it refuses
+TCP, SSH and other remote endpoints, other contexts, a `DOCKER_HOST` or
+`DOCKER_CONTEXT` pointing elsewhere, and Linux outside GitHub-hosted CI.
 
 If replay changes generated types captured by the native run, repeat steps 2–4
 with the refreshed inputs. The final native source hashes and clean replay must
