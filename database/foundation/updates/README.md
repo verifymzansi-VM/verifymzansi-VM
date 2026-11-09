@@ -84,9 +84,13 @@ rollback; prefer a new version).
 
 ## Post expiry rules, 9 November 2026
 
-`20261109104020_post_expiry_rules.sql` is **not applied yet**. It needs
-`20261109073519_post_lifecycle_guards.sql` first and refuses to run without it.
-It sets the deletion rules decided on 9 November 2026:
+`20261109104020_post_expiry_rules.sql` is applied: the owner applied it to
+production on 9 November 2026, after the post lifecycle guards update and after
+its preflight returned only the summary row. Production's fingerprint then
+matched the replay through this update (`../fingerprint.json`,
+`productionCheck`). It needs `20261109073519_post_lifecycle_guards.sql` first
+and refuses to run without it. It sets the deletion rules decided on 9 November
+2026:
 
 - **Market and Business posts** hold a plan slot. When a post's paid run ends
   (its `visible_until`, or a refund, chargeback or sponsorship end of the plan
@@ -207,9 +211,10 @@ rollback changes.
 
 ## Post lifecycle guards, 9 November 2026
 
-`20261109073519_post_lifecycle_guards.sql` is **not applied yet**. It changes no
-member-facing rule and adds no new deletion; it prepares the deletion rules that
-follow it.
+`20261109073519_post_lifecycle_guards.sql` is applied: the owner applied it to
+production on 9 November 2026, after its preflight returned only the summary
+row. It changes no member-facing rule and adds no new deletion; it prepares the
+deletion rules that follow it.
 
 - **Staff content holds block deletion.** While a hold from the Hide action is
   open, the lifecycle job neither deletes the post nor sends a deletion warning,
