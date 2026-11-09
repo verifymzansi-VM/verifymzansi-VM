@@ -115,6 +115,12 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
     { limit: 5, ttl: 60 }, // 5 per minute
     { limit: 10, ttl: 3600 }, // 10 per hour
   ],
+  // Each server-side check of the current password when a signed-in member
+  // changes it (a sign-in without CAPTCHA), per account.
+  "auth:change-password:verify": [
+    { limit: 5, ttl: 3600 }, // 5 per hour per account
+    { limit: 10, ttl: 86400 }, // 10 per day per account
+  ],
   "auth:reset-password": [
     { limit: 5, ttl: 60 }, // 5 per minute
     { limit: 10, ttl: 3600 }, // 10 per hour

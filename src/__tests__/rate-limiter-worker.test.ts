@@ -234,6 +234,19 @@ describe("rate-limiter worker", () => {
     expect((await send("account:user-2")).status).toBe(200);
   });
 
+  it("caps current-password checks at five an hour per account without blocking another account", async () => {
+    const { env } = createWorkerEnv();
+    const check = (key: string) =>
+      rateLimiterWorker.fetch(
+        createWorkerRequest("auth:change-password:verify", key),
+        env as never
+      );
+    for (let attempt = 0; attempt < 5; attempt++)
+      expect((await check("account:user-1")).status).toBe(200);
+    expect((await check("account:user-1")).status).toBe(429);
+    expect((await check("account:user-2")).status).toBe(200);
+  });
+
   it("keeps a platform-wide budget for password setup emails", async () => {
     const { env } = createWorkerEnv();
     for (let attempt = 0; attempt < 30; attempt++)

@@ -39,7 +39,21 @@ const caller = z.object({
   exp: z.number().int().positive(),
   session_id: z.uuid(),
   amr: z.unknown().optional(),
+  aal: z.unknown().optional(),
 });
+
+/** GoTrue's own rule (User.HasMFAEnabled): any verified factor of any kind. */
+function hasVerifiedFactor(user: { factors?: unknown }) {
+  return (
+    Array.isArray(user.factors) &&
+    user.factors.some(
+      (factor: unknown) =>
+        !!factor &&
+        typeof factor === "object" &&
+        (factor as Record<string, unknown>).status === "verified"
+    )
+  );
+}
 
 /** One request, one explicit foundation project, one verified caller token.
  * The caller must forward BOTH cookie writes and cache headers from setAll to
@@ -111,7 +125,10 @@ export async function createFoundationRequestCaller(
     if (cookieAccessFailed) throw new FoundationSessionError(503);
     return {
       ...verified,
-      updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher),
+      updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher, {
+        email: verified.user.email,
+        authenticatorStepMissing: verified.authenticatorStepMissing,
+      }),
       /** Starts an email change for this same session (email-change.ts). */
       changeEmail: createFoundationEmailChanger(config, token, verified.accountId, fetcher),
       resetPassword: verified.recovery
@@ -172,6 +189,9 @@ async function verifyFoundationCallerToken(input: unknown, token: string, fetche
       signedInWithPassword: foundationSignedInWithPassword(claims.amr),
       /** When this session last used its authenticator app (seconds), or null. */
       authenticatorAt: foundationLatestAuthenticatorStep(claims.amr),
+      /** The account has a verified authenticator this session has not used
+       * (its token is not `aal2`), so Auth refuses a password change. */
+      authenticatorStepMissing: hasVerifiedFactor(verified.data.user) && claims.aal !== "aal2",
     };
   } catch {
     // Never include cookie contents, tokens or provider error bodies.

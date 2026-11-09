@@ -1,7 +1,12 @@
 import "server-only";
 
+import { z } from "zod";
 import { parseFoundationConnection } from "./connection";
 import { authErrorCode } from "./auth-error-code";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("FoundationPasswordUpdate");
+const secretKey = z.string().regex(/^sb_secret_[A-Za-z0-9_-]+$/);
 
 export class FoundationPasswordUpdateError extends Error {
   constructor(
@@ -79,14 +84,143 @@ function passwordCommand(input: unknown, token: string, subject: string, fetcher
   };
 }
 
+/** What the password change needs, from the verified session only, to
+ * confirm the current password itself. */
+export interface FoundationPasswordCheck {
+  /** The session's own address as GoTrue returned it, never request input. */
+  email: string | undefined;
+  /** The account has a verified authenticator that this session has not
+   * used (GoTrue `aal1`); Auth then refuses the change (insufficient_aal). */
+  authenticatorStepMissing: boolean;
+}
+
+/** True when `accessToken` names a session. Auth signs out EVERY session of
+ * a token without one (GoTrue Logout), so only such a token may be used. */
+function namesSession(accessToken: string) {
+  try {
+    const claims: unknown = JSON.parse(
+      atob(accessToken.split(".")[1].replaceAll("-", "+").replaceAll("_", "/"))
+    );
+    return z.object({ session_id: z.uuid() }).safeParse(claims).success;
+  } catch {
+    return false;
+  }
+}
+
+/** Ends only the session that the verification sign-in created. */
+async function endVerificationSession(
+  connection: ReturnType<typeof parseFoundationConnection>,
+  accessToken: unknown,
+  fetcher: typeof fetch
+) {
+  if (typeof accessToken !== "string" || !namesSession(accessToken)) return false;
+  try {
+    const response = await fetcher(`${connection.url}/auth/v1/logout?scope=local`, {
+      method: "POST",
+      headers: { apikey: connection.publishableKey, Authorization: `Bearer ${accessToken}` },
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+    });
+    await response.body?.cancel();
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Confirms the current password with a password sign-in for the session's
+ * own address, so a wrong one is refused even when Auth's "Require current
+ * password when updating" setting is off. The sign-in carries the project's
+ * secret key, which Auth's CAPTCHA check skips (GoTrue verifyCaptcha, as for
+ * password setup in password-recovery.ts); the caller's per-account budget
+ * takes its place. Its tokens are never stored or returned: the session it
+ * created is ended at once (scope local, that session only). Should that
+ * fail, a successful change still ends it, as Auth signs every other session
+ * out when a password changes (GoTrue UpdatePassword).
+ */
+async function confirmCurrentPassword(
+  connection: ReturnType<typeof parseFoundationConnection>,
+  key: string,
+  email: string,
+  subject: string,
+  password: string,
+  fetcher: typeof fetch
+) {
+  let response: Response;
+  try {
+    response = await fetcher(`${connection.url}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        "X-Supabase-Api-Version": "2024-01-01",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    // Nothing was changed; any session it may have made has no known token.
+    throw new FoundationPasswordUpdateError(503, "unavailable");
+  }
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    // Auth answers a wrong password, and an account without one, alike.
+    if (authErrorCode(body) === "invalid_credentials")
+      throw new FoundationPasswordUpdateError(400, "current_password");
+    throw new FoundationPasswordUpdateError(response.status === 429 ? 429 : 503, "unavailable");
+  }
+  const reply = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  if (!(await endVerificationSession(connection, reply.access_token, fetcher)))
+    log.error("Password check session could not be ended");
+  const user = reply.user;
+  if (!user || typeof user !== "object" || !("id" in user) || user.id !== subject)
+    throw new FoundationPasswordUpdateError(503, "unavailable");
+}
+
+/**
+ * The change-password command (current password known). In order: Auth's
+ * authenticator-step rule (GoTrue checks it before any password, so a session
+ * without the step learns nothing about the password), the caller's budget
+ * for password checks (`chargeCheck`, which throws when spent), this server's
+ * own check of the current password, then the update, which still sends the
+ * current password so Auth checks it too when its setting is on.
+ */
 export function createFoundationPasswordUpdater(
   input: unknown,
   token: string,
   subject: string,
-  fetcher: typeof fetch
+  fetcher: typeof fetch,
+  check: FoundationPasswordCheck,
+  environment: NodeJS.ProcessEnv = process.env
 ) {
-  const update = passwordCommand(input, token, subject, fetcher);
-  return (currentPassword: string, newPassword: string) => update(currentPassword, newPassword);
+  const connection = parseFoundationConnection(input);
+  const update = passwordCommand(connection, token, subject, fetcher);
+  return async (
+    currentPassword: string,
+    newPassword: string,
+    chargeCheck: () => Promise<void>
+  ): Promise<void> => {
+    if (check.authenticatorStepMissing)
+      throw new FoundationPasswordUpdateError(403, "mfa_required");
+    const key = secretKey.safeParse(environment.FOUNDATION_SUPABASE_SECRET_KEY);
+    if (!key.success || typeof check.email !== "string" || !check.email)
+      throw new FoundationPasswordUpdateError(503, "unavailable");
+    await chargeCheck();
+    await confirmCurrentPassword(
+      connection,
+      key.data,
+      check.email,
+      subject,
+      currentPassword,
+      fetcher
+    );
+    await update(currentPassword, newPassword);
+  };
 }
 
 /** Issued only for a GoTrue-verified signed recovery method. Logout failure is

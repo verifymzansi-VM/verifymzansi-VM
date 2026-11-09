@@ -62,6 +62,10 @@ import {
 //     each get a confirmation link; until both are opened the old address
 //     still signs in and the new one does not, then only the new one does;
 //     opening a link signs nobody in, and the member stays signed in;
+//   - a member changes the password from the security tab: a wrong current
+//     password is refused although local Auth itself does not check it (the
+//     website checks it with a sign-in whose session it ends at once), and
+//     the right one changes it while the browser stays signed in;
 //   - a member saves a communication choice, which stays saved;
 //   - a member deletes the account and cannot sign in again.
 //
@@ -124,6 +128,7 @@ const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 const RESET_PATH = "/api/auth/reset-password";
 const RECOVERY_PATH = "/api/auth/forgot-password";
 const EMAIL_CHANGE_PATH = "/api/account/email/change";
+const CHANGE_PASSWORD_PATH = "/api/auth/change-password";
 const PREFERENCES_PATH = "/api/communications/preferences";
 const EMAIL_ACTIVITY_PATH = "/api/communications/email-activity";
 const DELETE_PATH = "/api/account/delete";
@@ -412,6 +417,7 @@ async function openEmailChangeLink(page: Page, link: URL) {
 let resetter: VerifiedMember;
 let google: GoogleMember;
 let mover: VerifiedMember;
+let changer: VerifiedMember;
 let chooser: VerifiedMember;
 let leaver: VerifiedMember;
 
@@ -428,6 +434,7 @@ test.describe("account recovery and self-service", () => {
     resetter = await registerConfirmedMember("resetter");
     google = await withPhone(await registerGoogleMember("google"));
     mover = await withPhone(await registerConfirmedMember("mover"));
+    changer = await withPhone(await registerConfirmedMember("changer"));
     chooser = await withPhone(await registerConfirmedMember("chooser"));
     leaver = await withPhone(await registerConfirmedMember("leaver"));
   });
@@ -1033,6 +1040,93 @@ test.describe("account recovery and self-service", () => {
       )
     ).toEqual([]);
     mover.email = newEmail;
+    expectContained(guarded);
+    expectNoProviderSince(mark);
+  });
+
+  test("a password change from the security tab needs the right current password", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const guarded = await guard(context);
+    const copy = readTestCopy();
+    // Premise: the copy's local Auth does not check the current password
+    // itself (its "require current password" setting is off), so only the
+    // website's own check can refuse a wrong one.
+    const direct = await signIn(copy, changer);
+    const premise = `${changer.password}-direct`;
+    const accepted = await fetch(`${API_ORIGIN}/auth/v1/user`, {
+      method: "PUT",
+      redirect: "error",
+      headers: {
+        apikey: copy.publishableKey,
+        Authorization: `Bearer ${direct.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password: premise, current_password: "not-the-current-password" }),
+    });
+    expect(accepted.status).toBe(200);
+    changer.password = premise;
+    await signInBrowser(context, changer);
+    // Local Auth's record of this member's sign-ins and sign-outs.
+    const authEvents = () =>
+      queryTestCopy(
+        "select count(*) filter (where payload->>'action' = 'login') || '/' || " +
+          "count(*) filter (where payload->>'action' = 'logout') from auth.audit_log_entries " +
+          `where payload->>'actor_id' = '${changer.id}';`
+      );
+    const sessions = () =>
+      queryTestCopy(`select count(*) from auth.sessions where user_id = '${changer.id}';`);
+    const [logins, logouts] = authEvents().split("/").map(Number);
+    const openSessions = sessions();
+    const next = `${changer.password}-next`;
+    const submit = async (current: string) => {
+      const before = guarded.reply(CHANGE_PASSWORD_PATH).length;
+      await page.getByLabel("Current password", { exact: true }).fill(current);
+      await page.getByLabel("New password", { exact: true }).fill(next);
+      await page.getByLabel("Confirm new password", { exact: true }).fill(next);
+      await page.getByRole("button", { name: "Update password" }).click();
+      await expect
+        .poll(() => guarded.reply(CHANGE_PASSWORD_PATH).length, { timeout: 20_000 })
+        .toBe(before + 1);
+      return guarded.reply(CHANGE_PASSWORD_PATH).at(-1)!;
+    };
+    await openProfileTab(page, "Security");
+    await page.getByRole("button", { name: "Change", exact: true }).click();
+    // A wrong current password is refused, and its check opened no session.
+    expect(await submit("not-the-current-password")).toEqual({
+      method: "POST",
+      path: CHANGE_PASSWORD_PATH,
+      status: 400,
+      body: { error: "Current password is incorrect", reason: "current_password" },
+    });
+    await expect(toast(page, "Password change failed")).toBeVisible();
+    expect(authEvents()).toBe(`${logins}/${logouts}`);
+    expect(sessions()).toBe(openSessions);
+    // The page sends the three password fields only.
+    expect(guarded.sentTo(CHANGE_PASSWORD_PATH)[0].fields.join()).toBe(
+      "confirmNewPassword,currentPassword,newPassword"
+    );
+    // The right one changes it. The check signed in once and ended that
+    // session at once; Auth then ended the member's other sessions, and the
+    // browser's own session stays signed in.
+    expect(await submit(changer.password)).toEqual({
+      method: "POST",
+      path: CHANGE_PASSWORD_PATH,
+      status: 200,
+      body: { ok: true },
+    });
+    await expect(toast(page, "Password changed")).toBeVisible();
+    expect(authEvents()).toBe(`${logins + 1}/${logouts + 1}`);
+    expect(sessions()).toBe("1");
+    await page.goto("/dashboard/profile");
+    await expect(page.getByRole("tab", { name: "Security" })).toBeVisible({ timeout: 20_000 });
+    expect(page.url()).toBe(`${APP_ORIGIN}/dashboard/profile`);
+    expect(await canSignIn(changer.email, next)).toBe(true);
+    expect(await canSignIn(changer.email, changer.password)).toBe(false);
+    changer.password = next;
     expectContained(guarded);
     expectNoProviderSince(mark);
   });

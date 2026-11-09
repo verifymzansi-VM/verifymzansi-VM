@@ -67,6 +67,7 @@ it("refuses inconsistent verified user and account identities", async () => {
     signedInAt: null,
     signedInWithPassword: false,
     authenticatorAt: null,
+    authenticatorStepMissing: false,
     user: { ...user, id: "00000000-0000-4000-8000-000000000002" },
   });
   await expect(readFoundationServerSession()).rejects.toMatchObject({ status: 503 });

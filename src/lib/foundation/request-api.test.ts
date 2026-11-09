@@ -64,28 +64,116 @@ const user = (n = 1, anonymous = false) => ({
   is_anonymous: anonymous,
 });
 
-it("pins password updates to the verified MFA token even if cookie state changes afterwards", async () => {
-  const candidate = token(1, { aal: "aal2" });
-  const jar = cookieAdapter(session(candidate));
-  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
-    expect(new URL(String(url)).pathname).toBe("/auth/v1/user");
-    expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${candidate}`);
-    return Response.json(user(1));
+/** Local Auth for a password change: GoTrue's user check and the update on
+ * /user, the current-password check's sign-in on /token and its sign-out. */
+function passwordAuth(verifiedUser: Record<string, unknown>, expectedToken: string) {
+  const checkToken = token(1, { session_id: id(199) });
+  return vi.fn<typeof fetch>(async (url, init) => {
+    const { pathname } = new URL(String(url));
+    if (pathname === "/auth/v1/token")
+      return Response.json({ access_token: checkToken, user: { id: id(1) } });
+    if (pathname === "/auth/v1/logout") return new Response(null, { status: 204 });
+    expect(pathname).toBe("/auth/v1/user");
+    expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${expectedToken}`);
+    return Response.json(verifiedUser);
   });
-  const caller = await createFoundationRequestCaller(config, jar, fetcher);
-  await jar.setAll(
-    [
-      {
-        name: "sb-abcdefghijklmnopqrst-auth-token",
-        value: "base64-" + Buffer.from(JSON.stringify(session(token(2), 2))).toString("base64url"),
-      },
-    ],
-    {}
+}
+const paths = (fetcher: ReturnType<typeof vi.fn<typeof fetch>>) =>
+  fetcher.mock.calls.map(
+    (call) => `${call[1]?.method ?? "GET"} ${new URL(String(call[0])).pathname}`
   );
-  await caller.updatePassword("synthetic-current-password", "synthetic-next-password");
-  expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(fetcher.mock.calls[1][1]?.method).toBe("PUT");
+
+it("pins password updates to the verified MFA token even if cookie state changes afterwards", async () => {
+  vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "sb_secret_synthetic_unit_only");
+  try {
+    const candidate = token(1, { aal: "aal2" });
+    const jar = cookieAdapter({
+      ...session(candidate),
+      user: { ...session(candidate).user, email: "cookie-claim@example.invalid" },
+    });
+    const fetcher = passwordAuth(
+      {
+        ...user(1),
+        email: "member@example.invalid",
+        factors: [{ id: id(300), factor_type: "totp", status: "verified" }],
+      },
+      candidate
+    );
+    const caller = await createFoundationRequestCaller(config, jar, fetcher);
+    await jar.setAll(
+      [
+        {
+          name: "sb-abcdefghijklmnopqrst-auth-token",
+          value:
+            "base64-" + Buffer.from(JSON.stringify(session(token(2), 2))).toString("base64url"),
+        },
+      ],
+      {}
+    );
+    await caller.updatePassword("synthetic-current-password", "synthetic-next-password", () =>
+      Promise.resolve()
+    );
+    expect(paths(fetcher)).toEqual([
+      "GET /auth/v1/user",
+      "POST /auth/v1/token",
+      "POST /auth/v1/logout",
+      "PUT /auth/v1/user",
+    ]);
+    // The current password is checked for GoTrue's own record of the address,
+    // never the cookie's copy of the user.
+    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toEqual({
+      email: "member@example.invalid",
+      password: "synthetic-current-password",
+    });
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });
+
+it.each([
+  ["a verified authenticator and a session without its step", "aal1", "verified", false],
+  ["a verified authenticator and no aal claim", undefined, "verified", false],
+  ["a verified authenticator and a session with its step", "aal2", "verified", true],
+  ["only an unverified authenticator", "aal1", "unverified", true],
+] as const)(
+  "checks a password only where Auth would allow the change: %s",
+  async (_label, aal, status, allowed) => {
+    vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", "sb_secret_synthetic_unit_only");
+    try {
+      const candidate = token(1, aal ? { aal } : {});
+      const fetcher = passwordAuth(
+        {
+          ...user(1),
+          email: "member@example.invalid",
+          factors: [{ id: id(300), factor_type: "totp", status }],
+        },
+        candidate
+      );
+      const caller = await createFoundationRequestCaller(
+        config,
+        cookieAdapter(session(candidate)),
+        fetcher
+      );
+      const charge = vi.fn(() => Promise.resolve());
+      const outcome = caller
+        .updatePassword("synthetic-current-password", "synthetic-next-password", charge)
+        .then(
+          () => "updated",
+          (error: unknown) => error
+        );
+      if (allowed) {
+        expect(await outcome).toBe("updated");
+        expect(paths(fetcher)).toContain("POST /auth/v1/token");
+      } else {
+        expect(await outcome).toMatchObject({ status: 403, reason: "mfa_required" });
+        expect(charge).not.toHaveBeenCalled();
+        expect(paths(fetcher)).toEqual(["GET /auth/v1/user"]);
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+);
 
 it("pins email changes to the verified token even if cookie state changes afterwards", async () => {
   const candidate = token(1);
