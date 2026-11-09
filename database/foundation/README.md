@@ -72,9 +72,11 @@ public and a fingerprint equal to `fingerprint.json`. It then adds
 the sign-up hook is switched on) and seeds the test people and posts from
 `e2e/foundation/fixture/` through the real local Auth, the mail catcher and the
 production API commands. Every entry point refuses any database address that is
-not this local stack. `reset` rebuilds the copy; `down` deletes the stack, its
-data and the files the copy wrote (`tmp/foundation-e2e/state.json`, the fake SMS
-sink, `public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
+not this local stack, and the copy uses the native fixture's Docker guard (see
+below), so it runs only on Docker Desktop on Windows or a GitHub-hosted Linux
+runner. `reset` rebuilds the copy; `down` deletes the stack, its data and the
+files the copy wrote (`tmp/foundation-e2e/state.json`, the fake SMS sink,
+`public/e2e-media/*` and `tmp/e2e-private-storage/*`, all git-ignored).
 
 The website environment blanks every key named in the root `.env*` files, so
 Next cannot refill real settings from them; `build` stamps `.next` with a hash
@@ -110,8 +112,9 @@ execution eligibility remains distinct from business authorization.
 
 The single CLI-created migration deliberately raises an exception. The candidate
 is not a deployable migration, and this checkout must not be linked to the
-current hosted source. Deployment, hosted configuration, complete
-application/provider workflows and recovery acceptance remain outstanding.
+retired source project. Changes to the live London project are reviewed files in
+`updates/`, applied by the owner after merge and before the code that needs them
+is deployed (see `updates/README.md` and `AGENTS.md`).
 
 candidate.sql is assembled from allowlisted prototype SQL modules. assembly.json
 records source and candidate hashes. Generated API types, role aliases and role
@@ -128,6 +131,22 @@ Local reproduction creates its own ignored evidence:
 4. Run node scripts/replay-foundation-baseline.mjs.
 5. Run node scripts/check-foundation-api-contracts.mjs and maintained review
    gates.
+
+The native suite also runs in CI: the `foundation-native` job
+(`.github/workflows/foundation-native.yml`) prepares the fixture, starts the
+local stack with the pinned Supabase CLI and runs `pnpm test:foundation:native`
+on an ubuntu-latest runner, then uploads the redacted `results.json` (and the
+staff-read probe record) as the `foundation-native-results` run artifact. It
+runs nightly, on manual dispatch and on every pull request; when a pull request
+does not touch `database/foundation/`, `docs/backend-foundation/prototypes/`,
+`src/lib/`, `src/types/`, `src/app/api/`, the native scripts or the
+dependencies, the job passes without starting Docker. The fixture's Docker guard
+(`localDockerContext` in `scripts/lib/foundation-native-isolation.mjs`, also
+used by the browser test copy through `localDockerEnvironment`) accepts only
+Docker Desktop's local Linux engine pipe on Windows, or the default context on
+the local socket `/var/run/docker.sock` of a GitHub-hosted runner; it refuses
+TCP, SSH and other remote endpoints, other contexts, a `DOCKER_HOST` or
+`DOCKER_CONTEXT` pointing elsewhere, and Linux outside GitHub-hosted CI.
 
 If replay changes generated types captured by the native run, repeat steps 2–4
 with the refreshed inputs. The final native source hashes and clean replay must
@@ -150,8 +169,8 @@ document hash only, with no account acceptance data. Authenticated users must
 explicitly accept the current version once; SQL blocks submission without that
 acceptance. A new version requires a separately shipped snapshot and renewed
 acceptance. Existing version files must never be rewritten after publication.
-Keep the explicit FOUNDATION_* application bindings unset until target Auth,
-schema, application workflows and release acceptance are ready.
+Production sets the FOUNDATION_* application bindings (`wrangler.toml`) and
+serves the website from this backend.
 
 Account profiles hold the display name, bio, avatar and an unreviewed legal-name
 claim. Identity registration snapshots that claim; an accepted review locks
@@ -223,8 +242,9 @@ src/lib/foundation/request-route.ts. Construct it once per request, enforce the
 route's origin/CSRF and input checks, then await authenticate() before calling a
 domain adapter. Return both success and error responses through respond() to
 preserve refresh/clear cookies and private browser/CDN cache headers. No client
-or context may be shared across requests. These bridges do not switch existing
-routes or provision target Auth accounts. A bounded local transport check is
-available with node --conditions=react-server --import tsx
+or context may be shared across requests. Existing routes use these bridges when
+the data backend is `foundation`, as it is in production; they do not provision
+Auth accounts. A bounded local transport check is available with node
+--conditions=react-server --import tsx
 scripts/probe-foundation-staff-adapter.mjs --request-session after preparing the
 owned native fixture; it never targets hosted projects.

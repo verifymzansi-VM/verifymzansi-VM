@@ -5,6 +5,17 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
+## Rules for new updates
+
+- One new file per change, named `<UTC timestamp>_<what_it_does>.sql`, with full
+  `create or replace` definitions. Never edit `../candidate.sql` or an applied
+  update.
+- Expand, then contract: add first, switch the code, remove in a later update.
+- The update travels in the same pull request as the code that needs it and is
+  proven locally (`pnpm test:foundation:native`, replay and contracts).
+- The owner applies it to production after the merge and before that code is
+  deployed, and its section below records when it was applied.
+
 ## How to write a new update
 
 - **Use full definitions.** Every changed function is written out as a complete
