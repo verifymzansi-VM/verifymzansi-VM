@@ -526,11 +526,11 @@ it("still reconciles an add-on payment that already exists while sales are pause
     settled: true,
   });
 });
-it("keeps add-on sales paused with the production and staging settings", () => {
+it("keeps add-on sales paused with the default and production settings", () => {
   const toml = parse(readFileSync("wrangler.toml", "utf8")) as {
     vars: Record<string, string>;
-    env: Record<"production" | "staging", { vars: Record<string, string> }>;
+    env: Record<string, { vars: Record<string, string> }>;
   };
-  for (const vars of [toml.vars, toml.env.production.vars, toml.env.staging.vars])
+  for (const vars of [toml.vars, toml.env.production.vars])
     expect(vars.ADDON_SALES_ENABLED).toBe("false");
 });

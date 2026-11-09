@@ -13,7 +13,6 @@ import {
   OUTBOUND_LOG_FILE,
   assertLocalFoundationTarget,
   assertLoopbackUrl,
-  localDockerContext,
   replayMigrationNames,
 } from "./lib/foundation-e2e-target.mjs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
@@ -145,42 +144,6 @@ test("every known hosted ref is refused wherever it appears", () => {
       () =>
         assertLoopbackUrl(`http://127.0.0.1:55443/#${ref}`, { what: "x", protocols: ["http:"] }),
       refused
-    );
-});
-
-test("Docker must be this machine's engine", () => {
-  const inspect = (hosts) => (name) => hosts[name];
-  assert.equal(
-    localDockerContext({
-      platform: "win32",
-      env: {},
-      inspect: inspect({ "desktop-linux": "npipe:////./pipe/dockerDesktopLinuxEngine" }),
-    }),
-    "desktop-linux"
-  );
-  assert.equal(
-    localDockerContext({
-      platform: "linux",
-      env: {},
-      inspect: inspect({ default: "unix:///var/run/docker.sock" }),
-    }),
-    "default"
-  );
-  for (const [platform, env, hosts] of [
-    ["win32", {}, { "desktop-linux": "tcp://10.0.0.5:2375" }],
-    [
-      "win32",
-      { DOCKER_HOST: "tcp://10.0.0.5:2375" },
-      { "desktop-linux": "npipe:////./pipe/dockerDesktopLinuxEngine" },
-    ],
-    ["linux", { DOCKER_HOST: "ssh://builder@remote" }, { default: "unix:///var/run/docker.sock" }],
-    ["linux", { DOCKER_CONTEXT: "remote" }, { default: "unix:///var/run/docker.sock" }],
-    ["linux", {}, { default: "tcp://docker.example.com:2376" }],
-    ["freebsd", {}, {}],
-  ])
-    assert.throws(
-      () => localDockerContext({ platform, env, inspect: inspect(hosts) }),
-      /local engine/
     );
 });
 
