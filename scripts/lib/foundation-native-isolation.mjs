@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
@@ -126,19 +126,70 @@ export function nativeIsolation() {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !/^(SUPABASE_|DOCKER_)/i.test(key))
   );
-  const endpoint = execFileSync(
-    "docker",
-    ["context", "inspect", "desktop-linux", "--format", "{{.Endpoints.docker.Host}}"],
-    { encoding: "utf8", env, stdio: ["ignore", "pipe", "pipe"] }
-  ).trim();
-  if (endpoint !== "npipe:////./pipe/dockerDesktopLinuxEngine")
-    throw new Error("Non-local Docker endpoint prohibited");
-  env.DOCKER_CONTEXT = "desktop-linux";
+  const context = localDockerContext({
+    platform: process.platform,
+    env: process.env,
+    inspect: (name) =>
+      execFileSync(
+        "docker",
+        ["context", "inspect", name, "--format", "{{.Endpoints.docker.Host}}"],
+        {
+          encoding: "utf8",
+          env,
+          stdio: ["ignore", "pipe", "pipe"],
+        }
+      ).trim(),
+    isSocket: (file) => lstatSync(file, { throwIfNoEntry: false })?.isSocket() === true,
+  });
+  env.DOCKER_CONTEXT = context;
   return {
     workdir,
     config,
     env,
     cliPath: path.resolve("node_modules/supabase/dist/supabase.js"),
-    dockerArgs: ["--context", "desktop-linux"],
+    dockerArgs: ["--context", context],
   };
+}
+
+const WINDOWS_DOCKER = {
+  context: "desktop-linux",
+  host: "npipe:////./pipe/dockerDesktopLinuxEngine",
+};
+const LINUX_CI_DOCKER = {
+  context: "default",
+  socket: "/var/run/docker.sock",
+  host: "unix:///var/run/docker.sock",
+};
+
+/**
+ * Chooses the only Docker endpoints the native fixture may use and refuses
+ * every other one (remote hosts, TCP/SSH endpoints, other contexts or sockets):
+ * - Windows: Docker Desktop's local Linux engine pipe (context desktop-linux).
+ * - Linux: only on a GitHub-hosted Actions runner (a throwaway VM whose Docker
+ *   daemon is local), through the built-in default context and the standard
+ *   local unix socket, with no DOCKER_HOST/DOCKER_CONTEXT pointing elsewhere.
+ * Linux outside GitHub-hosted CI and every other platform are refused.
+ * Child processes never inherit DOCKER_* variables; the caller pins the
+ * returned context with --context and DOCKER_CONTEXT.
+ */
+export function localDockerContext({ platform, env, inspect, isSocket }) {
+  const refuse = () => {
+    throw new Error("Non-local Docker endpoint prohibited");
+  };
+  if (platform === "win32") {
+    if (inspect(WINDOWS_DOCKER.context) !== WINDOWS_DOCKER.host) refuse();
+    return WINDOWS_DOCKER.context;
+  }
+  if (platform !== "linux") refuse();
+  if (
+    env.CI !== "true" ||
+    env.GITHUB_ACTIONS !== "true" ||
+    env.RUNNER_ENVIRONMENT !== "github-hosted"
+  )
+    refuse();
+  if (env.DOCKER_HOST !== undefined && env.DOCKER_HOST !== LINUX_CI_DOCKER.host) refuse();
+  if (env.DOCKER_CONTEXT !== undefined && env.DOCKER_CONTEXT !== LINUX_CI_DOCKER.context) refuse();
+  if (!isSocket(LINUX_CI_DOCKER.socket)) refuse();
+  if (inspect(LINUX_CI_DOCKER.context) !== LINUX_CI_DOCKER.host) refuse();
+  return LINUX_CI_DOCKER.context;
 }

@@ -1,3 +1,8 @@
+> Historical: describes the retired source backend. Foundation staff access is
+> granted by the operator-only `internal.bootstrap_first_administrator` and the
+> native staff governance commands; see
+> [database/foundation/README.md](../../database/foundation/README.md).
+
 # Staff access: provisioning and recovery
 
 Staff access is granted only by rows in `public.staff_roles`. The `role` in a
