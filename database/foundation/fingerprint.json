@@ -20,61 +20,72 @@
       "schema_grants",
       "table_grants"
     ],
-    "howToCompare": "Run database/foundation/fingerprint.sql unchanged in the Supabase SQL editor (read-only) and compare each row with categories below."
+    "howToCompare": "Run database/foundation/fingerprint.sql unchanged in the Supabase SQL editor (read-only) and compare each row with categories below.",
+    "matchedThroughUpdate": "20261105203431_restored_public_affiliation_badges.sql",
+    "matchedFingerprints": {
+      "function_bodies": "32aa7e11dc2d5b128b9af374d3875992",
+      "columns": "ee319f214008a3278113bd15084419bb",
+      "constraints": "d379dceb97dc291ae49872bdfec430d2",
+      "indexes": "f4fe4b389e0780c5554b12e4be424938",
+      "triggers": "483f8b84299f04c1bb4df8ccdaed274a"
+    },
+    "pendingApplication": [
+      "20261109073519_post_lifecycle_guards.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2 while production holds only posting-v1; a later reviewed change resolves this."
   ],
-  "updateCount": 49,
-  "lastUpdate": "20261105203431_restored_public_affiliation_badges.sql",
+  "updateCount": 50,
+  "lastUpdate": "20261109073519_post_lifecycle_guards.sql",
   "categories": {
     "column_grants": {
       "items": 2,
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1072,
-      "fingerprint": "ee319f214008a3278113bd15084419bb"
+      "items": 1082,
+      "fingerprint": "47f29c726ddbc02a9b226c55896fd6c2"
     },
     "constraints": {
-      "items": 951,
-      "fingerprint": "d379dceb97dc291ae49872bdfec430d2"
+      "items": 959,
+      "fingerprint": "e15743ed66c935c206ba5334d034c916"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 730,
-      "fingerprint": "32aa7e11dc2d5b128b9af374d3875992"
+      "items": 735,
+      "fingerprint": "e3c6875e2894ae603788eced01f753e4"
     },
     "function_grants": {
       "items": 595,
       "fingerprint": "6070d777923e495f2bb058b1d9003ef7"
     },
     "function_metadata": {
-      "items": 730,
-      "fingerprint": "399510df424aa359097c296e356d65d6"
+      "items": 735,
+      "fingerprint": "980116da1060fb43f035883e568865ac"
     },
     "indexes": {
-      "items": 361,
-      "fingerprint": "f4fe4b389e0780c5554b12e4be424938"
+      "items": 368,
+      "fingerprint": "aaae33e5d81d3ec893cc3173eb0cc4f4"
     },
     "policies": {
       "items": 1,
       "fingerprint": "2c1b773d5ffe29f172271087b1f36e04"
     },
     "row_level_security": {
-      "items": 119,
-      "fingerprint": "71bf5b2391d47f87f04820141b20b2bc"
+      "items": 121,
+      "fingerprint": "ccda85e722f9ee52bc9dda66fdf3ba3d"
     },
     "schema_grants": {
       "items": 7,
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 91,
-      "fingerprint": "483f8b84299f04c1bb4df8ccdaed274a"
+      "items": 96,
+      "fingerprint": "8feeba2e911af4ac021df7d8c6df82b5"
     }
   }
 }

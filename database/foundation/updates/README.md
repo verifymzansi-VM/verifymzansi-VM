@@ -22,6 +22,53 @@ establish that a hosted project has received it.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Post lifecycle guards, 9 November 2026
+
+`20261109073519_post_lifecycle_guards.sql` is **not applied yet**. It changes no
+member-facing rule and adds no new deletion; it prepares the deletion rules that
+follow it.
+
+- **Staff content holds block deletion.** While a hold from the Hide action is
+  open, the lifecycle job neither deletes the post nor sends a deletion warning,
+  the owner cannot mark it sold, archive it or delete it (the same
+  `PT423 staff_visibility_hold` refusal the website already shows for
+  resubmission), and a trigger refuses any other delete of the post row. The
+  media the post showed when it was hidden are recorded against the hold, so
+  media cleanup leaves them alone until that hold is released. After the last
+  release, an idle post's 45/60-day clock counts from the release. Legal holds
+  behave as before.
+- **A stable deletion clock.** `posts.ended_at` records when a post's public run
+  ended (expired, sold or archived) and `posts.deletes_at` when the lifecycle
+  job may delete it (today `ended_at` + 30 days). Publication or a new
+  submission for review clears both. The edit flow passes an ended post through
+  `paused` inside one transaction; that no longer moves the deletion date or
+  re-sends `post_expired` and its reminders, whose keys now use `ended_at`.
+  Existing ended posts are backfilled from `status_changed_at`, so their dates
+  and notice keys do not change. Approval digests leave both columns out.
+- **Kept free-event submissions.** `private.event_submissions` records each
+  submission of an original free event. The limit of 10 per rolling 30 days
+  counts distinct events from it, so an event removed by the lifecycle job or
+  any other path keeps its place. As decided by the owner, deleting one's own
+  event still returns the place; the five-active limit is unchanged. The table
+  is append-only apart from that one release, and rows older than the window are
+  purged by the lifecycle job. The backfill copies each original event's latest
+  submission from the last 31 days.
+
+`pnpm db:foundation:lifecycle-test` (CI step in `foundation-sql-lint`) replays
+this folder into the throwaway Postgres 17 container, seeds synthetic members
+and posts before the update, applies it, and checks the backfills, each guard
+through the production API commands, and races between a hide and an owner
+delete, mark-sold, the lifecycle job, and two event submissions at the limit.
+The only stand-in is `internal.current_verified_identity`, so free events reach
+the fair-use check.
+
+Apply it before any application release that depends on it. It takes a short
+exclusive lock on `private.posts` (lock timeout 5 s), so apply it at a quiet
+time and rerun it if the lock times out. `../fingerprint.json` lists it under
+`productionCheck.pendingApplication`; once production's fingerprint matches
+again, move `matchedThroughUpdate` and `matchedFingerprints` forward together
+with `scripts/foundation-replay.test.mjs`.
+
 ## Staff content holds, 5 November 2026
 
 `20261105043010_native_report_content_holds.sql` is applied. The selected Hide

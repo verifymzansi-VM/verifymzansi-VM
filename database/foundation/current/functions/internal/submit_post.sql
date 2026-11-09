@@ -85,13 +85,16 @@ begin
       raise exception 'media exceed the funded post allowance' using errcode = '22023';
     end if;
   elsif post.kind = 'event' then
-    -- Free events: fair use of 5 active (pending or live) and 10 submissions per 30 days.
+    -- Free events: fair use of 5 active (pending or live) and 10 submissions
+    -- per 30 days. The 10 are counted from the kept submission ledger, so an
+    -- event removed by the lifecycle job keeps its place; an owner deleting
+    -- their own event returns it (internal.delete_post).
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(actor::text, 909));
     perform internal.price_draft_actor(); -- fresh authority before quota or duplicate errors
     if (select count(*) from private.posts p where p.owner_id = actor and p.kind = 'event' and p.edit_of is null
           and p.status in ('pending_moderation', 'live') and p.id <> post.id) >= 5
-      or (select count(*) from private.posts p where p.owner_id = actor and p.kind = 'event' and p.edit_of is null
-          and p.submitted_at > statement_timestamp() - interval '30 days' and p.id <> post.id) >= 10 then
+      or (select count(distinct s.post_id) from private.event_submissions s where s.owner_id = actor
+          and s.released_at is null and s.submitted_at > statement_timestamp() - interval '30 days' and s.post_id <> post.id) >= 10 then
       raise exception 'event fair-use limit reached' using errcode = 'PT429';
     end if;
   else
@@ -114,6 +117,9 @@ begin
   update private.posts set status = 'pending_moderation', submitted_at = statement_timestamp(),
     status_reason = null, revision = revision + 1
   where id = post.id returning revision into rev;
+  if post.kind = 'event' and post.edit_of is null then
+    insert into private.event_submissions(owner_id, post_id, submitted_at) values (actor, post.id, statement_timestamp());
+  end if;
   perform internal.assert_post_contacts_ready(post.id,false);
   perform internal.assert_posting_verification_ready(post.id,false);
   perform internal.price_draft_actor(); -- final live owner/session check after all waits

@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.frontend_post_approval_digest(p_id uuid)
  SET search_path TO 'pg_catalog'
 AS $function$
  select encode(sha256(convert_to(jsonb_build_object(
-   'post',to_jsonb(p)-array['status','status_reason','revision','published_at','visible_until','submitted_at','content_updated_at','status_changed_at'],
+   'post',to_jsonb(p)-array['status','status_reason','revision','published_at','visible_until','submitted_at','content_updated_at','status_changed_at','ended_at','deletes_at'],
    'listing',(select to_jsonb(d) from private.listing_details d where d.post_id=p.id),
    'business',(select to_jsonb(d) from private.business_details d where d.post_id=p.id),
    'event',(select to_jsonb(d) from private.event_details d where d.post_id=p.id),

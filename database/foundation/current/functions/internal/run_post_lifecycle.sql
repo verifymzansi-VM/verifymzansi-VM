@@ -33,53 +33,66 @@ begin
   end loop;
   -- At most p_limit new notices per invocation; old dedupe rows do not starve
   -- later notices. Lock/recheck each post so a concurrent renewal invalidates
-  -- the captured revision before its stale reminder can be queued.
+  -- the captured revision before its stale reminder can be queued. Expiry
+  -- notices key on ended_at, which edits do not move. A held post is not
+  -- warned about a deletion that will not happen; an idle post's clock counts
+  -- from the release of its last staff hold.
   for r in
     select n.* from (
-      select 'post_expired'::text as kind,p.id,p.owner_id,p.revision,p.status_changed_at as due_at,
-        'post_expired:'||p.id||':'||floor(extract(epoch from p.status_changed_at))::bigint as dedupe_key
+      select 'post_expired'::text as kind,p.id,p.owner_id,p.revision,p.ended_at as due_at,
+        'post_expired:'||p.id||':'||floor(extract(epoch from p.ended_at))::bigint as dedupe_key
       from private.posts p where p.status='expired'
       union all
-      select 'post_expiry_reminder',p.id,p.owner_id,p.revision,p.status_changed_at+make_interval(days=>d.day),
-        'post_expiry_reminder:'||p.id||':'||d.day||':'||floor(extract(epoch from p.status_changed_at))::bigint
+      select 'post_expiry_reminder',p.id,p.owner_id,p.revision,p.ended_at+make_interval(days=>d.day),
+        'post_expiry_reminder:'||p.id||':'||d.day||':'||floor(extract(epoch from p.ended_at))::bigint
       from private.posts p cross join (values(7),(21)) d(day)
-      where p.status='expired' and p.status_changed_at<=clock_timestamp()-make_interval(days=>d.day)
+      where p.status='expired' and p.ended_at<=clock_timestamp()-make_interval(days=>d.day)
       union all
-      select 'draft_deletion_warning',p.id,p.owner_id,p.revision,greatest(p.content_updated_at,p.status_changed_at)+interval '45 days',
-        'draft_deletion_warning:'||p.id||':'||floor(extract(epoch from greatest(p.content_updated_at,p.status_changed_at)))::bigint
-      from private.posts p where p.status in('draft','rejected','paused')
-        and greatest(p.content_updated_at,p.status_changed_at)<=clock_timestamp()-interval '45 days'
+      select 'draft_deletion_warning',p.id,p.owner_id,p.revision,i.idle_since+interval '45 days',
+        'draft_deletion_warning:'||p.id||':'||floor(extract(epoch from i.idle_since))::bigint
+      from private.posts p cross join lateral (select greatest(p.content_updated_at,p.status_changed_at,
+        (select max(h.released_at) from private.frontend_content_holds h where h.post_id=p.id)) as idle_since) i
+      where p.status in('draft','rejected','paused') and i.idle_since<=clock_timestamp()-interval '45 days'
     ) n where not exists(select 1 from private.outbox_events o where o.dedupe_key=n.dedupe_key)
       and not exists(select 1 from private.legal_holds h where h.subject_id=n.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=n.id and h.released_at is null)
     order by n.due_at,n.id,n.kind,n.dedupe_key limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     select * into post from private.posts p where p.id=r.id and p.revision=r.revision for update skip locked;
-    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null) then continue; end if;
+    if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=r.id and h.released_at is null) then continue; end if;
     insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values(r.kind,r.id,r.owner_id,r.dedupe_key)
       on conflict(dedupe_key) do nothing;
     get diagnostics changed=row_count; n_notices:=n_notices+changed;
   end loop;
   for r in
     select p.id,p.owner_id from private.posts p
-    where ((p.status in('expired','sold','archived') and p.status_changed_at<=clock_timestamp()-interval '30 days')
-      or (p.status in('draft','rejected','paused') and greatest(p.content_updated_at,p.status_changed_at)<=clock_timestamp()-interval '60 days'))
+    where ((p.status in('expired','sold','archived') and p.deletes_at<=clock_timestamp())
+      or (p.status in('draft','rejected','paused') and greatest(p.content_updated_at,p.status_changed_at,
+        (select max(h.released_at) from private.frontend_content_holds h where h.post_id=p.id))<=clock_timestamp()-interval '60 days'))
       and not exists(select 1 from private.legal_holds h where h.subject_id=p.owner_id and h.released_at is null)
+      and not exists(select 1 from private.frontend_content_holds h where h.post_id=p.id and h.released_at is null)
       and not exists(select 1 from private.posts e where e.edit_of=p.id and (e.status='pending_moderation' or greatest(e.content_updated_at,e.status_changed_at)>clock_timestamp()-interval '60 days'))
     order by p.status_changed_at,p.id limit p_limit
   loop
     if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(r.owner_id::text,2408)) then continue; end if;
     select * into post from private.posts p where p.id=r.id and
-      ((p.status in('expired','sold','archived') and p.status_changed_at<=clock_timestamp()-interval '30 days')
-       or (p.status in('draft','rejected','paused') and greatest(p.content_updated_at,p.status_changed_at)<=clock_timestamp()-interval '60 days'))
-      for update skip locked;
+      ((p.status in('expired','sold','archived') and p.deletes_at<=clock_timestamp())
+       or (p.status in('draft','rejected','paused') and greatest(p.content_updated_at,p.status_changed_at,
+         (select max(h.released_at) from private.frontend_content_holds h where h.post_id=p.id))<=clock_timestamp()-interval '60 days'))
+      for update of p skip locked;
     if not found or exists(select 1 from private.legal_holds h where h.subject_id=r.owner_id and h.released_at is null)
+      or exists(select 1 from private.frontend_content_holds h where h.post_id=post.id and h.released_at is null)
       or exists(select 1 from private.posts e where e.edit_of=post.id and (e.status='pending_moderation' or greatest(e.content_updated_at,e.status_changed_at)>clock_timestamp()-interval '60 days')) then continue; end if;
     insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key)
       values('post_deleted',post.id,post.owner_id,'post_deleted:'||post.id) on conflict(dedupe_key) do nothing;
     delete from private.posts where id=post.id;
     n_deleted:=n_deleted+1;
   end loop;
+  -- Free-event submissions older than every rolling 30-day window.
+  delete from private.event_submissions s where s.id in(select x.id from private.event_submissions x
+    where x.submitted_at<=clock_timestamp()-interval '31 days' order by x.submitted_at limit p_limit);
   return jsonb_build_object('expired',n_expired,'notices',n_notices,'deleted',n_deleted);
 end;
 $function$;

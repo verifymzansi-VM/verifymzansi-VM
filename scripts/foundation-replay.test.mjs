@@ -12,12 +12,25 @@ import {
 const recorded = JSON.parse(readFileSync(FINGERPRINT_FILE, "utf8"));
 
 test("the recorded fingerprint keeps the production-matched values", () => {
-  // Captured read-only from production on 6 November 2026.
-  assert.equal(recorded.categories.function_bodies.fingerprint, "32aa7e11dc2d5b128b9af374d3875992");
-  assert.equal(recorded.categories.columns.fingerprint, "ee319f214008a3278113bd15084419bb");
-  assert.equal(recorded.categories.constraints.fingerprint, "d379dceb97dc291ae49872bdfec430d2");
-  assert.equal(recorded.categories.indexes.fingerprint, "f4fe4b389e0780c5554b12e4be424938");
-  assert.equal(recorded.categories.triggers.fingerprint, "483f8b84299f04c1bb4df8ccdaed274a");
+  // Captured read-only from production on 6 November 2026, through the update
+  // below. Reviewed updates after it are listed as pending until the owner has
+  // applied them and production is captured again.
+  const check = recorded.productionCheck;
+  assert.equal(check.matchedThroughUpdate, "20261105203431_restored_public_affiliation_badges.sql");
+  assert.deepEqual(check.matchedFingerprints, {
+    function_bodies: "32aa7e11dc2d5b128b9af374d3875992",
+    columns: "ee319f214008a3278113bd15084419bb",
+    constraints: "d379dceb97dc291ae49872bdfec430d2",
+    indexes: "f4fe4b389e0780c5554b12e4be424938",
+    triggers: "483f8b84299f04c1bb4df8ccdaed274a",
+  });
+  const pending = listUpdates().filter((update) => update > check.matchedThroughUpdate);
+  assert.deepEqual(check.pendingApplication, pending);
+  if (pending.length === 0) {
+    for (const [category, fingerprint] of Object.entries(check.matchedFingerprints)) {
+      assert.equal(recorded.categories[category].fingerprint, fingerprint);
+    }
+  }
 });
 
 test(

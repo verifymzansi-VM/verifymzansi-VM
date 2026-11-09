@@ -59,6 +59,12 @@ are compared with `lint-baseline.json`: errors fail unless listed in
 and fixed entries must be removed, so the baseline only shrinks
 (`pnpm db:foundation:lint -- --write-baseline`).
 
+The same job then runs `pnpm db:foundation:lifecycle-test`: a second throwaway
+container replays this folder up to the post lifecycle guards update, seeds
+synthetic members and posts, applies that update and every later one, and checks
+the post lifecycle guards and their races through the production API commands
+(`updates/README.md`).
+
 ## Browser test copy (CI job `e2e-foundation`)
 
 `playwright.foundation.config.ts` runs the restored website in foundation mode

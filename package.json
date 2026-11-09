@@ -93,6 +93,7 @@
     "db:foundation:snapshot": "node scripts/generate-foundation-snapshot.mjs",
     "db:foundation:api-check": "node scripts/check-foundation-api-drift.mjs",
     "db:foundation:lint": "node scripts/lint-foundation-sql.mjs",
+    "db:foundation:lifecycle-test": "node --import tsx scripts/test-foundation-lifecycle-guards.mjs",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",
     "db:check-invariants": "tsx scripts/check-db-invariants.ts",
     "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",

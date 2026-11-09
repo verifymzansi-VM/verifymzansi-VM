@@ -12,8 +12,15 @@ begin
   perform internal.assert_post_revision(p_expected_revision);
   next_status := case p_action when 'pause' then 'paused' when 'sold' then 'sold' when 'archive' then 'archived' end;
   if next_status is null then raise exception 'unknown action' using errcode = '22023'; end if;
+  -- Match hold placement ordering: account subject before post rows.
+  perform internal.lock_evidence_subject(actor);
   select * into post from private.posts p where p.id = p_post_id and p.owner_id = actor for update;
   if not found then raise exception 'post not found' using errcode = '22023'; end if;
+  -- Hidden content stays as staff left it until an independent release;
+  -- sold or archived would start its deletion.
+  if exists (select 1 from private.frontend_content_holds h where h.post_id = post.id and h.released_at is null) then
+    raise exception 'staff visibility hold requires independent release' using errcode = 'PT423', detail = 'staff_visibility_hold';
+  end if;
   if post.status not in ('live', 'paused') or (p_action = 'sold' and post.kind <> 'listing')
     or (p_action = 'pause' and post.status <> 'live') then
     raise exception 'action not available for this post' using errcode = '22023';
