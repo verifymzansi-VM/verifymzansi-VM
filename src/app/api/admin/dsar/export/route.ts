@@ -25,10 +25,9 @@ const MAX_ROWS_PER_DATASET = 50_000;
 
 const exportSchema = z.object({ requestId: uuidSchema });
 
-/** Datasets in a foundation access export: 32 before database update
- * 20261109073519_post_lifecycle_guards.sql, 33 once it adds event_submissions.
- * Accept both until production has the update, then keep only 33. */
-const FOUNDATION_EXPORT_DATASET_COUNTS = [32, 33];
+/** Datasets in a foundation access export (33 since database update
+ * 20261109073519_post_lifecycle_guards.sql added event_submissions). */
+const FOUNDATION_EXPORT_DATASET_COUNT = 33;
 
 class ExportIncompleteError extends Error {}
 
@@ -324,7 +323,7 @@ export async function POST(request: Request) {
             })
             .refine((v) =>
               v.account_found
-                ? FOUNDATION_EXPORT_DATASET_COUNTS.includes(Object.keys(v.datasets).length)
+                ? Object.keys(v.datasets).length === FOUNDATION_EXPORT_DATASET_COUNT
                 : Object.keys(v.datasets).length === 0
             )
         );

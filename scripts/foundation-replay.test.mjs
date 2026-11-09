@@ -16,7 +16,7 @@ test("the recorded fingerprint keeps the production-matched values", () => {
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261109104020_post_expiry_rules.sql");
+  assert.equal(check.matchedThroughUpdate, "20261109173012_posting_terms_v3.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "11724f805587a82326eae936e0200f0c",
     columns: "044ab7ea20a73ccadf55dcfd0c098d08",
