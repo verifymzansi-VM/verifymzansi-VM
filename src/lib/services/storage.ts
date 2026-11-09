@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
@@ -281,11 +282,15 @@ function assertSafeStorageKey(key: string): void {
  * Initialize R2 client using S3-compatible API.
  * Cached as a module-level singleton to avoid recreating TLS connections
  * and credential parsing on every upload/download call.
+ *
+ * "single-attempt" turns off the SDK's own retries (3 attempts by default).
+ * Scheduled cleanup uses it so that one call is exactly one Worker
+ * subrequest; it retries through its claim/lease cycle instead.
  */
-let _r2Client: S3Client | null = null;
-let _r2ConfigKey: string | null = null;
+type R2ClientAttempts = "default" | "single-attempt";
+const _r2Clients: Partial<Record<R2ClientAttempts, { configKey: string; client: S3Client }>> = {};
 
-function getR2Client(): S3Client {
+function getR2Client(attempts: R2ClientAttempts = "default"): S3Client {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -296,11 +301,12 @@ function getR2Client(): S3Client {
 
   // Invalidate singleton if credentials change (e.g. key rotation).
   const configKey = `${accountId}:${accessKeyId}`;
-  if (_r2Client && _r2ConfigKey === configKey) {
-    return _r2Client;
+  const cached = _r2Clients[attempts];
+  if (cached && cached.configKey === configKey) {
+    return cached.client;
   }
 
-  _r2Client = new S3Client({
+  const client = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: {
@@ -311,9 +317,10 @@ function getR2Client(): S3Client {
     // a hoisted empty-body CRC32 that breaks PUTs of non-empty files.
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
+    ...(attempts === "single-attempt" ? { maxAttempts: 1 } : {}),
   });
-  _r2ConfigKey = configKey;
-  return _r2Client;
+  _r2Clients[attempts] = { configKey, client };
+  return client;
 }
 
 /**
@@ -510,8 +517,14 @@ export function generateStorageKey(
 
 /**
  * Delete a file from R2.
+ * "single-attempt" sends exactly one storage request (no SDK retries), for
+ * scheduled cleanup that counts its Worker subrequests.
  */
-export async function deleteFromR2(bucket: string, key: string): Promise<void> {
+export async function deleteFromR2(
+  bucket: string,
+  key: string,
+  attempts: R2ClientAttempts = "default"
+): Promise<void> {
   assertSafeStorageKey(key);
   const localPath = await playwrightStoragePath(bucket, key);
   if (localPath) {
@@ -527,13 +540,60 @@ export async function deleteFromR2(bucket: string, key: string): Promise<void> {
     return;
   }
 
-  const client = getR2Client();
+  const client = getR2Client(attempts);
   const command = new DeleteObjectCommand({
     Bucket: bucket,
     Key: key,
   });
 
   await client.send(command, r2SendOptions(R2_METADATA_TIMEOUT_MS));
+}
+
+/** S3 DeleteObjects and the Workers R2 binding both take at most 1,000 keys. */
+export const R2_DELETE_BATCH_LIMIT = 1000;
+
+/**
+ * Delete up to 1,000 keys with one storage request and no SDK retries (one
+ * Worker subrequest). Returns the keys storage did not confirm as deleted; a
+ * key that does not exist counts as deleted. Throws when the request itself
+ * fails, so the caller can retry later or fall back to single deletes.
+ */
+export async function deleteManyFromR2(bucket: string, keys: readonly string[]): Promise<string[]> {
+  if (keys.length === 0) return [];
+  if (keys.length > R2_DELETE_BATCH_LIMIT || new Set(keys).size !== keys.length) {
+    throw new Error("Invalid storage batch");
+  }
+  keys.forEach(assertSafeStorageKey);
+  if (shouldUsePlaywrightStorage()) {
+    const fs = await import("node:fs/promises");
+    for (const key of keys) {
+      const localPath = await playwrightStoragePath(bucket, key);
+      if (localPath) await fs.rm(localPath, { force: true });
+    }
+    return [];
+  }
+
+  const r2Binding = await getR2BucketBinding(bucket);
+  if (r2Binding) {
+    await r2Binding.delete([...keys]);
+    return [];
+  }
+
+  const response = await getR2Client("single-attempt").send(
+    new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+    }),
+    r2SendOptions(R2_METADATA_TIMEOUT_MS)
+  );
+  const requested = new Set(keys);
+  const unconfirmed = new Set<string>();
+  for (const error of response.Errors ?? []) {
+    // An error that names no requested key cannot be attributed: confirm nothing.
+    if (!error.Key || !requested.has(error.Key)) return [...keys];
+    if (error.Code !== "NoSuchKey") unconfirmed.add(error.Key);
+  }
+  return [...unconfirmed];
 }
 
 /**
