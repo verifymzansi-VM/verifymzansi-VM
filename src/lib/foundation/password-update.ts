@@ -1,6 +1,7 @@
 import "server-only";
 
 import { parseFoundationConnection } from "./connection";
+import { authErrorCode } from "./auth-error-code";
 
 export class FoundationPasswordUpdateError extends Error {
   constructor(
@@ -55,8 +56,9 @@ function passwordCommand(input: unknown, token: string, subject: string, fetcher
     }
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) {
-      const code =
-        body && typeof body === "object" && "error_code" in body ? body.error_code : null;
+      // The request asks for API version 2024-01-01, whose replies carry the
+      // code as `code`; older replies used `error_code` (auth-error-code.ts).
+      const code = authErrorCode(body);
       if (code === "current_password_invalid" || code === "current_password_required")
         throw new FoundationPasswordUpdateError(400, "current_password");
       if (code === "insufficient_aal") throw new FoundationPasswordUpdateError(403, "mfa_required");

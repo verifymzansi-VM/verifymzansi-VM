@@ -105,15 +105,22 @@ it("reports an unknown outcome whose sign-out also failed", async () => {
   await expect(reset(fetcher)).rejects.toMatchObject({ signOutComplete: false });
   expect(puts(fetcher)).toBe(1);
 });
-it("treats a repeat of the password already in force as the completed reset", async () => {
-  const fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(Response.json({ error_code: "same_password" }, { status: 422 }))
-    .mockResolvedValueOnce(new Response(null, { status: 204 }));
-  await expect(reset(fetcher)).resolves.toEqual({ signOutComplete: true, alreadyCurrent: true });
-  expect(puts(fetcher)).toBe(1);
-  expect(signOuts(fetcher)).toBe(1);
-});
+it.each([
+  // Auth's reply to API version 2024-01-01, which the request asks for.
+  ["the current reply", { code: "same_password", message: "PRIVATE_PROVIDER_DETAIL" }],
+  ["an older reply", { code: 422, error_code: "same_password", msg: "PRIVATE_PROVIDER_DETAIL" }],
+])(
+  "treats a repeat of the password already in force as the completed reset (%s)",
+  async (_label, reply) => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(reply, { status: 422 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(reset(fetcher)).resolves.toEqual({ signOutComplete: true, alreadyCurrent: true });
+    expect(puts(fetcher)).toBe(1);
+    expect(signOuts(fetcher)).toBe(1);
+  }
+);
 it.each([
   ["weak_password", 422],
   ["insufficient_aal", 403],
@@ -121,7 +128,9 @@ it.each([
   ["rate_limited", 429],
   ["bad_jwt", 401],
 ] as const)("keeps sessions after a clear refusal of the reset: %s", async (code, status) => {
-  const fetcher = vi.fn<typeof fetch>(async () => Response.json({ error_code: code }, { status }));
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json({ code, message: "PRIVATE_PROVIDER_DETAIL" }, { status })
+  );
   const failure = await reset(fetcher).catch((error: unknown) => error);
   expect(failure).not.toBeInstanceOf(FoundationPasswordResetUncertainError);
   expect(failure).toMatchObject({ detail: undefined });
@@ -159,18 +168,22 @@ it.each([
   ["weak_password", 400, "password_policy"],
   ["same_password", 400, "password_policy"],
 ] as const)("keeps %s closed without retry", async (code, status, reason) => {
-  const fetcher = vi.fn<typeof fetch>(async () =>
-    Response.json({ error_code: code }, { status: 400 })
-  );
-  await expect(
-    createFoundationPasswordUpdater(
-      config,
-      "synthetic-token",
-      id,
-      fetcher
-    )("current", "synthetic-next-password")
-  ).rejects.toMatchObject({ status, reason });
-  expect(fetcher).toHaveBeenCalledTimes(1);
+  // Auth's reply to API version 2024-01-01 (`code`), and an older one (`error_code`).
+  for (const reply of [
+    { code, message: "PRIVATE_PROVIDER_DETAIL" },
+    { code: 400, error_code: code, msg: "PRIVATE_PROVIDER_DETAIL" },
+  ]) {
+    const fetcher = vi.fn<typeof fetch>(async () => Response.json(reply, { status: 400 }));
+    await expect(
+      createFoundationPasswordUpdater(
+        config,
+        "synthetic-token",
+        id,
+        fetcher
+      )("current", "synthetic-next-password")
+    ).rejects.toMatchObject({ status, reason });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  }
 });
 it("does not acknowledge a mismatched provider user", async () => {
   const fetcher = vi.fn<typeof fetch>(async () => Response.json({ id: "another-user" }));
