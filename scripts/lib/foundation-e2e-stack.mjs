@@ -4,10 +4,11 @@
 // database/foundation/ (see replayMigrationNames). Nothing here accepts a
 // connection setting from the environment, and nothing can reach a hosted
 // project: every address comes from the local CLI and passes the loopback guard.
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { localDockerEnvironment } from "./foundation-native-isolation.mjs";
 import { assertFixturePath, ensureFixtureDirectory } from "./foundation-native-paths.mjs";
 import { compareFingerprints, replaySteps } from "./foundation-replay.mjs";
 import {
@@ -15,38 +16,21 @@ import {
   E2E_FIXTURE,
   assertLocalFoundationTarget,
   fixtureWorkdir,
-  localDockerContext,
   replayMigrationNames,
 } from "./foundation-e2e-target.mjs";
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 /** Resolves the workspace, the pinned local Docker context and a child
- * environment without any SUPABASE_* or DOCKER_* variables from the caller. */
+ * environment without any SUPABASE_* or DOCKER_* variables from the caller
+ * (the same guard as the native fixture, see localDockerEnvironment). */
 export function openFixture(root = process.cwd()) {
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !/^(SUPABASE_|DOCKER_)/i.test(key))
-  );
-  const context = localDockerContext({
-    platform: process.platform,
-    env: process.env,
-    inspect: (name) =>
-      execFileSync(
-        "docker",
-        ["context", "inspect", name, "--format", "{{.Endpoints.docker.Host}}"],
-        {
-          encoding: "utf8",
-          env,
-          stdio: ["ignore", "pipe", "pipe"],
-        }
-      ).trim(),
-  });
-  env.DOCKER_CONTEXT = context;
+  const { env, dockerArgs } = localDockerEnvironment();
   return {
     root,
     workdir: fixtureWorkdir(root),
     env,
-    dockerArgs: ["--context", context],
+    dockerArgs,
     cliPath: path.resolve(root, "node_modules/supabase/dist/supabase.js"),
   };
 }
