@@ -121,4 +121,47 @@ test("the Windows guard ignores CI variables and still requires the local pipe",
     env: { ...GITHUB_HOSTED, DOCKER_HOST: LINUX_HOST },
     endpoints: { "desktop-linux": "tcp://10.0.0.5:2375", default: LINUX_HOST },
   });
+  refused({
+    platform: "win32",
+    env: GITHUB_HOSTED,
+    endpoints: { "desktop-linux": "tcp://10.0.0.5:2375", default: LINUX_HOST },
+  });
+  assert.equal(
+    guard({
+      platform: "win32",
+      env: GITHUB_HOSTED,
+      endpoints: { "desktop-linux": WINDOWS_HOST },
+    }).result(),
+    "desktop-linux"
+  );
+});
+
+test("Windows refuses DOCKER_HOST or DOCKER_CONTEXT pointing away from the local pipe", () => {
+  const endpoints = { "desktop-linux": WINDOWS_HOST };
+  for (const host of [...REMOTE_HOSTS, LINUX_HOST]) {
+    const { result, inspected } = guard({
+      platform: "win32",
+      env: { DOCKER_HOST: host },
+      endpoints,
+    });
+    assert.throws(result, /Non-local Docker endpoint prohibited/);
+    assert.deepEqual(inspected, []);
+  }
+  for (const context of ["default", "remote", "rootless", ""]) {
+    const { result, inspected } = guard({
+      platform: "win32",
+      env: { DOCKER_CONTEXT: context },
+      endpoints: { ...endpoints, [context]: WINDOWS_HOST },
+    });
+    assert.throws(result, /Non-local Docker endpoint prohibited/);
+    assert.deepEqual(inspected, []);
+  }
+  assert.equal(
+    guard({
+      platform: "win32",
+      env: { DOCKER_HOST: WINDOWS_HOST, DOCKER_CONTEXT: "desktop-linux" },
+      endpoints,
+    }).result(),
+    "desktop-linux"
+  );
 });

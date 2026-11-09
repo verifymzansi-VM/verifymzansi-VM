@@ -1,0 +1,149 @@
+// Identity and safety guards for the foundation browser test copy (M0.7).
+// Pure functions only (unit-tested in scripts/foundation-e2e-target.test.mjs):
+// the test copy may only ever talk to a throwaway stack on this machine.
+import path from "node:path";
+
+/** The throwaway stack. Ports must match e2e/foundation/fixture/supabase-config.toml. */
+export const E2E_FIXTURE = Object.freeze({
+  projectId: "vm-foundation-e2e",
+  workdir: "tmp/foundation-e2e",
+  configTemplate: "e2e/foundation/fixture/supabase-config.toml",
+  stateFile: "tmp/foundation-e2e/state.json",
+  apiPort: 55443,
+  dbPort: 55452,
+  mailPort: 55454,
+  appPort: 3110,
+  /** The website's connection guard accepts only this marker for a local stack. */
+  projectRef: "local-foundation",
+  /** Services the copy does not need; Auth, PostgREST, Kong, Mailpit and Postgres stay. */
+  excludedServices:
+    "realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
+});
+export const E2E_DB_CONTAINER = `supabase_db_${E2E_FIXTURE.projectId}`;
+
+/** Hosted projects this copy must never reach (production, the retired source
+ * project and the other known hosted refs from src/lib/foundation/connection.ts). */
+export const HOSTED_PROJECT_REFS = Object.freeze([
+  "gntzjtuncsyefujajmjy",
+  "tnygdgormnofpgjknlhr",
+  "ubrtdtmumfhjpuegxnhj",
+  "pfuurrahjdewiphmjyiq",
+  "vlsynwsekujghfufvsxn",
+]);
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+function refuse(what) {
+  // Never echo the refused value: it may be a real connection string.
+  throw new Error(`Foundation test copy refused: ${what} must point at the local throwaway stack`);
+}
+
+/**
+ * Accepts only a loopback URL (127.0.0.1, localhost or ::1) with the expected
+ * protocol and, when given, the expected port. Refuses hosted Supabase
+ * (*.supabase.co / *.supabase.in), every other host, embedded hosted project
+ * refs anywhere in the value, query strings, fragments and malformed input.
+ * @param {unknown} value
+ * @param {{ what: string, protocols: string[], port?: number, allowUserInfo?: boolean }} options
+ * @returns {URL}
+ */
+export function assertLoopbackUrl(value, { what, protocols, port, allowUserInfo = false }) {
+  if (typeof value !== "string" || value.length === 0 || value.length > 2048) refuse(what);
+  const lowered = value.toLowerCase();
+  if (HOSTED_PROJECT_REFS.some((ref) => lowered.includes(ref))) refuse(what);
+  if (/supabase\.(co|in|com|net)\b/.test(lowered)) refuse(what);
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    refuse(what);
+  }
+  if (!protocols.includes(url.protocol)) refuse(what);
+  if (!LOOPBACK_HOSTS.has(url.hostname)) refuse(what);
+  if (port !== undefined && url.port !== String(port)) refuse(what);
+  if (url.search || url.hash) refuse(what);
+  if (!allowUserInfo && (url.username || url.password)) refuse(what);
+  return url;
+}
+
+/**
+ * The single gate every entry point (setup, seed, web server, Playwright config)
+ * passes before it touches the database or starts the website.
+ * - apiUrl: the stack's API gateway, exactly http://127.0.0.1:<apiPort>.
+ * - dbUrl: the stack's Postgres, a postgresql:// loopback URL on <dbPort>.
+ * - env: the environment handed to the website; every Supabase or foundation
+ *   URL in it must be that same local gateway, and the project ref the local
+ *   marker.
+ * @param {{ apiUrl: string | undefined, dbUrl?: string, env?: Record<string, string | undefined> }} target
+ * @returns {string} the API origin
+ */
+export function assertLocalFoundationTarget({ apiUrl, dbUrl, env = {} }) {
+  const api = assertLoopbackUrl(apiUrl, {
+    what: "the database API address",
+    protocols: ["http:"],
+    port: E2E_FIXTURE.apiPort,
+  });
+  // The website's connection guard only accepts 127.0.0.1 for a local stack.
+  if (api.hostname !== "127.0.0.1" || api.pathname !== "/") refuse("the database API address");
+  if (dbUrl !== undefined) {
+    assertLoopbackUrl(dbUrl, {
+      what: "the database address",
+      protocols: ["postgresql:", "postgres:"],
+      port: E2E_FIXTURE.dbPort,
+      allowUserInfo: true,
+    });
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined || value === "") continue;
+    if (/SUPABASE_URL$/.test(key) && value !== api.origin) refuse(key);
+    if (/(DATABASE|POSTGRES|DB)_URL$/.test(key))
+      assertLoopbackUrl(value, {
+        what: key,
+        protocols: ["postgresql:", "postgres:"],
+        port: E2E_FIXTURE.dbPort,
+        allowUserInfo: true,
+      });
+    if (/PROJECT_REF$/.test(key) && value !== E2E_FIXTURE.projectRef) refuse(key);
+  }
+  if (env.ENVIRONMENT === "production") refuse("ENVIRONMENT");
+  return api.origin;
+}
+
+// Docker must be this machine's own engine: the copy shares the native
+// fixture's guard (localDockerEnvironment in foundation-native-isolation.mjs).
+
+/** Throwaway workspace path, inside the repository's ignored tmp/ folder. */
+export function fixtureWorkdir(root = process.cwd()) {
+  return path.resolve(root, E2E_FIXTURE.workdir);
+}
+
+/**
+ * Migration filenames for the workspace copy of the replay, in replay order:
+ * candidate.sql takes the version of the guarded CLI migration that stands in
+ * for it, the baseline supplement the version just before the update that
+ * needs it, and each update keeps its own name. The platform prelude is not
+ * copied: the real local stack provides the roles, Auth schema and extensions.
+ */
+export function replayMigrationNames(steps) {
+  const names = [];
+  for (const step of steps) {
+    if (step.label === "platform-prelude.sql") continue;
+    if (step.label === "candidate.sql")
+      names.push({ ...step, name: "20261015140403_candidate.sql" });
+    else if (step.label === "baseline-supplement.sql") {
+      const next = steps[steps.indexOf(step) + 1]?.label ?? "";
+      const version = /^(\d{14})_/.exec(next)?.[1];
+      if (!version) throw new Error("Baseline supplement must precede an update");
+      names.push({
+        ...step,
+        name: `${String(BigInt(version) - 1n)}_replay_baseline_supplement.sql`,
+      });
+    } else if (/^\d{14}_[a-z0-9_]+\.sql$/.test(step.label))
+      names.push({ ...step, name: step.label });
+    else throw new Error(`Unexpected replay step ${step.label}`);
+  }
+  const sorted = names.map((entry) => entry.name).sort();
+  if (new Set(sorted).size !== names.length || sorted.some((name, i) => name !== names[i].name))
+    throw new Error("Replay migration names do not sort in replay order");
+  return names;
+}
