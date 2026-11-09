@@ -9,8 +9,8 @@ CREATE OR REPLACE FUNCTION internal.claim_supported_notification_outbox(p_suppor
 AS $function$
 declare result jsonb;
 begin
-  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 17 or coalesce(array_ndims(p_supported_kinds),0)<>1 then raise exception 'supported mail kinds required' using errcode='22023';end if;
-  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
+  if p_supported_kinds is null or cardinality(p_supported_kinds) not between 1 and 18 or coalesce(array_ndims(p_supported_kinds),0)<>1 then raise exception 'supported mail kinds required' using errcode='22023';end if;
+  if exists(select 1 from unnest(p_supported_kinds) k where k is null or k not in('payment_completed','payment_reversed','payment_reconciliation_required','trial_started','post_expired','post_expiry_reminder','draft_deletion_warning','post_deleted','verification_phone_confirmed','identity_accepted','enquiry_received','account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update','post_sold')) then raise exception 'unsupported mail kind' using errcode='22023';end if;
   if p_limit is null or p_limit not between 1 and 50 then raise exception 'invalid limit' using errcode='22023'; end if;
   with due as (select id from private.outbox_events where kind=any(p_supported_kinds) and processed_at is null
     and delivery_attempts<8 and delivery_after<=statement_timestamp()

@@ -1,26 +1,34 @@
 #!/usr/bin/env node
-// Behaviour checks for database/foundation/updates/20261109073519_post_lifecycle_guards.sql.
+// Behaviour checks for the post lifecycle updates in database/foundation/updates:
+// 20261109073519_post_lifecycle_guards.sql (staff holds, stable deletion
+// clock, kept event submissions) and 20261109104020_post_expiry_rules.sql
+// (3-day grace, sold and paused posts keep their slot, events deleted at
+// their end, late-payment extension, cutover dates, owner reads with the
+// deletion date).
 //
 // Replays database/foundation (prelude, candidate.sql, every update) into the
 // throwaway, network-less Postgres 17 container used by the SQL lint gate,
-// seeds synthetic members and posts before the update, applies the update
-// itself, and checks the backfills, the guards and their concurrency through
+// seeds synthetic members and posts before each update, applies the update
+// itself, and checks the backfills, the rules and their concurrency through
 // the production API commands (member calls run as `authenticated` with
 // synthetic claims and a live session row; jobs as `service_role`).
 //
 //   node --import tsx scripts/test-foundation-lifecycle-guards.mjs
 //
-// It also runs the update's read-only preflight (preflight/) before the
+// It also runs each update's read-only preflight (preflight/) before the
 // update, and proves that apply -> rollback (rollback/) -> apply returns the
 // schema fingerprint to the same values each time.
 //
 // Needs a local Docker daemon; it takes no connection settings at all. The
 // Hide action and most hold releases are mirrored by vmtest.hide/release
 // (same rows and lock order; the real staff commands need report and claim
-// fixtures); one release goes through the real staff command. The only
-// stand-in is internal.current_verified_identity (identity review is covered
-// by its own suites), replaced after the update so free events can reach the
-// fair-use branch of internal.submit_post.
+// fixtures); one release goes through the real staff command. Plan slots are
+// staff-granted entitlements, published posts get their approval snapshot
+// directly (moderation has its own suites), and the time a rule waits for is
+// simulated by moving a post's clock columns back. The only stand-in is
+// internal.current_verified_identity (identity review is covered by its own
+// suites), replaced after the updates so submissions and reactivation reach
+// the posting rules.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -29,15 +37,14 @@ import { replaySteps } from "./lib/foundation-replay.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 import { buildRestoredPostInput } from "../src/lib/foundation/restored-post-input.ts";
 
-const UPDATE = "20261109073519_post_lifecycle_guards.sql";
-const PREFLIGHT = readFileSync(
-  "database/foundation/preflight/20261109073519_post_lifecycle_guards.check.sql",
-  "utf8"
-);
-const ROLLBACK = readFileSync(
-  "database/foundation/rollback/20261109073519_post_lifecycle_guards.down.sql",
-  "utf8"
-);
+const GUARDS = "20261109073519_post_lifecycle_guards.sql";
+const RULES = "20261109104020_post_expiry_rules.sql";
+const companion = (folder, update, suffix) =>
+  readFileSync(`database/foundation/${folder}/${update.replace(/\.sql$/, suffix)}`, "utf8");
+const GUARDS_PREFLIGHT = companion("preflight", GUARDS, ".check.sql");
+const GUARDS_ROLLBACK = companion("rollback", GUARDS, ".down.sql");
+const RULES_PREFLIGHT = companion("preflight", RULES, ".check.sql");
+const RULES_ROLLBACK = companion("rollback", RULES, ".down.sql");
 const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const TERMS = {
   version: "posting-v1",
@@ -58,9 +65,11 @@ const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
   const { steps } = replaySteps();
-  const index = steps.findIndex((step) => step.label === UPDATE);
-  assert.ok(index > 0, `${UPDATE} is missing`);
-  applySteps(database, steps.slice(0, index));
+  const guardsIndex = steps.findIndex((step) => step.label === GUARDS);
+  const rulesIndex = steps.findIndex((step) => step.label === RULES);
+  assert.ok(guardsIndex > 0, `${GUARDS} is missing`);
+  assert.ok(rulesIndex > guardsIndex, `${RULES} is missing`);
+  applySteps(database, steps.slice(0, guardsIndex));
 
   // ---------------------------------------------------------------- helpers
   const run = (sql) => database.psql(`\\set VERBOSITY verbose\n${sql}`, ["-A", "-t"]);
@@ -90,8 +99,8 @@ try {
   const staffMember = (user, sql) =>
     `\\o /dev/null\nselect set_config('request.jwt.claim.sub','${user.id}',false),set_config('request.jwt.claims','${staffClaims(user)}',false);\n\\o\nset role authenticated;\n${sql}`;
   const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
-  const preflight = () =>
-    q(PREFLIGHT)
+  const preflight = (sql) =>
+    q(sql)
       .split("\n")
       .filter(Boolean)
       .map((line) => line.split("|"));
@@ -142,7 +151,9 @@ try {
       if p_kind<>'business' then insert into private.post_contacts(post_id,post_kind,channels) values(pid,p_kind,array['form']); end if;
       insert into private.post_media(post_id,object_id,purpose,position) values(pid,cover,'cover',0);
       if p_status in('live','expired','sold','archived','paused') then
-        update private.posts set status='live',published_at=now()-interval '40 days',visible_until=now()+interval '5 days' where id=pid;
+        update private.posts set status='live',published_at=now()-interval '40 days',
+          visible_until=case when p_kind='event' then (select e.ends_at from private.event_details e where e.post_id=pid)
+            else now()+interval '5 days' end where id=pid;
       end if;
       if p_status<>'draft' and p_status<>'live' then
         if p_status='pending_moderation' or p_submitted_age is not null then
@@ -182,6 +193,30 @@ try {
       insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
       return m;
     end$$;
+    -- A plan slot: a staff-granted entitlement running for p_days more days.
+    create function vmtest.slot(p_owner uuid,p_staff uuid,p_capacity integer default 1,p_days integer default 20)
+    returns uuid language sql as $$
+      insert into private.entitlements(owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+        values(p_owner,'staff_grant',p_staff,p_capacity,10,1,now()-interval '1 day',now()+make_interval(days=>p_days))
+        returning id;
+    $$;
+    -- A live Market post published in that slot until the slot ends, with the
+    -- approval snapshot moderation records.
+    create function vmtest.slot_post(p_owner uuid,p_slot uuid) returns uuid language plpgsql as $$
+    declare pid uuid:=vmtest.post(p_owner,'listing','live'); begin
+      insert into private.post_activations(post_id,entitlement_id,owner_id) values(pid,p_slot,p_owner);
+      update private.posts set visible_until=(select e.ends_at from private.entitlements e where e.id=p_slot) where id=pid;
+      insert into private.frontend_post_approval_snapshots(post_id,digest,approved_at,structural_digest)
+        values(pid,internal.frontend_post_approval_digest(pid),now(),internal.frontend_post_structural_digest(pid));
+      return pid;
+    end$$;
+    -- The slot's plan ends now; the posts it funds reach the end of their run.
+    create function vmtest.end_slot(p_slot uuid) returns void language sql as $$
+      update private.entitlements set ends_at=clock_timestamp()-interval '1 second' where id=p_slot;
+      update private.posts set visible_until=clock_timestamp()-interval '1 second'
+        where id in(select a.post_id from private.post_activations a where a.entitlement_id=p_slot)
+          and status in('live','paused');
+    $$;
     create table vmtest.marker(id uuid);`);
   const user = (label) => json(`select vmtest.member('${label}');`);
   const post = (owner, kind, status, age = 0, submitted = null, reason = null) =>
@@ -254,7 +289,7 @@ try {
     return json(member(owner, `select api.consume_frontend_post_command('${request}');`));
   };
 
-  // ------------------------------------------- state before the update
+  // ------------------------------------- state before the lifecycle guards
   const expiredListing = post(alice, "listing", "expired", 10, 12);
   const soldListing = post(alice, "listing", "sold", 5, 40);
   const characterised = post(alice, "listing", "expired", 3, 20);
@@ -311,70 +346,80 @@ try {
   });
   // Created after the old job ran: past its deletion date, not yet deleted.
   const oldExpired = post(alice, "listing", "expired", 31, 45);
-  const notices = (id) => outbox(id, "post_expired");
-  const expiredNoticesBefore = notices(expiredListing);
-  assert.equal(expiredNoticesBefore, 1);
+  const remindersBefore = outbox(expiredListing, "post_expiry_reminder");
+  assert.equal(outbox(expiredListing, "post_expired"), 1);
+  assert.equal(remindersBefore, 1, "the earlier job queued one 7-day reminder");
 
-  await check("preflight: read only, and silent when the backfill will pass", () => {
-    const rows = preflight();
-    assert.equal(rows.length, 1, JSON.stringify(rows));
-    assert.equal(rows[0][1], "summary");
-    // As one transaction (like the SQL editor), any write after it is refused.
-    const write = database.psql(
-      `${PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
-      ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
-    );
-    assert.notEqual(write.status, 0);
-    assert.match(write.stderr, /ERROR:\s+25006:/);
-  });
-  await check("preflight: reports rows the backfill's deferred checks would refuse", () => {
+  // Rows that cannot be made through any command, written with triggers off,
+  // that a backfill's deferred checks would refuse.
+  const brokenRows = (extra) => {
     const [job, attrs, bare] = [randomUUID(), randomUUID(), randomUUID()];
     const broken = (id, category, status) =>
-      `insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id,status)
-         values('${id}','${alice.id}','listing','market','${category}','Broken fixture','A broken synthetic row.','gp','gp_johannesburg','${status}');`;
-    // Written with triggers off: these rows cannot be made through any command.
+      `insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id,status${extra.columns})
+         values('${id}','${alice.id}','listing','market','${category}','Broken fixture','A broken synthetic row.','gp','gp_johannesburg','${status}'${extra.values});`;
     q(`set session_replication_role=replica;
        ${broken(job, "jobs_services", "expired")}
        insert into private.listing_details(post_id,price_mode,price_cents) values('${job}','free',0);
        ${broken(attrs, "other_items", "sold")}
        insert into private.listing_details(post_id,price_mode,price_cents,attributes) values('${attrs}','amount',100,'{"no_such_field":"x"}');
        ${broken(bare, "other_items", "archived")}`);
-    const problems = preflight()
-      .filter((r) => r[1] !== "summary")
-      .map((r) => [r[1], r[2]]);
-    assert.deepEqual(
-      problems.sort(),
-      [
+    return {
+      expected: [
         ["deferred check: exactly one detail row", bare],
         ["deferred check: job salary cannot be free or negotiable", job],
         ["deferred check: listing attributes", attrs],
-      ].sort()
+      ].sort(),
+      remove: () =>
+        q(`set session_replication_role=replica;
+           delete from private.listing_details where post_id in('${job}','${attrs}');
+           delete from private.posts where id in('${job}','${attrs}','${bare}');`),
+    };
+  };
+  const problems = (sql) =>
+    preflight(sql)
+      .filter((r) => r[1] !== "summary")
+      .map((r) => [r[1], r[2]])
+      .sort();
+
+  await check("guards preflight: read only, and silent when the backfill will pass", () => {
+    const rows = preflight(GUARDS_PREFLIGHT);
+    assert.equal(rows.length, 1, JSON.stringify(rows));
+    assert.equal(rows[0][1], "summary");
+    // As one transaction (like the SQL editor), any write after it is refused.
+    const write = database.psql(
+      `${GUARDS_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
+      ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
     );
-    q(`set session_replication_role=replica;
-       delete from private.listing_details where post_id in('${job}','${attrs}');
-       delete from private.posts where id in('${job}','${attrs}','${bare}');`);
-    assert.equal(preflight().length, 1);
+    assert.notEqual(write.status, 0);
+    assert.match(write.stderr, /ERROR:\s+25006:/);
+  });
+  await check("guards preflight: reports rows the backfill's deferred checks would refuse", () => {
+    const rows = brokenRows({ columns: "", values: "" });
+    assert.deepEqual(problems(GUARDS_PREFLIGHT), rows.expected);
+    rows.remove();
+    assert.equal(preflight(GUARDS_PREFLIGHT).length, 1);
+  });
+  await check("rules preflight: refuses to run before the lifecycle guards", () => {
+    const result = run(RULES_PREFLIGHT);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /apply 20261109073519_post_lifecycle_guards\.sql first/);
   });
 
-  // ------------------------------------------------------ apply the update
-  const before = fingerprint();
-  applySteps(database, [steps[index]]);
-  const after = fingerprint();
-  await check("rollback: apply, roll back and apply again are clean", () => {
-    assert.notEqual(after, before);
-    applySteps(database, [{ label: "rollback", sql: ROLLBACK }]);
-    assert.equal(fingerprint(), before, "the rollback leaves the pre-update schema");
+  // ----------------------------------------- apply the lifecycle guards
+  const guardsBefore = fingerprint();
+  applySteps(database, [steps[guardsIndex]]);
+  const guardsAfter = fingerprint();
+  await check("guards rollback: apply, roll back and apply again are clean", () => {
+    assert.notEqual(guardsAfter, guardsBefore);
+    applySteps(database, [{ label: "guards rollback", sql: GUARDS_ROLLBACK }]);
+    assert.equal(fingerprint(), guardsBefore, "the rollback leaves the pre-update schema");
     assert.equal(exists(expiredListing), true);
-    applySteps(database, [steps[index]]);
-    assert.equal(fingerprint(), after, "re-applying gives the same schema");
+    applySteps(database, [steps[guardsIndex]]);
+    assert.equal(fingerprint(), guardsAfter, "re-applying gives the same schema");
   });
-  applySteps(database, steps.slice(index + 1));
-  console.log(`Applied ${UPDATE} and any later updates.`);
-  q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
-      language sql set search_path=pg_catalog as $$
-      select 'fixture-identity'::text where exists(select 1 from private.current_account_access a where a.id=p_owner) $$;`);
+  applySteps(database, steps.slice(guardsIndex + 1, rulesIndex));
 
-  await check("backfill: ended posts keep their deletion date; others have none", () => {
+  await check("guards backfill: ended posts keep their deletion date; others have none", () => {
     for (const id of [expiredListing, soldListing, oldExpired]) {
       const p = row(id);
       assert.equal(p.ended_at, p.status_changed_at);
@@ -390,7 +435,7 @@ try {
       assert.equal(row(id).deletes_at, null);
     }
   });
-  await check("backfill: the free-event count is unchanged for every owner", () => {
+  await check("guards backfill: the free-event count is unchanged for every owner", () => {
     const ledger = (owner) =>
       Number(
         scalar(
@@ -407,7 +452,7 @@ try {
       "a submission outside the window is not copied"
     );
   });
-  await check("backfill: open holds keep the media the post showed", () => {
+  await check("guards backfill: open holds keep the media the post showed", () => {
     assert.equal(
       scalar(
         `select string_agg(object_id::text,',' order by object_id) from private.frontend_content_hold_media where hold_id='${preexistingHold}';`
@@ -415,16 +460,227 @@ try {
       [heldCover, logo].sort().join(",")
     );
   });
-  await check("approval digests do not include the lifecycle columns", () => {
+  const digestUnchanged = () =>
     assert.equal(
       scalar(
         `select internal.frontend_post_approval_digest('${expiredListing}')||':'||internal.frontend_post_structural_digest('${expiredListing}');`
       ),
       approvalDigest
     );
+  await check("approval digests do not include the lifecycle columns", digestUnchanged);
+
+  // ------------------------------------- state before the expiry rules
+  // Posts as the lifecycle guards leave them (deletion 30 days after the run
+  // ended; pausing and selling released the slot).
+  const dana = user("dana");
+  const endedAgo = (id, days) =>
+    q(
+      `update private.posts set ended_at=now()-make_interval(days=>${days}),deletes_at=now()-make_interval(days=>${days})+interval '30 days' where id='${id}';`
+    );
+  const cutExpired = post(dana, "listing", "expired", 25);
+  endedAgo(cutExpired, 25);
+  const cutExpiredRecent = post(dana, "listing", "expired", 1);
+  endedAgo(cutExpiredRecent, 1);
+  const cutArchived = post(dana, "listing", "archived", 1);
+  endedAgo(cutArchived, 1);
+  const cutExpiredEvent = post(dana, "event", "expired", 5);
+  endedAgo(cutExpiredEvent, 5);
+  const cutLiveEvent = post(dana, "event", "live");
+  const cutPausedEvent = post(dana, "event", "paused");
+  const cutOverEvent = post(dana, "event", "live");
+  q(`update private.event_details set starts_at=date_trunc('milliseconds',now()-interval '2 hours'),
+       ends_at=date_trunc('milliseconds',now()-interval '1 hour') where post_id='${cutOverEvent}';
+     update private.posts set visible_until=(select ends_at from private.event_details where post_id='${cutOverEvent}')
+       where id='${cutOverEvent}';`);
+  const cutSlot = scalar(`select vmtest.slot('${dana.id}','${staff.id}',2);`);
+  const cutSold = scalar(`select vmtest.slot_post('${dana.id}','${cutSlot}');`);
+  const cutPaused = scalar(`select vmtest.slot_post('${dana.id}','${cutSlot}');`);
+  q(member(dana, `select api.set_post_state('${cutSold}',${row(cutSold).revision},'sold');`));
+  q(member(dana, `select api.set_post_state('${cutPaused}',${row(cutPaused).revision},'pause');`));
+  const openSlot = (id) =>
+    scalar(
+      `select coalesce((select id::text from private.post_activations where post_id='${id}' and released_at is null),'')`
+    );
+  assert.equal(openSlot(cutSold), "", "the lifecycle guards release a sold post's slot");
+  assert.equal(openSlot(cutPaused), "", "the lifecycle guards release a paused post's slot");
+  const count = (sql) => Number(scalar(`select count(*) from (${sql}) x;`));
+
+  await check("rules preflight: read only, and its summary counts what the update changes", () => {
+    const rows = preflight(RULES_PREFLIGHT);
+    assert.equal(rows.length, 1, JSON.stringify(rows));
+    assert.equal(rows[0][1], "summary");
+    const ended = count("select 1 from private.posts where status in('expired','sold','archived')");
+    const notices = count(
+      "select 1 from private.posts where (status='expired' and kind<>'event') or status='sold'"
+    );
+    const events = count(
+      "select 1 from private.posts where kind='event' and status in('live','paused') and ended_at is null"
+    );
+    const paused = count(
+      "select 1 from private.posts p where status='paused' and not exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null)"
+    );
+    const holds = count("select 1 from private.frontend_content_holds where released_at is null");
+    assert.equal(
+      rows[0][3],
+      `${ended} ended posts get a deletion date at least 3 days away (${notices} new notices); ` +
+        `${events} live or paused events get their end as deletion date (1 already over); ` +
+        `${paused} paused posts without a slot keep the idle rule; ${holds} open staff holds`
+    );
+    const write = database.psql(
+      `${RULES_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
+      ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
+    );
+    assert.notEqual(write.status, 0);
+    assert.match(write.stderr, /ERROR:\s+25006:/);
   });
+  await check("rules preflight: reports rows the backfill's deferred checks would refuse", () => {
+    const rows = brokenRows({
+      columns: ",ended_at,deletes_at",
+      values: ",now(),now()+interval '30 days'",
+    });
+    assert.deepEqual(problems(RULES_PREFLIGHT), rows.expected);
+    rows.remove();
+    assert.equal(preflight(RULES_PREFLIGHT).length, 1);
+  });
+
+  // --------------------------------------------- apply the expiry rules
+  const rulesBefore = fingerprint();
+  applySteps(database, [steps[rulesIndex]]);
+  const rulesAfter = fingerprint();
+  await check("rules rollback: apply, roll back and apply again are clean", () => {
+    assert.notEqual(rulesAfter, rulesBefore);
+    // State only the expiry rules make: a paused and a sold post keep their
+    // slot, and a sold notice is queued.
+    const slotId = scalar(`select vmtest.slot('${dana.id}','${staff.id}',2);`);
+    const paused = scalar(`select vmtest.slot_post('${dana.id}','${slotId}');`);
+    const sold = scalar(`select vmtest.slot_post('${dana.id}','${slotId}');`);
+    q(member(dana, `select api.set_post_state('${paused}',${row(paused).revision},'pause');`));
+    q(member(dana, `select api.set_post_state('${sold}',${row(sold).revision},'sold');`));
+    assert.notEqual(openSlot(paused), "");
+    assert.notEqual(openSlot(sold), "");
+    job();
+    assert.equal(outbox(sold, "post_sold"), 1);
+    applySteps(database, [{ label: "rules rollback", sql: RULES_ROLLBACK }]);
+    assert.equal(fingerprint(), rulesBefore, "the rollback leaves the pre-update schema");
+    assert.equal(openSlot(paused), "", "a paused post releases its slot, as before");
+    assert.equal(openSlot(sold), "", "a sold post releases its slot, as before");
+    assert.equal(
+      count(
+        "select 1 from private.posts where status in('expired','sold','archived') and deletes_at<>ended_at+interval '30 days'"
+      ),
+      0
+    );
+    assert.equal(row(cutLiveEvent).deletes_at, null);
+    assert.equal(count("select 1 from private.outbox_events where kind='post_sold'"), 0);
+    assert.equal(
+      scalar("select to_regprocedure('api.get_my_frontend_post_v2(uuid)') is null;"),
+      "t"
+    );
+    assert.equal(exists(cutExpired) && exists(sold), true);
+    applySteps(database, [steps[rulesIndex]]);
+    assert.equal(fingerprint(), rulesAfter, "re-applying gives the same schema");
+  });
+  // The cutover instant is the re-application above; posts that ended before
+  // it are dated from it.
+  const cutover = scalar(
+    "select max(deletes_at)-interval '3 days' from private.posts where status in('expired','sold','archived');"
+  );
+  applySteps(database, steps.slice(rulesIndex + 1));
+  console.log(`Applied ${GUARDS}, ${RULES} and any later updates.`);
+  q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
+      language sql set search_path=pg_catalog as $$
+      select 'fixture-identity'::text where exists(select 1 from private.current_account_access a where a.id=p_owner) $$;`);
+
+  // ----------------------------------------------------- cutover safety
+  const endedRows = () =>
+    json(
+      "select coalesce(jsonb_agg(jsonb_build_object('id',id,'deletes_at',deletes_at) order by id),'[]') from private.posts where status in('expired','sold','archived');"
+    );
+  await check(
+    "cutover: every ended post is kept at least 3 days and the first job run deletes none",
+    () => {
+      const before = endedRows();
+      assert.ok(before.length >= 15, `${before.length} ended posts`);
+      assert.equal(
+        count(
+          `select 1 from private.posts where status in('expired','sold','archived') and deletes_at<>'${cutover}'::timestamptz+interval '3 days'`
+        ),
+        0,
+        "posts that ended before the update are deleted 3 days after it"
+      );
+      assert.equal(
+        scalar(
+          `select ('${cutover}'::timestamptz between now()-interval '10 minutes' and now())::text;`
+        ),
+        "true"
+      );
+      job();
+      assert.deepEqual(endedRows(), before);
+    }
+  );
+  await check(
+    "cutover: their owners get one notice of the 3-day rule; expired events and archived posts none",
+    () => {
+      const fresh = (id, kind) =>
+        count(
+          `select 1 from private.outbox_events where subject_id='${id}' and kind='${kind}' and dedupe_key like '%:3d'`
+        );
+      for (const id of [cutExpired, cutExpiredRecent, expiredListing, oldExpired]) {
+        assert.equal(fresh(id, "post_expired"), 1, id);
+      }
+      assert.equal(outbox(cutSold, "post_sold"), 1);
+      assert.equal(outbox(soldListing, "post_sold"), 1);
+      assert.equal(fresh(cutExpiredEvent, "post_expired"), 0);
+      assert.equal(outbox(cutArchived, "post_expired") + outbox(cutArchived, "post_sold"), 0);
+      job();
+      assert.equal(fresh(cutExpired, "post_expired"), 1, "not repeated");
+      assert.equal(outbox(cutSold, "post_sold"), 1, "not repeated");
+      assert.equal(
+        outbox(expiredListing, "post_expiry_reminder"),
+        remindersBefore,
+        "no new reminders"
+      );
+    }
+  );
+  await check(
+    "cutover: live and paused events are dated at their end; one already over gets 3 days",
+    () => {
+      for (const id of [cutLiveEvent, cutPausedEvent]) {
+        assert.equal(
+          scalar(
+            `select (p.deletes_at=e.ends_at)::text from private.posts p join private.event_details e on e.post_id=p.id where p.id='${id}';`
+          ),
+          "true"
+        );
+      }
+      assert.equal(
+        scalar(
+          `select (abs(extract(epoch from deletes_at-('${cutover}'::timestamptz+interval '3 days')))<5)::text from private.posts where id='${cutOverEvent}';`
+        ),
+        "true"
+      );
+      job();
+      assert.equal(exists(cutOverEvent), true);
+    }
+  );
+  await check(
+    "cutover: a post paused before the update holds no slot and keeps the idle rule",
+    () => {
+      q(
+        `update private.posts set status_changed_at=now()-interval '61 days',content_updated_at=now()-interval '61 days' where id='${cutPaused}';`
+      );
+      job();
+      assert.equal(exists(cutPaused), false);
+      assert.equal(outbox(cutPaused, "draft_deletion_warning"), 1);
+    }
+  );
+
   await check("access: new tables and functions are closed to API roles", () => {
-    for (const table of ["private.event_submissions", "private.frontend_content_hold_media"]) {
+    for (const table of [
+      "private.event_submissions",
+      "private.frontend_content_hold_media",
+      "private.post_deletion_extensions",
+    ]) {
       assert.equal(
         scalar(`select relrowsecurity from pg_class where oid='${table}'::regclass;`),
         "t"
@@ -442,21 +698,35 @@ try {
       "internal.snapshot_frontend_content_hold_media()",
       "internal.release_frontend_content_hold_media()",
       "internal.event_submission_guard()",
+      "internal.event_deletion_clock()",
+      "internal.frontend_owner_post_v2(uuid,uuid)",
     ]) {
       for (const role of ["anon", "authenticated", "service_role", "public"]) {
         assert.equal(scalar(`select has_function_privilege('${role}','${fn}','execute');`), "f");
       }
     }
-    assert.equal(
-      scalar(
-        `select has_function_privilege('authenticated','internal.run_post_lifecycle(integer)','execute')::text||has_function_privilege('service_role','internal.run_post_lifecycle(integer)','execute')::text;`
-      ),
-      "falsetrue"
-    );
+    const audience = (fn) =>
+      ["anon", "authenticated", "service_role"]
+        .map((role) => scalar(`select has_function_privilege('${role}','${fn}','execute');`))
+        .join("");
+    assert.equal(audience("internal.run_post_lifecycle(integer)"), "fft");
+    assert.equal(audience("internal.claim_supported_notification_outbox(text[],integer)"), "fft");
+    for (const fn of [
+      "api.get_my_frontend_post_v2(uuid)",
+      "internal.get_my_frontend_post_v2(uuid)",
+      "api.list_my_frontend_posts_v2(text,text,integer,integer)",
+      "internal.list_my_frontend_posts_v2(text,text,integer,integer)",
+    ]) {
+      assert.equal(audience(fn), "ftf", fn);
+    }
   });
+  await check("approval digests are unchanged by the expiry rules", digestUnchanged);
 
   // -------------------------------------------------------- 2. edit clock
   await check("edit: a post past its deletion date is still deleted after an edit", () => {
+    q(
+      `update private.posts set ended_at=clock_timestamp()-interval '3 days',deletes_at=clock_timestamp()-interval '1 second' where id='${oldExpired}';`
+    );
     edit(alice, oldExpired);
     assert.equal(row(oldExpired).status, "expired");
     job();
@@ -464,6 +734,7 @@ try {
     assert.equal(outbox(oldExpired, "post_deleted"), 1);
   });
   await check("edit: an expired post keeps its deletion date and gets no second notice", () => {
+    const notices = outbox(expiredListing, "post_expired");
     const before = row(expiredListing);
     const answer = edit(alice, expiredListing);
     assert.equal(answer.status, "expired");
@@ -473,12 +744,10 @@ try {
     assert.equal(after.deletes_at, before.deletes_at);
     assert.notEqual(after.content_updated_at, before.content_updated_at);
     job();
-    assert.equal(notices(expiredListing), expiredNoticesBefore);
-    assert.equal(outbox(expiredListing, "post_expiry_reminder"), 1, "one 7-day reminder");
     edit(alice, expiredListing);
     job();
-    assert.equal(notices(expiredListing), expiredNoticesBefore);
-    assert.equal(outbox(expiredListing, "post_expiry_reminder"), 1);
+    assert.equal(outbox(expiredListing, "post_expired"), notices);
+    assert.equal(outbox(expiredListing, "post_expiry_reminder"), remindersBefore);
   });
   await check("edit: a sold post keeps its deletion date", () => {
     const before = row(soldListing);
@@ -488,18 +757,17 @@ try {
     assert.equal(after.ended_at, before.ended_at);
     assert.equal(after.deletes_at, before.deletes_at);
   });
+  const threeDays = (id) =>
+    scalar(
+      `select (deletes_at=ended_at+interval '3 days')::text from private.posts where id='${id}';`
+    );
   await check("lifecycle: real state changes still start and clear the clock", () => {
     const listing = post(alice, "listing", "live");
     const p = row(listing);
     q(member(alice, `select api.set_post_state('${listing}',${p.revision},'sold');`));
     const sold = row(listing);
     assert.ok(sold.ended_at);
-    assert.equal(
-      scalar(
-        `select (deletes_at=ended_at+interval '30 days')::text from private.posts where id='${listing}';`
-      ),
-      "true"
-    );
+    assert.equal(threeDays(listing), "true");
     q(
       `update private.posts set status='live',published_at=now(),visible_until=now()+interval '1 day' where id='${listing}';`
     );
@@ -615,6 +883,12 @@ try {
     job();
     assert.equal(exists(idleHeld), false);
   });
+  const endsAt = (id) =>
+    json(`select to_jsonb(ends_at) from private.event_details where post_id='${id}';`);
+  const datedAtEnd = (id) =>
+    scalar(
+      `select (p.deletes_at=e.ends_at)::text from private.posts p join private.event_details e on e.post_id=p.id where p.id='${id}';`
+    );
   await check("hold release: the staff release command restores a hidden event", () => {
     const releaser = json(`select vmtest.staff('releaser','admin');`);
     const event = post(bea, "event", "live");
@@ -641,7 +915,7 @@ try {
     const after = row(event);
     assert.equal(after.status, "live");
     assert.equal(after.ended_at, null);
-    assert.equal(after.deletes_at, null);
+    assert.equal(datedAtEnd(event), "true", "a restored event is still deleted at its end");
     assert.equal(
       scalar(`select count(*) from private.frontend_content_hold_media where hold_id='${hold}';`),
       "0"
@@ -668,16 +942,19 @@ try {
     q(`delete from private.posts where id='${caraEvents[4]}';`);
     fails(submit(cara, draft(cara)), "PT429");
   });
-  await check("events: an owner deleting their own event returns the place (DEC-32)", () => {
-    const own = caraEvents[5];
-    q(member(cara, `select api.delete_post('${own}',${row(own).revision});`));
-    assert.equal(
-      scalar(`select release_reason from private.event_submissions where post_id='${own}';`),
-      "owner_deleted"
-    );
-    q(submit(cara, draft(cara)));
-    fails(submit(cara, draft(cara)), "PT429");
-  });
+  await check(
+    "events: an owner deleting their own event before it ends returns the place (DEC-32)",
+    () => {
+      const own = caraEvents[5];
+      q(member(cara, `select api.delete_post('${own}',${row(own).revision});`));
+      assert.equal(
+        scalar(`select release_reason from private.event_submissions where post_id='${own}';`),
+        "owner_deleted"
+      );
+      q(submit(cara, draft(cara)));
+      fails(submit(cara, draft(cara)), "PT429");
+    }
+  );
   await check("events: resubmitting the same event does not count twice", () => {
     const rejected = caraEvents[1]; // live -> reject it, then resubmit
     q(`update private.posts set status='rejected' where id='${rejected}';`);
@@ -744,6 +1021,468 @@ try {
          for each row execute function vmtest.purge_submission();`);
     fails(`insert into vmtest.purge_signal values('${id}');`, "23514");
     assert.equal(scalar(`select count(*) from private.event_submissions where id='${id}';`), "1");
+  });
+
+  // ------------------------------------------ 4. slot posts: expiry and grace
+  const slot = (owner, capacity = 1, days = 20) =>
+    scalar(`select vmtest.slot('${owner.id}','${staff.id}',${capacity},${days});`);
+  const slotPost = (owner, ent) => scalar(`select vmtest.slot_post('${owner.id}','${ent}');`);
+  const endSlot = (ent) => q(`select vmtest.end_slot('${ent}');`);
+  const slotActivations = (ent) =>
+    Number(scalar(`select count(*) from private.post_activations where entitlement_id='${ent}';`));
+  const openOn = (ent) =>
+    Number(
+      scalar(
+        `select count(*) from private.post_activations where entitlement_id='${ent}' and released_at is null;`
+      )
+    );
+  const releaseReason = (activation) =>
+    scalar(`select release_reason from private.post_activations where id='${activation}';`);
+  const action = (owner, id, name) => {
+    const p = row(id);
+    return `select api.execute_my_frontend_post_action('${randomUUID()}','${id}',${p.revision},'${name}','${p.kind}','${p.area}');`;
+  };
+  const setState = (owner, id, name) =>
+    json(member(owner, `select api.set_post_state('${id}',${row(id).revision},'${name}');`));
+  const remove = (owner, id) =>
+    json(member(owner, `select api.delete_post('${id}',${row(id).revision});`));
+  // The 3 days have passed (to the millisecond, or not quite).
+  const graceEnds = (id, early = "0 seconds") =>
+    q(
+      `update private.posts set ended_at=clock_timestamp()-interval '3 days'+interval '${early}',
+         deletes_at=clock_timestamp()+interval '${early}' where id='${id}';`
+    );
+
+  await check(
+    "expiry: a slot post expires when its run ends, releases its slot and is notified once",
+    () => {
+      const hana = user("hana");
+      const ent = slot(hana);
+      const listing = slotPost(hana, ent);
+      const activation = openSlot(listing);
+      endSlot(ent);
+      assert.deepEqual(job().expired >= 1, true);
+      const expired = row(listing);
+      assert.equal(expired.status, "expired");
+      assert.equal(threeDays(listing), "true");
+      assert.equal(releaseReason(activation), "expired");
+      assert.equal(outbox(listing, "post_expired"), 1);
+      job();
+      assert.equal(outbox(listing, "post_expired"), 1, "not repeated");
+      // No 7- or 21-day reminders any more: a post that expired 22 days ago
+      // (kept by a legal hold until now) gets its expiry notice only.
+      const old = post(hana, "listing", "expired");
+      q(
+        `update private.posts set ended_at=clock_timestamp()-interval '22 days',deletes_at=clock_timestamp()+interval '1 hour' where id='${old}';`
+      );
+      job();
+      assert.equal(outbox(old, "post_expired"), 1);
+      assert.equal(outbox(old, "post_expiry_reminder"), 0);
+    }
+  );
+  await check(
+    "grace: an expired post is kept until exactly 3 days after it expired, then deleted with its media",
+    () => {
+      const iris = user("iris");
+      const ent = slot(iris);
+      const listing = slotPost(iris, ent);
+      const cover = scalar(
+        `select object_id from private.post_media where post_id='${listing}' and purpose='cover';`
+      );
+      endSlot(ent);
+      job();
+      graceEnds(listing, "1 second");
+      job();
+      assert.equal(exists(listing), true, "deleted before its 3 days were over");
+      graceEnds(listing);
+      job();
+      assert.equal(exists(listing), false);
+      assert.equal(outbox(listing, "post_deleted"), 1);
+      assert.equal(scalar(`select internal.media_object_in_use('${cover}');`), "f");
+      assert.equal(
+        scalar(`select unlinked_at is not null from private.media_objects where id='${cover}';`),
+        "t"
+      );
+    }
+  );
+  await check("grace: the owner can delete an expired post during the 3 days", () => {
+    const jo = user("jo");
+    const ent = slot(jo);
+    const listing = slotPost(jo, ent);
+    endSlot(ent);
+    job();
+    assert.equal(remove(jo, listing).status, "deleted");
+    assert.equal(exists(listing), false);
+  });
+  await check(
+    "grace: after buying a plan, reactivating within the 3 days republishes it unchanged",
+    () => {
+      const kim = user("kim");
+      const ent = slot(kim);
+      const listing = slotPost(kim, ent);
+      endSlot(ent);
+      job();
+      fails(member(kim, action(kim, listing, "reactivate")), "PT402");
+      assert.equal(row(listing).status, "expired");
+      const plan = slot(kim, 1, 30);
+      const answer = json(member(kim, action(kim, listing, "reactivate")));
+      assert.equal(answer.status, "live");
+      const live = row(listing);
+      assert.equal(live.ended_at, null);
+      assert.equal(live.deletes_at, null);
+      assert.equal(
+        scalar(
+          `select (p.visible_until=e.ends_at)::text from private.posts p, private.entitlements e where p.id='${listing}' and e.id='${plan}';`
+        ),
+        "true"
+      );
+      assert.equal(openOn(plan), 1);
+    }
+  );
+
+  // ---------------------------------------------------------------- 5. sold
+  await check(
+    "sold: the slot stays taken, the owner is told, and the post is deleted 3 days later",
+    () => {
+      const lerato = user("lerato");
+      const ent = slot(lerato);
+      const listing = slotPost(lerato, ent);
+      const activation = openSlot(listing);
+      assert.equal(setState(lerato, listing, "sold").status, "sold");
+      assert.equal(openSlot(listing), activation, "the sold post still holds its slot");
+      assert.equal(threeDays(listing), "true");
+      job();
+      assert.equal(outbox(listing, "post_sold"), 1);
+      assert.equal(outbox(listing, "post_expired"), 0);
+      graceEnds(listing, "1 second");
+      job();
+      assert.equal(exists(listing), true);
+      graceEnds(listing);
+      job();
+      assert.equal(exists(listing), false);
+      assert.equal(releaseReason(activation), "deleted", "deletion frees the slot");
+      assert.equal(openOn(ent), 0);
+    }
+  );
+  await check("sold: deleting a sold post early frees its slot for a new post", () => {
+    const musa = user("musa");
+    const ent = slot(musa);
+    const listing = slotPost(musa, ent);
+    setState(musa, listing, "sold");
+    const next = post(musa, "listing", "draft");
+    const refused = fails(submit(musa, next), "PT409");
+    assert.match(refused, /all posting capacity is in use/);
+    remove(musa, listing);
+    assert.equal(json(submit(musa, next)).status, "pending_moderation");
+    assert.notEqual(openSlot(next), "");
+    assert.equal(openOn(ent), 1);
+  });
+  await check(
+    "sold: undoing it within the 3 days brings it back for the slot's remaining days, with no new activation",
+    () => {
+      const nomsa = user("nomsa");
+      const ent = slot(nomsa, 1, 12);
+      const listing = slotPost(nomsa, ent);
+      const activation = openSlot(listing);
+      setState(nomsa, listing, "sold");
+      const answer = json(member(nomsa, action(nomsa, listing, "reactivate")));
+      assert.equal(answer.status, "live");
+      const live = row(listing);
+      assert.equal(live.status, "live");
+      assert.equal(live.deletes_at, null);
+      assert.equal(openSlot(listing), activation);
+      assert.equal(slotActivations(ent), 1);
+      assert.equal(
+        scalar(
+          `select (p.visible_until=e.ends_at)::text from private.posts p, private.entitlements e where p.id='${listing}' and e.id='${ent}';`
+        ),
+        "true"
+      );
+      // Once the slot itself has ended, there is nothing left to go back to.
+      setState(nomsa, listing, "sold");
+      endSlot(ent);
+      fails(member(nomsa, action(nomsa, listing, "reactivate")), "PT402");
+      assert.equal(row(listing).status, "sold");
+    }
+  );
+
+  // -------------------------------------------------------------- 6. paused
+  await check("pause: pausing keeps the slot and reactivating spends no activation", () => {
+    const olwethu = user("olwethu");
+    const ent = slot(olwethu);
+    const listing = slotPost(olwethu, ent);
+    const activation = openSlot(listing);
+    assert.equal(setState(olwethu, listing, "pause").status, "paused");
+    assert.equal(openSlot(listing), activation);
+    const capacity = json(member(olwethu, "select api.my_posting_capacity();"));
+    assert.equal(capacity.active, 1, "a paused post still uses its slot");
+    const next = post(olwethu, "listing", "draft");
+    fails(submit(olwethu, next), "PT409");
+    const answer = json(member(olwethu, action(olwethu, listing, "reactivate")));
+    assert.equal(answer.status, "live");
+    assert.equal(openSlot(listing), activation);
+    assert.equal(slotActivations(ent), 1);
+  });
+  await check(
+    "pause: a paused post that holds a slot is not deleted or warned about as idle",
+    () => {
+      const palesa = user("palesa");
+      const ent = slot(palesa);
+      const listing = slotPost(palesa, ent);
+      setState(palesa, listing, "pause");
+      q(
+        `update private.posts set status_changed_at=now()-interval '61 days',content_updated_at=now()-interval '61 days' where id='${listing}';`
+      );
+      job();
+      assert.equal(row(listing).status, "paused");
+      assert.equal(outbox(listing, "draft_deletion_warning"), 0);
+    }
+  );
+  await check("pause: a paused post expires with its plan, then follows the 3-day rule", () => {
+    const qiniso = user("qiniso");
+    const ent = slot(qiniso);
+    const listing = slotPost(qiniso, ent);
+    const activation = openSlot(listing);
+    setState(qiniso, listing, "pause");
+    endSlot(ent);
+    job();
+    const expired = row(listing);
+    assert.equal(expired.status, "expired");
+    assert.equal(threeDays(listing), "true");
+    assert.equal(releaseReason(activation), "expired");
+    assert.equal(outbox(listing, "post_expired"), 1);
+    graceEnds(listing);
+    job();
+    assert.equal(exists(listing), false);
+  });
+
+  // -------------------------------------------------------- 7. late payment
+  const payment = (owner, created) =>
+    scalar(`set session_replication_role=replica;
+      insert into private.payments(owner_id,product_kind,plan_version_id,amount_cents,currency,snapshot,created_at)
+        values('${owner.id}','plan',(select id from private.plan_versions order by created_at,id limit 1),10000,'ZAR','{}'::jsonb,${created})
+        returning id;`);
+  const expiredSlotPost = (label) => {
+    const owner = user(label);
+    const ent = slot(owner);
+    const listing = slotPost(owner, ent);
+    endSlot(ent);
+    job();
+    assert.equal(row(listing).status, "expired");
+    return { owner, listing };
+  };
+  await check(
+    "late payment: a plan payment still being confirmed when the 3 days end extends them once by 24 hours",
+    () => {
+      const { owner, listing } = expiredSlotPost("rudo");
+      graceEnds(listing);
+      const due = row(listing).deletes_at;
+      const pay = payment(owner, "clock_timestamp()-interval '1 hour'");
+      assert.equal(job().extended, 1);
+      assert.equal(exists(listing), true);
+      assert.equal(
+        scalar(
+          `select (deletes_at='${due}'::timestamptz+interval '24 hours')::text from private.posts where id='${listing}';`
+        ),
+        "true"
+      );
+      assert.equal(
+        scalar(
+          `select payment_id from private.post_deletion_extensions where post_id='${listing}';`
+        ),
+        pay
+      );
+      const extended = row(listing).deletes_at;
+      job();
+      assert.equal(row(listing).deletes_at, extended, "extended only once");
+      // The payment fails: the post goes at once.
+      q(
+        `update private.payments set status='failed',status_changed_at=clock_timestamp() where id='${pay}';`
+      );
+      job();
+      assert.equal(exists(listing), false);
+      assert.equal(
+        scalar(`select count(*) from private.post_deletion_extensions where post_id='${listing}';`),
+        "0"
+      );
+    }
+  );
+  await check("late payment: still unconfirmed after the 24 hours, the post is deleted", () => {
+    const { owner, listing } = expiredSlotPost("sipho");
+    graceEnds(listing);
+    payment(owner, "clock_timestamp()-interval '2 hours'");
+    job();
+    assert.equal(exists(listing), true);
+    q(
+      `update private.posts set deletes_at=clock_timestamp()-interval '1 second' where id='${listing}';`
+    );
+    job();
+    assert.equal(exists(listing), false);
+  });
+  await check("late payment: a payment started before the post expired does not extend it", () => {
+    const { owner, listing } = expiredSlotPost("thabo");
+    graceEnds(listing);
+    payment(owner, "clock_timestamp()-interval '4 days'");
+    job();
+    assert.equal(exists(listing), false);
+  });
+  await check(
+    "late payment: reactivating during the extension keeps the post and clears the extension",
+    () => {
+      const { owner, listing } = expiredSlotPost("uzo");
+      graceEnds(listing);
+      payment(owner, "clock_timestamp()-interval '1 hour'");
+      job();
+      slot(owner, 1, 30); // the confirmed plan
+      assert.equal(json(member(owner, action(owner, listing, "reactivate"))).status, "live");
+      assert.equal(
+        scalar(`select count(*) from private.post_deletion_extensions where post_id='${listing}';`),
+        "0"
+      );
+      assert.equal(row(listing).deletes_at, null);
+    }
+  );
+
+  // ---------------------------------------------------------------- 8. events
+  const liveEvent = (owner) => {
+    const event = draft(owner);
+    q(submit(owner, event));
+    q(`update private.posts set status='live',published_at=now()-interval '1 hour',
+         visible_until=(select ends_at from private.event_details where post_id='${event}') where id='${event}';`);
+    return event;
+  };
+  const eventEnds = (id) =>
+    q(`update private.event_details set starts_at=date_trunc('milliseconds',clock_timestamp()-interval '2 hours'),
+         ends_at=date_trunc('milliseconds',clock_timestamp()-interval '1 millisecond') where post_id='${id}';`);
+  const place = (id) =>
+    scalar(
+      `select coalesce(release_reason,'kept') from private.event_submissions where post_id='${id}' order by submitted_at desc limit 1;`
+    );
+  await check(
+    "events: a live event is deleted as soon as it ends, with no expiry notice, keeping its place",
+    () => {
+      const ella = user("ella");
+      const event = liveEvent(ella);
+      assert.equal(datedAtEnd(event), "true");
+      job();
+      assert.equal(exists(event), true, "deleted before it ended");
+      eventEnds(event);
+      assert.equal(datedAtEnd(event), "true", "the deletion date follows a changed end");
+      job();
+      assert.equal(exists(event), false);
+      assert.equal(outbox(event, "post_expired"), 0);
+      assert.equal(outbox(event, "post_deleted"), 1);
+      assert.equal(place(event), "kept");
+    }
+  );
+  await check("events: a paused event is deleted at its end too", () => {
+    const fezeka = user("fezeka");
+    const event = liveEvent(fezeka);
+    setState(fezeka, event, "pause");
+    assert.equal(datedAtEnd(event), "true");
+    eventEnds(event);
+    job();
+    assert.equal(exists(event), false);
+    assert.equal(outbox(event, "post_expired"), 0);
+  });
+  await check(
+    "events: an owner deleting an event before it ends returns its place; after its end it does not",
+    () => {
+      const gcina = user("gcina");
+      const early = liveEvent(gcina);
+      remove(gcina, early);
+      assert.equal(place(early), "owner_deleted");
+      const late = liveEvent(gcina);
+      eventEnds(late); // over, but the job has not run yet
+      remove(gcina, late);
+      assert.equal(place(late), "kept");
+    }
+  );
+
+  // ------------------------------------------------------------ 9. holds
+  await check("holds: a held post neither expires with its plan nor is deleted at its end", () => {
+    const hlengiwe = user("hlengiwe");
+    const ent = slot(hlengiwe);
+    const listing = slotPost(hlengiwe, ent);
+    scalar(`select vmtest.hide('${listing}','${staff.id}');`);
+    endSlot(ent);
+    const event = liveEvent(hlengiwe);
+    scalar(`select vmtest.hide('${event}','${staff.id}');`);
+    eventEnds(event);
+    job();
+    assert.equal(row(listing).status, "paused");
+    assert.equal(row(listing).status_reason, "staff_hidden");
+    assert.notEqual(openSlot(listing), "", "the slot is not released while held");
+    assert.equal(exists(event), true);
+    assert.equal(outbox(listing, "post_expired"), 0);
+  });
+
+  // ------------------------------------------------- 10. owner reads (v2)
+  await check(
+    "owner reads: the v2 reads add the deletion date; the original reads are unchanged",
+    () => {
+      const vusi = user("vusi");
+      const ent = slot(vusi);
+      const listing = slotPost(vusi, ent);
+      setState(vusi, listing, "sold");
+      const due = row(listing).deletes_at;
+      const v1 = json(member(vusi, `select api.get_my_frontend_post('${listing}');`));
+      const v2 = json(member(vusi, `select api.get_my_frontend_post_v2('${listing}');`));
+      assert.equal("deletes_at" in v1, false);
+      const { deletes_at, ...rest } = v2;
+      assert.equal(deletes_at, due);
+      assert.deepEqual(rest, v1);
+      const listed = json(member(vusi, "select api.list_my_frontend_posts_v2('listing');"));
+      assert.equal(listed.total, 1);
+      assert.equal(listed.items[0].deletes_at, due);
+      const event = liveEvent(vusi);
+      const eventRead = json(member(vusi, `select api.get_my_frontend_post_v2('${event}');`));
+      assert.equal(eventRead.deletes_at, endsAt(event));
+      const draftRead = json(member(vusi, `select api.get_my_frontend_post_v2('${draft(vusi)}');`));
+      assert.equal(draftRead.deletes_at, null);
+      // Another member sees nothing.
+      assert.equal(
+        scalar(member(alice, `select api.get_my_frontend_post_v2('${listing}') is null;`)),
+        "t"
+      );
+      assert.equal(
+        json(member(alice, "select api.list_my_frontend_posts_v2('event');")).items.some(
+          (item) => item.id === event
+        ),
+        false
+      );
+      fails(member(vusi, "select api.list_my_frontend_posts_v2('listing',null,101);"), "22023");
+    }
+  );
+  await check("notices: the mail claim accepts the sold notice and the earlier kind list", () => {
+    const earlier = [
+      "payment_completed",
+      "payment_reversed",
+      "payment_reconciliation_required",
+      "trial_started",
+      "post_expired",
+      "post_expiry_reminder",
+      "draft_deletion_warning",
+      "post_deleted",
+      "verification_phone_confirmed",
+      "identity_accepted",
+      "enquiry_received",
+      "account_warning",
+      "content_hidden",
+      "account_suspended",
+      "account_banned",
+      "appeal_decided",
+      "business_check_update",
+    ];
+    const claim = (kinds) =>
+      service(
+        `select api.claim_supported_notification_outbox(array[${kinds.map((k) => `'${k}'`).join(",")}],50);`
+      );
+    const sold = json(claim(["post_sold"]));
+    assert.ok(sold.some((item) => item.kind === "post_sold" && item.post_id === soldListing));
+    q(claim(earlier)); // the list of the application deployed before this update
+    q(claim([...earlier, "post_sold"]));
+    fails(claim([...earlier, "post_sold", "post_sold"]), "22023");
   });
 
   // ----------------------------------------------------------- concurrency
@@ -826,6 +1565,48 @@ try {
     job();
     assert.equal(exists(idle), true);
   });
+  await check(
+    "concurrency: a new post racing the deletion of a sold post never overfills the slot",
+    async () => {
+      const wandile = user("wandile");
+      const ent = slot(wandile);
+      const listing = slotPost(wandile, ent);
+      setState(wandile, listing, "sold");
+      graceEnds(listing);
+      const next = post(wandile, "listing", "draft");
+      const [sweep, submitted] = await Promise.all([
+        session(service(`begin; select api.run_post_lifecycle(500); select pg_sleep(2); commit;`)),
+        later(700, submit(wandile, next)),
+      ]);
+      assert.equal(sweep.status, 0, sweep.stderr);
+      assert.equal(exists(listing), false);
+      if (submitted.status !== 0) {
+        // It saw the slot still taken by the uncommitted deletion; it can retry.
+        assert.match(submitted.stderr, /ERROR:\s+PT409:/);
+        q(submit(wandile, next));
+      }
+      assert.equal(row(next).status, "pending_moderation");
+      assert.equal(openOn(ent), 1);
+    }
+  );
+  await check(
+    "concurrency: undoing sold racing its deletion either keeps it live or deletes it, never both",
+    async () => {
+      const xolani = user("xolani");
+      const ent = slot(xolani);
+      const listing = slotPost(xolani, ent);
+      setState(xolani, listing, "sold");
+      graceEnds(listing);
+      const [sweep, undo] = await Promise.all([
+        session(service(`begin; select api.run_post_lifecycle(500); select pg_sleep(2); commit;`)),
+        later(700, member(xolani, action(xolani, listing, "reactivate"))),
+      ]);
+      assert.equal(sweep.status, 0, sweep.stderr);
+      if (undo.status === 0) assert.equal(row(listing).status, "live");
+      else assert.equal(exists(listing), false);
+      assert.ok(openOn(ent) <= 1);
+    }
+  );
 } catch (error) {
   console.error(`FAIL ${current}`);
   throw error;
@@ -833,5 +1614,5 @@ try {
   database.stop();
 }
 console.log(
-  `Lifecycle guard checks passed: ${checks.length} in ${Math.round((Date.now() - started) / 1000)} s.`
+  `Post lifecycle checks passed: ${checks.length} in ${Math.round((Date.now() - started) / 1000)} s.`
 );

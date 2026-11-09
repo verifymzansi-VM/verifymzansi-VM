@@ -30,62 +30,63 @@
       "triggers": "483f8b84299f04c1bb4df8ccdaed274a"
     },
     "pendingApplication": [
-      "20261109073519_post_lifecycle_guards.sql"
+      "20261109073519_post_lifecycle_guards.sql",
+      "20261109104020_post_expiry_rules.sql"
     ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2 while production holds only posting-v1; a later reviewed change resolves this."
   ],
-  "updateCount": 50,
-  "lastUpdate": "20261109073519_post_lifecycle_guards.sql",
+  "updateCount": 51,
+  "lastUpdate": "20261109104020_post_expiry_rules.sql",
   "categories": {
     "column_grants": {
       "items": 2,
       "fingerprint": "11724f805587a82326eae936e0200f0c"
     },
     "columns": {
-      "items": 1082,
-      "fingerprint": "47f29c726ddbc02a9b226c55896fd6c2"
+      "items": 1087,
+      "fingerprint": "c6638da249aa471b73b020a28c796c6b"
     },
     "constraints": {
-      "items": 959,
-      "fingerprint": "e15743ed66c935c206ba5334d034c916"
+      "items": 962,
+      "fingerprint": "c1a7f21ef9fefec8b11f58359c7ad18b"
     },
     "event_triggers": {
       "items": 1,
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 735,
-      "fingerprint": "c1e6c1ce5e9ef08d89551f1ded3f1d51"
+      "items": 741,
+      "fingerprint": "79ef0ab27d279ad93e0f2d78f783f4d4"
     },
     "function_grants": {
-      "items": 595,
-      "fingerprint": "6070d777923e495f2bb058b1d9003ef7"
+      "items": 599,
+      "fingerprint": "40a5a0cca5e07f24c91344a13ab1f133"
     },
     "function_metadata": {
-      "items": 735,
-      "fingerprint": "980116da1060fb43f035883e568865ac"
+      "items": 741,
+      "fingerprint": "152776874e66b8c0f6000d51ab4cb24e"
     },
     "indexes": {
-      "items": 368,
-      "fingerprint": "aaae33e5d81d3ec893cc3173eb0cc4f4"
+      "items": 370,
+      "fingerprint": "060920afaa7370505c8e55ca6e0705e0"
     },
     "policies": {
       "items": 1,
       "fingerprint": "2c1b773d5ffe29f172271087b1f36e04"
     },
     "row_level_security": {
-      "items": 121,
-      "fingerprint": "ccda85e722f9ee52bc9dda66fdf3ba3d"
+      "items": 122,
+      "fingerprint": "944d5807e48498f73aa615b3026afa03"
     },
     "schema_grants": {
       "items": 7,
       "fingerprint": "a68294e7a9bcf7c20492a72f7c724252"
     },
     "triggers": {
-      "items": 96,
-      "fingerprint": "8feeba2e911af4ac021df7d8c6df82b5"
+      "items": 97,
+      "fingerprint": "cbed8a32da7aa1ca298aaa7eca019d1f"
     }
   }
 }

@@ -3052,6 +3052,59 @@
       "authority": "Live confirmed active member; bounded self-only original-post collection and exact count"
     },
     {
+      "name": "get_my_frontend_post_v2",
+      "updates": ["updates/20261109104020_post_expiry_rules.sql"],
+      "arguments": [
+        {
+          "name": "p_id",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed active member; self-only owner form of get_my_frontend_post plus the post's deletion date"
+    },
+    {
+      "name": "list_my_frontend_posts_v2",
+      "updates": ["updates/20261109104020_post_expiry_rules.sql"],
+      "arguments": [
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_area",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": true
+        },
+        {
+          "name": "p_offset",
+          "sqlType": "integer",
+          "optional": true
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed active member; bounded self-only original-post collection and exact count, each post with its deletion date"
+    },
+    {
       "name": "consume_frontend_post_command",
       "updates": [
         "updates/20261104002445_restored_post_commands.sql",

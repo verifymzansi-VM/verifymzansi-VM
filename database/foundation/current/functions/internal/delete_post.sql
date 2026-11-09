@@ -21,10 +21,13 @@ begin
   if exists (select 1 from private.frontend_content_holds h where h.post_id = post.id and h.released_at is null) then
     raise exception 'staff visibility hold requires independent release' using errcode = 'PT423', detail = 'staff_visibility_hold';
   end if;
-  -- Owner decision DEC-32: deleting one's own free event returns its place in
-  -- the rolling submission limit.
+  -- Owner decision DEC-32 (an owner answer on keeping it is pending; removing
+  -- this one statement stops owner deletions returning places): deleting
+  -- one's own free event before it ends returns its place in the rolling
+  -- submission limit. An event that has ended keeps its place.
   update private.event_submissions set released_at = statement_timestamp(), release_reason = 'owner_deleted'
-    where post_id = post.id and owner_id = actor and released_at is null;
+    where post_id = post.id and owner_id = actor and released_at is null
+      and exists (select 1 from private.event_details e where e.post_id = post.id and e.ends_at > statement_timestamp());
   delete from private.posts where id = post.id; -- with its edit copy, links and queue claim
   perform internal.price_draft_actor(); -- final live owner/session check after all waits
   return jsonb_build_object('id', post.id, 'status', 'deleted');

@@ -31,9 +31,13 @@ begin
   end if;
   update private.posts set status = next_status, revision = revision + 1 where id = post.id returning revision into rev;
   update private.post_search_documents set is_visible = false where post_id = post.id;
-  update private.post_activations set released_at = statement_timestamp(),
-    release_reason = case when p_action = 'sold' then 'sold' else 'owner' end
-  where post_id = post.id and released_at is null;
+  -- A paused post keeps its slot (its run's clock keeps going, and reactivating
+  -- it reuses the slot); a sold post holds its slot until it is deleted, 3
+  -- days later or earlier by its owner. Archiving releases the slot now.
+  if p_action = 'archive' then
+    update private.post_activations set released_at = statement_timestamp(), release_reason = 'owner'
+    where post_id = post.id and released_at is null;
+  end if;
   perform internal.price_draft_actor(); -- final live owner/session check after all waits
   return jsonb_build_object('id', post.id, 'status', next_status, 'revision', rev);
 end;

@@ -61,9 +61,10 @@ and fixed entries must be removed, so the baseline only shrinks
 
 The same job then runs `pnpm db:foundation:lifecycle-test`: a second throwaway
 container replays this folder up to the post lifecycle guards update, seeds
-synthetic members and posts, applies that update and every later one, and checks
-the post lifecycle guards and their races through the production API commands
-(`updates/README.md`).
+synthetic members and posts, applies that update, seeds again before the post
+expiry rules update, applies it and every later one, and checks the post
+lifecycle guards, the expiry rules and their races through the production API
+commands (`updates/README.md`).
 
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:

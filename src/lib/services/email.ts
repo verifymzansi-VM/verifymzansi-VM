@@ -73,8 +73,12 @@ const platformNotices = {
     "Your eligible introductory allowance is now recorded on your account.",
   ],
   post_expired: [
-    "A post reached its visibility end date",
-    "Review your posts to see the available renewal and posting options.",
+    "Your post has expired",
+    "One of your posts has reached the end of its plan and is no longer shown. It will be deleted, with its photos and videos, in 3 days. To keep it, buy a plan and reactivate it from your posts before then.",
+  ],
+  post_sold: [
+    "Your post is marked as sold",
+    "You marked one of your posts as sold. It will be deleted, with its photos and videos, in 3 days, and its plan slot will then be free again. To reuse the slot sooner, delete the post yourself. Marked it by mistake? Reactivate it from your posts before then.",
   ],
   post_expiry_reminder: [
     "A post is approaching its visibility end date",

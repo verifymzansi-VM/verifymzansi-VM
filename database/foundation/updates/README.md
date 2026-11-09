@@ -22,6 +22,76 @@ establish that a hosted project has received it.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Post expiry rules, 9 November 2026
+
+`20261109104020_post_expiry_rules.sql` is **not applied yet**. It needs
+`20261109073519_post_lifecycle_guards.sql` first and refuses to run without it.
+It sets the deletion rules decided on 9 November 2026:
+
+- **Market and Business posts** hold a plan slot. When a post's paid run ends,
+  the lifecycle job expires it, releases the slot and queues `post_expired`. The
+  post stays hidden for 3 days (`deletes_at` = `ended_at` + 3 days), during
+  which its owner can buy a plan and reactivate it; then the job deletes it with
+  its media. The 7- and 21-day reminders are no longer queued.
+- **Sold.** A sold post keeps its slot until it is deleted, 3 days after it was
+  marked sold; its owner gets `post_sold`, can delete it earlier to reuse the
+  slot, or reactivate it within the 3 days (it then runs for the slot's
+  remaining days while that slot is still valid, with no new activation).
+- **Events.** A live or paused event is deleted when it ends
+  (`event_details.ends_at`, followed through edits by the `event_deletion_clock`
+  trigger), with no grace period and no expiry notice. Its place in the limit of
+  10 free events per 30 days returns only when its owner deletes it before it
+  ends; deletion by the job never returns it. The owner-delete release is one
+  statement in `internal.delete_post`, kept as decided (DEC-32) and easy to
+  remove if that decision changes.
+- **Paused.** Pausing keeps the slot and does not stop the run's clock: a paused
+  post that holds a slot expires like a live one, and reactivating it spends no
+  further activation. Such a post is not deleted as idle. Paused posts without a
+  slot (paused before this update, or whose plan was reversed) keep the
+  45/60-day idle rule.
+- **Late payment.** A plan payment the owner started during the 3 days and that
+  is still being confirmed when they end moves the deletion date once, by 24
+  hours (`private.post_deletion_extensions`). The post is deleted as soon as
+  that payment fails, or when the 24 hours have passed.
+- **Cutover.** Nothing that has already ended is deleted sooner than 3 days
+  after the update: expired, sold and archived posts get the later of now + 3
+  days and `ended_at` + 3 days, and their owners get the new notice once
+  (expired events and archived posts excepted). Live and paused events get their
+  end, or now + 3 days when it has already passed.
+- **Owner reads.** `api.get_my_frontend_post_v2` and
+  `api.list_my_frontend_posts_v2` return the original owner post data plus
+  `deletes_at`; the website reads them from this release. The original reads are
+  unchanged, so the release before it keeps working once the update is applied.
+
+Staff content holds and legal holds keep protecting posts as before: a held post
+neither expires nor is deleted.
+
+`pnpm db:foundation:lifecycle-test` covers both lifecycle updates: for this one
+it runs the preflight (including rows it must report), applies the update, rolls
+it back and applies it again, checks the cutover dates and notices, and then
+each rule through the production API commands: the 3-day edges, deletion and
+reactivation during the grace period, sold and paused slots, the late-payment
+extension and its failure, events at their end and their places, held posts, the
+owner reads, and races between the job and a new post or an undo of "sold".
+
+**Applying.** After the post lifecycle guards update, and before the website
+release that reads `get_my_frontend_post_v2` (that release also declares the
+`post_sold` notice to the mail job, which an older database refuses):
+
+1. Run `../preflight/20261109104020_post_expiry_rules.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row; the summary says how many posts get a new deletion date.
+2. At a quiet time, run the update. It first takes its table locks without
+   waiting: `private.posts`, `private.event_details` and `private.payments` (no
+   writes until it commits) and `private.outbox_events` (exclusive). If any is
+   busy it stops at once and changes nothing; run it again.
+3. Run `../fingerprint.sql` and compare with `../fingerprint.json` (this update
+   is listed under `productionCheck.pendingApplication`).
+
+The reviewed rollback is `../rollback/20261109104020_post_expiry_rules.down.sql`
+(only with the owner's decision; prefer a forward fix). Roll the website back
+first. Its header lists what a rollback changes.
+
 ## Post lifecycle guards, 9 November 2026
 
 `20261109073519_post_lifecycle_guards.sql` is **not applied yet**. It changes no

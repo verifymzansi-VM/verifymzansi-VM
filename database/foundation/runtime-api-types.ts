@@ -416,6 +416,11 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_kind: string; p_area?: string; p_limit?: number; p_offset?: number };
         Returns: Json;
       };
+      get_my_frontend_post_v2: { Args: { p_id: string }; Returns: Json };
+      list_my_frontend_posts_v2: {
+        Args: { p_kind: string; p_area?: string; p_limit?: number; p_offset?: number };
+        Returns: Json;
+      };
       consume_frontend_post_command: { Args: { p_request: string }; Returns: Json };
       reserve_frontend_verification_upload: {
         Args: {

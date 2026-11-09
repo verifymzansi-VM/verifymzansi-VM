@@ -146,3 +146,23 @@ it("acknowledges a removed recipient without sending a warning or requiring eras
   expect(await runFoundationOperationJobs(service, deliver)).toMatchObject({ succeeded: 1 });
   expect(deliver).not.toHaveBeenCalled();
 });
+it("declares and delivers the sold-post notice within the database's kind limit", async () => {
+  rpc.mockImplementation(async (name) => ({
+    data:
+      name === "claim_supported_notification_outbox"
+        ? [{ ...job(), kind: "post_sold" }]
+        : name === "complete_notification_outbox"
+          ? true
+          : {},
+    error: null,
+  }));
+  expect(await runFoundationOperationJobs(service, deliver)).toMatchObject({ succeeded: 1 });
+  const claimArgs = rpc.mock.calls.find(([name]) => name === "claim_supported_notification_outbox");
+  expect(claimArgs?.[1].p_supported_kinds).toContain("post_sold");
+  expect(claimArgs?.[1].p_supported_kinds).toHaveLength(18);
+  expect(deliver).toHaveBeenCalledExactlyOnceWith(
+    "synthetic@example.invalid",
+    "post_sold",
+    `foundation-outbox/${id}`
+  );
+});

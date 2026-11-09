@@ -50,6 +50,18 @@ describe("email service", () => {
     ).rejects.toThrow("details unavailable");
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
+  it("tells owners of expired and sold posts about the 3-day deletion", async () => {
+    await sendPlatformNotice("owner@example.invalid", "post_expired", "foundation-outbox/expired");
+    await sendPlatformNotice("owner@example.invalid", "post_sold", "foundation-outbox/sold");
+    const [expired, sold] = mockSend.mock.calls.map(([message]) => message);
+    expect(expired.subject).toBe("Your post has expired");
+    expect(expired.text).toContain("deleted, with its photos and videos, in 3 days");
+    expect(expired.text).toContain("buy a plan and reactivate it");
+    expect(sold.subject).toBe("Your post is marked as sold");
+    expect(sold.text).toContain("in 3 days");
+    expect(sold.text).toContain("delete the post yourself");
+    expect(sold.text).toContain("/dashboard");
+  });
   it("passes durable job keys to Resend for repeatable notices", async () => {
     await sendModerationNoticeEmail({
       email: "user@example.com",
