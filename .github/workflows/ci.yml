@@ -238,6 +238,10 @@ jobs:
       - name: Verify built Worker startup in workerd
         timeout-minutes: 5
         run: pnpm test:cloudflare:startup
+      # Cloudflare refuses a compressed Worker over 10 MB; stay under 9.5 MB.
+      - name: Worker size budget
+        timeout-minutes: 5
+        run: pnpm check:worker-size
       - name: Verify critical payment routes in build
         run: |
           echo "Checking critical addon/payment routes exist in build output..."
