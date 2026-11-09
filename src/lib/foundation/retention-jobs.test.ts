@@ -17,6 +17,7 @@ const variants = (key: string) => [
   `${key}.w800.webp`,
   `${key}.w1600.webp`,
 ];
+const busy = () => Object.assign(new Error("SlowDown"), { retryLater: true });
 
 type StoredObject = {
   id: string;
@@ -28,12 +29,24 @@ type StoredObject = {
   acknowledged: number;
 };
 type Artifact = Omit<StoredObject, "inUse">;
+type Override = (args: Record<string, unknown>, signal: AbortSignal) => unknown;
 
 /**
  * Stand-in for the SQL claim contract (claim_media_cleanup and friends):
- * claims never return objects in use, every claim gets a fresh token and a
- * 5-minute lease, and an acknowledgement needs the current token within the
- * lease. Storage holds every key, so a test can see what was deleted.
+ * every claim gets a fresh token and a 5-minute lease, a claimed object is
+ * not returned again while its lease runs, and an acknowledgement needs the
+ * current token within the lease. That lease plus the token-checked
+ * acknowledgement is what keeps overlapping runs apart.
+ *
+ * In-use objects are simply never returned here. The real SQL drops in-use
+ * `ready` objects before its limit and re-checks every row under its lock,
+ * skipping any that turned out to be in use, so it can return fewer rows than
+ * the limit while more are waiting; the worker then treats the queue as
+ * drained for this run, which only delays work to the next run.
+ *
+ * Storage holds every key, so a test can see what was deleted. Every database
+ * call must pass the run's abort signal (the stand-in only answers through
+ * `.abortSignal()`).
  */
 function createWorld(
   options: { media?: number; inUse?: number[]; evidence?: number; clockStep?: number } = {}
@@ -82,9 +95,9 @@ function createWorld(
     o.acknowledged++;
     return { data: true, error: null };
   };
-  const overrides: Record<string, (args: Record<string, unknown>) => unknown> = {};
-  const rpc = vi.fn(async (name: string, args: Record<string, unknown>) => {
-    if (overrides[name]) return overrides[name](args);
+  const overrides: Record<string, Override> = {};
+  const answer = (name: string, args: Record<string, unknown>, signal: AbortSignal) => {
+    if (overrides[name]) return overrides[name](args, signal);
     switch (name) {
       case "run_retention":
       case "purge_frontend_form_drafts":
@@ -121,12 +134,21 @@ function createWorld(
         );
     }
     throw new Error(`unexpected command ${name}`);
-  });
+  };
+  const signals: AbortSignal[] = [];
+  const rpc = vi.fn((name: string, args: Record<string, unknown>) => ({
+    abortSignal: (signal: AbortSignal) => {
+      signals.push(signal);
+      return Promise.resolve().then(() => answer(name, args, signal));
+    },
+  }));
   const storage = {
-    deleteOne: vi.fn<CleanupStorage["deleteOne"]>(async (_bucket, key) => {
+    deleteOne: vi.fn<CleanupStorage["deleteOne"]>(async (_bucket, key, signal) => {
+      signals.push(signal);
       stored.delete(key);
     }),
-    deleteMany: vi.fn<CleanupStorage["deleteMany"]>(async (_bucket, keys) => {
+    deleteMany: vi.fn<CleanupStorage["deleteMany"]>(async (_bucket, keys, signal) => {
+      signals.push(signal);
       for (const key of keys) stored.delete(key);
       return [];
     }),
@@ -135,15 +157,39 @@ function createWorld(
     rpc.mock.calls.length +
     storage.deleteOne.mock.calls.length +
     storage.deleteMany.mock.calls.length;
+  const claims = () => rpc.mock.calls.filter(([name]) => name === "claim_media_cleanup");
   const run = (limits?: NonNullable<Parameters<typeof runFoundationRetention>[2]>["limits"]) =>
     runFoundationRetention({ rpc } as unknown as FoundationServiceApi, storage, { now, limits });
-  return { clock, objects, artifacts, stored, rpc, storage, overrides, subrequests, run };
+  return {
+    clock,
+    objects,
+    artifacts,
+    stored,
+    rpc,
+    storage,
+    overrides,
+    signals,
+    subrequests,
+    claims,
+    run,
+  };
 }
 
 const info = vi.spyOn(console, "info");
+const warn = vi.spyOn(console, "warn");
+/** The run's single log line and its level. */
+function logLine() {
+  const lines = [
+    ...info.mock.calls.map(([line]) => ({ level: "info", line: String(line) })),
+    ...warn.mock.calls.map(([line]) => ({ level: "warn", line: String(line) })),
+  ].filter(({ line }) => line.includes("Storage cleanup run"));
+  expect(lines).toHaveLength(1);
+  return lines[0]!;
+}
 beforeEach(() => {
   vi.clearAllMocks();
   info.mockImplementation(() => {});
+  warn.mockImplementation(() => {});
 });
 afterEach(() => {
   delete process.env.R2_PUBLIC_BUCKET;
@@ -156,11 +202,13 @@ it("deletes a claimed object and its display variants in one batch request, then
   const [object] = world.objects;
   expect(world.storage.deleteMany).toHaveBeenCalledExactlyOnceWith(
     "verifymzansi-public",
-    variants(object!.key)
+    variants(object!.key),
+    expect.any(AbortSignal)
   );
   expect(world.storage.deleteOne).toHaveBeenCalledExactlyOnceWith(
     "verifymzansi-private",
-    world.artifacts[0]!.key
+    world.artifacts[0]!.key,
+    expect.any(AbortSignal)
   );
   expect(world.rpc).toHaveBeenCalledWith("mark_media_deleted", {
     p_object_id: object!.id,
@@ -169,6 +217,15 @@ it("deletes a claimed object and its display variants in one batch request, then
   expect(world.rpc).toHaveBeenCalledWith("purge_frontend_form_drafts", { p_limit: 500 });
   expect(world.rpc).toHaveBeenCalledWith("run_retention", { p_limit: 100 });
   expect(world.stored.size).toBe(0);
+  expect(logLine().level).toBe("info");
+});
+
+it("passes one run-wide deadline to every database and storage call", async () => {
+  const world = createWorld({ media: 3, evidence: 2 });
+  await world.run();
+  expect(world.signals).toHaveLength(world.subrequests());
+  expect(new Set(world.signals).size).toBe(1);
+  expect(world.signals[0]!.aborted).toBe(false);
 });
 
 it("uses the configured buckets", async () => {
@@ -208,14 +265,14 @@ it("never spends more than the budget across every run of a long backlog", async
   }
 });
 
-it("claims further rounds until the queue is empty when the budget allows", async () => {
+it("claims further rounds until a claim comes back short, then claims no more", async () => {
   const world = createWorld({ media: 35 });
   expect(await world.run({ subrequests: 200, mediaClaimPerRound: 10 })).toMatchObject({
     claimed: 35,
     deleted: 35,
     backlog: "drained",
   });
-  expect(world.rpc.mock.calls.filter(([name]) => name === "claim_media_cleanup")).toEqual([
+  expect(world.claims()).toEqual([
     ["claim_media_cleanup", { p_limit: 10 }],
     ["claim_media_cleanup", { p_limit: 10 }],
     ["claim_media_cleanup", { p_limit: 10 }],
@@ -228,8 +285,12 @@ it("claims further rounds until the queue is empty when the budget allows", asyn
 it("starts no round after the time limit but finishes the round it started", async () => {
   // Every clock read moves 3 s on, so the limit passes partway through.
   const world = createWorld({ media: 1000, clockStep: 3000 });
-  const result = await world.run({ subrequests: 1000, mediaClaimPerRound: 5 });
-  const claims = world.rpc.mock.calls.filter(([name]) => name === "claim_media_cleanup").length;
+  const result = await world.run({
+    subrequests: 1000,
+    mediaClaimPerRound: 5,
+    slowClaimMs: 1_000_000,
+  });
+  const claims = world.claims().length;
   expect(claims).toBeGreaterThan(0);
   expect(claims).toBeLessThan(CLEANUP_LIMITS.rounds);
   expect(result).toMatchObject({ claimed: claims * 5, backlog: "remaining" });
@@ -240,9 +301,75 @@ it("starts no round after the time limit but finishes the round it started", asy
 it("stops after the round limit even with budget and time to spare", async () => {
   const world = createWorld({ media: 1000 });
   await world.run({ subrequests: 1000, mediaClaimPerRound: 5 });
-  expect(world.rpc.mock.calls.filter(([name]) => name === "claim_media_cleanup")).toHaveLength(
-    CLEANUP_LIMITS.rounds
+  expect(world.claims()).toHaveLength(CLEANUP_LIMITS.rounds);
+});
+
+it("aborts calls that are still waiting at the run's deadline and claims nothing more", async () => {
+  const world = createWorld({ media: 10 });
+  let seen: AbortSignal | undefined;
+  world.overrides.claim_media_cleanup = (_args, signal) => {
+    seen = signal;
+    return new Promise((resolve) =>
+      signal.addEventListener("abort", () =>
+        resolve({ data: null, error: { message: "AbortError" } })
+      )
+    );
+  };
+  const started = Date.now();
+  await expect(world.run({ runMs: 50, deadlineMs: 150 })).rejects.toThrow("incomplete");
+  expect(Date.now() - started).toBeLessThan(5000);
+  expect(seen?.aborted).toBe(true);
+  expect(world.claims()).toHaveLength(1);
+  expect(world.storage.deleteMany).not.toHaveBeenCalled();
+  expect(logLine()).toMatchObject({ level: "warn" });
+  expect(logLine().line).toContain('"media_claim"');
+});
+
+it.each([
+  ["an error reply", () => ({ data: null, error: { message: "statement timeout" } })],
+  [
+    "a thrown request",
+    () => {
+      throw new Error("network unavailable");
+    },
+  ],
+])("ends the run's claims after %s, reporting it as a warning", async (_, fail) => {
+  const world = createWorld({ media: 100 });
+  world.overrides.claim_media_cleanup = fail;
+  await expect(world.run({ subrequests: 1000, mediaClaimPerRound: 10 })).rejects.toThrow(
+    "Storage cleanup run was incomplete"
   );
+  expect(world.claims()).toHaveLength(1);
+  expect(logLine()).toMatchObject({ level: "warn" });
+  expect(logLine().line).toContain('"media_claim"');
+});
+
+it("reports a slow claim and claims no more in that run", async () => {
+  const world = createWorld({ media: 100 });
+  let claims = 0;
+  world.overrides.claim_media_cleanup = (args) => {
+    claims++;
+    world.clock.at += 2500;
+    delete world.overrides.claim_media_cleanup;
+    const rows = world.objects.slice(0, args.p_limit as number).map((o, index) => {
+      o.state = "cleanup_required";
+      o.token = uuid(200000 + index);
+      o.leaseUntil = world.clock.at + LEASE_MS;
+      return {
+        object_id: o.id,
+        object_key: o.key,
+        claim_token: o.token,
+        lease_until: new Date(o.leaseUntil).toISOString(),
+      };
+    });
+    return { data: rows, error: null };
+  };
+  const result = await world.run({ subrequests: 1000, mediaClaimPerRound: 10 });
+  expect(claims).toBe(1);
+  expect(world.claims()).toHaveLength(1);
+  expect(result).toMatchObject({ claimed: 10, deleted: 10, backlog: "remaining" });
+  expect(logLine()).toMatchObject({ level: "warn" });
+  expect(logLine().line).toMatch(/"slow_claim".*"claimMs":2500/);
 });
 
 it("never deletes or acknowledges an object that is still in use", async () => {
@@ -275,9 +402,11 @@ it("acknowledges only objects whose every key storage confirmed, and retries the
   });
   expect(await world.run()).toEqual({ claimed: 3, deleted: 2, retrying: 1, backlog: "drained" });
   expect(world.objects.map((o) => o.state)).toEqual(["deleted", "cleanup_required", "deleted"]);
+  expect(logLine().line).toContain('"objects_retrying"');
   const firstToken = world.objects[1]!.token;
 
   // Inside the lease nothing is claimed again; after it, a new claim finishes the object.
+  vi.clearAllMocks();
   expect(await world.run()).toMatchObject({ claimed: 0, deleted: 0 });
   world.clock.at += LEASE_MS;
   expect(await world.run()).toEqual({ claimed: 1, deleted: 1, retrying: 0, backlog: "drained" });
@@ -328,16 +457,17 @@ it("does not touch rows whose lease is too close to its end", async () => {
   expect(world.stored.size).toBe(8);
 });
 
-it("falls back to one request per key when the batch request fails, inside the same budget", async () => {
+it("falls back to one request per key when storage refuses the batch request, inside the same budget", async () => {
   const world = createWorld({ media: 100 });
-  world.storage.deleteMany.mockRejectedValue(new Error("batch delete unavailable"));
+  world.storage.deleteMany.mockRejectedValue(new Error("batch reply names no requested key"));
   const result = await world.run();
   expect(world.subrequests()).toBeLessThanOrEqual(CLEANUP_LIMITS.subrequests);
-  // 40 - 2 sweeps - evidence claim - media claim - failed batch = 35:
+  // 40 - 2 sweeps - evidence claim - media claim - refused batch = 35:
   // seven objects at four deletes plus an acknowledgement each.
   expect(world.storage.deleteOne).toHaveBeenCalledTimes(28);
   expect(result).toEqual({ claimed: 35, deleted: 7, retrying: 28, backlog: "remaining" });
-  expect(info.mock.calls.at(-1)![0]).toMatch(/"batchFallback":true/);
+  expect(logLine()).toMatchObject({ level: "warn" });
+  expect(logLine().line).toMatch(/"batch_fallback".*"deferred":28.*"batchFallback":true/);
 
   // Later runs try the batch again first and keep making progress either way.
   world.clock.at += LEASE_MS;
@@ -346,9 +476,59 @@ it("falls back to one request per key when the batch request fails, inside the s
   expect(world.objects.filter((o) => o.state === "deleted")).toHaveLength(14);
 });
 
+it("sizes later claims for the per-key cost once storage has refused the batch request", async () => {
+  const world = createWorld({ media: 100 });
+  world.storage.deleteMany.mockRejectedValue(new Error("batch reply names no requested key"));
+  await world.run({ subrequests: 100, mediaClaimPerRound: 10 });
+  // Round 1: 100 - 2 sweeps - evidence claim - claim - batch - 10 x (4 + 1) = 45 left.
+  // Round 2 claims floor((45 - 1) / 5) = 8 and never tries the batch again.
+  expect(world.claims()).toEqual([
+    ["claim_media_cleanup", { p_limit: 10 }],
+    ["claim_media_cleanup", { p_limit: 8 }],
+  ]);
+  expect(world.storage.deleteMany).toHaveBeenCalledOnce();
+  expect(world.objects.filter((o) => o.state === "deleted")).toHaveLength(18);
+  expect(world.subrequests()).toBeLessThanOrEqual(100);
+});
+
+it("sends nothing more in a run once storage is busy, and retries on a later run", async () => {
+  const world = createWorld({ media: 100 });
+  world.storage.deleteMany.mockRejectedValueOnce(busy());
+  expect(await world.run({ subrequests: 200, mediaClaimPerRound: 10 })).toEqual({
+    claimed: 10,
+    deleted: 0,
+    retrying: 10,
+    backlog: "remaining",
+  });
+  expect(world.storage.deleteOne).not.toHaveBeenCalled();
+  expect(world.claims()).toHaveLength(1);
+  expect(logLine().line).toMatch(/"storage_busy".*"objects_retrying"/);
+
+  vi.clearAllMocks();
+  world.clock.at += LEASE_MS;
+  // Eight rounds of 10; the 10 left by the busy run are claimed again first.
+  expect(await world.run({ subrequests: 200, mediaClaimPerRound: 10 })).toMatchObject({
+    deleted: 80,
+  });
+  expect(world.objects.slice(0, 10).every((o) => o.state === "deleted")).toBe(true);
+});
+
+it("stops after a busy reply during the per-key fallback", async () => {
+  const world = createWorld({ media: 100 });
+  world.storage.deleteMany.mockRejectedValue(new Error("batch reply names no requested key"));
+  world.storage.deleteOne.mockImplementation(async (_bucket, key) => {
+    if (key === `${world.objects[0]!.key}.w800.webp`) throw busy();
+    world.stored.delete(key);
+  });
+  await world.run({ subrequests: 200, mediaClaimPerRound: 10 });
+  expect(world.claims()).toHaveLength(1);
+  expect(world.objects[0]!.state).toBe("cleanup_required");
+  expect(logLine().line).toContain('"storage_busy"');
+});
+
 it("does not acknowledge an object if any single delete fails during the fallback", async () => {
   const world = createWorld({ media: 2 });
-  world.storage.deleteMany.mockRejectedValue(new Error("batch delete unavailable"));
+  world.storage.deleteMany.mockRejectedValue(new Error("batch reply names no requested key"));
   world.storage.deleteOne.mockImplementation(async (_bucket, key) => {
     if (key === `${world.objects[0]!.key}.w400.webp`) throw new Error("storage unavailable");
     world.stored.delete(key);
@@ -364,7 +544,7 @@ it("does not acknowledge evidence whose deletion failed", async () => {
   expect(world.rpc.mock.calls.some(([name]) => name.startsWith("mark_"))).toBe(false);
 });
 
-it("two overlapping runs never delete or acknowledge the same object", async () => {
+it("overlapping runs never act on the same object (leased claims, token-checked acknowledgements)", async () => {
   const world = createWorld({ media: 50 });
   await Promise.all([world.run(), world.run()]);
   const batches = world.storage.deleteMany.mock.calls.map(([, keys]) => keys);
@@ -426,7 +606,7 @@ it("refuses a claim that returns more rows than it asked for before any deletion
 });
 
 it("refuses an evidence claim larger than it asked for before any deletion", async () => {
-  const world = createWorld({ evidence: 5, media: 1 });
+  const world = createWorld({ evidence: 5 });
   world.overrides.claim_evidence_cleanup = (args) => ({
     data: world.artifacts.slice(0, (args.p_limit as number) + 1).map((a) => ({
       artifact_id: a.id,
@@ -438,44 +618,60 @@ it("refuses an evidence claim larger than it asked for before any deletion", asy
   });
   await expect(world.run()).rejects.toThrow();
   expect(world.storage.deleteOne).not.toHaveBeenCalled();
-  expect(world.storage.deleteMany).not.toHaveBeenCalled();
+  expect(logLine().line).toContain('"evidence_claim"');
 });
 
 it("fails the run when a claim fails, after finishing the work it could do", async () => {
   const world = createWorld({ evidence: 1, media: 1 });
   world.overrides.claim_media_cleanup = () => ({ data: null, error: { message: "unavailable" } });
-  await expect(world.run()).rejects.toThrow("Storage cleanup could not be claimed");
+  await expect(world.run()).rejects.toThrow("Storage cleanup run was incomplete");
   expect(world.artifacts[0]!.state).toBe("deleted");
   expect(world.storage.deleteMany).not.toHaveBeenCalled();
-  expect(info).toHaveBeenCalledOnce();
+  expect(logLine()).toMatchObject({ level: "warn" });
 });
 
-it("stops before any claim when the retention sweep fails", async () => {
-  const world = createWorld({ media: 1 });
-  world.overrides.run_retention = () => ({ data: null, error: { message: "unavailable" } });
-  await expect(world.run()).rejects.toThrow("Retention transactions could not be completed");
-  expect(world.rpc.mock.calls.some(([name]) => name.startsWith("claim_"))).toBe(false);
+it.each([
+  ["run_retention", "retention_sweep"],
+  ["purge_frontend_form_drafts", "draft_purge"],
+])("still cleans storage when %s fails, then reports it", async (command, alert) => {
+  const world = createWorld({ media: 2, evidence: 1 });
+  world.overrides[command] = () => ({ data: null, error: { message: "statement timeout" } });
+  await expect(world.run()).rejects.toThrow("Storage cleanup run was incomplete");
+  expect(world.objects.every((o) => o.state === "deleted")).toBe(true);
+  expect(world.artifacts[0]!.state).toBe("deleted");
+  expect(logLine()).toMatchObject({ level: "warn" });
+  expect(logLine().line).toContain(`"${alert}"`);
+});
+
+it("still cleans storage when a sweep request throws", async () => {
+  const world = createWorld({ media: 2 });
+  world.overrides.run_retention = () => {
+    throw new Error("network unavailable");
+  };
+  await expect(world.run()).rejects.toThrow("Storage cleanup run was incomplete");
+  expect(world.objects.every((o) => o.state === "deleted")).toBe(true);
 });
 
 it("logs counts only, never keys or identifiers", async () => {
   const world = createWorld({ media: 100, evidence: 1 });
   await world.run();
-  expect(info).toHaveBeenCalledOnce();
-  const line = String(info.mock.calls[0]![0]);
-  expect(line).toContain("Storage cleanup run");
+  const { level, line } = logLine();
+  expect(level).toBe("info");
+  expect(line).toContain('"alerts":[]');
   expect(line).toContain('"backlog":"remaining"');
   expect(line).toContain('"subrequests":40');
   expect(line).toMatch(/"claimMs":\d+/);
   expect(line).not.toMatch(/media\/|evidence\/|[0-9a-f]{8}-[0-9a-f]{4}-/);
 });
 
-it("refuses limits a single batch request or the claim commands cannot honour", async () => {
+it("refuses limits a single batch request, the claim commands or the deadline cannot honour", async () => {
   const world = createWorld({ media: 1 });
   for (const limits of [
     { mediaClaimPerRound: 251 },
     { evidenceClaim: 101 },
     { subrequests: 0 },
     { runMs: 1.5 },
+    { runMs: 40_000 },
   ])
     await expect(world.run(limits)).rejects.toThrow("Invalid storage cleanup limits");
   expect(world.rpc).not.toHaveBeenCalled();

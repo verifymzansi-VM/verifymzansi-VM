@@ -332,8 +332,41 @@ function getR2Client(attempts: R2ClientAttempts = "default"): S3Client {
 const R2_TRANSFER_TIMEOUT_MS = 120_000;
 const R2_METADATA_TIMEOUT_MS = 15_000;
 
-function r2SendOptions(timeoutMs: number): { abortSignal: AbortSignal } {
-  return { abortSignal: AbortSignal.timeout(timeoutMs) };
+/** A caller's signal (for example a whole job's deadline) still gets the per-call timeout. */
+function r2SendOptions(timeoutMs: number, signal?: AbortSignal): { abortSignal: AbortSignal } {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return { abortSignal: signal ? AbortSignal.any([signal, timeout]) : timeout };
+}
+
+/**
+ * Thrown by cleanup deletes when storage is overloaded, failing (5xx,
+ * SlowDown) or did not answer in time. Callers should send nothing more now
+ * and retry on a later run.
+ */
+class StorageRetryLaterError extends Error {
+  readonly retryLater = true;
+  constructor(cause: unknown) {
+    super("Storage is busy; retry later", { cause });
+    this.name = "StorageRetryLaterError";
+  }
+}
+
+const RETRY_LATER_NAMES = new Set([
+  "SlowDown",
+  "ServiceUnavailable",
+  "InternalError",
+  "RequestTimeout",
+  "TimeoutError",
+  "AbortError",
+]);
+
+function asRetryLater(error: unknown): unknown {
+  const failure = error as { name?: unknown; $metadata?: { httpStatusCode?: unknown } } | null;
+  const status = failure?.$metadata?.httpStatusCode;
+  return (typeof status === "number" && status >= 500) ||
+    (typeof failure?.name === "string" && RETRY_LATER_NAMES.has(failure.name))
+    ? new StorageRetryLaterError(error)
+    : error;
 }
 
 /**
@@ -517,13 +550,15 @@ export function generateStorageKey(
 
 /**
  * Delete a file from R2.
- * "single-attempt" sends exactly one storage request (no SDK retries), for
- * scheduled cleanup that counts its Worker subrequests.
+ * "single-attempt" is for scheduled cleanup that counts its Worker
+ * subrequests: exactly one storage request (no SDK retries), the caller's
+ * signal applies, and a busy or unanswered request throws
+ * StorageRetryLaterError.
  */
 export async function deleteFromR2(
   bucket: string,
   key: string,
-  attempts: R2ClientAttempts = "default"
+  options: { attempts?: R2ClientAttempts; signal?: AbortSignal } = {}
 ): Promise<void> {
   assertSafeStorageKey(key);
   const localPath = await playwrightStoragePath(bucket, key);
@@ -540,13 +575,18 @@ export async function deleteFromR2(
     return;
   }
 
+  const attempts = options.attempts ?? "default";
   const client = getR2Client(attempts);
   const command = new DeleteObjectCommand({
     Bucket: bucket,
     Key: key,
   });
 
-  await client.send(command, r2SendOptions(R2_METADATA_TIMEOUT_MS));
+  try {
+    await client.send(command, r2SendOptions(R2_METADATA_TIMEOUT_MS, options.signal));
+  } catch (error) {
+    throw attempts === "single-attempt" ? asRetryLater(error) : error;
+  }
 }
 
 /** S3 DeleteObjects and the Workers R2 binding both take at most 1,000 keys. */
@@ -554,11 +594,20 @@ export const R2_DELETE_BATCH_LIMIT = 1000;
 
 /**
  * Delete up to 1,000 keys with one storage request and no SDK retries (one
- * Worker subrequest). Returns the keys storage did not confirm as deleted; a
- * key that does not exist counts as deleted. Throws when the request itself
- * fails, so the caller can retry later or fall back to single deletes.
+ * Worker subrequest). Returns the keys storage did not confirm as deleted.
+ *
+ * A key counts as deleted only when the reply lists it under Deleted, or
+ * under Errors as NoSuchKey (already gone). Any other requested key is
+ * unconfirmed. The reply must account for the request: one that names no
+ * requested key at all (an empty or non-S3 200), or an error naming a key
+ * that was not requested, throws so the caller can fall back to single
+ * deletes. Busy or unanswered requests throw StorageRetryLaterError.
  */
-export async function deleteManyFromR2(bucket: string, keys: readonly string[]): Promise<string[]> {
+export async function deleteManyFromR2(
+  bucket: string,
+  keys: readonly string[],
+  options: { signal?: AbortSignal } = {}
+): Promise<string[]> {
   if (keys.length === 0) return [];
   if (keys.length > R2_DELETE_BATCH_LIMIT || new Set(keys).size !== keys.length) {
     throw new Error("Invalid storage batch");
@@ -579,21 +628,35 @@ export async function deleteManyFromR2(bucket: string, keys: readonly string[]):
     return [];
   }
 
-  const response = await getR2Client("single-attempt").send(
-    new DeleteObjectsCommand({
-      Bucket: bucket,
-      Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
-    }),
-    r2SendOptions(R2_METADATA_TIMEOUT_MS)
-  );
-  const requested = new Set(keys);
-  const unconfirmed = new Set<string>();
-  for (const error of response.Errors ?? []) {
-    // An error that names no requested key cannot be attributed: confirm nothing.
-    if (!error.Key || !requested.has(error.Key)) return [...keys];
-    if (error.Code !== "NoSuchKey") unconfirmed.add(error.Key);
+  let response;
+  try {
+    response = await getR2Client("single-attempt").send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        // Not quiet: a reply must name every key it deleted.
+        Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: false },
+      }),
+      r2SendOptions(R2_METADATA_TIMEOUT_MS, options.signal)
+    );
+  } catch (error) {
+    throw asRetryLater(error);
   }
-  return [...unconfirmed];
+  const requested = new Set(keys);
+  const confirmed = new Set<string>();
+  const refused = new Set<string>();
+  for (const item of response.Deleted ?? []) {
+    if (item.Key && requested.has(item.Key)) confirmed.add(item.Key);
+  }
+  for (const error of response.Errors ?? []) {
+    if (!error.Key || !requested.has(error.Key))
+      throw new Error("Storage batch reply names a key that was not requested");
+    if (error.Code === "NoSuchKey") confirmed.add(error.Key);
+    else refused.add(error.Key);
+  }
+  if (confirmed.size === 0 && refused.size === 0)
+    throw new Error("Storage batch reply names none of the requested keys");
+  // A key reported both deleted and refused is not confirmed.
+  return keys.filter((key) => !confirmed.has(key) || refused.has(key));
 }
 
 /**

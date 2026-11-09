@@ -225,8 +225,8 @@ describe("storage service", () => {
       process.env.R2_ACCOUNT_ID = "attempts-account";
       mockSendClientConfigs.length = 0;
       await deleteFromR2("my-bucket", "some/key.jpg");
-      await deleteFromR2("my-bucket", "some/key.jpg", "single-attempt");
-      await deleteFromR2("my-bucket", "some/key.jpg", "single-attempt");
+      await deleteFromR2("my-bucket", "some/key.jpg", { attempts: "single-attempt" });
+      await deleteFromR2("my-bucket", "some/key.jpg", { attempts: "single-attempt" });
       expect(mockSendClientConfigs).toHaveLength(3);
       expect(mockSendClientConfigs[0]).not.toHaveProperty("maxAttempts");
       expect(mockSendClientConfigs[1]).toMatchObject({
@@ -236,14 +236,39 @@ describe("storage service", () => {
       // Both clients are cached: no new client for the repeated call.
       expect(mockSendClientConfigs[2]).toBe(mockSendClientConfigs[1]);
     });
+
+    it("single-attempt deletes honour the caller's signal and report busy storage", async () => {
+      const caller = new AbortController();
+      const slowDown = () => Object.assign(new Error("slow"), { name: "SlowDown", $metadata: {} });
+      let signalled = false;
+      mockSend.mockImplementationOnce(async (_command, options) => {
+        caller.abort();
+        signalled = options.abortSignal.aborted;
+        throw slowDown();
+      });
+      await expect(
+        deleteFromR2("my-bucket", "some/key.jpg", {
+          attempts: "single-attempt",
+          signal: caller.signal,
+        })
+      ).rejects.toMatchObject({ retryLater: true, name: "StorageRetryLaterError" });
+      expect(signalled).toBe(true);
+      // Ordinary deletes keep the original error.
+      mockSend.mockRejectedValueOnce(slowDown());
+      await expect(deleteFromR2("my-bucket", "some/key.jpg")).rejects.toMatchObject({
+        name: "SlowDown",
+      });
+    });
   });
 
   describe("deleteManyFromR2", () => {
     const keys = ["media/a", "media/a.w400.webp", "media/a.w800.webp"];
+    const allDeleted = { Deleted: keys.map((Key) => ({ Key })) };
 
-    it("deletes the keys with one quiet DeleteObjects request and no SDK retries", async () => {
+    it("deletes the keys with one DeleteObjects request that lists them, and no SDK retries", async () => {
       process.env.R2_ACCOUNT_ID = "batch-account";
       mockSendClientConfigs.length = 0;
+      mockSend.mockResolvedValue(allDeleted);
       expect(await deleteManyFromR2("my-bucket", keys)).toEqual([]);
       expect(mockSend).toHaveBeenCalledOnce();
       const [command, options] = mockSend.mock.calls[0]!;
@@ -251,32 +276,28 @@ describe("storage service", () => {
         batch: true,
         params: {
           Bucket: "my-bucket",
-          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: false },
         },
       });
       expect(options?.abortSignal).toBeInstanceOf(AbortSignal);
       expect(mockSendClientConfigs[0]).toMatchObject({ maxAttempts: 1 });
     });
 
-    it("returns the keys storage did not confirm and counts missing keys as deleted", async () => {
-      mockSend.mockResolvedValue({
-        Errors: [
-          { Key: "media/a.w400.webp", Code: "InternalError" },
-          { Key: "media/a.w800.webp", Code: "NoSuchKey" },
-        ],
+    it("passes the caller's signal to the request", async () => {
+      const caller = new AbortController();
+      let signalled = false;
+      mockSend.mockImplementationOnce(async (_command, options) => {
+        caller.abort();
+        signalled = options.abortSignal.aborted;
+        throw Object.assign(new Error("aborted"), { name: "AbortError" });
       });
-      expect(await deleteManyFromR2("my-bucket", keys)).toEqual(["media/a.w400.webp"]);
+      await expect(
+        deleteManyFromR2("my-bucket", keys, { signal: caller.signal })
+      ).rejects.toMatchObject({ retryLater: true });
+      expect(signalled).toBe(true);
     });
 
-    it.each([[{ Code: "InternalError" }], [{ Key: "media/other", Code: "AccessDenied" }]])(
-      "confirms nothing when an error names no requested key (%o)",
-      async (error) => {
-        mockSend.mockResolvedValue({ Errors: [error] });
-        expect(await deleteManyFromR2("my-bucket", keys)).toEqual(keys);
-      }
-    );
-
-    it("lets a failed request throw so the caller can retry", async () => {
+    it("lets a failed request throw so the caller can retry or fall back", async () => {
       mockSend.mockRejectedValue(new Error("network unavailable"));
       await expect(deleteManyFromR2("my-bucket", keys)).rejects.toThrow("network unavailable");
     });
@@ -292,6 +313,7 @@ describe("storage service", () => {
 
     it("accepts exactly 1,000 keys in one request", async () => {
       const limit = Array.from({ length: 1000 }, (_, index) => `media/${index}`);
+      mockSend.mockResolvedValue({ Deleted: limit.map((Key) => ({ Key })) });
       expect(await deleteManyFromR2("my-bucket", limit)).toEqual([]);
       expect(mockSend).toHaveBeenCalledOnce();
     });
