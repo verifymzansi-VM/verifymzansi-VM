@@ -65,6 +65,13 @@ synthetic members and posts, applies that update and every later one, and checks
 the post lifecycle guards and their races through the production API commands
 (`updates/README.md`).
 
+An update that backfills existing rows or is hard to undo can come with two
+reviewed companions named after it, which the replay never applies:
+`preflight/<update>.check.sql`, a read-only check the owner runs in the SQL
+editor before applying, and `rollback/<update>.down.sql`, which restores the
+previous function bodies and drops what the update added. Its behaviour test
+proves apply, rollback and re-apply on the throwaway database.
+
 ## Browser test copy (CI job `e2e-foundation`)
 
 `playwright.foundation.config.ts` runs the restored website in foundation mode

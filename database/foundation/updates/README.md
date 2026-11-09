@@ -31,12 +31,13 @@ follow it.
 - **Staff content holds block deletion.** While a hold from the Hide action is
   open, the lifecycle job neither deletes the post nor sends a deletion warning,
   the owner cannot mark it sold, archive it or delete it (the same
-  `PT423 staff_visibility_hold` refusal the website already shows for
-  resubmission), and a trigger refuses any other delete of the post row. The
-  media the post showed when it was hidden are recorded against the hold, so
-  media cleanup leaves them alone until that hold is released. After the last
-  release, an idle post's 45/60-day clock counts from the release. Legal holds
-  behave as before.
+  `PT423 staff_visibility_hold` refusal as for resubmission; the website now
+  says "This post is hidden while our team reviews it. You can't republish, sell
+  or delete it until the review is finished."), and a trigger refuses any other
+  delete of the post row. The media the post showed when it was hidden are
+  recorded against the hold, so media cleanup leaves them alone until that hold
+  is released. After the last release, an idle post's 45/60-day clock counts
+  from the release. Legal holds behave as before.
 - **A stable deletion clock.** `posts.ended_at` records when a post's public run
   ended (expired, sold or archived) and `posts.deletes_at` when the lifecycle
   job may delete it (today `ended_at` + 30 days). Publication or a new
@@ -50,24 +51,48 @@ follow it.
   counts distinct events from it, so an event removed by the lifecycle job or
   any other path keeps its place. As decided by the owner, deleting one's own
   event still returns the place; the five-active limit is unchanged. The table
-  is append-only apart from that one release, and rows older than the window are
-  purged by the lifecycle job. The backfill copies each original event's latest
-  submission from the last 31 days.
+  is append-only apart from that one release; rows leave it only once they are
+  older than the window (purged by the lifecycle job) or with their erased
+  account. The backfill copies each original event's latest submission from the
+  last 31 days. The rows are part of the member's privacy export (dataset
+  `event_submissions`; the export route accepts 32 or 33 datasets until
+  production has this update).
 
 `pnpm db:foundation:lifecycle-test` (CI step in `foundation-sql-lint`) replays
-this folder into the throwaway Postgres 17 container, seeds synthetic members
-and posts before the update, applies it, and checks the backfills, each guard
-through the production API commands, and races between a hide and an owner
-delete, mark-sold, the lifecycle job, and two event submissions at the limit.
-The only stand-in is `internal.current_verified_identity`, so free events reach
-the fair-use check.
+this folder into the throwaway Postgres 17 container, runs the read-only
+preflight (including rows it must report), seeds synthetic members and posts
+before the update, applies it, rolls it back with the rollback file and applies
+it again (the schema fingerprint returns to the same values each time), and then
+checks the backfills, each guard through the production API commands, and races
+between a hide and an owner delete, mark-sold, the lifecycle job, and two event
+submissions at the limit. The Hide action and most releases are mirrored in SQL
+with the same rows and lock order; one release runs the real staff command, with
+a synthetic staff session, and restores a hidden event. The only stand-in is
+`internal.current_verified_identity`, so free events reach the fair-use check.
 
-Apply it before any application release that depends on it. It takes a short
-exclusive lock on `private.posts` (lock timeout 5 s), so apply it at a quiet
-time and rerun it if the lock times out. `../fingerprint.json` lists it under
-`productionCheck.pendingApplication`; once production's fingerprint matches
-again, move `matchedThroughUpdate` and `matchedFingerprints` forward together
-with `scripts/foundation-replay.test.mjs`.
+**Applying.** Apply it before any application release that depends on it:
+
+1. Run `../preflight/20261109073519_post_lifecycle_guards.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row; any other row is a post the backfill would refuse, or an open
+   staff hold on an ended post to review first.
+2. At a quiet time, run the update. It first takes every table lock it needs, in
+   one fixed order and without waiting: `private.posts` (exclusive), then
+   `private.frontend_content_holds`, `private.media_objects` and `auth.users`
+   (no writes, including sign-in bookkeeping, until it commits, which takes well
+   under a second). If any of them is busy it stops at once with a lock error
+   and changes nothing; run it again.
+3. Run `../fingerprint.sql` and compare with `../fingerprint.json`, which lists
+   this update under `productionCheck.pendingApplication`. Once production's
+   fingerprint matches again, move `matchedThroughUpdate` and
+   `matchedFingerprints` forward (`scripts/foundation-replay.test.mjs` checks
+   them).
+
+The reviewed rollback is
+`../rollback/20261109073519_post_lifecycle_guards.down.sql` (only with the
+owner's decision; prefer a forward fix). Its header lists what a rollback loses,
+including possible repeat expiry emails for posts edited while the update was in
+place.
 
 ## Staff content holds, 5 November 2026
 

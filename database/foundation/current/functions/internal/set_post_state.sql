@@ -16,8 +16,8 @@ begin
   perform internal.lock_evidence_subject(actor);
   select * into post from private.posts p where p.id = p_post_id and p.owner_id = actor for update;
   if not found then raise exception 'post not found' using errcode = '22023'; end if;
-  -- Hidden content stays as staff left it until an independent release;
-  -- sold or archived would start its deletion.
+  -- While a staff hold is open the owner cannot change the post's state here:
+  -- sold or archived would start its deletion clock.
   if exists (select 1 from private.frontend_content_holds h where h.post_id = post.id and h.released_at is null) then
     raise exception 'staff visibility hold requires independent release' using errcode = 'PT423', detail = 'staff_visibility_hold';
   end if;

@@ -34,6 +34,33 @@ test("the recorded fingerprint keeps the production-matched values", () => {
 });
 
 test(
+  "the replay through the last applied update still equals the production capture",
+  { timeout: 120000 },
+  async () => {
+    // Pending updates change the recorded fingerprint; the files production
+    // already has must still rebuild exactly what was captured there.
+    const check = recorded.productionCheck;
+    const replay = await replayFoundation({ through: check.matchedThroughUpdate });
+    try {
+      assert.equal(replay.updates.at(-1), check.matchedThroughUpdate);
+      const categories = await fingerprintFoundation(replay.db);
+      for (const [category, fingerprint] of Object.entries(check.matchedFingerprints)) {
+        assert.equal(categories[category].fingerprint, fingerprint, category);
+      }
+    } finally {
+      await replay.db.close();
+    }
+  }
+);
+
+test("a replay cannot stop at an update that does not exist", async () => {
+  await assert.rejects(
+    replayFoundation({ through: "29991231235959_missing_update.sql" }),
+    /Unknown update/
+  );
+});
+
+test(
   "an edited function body without a new fingerprint fails the gate",
   { timeout: 120000 },
   async () => {

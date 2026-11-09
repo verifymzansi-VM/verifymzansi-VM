@@ -10,18 +10,35 @@
 //
 //   node --import tsx scripts/test-foundation-lifecycle-guards.mjs
 //
+// It also runs the update's read-only preflight (preflight/) before the
+// update, and proves that apply -> rollback (rollback/) -> apply returns the
+// schema fingerprint to the same values each time.
+//
 // Needs a local Docker daemon; it takes no connection settings at all. The
-// only stand-in is internal.current_verified_identity (identity review is
-// covered by its own suites), replaced after the update so free events can
-// reach the fair-use branch of internal.submit_post.
+// Hide action and most hold releases are mirrored by vmtest.hide/release
+// (same rows and lock order; the real staff commands need report and claim
+// fixtures); one release goes through the real staff command. The only
+// stand-in is internal.current_verified_identity (identity review is covered
+// by its own suites), replaced after the update so free events can reach the
+// fair-use branch of internal.submit_post.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 import { buildRestoredPostInput } from "../src/lib/foundation/restored-post-input.ts";
 
 const UPDATE = "20261109073519_post_lifecycle_guards.sql";
+const PREFLIGHT = readFileSync(
+  "database/foundation/preflight/20261109073519_post_lifecycle_guards.check.sql",
+  "utf8"
+);
+const ROLLBACK = readFileSync(
+  "database/foundation/rollback/20261109073519_post_lifecycle_guards.down.sql",
+  "utf8"
+);
+const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const TERMS = {
   version: "posting-v1",
   document_hash: "RAXTzmTyM5iMYeLy8Xv_NvnvzqsjUKPYq5hQaqqNS1Q",
@@ -63,6 +80,21 @@ try {
     });
   const member = (user, sql) =>
     `\\o /dev/null\nselect set_config('request.jwt.claim.sub','${user.id}',false),set_config('request.jwt.claims','${claims(user)}',false);\n\\o\nset role authenticated;\n${sql}`;
+  // A staff session that verified its authenticator app just now.
+  const staffClaims = (user) =>
+    JSON.stringify({
+      ...JSON.parse(claims(user)),
+      aal: "aal2",
+      amr: [{ method: "totp", timestamp: Math.floor(Date.now() / 1000) }],
+    });
+  const staffMember = (user, sql) =>
+    `\\o /dev/null\nselect set_config('request.jwt.claim.sub','${user.id}',false),set_config('request.jwt.claims','${staffClaims(user)}',false);\n\\o\nset role authenticated;\n${sql}`;
+  const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
+  const preflight = () =>
+    q(PREFLIGHT)
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split("|"));
   const service = (sql) => `set role service_role;\n${sql}`;
   const fails = (sql, state) => {
     const result = run(sql);
@@ -141,7 +173,16 @@ try {
     create function vmtest.release(p_hold uuid,p_staff uuid) returns void language sql as $$
       update private.frontend_content_holds set version=version+1,released_at=clock_timestamp(),released_by=p_staff,
         release_reason='Synthetic review cleared' where id=p_hold;
-    $$;`);
+    $$;
+    -- A staff member with a verified authenticator and an AAL2 session.
+    create function vmtest.staff(p_label text,p_role text) returns jsonb language plpgsql as $$
+    declare m jsonb:=vmtest.member(p_label); begin
+      update auth.sessions set aal='aal2' where id=(m->>'session')::uuid;
+      insert into auth.mfa_factors(user_id,factor_type,status) values((m->>'id')::uuid,'totp','verified');
+      insert into private.staff_roles(user_id,role) values((m->>'id')::uuid,p_role);
+      return m;
+    end$$;
+    create table vmtest.marker(id uuid);`);
   const user = (label) => json(`select vmtest.member('${label}');`);
   const post = (owner, kind, status, age = 0, submitted = null, reason = null) =>
     scalar(
@@ -274,8 +315,60 @@ try {
   const expiredNoticesBefore = notices(expiredListing);
   assert.equal(expiredNoticesBefore, 1);
 
+  await check("preflight: read only, and silent when the backfill will pass", () => {
+    const rows = preflight();
+    assert.equal(rows.length, 1, JSON.stringify(rows));
+    assert.equal(rows[0][1], "summary");
+    // As one transaction (like the SQL editor), any write after it is refused.
+    const write = database.psql(
+      `${PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
+      ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
+    );
+    assert.notEqual(write.status, 0);
+    assert.match(write.stderr, /ERROR:\s+25006:/);
+  });
+  await check("preflight: reports rows the backfill's deferred checks would refuse", () => {
+    const [job, attrs, bare] = [randomUUID(), randomUUID(), randomUUID()];
+    const broken = (id, category, status) =>
+      `insert into private.posts(id,owner_id,kind,area,category_key,title,description,province_id,city_id,status)
+         values('${id}','${alice.id}','listing','market','${category}','Broken fixture','A broken synthetic row.','gp','gp_johannesburg','${status}');`;
+    // Written with triggers off: these rows cannot be made through any command.
+    q(`set session_replication_role=replica;
+       ${broken(job, "jobs_services", "expired")}
+       insert into private.listing_details(post_id,price_mode,price_cents) values('${job}','free',0);
+       ${broken(attrs, "other_items", "sold")}
+       insert into private.listing_details(post_id,price_mode,price_cents,attributes) values('${attrs}','amount',100,'{"no_such_field":"x"}');
+       ${broken(bare, "other_items", "archived")}`);
+    const problems = preflight()
+      .filter((r) => r[1] !== "summary")
+      .map((r) => [r[1], r[2]]);
+    assert.deepEqual(
+      problems.sort(),
+      [
+        ["deferred check: exactly one detail row", bare],
+        ["deferred check: job salary cannot be free or negotiable", job],
+        ["deferred check: listing attributes", attrs],
+      ].sort()
+    );
+    q(`set session_replication_role=replica;
+       delete from private.listing_details where post_id in('${job}','${attrs}');
+       delete from private.posts where id in('${job}','${attrs}','${bare}');`);
+    assert.equal(preflight().length, 1);
+  });
+
   // ------------------------------------------------------ apply the update
-  applySteps(database, steps.slice(index));
+  const before = fingerprint();
+  applySteps(database, [steps[index]]);
+  const after = fingerprint();
+  await check("rollback: apply, roll back and apply again are clean", () => {
+    assert.notEqual(after, before);
+    applySteps(database, [{ label: "rollback", sql: ROLLBACK }]);
+    assert.equal(fingerprint(), before, "the rollback leaves the pre-update schema");
+    assert.equal(exists(expiredListing), true);
+    applySteps(database, [steps[index]]);
+    assert.equal(fingerprint(), after, "re-applying gives the same schema");
+  });
+  applySteps(database, steps.slice(index + 1));
   console.log(`Applied ${UPDATE} and any later updates.`);
   q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
       language sql set search_path=pg_catalog as $$
@@ -522,6 +615,39 @@ try {
     job();
     assert.equal(exists(idleHeld), false);
   });
+  await check("hold release: the staff release command restores a hidden event", () => {
+    const releaser = json(`select vmtest.staff('releaser','admin');`);
+    const event = post(bea, "event", "live");
+    const cover = scalar(
+      `select object_id from private.post_media where post_id='${event}' and purpose='cover';`
+    );
+    const hold = scalar(`select vmtest.hide('${event}','${staff.id}');`);
+    assert.equal(
+      scalar(`select count(*) from private.frontend_content_hold_media where hold_id='${hold}';`),
+      "1"
+    );
+    fails(member(bea, `select api.delete_post('${event}',${row(event).revision});`), "PT423");
+    const version = Number(
+      scalar(`select version from private.frontend_content_holds where id='${hold}';`)
+    );
+    const released = json(
+      staffMember(
+        releaser,
+        `select api.release_frontend_content_hold('${hold}',${version},'Synthetic review found no problem');`
+      )
+    );
+    assert.equal(released.status, "released");
+    assert.equal(released.restored, true);
+    const after = row(event);
+    assert.equal(after.status, "live");
+    assert.equal(after.ended_at, null);
+    assert.equal(after.deletes_at, null);
+    assert.equal(
+      scalar(`select count(*) from private.frontend_content_hold_media where hold_id='${hold}';`),
+      "0"
+    );
+    assert.equal(scalar(`select internal.media_object_in_use('${cover}');`), "t");
+  });
 
   // ------------------------------------------------- 3. free-event ledger
   const submit = (owner, id) =>
@@ -562,6 +688,25 @@ try {
     );
     fails(submit(cara, draft(cara)), "PT429");
   });
+  await check("events: the member's privacy export includes their submissions", () => {
+    // Hosted Auth has this column; the replay prelude models only what the
+    // schema itself references.
+    q("alter table auth.users add column if not exists phone_confirmed_at timestamptz;");
+    const exported = json(`select internal.frontend_privacy_export_data('${cara.id}');`);
+    assert.equal(Object.keys(exported).length, 33);
+    const rows = exported.event_submissions;
+    assert.equal(
+      rows.length,
+      Number(scalar(`select count(*) from private.event_submissions where owner_id='${cara.id}';`))
+    );
+    assert.deepEqual(Object.keys(rows[0]).sort(), [
+      "post_id",
+      "release_reason",
+      "released_at",
+      "submitted_at",
+    ]);
+    assert.ok(rows.some((r) => r.release_reason === "owner_deleted"));
+  });
   await check("events: the ledger is append-only and purged after the window", () => {
     const id = scalar(
       `select id from private.event_submissions where owner_id='${cara.id}' order by submitted_at desc limit 1;`
@@ -591,6 +736,14 @@ try {
       scalar(`select count(*) from private.event_submissions where owner_id='${erased}';`),
       "0"
     );
+    // A delete issued from inside another trigger is refused like any other.
+    q(`create table vmtest.purge_signal(id uuid);
+       create function vmtest.purge_submission() returns trigger language plpgsql as $$
+       begin delete from private.event_submissions where id=new.id; return null; end$$;
+       create trigger purge_submission after insert on vmtest.purge_signal
+         for each row execute function vmtest.purge_submission();`);
+    fails(`insert into vmtest.purge_signal values('${id}');`, "23514");
+    assert.equal(scalar(`select count(*) from private.event_submissions where id='${id}';`), "1");
   });
 
   // ----------------------------------------------------------- concurrency

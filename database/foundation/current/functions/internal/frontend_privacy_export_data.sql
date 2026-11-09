@@ -32,6 +32,8 @@ begin
       from private.entitlements where owner_id=$1 order by created_at,id$q$),
     ('post_activations',$q$select post_id,entitlement_id,activated_at,released_at,release_reason
       from private.post_activations where owner_id=$1 order by activated_at,id$q$),
+    ('event_submissions',$q$select post_id,submitted_at,released_at,release_reason
+      from private.event_submissions where owner_id=$1 order by submitted_at,id$q$),
     ('introductory_trials',$q$select post_id,trial_entitlement_id,claimed_at,converted_at
       from private.post_trial_claims where owner_id=$1 order by claimed_at,post_id$q$),
     ('posting_terms',$q$select version,document_hash,accepted_at from private.posting_terms_acceptances where owner_id=$1 order by accepted_at,version$q$),

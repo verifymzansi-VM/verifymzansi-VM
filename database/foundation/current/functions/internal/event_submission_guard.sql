@@ -13,8 +13,9 @@ begin
       and (new.id,new.owner_id,new.post_id,new.submitted_at) is not distinct from (old.id,old.owner_id,old.post_id,old.submitted_at) then
       return new;
     end if;
-  elsif old.submitted_at<=clock_timestamp()-interval '30 days' or pg_catalog.pg_trigger_depth()>1 then
-    return old; -- outside every rolling window, or removed with its account
+  elsif old.submitted_at<=clock_timestamp()-interval '30 days'
+    or not exists(select 1 from auth.users u where u.id=old.owner_id) then
+    return old; -- outside every rolling window, or removed with its erased account
   end if;
   raise exception 'event submissions are append-only' using errcode='23514';
 end$function$;
