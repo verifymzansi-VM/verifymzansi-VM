@@ -10,7 +10,9 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import {
   E2E_FIXTURE,
+  LOCAL_ID_ENCRYPTION_KEY,
   LOCAL_OPS_JOBS_SECRET,
+  LOCAL_PHONE_OTP_KEY,
   assertLocalFoundationTarget,
 } from "./foundation-e2e-target.mjs";
 
@@ -101,13 +103,18 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     FOUNDATION_RECOVERY_ENABLED: "true",
     FOUNDATION_PHONE_VERIFICATION_ENABLED: "true",
     KYC_PROVIDER: "manual",
+    // Phone codes and ID numbers: synthetic keys in the shape the website
+    // requires (the stub suite's ID key repeats one digit and is refused).
+    FOUNDATION_PHONE_OTP_KEY: LOCAL_PHONE_OTP_KEY,
+    ID_ENCRYPTION_KEY: LOCAL_ID_ENCRYPTION_KEY,
     // The stub suite unsets these; unset keys would be refilled from .env files.
     // The e2e runtime validates the environment strictly (a limiter key needs a
     // limiter URL, formatted keys reject ""), so these get neutral valid
     // values. The limiter is the copy's own loopback stub (started by `serve`),
     // so fail-closed actions such as checkout are not blocked as "degraded".
     OTP_RATE_LIMITER_URL: LOCAL_LIMITER_URL,
-    OTP_RATE_LIMITER_TIMEOUT_MS: "500",
+    // Production's value: a loaded Windows runner can take more than 500 ms.
+    OTP_RATE_LIMITER_TIMEOUT_MS: "2500",
     RATE_LIMITER_API_KEY: LOCAL_LIMITER_KEY,
     // Ozow: mock mode (the stub suite's ENABLE_MOCK_OZOW) against the test
     // system, with synthetic values only. The base URL is the code's own

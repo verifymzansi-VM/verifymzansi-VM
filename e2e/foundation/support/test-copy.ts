@@ -4,10 +4,14 @@
 // fixture (module import), and the gateway key, post ids and authenticator
 // secrets are read from the copy itself (local CLI status and the copy's own
 // database container).
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { createServerClient } from "@supabase/ssr";
 import people from "../fixture/people.json";
 import {
   E2E_FIXTURE,
+  OUTBOUND_LOG_FILE,
+  TEST_SMS_SINK_FILE,
   assertLocalFoundationTarget,
 } from "../../../scripts/lib/foundation-e2e-target.mjs";
 import {
@@ -20,6 +24,12 @@ import { nativeTotp } from "../../../scripts/lib/foundation-native-totp.mjs";
 import { IDEMPOTENCY_HEADER } from "../../../scripts/lib/foundation-e2e-mail-relay.mjs";
 
 export type PersonKey = "invitedMember" | "verifiedMember" | "moderator" | "admin";
+/** A fixture person, or a person a spec registered during its own run. */
+export type Person = PersonKey | { email: string; password: string };
+
+function credentialsOf(person: Person) {
+  return typeof person === "string" ? people[person] : person;
+}
 
 /** The only address any helper sends a request to. */
 const API_ORIGIN = assertLocalFoundationTarget({
@@ -174,8 +184,10 @@ export function totpCode(secret: string, at = Date.now()): string {
 }
 
 /** The verified authenticator factor local Auth holds for a test person. */
-function authenticatorOf(key: PersonKey): { factorId: string; secret: string } | null {
-  const email = people[key].email.toLowerCase().replace(/[^a-z0-9@.-]/g, "");
+function authenticatorOf(person: Person): { factorId: string; secret: string } | null {
+  const email = credentialsOf(person)
+    .email.toLowerCase()
+    .replace(/[^a-z0-9@.-]/g, "");
   const row = queryTestCopy(
     "select f.id, f.secret from auth.mfa_factors f join auth.users u on u.id = f.user_id " +
       `where lower(u.email) = '${email}' and f.factor_type = 'totp' and f.status = 'verified';`
@@ -228,12 +240,14 @@ export function retiredTableRead(copy: TestCopy, table: string) {
 }
 
 /** Real local GoTrue password sign-in; with an authenticator, the second step too. */
-export async function signIn(copy: TestCopy, key: PersonKey) {
+export async function signIn(copy: TestCopy, person: Person) {
+  const { email, password } = credentialsOf(person);
+  const key = typeof person === "string" ? person : "a registered test person";
   const login = await request(copy, "/auth/v1/token?grant_type=password", {
-    body: { email: people[key].email, password: people[key].password },
+    body: { email, password },
   });
   if (login.status !== 200) throw new Error(`Sign-in failed for ${key} (${login.status})`);
-  const factor = authenticatorOf(key);
+  const factor = authenticatorOf(person);
   if (!factor)
     return {
       token: login.data.access_token as string,
@@ -258,8 +272,9 @@ export async function signIn(copy: TestCopy, key: PersonKey) {
  * @supabase/ssr itself writes them (name, chunking, encoding), as the website's
  * own sign-in would; its only request goes to the local gateway.
  */
-export async function browserSessionCookies(copy: TestCopy, key: PersonKey) {
-  const session = await signIn(copy, key);
+export async function browserSessionCookies(copy: TestCopy, person: Person) {
+  const key = typeof person === "string" ? person : "a registered test person";
+  const session = await signIn(copy, person);
   const cookies: { name: string; value: string }[] = [];
   const auth = createServerClient(API_ORIGIN, copy.publishableKey, {
     cookies: {
@@ -288,4 +303,78 @@ export async function browserSessionCookies(copy: TestCopy, key: PersonKey) {
   if (error || !data.session) throw new Error(`Session cookies failed for ${key}`);
   if (cookies.length === 0) throw new Error("No session cookie was written");
   return { accountId: data.session.user.id, cookies };
+}
+
+/** The newest message to an address in the local mail catcher, received at
+ * or after `after` (ms since the epoch). Requests go only to the local catcher. */
+export async function latestMailTo(
+  recipient: string,
+  { after = 0, timeoutMs = 20_000 }: { after?: number; timeoutMs?: number } = {}
+): Promise<CaughtMail> {
+  const wanted = recipient.toLowerCase();
+  const deadline = Date.now() + timeoutMs;
+  const get = async (pathname: string) => {
+    const url = new URL(pathname, MAIL_ORIGIN);
+    if (url.origin !== MAIL_ORIGIN) throw new Error("Mail lookups stay on the local catcher");
+    const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`Mail catcher answered ${response.status}`);
+    return response.json();
+  };
+  while (Date.now() < deadline) {
+    const list = await get("/api/v1/messages?limit=100");
+    const item = (list.messages ?? []).find(
+      (entry: { ID: string; Created: string; To?: { Address: string }[] }) =>
+        /^[A-Za-z0-9]{8,64}$/.test(entry.ID) &&
+        Date.parse(entry.Created) >= after &&
+        (entry.To ?? []).some((to) => to.Address.toLowerCase() === wanted)
+    );
+    if (item) {
+      const message = await get(`/api/v1/message/${item.ID}`);
+      return { id: item.ID, subject: String(message.Subject), text: String(message.Text ?? "") };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("No email to this address reached the local mail catcher");
+}
+
+/** Every message to an address in the local mail catcher (count only). */
+export async function mailCountTo(recipient: string): Promise<number> {
+  const wanted = recipient.toLowerCase();
+  const url = new URL("/api/v1/messages?limit=500", MAIL_ORIGIN);
+  if (url.origin !== MAIL_ORIGIN) throw new Error("Mail lookups stay on the local catcher");
+  const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new Error(`Mail catcher answered ${response.status}`);
+  const list = await response.json();
+  return (list.messages ?? []).filter((entry: { To?: { Address: string }[] }) =>
+    (entry.To ?? []).some((to) => to.Address.toLowerCase() === wanted)
+  ).length;
+}
+
+function readJsonLines<T>(file: string): T[] {
+  const full = path.resolve(process.cwd(), file);
+  if (!existsSync(full)) return [];
+  return readFileSync(full, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as T);
+}
+
+export type TestSms = { to: string; message: string; at: string };
+
+/** The SMS the copy's website would have sent (its e2e branch writes them to
+ * the local sink instead of contacting the SMS provider). */
+export function readTestSms(): TestSms[] {
+  return readJsonLines<TestSms>(TEST_SMS_SINK_FILE);
+}
+
+export type OutboundAttempt = {
+  origin: string;
+  outcome: "answered-locally" | "blocked";
+  at: string;
+};
+
+/** Requests the copy's website tried to send off this machine (origins only);
+ * the copy's fence answered the password breach check and refused the rest. */
+export function readOutboundAttempts(): OutboundAttempt[] {
+  return readJsonLines<OutboundAttempt>(OUTBOUND_LOG_FILE);
 }

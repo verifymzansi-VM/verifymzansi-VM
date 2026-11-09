@@ -3,7 +3,10 @@ import { test } from "node:test";
 import {
   E2E_FIXTURE,
   HOSTED_PROJECT_REFS,
+  LOCAL_ID_ENCRYPTION_KEY,
   LOCAL_OPS_JOBS_SECRET,
+  LOCAL_PHONE_OTP_KEY,
+  OUTBOUND_LOG_FILE,
   assertLocalFoundationTarget,
   assertLoopbackUrl,
   replayMigrationNames,
@@ -29,9 +32,15 @@ import {
   startLocalMailRelay,
   toMailCatcherMessage,
 } from "./lib/foundation-e2e-mail-relay.mjs";
+import {
+  breachCheckReply,
+  classifyOutbound,
+  installOutboundGuard,
+} from "./lib/foundation-e2e-outbound-guard.mjs";
+import { getPwnedPasswordCount } from "../src/lib/security/pwned-passwords.ts";
 import { TEST_COPY_CHECKOUT, testCopyCheckout } from "../src/lib/payments/checkout-origins.ts";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { EOL, tmpdir } from "node:os";
 import path from "node:path";
@@ -647,4 +656,111 @@ test("hosted markers are found, the local key is not", () => {
   assert.deepEqual(hostedMarkersIn("https://abcdefghijklmnopqrst.supabase.co/rest", "k"), [
     "abcdefghijklmnopqrst.supabase.co",
   ]);
+});
+
+test("the copy's phone-code and ID-number keys have the shape the website requires", async () => {
+  const saved = { ...process.env };
+  try {
+    process.env.FOUNDATION_PHONE_OTP_KEY = "caller-phone-otp-key";
+    process.env.ID_ENCRYPTION_KEY = "b".repeat(64);
+    const env = foundationWebsiteEnv(LOCAL_STATUS, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
+    assert.equal(env.FOUNDATION_PHONE_OTP_KEY, LOCAL_PHONE_OTP_KEY);
+    assert.equal(env.ID_ENCRYPTION_KEY, LOCAL_ID_ENCRYPTION_KEY);
+    // The website refuses keys that are not 64 hex characters with at least 8
+    // distinct digits (verification-runtime.ts, phone-verification.ts).
+    for (const key of [LOCAL_PHONE_OTP_KEY, LOCAL_ID_ENCRYPTION_KEY]) {
+      assert.match(key, /^[a-f0-9]{64}$/);
+      assert.ok(new Set(key).size >= 8);
+    }
+    assert.notEqual(LOCAL_PHONE_OTP_KEY, LOCAL_ID_ENCRYPTION_KEY);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the outbound fence passes loopback, answers the breach check and refuses everything else", () => {
+  const cases = {
+    "http://127.0.0.1:55443/rest/v1/rpc/x": "local",
+    "http://localhost:3110/api/health": "local",
+    "http://[::1]:55451/emails": "local",
+    "https://api.pwnedpasswords.com/range/ABCDE": "breach-check",
+    "https://api.pwnedpasswords.com/range/abcde": "breach-check",
+    "https://api.pwnedpasswords.com/range/ABCDEF": "blocked",
+    "https://api.pwnedpasswords.com/range/ABCDE?x=1": "blocked",
+    "https://api.pwnedpasswords.com:8443/range/ABCDE": "blocked",
+    "http://api.pwnedpasswords.com/range/ABCDE": "blocked",
+    "https://api.africastalking.com/version1/messaging": "blocked",
+    "https://api.sandbox.africastalking.com/version1/messaging": "blocked",
+    "https://api.resend.com/emails": "blocked",
+    "https://stagingone.ozow.com/": "blocked",
+    "https://gntzjtuncsyefujajmjy.supabase.co/rest/v1/": "blocked",
+    "https://127.0.0.1.example.com/": "blocked",
+    "http://user:pass@127.0.0.1:3110/": "blocked",
+    "file:///etc/passwd": "blocked",
+    "/relative/path": "blocked",
+    "not a url": "blocked",
+  };
+  for (const [href, expected] of Object.entries(cases))
+    assert.equal(classifyOutbound(href), expected, href);
+});
+
+test("the outbound fence forwards only loopback requests and records the others by origin", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "vm-fence-"));
+  const saved = globalThis.fetch;
+  const forwarded = [];
+  try {
+    const guarded = installOutboundGuard({
+      root,
+      fetchImpl: async (input) => {
+        forwarded.push(String(input));
+        return new Response("ok");
+      },
+    });
+    assert.equal(globalThis.fetch, guarded);
+    assert.equal(await (await fetch(new URL("/api/health", E2E_APP_URL))).text(), "ok");
+    assert.equal(await (await fetch(new URL("http://localhost:55443/x"))).text(), "ok");
+    // The website's real breach-check parser reads the stand-in reply as "not found".
+    assert.equal(await getPwnedPasswordCount("Local-fixture-password-0"), 0);
+    await assert.rejects(
+      fetch("https://api.africastalking.com/version1/messaging?secret=1", { method: "POST" }),
+      TypeError
+    );
+    await assert.rejects(fetch(new Request("https://api.resend.com/emails")), TypeError);
+    assert.deepEqual(forwarded, [`${E2E_APP_URL}/api/health`, "http://localhost:55443/x"]);
+    const log = readFileSync(path.join(root, OUTBOUND_LOG_FILE), "utf8")
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line));
+    assert.deepEqual(
+      log.map(({ origin, outcome }) => ({ origin, outcome })),
+      [
+        { origin: "https://api.pwnedpasswords.com", outcome: "answered-locally" },
+        { origin: "https://api.africastalking.com", outcome: "blocked" },
+        { origin: "https://api.resend.com", outcome: "blocked" },
+      ]
+    );
+    // Origins only: no path, query or body is ever written.
+    assert.equal(/secret|messaging|range/.test(JSON.stringify(log)), false);
+    assert.equal(breachCheckReply().trim(), `${"0".repeat(35)}:0`);
+  } finally {
+    globalThis.fetch = saved;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("only the copy's website server process gets the outbound fence", () => {
+  const source = readFileSync(path.join("scripts", "foundation-e2e.mjs"), "utf8");
+  const preload = readFileSync(
+    path.join("scripts", "lib", "foundation-e2e-outbound-preload.mjs"),
+    "utf8"
+  );
+  assert.match(preload, /installOutboundGuard\(\);/);
+  // The fence is added to the `next start` spawn only (not to builds).
+  assert.equal(source.match(/--import=\$\{fence\}/g)?.length, 1);
+  assert.match(source, /foundation-e2e-outbound-preload\.mjs/);
+  const website = readFileSync(path.join("scripts", "lib", "foundation-e2e-website.mjs"), "utf8");
+  assert.equal(/outbound/.test(website), false);
 });

@@ -1,0 +1,5 @@
+# Synthetic local test-copy values (64-hex keys for the throwaway foundation
+# test copy only), replaced in a later commit by keys derived at runtime from a
+# public label. Never real credentials. Exact fingerprints only.
+525f24baac4fcd80b137817f80dae399c6025cf5:scripts/lib/foundation-e2e-target.mjs:generic-api-key:35
+525f24baac4fcd80b137817f80dae399c6025cf5:scripts/lib/foundation-e2e-target.mjs:generic-api-key:37
