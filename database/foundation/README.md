@@ -6,6 +6,32 @@ digest, live public/service API contracts, credentials and hidden schemas. It
 never installs or changes the database. The default preflight still refuses an
 unreleased clean assembly, and its SQL installation guard remains intact.
 
+## Replay gate (CI job `foundation-replay`)
+
+`pnpm db:foundation:replay` rebuilds the production schema from this folder
+alone, in an embedded Postgres (PGlite) that cannot reach any hosted database:
+
+1. `replay/platform-prelude.sql`: stand-ins for what Supabase provides (API
+   roles, the Auth schema and helpers, the extensions schema);
+2. `candidate.sql`, the reviewed baseline;
+3. every file in `updates/` in filename order, with
+   `replay/baseline-supplement.sql` applied just before
+   `20261103154538_owner_signup_access.sql` (production received that hook
+   outside the repository; the supplement recreates its accepted body).
+
+It then runs `fingerprint.sql` (read-only catalogue queries: function bodies and
+metadata, columns, constraints, indexes, triggers, policies, grants, row level
+security, the event trigger) and compares the result with `fingerprint.json`. CI
+fails on any difference, including a new update whose fingerprint was not
+recorded. When a reviewed update intentionally changes the schema, run
+`pnpm db:foundation:replay -- --write` and commit the new `fingerprint.json` in
+the same pull request.
+
+To compare production, the owner runs `fingerprint.sql` unchanged in the
+Supabase SQL editor (it reads only the catalogue) and checks each row against
+`fingerprint.json`. Function bodies, columns, constraints, indexes and triggers
+matched production on 6 November 2026.
+
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST
 export belong to the retired source schema. Their wrappers refuse foundation
 targets. Do not replay that tree into the new project. Use reviewed additive
