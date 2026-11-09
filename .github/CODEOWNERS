@@ -13,6 +13,10 @@
 /src/app/api/kyc/ @verifymzansi-VM
 /supabase/migrations/ @verifymzansi-VM
 
+# Foundation backend (live) — database updates and server adapters
+/database/foundation/ @verifymzansi-VM
+/src/lib/foundation/ @verifymzansi-VM
+
 # Payments — financial transactions
 /src/app/api/webhooks/ozow/ @verifymzansi-VM
 /src/lib/payments/ @verifymzansi-VM
