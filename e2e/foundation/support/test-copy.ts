@@ -17,6 +17,7 @@ import {
   PUBLIC_TABLES_QUERY,
 } from "../../../scripts/lib/foundation-e2e-stack.mjs";
 import { nativeTotp } from "../../../scripts/lib/foundation-native-totp.mjs";
+import { IDEMPOTENCY_HEADER } from "../../../scripts/lib/foundation-e2e-mail-relay.mjs";
 
 export type PersonKey = "invitedMember" | "verifiedMember" | "moderator" | "admin";
 
@@ -79,6 +80,92 @@ export function clearUnpaidMockCheckouts(accountId: string): number {
       `select count(*) from private.payments where owner_id = '${accountId}' and status = 'pending';`
     )
   );
+}
+
+/** Email-job rows that one run of the job could claim now (any recipient). */
+export function dueOutboxCount(): number {
+  return Number(
+    queryTestCopy(
+      "select count(*) from private.outbox_events where processed_at is null and delivery_attempts < 8 " +
+        "and delivery_after <= now() and (delivery_until is null or delivery_until < now());"
+    )
+  );
+}
+
+/**
+ * Trusted local step (copy only): queues one website notice for a test person,
+ * as the database's own commands do, so a spec can follow one email-job row
+ * from the database to the mail catcher. Returns the row id.
+ */
+export function queueMailCheckNotice(accountId: string): string {
+  if (!UUID.test(accountId)) throw new Error("Unexpected account id");
+  const id = queryTestCopy(
+    "insert into private.outbox_events(kind, subject_id, owner_id, dedupe_key) " +
+      `values ('trial_started', gen_random_uuid(), '${accountId}', 'fixture-mail-check:' || gen_random_uuid()) returning id;`
+  );
+  if (!UUID.test(id)) throw new Error("Unexpected outbox id");
+  return id;
+}
+
+export type OutboxState = { processed: boolean; attempts: number; error: string | null };
+
+/** Delivery state of one email-job row. */
+export function outboxState(id: string): OutboxState {
+  if (!UUID.test(id)) throw new Error("Unexpected outbox id");
+  const row = queryTestCopy(
+    "select processed_at is not null, delivery_attempts, coalesce(delivery_error, '') " +
+      `from private.outbox_events where id = '${id}';`
+  );
+  if (!row) throw new Error("Unknown outbox row");
+  const [processed, attempts, error] = row.split("|");
+  return { processed: processed === "t", attempts: Number(attempts), error: error || null };
+}
+
+/** Saved enquiries for a post (count only). */
+export function enquiryCount(postId: string): number {
+  if (!UUID.test(postId)) throw new Error("Unexpected post id");
+  return Number(
+    queryTestCopy(`select count(*) from private.enquiries where post_id = '${postId}';`)
+  );
+}
+
+const MAIL_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.mailPort}`;
+
+export type CaughtMail = { id: string; subject: string; text: string };
+
+/**
+ * The message the website sent for one email-job row, found in the local mail
+ * catcher by recipient and the provider idempotency key the relay keeps
+ * (foundation-outbox/<row id>). Requests go only to the fixed local catcher.
+ */
+export async function caughtMailFor(
+  recipient: string,
+  idempotencyKey: string,
+  { timeoutMs = 15_000 } = {}
+): Promise<CaughtMail> {
+  const wanted = recipient.toLowerCase();
+  const deadline = Date.now() + timeoutMs;
+  const get = async (pathname: string) => {
+    const url = new URL(pathname, MAIL_ORIGIN);
+    if (url.origin !== MAIL_ORIGIN) throw new Error("Mail lookups stay on the local catcher");
+    const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error(`Mail catcher answered ${response.status}`);
+    return response.json();
+  };
+  while (Date.now() < deadline) {
+    const list = await get("/api/v1/messages?limit=100");
+    for (const item of list.messages ?? []) {
+      if (!/^[A-Za-z0-9]{8,64}$/.test(item.ID)) continue;
+      if (!(item.To ?? []).some((to: { Address: string }) => to.Address.toLowerCase() === wanted))
+        continue;
+      const headers = await get(`/api/v1/message/${item.ID}/headers`);
+      if (!(headers[IDEMPOTENCY_HEADER] ?? []).includes(idempotencyKey)) continue;
+      const message = await get(`/api/v1/message/${item.ID}`);
+      return { id: item.ID, subject: String(message.Subject), text: String(message.Text ?? "") };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("The website's email did not reach the local mail catcher");
 }
 
 /** RFC 6238 code from the authenticator secret, computed with node:crypto. */

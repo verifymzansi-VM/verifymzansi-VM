@@ -8,7 +8,11 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { E2E_FIXTURE, assertLocalFoundationTarget } from "./foundation-e2e-target.mjs";
+import {
+  E2E_FIXTURE,
+  LOCAL_OPS_JOBS_SECRET,
+  assertLocalFoundationTarget,
+} from "./foundation-e2e-target.mjs";
 
 const require = createRequire(import.meta.url);
 const { createDeterministicEnv } = require("../start-playwright-server.cjs");
@@ -61,6 +65,11 @@ export const LOCAL_LIMITER_URL = `http://127.0.0.1:${E2E_FIXTURE.limiterPort}/ch
 /** Synthetic key the stub expects; it exists only in the copy. */
 export const LOCAL_LIMITER_KEY = "local-fixture-limiter-key";
 
+/** The copy's local email relay, started by `serve` on loopback; the email
+ * provider's SDK sends there instead of to the provider (RESEND_BASE_URL). */
+export const LOCAL_MAIL_RELAY_URL = `http://127.0.0.1:${E2E_FIXTURE.mailRelayPort}`;
+/** Synthetic provider key the relay expects; it exists only in the copy. */
+export const LOCAL_MAIL_RELAY_KEY = "re_local_fixture_mail_relay";
 /** Keys Next itself manages, in any letter case; never blanked. */
 const NEXT_MANAGED = new Set(["NODE_ENV"]);
 
@@ -109,6 +118,12 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     OZOW_WEBHOOK_SECRET: inherited.OZOW_WEBHOOK_SECRET,
     OZOW_API_BASE_URL: "https://stagingone.ozow.com",
     NEXT_PUBLIC_CF_IMAGE_RESIZING: "false",
+    // Emails: the provider SDK's address is the copy's loopback relay, which
+    // hands every message to the local mail catcher (never the provider).
+    RESEND_BASE_URL: LOCAL_MAIL_RELAY_URL,
+    RESEND_API_KEY: LOCAL_MAIL_RELAY_KEY,
+    // The email job route refuses to run without a secret; a synthetic one.
+    OPS_JOBS_SECRET: LOCAL_OPS_JOBS_SECRET,
   };
   // A name in another letter case beside its all-capitals form (a parent's
   // "Kyc_Provider" next to KYC_PROVIDER) is dropped, so the copy's value wins.
@@ -123,6 +138,8 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
   assertLocalFoundationTarget({ apiUrl: status.apiUrl, env });
   if (new URL(env.OTP_RATE_LIMITER_URL).hostname !== "127.0.0.1")
     throw new Error("Foundation test copy refused: the rate limiter must stay local");
+  if (new URL(env.RESEND_BASE_URL).hostname !== "127.0.0.1")
+    throw new Error("Foundation test copy refused: website emails must stay local");
   return env;
 }
 

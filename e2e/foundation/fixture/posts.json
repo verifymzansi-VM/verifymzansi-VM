@@ -1,5 +1,5 @@
 {
-  "$comment": "Synthetic showroom posts seeded into the local foundation test copy (M0.7). Owned by verifiedMember (the verified intro trial funds one business post; events are free), published through the real submit, queue claim and moderation commands. Titles start with 'Fixture' so specs can find them.",
+  "$comment": "Synthetic showroom posts seeded into the local foundation test copy (M0.7). Owned by verifiedMember (the verified intro trial funds one business post; events are free), published through the real submit, queue claim and moderation commands. Titles start with 'Fixture' so specs can find them. Events default to the enquiry form only; contactChannels overrides that (the craft market also offers a call, so visitors can reveal the seller's number, M0.9a).",
   "posts": [
     {
       "key": "workshop",
@@ -22,7 +22,8 @@
       "provinceId": "gp",
       "cityId": "gp_johannesburg",
       "colour": "#c9a227",
-      "durationDays": 14
+      "durationDays": 14,
+      "contactChannels": ["call", "form"]
     },
     {
       "key": "festival",
