@@ -41,6 +41,61 @@ jobs:
             tmp/cloudflare-runtime/latest.json
             .open-next/build-fingerprint.json
 
+  # Rebuilds the production (foundation) schema from database/foundation in an
+  # embedded Postgres, compares its fingerprint with fingerprint.json, checks
+  # the committed readable snapshot (database/foundation/current) and the API
+  # manifests and runtime types against it.
+  foundation-replay:
+    name: foundation-replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Replay the foundation schema and compare its fingerprint
+        run: pnpm db:foundation:replay
+      - name: Regenerate the readable schema snapshot (database/foundation/current)
+        run: pnpm db:foundation:snapshot
+      - name: Fail when the committed snapshot is out of date
+        run: |
+          git diff --exit-code -- database/foundation/current
+          untracked="$(git status --porcelain --untracked-files=all -- database/foundation/current)"
+          if [ -n "$untracked" ]; then
+            echo "::error::database/foundation/current is out of date; run pnpm db:foundation:snapshot and commit it."
+            echo "$untracked"
+            exit 1
+          fi
+      - name: Check the API manifests and runtime types against the replay
+        run: pnpm db:foundation:api-check
+
+  # plpgsql_check over every plpgsql function of the replayed schema, in a
+  # throwaway network-less Postgres 17 container (the Supabase image that ships
+  # plpgsql_check). Fails on any error not reviewed in lint-baseline.json and on
+  # more warnings than the baseline.
+  foundation-sql-lint:
+    name: foundation-sql-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Pull the pinned Postgres image
+        run: docker pull "$(node -e "import('./scripts/lib/foundation-sql-lint.mjs').then((m) => console.log(m.LINT_IMAGE))")"
+      - name: Lint the replayed foundation SQL with plpgsql_check
+        run: pnpm db:foundation:lint
+
   lint-type-security:
     runs-on: ubuntu-latest
     steps:
@@ -221,6 +276,10 @@ jobs:
       - name: Verify built Worker startup in workerd
         timeout-minutes: 5
         run: pnpm test:cloudflare:startup
+      # Cloudflare refuses a compressed Worker over 10 MB; stay under 9.5 MB.
+      - name: Worker size budget
+        timeout-minutes: 5
+        run: pnpm check:worker-size
       - name: Verify critical payment routes in build
         run: |
           echo "Checking critical addon/payment routes exist in build output..."

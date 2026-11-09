@@ -1,23 +1,29 @@
+# Owners are informational: the ruleset does not require code-owner review,
+# because the owner opens and merges pull requests from the same account.
 # Default owner for all files
-* @verifymzansi-a11y
+* @verifymzansi-VM
 
 # Auth & security — require review for any auth changes
-/src/app/api/auth/ @verifymzansi-a11y
-/src/middleware.ts @verifymzansi-a11y
-/src/hooks/use-auth.ts @verifymzansi-a11y
+/src/app/api/auth/ @verifymzansi-VM
+/src/middleware.ts @verifymzansi-VM
+/src/hooks/use-auth.ts @verifymzansi-VM
 
 # KYC verification pipeline — sensitive, POPIA-regulated
-/src/lib/services/kyc-engine.ts @verifymzansi-a11y
-/src/app/api/kyc/ @verifymzansi-a11y
-/supabase/migrations/ @verifymzansi-a11y
+/src/lib/services/kyc-engine.ts @verifymzansi-VM
+/src/app/api/kyc/ @verifymzansi-VM
+/supabase/migrations/ @verifymzansi-VM
+
+# Foundation backend (live) — database updates and server adapters
+/database/foundation/ @verifymzansi-VM
+/src/lib/foundation/ @verifymzansi-VM
 
 # Payments — financial transactions
-/src/app/api/webhooks/ozow/ @verifymzansi-a11y
-/src/lib/payments/ @verifymzansi-a11y
+/src/app/api/webhooks/ozow/ @verifymzansi-VM
+/src/lib/payments/ @verifymzansi-VM
 
 # Infrastructure — deployment & CI
-/.github/ @verifymzansi-a11y
-/wrangler*.toml @verifymzansi-a11y
+/.github/ @verifymzansi-VM
+/wrangler*.toml @verifymzansi-VM
 
 # Storage — file handling & encryption
-/src/lib/services/storage.ts @verifymzansi-a11y
+/src/lib/services/storage.ts @verifymzansi-VM
