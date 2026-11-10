@@ -1470,6 +1470,12 @@ try {
       assert.equal(waits(listing), true);
       q(service(`select api.grant_verified_intro_trial('${lindi.id}',7);`));
       const [granted] = trials(lindi);
+      // A running trial is what the member sees, even while a post still waits.
+      assert.deepEqual(freeWeek(lindi), {
+        status: "running",
+        starts_at: granted.starts_at,
+        ends_at: granted.ends_at,
+      });
       assert.equal(json(decide(listing, "approve")).status, "live");
       assert.equal(trials(lindi).length, 1, "no second trial");
       assert.equal(openActivation(listing), granted.id);
