@@ -4,7 +4,8 @@
 // clock, kept event submissions) and 20261109104020_post_expiry_rules.sql
 // (3-day grace, sold and paused posts keep their slot, events deleted at
 // their end, late-payment extension, cutover dates, owner reads with the
-// deletion date).
+// deletion date), and 20261109224337_fix_post_command_target.sql (saving an
+// edit of an existing event).
 //
 // Replays database/foundation (prelude, candidate.sql, every update) into the
 // throwaway, network-less Postgres 17 container used by the SQL lint gate,
@@ -27,8 +28,8 @@
 // directly (moderation has its own suites), and the time a rule waits for is
 // simulated by moving a post's clock columns back. The only stand-in is
 // internal.current_verified_identity (identity review is covered by its own
-// suites), replaced after the updates so submissions and reactivation reach
-// the posting rules.
+// suites), replaced after the posting terms update (the later updates do not
+// define it) so submissions and reactivation reach the posting rules.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -40,6 +41,7 @@ import { buildRestoredPostInput } from "../src/lib/foundation/restored-post-inpu
 const GUARDS = "20261109073519_post_lifecycle_guards.sql";
 const RULES = "20261109104020_post_expiry_rules.sql";
 const TERMS_V3 = "20261109173012_posting_terms_v3.sql";
+const TARGET_FIX = "20261109224337_fix_post_command_target.sql";
 const companion = (folder, update, suffix) =>
   readFileSync(`database/foundation/${folder}/${update.replace(/\.sql$/, suffix)}`, "utf8");
 const GUARDS_PREFLIGHT = companion("preflight", GUARDS, ".check.sql");
@@ -48,6 +50,8 @@ const RULES_PREFLIGHT = companion("preflight", RULES, ".check.sql");
 const RULES_ROLLBACK = companion("rollback", RULES, ".down.sql");
 const TERMS_V3_PREFLIGHT = companion("preflight", TERMS_V3, ".check.sql");
 const TERMS_V3_ROLLBACK = companion("rollback", TERMS_V3, ".down.sql");
+const TARGET_FIX_PREFLIGHT = companion("preflight", TARGET_FIX, ".check.sql");
+const TARGET_FIX_ROLLBACK = companion("rollback", TARGET_FIX, ".down.sql");
 const CATALOGUE = JSON.parse(readFileSync("src/lib/legal/terms-documents/catalogue.json", "utf8"));
 const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const TERMS = {
@@ -249,30 +253,25 @@ try {
     fikile = user("fikile"), // concurrent events owner
     gugu = user("gugu"); // concurrency hold owner
 
-  // Edits: the restored listing form's edit payload, staged by the server and
-  // consumed by the owner, exactly as the website does.
-  const edit = (owner, id) => {
+  // Edits: the restored form's edit payload for the post's own cover, staged
+  // by the server with the target post and consumed by the owner, exactly as
+  // the website does (src/lib/foundation/restored-post-route.ts).
+  const stageEdit = (owner, collection, id, fields) => {
     const p = row(id);
     const cover = scalar(
       `select object_id from private.post_media where post_id='${id}' and purpose='cover';`
     );
     const request = randomUUID();
     const input = buildRestoredPostInput(
-      "listings",
+      collection,
       {
         postRequestId: request,
         postingTerms: TERMS,
         expectedRevision: p.revision,
-        title: "Edited fixture listing",
-        description: "An edited synthetic description long enough for every rule.",
-        price_zar: 150,
-        category: "other_items",
-        attributes: {},
-        condition: "good",
         province: "Gauteng",
         city: "Johannesburg",
         images: [`https://media.verifymzansi.com/media/${cover}`],
-        contactMethods: ["form"],
+        ...fields,
       },
       undefined,
       true
@@ -291,8 +290,36 @@ try {
         `select api.stage_frontend_post_command('${owner.id}','${request}','${digest}',$payload$${JSON.stringify(bound)}$payload$::jsonb);`
       )
     );
-    return json(member(owner, `select api.consume_frontend_post_command('${request}');`));
+    return request;
   };
+  const consume = (owner, request) =>
+    member(owner, `select api.consume_frontend_post_command('${request}');`);
+  const edit = (owner, id) =>
+    json(
+      consume(
+        owner,
+        stageEdit(owner, "listings", id, {
+          title: "Edited fixture listing",
+          description: "An edited synthetic description long enough for every rule.",
+          price_zar: 150,
+          category: "other_items",
+          attributes: {},
+          condition: "good",
+          contactMethods: ["form"],
+        })
+      )
+    );
+  // The restored event form's edit with a new event window.
+  const eventEdit = (owner, id, window) =>
+    stageEdit(owner, "promotions", id, {
+      title: "Edited fixture event",
+      description: "An edited synthetic event description long enough for every rule.",
+      promotion_type: "event",
+      contact_methods: ["form"],
+      start_date: window.starts_at,
+      end_date: window.ends_at,
+      event_details: { event_type: row(id).activity_key },
+    });
 
   // ------------------------------------- state before the lifecycle guards
   const expiredListing = post(alice, "listing", "expired", 10, 12);
@@ -621,8 +648,10 @@ try {
   const cutover = scalar(
     "select max(deletes_at)-interval '3 days' from private.posts where status in('expired','sold','archived');"
   );
-  applySteps(database, steps.slice(rulesIndex + 1));
-  console.log(`Applied ${GUARDS}, ${RULES} and any later updates.`);
+  const fixIndex = steps.findIndex((step) => step.label === TARGET_FIX);
+  assert.ok(fixIndex > rulesIndex, `${TARGET_FIX} is missing`);
+  applySteps(database, steps.slice(rulesIndex + 1, fixIndex));
+  console.log(`Applied ${GUARDS}, ${RULES} and the updates before ${TARGET_FIX}.`);
   await check("posting terms v3: current after the expiry rules, rollback and re-apply", () => {
     const termsStep = steps.find((step) => step.label === TERMS_V3);
     assert.ok(termsStep && steps.indexOf(termsStep) > rulesIndex, `${TERMS_V3} is missing`);
@@ -662,6 +691,185 @@ try {
   q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
       language sql set search_path=pg_catalog as $$
       select 'fixture-identity'::text where exists(select 1 from private.current_account_access a where a.id=p_owner) $$;`);
+
+  // ------------------------------------ post commands with a target post
+  // Event edits carry target_id and reach the event window branch of
+  // internal.consume_frontend_post_command, which the fix corrects.
+  const fixStep = steps[fixIndex];
+  const nandi = user("nandi"); // event edit owner
+  const targetDraft = post(nandi, "event", "draft");
+  const targetPaused = post(nandi, "event", "paused");
+  const targetRejected = post(nandi, "event", "rejected", 0, 1);
+  const targetLive = post(nandi, "event", "live");
+  const DAY = 24 * 60 * 60 * 1000;
+  const eventWindow = (days) => ({
+    starts_at: new Date(Date.now() + days * DAY).toISOString(),
+    ends_at: new Date(Date.now() + (days + 1) * DAY).toISOString(),
+    timezone: "Africa/Johannesburg",
+  });
+  const savedWindow = (id) =>
+    json(
+      `select jsonb_build_object('starts_at',to_char(starts_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'ends_at',to_char(ends_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'timezone',timezone) from private.event_details where post_id='${id}';`
+    );
+  const fixPreflight = () => preflight(TARGET_FIX_PREFLIGHT);
+  const refusedEdit = (request) => {
+    const stderr = fails(consume(nandi, request), "42725");
+    assert.match(stderr, /operator is not unique: unknown - unknown/);
+  };
+  const BUGGY = "3a2351c232554b060e0c7dd49bd3c7e3";
+  const FIXED = "48f301b07ef97551cc810c17c4512283";
+  const commandBody = () =>
+    scalar(
+      "select md5(replace(prosrc,E'\\r\\n',E'\\n')) from pg_proc where oid='internal.consume_frontend_post_command(uuid)'::regprocedure;"
+    );
+  const staleWindow = eventWindow(32);
+  let staleRequest;
+
+  await check("post command target: before the fix, every event edit fails with 42725", () => {
+    assert.equal(commandBody(), BUGGY);
+    for (const id of [targetDraft, targetPaused, targetRejected, targetLive]) {
+      const before = row(id);
+      refusedEdit(eventEdit(nandi, id, eventWindow(30)));
+      assert.deepEqual(row(id), before, "a refused edit changes nothing");
+    }
+    assert.equal(count(`select 1 from private.posts where edit_of='${targetLive}'`), 0);
+    staleRequest = eventEdit(nandi, targetDraft, staleWindow);
+    refusedEdit(staleRequest);
+    // A listing edit carries target_id too, but never reaches the event branch.
+    assert.equal(edit(alice, post(alice, "listing", "draft")).status, "draft");
+  });
+  await check(
+    "post command target preflight: read only, summary only, counts refused edits",
+    () => {
+      const rows = fixPreflight();
+      assert.deepEqual(
+        rows.map((r) => r[0]),
+        ["summary"],
+        JSON.stringify(rows)
+      );
+      assert.match(
+        rows[0][1],
+        /reviewed live body, fix not applied; unexpired event edits without a result: 5$/
+      );
+      const write = database.psql(
+        `${TARGET_FIX_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
+        ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
+      );
+      assert.notEqual(write.status, 0);
+      assert.match(write.stderr, /ERROR:\s+25006:/);
+    }
+  );
+  await check("post command target: drift and a premature rollback are refused", () => {
+    const before = fingerprint();
+    // The rollback needs the fixed body.
+    const early = fails(TARGET_FIX_ROLLBACK, "55000");
+    assert.match(early, /rollback precondition/);
+    assert.equal(fingerprint(), before);
+    // Any other body: the preflight reports it and the update refuses it.
+    const live = q(
+      "select pg_get_functiondef('internal.consume_frontend_post_command(uuid)'::regprocedure);"
+    );
+    q(
+      `do $$begin execute replace(pg_get_functiondef('internal.consume_frontend_post_command(uuid)'::regprocedure),'end$function$','end;$function$'); end$$;`
+    );
+    assert.notEqual(commandBody(), BUGGY);
+    const rows = fixPreflight();
+    assert.equal(rows.length, 2, JSON.stringify(rows));
+    assert.match(rows[1][1], /is not the reviewed body/);
+    const refusedUpdate = fails(fixStep.sql, "55000");
+    assert.match(refusedUpdate, /post command drift/);
+    q(`${live};`);
+    assert.equal(commandBody(), BUGGY);
+    assert.equal(fingerprint(), before);
+  });
+
+  const fixBefore = fingerprint();
+  applySteps(database, [fixStep]);
+  const fixAfter = fingerprint();
+  await check("post command target: apply, roll back and apply again are clean", () => {
+    assert.notEqual(fixAfter, fixBefore);
+    assert.equal(commandBody(), FIXED);
+    assert.match(fixPreflight()[0][1], /already fixed/);
+    applySteps(database, [{ label: "post command target rollback", sql: TARGET_FIX_ROLLBACK }]);
+    assert.equal(fingerprint(), fixBefore, "the rollback leaves the pre-update schema");
+    assert.equal(commandBody(), BUGGY);
+    refusedEdit(eventEdit(nandi, targetDraft, eventWindow(30)));
+    applySteps(database, [fixStep]);
+    assert.equal(fingerprint(), fixAfter, "re-applying gives the same schema");
+    applySteps(database, [fixStep]);
+    assert.equal(fingerprint(), fixAfter, "a repeated run changes nothing");
+  });
+  await check(
+    "post command target: a refused edit sent again before it expires is saved once",
+    () => {
+      // Staged before the update; the rollback check refused one more.
+      assert.match(
+        fixPreflight()[0][1],
+        /already fixed; unexpired event edits without a result: 6$/
+      );
+      const answer = json(consume(nandi, staleRequest));
+      assert.equal(answer.id, targetDraft);
+      assert.equal(answer.status, "draft");
+      assert.deepEqual(savedWindow(targetDraft), staleWindow);
+      assert.deepEqual(json(consume(nandi, staleRequest)), answer, "the receipt is replayed");
+      assert.match(
+        fixPreflight()[0][1],
+        /already fixed; unexpired event edits without a result: 5$/
+      );
+    }
+  );
+  await check(
+    "post command target: after the fix, non-live event edits save the new window",
+    () => {
+      for (const [id, status] of [
+        [targetDraft, "draft"],
+        [targetPaused, "paused"],
+        [targetRejected, "rejected"],
+      ]) {
+        const window = eventWindow(40);
+        const before = row(id);
+        const answer = json(consume(nandi, eventEdit(nandi, id, window)));
+        assert.equal(answer.id, id);
+        assert.equal(answer.original_id, id);
+        assert.equal(answer.edit_of, null);
+        assert.equal(answer.status, status);
+        assert.ok(answer.revision > before.revision);
+        assert.equal(row(id).status, status);
+        assert.deepEqual(savedWindow(id), window);
+        assert.equal(
+          scalar(`select title from private.posts where id='${id}';`),
+          "Edited fixture event"
+        );
+        assert.equal(
+          scalar(
+            `select array_to_string(channels,',') from private.post_contacts where post_id='${id}';`
+          ),
+          "form"
+        );
+      }
+    }
+  );
+  await check(
+    "post command target: a live event edit becomes a review copy, the original stays live",
+    () => {
+      const window = eventWindow(45);
+      const original = savedWindow(targetLive);
+      const answer = json(consume(nandi, eventEdit(nandi, targetLive, window)));
+      assert.equal(answer.original_id, targetLive);
+      assert.equal(answer.edit_of, targetLive);
+      assert.notEqual(answer.id, targetLive);
+      assert.equal(answer.status, "pending_moderation");
+      assert.equal(row(targetLive).status, "live");
+      assert.deepEqual(
+        savedWindow(targetLive),
+        original,
+        "the public event is unchanged until review"
+      );
+      assert.deepEqual(savedWindow(answer.id), window);
+    }
+  );
+  applySteps(database, steps.slice(fixIndex + 1));
+  console.log(`Applied ${TARGET_FIX} and any later updates.`);
 
   // ----------------------------------------------------- cutover safety
   const endedRows = () =>
