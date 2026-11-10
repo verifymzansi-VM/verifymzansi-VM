@@ -64,14 +64,25 @@ try {
     (await (await app.fetch("https://fixture.invalid/snapshot")).json()).received,
     []
   );
-  for (const [name] of cases)
-    await server
+  for (const [name] of cases) {
+    const result = await server
       .getWorker("vm-companion-" + name)
       .scheduled({ cron: "test", scheduledTime: new Date() });
+    assert.equal(result.outcome, "ok", `${name} succeeded`);
+  }
   const snapshot = await (await app.fetch("https://fixture.invalid/snapshot")).json();
   assert.deepEqual(snapshot.received.sort(), cases.map(([, endpoint]) => endpoint).sort());
+  // A job the app could not complete must fail the scheduled run, so the
+  // platform records it, rather than being logged and reported as success.
+  await app.fetch("https://fixture.invalid/fail", { method: "POST" });
+  for (const [name] of cases) {
+    const result = await server
+      .getWorker("vm-companion-" + name)
+      .scheduled({ cron: "test", scheduledTime: new Date() });
+    assert.equal(result.outcome, "exception", `${name} reports a failed run`);
+  }
   console.log(
-    "Companion workerd PASS: all three scheduled jobs use service bindings and scoped keys; unauthorized manual triggers execute nothing."
+    "Companion workerd PASS: all three scheduled jobs use service bindings and scoped keys; failed app jobs fail the scheduled run; unauthorized manual triggers execute nothing."
   );
 } catch (error) {
   server.debug();

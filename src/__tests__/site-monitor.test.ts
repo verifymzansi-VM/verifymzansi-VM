@@ -1,7 +1,11 @@
 /** @vitest-environment node */
 import { beforeEach, expect, it, vi } from "vitest";
 import worker from "../../workers/site-monitor";
-import { isCloudflareChallenge } from "../../scripts/lib/public-edge";
+import {
+  classifyPublicEdge,
+  isCloudflareChallenge,
+  publicEdgeReport,
+} from "../../scripts/lib/public-edge";
 import { checkSiteMonitorHomepage, siteMonitorTransport } from "../../scripts/lib/site-monitor";
 
 const key = "synthetic-site-monitor-credential-only-".repeat(2);
@@ -183,4 +187,36 @@ it("distinguishes a real edge challenge from ordinary app errors and injected JS
   expect(
     isCloudflareChallenge(403, new Headers(), '<div id="cf-error-details">Blocked</div>')
   ).toBe(false);
+});
+
+it("treats a Cloudflare challenge as inconclusive, never as a pass", () => {
+  const ray = { "cf-ray": "synthetic-ray" };
+  const page = '<script src="https://gntzjtuncsyefujajmjy.supabase.co"></script>';
+  expect(classifyPublicEdge(200, new Headers(ray), page)).toBe("pass");
+  for (const [status, headers, body] of [
+    [403, { ...ray, "cf-mitigated": "challenge" }, ""],
+    [503, { ...ray, "cf-mitigated": "challenge" }, page],
+    [403, ray, "<title>Just a moment...</title><script>window._cf_chl_opt={}</script>"],
+    [403, ray, '<div id="cf-error-details">Blocked</div>'],
+  ] as const) {
+    expect(classifyPublicEdge(status, new Headers(headers), body)).toBe("inconclusive");
+    const report = publicEdgeReport("inconclusive", status);
+    expect(report.line).toMatch(/^::warning .*INCONCLUSIVE.*not a pass/);
+    expect(report.summary).toMatch(/INCONCLUSIVE.*not a pass/);
+    expect(report.line).not.toMatch(/PASS:/);
+  }
+  // Ordinary errors, a missing challenge marker or the retired backend fail.
+  for (const [status, headers, body] of [
+    [403, ray, '{"error":"Forbidden"}'],
+    [503, {}, '<div id="cf-error-details">Blocked</div>'],
+    [500, ray, page],
+    [200, ray, "<html>no backend marker</html>"],
+    [200, ray, page + "tnygdgormnofpgjknlhr"],
+  ] as const)
+    expect(classifyPublicEdge(status, new Headers(headers), body)).toBe("fail");
+  expect(publicEdgeReport("fail", 500)).toMatchObject({ exitCode: 1 });
+  expect(publicEdgeReport("pass", 200)).toMatchObject({
+    exitCode: 0,
+    summary: "Public edge: PASS",
+  });
 });

@@ -1,6 +1,7 @@
 import { runAuthorizedWorkerTrigger } from "./manual-trigger";
 import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects";
 import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
+import { sendHeartbeat } from "./heartbeat";
 
 import { supabaseServiceHeaders } from "./supabase-headers";
 import type { ScheduledWorker } from "./handler-types";
@@ -157,10 +158,16 @@ async function createNotification(
   return true;
 }
 
-const worker: ScheduledWorker<Env | FoundationJobEnv> = {
-  async scheduled(_event, env) {
+type FoundationEnv = FoundationJobEnv & { HEARTBEAT_URL_PAYMENT_CLEANUP?: string };
+
+const worker: ScheduledWorker<Env | FoundationEnv> = {
+  async scheduled(event, env) {
     if (env.DATA_BACKEND === "foundation") {
+      // Throws on any failure, so Cloudflare marks the run failed and no
+      // heartbeat is sent. Manual runs do not count as the schedule firing.
       await triggerFoundationJob(env, "/api/internal/payments/reconcile");
+      if (event.cron !== "manual")
+        await sendHeartbeat("payment-cleanup", env.HEARTBEAT_URL_PAYMENT_CLEANUP);
       return;
     }
     if (env.APP_URL) {
