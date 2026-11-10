@@ -89,7 +89,7 @@ describe("POST /api/webhooks/ops-jobs", () => {
     });
     const res = await POST(request(`Bearer ${SECRET}`));
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ succeeded: 25 });
+    await expect(res.json()).resolves.toEqual({ claimed: 25, succeeded: 25, retrying: 0 });
     expect(runOperationJobs).not.toHaveBeenCalled();
   });
 });

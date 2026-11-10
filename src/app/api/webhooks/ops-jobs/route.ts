@@ -33,11 +33,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const summary =
-      getDataBackend() === "foundation"
-        ? await runFoundationOperationJobs()
-        : await runOperationJobs(20);
-    return NextResponse.json(summary);
+    if (getDataBackend() !== "foundation") return NextResponse.json(await runOperationJobs(20));
+    // The answer keeps its earlier shape; lost emails and failed steps are logged.
+    const { claimed, succeeded, retrying } = await runFoundationOperationJobs();
+    return NextResponse.json({ claimed, succeeded, retrying });
   } catch (err) {
     // Every step has already run; name the failed ones for the logs.
     log.error("Operation job run failed", {
