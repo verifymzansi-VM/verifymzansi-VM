@@ -58,29 +58,34 @@ function refusedNewerKinds(error: { code?: string; message?: string } | null) {
 export const OUTBOX_FINAL_ATTEMPT = 8;
 /** Messages sent per run: 100 queued messages go out within five runs. */
 export const OUTBOX_RUN_LIMIT = 25;
-// Claimed a few at a time so every claimed message is sent well inside its
-// 90-second lease; one at a time once a send has been slow.
-const CLAIM_CHUNK = 5;
-const SLOW_SEND_MS = 3_000;
 const PRIVACY_RUN_LIMIT = 5;
-// The worker gives up on the request after 50 seconds. Everything here aims to
-// finish within 47 s: database calls are cut off at that point. A send
-// (outbox, privacy notice or staff alert) starts only while a worst-case send
-// and its completion still fit: three 8-second provider attempts with 1 s and
-// 2 s backoff, pacing, and 3 s to record the outcome. That means no new send
-// after 16 s, and no new claim after 13 s, so what a claim returns can still
-// be sent.
-const RUN_DEADLINE_MS = 47_000;
+// A claim uses up one of a message's eight attempts, and giving a message
+// back does not return it. So messages are claimed one at a time, only while
+// a worst-case send still fits, and each is sent straight away. The next claim
+// runs while the previous outcome is being recorded.
+//
+// The worker allows 50 s from its own start, which also covers dispatch, cold
+// start and middleware before this code runs, so the run aims to end within
+// 44 s. Database calls are cut off then. A send (queued email, privacy notice
+// or staff alert) starts only while a worst-case send and the record of its
+// outcome still fit: three 8-second provider attempts with 1 s and 2 s backoff,
+// pacing, and 3 s to record the outcome. That means no new send after 13 s.
+const RUN_DEADLINE_MS = 44_000;
 const SEND_BUDGET_MS = 31_000;
-const CLAIM_BUDGET_MS = 34_000;
-// Lost messages are reported as they are found; at most this many alert
-// emails go out in one run.
-const MAX_ALERTS_PER_RUN = 2;
+// A claim starts only with at least twice this much of the send window left
+// and is cut off this long before the window closes, so what it returns can
+// still be sent.
+const CLAIM_MARGIN_MS = 500;
 // A send needs this much lease left, or another run could claim the message
 // while it is still being sent.
-const LEASE_RESERVE_MS = 30_000;
+const LEASE_RESERVE_MS = SEND_BUDGET_MS;
 // The email provider's default limit is two requests a second.
 const SEND_SPACING_MS = 500;
+// The first lost message is reported at once; later ones are collected and
+// reported at the end of the email batch, or when this little of the send
+// window is left. At most two alert emails go out in one run.
+const ALERT_RESERVE_MS = 2_000;
+const MAX_ALERTS_PER_RUN = 2;
 
 const SWEEPS = [
   ["run_post_lifecycle", { p_limit: 100 }],
@@ -122,7 +127,7 @@ type Delivery = (
   key: string,
   reason?: string,
   details?: PostLifecycleDetails
-) => Promise<{ success: boolean }>;
+) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
 type RpcResult = { data: unknown; error: { code?: string; message?: string } | null };
 type StaffAlert = (lost: Array<{ id: string; kind: string }>) => Promise<{ success: boolean }>;
 export interface OperationJobOptions {
@@ -158,8 +163,7 @@ export async function runFoundationOperationJobs(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const alertStaff = options.alertStaff ?? sendOutboxFinalFailureAlert;
-  const started = now();
-  const deadline = started + RUN_DEADLINE_MS;
+  const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
   const lost: Array<{ id: string; kind: string }> = [];
@@ -171,10 +175,17 @@ export async function runFoundationOperationJobs(
     // Logged at once, so the record survives even if the run is cut off.
     log.error("Queued email reached its last attempt", { kind, id });
   };
-  const timeToSend = () => deadline - now() >= SEND_BUDGET_MS;
-  const timeToClaim = () => deadline - now() >= CLAIM_BUDGET_MS;
+  // Time left before the last moment a send may start.
+  const windowLeft = () => deadline - SEND_BUDGET_MS - now();
+  const timeToSend = () => windowLeft() >= 0;
+  const timeToClaim = () => windowLeft() >= 2 * CLAIM_MARGIN_MS;
   const runSignal = () => AbortSignal.timeout(Math.max(1, deadline - now()));
-  const call = async (name: string, args: Record<string, unknown>): Promise<RpcResult> => {
+  const claimSignal = () => AbortSignal.timeout(Math.max(1, windowLeft() - CLAIM_MARGIN_MS));
+  const call = async (
+    name: string,
+    args: Record<string, unknown>,
+    signal: () => AbortSignal = runSignal
+  ): Promise<RpcResult> => {
     try {
       // Typed per command elsewhere; the job only needs data and error.
       const rpc = service.rpc as unknown as (n: string, a: unknown) => PromiseLike<RpcResult>;
@@ -182,7 +193,7 @@ export async function runFoundationOperationJobs(
         abortSignal?: (signal: AbortSignal) => PromiseLike<RpcResult>;
       };
       return await (typeof request.abortSignal === "function"
-        ? request.abortSignal(runSignal())
+        ? request.abortSignal(signal())
         : request);
     } catch {
       return { data: null, error: { message: "request failed" } };
@@ -209,22 +220,16 @@ export async function runFoundationOperationJobs(
 
   const isFinal = (attempts: unknown) =>
     typeof attempts === "number" && attempts >= OUTBOX_FINAL_ATTEMPT;
-  const rowIsFinal = (row: unknown) => isFinal(jobIdentity.safeParse(row).data?.attempts);
 
   let otherList: Kind[] = otherKinds;
-  const claim = async (step: string, kinds: Kind[], limit: number) => {
-    let result = await call("claim_supported_notification_outbox", {
-      p_limit: limit,
-      p_supported_kinds: kinds,
-    });
+  const claim = async (step: string, kinds: Kind[]) => {
+    const args = (list: Kind[]) => ({ p_limit: 1, p_supported_kinds: list });
+    let result = await call("claim_supported_notification_outbox", args(kinds), claimSignal);
     if (kinds === otherList && refusedNewerKinds(result.error)) {
       otherList = otherKinds.filter((k) => !laterKinds.has(k));
-      result = await call("claim_supported_notification_outbox", {
-        p_limit: limit,
-        p_supported_kinds: otherList,
-      });
+      result = await call("claim_supported_notification_outbox", args(otherList), claimSignal);
     }
-    const rows = z.array(z.unknown()).max(limit).safeParse(result.data);
+    const rows = z.array(z.unknown()).max(1).safeParse(result.data);
     if (result.error || !rows.success) {
       fail(step);
       return null;
@@ -232,11 +237,9 @@ export async function runFoundationOperationJobs(
     return rows.data;
   };
 
-  let slow = false;
-  // Average time to send and record one message in this run, to size claims.
-  let rowMs = 0;
-  let rowsTimed = 0;
-  const handle = async (raw: unknown) => {
+  // `onSent` runs once a message has been handed to the provider, before its
+  // outcome is recorded, with whether the message is now lost.
+  const handle = async (raw: unknown, onSent: (lostNow: boolean) => void) => {
     summary.claimed++;
     const parsed = jobSchema.safeParse(raw);
     if (!parsed.success) {
@@ -257,8 +260,8 @@ export async function runFoundationOperationJobs(
     // An expired lease may already belong to another run: never send or acknowledge it.
     if (leaseLeft <= 0) return giveUp();
     if (job.recipient && (leaseLeft < LEASE_RESERVE_MS || !timeToSend())) {
-      // Too late to send safely in this run. Give the message back with the
-      // usual retry delay rather than leave it locked.
+      // Should not happen with one-at-a-time claims; if it does, give the
+      // message back with the usual retry delay rather than send it late.
       const back = await call("complete_notification_outbox", {
         p_id: job.id,
         p_claim: job.claim_token,
@@ -269,51 +272,55 @@ export async function runFoundationOperationJobs(
       return giveUp();
     }
     let success = job.recipient === null;
-    let sendStarted: number | null = null;
+    // The provider refused a repeat of an earlier request with the same key:
+    // that earlier request may have been delivered.
+    let unknown = false;
     if (job.recipient) {
       const recipient = job.recipient;
       const key = `foundation-outbox/${job.id}`;
       try {
-        success = (
-          await paced(() =>
-            job.kind === "account_warning" && job.notice_reason
-              ? deliver(recipient, job.kind, key, job.notice_reason)
-              : lifecycleKinds.has(job.kind)
-                ? deliver(recipient, job.kind, key, undefined, {
-                    deletesAt: job.deletes_at ?? null,
-                    holdsSlot: job.holds_slot ?? null,
-                  })
-                : deliver(recipient, job.kind, key)
-          )
-        ).success;
+        const result = await paced(() =>
+          job.kind === "account_warning" && job.notice_reason
+            ? deliver(recipient, job.kind, key, job.notice_reason)
+            : lifecycleKinds.has(job.kind)
+              ? deliver(recipient, job.kind, key, undefined, {
+                  deletesAt: job.deletes_at ?? null,
+                  holdsSlot: job.holds_slot ?? null,
+                })
+              : deliver(recipient, job.kind, key)
+        );
+        success = result.success;
+        unknown = !success && result.outcomeUnknown === true;
       } catch {
         success = false;
       }
-      if (now() - lastSend > SLOW_SEND_MS) slow = true;
-      sendStarted = lastSend;
+      onSent(!success && !unknown && isFinal(job.attempts));
     }
     const done = await call("complete_notification_outbox", {
       p_id: job.id,
       p_claim: job.claim_token,
       p_ok: success,
-      p_error: success ? undefined : "delivery_failed",
+      p_error: success ? undefined : unknown ? "outcome_unknown" : "delivery_failed",
     });
     // `false` means the lease was lost (retried later); an error means the
     // outcome could not be recorded at all.
     if (done.error) fail("outbox:complete");
-    if (sendStarted !== null) {
-      rowMs = (rowMs * rowsTimed + (now() - sendStarted)) / (rowsTimed + 1);
-      rowsTimed++;
-    }
     if (done.error || done.data !== true || !success) summary.retrying++;
     else summary.succeeded++;
-    if (!success && isFinal(job.attempts)) lose(job.id, job.kind);
+    if (!isFinal(job.attempts) || success) return;
+    if (unknown)
+      log.warn("Queued email outcome unknown at its last attempt", { kind: job.kind, id: job.id });
+    else lose(job.id, job.kind);
   };
 
-  // Reports lost messages once the last attempts of a claim are done, before
-  // any further send, while a worst-case alert send still fits in the run.
   let alertsSent = 0;
   let reported = 0;
+  const alertDue = () =>
+    reported < lost.length &&
+    alertsSent < MAX_ALERTS_PER_RUN &&
+    (alertsSent === 0 || windowLeft() < ALERT_RESERVE_MS);
+  // Sends one alert for the lost messages not yet reported, while a
+  // worst-case alert send still fits in the run.
   const alertLost = async () => {
     if (reported >= lost.length || alertsSent >= MAX_ALERTS_PER_RUN || !timeToSend()) return;
     const batch = lost.slice(reported);
@@ -330,24 +337,20 @@ export async function runFoundationOperationJobs(
 
   const outbox = async (step: string, kinds: () => Kind[], limit: number) => {
     let handled = 0;
-    while (handled < limit && timeToClaim()) {
-      // Claim only what can still be sent before the send cutoff at the
-      // speed seen so far, so claimed messages are not deferred.
-      const fits = rowsTimed
-        ? Math.floor((deadline - SEND_BUDGET_MS - now()) / Math.max(rowMs, SEND_SPACING_MS))
-        : CLAIM_CHUNK;
-      const want = Math.min(slow ? 1 : CLAIM_CHUNK, fits, limit - handled);
-      if (want < 1) break;
-      const rows = await claim(step, kinds(), want);
-      if (rows === null) break;
-      // Last attempts first, so time running out never costs a message its
-      // last try, and the alert for any of them goes out before the rest.
-      const finals = rows.filter(rowIsFinal);
-      for (const raw of finals) await handle(raw);
-      await alertLost();
-      for (const raw of rows.filter((row) => !rowIsFinal(row))) await handle(raw);
-      handled += rows.length;
-      if (rows.length < want) break;
+    const ahead: { claim: Promise<unknown[] | null> | null } = { claim: null };
+    while (handled < limit) {
+      if (!ahead.claim && alertDue()) await alertLost();
+      const pending = ahead.claim;
+      ahead.claim = null;
+      const rows = pending ? await pending : timeToClaim() ? await claim(step, kinds()) : null;
+      if (!rows?.length) break;
+      handled++;
+      await handle(rows[0], (lostNow) => {
+        // Claim the next message while this outcome is recorded, unless an
+        // alert has to go out first.
+        if (!lostNow && handled < limit && timeToClaim() && !alertDue())
+          ahead.claim = claim(step, kinds());
+      });
     }
     return handled;
   };
@@ -359,9 +362,12 @@ export async function runFoundationOperationJobs(
     for (let i = 0; i < PRIVACY_RUN_LIMIT && timeToClaim(); i++) {
       let privacy;
       try {
-        privacy = await paced(() =>
-          runFoundationPrivacyNotice(service, { signal: runSignal(), canSend: timeToSend })
-        );
+        privacy = await runFoundationPrivacyNotice(service, {
+          claimSignal: claimSignal(),
+          signal: runSignal(),
+          canSend: timeToSend,
+          pace: paced,
+        });
       } catch {
         fail("privacy_notice");
         break;
@@ -374,7 +380,8 @@ export async function runFoundationOperationJobs(
 
     await alertLost();
     summary.lost = lost.length;
-    // Lost messages that no alert could cover in time stay only in the log.
+    // Lost messages that no alert could cover in time stay only in the log
+    // and the database.
     if (reported < lost.length) fail("staff_alert");
   })();
 

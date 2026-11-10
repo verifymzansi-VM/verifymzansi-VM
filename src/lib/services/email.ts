@@ -201,6 +201,10 @@ interface SendEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /** The provider refused a repeat of an earlier request with the same key
+   * (still in progress, or sent with different content). That earlier request
+   * may have been delivered, so this is not a refusal of the email. */
+  outcomeUnknown?: boolean;
 }
 
 const EMAIL_MAX_RETRIES = 2;
@@ -227,6 +231,17 @@ function isRetryableProviderError(error: {
     ["rate_limit_exceeded", "internal_server_error", "application_error"].includes(
       error.name ?? ""
     ) || /rate.?limit|\b429\b|\b5\d{2}\b/i.test(error.message ?? "")
+  );
+}
+
+// HTTP 409 for an idempotency key that was already used: a retry after a
+// timeout while the first request is still in progress, or the same key with
+// different content (for example a lifecycle notice whose dates changed).
+function isRepeatedRequestError(error: { statusCode?: number | null; name?: string }): boolean {
+  return (
+    error.statusCode === 409 ||
+    error.name === "concurrent_idempotent_requests" ||
+    error.name === "invalid_idempotent_request"
   );
 }
 
@@ -278,6 +293,12 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
           });
           await new Promise((r) => setTimeout(r, backoff));
           continue;
+        }
+        if (isRepeatedRequestError(result.error)) {
+          log.warn("Resend refused a repeated request; outcome unknown", {
+            error: result.error.name,
+          });
+          return { success: false, error: result.error.message, outcomeUnknown: true };
         }
         log.error("Resend error", { error: result.error });
         return { success: false, error: result.error.message };

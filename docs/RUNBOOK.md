@@ -785,24 +785,44 @@ until the owner does those steps.
   `Operation job run failed` names the failed steps (for example
   `sweep:sweep_sponsorships`, `claim:payment`, `privacy_notice`, `staff_alert`).
 - **Queued emails** go out up to 25 a run: payment messages first, then
-  privacy-request notices (up to five), then every other kind. Messages are
-  claimed five at a time, one at a time after a slow send, and never more than
-  still fit before the send cutoff at the speed seen so far. The last attempts
-  in each claim go first, and sends are paced to the email provider's rate. The
-  run aims to end within 47 seconds: database calls are cut off then, no claim
-  starts after 13 seconds and no send (including the staff alert) after 16
-  seconds, so even a send that uses all its provider retries, and the record of
-  its outcome, end before the worker gives up at 50 seconds.
+  privacy-request notices (up to five), then every other kind. Every claim uses
+  up one of a message's eight attempts, so messages are claimed one at a time,
+  only while a worst-case send still fits, and each is sent straight away; the
+  next claim runs while the previous outcome is recorded. Sends are paced to the
+  email provider's rate. The worker gives the request 50 seconds from its own
+  start (including dispatch and start-up), so the run aims to end within 44
+  seconds: database calls are cut off then, and no claim or send (including the
+  staff alert) starts after 13 seconds. Even a send that uses all its provider
+  retries, and the record of its outcome, then end in time.
+- **Unknown outcome.** When the provider refuses a repeat of an earlier request
+  with the same key (still in progress, or sent with different content), the
+  earlier request may have been delivered. The message is recorded with the
+  error `outcome_unknown` and retried later; on its last attempt it is logged
+  (`Queued email outcome unknown at its last attempt`) but not reported as lost.
 - **Last attempt.** A queued email is tried at most eight times. When one fails
   on its eighth attempt, the run logs `Queued email reached its last attempt`
-  (kind and queue id only) straight away and, before sending the rest of its
-  claim, sends an alert to the support address listing the emails lost so far,
-  at most two alerts a run. A lost email that no alert covers (too late in the
-  run, or over the two-alert limit), or an alert that cannot be sent, fails the
-  run (`staff_alert`). The alert is not retried, and the database never hands
-  those emails out again, so the log line is the lasting record; with a
-  one-minute job and a five-minute heartbeat grace, one failed run does not page
-  anyone.
+  (kind and queue id only) straight away and, before any further send, emails
+  the support address. Later losses in the same run are collected into one more
+  alert at the end of the email batch (or when the send window is nearly over):
+  at most two alerts a run. A lost email that no alert covers, or an alert that
+  cannot be sent, fails the run (`staff_alert`). The alert is not retried, and
+  with a one-minute job and a five-minute heartbeat grace, one failed run does
+  not page anyone.
+- **Where lost emails stay.** The database never hands such an email out again
+  and never purges it (only delivered emails are deleted, 30 days after
+  delivery), so it stays in `private.outbox_events`. The owner can list them
+  read-only in the Supabase SQL editor for the London project:
+
+  ```sql
+  select id, kind, created_at, delivery_attempts, delivery_error
+  from private.outbox_events
+  where processed_at is null and delivery_attempts >= 8
+  order by created_at;
+  ```
+
+  `delivery_error` is `delivery_failed`, `deferred` or `outcome_unknown`. There
+  is no retry button yet; tell the account owner directly if the email mattered.
+
 - Known gap: an email that fails an earlier attempt is retried later and does
   not fail the run, and a storage object that could not be deleted yet does not
   either, so a lasting email outage shows only through the last-attempt alert
@@ -859,7 +879,8 @@ until the owner does those steps.
   Actions.
 - **Last-attempt email alert:** check the email provider's status page and
   sending limits, then the app Worker logs for
-  `Queued email reached its last attempt`. Those emails are not retried
+  `Queued email reached its last attempt`, and list every such email with the
+  read-only query under "Where lost emails stay". Those emails are not retried
   automatically; tell the affected account owners if the message mattered
   (payment messages first).
 

@@ -21,8 +21,9 @@ const notice = {
   reason: null,
 };
 const signals: Array<[string, AbortSignal]> = [];
-const rpc = vi.fn((name: string) => {
-  const result = Promise.resolve({
+type Answer = { data: unknown; error: { code: string } | null };
+const answer = (name: string) => {
+  const result: Promise<Answer> = Promise.resolve({
     data: name === "claim_frontend_privacy_notice" ? notice : true,
     error: null,
   });
@@ -32,10 +33,12 @@ const rpc = vi.fn((name: string) => {
       return result;
     },
   });
-});
+};
+const rpc = vi.fn<(name: string) => Promise<Answer> & { abortSignal: unknown }>(answer);
 const service = { rpc } as unknown as FoundationServiceApi;
 beforeEach(() => {
   vi.clearAllMocks();
+  rpc.mockImplementation(answer);
   signals.length = 0;
 });
 
@@ -59,6 +62,35 @@ it("gives a claimed notice back without sending when a send no longer fits", asy
     p_claim: notice.claim_token,
     p_delivered: false,
   });
+});
+
+it("claims with the claim limit and paces the send", async () => {
+  const claimSignal = new AbortController().signal;
+  const signal = new AbortController().signal;
+  let paced = 0;
+  const pace = <T>(send: () => Promise<T>) => {
+    paced++;
+    return send();
+  };
+  await runFoundationPrivacyNotice(service, { claimSignal, signal, pace });
+  expect(signals).toEqual([
+    ["claim_frontend_privacy_notice", claimSignal],
+    ["complete_frontend_privacy_notice", signal],
+  ]);
+  expect(paced).toBe(1);
+});
+
+it("reports an outcome that could not be recorded", async () => {
+  rpc.mockImplementation((name: string) => {
+    const result: Promise<Answer> = Promise.resolve(
+      name === "claim_frontend_privacy_notice"
+        ? { data: notice, error: null }
+        : { data: null, error: { code: "PGRST202" } }
+    );
+    return Object.assign(result, { abortSignal: () => result });
+  });
+  await expect(runFoundationPrivacyNotice(service)).rejects.toThrow("could not be recorded");
+  expect(sendDsarCompletedEmail).toHaveBeenCalledOnce();
 });
 
 it("keeps working without run limits", async () => {

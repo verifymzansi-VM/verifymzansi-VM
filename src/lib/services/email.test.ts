@@ -401,6 +401,23 @@ describe("email service", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
 
+    it.each(["concurrent_idempotent_requests", "invalid_idempotent_request"])(
+      "reports a repeated-request refusal (%s) as an unknown outcome, not a failure",
+      async (name) => {
+        mockSend.mockResolvedValue({
+          data: null,
+          error: { name, message: "Same idempotency key", statusCode: 409 },
+        });
+        const result = await sendPlatformNotice(
+          "owner@example.invalid",
+          "post_expired",
+          "foundation-outbox/synthetic"
+        );
+        expect(result).toMatchObject({ success: false, outcomeUnknown: true });
+        expect(mockSend).toHaveBeenCalledOnce();
+      }
+    );
+
     it("alerts the support address about lost queued emails without recipient details", async () => {
       const a = "00000000-0000-4000-8000-00000000000a";
       const b = "00000000-0000-4000-8000-00000000000b";

@@ -9,7 +9,7 @@ import {
   OUTBOX_RUN_LIMIT,
   runFoundationOperationJobs,
 } from "./operation-jobs";
-import { runFoundationPrivacyNotice } from "./privacy-notice-job";
+import { runFoundationPrivacyNotice, type PrivacyNoticeRun } from "./privacy-notice-job";
 vi.mock("server-only", () => ({}));
 vi.mock("../services/email", () => ({
   sendPlatformNotice: vi.fn(),
@@ -157,91 +157,224 @@ describe("independent steps", () => {
   });
 });
 
-describe("batch size, order and time limit", () => {
-  const make = (n: number, kind: string, from = 0) =>
-    Array.from({ length: n }, (_, i) =>
-      job({ id: `00000000-0000-4000-8000-${String(from + i).padStart(12, "0")}`, kind })
-    );
+// An outbox that behaves like the database: a claim uses up one attempt and
+// takes a 90-second lease, only messages with fewer than eight attempts are
+// handed out, and a completion clears the lease and sets the retry delay.
+type Row = {
+  id: string;
+  kind: string;
+  attempts: number;
+  due: number;
+  lease: number;
+  token: string;
+  done: boolean;
+  errors: string[];
+};
+function world(
+  clock: { t: number },
+  items: Array<{ id: string; kind: string; attempts?: number }>,
+  rpcMs = 0
+) {
+  const rows: Row[] = items.map((item) => ({
+    ...item,
+    attempts: item.attempts ?? 0,
+    due: 0,
+    lease: 0,
+    token: "",
+    done: false,
+    errors: [],
+  }));
+  let tokens = 0;
+  rpc.mockImplementation(async (name, args) => {
+    // Calls that overlap share the time: each ends rpcMs after it began.
+    if (!SWEEPS.includes(name) && rpcMs) {
+      const begun = clock.t;
+      await Promise.resolve();
+      clock.t = Math.max(clock.t, begun + rpcMs);
+    }
+    if (name === "claim_supported_notification_outbox") {
+      const out = [];
+      for (const row of rows) {
+        if (out.length >= args.p_limit) break;
+        if (row.done || row.attempts >= OUTBOX_FINAL_ATTEMPT || row.due > clock.t) continue;
+        if (row.lease > clock.t || !args.p_supported_kinds.includes(row.kind)) continue;
+        row.attempts++;
+        row.lease = clock.t + 90_000;
+        row.token = `00000000-0000-4000-9000-${String(++tokens).padStart(12, "0")}`;
+        out.push({
+          id: row.id,
+          kind: row.kind,
+          claim_token: row.token,
+          locked_until: new Date(row.lease).toISOString(),
+          attempts: row.attempts,
+          recipient: "synthetic@example.invalid",
+        });
+      }
+      return { data: out, error: null };
+    }
+    if (name === "complete_notification_outbox") {
+      const row = rows.find((r) => r.id === args.p_id);
+      if (!row || row.token !== args.p_claim || row.done || row.lease <= clock.t)
+        return { data: false, error: null };
+      row.done = args.p_ok;
+      row.token = "";
+      row.lease = 0;
+      if (!args.p_ok) row.errors.push(args.p_error);
+      row.due = clock.t + Math.min(21_600, 30 * 2 ** Math.min(row.attempts, 9)) * 1000;
+      return { data: true, error: null };
+    }
+    return { data: {}, error: null };
+  });
+  return rows;
+}
+const uuids = (n: number, from = 0) =>
+  Array.from(
+    { length: n },
+    (_, i) => `00000000-0000-4000-8000-${String(from + i).padStart(12, "0")}`
+  );
+const start = () => ({ t: Date.parse("2026-11-10T08:00:00Z") });
+// Each send takes `sendMs` on the run's clock; pacing waits move the clock too.
+function timed(clock: { t: number }, sendMs: number, success = true) {
+  deliver.mockImplementation(async () => {
+    clock.t += sendMs;
+    return { success };
+  });
+  return { now: () => clock.t, sleep: async (ms: number) => void (clock.t += ms) };
+}
+const deferred = (rows: Row[]) => rows.flatMap((r) => r.errors).filter((e) => e === "deferred");
 
+describe("batch size, order and time limit", () => {
   it("sends 100 queued messages within five runs, payment messages first", async () => {
+    const clock = start();
     // Oldest first in the queue; the ten payment messages were queued last.
-    const items = [...make(90, "post_expiry_reminder", 100), ...make(10, "payment_completed", 900)];
-    queue(...items);
+    const rows = world(clock, [
+      ...uuids(90, 100).map((id) => ({ id, kind: "post_expiry_reminder" })),
+      ...uuids(10, 900).map((id) => ({ id, kind: "payment_completed" })),
+    ]);
+    const options = timed(clock, 0);
     const perRun: number[] = [];
     for (let r = 0; r < 5; r++) {
       const before = deliver.mock.calls.length;
-      await run();
+      await run(options);
       perRun.push(deliver.mock.calls.length - before);
+      clock.t += 60_000;
     }
     expect(perRun).toEqual([25, 25, 25, 25, 0]);
-    const keys = deliver.mock.calls.map(([, , key]) => key);
-    expect(new Set(keys).size).toBe(100);
+    expect(rows.every((r) => r.done && r.attempts === 1)).toBe(true);
     expect(deliver.mock.calls.slice(0, 10).map(([, kind]) => kind)).toEqual(
       Array(10).fill("payment_completed")
     );
     expect(OUTBOX_RUN_LIMIT).toBeGreaterThanOrEqual(20);
   });
 
-  it("claims in small chunks, payment kinds before the others", async () => {
-    queue(...make(12, "enquiry_received", 100), ...make(2, "payment_reversed", 900));
-    await run();
+  it("sends 100 queued messages within five runs at realistic speeds", async () => {
+    // 150 ms per database call, 400 ms per send, real pacing.
+    const clock = start();
+    const rows = world(
+      clock,
+      uuids(100, 100).map((id) => ({ id, kind: "post_expiry_reminder" })),
+      150
+    );
+    const options = timed(clock, 400);
+    let longest = 0;
+    for (let r = 0; r < 5; r++) {
+      const begun = clock.t;
+      await run(options);
+      longest = Math.max(longest, clock.t - begun);
+      clock.t += 60_000;
+    }
+    expect(rows.filter((r) => r.done)).toHaveLength(100);
+    expect(rows.every((r) => r.attempts === 1)).toBe(true);
+    expect(longest).toBeLessThan(44_000);
+  });
+
+  it("with a slow provider, sends every message it claims and wastes no attempt", async () => {
+    // A 9-second provider: the first try times out at 8 s.
+    const clock = start();
+    const rows = world(
+      clock,
+      uuids(10, 100).map((id) => ({ id, kind: "payment_completed" })),
+      150
+    );
+    await run(timed(clock, 9_000));
+    const claimed = rows.filter((r) => r.attempts > 0);
+    expect(claimed.length).toBe(deliver.mock.calls.length);
+    expect(claimed.every((r) => r.done)).toBe(true);
+    expect(deferred(rows)).toEqual([]);
+    expect(deliver.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("claims one message at a time, payment kinds before the others", async () => {
+    const clock = start();
+    world(clock, [
+      ...uuids(3, 100).map((id) => ({ id, kind: "enquiry_received" })),
+      ...uuids(2, 900).map((id) => ({ id, kind: "payment_reversed" })),
+    ]);
+    await run(timed(clock, 0));
     const claims = calls("claim_supported_notification_outbox").map(([, a]) => ({
       limit: a.p_limit,
       payment: a.p_supported_kinds.every((k: string) => PAYMENT.includes(k)),
     }));
     expect(claims).toEqual([
-      { limit: 5, payment: true },
-      { limit: 5, payment: false },
-      { limit: 5, payment: false },
-      { limit: 5, payment: false },
+      ...Array(3).fill({ limit: 1, payment: true }),
+      ...Array(4).fill({ limit: 1, payment: false }),
     ]);
-    expect(deliver).toHaveBeenCalledTimes(14);
-    expect(deliver.mock.calls.slice(0, 2).map(([, kind]) => kind)).toEqual([
+    expect(deliver.mock.calls.map(([, kind]) => kind)).toEqual([
       "payment_reversed",
       "payment_reversed",
+      "enquiry_received",
+      "enquiry_received",
+      "enquiry_received",
     ]);
-    for (const [, args] of calls("claim_supported_notification_outbox"))
-      expect(args.p_limit).toBeLessThanOrEqual(5);
+  });
+
+  it("claims the next message while the previous outcome is recorded", async () => {
+    const clock = start();
+    world(
+      clock,
+      uuids(2, 100).map((id) => ({ id, kind: "payment_completed" })),
+      150
+    );
+    const order: string[] = [];
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) => {
+      if (!SWEEPS.includes(name)) order.push(`${name}:start`);
+      const result = await base(name, args);
+      if (!SWEEPS.includes(name)) order.push(`${name}:end`);
+      return result;
+    });
+    await run(timed(clock, 0));
+    expect(order.slice(2, 6)).toEqual([
+      "claim_supported_notification_outbox:start",
+      "complete_notification_outbox:start",
+      "claim_supported_notification_outbox:end",
+      "complete_notification_outbox:end",
+    ]);
   });
 
   it("paces sends to the provider's rate", async () => {
-    queue(...make(3, "payment_completed"));
-    let clock = 1_000_000;
-    const sleep = vi.fn(async (ms: number) => void (clock += ms));
-    await run({ now: () => clock, sleep });
-    // Two waits between the three emails, one before the privacy notice step.
-    expect(sleep.mock.calls).toEqual([[500], [500], [500]]);
-  });
-
-  it("stops claiming after the claim cutoff", async () => {
-    queue(...make(30, "post_expiry_reminder"));
-    let clock = 1_000_000;
-    deliver.mockImplementation(async () => {
-      clock += 4_000;
-      return { success: true };
-    });
-    await run({ now: () => clock });
-    // Chunk 1 (0-20 s) is sent; no further chunk is claimed after 20 s.
-    expect(calls("claim_supported_notification_outbox")).toHaveLength(2);
-    expect(deliver).toHaveBeenCalledTimes(5);
-  });
-
-  it("gives back claimed messages it can no longer send safely", async () => {
-    const start = Date.now();
-    queue(...make(5, "payment_completed"));
-    let clock = start;
-    deliver.mockImplementation(async () => {
-      clock += 9_000;
-      return { success: true };
-    });
-    await run({ now: () => clock });
-    // Sends start at 0 and 9 s; at 18 s a worst-case send no longer fits.
-    expect(deliver).toHaveBeenCalledTimes(2);
-    const deferred = calls("complete_notification_outbox").filter(
-      ([, a]) => a.p_error === "deferred"
+    const clock = start();
+    world(
+      clock,
+      uuids(3, 100).map((id) => ({ id, kind: "payment_completed" }))
     );
-    expect(deferred).toHaveLength(3);
-    expect(deferred[0][1]).toMatchObject({ p_ok: false });
+    const options = timed(clock, 0);
+    const sleep = vi.fn(options.sleep);
+    await run({ ...options, sleep });
+    expect(sleep.mock.calls).toEqual([[500], [500]]);
+  });
+
+  it("stops claiming once a worst-case send would no longer fit", async () => {
+    const clock = start();
+    const rows = world(
+      clock,
+      uuids(30, 100).map((id) => ({ id, kind: "post_expiry_reminder" }))
+    );
+    await run(timed(clock, 4_000));
+    // Sends start at 0, 4, 8 and 12 s; none may start after 13 s.
+    expect(deliver).toHaveBeenCalledTimes(4);
+    expect(rows.filter((r) => r.attempts > 0)).toHaveLength(4);
+    expect(deferred(rows)).toEqual([]);
   });
 
   it("does not send a message whose lease is too short to finish safely", async () => {
@@ -273,80 +406,35 @@ describe("batch size, order and time limit", () => {
     for (const name of SWEEPS) expect(calls(name)).toHaveLength(1);
   });
 
-  it("sends 100 queued messages within five runs at realistic speeds", async () => {
-    // Simulated clock: 150 ms per database call, 400 ms per send, real pacing.
-    let clock = Date.parse("2026-11-10T08:00:00Z");
-    const items = make(100, "post_expiry_reminder", 100);
-    queue(...items);
-    const base = rpc.getMockImplementation()!;
-    rpc.mockImplementation(async (name, args) => {
-      clock += 150;
-      const result = await base(name, args);
-      if (name === "claim_supported_notification_outbox")
-        for (const row of result.data) row.locked_until = new Date(clock + 90_000).toISOString();
-      return result;
+  it("passes the run's time limits and pacing to the privacy notice step", async () => {
+    const clock = start();
+    let seen: PrivacyNoticeRun = {};
+    privacy.mockImplementation(async (_service, limits = {}) => {
+      seen = limits;
+      return "empty";
     });
-    deliver.mockImplementation(async () => {
-      clock += 400;
-      return { success: true };
-    });
-    const sleep = async (ms: number) => void (clock += ms);
-    let elapsed = 0;
-    for (let r = 0; r < 5; r++) {
-      const start = clock;
-      await run({ now: () => clock, sleep });
-      elapsed = Math.max(elapsed, clock - start);
-      clock += 60_000;
-    }
-    expect(new Set(deliver.mock.calls.map(([, , key]) => key)).size).toBe(100);
-    expect(elapsed).toBeLessThan(45_000);
+    queue();
+    await run({ now: () => clock.t });
+    expect(seen.claimSignal).toBeInstanceOf(AbortSignal);
+    expect(seen.signal).toBeInstanceOf(AbortSignal);
+    expect(typeof seen.pace).toBe("function");
+    expect(seen.canSend?.()).toBe(true);
+    clock.t += 14_000;
+    expect(seen.canSend?.()).toBe(false);
   });
 
-  it("claims only what fits before the send cutoff at the speed seen", async () => {
-    // 800 ms per message (650 ms send, 150 ms per database call).
-    let clock = Date.parse("2026-11-10T08:00:00Z");
-    queue(...make(30, "post_expiry_reminder", 100));
-    const base = rpc.getMockImplementation()!;
-    rpc.mockImplementation(async (name, args) => {
-      if (!SWEEPS.includes(name)) clock += 150;
-      const result = await base(name, args);
-      if (name === "claim_supported_notification_outbox")
-        for (const row of result.data) row.locked_until = new Date(clock + 90_000).toISOString();
-      return result;
+  it("does not claim other kinds when what a claim returns could no longer be sent", async () => {
+    const clock = start();
+    privacy.mockImplementation(async () => {
+      clock.t += 12_500;
+      return "empty";
     });
-    deliver.mockImplementation(async () => {
-      clock += 650;
-      return { success: true };
-    });
-    await run({ now: () => clock, sleep: async (ms: number) => void (clock += ms) });
-    expect(calls("complete_notification_outbox").every(([, a]) => a.p_error !== "deferred")).toBe(
-      true
+    queue();
+    await run({ now: () => clock.t });
+    const others = calls("claim_supported_notification_outbox").filter(
+      ([, a]) => !a.p_supported_kinds.every((k: string) => PAYMENT.includes(k))
     );
-    // Claims of 5, 5 and 5, then only the 3 that still fit before 16 s.
-    expect(deliver).toHaveBeenCalledTimes(18);
-  });
-
-  it("claims one at a time after a slow send", async () => {
-    queue(...make(8, "post_expiry_reminder"));
-    let clock = 1_000_000;
-    deliver.mockImplementationOnce(async () => {
-      clock += 4_000;
-      return { success: true };
-    });
-    await run({ now: () => clock });
-    const limits = calls("claim_supported_notification_outbox").map(([, a]) => a.p_limit);
-    expect(limits).toEqual([5, 5, 1, 1, 1, 1]);
-    expect(deliver).toHaveBeenCalledTimes(8);
-  });
-
-  it("handles last attempts first within a claimed chunk", async () => {
-    const other = "00000000-0000-4000-8000-000000000003";
-    queue(job({ id: other, attempts: 2 }), job({ attempts: OUTBOX_FINAL_ATTEMPT }));
-    await run();
-    expect(deliver.mock.calls.map(([, , key]) => key)).toEqual([
-      `foundation-outbox/${id}`,
-      `foundation-outbox/${other}`,
-    ]);
+    expect(others).toHaveLength(0);
   });
 
   it("fails the run when an outcome cannot be recorded", async () => {
@@ -374,6 +462,19 @@ describe("batch size, order and time limit", () => {
     expect(signals.length).toBe(SWEEPS.length + 2);
     for (const signal of signals) expect(signal.aborted).toBe(false);
   });
+
+  it("records an unknown outcome without counting the message as lost", async () => {
+    queue(job({ attempts: OUTBOX_FINAL_ATTEMPT }));
+    deliver.mockResolvedValue({ success: false, outcomeUnknown: true });
+    expect(await run()).toMatchObject({ retrying: 1, lost: 0, failed: [] });
+    expect(alertStaff).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("complete_notification_outbox", {
+      p_id: id,
+      p_claim: claim,
+      p_ok: false,
+      p_error: "outcome_unknown",
+    });
+  });
 });
 
 describe("last attempt", () => {
@@ -387,34 +488,37 @@ describe("last attempt", () => {
     expect(JSON.stringify(alertStaff.mock.calls)).not.toContain("synthetic@example.invalid");
   });
 
-  it("sends one alert for several lost messages in a run", async () => {
-    const other = "00000000-0000-4000-8000-000000000003";
-    queue(job(last), job({ ...last, id: other, kind: "payment_reversed" }));
-    deliver.mockRejectedValue(new Error("provider down"));
-    await run();
-    expect(alertStaff).toHaveBeenCalledOnce();
-    expect(alertStaff.mock.calls[0][0]).toEqual([
-      { id, kind: "payment_completed" },
-      { id: other, kind: "payment_reversed" },
-    ]);
+  it("reports the first loss at once and collects later ones into one more alert", async () => {
+    const clock = start();
+    const lostIds = uuids(4, 100);
+    world(
+      clock,
+      lostIds.map((id) => ({ id, kind: "payment_completed", attempts: 7 }))
+    );
+    expect(await run(timed(clock, 0, false))).toMatchObject({ lost: 4, failed: [] });
+    expect(alertStaff).toHaveBeenCalledTimes(2);
+    expect(alertStaff.mock.calls[0][0]).toEqual([{ id: lostIds[0], kind: "payment_completed" }]);
+    expect(alertStaff.mock.calls[1][0].map((l: { id: string }) => l.id)).toEqual(lostIds.slice(1));
   });
 
   it("sends at most two alerts a run and reports the rest as a failed alert", async () => {
-    const ids = [3, 4, 5, 6, 7, 8].map((n) => `00000000-0000-4000-8000-00000000000${n}`);
-    // One lost payment message, then lost messages of other kinds in two chunks.
-    queue(job(last), ...ids.map((other) => job({ ...last, id: other, kind: "enquiry_received" })));
-    deliver.mockResolvedValue({ success: false });
-    const error = await run().catch((e) => e);
-    expect(alertStaff).toHaveBeenCalledTimes(2);
-    expect(alertStaff.mock.calls[0][0]).toEqual([{ id, kind: "payment_completed" }]);
-    expect(alertStaff.mock.calls[1][0]).toHaveLength(5);
+    const clock = start();
+    world(
+      clock,
+      uuids(10, 100).map((id) => ({ id, kind: "payment_completed", attempts: 7 }))
+    );
+    // Each failed send takes 2.2 s. Alert 1 goes out at 2.2 s; alert 2 once
+    // under 2 s of the send window is left (11.5 s); the message sent after
+    // it (from 12 s) is not covered by any alert.
+    const error = await run(timed(clock, 2_200, false)).catch((e) => e);
+    expect(alertStaff.mock.calls.map(([batch]) => batch.length)).toEqual([1, 4]);
     expect(error.failed).toEqual(["staff_alert"]);
-    expect(error.summary.lost).toBe(7);
+    expect(error.summary.lost).toBe(6);
   });
 
-  it("alerts before sending the rest of the claim it came in", async () => {
+  it("alerts before sending any further message", async () => {
     const other = "00000000-0000-4000-8000-000000000003";
-    queue(job({ id: other, attempts: 2 }), job(last));
+    queue(job(last), job({ id: other, attempts: 2 }));
     let clock = 1_000_000;
     const order: string[] = [];
     deliver.mockImplementation(async (_to, _kind, key) => {
@@ -441,32 +545,6 @@ describe("last attempt", () => {
     expect(alertStaff).not.toHaveBeenCalled();
     expect(error.failed).toEqual(["staff_alert"]);
     expect(error.summary.lost).toBe(1);
-  });
-
-  it("passes the run's time limits to the privacy notice step", async () => {
-    let clock = 1_000_000;
-    let seen: { signal?: AbortSignal; canSend?: () => boolean } = {};
-    privacy.mockImplementation(async (_service, run = {}) => {
-      seen = run;
-      return "empty";
-    });
-    await run({ now: () => clock });
-    expect(seen.signal).toBeInstanceOf(AbortSignal);
-    expect(seen.canSend?.()).toBe(true);
-    clock += 17_000;
-    expect(seen.canSend?.()).toBe(false);
-  });
-
-  it("does not claim when what it returns could no longer be sent", async () => {
-    let clock = 1_000_000;
-    privacy.mockImplementation(async () => {
-      clock += 14_000;
-      return "empty";
-    });
-    queue(job());
-    // One payment claim at 0 s; the privacy step ends after 14 s, past the last claim time (13 s).
-    await run({ now: () => clock });
-    expect(calls("claim_supported_notification_outbox")).toHaveLength(1);
   });
 
   it("alerts when a last-attempt message cannot be sent in time", async () => {
@@ -630,7 +708,7 @@ describe("a database without the newer kinds", () => {
     refuse("unsupported mail kind");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 16, 14]);
+    expect(lists.map((l) => l.length)).toEqual([3, 16, 14, 14]);
     expect(lists[2]).not.toContain("post_sold");
     expect(lists[2]).not.toContain("post_kept");
   });
@@ -638,7 +716,8 @@ describe("a database without the newer kinds", () => {
     refuse("supported mail kinds required");
     expect(await run()).toMatchObject({ succeeded: 1 });
     const lists = calls("claim_supported_notification_outbox").map(([, a]) => a.p_supported_kinds);
-    expect(lists.map((l) => l.length)).toEqual([3, 16, 14]);
+    // The follow-up claim keeps the earlier list instead of asking again.
+    expect(lists.map((l) => l.length)).toEqual([3, 16, 14, 14]);
   });
   it("does not retry the claim after another invalid-parameter refusal", async () => {
     rpc.mockImplementation(async (name) =>
