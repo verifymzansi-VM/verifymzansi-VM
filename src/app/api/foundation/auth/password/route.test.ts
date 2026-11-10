@@ -126,9 +126,56 @@ it("checks canonical identity, account protection and breach status before one u
     action: "auth:change-password",
     degradedMode: "block",
   });
-  expect(update).toHaveBeenCalledWith(payload.currentPassword, payload.newPassword);
+  expect(update).toHaveBeenCalledWith(
+    payload.currentPassword,
+    payload.newPassword,
+    expect.any(Function)
+  );
   expect(update).toHaveBeenCalledTimes(1);
   expect(notice).toHaveBeenCalledWith("member@example.invalid");
+  // The updater spends the account's own budget for current-password checks.
+  limit.mockClear();
+  await update.mock.calls[0][2]();
+  expect(limit).toHaveBeenCalledExactlyOnceWith({
+    key: "account:" + id,
+    action: "auth:change-password:verify",
+    degradedMode: "block",
+  });
+});
+it.each([
+  [{ limited: true }, 429, "Too many attempts; try again later"],
+  [{ limited: true, degraded: true }, 503, "Password change could not be confirmed"],
+])(
+  "refuses when the account's current-password check budget refuses (%o)",
+  async (refusal, status, error) => {
+    let checked = false;
+    update.mockImplementation(
+      async (_current: string, _next: string, charge: () => Promise<void>) => {
+        await charge();
+        checked = true;
+      }
+    );
+    limit.mockImplementation(async ({ action }: { action: string }) =>
+      action === "auth:change-password:verify" ? refusal : { limited: false }
+    );
+    const response = await POST(request());
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ error, reason: "unavailable" });
+    expect(checked).toBe(false);
+    expect(notice).not.toHaveBeenCalled();
+  }
+);
+it("answers a wrong current password from the server's own check in the page's terms", async () => {
+  update.mockRejectedValue(new FoundationPasswordUpdateError(400, "current_password"));
+  for (const send of [POST, compatibilityPOST]) {
+    const response = await send(request({ ...payload, currentPassword: "synthetic-wrong" }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Current password is incorrect",
+      reason: "current_password",
+    });
+  }
+  expect(notice).not.toHaveBeenCalled();
 });
 it.each([true, "unavailable"])(
   "does not update when breach protection refuses: %s",

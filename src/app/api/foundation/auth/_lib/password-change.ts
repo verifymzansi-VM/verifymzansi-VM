@@ -42,12 +42,8 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
     return reply(503, "Password changes are unavailable");
   }
   try {
-    const limit = async (key: string) => {
-      const result = await checkRateLimit({
-        key,
-        action: "auth:change-password",
-        degradedMode: "block",
-      });
+    const limit = async (key: string, action = "auth:change-password") => {
+      const result = await checkRateLimit({ key, action, degradedMode: "block" });
       if (result.limited)
         throw new FoundationPasswordUpdateError(result.degraded ? 503 : 429, "unavailable");
     };
@@ -80,7 +76,12 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
       return context.respond(reply(503, "Password protection is temporarily unavailable"));
     }
     if (breached) return context.respond(reply(400, PWNED_PASSWORD_ERROR));
-    await caller.updatePassword(parsed.data.currentPassword, parsed.data.newPassword);
+    // The server checks the current password itself with a sign-in that has
+    // no CAPTCHA (password-update.ts), so each check spends the account's own
+    // budget for them; reachable only with this account's verified session.
+    await caller.updatePassword(parsed.data.currentPassword, parsed.data.newPassword, () =>
+      limit("account:" + caller.accountId, "auth:change-password:verify")
+    );
     if (caller.user.email) {
       try {
         const notice = await sendPasswordChangeNotification(caller.user.email);
