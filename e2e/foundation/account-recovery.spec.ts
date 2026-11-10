@@ -65,7 +65,8 @@ import {
 //   - a member changes the password from the security tab: a wrong current
 //     password is refused although local Auth itself does not check it (the
 //     website checks it with a sign-in whose session it ends at once), and
-//     the right one changes it while the browser stays signed in;
+//     the right one changes it while the browser stays signed in; a session
+//     signed in over 24 hours ago is asked to sign in again first;
 //   - a member saves a communication choice, which stays saved;
 //   - a member deletes the account and cannot sign in again.
 //
@@ -1069,6 +1070,34 @@ test.describe("account recovery and self-service", () => {
     });
     expect(accepted.status).toBe(200);
     changer.password = premise;
+    // A session signed in over 24 hours ago is asked to sign in again before
+    // any password check, even with the right password (Auth's secure
+    // password change rule, applied by the website whatever that setting is).
+    const stale = await sessionCookies(
+      copy,
+      await signIn(copy, changer, { signInAgeSeconds: 25 * 3600 })
+    );
+    expect(stale.accountId).toBe(changer.id);
+    await context.addCookies(stale.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto("/");
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    expect(csrf?.value).toMatch(/^[a-f0-9]{64}$/i);
+    const staleChange = await page.request.post(`${APP_ORIGIN}${CHANGE_PASSWORD_PATH}`, {
+      headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+      data: {
+        currentPassword: changer.password,
+        newPassword: `${changer.password}-stale`,
+        confirmNewPassword: `${changer.password}-stale`,
+      },
+      maxRedirects: 0,
+    });
+    expect(staleChange.status()).toBe(401);
+    expect(await staleChange.json()).toEqual({
+      error: "Sign out, then sign in again before changing your password",
+      reason: "reauthentication",
+      code: "reauthentication_required",
+    });
+    await context.clearCookies({ name: /^sb-/ });
     await signInBrowser(context, changer);
     // Local Auth's record of this member's sign-ins and sign-outs.
     const authEvents = () =>
