@@ -7,6 +7,7 @@ import { ContentEnquiryAction } from "@/components/listings/content-enquiry-acti
 import { feedContactConfig } from "@/components/listings/contact-action-configs";
 import type { FeedSlide } from "@/lib/feed/types";
 import { formatCompactCount } from "@/lib/utils/format";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 const CIRCLE =
   "flex h-12 w-12 items-center justify-center rounded-full border border-[color:var(--viewer-border)] bg-[var(--viewer-surface)] text-[color:var(--viewer-foreground)] transition-colors duration-200";
@@ -36,23 +37,25 @@ export function ImmersiveActionRail({
       aria-label="Post actions"
     >
       {/* First, in the same circle as the others; not a button: views only count. */}
-      <div className="viewer-rail-action flex flex-col items-center gap-1.5">
-        <span className={CIRCLE} aria-hidden="true">
-          <Eye className="h-5 w-5" />
-        </span>
-        <span
-          className="text-xs font-semibold tabular-nums text-[color:var(--viewer-muted)]"
-          aria-hidden="true"
-        >
-          {formatCompactCount(views)}
-        </span>
-        <span className="viewer-action-label" aria-hidden="true">
-          Views
-        </span>
-        <span className="sr-only">
-          {views} {views === 1 ? "view" : "views"}
-        </span>
-      </div>
+      {SHOW_ENGAGEMENT_TOTALS ? (
+        <div className="viewer-rail-action flex flex-col items-center gap-1.5">
+          <span className={CIRCLE} aria-hidden="true">
+            <Eye className="h-5 w-5" />
+          </span>
+          <span
+            className="text-xs font-semibold tabular-nums text-[color:var(--viewer-muted)]"
+            aria-hidden="true"
+          >
+            {formatCompactCount(views)}
+          </span>
+          <span className="viewer-action-label" aria-hidden="true">
+            Views
+          </span>
+          <span className="sr-only">
+            {views} {views === 1 ? "view" : "views"}
+          </span>
+        </div>
+      ) : null}
       <ContentLikeButton
         key={slide.key}
         variant="rail"

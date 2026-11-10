@@ -139,7 +139,8 @@ describe("ListingDetailContent", () => {
     expect(screen.getByText("Image failed to load")).toBeTruthy();
   });
 
-  it("updates the visible view count after a recorded detail-page view", async () => {
+  // Roadmap M2.8: views are not stored by the live backend, so no count is shown.
+  it("shows no view count, even after a recorded detail-page view", async () => {
     listingDetailClientState.shouldThrow = false;
 
     render(
@@ -172,14 +173,15 @@ describe("ListingDetailContent", () => {
       />
     );
 
-    expect(screen.getByText("7 views")).toBeTruthy();
+    expect(screen.getAllByText("Viewed listing").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/views?$/)).toBeNull();
     expect(listingDetailClientState.lastProps?.onViewRecorded).toBeTypeOf("function");
 
     await act(async () => {
       (listingDetailClientState.lastProps?.onViewRecorded as (() => void) | undefined)?.();
     });
 
-    expect(screen.getByText("8 views")).toBeTruthy();
+    expect(screen.queryByText(/views?$/)).toBeNull();
   });
 
   it("renders review mode without public contact actions", () => {

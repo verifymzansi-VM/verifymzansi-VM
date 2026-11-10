@@ -107,6 +107,14 @@ its database (55452, local default password), gateway (55443) and mail catcher
 (55454) on all interfaces. Run it only on a trusted network or behind the
 machine's firewall, and stop it with `down`.
 
+In CI each Playwright project (`chromium`, `mobile-chrome`) runs in its own job
+with its own copy, as `e2e-foundation (<project>)`; the job `e2e-foundation`
+passes only when both did. Playwright stops a project's run after 12 minutes
+(`PLAYWRIGHT_GLOBAL_TIMEOUT_MS`) and still writes its JSON report, from which
+`scripts/e2e-foundation-summary.mjs` writes the job summary: failed tests with
+their first error, or "timed out — no test failure recorded" when the run ran
+out of time without a failure.
+
 ## Retired source schema and first administrator
 
 The root `supabase/migrations` tree, `bootstrap:operator` and supplemental REST

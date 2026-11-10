@@ -32,14 +32,22 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   // The skip guard fails a CI run on any skip that is not a documented
-  // platform skip (e2e/support/skip-policy.ts).
-  reporter: process.env.CI
-    ? [
-        ["list"],
-        ["html", { open: "never", outputFolder: "playwright-report/foundation" }],
-        ["./e2e/support/skip-guard-reporter.ts"],
-      ]
-    : [["list"], ["./e2e/support/skip-guard-reporter.ts"]],
+  // platform skip (e2e/support/skip-policy.ts). PLAYWRIGHT_JSON_REPORT adds a
+  // JSON report (the CI job summarises it with scripts/e2e-foundation-summary.mjs).
+  reporter: [
+    ["list"],
+    ...(process.env.CI
+      ? [["html", { open: "never", outputFolder: "playwright-report/foundation" }] as const]
+      : []),
+    ["./e2e/support/skip-guard-reporter.ts"],
+    ...(process.env.PLAYWRIGHT_JSON_REPORT
+      ? [["json", { outputFile: process.env.PLAYWRIGHT_JSON_REPORT }] as const]
+      : []),
+  ],
+  // PLAYWRIGHT_GLOBAL_TIMEOUT_MS stops the whole run in time for the reporters
+  // to write their results, so a slow run is recorded as timed out, not cut
+  // off by the CI step limit with nothing written. Unset or 0: no limit.
+  globalTimeout: Number(process.env.PLAYWRIGHT_GLOBAL_TIMEOUT_MS || 0),
   timeout: 60_000,
   use: {
     baseURL,

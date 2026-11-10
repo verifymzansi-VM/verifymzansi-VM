@@ -11,7 +11,9 @@ name: E2E foundation
 # Non-blocking while it proves itself: `e2e-foundation` is not a required
 # check in .github/rulesets/protect-main.json, so a red run is visible on the
 # pull request but does not block merging. It becomes required after five
-# green days in a row (the nightly run counts them).
+# green days in a row (the nightly run counts them). The check to require is
+# the aggregate job `e2e-foundation`, which fails unless every browser project
+# passed; the per-project jobs need not be listed.
 on:
   pull_request:
     branches: [main]
@@ -27,14 +29,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e-foundation:
-    name: e2e-foundation
+  # One job per Playwright project, each on its own runner with its own test
+  # copy (the copies never share data). Both projects in one step took about
+  # 12 minutes against a 14-minute limit, so one retried test or a slow runner
+  # timed the job out with no test failure recorded. Split, each project takes
+  # about 6.5 minutes of browser tests (about 13 for the whole job).
+  browser:
+    name: e2e-foundation (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # Roadmap budget: chromium and mobile-chrome together under 25 minutes
-    # (this job limit). The step limits below (5 + 10 + 14) are ceilings for
-    # each step; a normal run takes less (the stack about 1 minute, the
-    # build about 4 and the browser tests about 10 for both projects).
-    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, mobile-chrome]
+    # Roadmap budget: the browser tests finish within 25 minutes of wall time;
+    # the two projects run in parallel. Step ceilings: stack 5, build 10,
+    # tests 14 (Playwright stops itself at 12 and writes its report first).
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,23 +62,61 @@ jobs:
       - name: Build the website for the test copy
         timeout-minutes: 10
         run: node --import tsx scripts/foundation-e2e.mjs build
-      - name: Browser tests (chromium and mobile-chrome)
+      - name: Note when the browser tests start
+        run: echo "E2E_TESTS_STARTED=$(date +%s)" >> "$GITHUB_ENV"
+      # About 6.5 minutes when clean. Playwright's own limit (12 minutes, about
+      # 1.8 times a clean run) ends the run with its reports written, so a slow
+      # run reads "timed out" in the summary instead of being cut off; the step
+      # limit is the backstop if Playwright itself hangs.
+      - name: Browser tests (${{ matrix.project }})
         timeout-minutes: 14
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_GLOBAL_TIMEOUT_MS: "720000"
+          PLAYWRIGHT_JSON_REPORT: test-results/foundation-${{ matrix.project }}.json
+          PROJECT: ${{ matrix.project }}
         run: >-
           pnpm exec playwright test --config=playwright.foundation.config.ts
-          --project=chromium --project=mobile-chrome
+          --project="$PROJECT"
+      - name: Summarise the browser tests
+        if: always()
+        env:
+          PROJECT: ${{ matrix.project }}
+        run: |
+          node scripts/e2e-foundation-summary.mjs "test-results/foundation-$PROJECT.json" "$PROJECT" "${E2E_TESTS_STARTED:-}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -n "${E2E_TESTS_STARTED:-}" ]; then
+            echo "Browser tests ($PROJECT) ran for $(( $(date +%s) - E2E_TESTS_STARTED )) seconds."
+          fi
       - name: Keep the browser report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-foundation-report
+          name: e2e-foundation-report-${{ matrix.project }}
           if-no-files-found: ignore
           retention-days: 7
           path: |
             playwright-report/foundation
             test-results/foundation
+            test-results/foundation-${{ matrix.project }}.json
       - name: Delete the test copy
         if: always()
         run: node --import tsx scripts/foundation-e2e.mjs down
+
+  # The single check name for the whole workflow (the one to require): green
+  # only when every browser project passed.
+  e2e-foundation:
+    name: e2e-foundation
+    runs-on: ubuntu-latest
+    needs: browser
+    if: ${{ !cancelled() }}
+    timeout-minutes: 5
+    steps:
+      - name: Every browser project passed
+        env:
+          RESULT: ${{ needs.browser.result }}
+        run: |
+          echo "Browser projects: $RESULT"
+          if [ "$RESULT" != "success" ]; then
+            echo "::error::At least one browser project did not pass ($RESULT). Its job summary says whether tests failed or the run timed out."
+            exit 1
+          fi

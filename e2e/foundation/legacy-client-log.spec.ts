@@ -5,11 +5,13 @@ import { readServerLogEntries, type ServerLogEntry } from "./support/test-copy";
 // Roadmap M0.11: when code written for the retired backend creates one of the
 // retired Supabase clients while the website runs foundation (as production
 // does), the server writes one structured warning naming the route pattern and
-// nothing else. The like counter (/api/engagement/like) is such an old route:
-// it calls a retired command through the retired admin client. When that route
-// moves to foundation, point this spec at another route that is still old.
+// nothing else. The programme report download (/api/organisations/[id]/report)
+// is such an old route: it creates the retired server client to find the caller
+// before it refuses a visitor who is not signed in. (The like counter served
+// here until roadmap M2.8 closed it.) When this route moves to foundation,
+// point this spec at another route that is still old.
 const EVENT = "legacy_client_in_foundation";
-const ROUTE = "/api/engagement/like";
+const ROUTE = "/api/organisations/[id]/report";
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 const entriesFor = (route: string) =>
@@ -36,14 +38,13 @@ test("an old route in foundation mode logs legacy_client_in_foundation once, wit
 }) => {
   const before = entriesFor(ROUTE).length;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const response = await request.post(ROUTE, {
+    const response = await request.get(`/api/organisations/${randomUUID()}/report`, {
       headers: { origin: String(baseURL) },
-      data: { targetId: randomUUID(), targetType: "listing" },
     });
     // The log line changes nothing: the route still gives its own answer, which
-    // on the copy (as live) is its failure to reach the retired backend.
-    expect(response.status()).toBe(500);
-    expect(await response.json()).toEqual({ error: "Failed to update like" });
+    // for a visitor who is not signed in is a refusal.
+    expect(response.status()).toBe(401);
+    expect(await response.json()).toEqual({ error: "Unauthorized" });
   }
 
   await expect.poll(() => entriesFor(ROUTE).length, { timeout: 10_000 }).toBeGreaterThan(0);

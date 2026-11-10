@@ -84,7 +84,10 @@ no checks). This keeps `main` deployable: the deploy needs the whole CI run on
 (`Staging address configured` decides this in a job-level condition). Later
 slices add their jobs here and to the ruleset file (foundation browser tests,
 frontend ledger). `e2e-foundation` (workflow "E2E foundation") runs on every
-pull request but stays optional until it has five green nights in a row.
+pull request but stays optional until it has five green nights in a row. When it
+becomes required, list only the aggregate check `e2e-foundation`: it passes only
+when both per-project jobs, `e2e-foundation (chromium)` and
+`e2e-foundation (mobile-chrome)`, passed.
 
 ## How the owner applies it
 
