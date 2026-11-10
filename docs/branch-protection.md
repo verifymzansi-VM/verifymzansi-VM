@@ -74,6 +74,12 @@ such a check would block every pull request.
   commit itself: if two green pull requests conflict in behaviour, `main`'s CI
   fails and nothing is deployed.
 
+The browser jobs start as soon as `lint-type-security` passes; they do not wait
+for the unit or build jobs, but all of them stay required. A newer push to a
+pull request cancels that pull request's older CI run; a run on `main` is never
+cancelled, so every release commit gets a complete result. Every job has a time
+limit of about one and a half times its usual longest run.
+
 Every CI job that runs on a pull request is required, except
 `lighthouse-advisory` (advisory, `continue-on-error`) and
 `safety-gate-snapshot: plan only (runs no checks)` (a dry-run plan that executes

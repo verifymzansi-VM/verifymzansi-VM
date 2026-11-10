@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// Turns the Playwright JSON report of one foundation browser project into a
-// short Markdown summary for the CI job page (workflow "E2E foundation"). It
-// keeps three endings apart: real test failures, a run that ran out of time
-// with no failure recorded, and a run that stopped before any report was
-// written (step limit, cancellation or a crash).
+// Turns the Playwright JSON report of one browser project into a short
+// Markdown summary for the CI job page (workflow "E2E foundation", and the
+// browser jobs of workflow "CI"). It keeps three endings apart: real test
+// failures, a run that ran out of time with no failure recorded, and a run
+// that stopped before any report was written (step limit, cancellation or a
+// crash). It also counts tests that passed only on retry (flaky), which the
+// overall result hides.
 //
-// Usage: node scripts/e2e-foundation-summary.mjs <report.json> <project> [started-epoch-seconds]
+// Usage: node scripts/e2e-foundation-summary.mjs <report.json> <project> [started-epoch-seconds] [heading]
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -47,12 +49,15 @@ function didNotRun(test) {
   );
 }
 
+const DEFAULT_HEADING = "Foundation browser tests";
+
 /**
  * @param {any} report Playwright JSON report
  * @param {string} project
+ * @param {string} [heading]
  * @returns {string} Markdown
  */
-export function summarise(report, project) {
+export function summarise(report, project, heading = DEFAULT_HEADING) {
   const rows = [];
   for (const suite of report.suites ?? []) collect(suite, [], rows);
   const failed = rows.filter((row) => row.test.status === "unexpected");
@@ -67,7 +72,7 @@ export function summarise(report, project) {
   const timeout = errors.map((text) => GLOBAL_TIMEOUT.exec(text)).find(Boolean);
   const otherErrors = errors.filter((text) => !GLOBAL_TIMEOUT.test(text));
 
-  const lines = [`## Foundation browser tests (${project})`, ""];
+  const lines = [`## ${heading} (${project})`, ""];
   if (timeout) {
     lines.push(
       failed.length === 0
@@ -113,12 +118,12 @@ export function summarise(report, project) {
 
 /**
  * Summary when Playwright wrote no report at all.
- * @param {string} project @param {number | undefined} elapsedMs
+ * @param {string} project @param {number | undefined} elapsedMs @param {string} [heading]
  */
-export function summariseMissing(project, elapsedMs) {
+export function summariseMissing(project, elapsedMs, heading = DEFAULT_HEADING) {
   const took = elapsedMs === undefined ? "" : ` after ${minutes(elapsedMs)}`;
   return (
-    `## Foundation browser tests (${project})\n\n` +
+    `## ${heading} (${project})\n\n` +
     `**No report: the browser tests stopped${took} before Playwright finished ` +
     "(the step limit was reached, the run was cancelled or it crashed) — no test failure recorded.** " +
     "See the job log.\n"
@@ -126,10 +131,10 @@ export function summariseMissing(project, elapsedMs) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const [file, project, started] = process.argv.slice(2);
+  const [file, project, started, heading] = process.argv.slice(2);
   if (!file || !project) {
     throw new Error(
-      "Usage: e2e-foundation-summary.mjs <report.json> <project> [started-epoch-seconds]"
+      "Usage: e2e-foundation-summary.mjs <report.json> <project> [started-epoch-seconds] [heading]"
     );
   }
   const elapsed = started ? Date.now() - Number(started) * 1000 : undefined;
@@ -137,8 +142,8 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   try {
     report = JSON.parse(readFileSync(file, "utf8"));
   } catch {
-    process.stdout.write(summariseMissing(project, elapsed));
+    process.stdout.write(summariseMissing(project, elapsed, heading || undefined));
     process.exit(0);
   }
-  process.stdout.write(summarise(report, project));
+  process.stdout.write(summarise(report, project, heading || undefined));
 }

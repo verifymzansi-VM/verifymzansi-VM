@@ -53,6 +53,52 @@ describe("CI reports what it ran", () => {
   });
 });
 
+describe("CI job graph", () => {
+  const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
+    concurrency: { group: string; "cancel-in-progress": string };
+    jobs: Record<string, Job & { "timeout-minutes"?: number }>;
+  };
+
+  it("lets browser jobs start after the static checks instead of waiting for unit tests", () => {
+    // They use nothing the unit or build jobs produce. Every job stays a
+    // required check, so a merge still needs all of them green.
+    for (const id of ["e2e-smoke", "launch-flows-bundle", "e2e-full-matrix"])
+      expect([workflow.jobs[id].needs].flat(), id).toEqual(["lint-type-security"]);
+  });
+
+  it("cancels superseded pull request runs but never a run on main", () => {
+    expect(workflow.concurrency.group).toBe(
+      "ci-${{ github.event.pull_request.number || github.sha }}"
+    );
+    expect(workflow.concurrency["cancel-in-progress"]).toBe(
+      "${{ github.event_name == 'pull_request' }}"
+    );
+  });
+
+  it("gives every job a time limit instead of the six-hour default", () => {
+    for (const [id, job] of Object.entries(workflow.jobs)) {
+      const limit = job["timeout-minutes"];
+      expect(typeof limit, id).toBe("number");
+      expect(limit, id).toBeGreaterThan(0);
+      expect(limit, id).toBeLessThanOrEqual(45);
+    }
+  });
+
+  it("counts tests that passed only on retry in each browser job's summary", () => {
+    for (const id of ["e2e-smoke", "e2e-full-matrix"]) {
+      const steps = workflow.jobs[id].steps;
+      const run = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
+      const report = steps[run].env?.PLAYWRIGHT_JSON_REPORT ?? "";
+      expect(report, id).toMatch(/^test-results\/.+\$\{\{ matrix\.project \}\}\.json$/);
+      const summary = steps
+        .slice(run + 1)
+        .find((step) => (step.run ?? "").includes("scripts/e2e-foundation-summary.mjs"));
+      expect(summary?.if, id).toBe("always()");
+      expect(summary?.run, id).toContain('"$GITHUB_STEP_SUMMARY"');
+    }
+  });
+});
+
 describe("scheduled monitoring reports what it checked", () => {
   const load = (name: string) =>
     parse(readFileSync(`.github/workflows/${name}.yml`, "utf8")) as {

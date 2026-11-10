@@ -11,6 +11,13 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels that pull request's older run. Runs on
+# main are never cancelled (each has its own group), so every release commit
+# gets a complete result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   NODE_OPTIONS: --max-old-space-size=4096
 
@@ -182,6 +189,7 @@ jobs:
 
   lint-type-security:
     runs-on: ubuntu-latest
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -201,6 +209,7 @@ jobs:
 
   knip:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -215,6 +224,7 @@ jobs:
   jscpd-advisory:
     name: Duplication budget
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -320,6 +330,7 @@ jobs:
 
   unit-api-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 31
     needs: lint-type-security
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
@@ -344,6 +355,7 @@ jobs:
           path: tmp/safety-gate/**
   build-route-verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: lint-type-security
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -389,6 +401,7 @@ jobs:
 
   db-rls:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     env:
       # secrets context is not allowed in step-level if conditions, so map
       # these to env first and reference env in the Docker Hub login step.
@@ -424,7 +437,8 @@ jobs:
 
   e2e-smoke:
     runs-on: ubuntu-latest
-    needs: [unit-api-contract, build-route-verify]
+    timeout-minutes: 10
+    needs: lint-type-security
     strategy:
       fail-fast: false
       matrix:
@@ -448,10 +462,18 @@ jobs:
       - run: pnpm exec playwright test --grep "@smoke" --project "$BROWSER_PROJECT"
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
+          PLAYWRIGHT_JSON_REPORT: test-results/e2e-smoke-${{ matrix.project }}.json
+      # Retries (playwright.config.ts) can hide new flakiness: count it.
+      - name: Summarise results, including tests that passed only on retry
+        if: always()
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
+        run: node scripts/e2e-foundation-summary.mjs "test-results/e2e-smoke-$BROWSER_PROJECT.json" "$BROWSER_PROJECT" "" "Smoke browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
 
   launch-flows-bundle:
     runs-on: ubuntu-latest
-    needs: [unit-api-contract, build-route-verify]
+    timeout-minutes: 14
+    needs: lint-type-security
     env:
       PLAYWRIGHT_TEST_MODE: "1"
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
@@ -484,8 +506,8 @@ jobs:
 
   e2e-full-matrix:
     runs-on: ubuntu-latest
-    needs:
-      [e2e-smoke, launch-flows-bundle, db-rls, payment-kyc-regressions, audit-tooling-platforms]
+    timeout-minutes: 27
+    needs: lint-type-security
     strategy:
       fail-fast: false
       matrix:
@@ -516,6 +538,13 @@ jobs:
       - run: pnpm exec playwright test --project "$BROWSER_PROJECT" --grep-invert @visual
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
+          PLAYWRIGHT_JSON_REPORT: test-results/e2e-full-${{ matrix.project }}.json
+      # Retries (playwright.config.ts) can hide new flakiness: count it.
+      - name: Summarise results, including tests that passed only on retry
+        if: always()
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
+        run: node scripts/e2e-foundation-summary.mjs "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT" "" "Browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -592,6 +621,7 @@ jobs:
 
   perf-baseline:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.staging-config.outputs.configured == 'true'
     needs: [e2e-full-matrix, staging-config]
     steps:
@@ -613,6 +643,7 @@ jobs:
 
   k6-advisory:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.staging-config.outputs.configured == 'true'
     continue-on-error: true
     needs: [perf-baseline, staging-config]
@@ -641,6 +672,7 @@ jobs:
 
   bundle-analysis:
     runs-on: ubuntu-latest
+    timeout-minutes: 7
     needs: lint-type-security
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -659,6 +691,7 @@ jobs:
 
   lighthouse-advisory:
     runs-on: ubuntu-latest
+    timeout-minutes: 9
     continue-on-error: true
     needs: build-route-verify
     steps:
@@ -693,6 +726,7 @@ jobs:
   safety-gate-snapshot:
     name: "safety-gate-snapshot: plan only (runs no checks)"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: lint-type-security
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
@@ -717,6 +751,7 @@ jobs:
 
   payment-kyc-regressions:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
@@ -737,6 +772,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
