@@ -209,6 +209,8 @@ it("treats a Cloudflare challenge as inconclusive, never as a pass", () => {
   for (const [status, headers, body] of [
     [403, ray, '{"error":"Forbidden"}'],
     [503, {}, '<div id="cf-error-details">Blocked</div>'],
+    // Cloudflare's error page on a 503 is a real outage (e.g. the Worker failed).
+    [503, ray, '<div id="cf-error-details">Worker exceeded resource limits</div>'],
     [500, ray, page],
     [200, ray, "<html>no backend marker</html>"],
     [200, ray, page + "tnygdgormnofpgjknlhr"],

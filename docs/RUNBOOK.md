@@ -760,6 +760,9 @@ until the owner does those steps.
   30 minutes) checks the public homepage and the authenticated site monitor. A
   missing setting fails the run; there are no skip-and-pass steps. A Cloudflare
   challenge on the public check is reported as inconclusive, not as a pass.
+  Cloudflare's error page on a 503 counts as a failure. Inconclusive runs send
+  no email, so if every run is inconclusive the public homepage goes unchecked
+  from GitHub; the external public homepage check (owner step 1) covers that.
   GitHub emails one account when a scheduled run fails, and schedules can be
   delayed or paused, so this is a backstop rather than the main alert.
 - **Timed Workers** (`verifymzansi-ops-jobs` every minute,
@@ -775,6 +778,10 @@ until the owner does those steps.
 - A heartbeat is a plain HTTPS GET with no credentials and a short timeout. An
   unset URL sends nothing; a failed ping logs only the job name and never fails
   the job. The URL itself is treated as a secret and is never logged.
+- Known gap: items the app queues for a later retry (an email that could not be
+  sent, a storage object that could not be deleted yet) do not fail the run, so
+  a lasting email or storage outage shows neither a failed run nor a missing
+  heartbeat. Payment checks with failures do fail the run.
 
 ### Owner steps (not done in code)
 
@@ -785,7 +792,10 @@ until the owner does those steps.
    when the answer is not HTTP 200 or the JSON `status` is not `ok`, after two
    failed checks in a row, checking every 1 to 5 minutes. The key only runs the
    fixed anonymous smoke checks; if it is ever rotated, update the GitHub
-   secret, the Worker secret `MONITOR_API_KEY` and this monitor together.
+   secret, the Worker secret `MONITOR_API_KEY` and this monitor together. In the
+   same service add a plain check of `https://verifymzansi.com/` that alerts
+   when the page does not load, so the public edge is watched from outside
+   GitHub too.
 2. **One heartbeat check per timed job** in a heartbeat ("dead man's switch")
    monitor that accepts an HTTPS GET. Store each URL only as a secret, never in
    a `wrangler.*.toml` `[vars]` block or in the repository:

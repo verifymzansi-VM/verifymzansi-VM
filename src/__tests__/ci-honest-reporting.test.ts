@@ -64,11 +64,12 @@ describe("scheduled monitoring reports what it checked", () => {
     // The old worker-health job echoed "skipping" and exited 0 when its URLs
     // were unset, so it always reported success while checking nothing.
     expect(Object.keys(monitoring.jobs)).toEqual(["production-smoke"]);
+    expect(monitoring.jobs["production-smoke"].if).toBeUndefined();
     const steps = monitoring.jobs["production-smoke"].steps;
     for (const step of steps) {
       expect(step.if).toBeUndefined();
       expect(step["continue-on-error"]).toBeUndefined();
-      expect(step.run ?? "").not.toMatch(/skipping|skip=true|exit 0/i);
+      expect(step.run ?? "").not.toMatch(/skipping|skip=true|exit 0|\|\| true/i);
     }
     const runs = steps.map((step) => step.run ?? "").join("\n");
     expect(runs).toContain("exit 1");
@@ -77,7 +78,18 @@ describe("scheduled monitoring reports what it checked", () => {
   });
 
   it("pings the backup heartbeat last, only after the upload, and never fails the backup", () => {
-    const steps = load("database-backup").jobs.backup.steps;
+    const job = load("database-backup").jobs.backup;
+    const steps = job.steps;
+    // Every earlier step must be able to stop the run before the heartbeat.
+    expect(job.if).toBeUndefined();
+    for (const step of steps.slice(0, -1)) {
+      expect(step.if).toBeUndefined();
+      expect(step["continue-on-error"]).toBeUndefined();
+      expect(step.run ?? "").not.toMatch(/\|\| true/);
+    }
+    expect(steps.find((step) => step.name === "Encrypt the backup")!.run).toContain(
+      "set -o pipefail"
+    );
     const heartbeat = steps.at(-1)!;
     expect(steps.at(-2)!.name).toBe("Upload to the private R2 bucket");
     // No `if:` means it runs only when every earlier step succeeded.

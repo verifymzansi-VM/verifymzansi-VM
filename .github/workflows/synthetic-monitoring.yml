@@ -37,6 +37,7 @@ jobs:
       # A Cloudflare challenge is reported as INCONCLUSIVE (a warning and the
       # step summary), never as a pass; the authenticated check below must pass.
       - name: Check public edge delivery
+        id: public-edge
         env:
           APP_URL: ${{ secrets.PRODUCTION_APP_URL }}
         run: pnpm exec tsx scripts/check-public-edge.ts

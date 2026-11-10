@@ -98,6 +98,8 @@ jobs:
 
       - name: Encrypt the backup
         run: |
+          # A failed tar must fail the run, not encrypt a truncated archive.
+          set -o pipefail
           cd "$RUNNER_TEMP/backup"
           stamp=$(date -u +%Y%m%dT%H%M%SZ)
           name="verifymzansi-db-${stamp}.tar.gz.gpg"
