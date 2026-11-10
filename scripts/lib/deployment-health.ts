@@ -1,6 +1,9 @@
+import { LiveCheckError, readLiveJson, retryLiveCheck, type LiveRetryOptions } from "./live-retry";
+
 export function readinessUrl(baseUrl: string, override?: string): URL {
   const url = override ? new URL(override) : new URL("/api/health", baseUrl);
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Invalid health URL protocol");
+  if (!["http:", "https:"].includes(url.protocol))
+    throw new LiveCheckError("Invalid health URL protocol");
   url.searchParams.set("deep", "1");
   return url;
 }
@@ -14,13 +17,20 @@ export async function checkDeploymentHealth(
     headers: { Accept: "application/json", "User-Agent": "VerifyMzansi-Deploy-Healthcheck/1.0" },
     signal: AbortSignal.timeout(15_000),
   });
-  if (response.status !== 200) throw new Error(`Readiness returned HTTP ${response.status}`);
-  if (!response.headers.get("content-type")?.includes("application/json")) {
-    throw new Error("Readiness did not return JSON (possible edge challenge)");
+  if (response.status !== 200) {
+    await response.body?.cancel().catch(() => {});
+    throw new LiveCheckError(`Readiness returned HTTP ${response.status}`);
   }
-  const body = await response.json();
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    await response.body?.cancel().catch(() => {});
+    throw new LiveCheckError("Readiness did not return JSON (possible edge challenge)");
+  }
+  const body = (await readLiveJson(response, "Readiness returned malformed JSON")) as {
+    status?: unknown;
+    readiness?: unknown;
+  } | null;
   if (body?.status !== "ok" || body?.readiness !== "ok") {
-    throw new Error("Deployment is not ready");
+    throw new LiveCheckError("Deployment is not ready");
   }
 }
 
@@ -32,32 +42,7 @@ export async function checkDeploymentHealth(
  */
 export async function waitForDeploymentHealth(
   url: URL,
-  {
-    attempts = 6,
-    delayMs = 10_000,
-    fetchImpl = fetch,
-    sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
-    onRetry,
-  }: {
-    attempts?: number;
-    delayMs?: number;
-    fetchImpl?: typeof fetch;
-    sleep?: (ms: number) => Promise<void>;
-    onRetry?: (attempt: number, error: unknown) => void;
-  } = {}
+  { fetchImpl = fetch, ...retry }: LiveRetryOptions & { fetchImpl?: typeof fetch } = {}
 ): Promise<number> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      await checkDeploymentHealth(url, fetchImpl);
-      return attempt;
-    } catch (error) {
-      lastError = error;
-      if (attempt < attempts) {
-        onRetry?.(attempt, error);
-        await sleep(delayMs);
-      }
-    }
-  }
-  throw lastError;
+  return retryLiveCheck(() => checkDeploymentHealth(url, fetchImpl), retry);
 }

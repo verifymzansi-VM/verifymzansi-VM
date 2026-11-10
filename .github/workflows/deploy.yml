@@ -271,6 +271,11 @@ jobs:
 
       - name: Post-deploy health check
         id: health-check
+        # The live checks through just-deployed Workers retry for a cold start:
+        # at most 6 attempts, 10 s apart, 10-15 s each (about 2.5 min per
+        # check, four such checks). Bound the step well above that worst case
+        # so a hang cannot hold the deploy group; a timeout still fails it.
+        timeout-minutes: 20
         env:
           DEPLOY_HEALTHCHECK_URL: ${{ secrets.DEPLOY_HEALTHCHECK_URL }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

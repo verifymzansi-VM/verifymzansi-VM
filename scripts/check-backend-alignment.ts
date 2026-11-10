@@ -9,8 +9,10 @@ import {
   inspectPublicBindings,
   inspectSecretBindings,
 } from "./lib/cloudflare-deployment-bindings.mjs";
-import { checkDeploymentHealth, readinessUrl } from "./lib/deployment-health";
-import { checkSiteMonitorHomepage, siteMonitorTransport } from "./lib/site-monitor";
+import { readinessUrl, waitForDeploymentHealth } from "./lib/deployment-health";
+import { liveCheckFailureReason, retryLiveCheck } from "./lib/live-retry";
+import { checkRateLimiterKey } from "./lib/rate-limiter-probe";
+import { siteMonitorTransport, waitForLiveHomepage } from "./lib/site-monitor";
 import { verifyRoleOpenapi } from "./lib/foundation-api-openapi.mjs";
 import {
   verifyFoundationRuntimeApi,
@@ -23,12 +25,38 @@ loadEnvConfig(process.cwd());
 // deployments, SQL mutations, or customer rows. Reports contain no key values.
 type Result = { check: string; status: "PASS" | "FAIL" | "UNAVAILABLE"; detail: string };
 const results: Result[] = [];
-async function check(name: string, run: () => Promise<void>, failure: string) {
+async function check(name: string, run: () => Promise<void | number>, failure: string) {
   try {
-    await run();
-    results.push({ check: name, status: "PASS", detail: "Verified" });
+    const attempt = await run();
+    results.push({
+      check: name,
+      status: "PASS",
+      detail:
+        typeof attempt === "number" && attempt > 1 ? `Verified on attempt ${attempt}` : "Verified",
+    });
   } catch {
     results.push({ check: name, status: "FAIL", detail: failure });
+  }
+}
+/** Live checks that go through Workers this deploy has just replaced retry a
+ * bounded number of times (see retryLiveCheck). Log lines carry only fixed
+ * reasons, and a pass after a retry is reported rather than hidden. */
+async function retried(
+  name: string,
+  run: (onRetry: (attempt: number, error: unknown) => void) => Promise<number>
+) {
+  try {
+    const attempt = await run((failed, error) =>
+      console.warn(`${name}: attempt ${failed} failed (${liveCheckFailureReason(error)}); retrying`)
+    );
+    if (attempt > 1)
+      console.log(
+        `::warning title=Live check retried::${name} passed on attempt ${attempt}. Earlier attempts failed; watch for an intermittent fault.`
+      );
+    return attempt;
+  } catch (error) {
+    console.warn(`${name}: failed (${liveCheckFailureReason(error)})`);
+    throw error;
   }
 }
 
@@ -196,13 +224,14 @@ async function main() {
   );
   await check(
     "Live deep readiness",
-    async () => {
-      const monitor = process.env.SITE_MONITOR_API_KEY ? siteMonitorTransport(process.env) : null;
-      await checkDeploymentHealth(
-        monitor?.url ?? readinessUrl("https://verifymzansi.com"),
-        monitor?.fetcher
-      );
-    },
+    () =>
+      retried("Live deep readiness", (onRetry) => {
+        const monitor = process.env.SITE_MONITOR_API_KEY ? siteMonitorTransport(process.env) : null;
+        return waitForDeploymentHealth(monitor?.url ?? readinessUrl("https://verifymzansi.com"), {
+          fetchImpl: monitor?.fetcher,
+          onRetry,
+        });
+      }),
     "Live deep readiness is degraded, unavailable or not valid JSON."
   );
   if (!process.env.RATE_LIMITER_API_KEY) {
@@ -215,47 +244,20 @@ async function main() {
   } else
     await check(
       "Local key against deployed rate limiter",
-      async () => {
-        const key = process.env.RATE_LIMITER_API_KEY;
-        if (!key) throw new Error();
-        // The Worker implements readOnly without incrementing any counters.
-        // Pin the destination before sending the credential.
-        const response = await fetch(
-          "https://verifymzansi-rate-limiter.verifymzansi.workers.dev/",
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              key: "health:probe",
-              action: "businesses:read",
-              readOnly: true,
-            }),
-            redirect: "error",
-            signal: AbortSignal.timeout(10000),
-          }
-        );
-        if (!response.ok || (await response.json())?.ok !== true) throw new Error();
-      },
+      () =>
+        retried("Local key against deployed rate limiter", (onRetry) =>
+          retryLiveCheck(() => checkRateLimiterKey(process.env.RATE_LIMITER_API_KEY ?? ""), {
+            onRetry,
+          })
+        ),
       "The local RATE_LIMITER_API_KEY is missing, rejected or could not be verified against the deployed Worker. This does not establish the app's remote secret value."
     );
   await check(
     "Live HTML project references",
-    async () => {
-      if (process.env.SITE_MONITOR_API_KEY) {
-        await checkSiteMonitorHomepage(process.env, new URL(connection.url).hostname);
-        return;
-      }
-      const response = await fetch("https://verifymzansi.com", {
-        redirect: "error",
-        cache: "no-store",
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!response.ok || !response.headers.get("content-type")?.includes("text/html"))
-        throw new Error();
-      const html = await response.text();
-      const hosts = [...new Set(html.match(/[a-z]{20}\.supabase\.co/g) ?? [])];
-      if (hosts.length !== 1 || hosts[0] !== new URL(connection.url).hostname) throw new Error();
-    },
+    () =>
+      retried("Live HTML project references", (onRetry) =>
+        waitForLiveHomepage(process.env, new URL(connection.url).hostname, { onRetry })
+      ),
     "Live HTML could not be verified against the approved Supabase project. Check authenticated monitor diagnostics and browser build settings."
   );
   const report = {
