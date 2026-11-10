@@ -125,7 +125,6 @@ export const CHECKS: Check[] = [
     ["test:contract"],
     "clean foundation API artifact drift; Ozow full/thin official event fixtures, shared KYC schema, SMS/email"
   ),
-  check("canaries", ["test:security-canaries"], "security assertions; no mutation score"),
   check(
     "unit",
     ["exec", "vitest", "run"],
@@ -180,9 +179,18 @@ export const CHECKS: Check[] = [
   check(
     "coverage",
     ["test:coverage:core"],
-    "core thresholds unchanged; six DOM-heavy suites run in unit",
+    "core thresholds unchanged; DOM-heavy suites in src/test/coverage-excluded-suites.ts run in unit-coverage-excluded",
     full,
     { evidence: ["coverage/coverage-final.json"], timeoutMs: 1_800_000 }
+  ),
+  // CI runs coverage plus this lane instead of unit, so every unit test runs
+  // once. Where unit runs (review, release) it already includes these suites.
+  check(
+    "unit-coverage-excluded",
+    ["test:coverage:excluded"],
+    "the DOM-heavy suites the coverage lane leaves out (src/test/coverage-excluded-suites.ts), without coverage",
+    full,
+    { coveredBy: "unit", timeoutMs: 600_000 }
   ),
   check("preflight", ["preflight"], "local development environment", local, {
     category: "local_production_env",
@@ -462,7 +470,6 @@ for (const item of CHECKS) {
       "scripts/audit-tooling.test.ts",
     ],
     contracts: ["scripts/test-contract.ts", "src/test/contracts", "src/test/fixtures/contracts"],
-    canaries: ["scripts/test-mutation.ts"],
     unit: ["vitest.config.ts", "src/**/*.test.{ts,tsx}"],
     "payment-unit": [
       "scripts/run-domain-tests.ts payments",
@@ -477,6 +484,11 @@ for (const item of CHECKS) {
     "db-business-counts": ["scripts/test-business-category-counts.mjs"],
     "db-business-evidence": ["scripts/test-business-verification-file-privacy.mjs"],
     coverage: ["vitest.config.ts", "scripts/run-vitest.ts coverage-core"],
+    "unit-coverage-excluded": [
+      "vitest.config.ts",
+      "src/test/coverage-excluded-suites.ts",
+      "scripts/run-vitest.ts coverage-excluded",
+    ],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],
     "isolated-db": ["scripts/test-isolated-db.ts", "scripts/test-db.ts", "supabase/migrations"],

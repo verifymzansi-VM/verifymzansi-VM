@@ -18,6 +18,7 @@ import {
   type CheckResult,
 } from "./lib/audit-runtime";
 import { CHECKS, selectChecks } from "./lib/check-registry";
+import { COVERAGE_EXCLUDED_SUITES } from "../src/test/coverage-excluded-suites";
 import { validateLicenseReport } from "./lib/license-policy";
 import { validateDuplication } from "./lib/duplication-policy";
 import { scanFile } from "./lib/secret-scan-files";
@@ -442,6 +443,49 @@ test("business SQL regressions remain mandatory in blocking, review and release 
   }
   assert(selectChecks("kyc").some((item) => item.id === "db-business-evidence"));
   assert(!selectChecks("kyc").some((item) => item.id === "db-business-counts"));
+});
+
+test("CI runs every unit test once: the coverage run plus the suites it leaves out", async () => {
+  const { scripts } = JSON.parse(await readFile("package.json", "utf8"));
+  const ci = await readFile(".github/workflows/ci.yml", "utf8");
+  const checks = [...ci.matchAll(/pnpm safety:ci-review -- --checks=([^\s]+)/g)].flatMap((match) =>
+    match[1].split(",")
+  );
+  const count = (id: string) => checks.filter((check) => check === id).length;
+  assert.equal(count("coverage"), 1, "coverage runs once in CI");
+  assert.equal(count("unit-coverage-excluded"), 1, "the coverage-excluded suites run once in CI");
+  // unit, payment-unit and kyc-unit would run the same tests a second time.
+  for (const duplicate of ["unit", "payment-unit", "kyc-unit"])
+    assert.equal(count(duplicate), 0, `${duplicate} stays a local command`);
+  const ciPartition = [...ci.matchAll(/pnpm safety:ci-review -- --checks=([^\s]+)/g)]
+    .map((match) => match[1].split(","))
+    .find((partition) => partition.includes("coverage"));
+  assert(ciPartition?.includes("unit-coverage-excluded"), "both lanes share one job");
+
+  assert.equal(scripts["test:coverage:excluded"], "tsx scripts/run-vitest.ts coverage-excluded");
+  const lane = CHECKS.find((check) => check.id === "unit-coverage-excluded");
+  assert.deepEqual(lane?.args, ["test:coverage:excluded"]);
+  assert.equal(lane?.coveredBy, "unit");
+  assert(!lane?.optional && !lane?.advisory);
+  for (const mode of ["review", "release"] as const) {
+    const selected = selectChecks(mode).map((check) => check.id);
+    assert(selected.includes("unit") && selected.includes("coverage"));
+    assert(!selected.includes("unit-coverage-excluded"), `unit already runs them in ${mode}`);
+  }
+  assert(
+    selectChecks("ci-review", ["coverage", "unit-coverage-excluded"]).some(
+      (check) => check.id === "unit-coverage-excluded"
+    )
+  );
+
+  // A stale entry would silently shrink the lane; vitest.config.ts must use this list.
+  assert(COVERAGE_EXCLUDED_SUITES.length > 0);
+  for (const file of COVERAGE_EXCLUDED_SUITES) await readFile(file);
+  assert.match(
+    await readFile("vitest.config.ts", "utf8"),
+    /import \{ COVERAGE_EXCLUDED_SUITES \} from "\.\/src\/test\/coverage-excluded-suites";/
+  );
+  assert(!CHECKS.some((check) => check.id === "canaries"));
 });
 
 test("strict flags, unique registry and mandatory domain/release lanes", () => {

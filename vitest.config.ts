@@ -3,24 +3,34 @@ import path from "path";
 import react from "@vitejs/plugin-react";
 import { availableParallelism } from "node:os";
 import { LEGACY_BACKEND_SUITES } from "./src/test/legacy-backend-suites";
+import { COVERAGE_EXCLUDED_SUITES } from "./src/test/coverage-excluded-suites";
 
 const strictCoverage = process.env.STRICT_COVERAGE === "true";
 const vitestLane = process.env.VITEST_LANE ?? "blocking";
 const coverageCoreLane = vitestLane === "coverage-core";
-const coverageSensitiveTests = [
-  "src/components/listings/business-category-strip.test.tsx",
-  "src/app/(marketplace)/mzansi-business/discovery-bar.test.tsx",
-  "src/app/post/create-business/page.test.tsx",
-  "src/app/dsar/page.test.tsx",
-  "src/app/verification/page.test.tsx",
-  "src/app/post/edit-listing/[id]/page.test.tsx",
-];
-const laneExclude = coverageCoreLane
-  ? [...configDefaults.exclude, ...coverageSensitiveTests]
-  : configDefaults.exclude;
+// Runs only the suites the coverage lane leaves out, so CI runs every unit
+// test once: coverage-core plus coverage-excluded equals the blocking lane.
+const coverageExcludedLane = vitestLane === "coverage-excluded";
 // Test file paths contain glob characters such as [id] and (marketplace).
 const literalGlob = (file: string) => file.replace(/[[\]()]/g, (char) => `\\${char}`);
+const coverageExcludedGlobs = COVERAGE_EXCLUDED_SUITES.map(literalGlob);
+const laneExclude = coverageCoreLane
+  ? [...configDefaults.exclude, ...coverageExcludedGlobs]
+  : configDefaults.exclude;
 const legacyBackendGlobs = LEGACY_BACKEND_SUITES.map(literalGlob);
+const foundationInclude = coverageExcludedLane
+  ? coverageExcludedGlobs
+  : ["src/**/*.{test,spec}.{ts,tsx}"];
+// An empty include list would not mean "no files", so name a path that cannot
+// exist when no excluded suite is a legacy one.
+const legacyExcludedGlobs = legacyBackendGlobs.filter((glob) =>
+  coverageExcludedGlobs.includes(glob)
+);
+const legacyInclude = coverageExcludedLane
+  ? legacyExcludedGlobs.length > 0
+    ? legacyExcludedGlobs
+    : ["src/__no-legacy-coverage-excluded-suite__.test.ts"]
+  : legacyBackendGlobs;
 
 export default defineConfig({
   plugins: [react()],
@@ -51,7 +61,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "foundation",
-          include: ["src/**/*.{test,spec}.{ts,tsx}"],
+          include: foundationInclude,
           exclude: [...laneExclude, ...legacyBackendGlobs],
           env: { NEXT_PUBLIC_DATA_BACKEND: "foundation" },
         },
@@ -60,7 +70,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "legacy-backend",
-          include: legacyBackendGlobs,
+          include: legacyInclude,
           exclude: laneExclude,
           env: { NEXT_PUBLIC_DATA_BACKEND: "source" },
         },
