@@ -6,6 +6,8 @@ import {
   compareFingerprints,
   fingerprintFoundation,
   listUpdates,
+  policyInvariantProblems,
+  POLICY_INVARIANTS,
   replayFoundation,
 } from "./lib/foundation-replay.mjs";
 
@@ -91,4 +93,35 @@ test("a new update without a recorded fingerprint fails the gate", () => {
   const differences = compareFingerprints(recorded, { updates, categories: recorded.categories });
   assert.ok(differences.some((difference) => difference.startsWith("updates:")));
   assert.ok(differences.some((difference) => difference.startsWith("last update:")));
+});
+
+test("each access-policy invariant fails when the replayed schema breaks it", async () => {
+  const { db } = await replayFoundation({
+    extraSql: [
+      // The schema guards against both of the first two (event trigger
+      // require_table_rls, default privileges), so switch the guards off here.
+      `alter event trigger require_table_rls disable;
+       create table private.invariant_probe_no_rls (id int);
+       alter table private.invariant_probe_no_rls disable row level security;
+       create function api.invariant_probe_definer() returns int language sql
+         security definer set search_path = pg_catalog as 'select 1';
+       revoke execute on function api.invariant_probe_definer() from public;
+       create function internal.invariant_probe_public() returns int language sql
+         set search_path = pg_catalog as 'select 1';
+       grant execute on function internal.invariant_probe_public() to public;
+       create function internal.invariant_probe_no_path() returns int language sql as 'select 1';
+       revoke execute on function internal.invariant_probe_no_path() from public;`,
+    ],
+  });
+  try {
+    const problems = await policyInvariantProblems(db);
+    const byId = Object.fromEntries(problems.map((problem) => [problem.id, problem.items]));
+    assert.deepEqual(Object.keys(byId).sort(), POLICY_INVARIANTS.map((item) => item.id).sort());
+    assert.deepEqual(byId["rls-on-every-table"], ["private.invariant_probe_no_rls"]);
+    assert.deepEqual(byId["no-security-definer-in-api"], ["api.invariant_probe_definer()"]);
+    assert.deepEqual(byId["no-public-execute"], ["internal.invariant_probe_public()"]);
+    assert.deepEqual(byId["fixed-search-path"], ["internal.invariant_probe_no_path()"]);
+  } finally {
+    await db.close();
+  }
 });

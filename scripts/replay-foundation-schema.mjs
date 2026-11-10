@@ -12,6 +12,8 @@ import {
   FINGERPRINT_FILE,
   compareFingerprints,
   fingerprintFoundation,
+  policyInvariantProblems,
+  POLICY_INVARIANTS,
   replayFoundation,
 } from "./lib/foundation-replay.mjs";
 
@@ -22,8 +24,10 @@ const write = args.includes("--write");
 
 const { db, updates, milliseconds } = await replayFoundation();
 let categories;
+let policyProblems;
 try {
   categories = await fingerprintFoundation(db);
+  policyProblems = await policyInvariantProblems(db);
 } finally {
   await db.close();
 }
@@ -31,6 +35,16 @@ console.log(`Replayed candidate.sql and ${updates.length} updates in ${milliseco
 for (const [name, value] of Object.entries(categories)) {
   console.log(`  ${name.padEnd(20)} ${String(value.items).padStart(5)}  ${value.fingerprint}`);
 }
+
+if (policyProblems.length > 0) {
+  console.error("::error::The replayed schema breaks access-policy invariants:");
+  for (const problem of policyProblems) {
+    console.error(`  - ${problem.rule} (${problem.id}):`);
+    for (const item of problem.items) console.error(`      ${item}`);
+  }
+  process.exit(1);
+}
+console.log(`Access-policy invariants hold (${POLICY_INVARIANTS.length} checked).`);
 
 const recorded = JSON.parse(readFileSync(FINGERPRINT_FILE, "utf8"));
 if (write) {

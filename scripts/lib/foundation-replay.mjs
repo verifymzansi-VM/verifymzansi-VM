@@ -111,3 +111,57 @@ export function compareFingerprints(recorded, replay) {
   }
   return differences;
 }
+
+// Access-policy invariants of the replayed schema. Unlike the fingerprint,
+// which only notices that something changed, these say what must always hold.
+// Execute grants to anon/authenticated on `internal` functions are expected
+// (the `api` wrappers run as the caller and call them), so they are not
+// listed here; PUBLIC must never have them.
+export const POLICY_INVARIANTS = [
+  {
+    id: "rls-on-every-table",
+    rule: "every table in api, internal and private has row level security on",
+    sql: `select n.nspname || '.' || c.relname as item
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname in ('api', 'internal', 'private') and c.relkind in ('r', 'p')
+        and not c.relrowsecurity`,
+  },
+  {
+    id: "no-public-execute",
+    rule: "no function in api, internal or private is executable by PUBLIC",
+    sql: `select n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as item
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('api', 'internal', 'private')
+        and exists (
+          select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+          where a.grantee = 0 and a.privilege_type = 'EXECUTE')`,
+  },
+  {
+    id: "no-security-definer-in-api",
+    rule: "no api function is SECURITY DEFINER (api wrappers run as the caller)",
+    sql: `select n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as item
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'api' and p.prosecdef`,
+  },
+  {
+    id: "fixed-search-path",
+    rule: "every function in api, internal and private sets a fixed search_path",
+    sql: `select n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as item
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname in ('api', 'internal', 'private')
+        and not exists (
+          select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) setting
+          where setting like 'search_path=%')`,
+  },
+];
+
+/** Returns [{ id, rule, items }] for every invariant that does not hold. */
+export async function policyInvariantProblems(db, invariants = POLICY_INVARIANTS) {
+  const problems = [];
+  for (const invariant of invariants) {
+    const result = await db.query(invariant.sql);
+    const items = result.rows.map((row) => row.item).sort();
+    if (items.length > 0) problems.push({ id: invariant.id, rule: invariant.rule, items });
+  }
+  return problems;
+}

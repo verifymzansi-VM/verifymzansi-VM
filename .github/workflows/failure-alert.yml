@@ -6,7 +6,8 @@ name: Failure alert
 # out no code and only reads the finished run's name, link and commit.
 # Close the issue once the cause is fixed; the next failure opens a new one.
 on:
-  workflow_run:
+  # Reads only the finished run's metadata; no code is checked out or run.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows:
       - CI
       - Deploy
