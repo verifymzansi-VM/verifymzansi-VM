@@ -778,10 +778,64 @@ until the owner does those steps.
 - A heartbeat is a plain HTTPS GET with no credentials and a short timeout. An
   unset URL sends nothing; a failed ping logs only the job name and never fails
   the job. The URL itself is treated as a secret and is never logged.
-- Known gap: items the app queues for a later retry (an email that could not be
-  sent, a storage object that could not be deleted yet) do not fail the run, so
-  a lasting email or storage outage shows neither a failed run nor a missing
-  heartbeat. Payment checks with failures do fail the run.
+- **Operations jobs run each step on its own.** The timed sweeps and the email
+  batch run side by side; a sweep that fails does not stop the other sweeps or
+  the emails. When any step failed, the run is reported as failed after every
+  other step has finished, and the app Worker log line
+  `Operation job run failed` names the failed steps (for example
+  `sweep:sweep_sponsorships`, `claim:payment`, `privacy_notice`, `staff_alert`).
+- **Queued emails** go out up to 25 a run: payment messages first, then
+  privacy-request notices (up to five), then every other kind. Every claim uses
+  up one of a message's eight attempts, so messages are claimed one at a time,
+  only while a worst-case send still fits, and each is sent straight away; the
+  next claim runs while the previous outcome is recorded, except near the end of
+  the send window, where a slow record could otherwise push it past the window.
+  Sends are paced to the email provider's rate. The worker gives the request 50
+  seconds from its own start (including dispatch and start-up), so the run aims
+  to end within 44 seconds: database calls are cut off then, and no claim or
+  send (including the staff alert) starts after 13 seconds. Even a send that
+  uses all its provider retries, and the record of its outcome, then end in
+  time.
+- **Unknown outcome.** When the provider refuses a repeat of an earlier request
+  with the same key (still in progress, or sent with different content), the
+  earlier request may have been delivered. The message is recorded with the
+  error `outcome_unknown` and retried later; on its last attempt it is logged
+  (`Queued email outcome unknown at its last attempt`) and listed in the staff
+  alert marked "may have been delivered".
+- **Last attempt.** A queued email is tried at most eight times. When one fails
+  on its eighth attempt, the run logs `Queued email reached its last attempt`
+  (kind and queue id only) straight away and, before any further send, emails
+  the support address. Later losses in the same run are collected into one more
+  alert at the end of the email batch (or when the send window is nearly over):
+  at most two alerts a run. A lost email that no alert covers, or an alert that
+  cannot be sent, fails the run (`staff_alert`). The alert is not retried, and
+  with a one-minute job and a five-minute heartbeat grace, one failed run does
+  not page anyone.
+- **Where lost emails stay.** The database never hands such an email out again
+  and never purges it (only delivered emails are deleted, 30 days after
+  delivery), so it stays in `private.outbox_events`. The owner can list them
+  read-only in the Supabase SQL editor for the London project:
+
+  ```sql
+  select id, kind, created_at, delivery_attempts, delivery_error
+  from private.outbox_events
+  where processed_at is null and delivery_attempts >= 8
+  order by created_at;
+  ```
+
+  `delivery_error` is `delivery_failed`, `deferred` or `outcome_unknown`. There
+  is no retry button yet; tell the account owner directly if the email mattered.
+  Run this query too whenever a run fails with a `claim:payment` or
+  `claim:other` step: a claim that was cut off or lost on the way back can use
+  up an email's last attempt without the app seeing the email, so no alert names
+  it.
+
+- Known gap: an email that fails an earlier attempt is retried later and does
+  not fail the run, and a storage object that could not be deleted yet does not
+  either, so a lasting email outage shows only through the last-attempt alert
+  (about two hours after the first failure), which itself goes through the same
+  email provider. Privacy-request notices that use up their attempts raise no
+  alert yet. Payment checks with failures do fail the run.
 
 ### Owner steps (not done in code)
 
@@ -830,6 +884,12 @@ until the owner does those steps.
   `Invalid job configuration`). Then check the app Worker's logs for the
   matching route. For the backup, open the failed Database Backup run in GitHub
   Actions.
+- **Last-attempt email alert:** check the email provider's status page and
+  sending limits, then the app Worker logs for
+  `Queued email reached its last attempt`, and list every such email with the
+  read-only query under "Where lost emails stay". Those emails are not retried
+  automatically; tell the affected account owners if the message mattered
+  (payment messages first).
 
 ---
 

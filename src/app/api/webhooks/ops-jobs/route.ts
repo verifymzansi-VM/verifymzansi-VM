@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runOperationJobs } from "@/lib/services/operation-jobs";
 import { getDataBackend } from "@/lib/data-backend";
-import { runFoundationOperationJobs } from "@/lib/foundation/operation-jobs";
+import {
+  OperationJobsIncompleteError,
+  runFoundationOperationJobs,
+} from "@/lib/foundation/operation-jobs";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("OpsJobsWebhook");
@@ -21,22 +24,26 @@ function authorized(request: Request): boolean {
  * POST /api/webhooks/ops-jobs
  *
  * Called every minute by the verifymzansi-ops-jobs worker to run due
- * operation jobs (moderation notices, auth metadata sync). Authenticated
- * with OPS_JOBS_SECRET; refuses to run if the secret is not configured.
+ * operation jobs (timed sweeps and queued emails). Authenticated with
+ * OPS_JOBS_SECRET; refuses to run if the secret is not configured. Answers
+ * 500 when any step failed, after every other step has run.
  */
 export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const summary =
-      getDataBackend() === "foundation"
-        ? await runFoundationOperationJobs()
-        : await runOperationJobs(20);
-    return NextResponse.json(summary);
+    if (getDataBackend() !== "foundation") return NextResponse.json(await runOperationJobs(20));
+    // The answer keeps its earlier shape; lost emails and failed steps are logged.
+    const { claimed, succeeded, retrying } = await runFoundationOperationJobs();
+    return NextResponse.json({ claimed, succeeded, retrying });
   } catch (err) {
+    // Every step has already run; name the failed ones for the logs.
     log.error("Operation job run failed", {
       error: err instanceof Error ? err.message : "unknown",
+      ...(err instanceof OperationJobsIncompleteError
+        ? { failed: err.failed, lost: err.summary.lost }
+        : {}),
     });
     return NextResponse.json({ error: "Run failed" }, { status: 500 });
   }

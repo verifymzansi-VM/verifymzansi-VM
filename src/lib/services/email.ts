@@ -201,6 +201,10 @@ interface SendEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  /** The provider refused a repeat of an earlier request with the same key
+   * (still in progress, or sent with different content). That earlier request
+   * may have been delivered, so this is not a refusal of the email. */
+  outcomeUnknown?: boolean;
 }
 
 const EMAIL_MAX_RETRIES = 2;
@@ -227,6 +231,17 @@ function isRetryableProviderError(error: {
     ["rate_limit_exceeded", "internal_server_error", "application_error"].includes(
       error.name ?? ""
     ) || /rate.?limit|\b429\b|\b5\d{2}\b/i.test(error.message ?? "")
+  );
+}
+
+// HTTP 409 for an idempotency key that was already used: a retry after a
+// timeout while the first request is still in progress, or the same key with
+// different content (for example a lifecycle notice whose dates changed).
+function isRepeatedRequestError(error: { statusCode?: number | null; name?: string }): boolean {
+  return (
+    error.statusCode === 409 ||
+    error.name === "concurrent_idempotent_requests" ||
+    error.name === "invalid_idempotent_request"
   );
 }
 
@@ -278,6 +293,12 @@ async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
           });
           await new Promise((r) => setTimeout(r, backoff));
           continue;
+        }
+        if (isRepeatedRequestError(result.error)) {
+          log.warn("Resend refused a repeated request; outcome unknown", {
+            error: result.error.name,
+          });
+          return { success: false, error: result.error.message, outcomeUnknown: true };
         }
         log.error("Resend error", { error: result.error });
         return { success: false, error: result.error.message };
@@ -996,6 +1017,44 @@ export async function sendSupportRequestNotification(
       reason: "A request was saved through the VerifyMzansi contact form.",
     }),
     text: `Request ${supportReference(submissionId)}: a ${label} request is ready for review. Sign in to read it and contact the sender: ${appUrl}/admin/support?submission=${submissionId}`,
+  });
+}
+
+/** One staff alert per job run listing the queued emails that failed on
+ * their last attempt. Names only the notice kind and the queue entry id,
+ * never the recipient or the content. */
+const EOL = String.fromCharCode(10);
+
+export async function sendOutboxFinalFailureAlert(
+  items: ReadonlyArray<{ id: string; kind: string; maybeDelivered?: boolean }>
+): Promise<SendEmailResult> {
+  // One order for the key and the content: the same set always gives the same email.
+  const lost = [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const ids = lost.map((item) => item.id);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ids.join(",")));
+  const key = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  const payments = lost.filter((item) => item.kind.startsWith("payment_")).length;
+  const count = `${lost.length} queued email${lost.length === 1 ? "" : "s"}`;
+  const subject = `VerifyMzansi: ${count} not confirmed delivered after the last attempt${payments ? ` (${payments} payment)` : ""}`;
+  const rows = lost.map((item): [string, string] => [
+    `${item.kind.replace(/_/g, " ")}${item.maybeDelivered ? " (may have been delivered)" : ""}`,
+    item.id,
+  ]);
+  const intro = `${count} could not be confirmed as delivered on the last attempt.`;
+  const next =
+    "These emails will not be retried automatically. Check the email provider's status and the app Worker logs for 'Queued email reached its last attempt', then contact the account owners if needed. Emails marked 'may have been delivered' were refused as a repeat of an earlier request that may have gone out.";
+  return sendEmail({
+    idempotencyKey: `outbox-final-failure/${key}`,
+    to: SUPPORT_CONTACT_EMAIL,
+    subject,
+    html: brandedEmail({
+      title: "Queued emails not confirmed delivered",
+      intro,
+      bodyHtml: `${detailList(rows)}${paragraph(next)}`,
+      reason: "The VerifyMzansi job runner sends this alert to the support address.",
+      tone: "warning",
+    }),
+    text: [intro, rows.map(([kind, id]) => `${kind}: ${id}`).join(EOL), next].join(EOL + EOL),
   });
 }
 
