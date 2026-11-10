@@ -1,9 +1,10 @@
 import { siteMonitorTransport } from "./lib/site-monitor";
 import { waitForDeploymentHealth } from "./lib/deployment-health";
+import { LiveCheckError, liveCheckFailureReason } from "./lib/live-retry";
 
 async function main() {
   if (process.argv.slice(2).some((arg) => arg !== "--"))
-    throw new Error("Unsupported monitor argument");
+    throw new LiveCheckError("Unsupported monitor argument");
   const { url, fetcher } = siteMonitorTransport(process.env);
   await waitForDeploymentHealth(url, { fetchImpl: fetcher });
   console.log(
@@ -11,6 +12,7 @@ async function main() {
   );
 }
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "Site monitor failed");
+  // Only fixed reasons are printed; raw errors can repeat a header value.
+  console.error(`Site monitor failed: ${liveCheckFailureReason(error)}`);
   process.exitCode = 1;
 });
