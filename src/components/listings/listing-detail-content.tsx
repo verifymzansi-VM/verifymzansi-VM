@@ -31,6 +31,7 @@ import {
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
 import { placeLine } from "@/lib/utils/place-line";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 export interface ListingDetailRecord {
   id: string;
@@ -265,10 +266,12 @@ export function ListingDetailContent({
                   <Calendar className="h-4 w-4" />
                   <time dateTime={listing.created_at}>{createdAt}</time>
                 </span>
-                <span className="flex items-center gap-1">
-                  <Eye className="h-4 w-4" />
-                  {viewCount} {viewCount === 1 ? "view" : "views"}
-                </span>
+                {SHOW_ENGAGEMENT_TOTALS ? (
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-4 w-4" />
+                    {viewCount} {viewCount === 1 ? "view" : "views"}
+                  </span>
+                ) : null}
               </div>
             </div>
 

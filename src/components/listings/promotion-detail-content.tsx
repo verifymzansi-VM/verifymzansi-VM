@@ -60,6 +60,7 @@ import {
   formatEventWhen,
 } from "@/lib/presentation/event-facts";
 import { placeLine } from "@/lib/utils/place-line";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 export interface PromotionDetailRecord {
   id: string;
@@ -803,11 +804,15 @@ export function PromotionDetailContent({
                     </>
                   )}
 
-                  <dt className="text-muted-foreground">Views</dt>
-                  <dd className="flex items-center gap-1 font-medium">
-                    <Eye className="h-3 w-3" />
-                    {viewCount}
-                  </dd>
+                  {SHOW_ENGAGEMENT_TOTALS ? (
+                    <>
+                      <dt className="text-muted-foreground">Views</dt>
+                      <dd className="flex items-center gap-1 font-medium">
+                        <Eye className="h-3 w-3" />
+                        {viewCount}
+                      </dd>
+                    </>
+                  ) : null}
                 </dl>
 
                 {/* Public visitors have the contact buttons; only the owner's preview lists them. */}
