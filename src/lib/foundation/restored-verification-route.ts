@@ -14,6 +14,7 @@ import { createLogger } from "../utils/logger";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { enforceMutationRequest } from "../utils/mutation-guard";
 import { REQUIRED_VERIFICATION_STEPS } from "../constants/verification";
+import { presentedReturnReason } from "./verification-return-reason";
 const log = createLogger("RestoredVerification");
 const location = z.strictObject({
   province: z.string().min(1).max(100),
@@ -65,7 +66,7 @@ function presentedVerification(
         }
       : {}),
     ...(["needs_resubmission", "rejected"].includes(step.status)
-      ? { rejection_reason: value.verification.return_reason }
+      ? presentedReturnReason(value.verification.return_reason)
       : {}),
   }));
   if (!value.verification.verified && !value.verification.return_reason) {
