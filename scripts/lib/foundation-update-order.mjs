@@ -27,14 +27,36 @@ const UPDATE_FILE = /^\d{14}_[a-z0-9_]+\.sql$/;
 const REGISTER_START = "<!-- applied-register:start -->";
 const REGISTER_END = "<!-- applied-register:end -->";
 const STATUS_FORMS = [
-  { kind: "pending", pattern: /^pending$/ },
-  { kind: "applied", pattern: /^applied (\d{4}-\d{2}-\d{2}) \d{2}:\d{2} UTC$/ },
-  { kind: "applied", pattern: /^applied (\d{4}-\d{2}-\d{2}) \(SAST date, time not recorded\)$/ },
+  { kind: "pending", form: "pending", pattern: /^pending$/ },
+  { kind: "applied", form: "utc", pattern: /^applied (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC$/ },
   {
     kind: "applied",
-    pattern: /^applied before (\d{4}-\d{2}-\d{2}) \d{2}:\d{2} UTC \(exact time not recorded\)$/,
+    form: "day",
+    pattern: /^applied (\d{4}-\d{2}-\d{2}) \(SAST date, time not recorded\)$/,
+  },
+  {
+    kind: "applied",
+    form: "before",
+    pattern: /^applied before (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC \(exact time not recorded\)$/,
   },
 ];
+// Older updates whose application time was never written down may use the
+// "day" and "before" forms; every later update records the UTC time.
+export const LEGACY_STATUS_THROUGH = "20261109224337_fix_post_command_target.sql";
+
+/** True for a real calendar date (and HH:MM time, when given). */
+function realDateTime(date, time = "00:00") {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const value = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  return (
+    hour < 24 &&
+    minute < 60 &&
+    value.getUTCFullYear() === year &&
+    value.getUTCMonth() === month - 1 &&
+    value.getUTCDate() === day
+  );
+}
 const CHANGES = new Set([
   "remove",
   "remove-argument",
@@ -78,13 +100,12 @@ export function parseUpdateRegister(readme) {
       errors.push(`${file}: unknown status "${status}"`);
       continue;
     }
-    rows.push({
-      file,
-      status,
-      kind: form.kind,
-      date: form.pattern.exec(status)[1] ?? null,
-      evidence: evidence ?? "",
-    });
+    const [, date = null, time] = form.pattern.exec(status);
+    if (date && !realDateTime(date, time)) {
+      errors.push(`${file}: "${status}" is not a real date and time`);
+      continue;
+    }
+    rows.push({ file, status, kind: form.kind, form: form.form, date, evidence: evidence ?? "" });
   }
   return { rows, errors };
 }
@@ -112,6 +133,8 @@ export function checkUpdateRegister({ files, rows, fingerprint }) {
       errors.push(`${row.file}: applied date ${row.date} is before the file's own timestamp`);
     if (row.kind === "applied" && !row.evidence.trim())
       errors.push(`${row.file}: an applied row needs evidence after ";"`);
+    if (row.kind === "applied" && row.form !== "utc" && row.file > LEGACY_STATUS_THROUGH)
+      errors.push(`${row.file}: record the application as "applied YYYY-MM-DD HH:MM UTC"`);
   }
   if (listed.join("\n") !== [...listed].sort().join("\n"))
     errors.push("the applied register is not in filename order");
@@ -226,6 +249,8 @@ export function diffApiContracts(baseManifests, headManifests) {
 
 const stepKey = (item) =>
   [item.command, item.change, item.argument ?? "", item.role ?? ""].join("|");
+const stepIdentity = (step) => `${stepKey(step)}|${step.expandUpdate}`;
+const updateName = (entry) => entry.replace(/^updates\//, "");
 
 /** Validates contract-steps.json on its own. */
 export function parseContractSteps(document) {
@@ -258,21 +283,66 @@ export function parseContractSteps(document) {
       errors.push(`${at}: expandPullRequest must be the earlier pull request number`);
     if (typeof step.reason !== "string" || step.reason.trim().length < 10)
       errors.push(`${at}: reason must explain why callers are safe`);
-    const key = stepKey(step);
+    const key = stepIdentity(step);
     if (keys.has(key)) errors.push(`${at}: duplicate step for ${key}`);
     keys.add(key);
   });
   return { steps: errors.length ? [] : document.steps, errors };
 }
 
-/** Each breaking finding needs a recorded second step whose expand update was
- * merged before (present on the base commit) and applied to production, and
- * whose replacement (for a rename) already existed on the base commit. */
+/** Files in src/ and workers/ that still name a command. git grep exits 1
+ * when nothing matches; any other failure fails closed.
+ * @param {string} name
+ * @param {(args: string[]) => string} git runs git and throws on a non-zero exit
+ */
+export function codeReferences(name, git) {
+  try {
+    return git(["grep", "-l", "-F", "-w", "-e", name, "--", "src", "workers"])
+      .split(/\r?\n/)
+      .filter(Boolean);
+  } catch (error) {
+    if (error?.status === 1 && !String(error.stderr ?? "").trim()) return [];
+    throw new Error(`git grep failed while looking for ${name}`);
+  }
+}
+
+/** The update a finding undoes when it reverts an expand step that production
+ * has not received: the command's introducing update (for a removal) or its
+ * latest update, pending in the base register or deleted in this change, and no
+ * longer listed by the head manifest. Reverting such a change is safe. */
+function revertedUpdate(finding, base, head, basePending, headUpdateFiles) {
+  const updates = [...(base.get(finding.command)?.updates ?? [])].map(updateName).sort();
+  if (!updates.length) return null;
+  const update = finding.change === "remove" ? updates[0] : updates.at(-1);
+  const notApplied = basePending.has(update) || !headUpdateFiles.includes(update);
+  const stillListed = (head.get(finding.command)?.updates ?? []).map(updateName).includes(update);
+  return notApplied && !stillListed ? update : null;
+}
+
+/**
+ * Each breaking finding needs a second step recorded in this change (not
+ * already on the base commit), whose expand update was merged before (present
+ * on the base commit) and recorded as applied by the base commit's register,
+ * and whose replacement (for a rename) already existed on the base commit.
+ * Reverting an expand step production never received needs no entry.
+ * @param {object} input
+ * @param {object[]} input.findings diffApiContracts result
+ * @param {object[]} input.steps head contract-steps.json steps
+ * @param {object[]} input.baseSteps base commit contract-steps.json steps
+ * @param {string[]} input.baseUpdateFiles update files on the base commit
+ * @param {string[]} input.headUpdateFiles update files in this change
+ * @param {{file: string, kind: string}[]} input.baseRows base commit register rows
+ * @param {object[]} input.baseManifests
+ * @param {object[]} input.headManifests
+ * @param {(name: string) => string[]} [input.references] files still naming a command
+ */
 export function checkContractSteps({
   findings,
   steps,
+  baseSteps,
   baseUpdateFiles,
-  rows,
+  headUpdateFiles,
+  baseRows,
   baseManifests,
   headManifests,
   references = () => [],
@@ -280,14 +350,24 @@ export function checkContractSteps({
   const errors = [];
   const base = byName(baseManifests);
   const head = byName(headManifests);
-  const applied = new Set(rows.filter((row) => row.kind === "applied").map((row) => row.file));
-  const recorded = new Map(steps.map((step) => [stepKey(step), step]));
+  const applied = new Set(baseRows.filter((row) => row.kind === "applied").map((row) => row.file));
+  const basePending = new Set(
+    baseRows.filter((row) => row.kind === "pending").map((row) => row.file)
+  );
+  const old = new Set(baseSteps.map(stepIdentity));
+  const fresh = steps.filter((step) => !old.has(stepIdentity(step)));
   for (const finding of findings) {
-    const step = recorded.get(stepKey(finding));
+    if (revertedUpdate(finding, base, head, basePending, headUpdateFiles)) continue;
+    const step = fresh.find((candidate) => stepKey(candidate) === stepKey(finding));
     const hint =
-      'Expand first: add the new command or argument in one pull request, switch the code, and remove the old one in a later pull request with an entry in database/foundation/contract-steps.json (see "Safe order" in updates/README.md).';
+      'Expand first: add the new command or argument in one pull request, switch the code, and remove the old one in a later pull request with a new entry in database/foundation/contract-steps.json (see "Safe order" in updates/README.md).';
     if (!step) {
-      errors.push(`${finding.detail}, without a recorded second step. ${hint}`);
+      const reused = steps.some((candidate) => stepKey(candidate) === stepKey(finding));
+      errors.push(
+        reused
+          ? `${finding.detail}: the matching entry in contract-steps.json is already on the base commit and authorises only the change it was added with. ${hint}`
+          : `${finding.detail}, without a recorded second step. ${hint}`
+      );
       continue;
     }
     if (!baseUpdateFiles.includes(step.expandUpdate))
@@ -296,7 +376,7 @@ export function checkContractSteps({
       );
     if (!applied.has(step.expandUpdate))
       errors.push(
-        `${finding.detail}: expand update ${step.expandUpdate} is not recorded as applied in the register`
+        `${finding.detail}: expand update ${step.expandUpdate} is not recorded as applied on the base commit; it must reach production, and be recorded so in an earlier pull request, before this second step`
       );
     if (step.replacement !== undefined) {
       if (finding.change === "remove") {
@@ -412,27 +492,40 @@ export function readJsonFile(root, file) {
   return JSON.parse(readFileSync(path.join(root, file), "utf8"));
 }
 
-/** Update files that this commit's history added and later deleted (for
- * example by reverting a merged pull request). A database keeps them. */
+/** Update files that this commit's history deleted (for example by reverting
+ * a merged pull request) while the register at that time recorded them as
+ * applied: the database keeps them. Renamed files and files that were still
+ * pending when they were removed are not counted. */
 export function removedUpdateFiles(root = process.cwd(), git = defaultGit) {
   const output = git(root, [
     "log",
-    "--no-renames",
+    "--find-renames",
     "--diff-filter=D",
     "--name-only",
-    "--format=",
+    "--format=commit %H",
     "HEAD",
     "--",
     UPDATES_DIR,
   ]);
-  return [
-    ...new Set(
-      output
-        .split(/\r?\n/)
-        .map((line) => line.trim().split("/").pop())
-        .filter((file) => file && UPDATE_FILE.test(file))
-    ),
-  ];
+  const present = new Set(listUpdateFiles(root));
+  const removed = new Set();
+  let commit = "";
+  for (const line of output.split(/\r?\n/).map((value) => value.trim())) {
+    if (/^commit [0-9a-f]{40}$/.test(line)) {
+      commit = line.slice(7);
+      continue;
+    }
+    const file = line.split("/").pop();
+    if (!commit || !file || !UPDATE_FILE.test(file) || present.has(file)) continue;
+    let rows = [];
+    try {
+      rows = parseUpdateRegister(git(root, ["show", `${commit}^:${UPDATES_README}`])).rows;
+    } catch {
+      continue; // no register before this commit: not recorded as applied
+    }
+    if (rows.some((row) => row.file === file && row.kind === "applied")) removed.add(file);
+  }
+  return [...removed].sort();
 }
 function defaultGit(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8", windowsHide: true });

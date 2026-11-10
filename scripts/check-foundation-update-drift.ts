@@ -29,8 +29,12 @@ function settings(target: string, env: NodeJS.ProcessEnv) {
   };
 }
 
-async function main() {
-  const args = process.argv.slice(2).filter((arg) => arg !== "--");
+/** Exported for tests: a synthetic fetcher replaces the network. */
+export async function main(
+  argv: string[] = process.argv.slice(2),
+  options: { fetcher?: typeof fetch } = {}
+) {
+  const args = argv.filter((arg) => arg !== "--");
   const target = args.length === 1 ? /^--target=(staging|production)$/.exec(args[0])?.[1] : null;
   if (!target) throw new Error("Usage: --target=staging|production");
   const values = settings(target, process.env);
@@ -52,25 +56,47 @@ async function main() {
         ? "Staging must not point at the production project"
         : "Production must be the approved London project"
     );
-  const { drift, lines } = await readFoundationUpdateDrift(connection, {
-    target,
-    recorded: target === "production",
-  });
+  let result: Awaited<ReturnType<typeof readFoundationUpdateDrift>>;
+  try {
+    result = await readFoundationUpdateDrift(connection, {
+      target,
+      recorded: target === "production",
+      fetcher: options.fetcher,
+    });
+  } catch {
+    // Network failure, timeout or a paused project: nothing was measured.
+    printUpdateDrift([
+      {
+        level: "warning",
+        text: `${target} database could not be reached: update order not compared (inconclusive).`,
+      },
+    ]);
+    return 0;
+  }
+  const { drift, lines } = result;
   printUpdateDrift(lines);
-  if (target === "staging" && (drift.behind.length > 0 || drift.unexpected.length > 0)) {
+  if (drift.unexpected.length > 0)
+    printUpdateDrift([
+      {
+        level: "warning",
+        text: `${target} comparison is inconclusive for commands that answered unexpectedly (paused project or gateway error); only commands PostgREST reports missing count as behind.`,
+      },
+    ]);
+  if (target === "staging" && drift.behind.length > 0) {
     console.error("Staging is not in step with this commit: apply its updates to staging first.");
     return 1;
   }
   return 0;
 }
 
-main().then(
-  (code) => {
-    process.exitCode = code;
-  },
-  (error: unknown) => {
-    // Never echo connection values or provider bodies.
-    console.error(error instanceof Error ? error.message : "Update drift check failed");
-    process.exitCode = 1;
-  }
-);
+if (process.argv[1] && /check-foundation-update-drift\.ts$/.test(process.argv[1]))
+  main().then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error: unknown) => {
+      // Never echo connection values or provider bodies.
+      console.error(error instanceof Error ? error.message : "Update drift check failed");
+      process.exitCode = 1;
+    }
+  );

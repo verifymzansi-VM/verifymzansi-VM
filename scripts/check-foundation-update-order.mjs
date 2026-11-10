@@ -7,7 +7,9 @@
 //    update file and agrees with fingerprint.json's production record.
 // 2. With a base commit, the API manifests are compared with the base: a
 //    removed or renamed command or argument (or another change that breaks
-//    existing callers) needs a reviewed second step in contract-steps.json.
+//    existing callers) needs a reviewed second step added to
+//    contract-steps.json in this change. The expand update must be applied
+//    according to the base commit's register, not this change's.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -19,6 +21,7 @@ import {
   UPDATES_README,
   checkContractSteps,
   checkUpdateRegister,
+  codeReferences,
   diffApiContracts,
   listUpdateFiles,
   parseContractSteps,
@@ -44,7 +47,13 @@ if (/^0+$/.test(base)) base = "";
 
 const root = process.cwd();
 const git = (gitArgs) =>
-  execFileSync("git", gitArgs, { cwd: root, encoding: "utf8", windowsHide: true, maxBuffer: 64e6 });
+  execFileSync("git", gitArgs, {
+    cwd: root,
+    encoding: "utf8",
+    windowsHide: true,
+    maxBuffer: 64e6,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
 const errors = [];
 const files = listUpdateFiles(root);
@@ -66,31 +75,33 @@ if (base) {
   const head = git(["rev-parse", "HEAD"]).trim();
   if (commit === head) compared = "base is HEAD; nothing to compare";
   else {
-    const baseManifests = API_MANIFESTS.map((file) =>
-      JSON.parse(git(["show", `${commit}:${file}`]))
-    );
+    const atBase = (file) => git(["show", `${commit}:${file}`]);
+    const optionalAtBase = (file) => {
+      try {
+        return atBase(file);
+      } catch {
+        return null; // not on the base commit yet
+      }
+    };
+    const baseManifests = API_MANIFESTS.map((file) => JSON.parse(atBase(file)));
     const headManifests = API_MANIFESTS.map((file) => readJsonFile(root, file));
     const baseUpdateFiles = git(["ls-tree", "--name-only", `${commit}:${UPDATES_DIR}`])
       .split(/\r?\n/)
       .filter((file) => file.endsWith(".sql"));
+    const baseReadme = optionalAtBase(UPDATES_README);
+    const baseStepsText = optionalAtBase(CONTRACT_STEPS);
     const findings = diffApiContracts(baseManifests, headManifests);
     errors.push(
       ...checkContractSteps({
         findings,
         steps: steps.steps,
+        baseSteps: baseStepsText ? parseContractSteps(JSON.parse(baseStepsText)).steps : [],
         baseUpdateFiles,
-        rows: register.rows,
+        headUpdateFiles: files,
+        baseRows: baseReadme ? parseUpdateRegister(baseReadme).rows : [],
         baseManifests,
         headManifests,
-        references: (name) => {
-          try {
-            return git(["grep", "-l", "-F", "-w", "-e", name, "--", "src", "workers"])
-              .split(/\r?\n/)
-              .filter(Boolean);
-          } catch {
-            return []; // git grep exits 1 when nothing matches
-          }
-        },
+        references: (name) => codeReferences(name, git),
       })
     );
     compared = `${findings.length} caller-breaking API change(s) against ${commit.slice(0, 12)}`;

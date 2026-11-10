@@ -21,21 +21,41 @@ Code and database must never disagree, so every change follows this order:
    misses a file or when the API manifests remove or rename a command or
    argument compared with `main`.
 3. **Staging first.** Once a staging project exists, the update is applied there
-   before merge; the CI job `staging-database` then requires staging to be in
-   step with the pull request. Until staging is configured that job only prints
-   a notice.
+   before merge; the pull request job `staging-database` then fails when staging
+   lacks a command the change expects. Until staging is configured that job is
+   skipped. It never runs on `main`, so staging cannot block a deploy.
 4. **Merge, then apply to production.** The owner applies the update (or
    explicitly approves applying it) after the merge and before the code that
-   needs it is deployed, then changes its register line to the applied time. The
-   release preflight compares what production answers with what the commit
-   expects and warns "database behind by N" or "database ahead by N".
+   needs it is deployed. The release preflight compares what production answers
+   with what the commit expects and warns "database behind by N" or "database
+   ahead by N". Afterwards, one pull request records it, changing together:
+   - its register line, from `pending` to
+     `applied YYYY-MM-DD HH:MM UTC; <how it was applied>`;
+   - `../fingerprint.json` `productionCheck`: the owner's read-only fingerprint
+     capture moves `capturedOn`, `matchedThroughUpdate` and
+     `matchedFingerprints` to this update, and it leaves `pendingApplication`.
+
+   Updates are recorded in filename order: `pendingApplication` must be exactly
+   the updates after `matchedThroughUpdate`, so an update applied before an
+   earlier pending one stays `pending` until the earlier one is applied too.
+
 5. **Contract in a later pull request.** Removing or renaming a command or
    argument, changing an argument or return type, making an argument required or
    removing an execute grant happens only after the code has switched. That pull
-   request adds an entry to `../contract-steps.json` naming the earlier expand
-   update (already on `main` and recorded as applied) and its pull request
-   number; a replacement must already exist on `main`, and a removed command may
-   no longer be named in `src/` or `workers/`.
+   request adds a new entry to `../contract-steps.json` naming the earlier
+   expand update and its pull request number. The expand update must already be
+   on `main` and recorded there as applied (the check reads `main`'s register,
+   not the pull request's), a replacement must already exist on `main`, and a
+   removed command may no longer be named in `src/` or `workers/`. An entry
+   authorises only the pull request that adds it; a later change of the same
+   kind needs a new entry with its own expand update. Reverting an expand step
+   that production never received (its update still `pending` on `main`, or its
+   file deleted in the same change) needs no entry.
+
+The manifest comparison sees command names, argument names and types, which
+arguments are required, return types and execute grants. It does not see fields
+inside `jsonb` results or inputs, or changed argument defaults: review those by
+hand and keep them additive.
 
 A code rollback (reverting a pull request) never undoes a database update: the
 preflight then reports the database ahead, and a forward fix is preferred.
@@ -1163,14 +1183,16 @@ has no line, a line names a missing file, or a line disagrees with
 
 - `pending`: not yet applied to production (also listed in
   `pendingApplication`).
-- `applied YYYY-MM-DD HH:MM UTC`: the recorded application time. Use this form
-  for every new application.
-- `applied YYYY-MM-DD (SAST date, time not recorded)`: the day is recorded, the
-  time is not.
+- `applied YYYY-MM-DD HH:MM UTC`: the recorded application time. Required for
+  every update after `20261109224337_fix_post_command_target.sql`.
+- `applied YYYY-MM-DD (SAST date, time not recorded)`: older updates only; the
+  day is recorded, the time is not.
 - `applied before YYYY-MM-DD HH:MM UTC (exact time not recorded)`: older updates
-  whose application time was not written down; the time is that of the commit
-  that first recorded them as applied, or of the first production fingerprint
-  match.
+  only, whose application time was not written down; the time is that of the
+  commit that first recorded them as applied, or of the first production
+  fingerprint match.
+
+Dates and times must be real (CI rejects, for example, `2026-02-30`).
 
 <!-- applied-register:start -->
 

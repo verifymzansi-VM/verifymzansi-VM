@@ -51,6 +51,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit's first parent is the pull request's base.
+          fetch-depth: 2
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -77,23 +80,44 @@ jobs:
       # recorded second step (database/foundation/contract-steps.json).
       - name: Check the update register and API removals against the base commit
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          base=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            # Checked out as the merge commit: parent 1 is the base branch tip.
+            if [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -ne 3 ]; then
+              echo "::error::Expected the pull request merge commit; cannot find the base."
+              exit 1
+            fi
+            base="$(git rev-parse HEAD^1)"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            for attempt in 1 2 3; do
+              if git fetch --no-tags --depth=1 origin "$BEFORE_SHA"; then base="$BEFORE_SHA"; break; fi
+              sleep $((attempt * 5))
+            done
+            if [ -z "$base" ]; then
+              # Main already merged this change after its pull request passed;
+              # do not block the release on a fetch failure.
+              echo "::warning::Could not fetch the previous main commit; comparing with HEAD^1 instead."
+              base="$(git rev-parse HEAD^1)"
+            fi
           fi
-          node scripts/check-foundation-update-order.mjs --base "$BASE_SHA"
+          node scripts/check-foundation-update-order.mjs --base "$base"
 
-  # Updates reach staging before merge. Inert (a notice) until the owner
-  # creates staging and sets the FOUNDATION_STAGING_* secrets; then it fails a
-  # pull request whose updates staging has not received. Read-only: anonymous
-  # probes with the staging publishable key.
-  staging-database:
-    name: Staging database in step
+  # Updates reach staging before merge. Pull requests only, so a paused or
+  # unreachable staging project can never block a production deploy (deploy
+  # needs a green main CI run). Inert until the owner creates staging and sets
+  # the FOUNDATION_STAGING_* secrets: the check job is then skipped, not passed.
+  staging-database-config:
+    name: Staging database configured
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 2
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
     steps:
-      - name: Check staging configuration
+      - name: Check FOUNDATION_STAGING_SUPABASE_URL
         id: check
         env:
           STAGING_URL: ${{ secrets.FOUNDATION_STAGING_SUPABASE_URL }}
@@ -102,23 +126,29 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Staging is not configured (FOUNDATION_STAGING_* secrets unset): the staging database check is inert."
+            echo "::notice::FOUNDATION_STAGING_* secrets are not set: the staging database check is skipped."
           fi
+
+  # Read-only: anonymous probes with the staging publishable key. Fails only
+  # when PostgREST reports a command of this change missing on staging; an
+  # unreachable or paused project is a warning (inconclusive).
+  staging-database:
+    name: Staging database in step
+    runs-on: ubuntu-latest
+    needs: staging-database-config
+    if: github.event_name == 'pull_request' && needs.staging-database-config.outputs.configured == 'true'
+    timeout-minutes: 10
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.check.outputs.configured == 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-        if: steps.check.outputs.configured == 'true'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: steps.check.outputs.configured == 'true'
         with:
           node-version: "22"
           cache: "pnpm"
-      - if: steps.check.outputs.configured == 'true'
-        run: pnpm install --frozen-lockfile
-      - name: Compare staging with this commit's updates
-        if: steps.check.outputs.configured == 'true'
+      - run: pnpm install --frozen-lockfile
+      - name: Compare staging with this change's updates
         env:
           FOUNDATION_STAGING_SUPABASE_URL: ${{ secrets.FOUNDATION_STAGING_SUPABASE_URL }}
           FOUNDATION_STAGING_PROJECT_REF: ${{ secrets.FOUNDATION_STAGING_PROJECT_REF }}

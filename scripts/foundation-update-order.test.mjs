@@ -12,13 +12,16 @@ import {
   UPDATES_README,
   checkContractSteps,
   checkUpdateRegister,
+  codeReferences,
   diffApiContracts,
   introducingUpdates,
+  LEGACY_STATUS_THROUGH,
   listUpdateFiles,
   parseContractSteps,
   parseUpdateRegister,
   readFoundationUpdateDrift,
   readJsonFile,
+  removedUpdateFiles,
   updateDrift,
 } from "./lib/foundation-update-order.mjs";
 
@@ -189,8 +192,10 @@ const contract = (baseManifests, headManifests, steps, extra = {}) =>
   checkContractSteps({
     findings: diffApiContracts(baseManifests, headManifests),
     steps,
+    baseSteps: [],
     baseUpdateFiles: ["20261101000000_expand.sql"],
-    rows: appliedRows,
+    headUpdateFiles: ["20261101000000_expand.sql", "20261102000000_pending.sql"],
+    baseRows: appliedRows,
     baseManifests,
     headManifests,
     ...extra,
@@ -386,7 +391,7 @@ test("the live comparison sends only the publishable key and reports a missing c
 // Throwaway local probe: a temporary git repository with the real manifests,
 // a base commit and a head commit, checked by the real CLI.
 const cli = path.join(repo, "scripts/check-foundation-update-order.mjs");
-function probeRepository(mutate, steps = []) {
+function probeRepository(mutate, steps = [], options = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "vm-update-order-"));
   try {
     const git = (...args) =>
@@ -405,7 +410,8 @@ function probeRepository(mutate, steps = []) {
     for (const file of files)
       writeFileSync(path.join(dir, "database/foundation/updates", file), "");
     const write = (file, value) => writeFileSync(path.join(dir, file), JSON.stringify(value));
-    write(CONTRACT_STEPS, { schemaVersion: 1, steps: [] });
+    write(CONTRACT_STEPS, { schemaVersion: 1, steps: options.baseSteps ?? [] });
+    options.base?.(dir);
     git("init", "-q");
     git("add", "-A");
     git("commit", "-q", "-m", "base");
@@ -416,7 +422,8 @@ function probeRepository(mutate, steps = []) {
     mutate(b, r);
     write(API_MANIFESTS[0], b);
     write(API_MANIFESTS[1], r);
-    write(CONTRACT_STEPS, { schemaVersion: 1, steps });
+    write(CONTRACT_STEPS, { schemaVersion: 1, steps: [...(options.baseSteps ?? []), ...steps] });
+    options.head?.(dir);
     git("add", "-A");
     git("commit", "-q", "-m", "head");
     return spawnSync(process.execPath, [cli, "--base", base], {
@@ -519,4 +526,318 @@ test("the staging check is inert until configured and never points at production
   });
   assert.equal(production.status, 1);
   assert.match(production.stderr, /must not point at the production project/);
+});
+
+test("the expand update must be applied on the base register, and a step authorises only its own change", () => {
+  const expanded = manifests(fn("old_name", [["p_x", "text"]]), fn("new_name", [["p_x", "text"]]));
+  const contracted = manifests(fn("new_name", [["p_x", "text"]]));
+  // The pull request cannot flip its own expand update to applied: only the
+  // base commit's register counts.
+  assert.match(
+    contract(expanded, contracted, [step()], {
+      baseRows: [{ file: "20261101000000_expand.sql", kind: "pending" }],
+    }),
+    /not recorded as applied on the base commit; it must reach production, and be recorded so in an earlier pull request/
+  );
+  // An entry already on the base commit authorises nothing more.
+  assert.match(
+    contract(expanded, contracted, [step()], { baseSteps: [step()] }),
+    /already on the base commit and authorises only the change it was added with/
+  );
+  // A new entry for the same kind of change, with its own expand update, does.
+  assert.equal(
+    contract(expanded, contracted, [step(), step({ expandUpdate: "20261103000000_second.sql" })], {
+      baseSteps: [step()],
+      baseUpdateFiles: ["20261101000000_expand.sql", "20261103000000_second.sql"],
+      baseRows: [
+        { file: "20261101000000_expand.sql", kind: "applied" },
+        { file: "20261103000000_second.sql", kind: "applied" },
+      ],
+    }),
+    ""
+  );
+  assert.deepEqual(
+    parseContractSteps({
+      schemaVersion: 1,
+      steps: [step(), step({ expandUpdate: "20261103000000_second.sql" })],
+    }).errors,
+    []
+  );
+});
+
+test("reverting an expand step production never received needs no entry", () => {
+  const pending = "20261102000000_pending.sql";
+  const introduced = manifests(fn("old_name", [], { updates: [`updates/${pending}`] }));
+  const none = manifests();
+  // Introducing update still pending on the base register.
+  assert.equal(
+    contract(introduced, none, [], {
+      baseRows: [{ file: pending, kind: "pending" }],
+      headUpdateFiles: [pending],
+    }),
+    ""
+  );
+  // Its update file is deleted in the same change.
+  assert.equal(
+    contract(introduced, none, [], {
+      baseRows: [{ file: pending, kind: "applied" }],
+      headUpdateFiles: [],
+    }),
+    ""
+  );
+  // Applied and still present: a real contract step is needed.
+  assert.match(
+    contract(introduced, none, [], {
+      baseRows: [{ file: pending, kind: "applied" }],
+      headUpdateFiles: [pending],
+    }),
+    /without a recorded second step/
+  );
+  // Reverting an optional argument added by a pending update.
+  const old = "20261101000000_expand.sql";
+  const before = manifests(
+    fn(
+      "cmd",
+      [
+        ["p_a", "text"],
+        ["p_b", "text", true],
+      ],
+      {
+        updates: [`updates/${old}`, `updates/${pending}`],
+      }
+    )
+  );
+  const after = manifests(fn("cmd", [["p_a", "text"]], { updates: [`updates/${old}`] }));
+  assert.equal(
+    contract(before, after, [], {
+      baseRows: [
+        { file: old, kind: "applied" },
+        { file: pending, kind: "pending" },
+      ],
+    }),
+    ""
+  );
+  assert.match(
+    contract(before, after, [], {
+      baseRows: [
+        { file: old, kind: "applied" },
+        { file: pending, kind: "applied" },
+      ],
+    }),
+    /argument p_b removed, without a recorded second step/
+  );
+});
+
+test("a git grep failure fails closed instead of meaning 'no references'", () => {
+  const failing = (status, stderr) => () => {
+    throw Object.assign(new Error("git"), { status, stderr });
+  };
+  assert.deepEqual(codeReferences("old_name", failing(1, "")), []);
+  assert.throws(
+    () => codeReferences("old_name", failing(128, "fatal: not a git repository")),
+    /git grep failed/
+  );
+  assert.throws(() => codeReferences("old_name", failing(1, "fatal: bad")), /git grep failed/);
+  assert.deepEqual(
+    codeReferences("old_name", () => "src/a.ts\nworkers/b.ts\n"),
+    ["src/a.ts", "workers/b.ts"]
+  );
+});
+
+test("register dates must be real, and updates after the legacy ones record the UTC time", () => {
+  const a = "20261101000000_a.sql";
+  for (const status of [
+    "applied 2026-99-99 99:99 UTC",
+    "applied 2026-02-30 10:00 UTC",
+    "applied 2026-11-01 24:00 UTC",
+    "applied 2026-11-01 10:60 UTC",
+    "applied 2026-13-01 (SAST date, time not recorded)",
+    "applied before 2026-11-31 05:06 UTC (exact time not recorded)",
+  ])
+    assert.match(
+      parseUpdateRegister(register([`- \`${a}\`: ${status}; r`])).errors.join(),
+      /is not a real date and time/,
+      status
+    );
+  const later = "20261111000000_later.sql";
+  const fp = { productionCheck: { matchedThroughUpdate: later, pendingApplication: [] } };
+  for (const status of [
+    "applied 2026-11-11 (SAST date, time not recorded)",
+    "applied before 2026-11-11 05:06 UTC (exact time not recorded)",
+  ])
+    assert.match(
+      checkUpdateRegister({
+        files: [later],
+        rows: parseUpdateRegister(register([`- \`${later}\`: ${status}; r`])).rows,
+        fingerprint: fp,
+      }).join(),
+      /record the application as "applied YYYY-MM-DD HH:MM UTC"/
+    );
+  assert.deepEqual(
+    checkUpdateRegister({
+      files: [later],
+      rows: parseUpdateRegister(register([`- \`${later}\`: applied 2026-11-11 08:15 UTC; r`])).rows,
+      fingerprint: fp,
+    }),
+    []
+  );
+  assert.ok(LEGACY_STATUS_THROUGH < later);
+});
+
+test("only update files deleted while recorded as applied count as ahead; renames and pending ones do not", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "vm-update-removed-"));
+  try {
+    const git = (...args) =>
+      execFileSync(
+        "git",
+        ["-c", "user.name=probe", "-c", "user.email=probe@example.invalid", ...args],
+        { cwd: dir, encoding: "utf8", windowsHide: true }
+      );
+    const updates = path.join(dir, "database/foundation/updates");
+    mkdirSync(updates, { recursive: true });
+    const applied = "20261101000000_applied.sql";
+    const pendingFile = "20261102000000_pending.sql";
+    const renamed = "20261103000000_renamed.sql";
+    for (const [file, body] of [
+      [applied, "select 1; -- applied\n"],
+      [pendingFile, "select 2; -- pending\n"],
+      [renamed, "select 3; -- a long enough body to be detected as a rename\n"],
+    ])
+      writeFileSync(path.join(updates, file), body);
+    writeFileSync(
+      path.join(dir, UPDATES_README),
+      register([
+        `- \`${applied}\`: applied 2026-11-01 10:00 UTC; r`,
+        `- \`${pendingFile}\`: pending`,
+        `- \`${renamed}\`: applied 2026-11-03 10:00 UTC; r`,
+      ])
+    );
+    git("init", "-q");
+    git("add", "-A");
+    git("commit", "-q", "-m", "base");
+    git(
+      "mv",
+      `database/foundation/updates/${renamed}`,
+      "database/foundation/updates/20261103000000_better_name.sql"
+    );
+    git("commit", "-q", "-m", "rename");
+    git("rm", "-q", `database/foundation/updates/${pendingFile}`);
+    git("commit", "-q", "-m", "revert an unapplied update");
+    assert.deepEqual(removedUpdateFiles(dir), []);
+    git("rm", "-q", `database/foundation/updates/${applied}`);
+    git("commit", "-q", "-m", "revert an applied update");
+    assert.deepEqual(removedUpdateFiles(dir), [applied]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+const markPending = (file) => (dir) => {
+  const target = path.join(dir, UPDATES_README);
+  const text = readFileSync(target, "utf8");
+  const start = text.indexOf(`\`${file}\`: `) + file.length + 4;
+  writeFileSync(target, `${text.slice(0, start)}pending${text.slice(text.indexOf(";", start))}`);
+};
+const restoreReadme = (dir) =>
+  copyFileSync(path.join(repo, UPDATES_README), path.join(dir, UPDATES_README));
+const removeVictim = (_b, r) => {
+  r.functions = r.functions.filter((item) => item.name !== victim.name);
+};
+
+test("probe: a self-recorded expand update and a reused old entry fail; reverting a pending expand passes", () => {
+  // The pull request marks its expand update (which introduced the replacement)
+  // applied itself, while removing an older, applied command: refused.
+  const expand = files.find((file) => file !== victimUpdate);
+  const selfFlip = probeRepository(
+    removeVictim,
+    [step({ command: victim.name, expandUpdate: expand })],
+    {
+      base: markPending(expand),
+      head: restoreReadme,
+    }
+  );
+  assert.equal(selfFlip.status, 1, selfFlip.stdout);
+  assert.match(selfFlip.stderr, /not recorded as applied on the base commit/);
+
+  // An entry already on main does not authorise a new removal.
+  const reused = probeRepository(removeVictim, [], {
+    baseSteps: [step({ command: victim.name, expandUpdate: victimUpdate })],
+  });
+  assert.equal(reused.status, 1, reused.stdout);
+  assert.match(reused.stderr, /already on the base commit/);
+
+  // Reverting an expand step whose update main still lists as pending.
+  const revert = probeRepository(removeVictim, [], {
+    base: markPending(victimUpdate),
+    head: restoreReadme,
+  });
+  assert.equal(revert.status, 0, revert.stderr);
+});
+
+test("staging comparison: unreachable or paused is inconclusive, a missing command fails", async () => {
+  const { main } = await import("./check-foundation-update-drift.ts");
+  const names = [
+    "FOUNDATION_STAGING_SUPABASE_URL",
+    "FOUNDATION_STAGING_PROJECT_REF",
+    "FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY",
+  ];
+  const saved = names.map((name) => process.env[name]);
+  const logged = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = (line) => logged.push(String(line));
+  console.error = (line) => logged.push(String(line));
+  try {
+    process.env.FOUNDATION_STAGING_SUPABASE_URL = "https://abcdefghijabcdefghij.supabase.co";
+    process.env.FOUNDATION_STAGING_PROJECT_REF = "abcdefghijabcdefghij";
+    process.env.FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_synthetic";
+    const answer = (missing) => async (url) => {
+      const name = url.split("/rpc/")[1];
+      if (name === missing) return Response.json({ code: "PGRST202" }, { status: 404 });
+      return runtime.functions.find((item) => item.name === name).execute.anon
+        ? Response.json([])
+        : Response.json({ code: "42501" }, { status: 401 });
+    };
+    const offline = async () => {
+      throw new TypeError("fetch failed");
+    };
+    assert.equal(await main(["--target=staging"], { fetcher: offline }), 0);
+    assert.match(logged.join("\n"), /could not be reached.*inconclusive/);
+    const paused = async () => new Response("paused", { status: 540 });
+    assert.equal(await main(["--target=staging"], { fetcher: paused }), 0);
+    assert.match(logged.join("\n"), /inconclusive for commands that answered unexpectedly/);
+    assert.equal(await main(["--target=staging"], { fetcher: answer(null) }), 0);
+    assert.equal(await main(["--target=staging"], { fetcher: answer(victim.name) }), 1);
+    assert.match(logged.join("\n"), /staging database behind by 1/);
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+    names.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name];
+      else process.env[name] = saved[index];
+    });
+  }
+});
+
+test("CI runs the staging check on pull requests only and gives the replay job the base parent", () => {
+  const ci = readFileSync(path.join(repo, ".github/workflows/ci.yml"), "utf8").replace(
+    /\r\n/g,
+    "\n"
+  );
+  const job = (name) => {
+    const start = ci.indexOf(`\n  ${name}:\n`);
+    assert.notEqual(start, -1, name);
+    const next = ci.slice(start + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    return ci.slice(start, next === -1 ? undefined : start + 1 + next);
+  };
+  const replay = job("foundation-replay");
+  assert.match(replay, /fetch-depth: 2/);
+  assert.match(replay, /node scripts\/check-foundation-update-order\.mjs --base/);
+  assert.match(job("staging-database-config"), /\n {4}if: github\.event_name == 'pull_request'\n/);
+  const check = job("staging-database");
+  assert.match(check, /\n {4}needs: staging-database-config\n/);
+  assert.match(
+    check,
+    /\n {4}if: github\.event_name == 'pull_request' && needs\.staging-database-config\.outputs\.configured == 'true'\n/
+  );
 });
