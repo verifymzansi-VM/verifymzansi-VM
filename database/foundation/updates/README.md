@@ -116,9 +116,9 @@ state to a member who has one. The release preflight reports the database behind
 by this update until it is applied. For the same reason, if that release is ever
 reverted, run the rollback below first.
 
-**Applying.** Production must already have
-`20261110045944_intro_trial_at_first_approval.sql`, and the website release that
-knows the `verification_returned` kind must be live.
+**Applying.** Production has `20261110045944_intro_trial_at_first_approval.sql`
+(applied 10 November 2026). The website release that knows the
+`verification_returned` kind must be live.
 
 1. Run `../preflight/20261110173012_verification_returned_notice.check.sql`
    unchanged in the SQL editor. It is read only. Continue only if its result is
@@ -139,12 +139,20 @@ email to do so; return requests and their reasons are kept.
 
 ## The free week starts at the first approved post, 10 November 2026
 
-`20261110045944_intro_trial_at_first_approval.sql` is not applied yet. It needs
-`20261109104020_post_expiry_rules.sql` and refuses to run without it. Apply it
-before the website release that reads `api.get_my_intro_trial` is deployed (the
-release preflight checks every API command it uses). That release also works
-with a database that does not have the update yet: the trial card stays hidden
-and the trial email has no date.
+`20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
+applied it to production on 10 November 2026 at about 11:30 UTC. Before it, the
+preflight returned the single summary row "reviewed live bodies, update not
+applied" with every count 0 (no earlier trials to restart or keep, no member
+with an unfunded post in review); the update returned no rows; afterwards the
+preflight read "already applied; trials to restart: 0". Production's fingerprint
+then matched the replay through this update in every category
+(`../fingerprint.json`, `productionCheck`), apart from the known `schema_grants`
+item that the Auth hook adds (`knownDifferences`).
+
+It needs `20261109104020_post_expiry_rules.sql` and refuses to run without it.
+The website release that reads `api.get_my_intro_trial` also works with a
+database that does not have the update: the trial card stays hidden and the
+trial email has no date.
 
 Until now the every-minute job (`internal.reconcile_intro_trials`) gave every
 fully verified member a 7-day introductory trial as soon as verification
@@ -1537,7 +1545,12 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   recorded); recorded in b7de37ee
 - `20261109224337_fix_post_command_target.sql`: applied 2026-11-10 (SAST date,
   time not recorded); recorded in febb1aa2
-- `20261110045944_intro_trial_at_first_approval.sql`: pending
+- `20261110045944_intro_trial_at_first_approval.sql`: applied 2026-11-10 11:30
+  UTC; time approximate, applied by the coordinator in the Supabase dashboard
+  SQL editor, preflight before "reviewed live bodies, update not applied" with
+  every count 0, after "already applied, trials to restart: 0", production
+  fingerprint then matched the replay (section The free week starts at the first
+  approved post)
 - `20261110173012_verification_returned_notice.sql`: pending
 
 <!-- applied-register:end -->
