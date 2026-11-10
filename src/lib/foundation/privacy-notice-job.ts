@@ -25,8 +25,18 @@ const jobSchema = z
       Boolean(j.due) === (j.kind === "extended" || j.kind === "submitted") &&
       Boolean(j.reason) === (j.kind === "extended")
   );
-export async function runFoundationPrivacyNotice(service: FoundationServiceApi) {
-  const { data, error } = await service.rpc("claim_frontend_privacy_notice", {}, { get: false });
+/** `signal` cuts the database calls off at the job run's deadline; `canSend`
+ * says whether a worst-case send still fits once the notice is claimed. */
+export interface PrivacyNoticeRun {
+  signal?: AbortSignal;
+  canSend?: () => boolean;
+}
+export async function runFoundationPrivacyNotice(
+  service: FoundationServiceApi,
+  run: PrivacyNoticeRun = {}
+) {
+  const claim = service.rpc("claim_frontend_privacy_notice", {}, { get: false });
+  const { data, error } = await (run.signal ? claim.abortSignal(run.signal) : claim);
   if (error) throw new Error("Privacy notice claim failed");
   if (data === null) return "empty" as const;
   const job = jobSchema.parse(data);
@@ -34,6 +44,8 @@ export async function runFoundationPrivacyNotice(service: FoundationServiceApi) 
   const reference = `DSAR-${job.request_id.slice(0, 8).toUpperCase()}`;
   const key = `foundation-privacy/${job.id}`;
   let delivered = false;
+  // Too late to send in this run: give the notice back for a later retry.
+  if (run.canSend && !run.canSend()) return complete(job, false, service, run.signal);
   try {
     let result;
     switch (job.kind) {
@@ -54,12 +66,22 @@ export async function runFoundationPrivacyNotice(service: FoundationServiceApi) 
   } catch {
     delivered = false;
   }
-  const complete = await service.rpc("complete_frontend_privacy_notice", {
+  return complete(job, delivered, service, run.signal);
+}
+
+async function complete(
+  job: { id: string; claim_token: string },
+  delivered: boolean,
+  service: FoundationServiceApi,
+  signal?: AbortSignal
+) {
+  const call = service.rpc("complete_frontend_privacy_notice", {
     p_job: job.id,
     p_claim: job.claim_token,
     p_delivered: delivered,
   });
-  return !complete.error && complete.data === true && delivered
+  const result = await (signal ? call.abortSignal(signal) : call);
+  return !result.error && result.data === true && delivered
     ? ("succeeded" as const)
     : ("retrying" as const);
 }

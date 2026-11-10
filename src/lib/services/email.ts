@@ -999,6 +999,38 @@ export async function sendSupportRequestNotification(
   });
 }
 
+/** One staff alert per job run listing the queued emails that failed on
+ * their last attempt. Names only the notice kind and the queue entry id,
+ * never the recipient or the content. */
+export async function sendOutboxFinalFailureAlert(
+  items: ReadonlyArray<{ id: string; kind: string }>
+): Promise<SendEmailResult> {
+  // One order for the key and the content: the same set always gives the same email.
+  const lost = [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const ids = lost.map((item) => item.id);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ids.join(",")));
+  const key = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  const payments = lost.filter((item) => item.kind.startsWith("payment_")).length;
+  const count = `${lost.length} queued email${lost.length === 1 ? "" : "s"}`;
+  const subject = `VerifyMzansi: ${count} not delivered after the last attempt${payments ? ` (${payments} payment)` : ""}`;
+  const rows = lost.map((item): [string, string] => [item.kind.replace(/_/g, " "), item.id]);
+  const next =
+    "These emails will not be retried automatically. Check the email provider's status and the app Worker logs for 'Queued email reached its last attempt', then contact the account owners if needed.";
+  return sendEmail({
+    idempotencyKey: `outbox-final-failure/${key}`,
+    to: SUPPORT_CONTACT_EMAIL,
+    subject,
+    html: brandedEmail({
+      title: "Queued emails were not delivered",
+      intro: `${count} failed on the last delivery attempt.`,
+      bodyHtml: `${detailList(rows)}${paragraph(next)}`,
+      reason: "The VerifyMzansi job runner sends this alert to the support address.",
+      tone: "warning",
+    }),
+    text: `${count} failed on the last delivery attempt.\n\n${rows.map(([kind, id]) => `${kind}: ${id}`).join("\n")}\n\n${next}`,
+  });
+}
+
 export async function sendSupportAcknowledgement(
   email: string,
   submissionId: string,

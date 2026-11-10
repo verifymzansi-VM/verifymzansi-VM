@@ -27,6 +27,7 @@ import {
   sendModerationNoticeEmail,
   sendDsarExtensionEmail,
   sendPlatformNotice,
+  sendOutboxFinalFailureAlert,
 } from "./email";
 
 describe("email service", () => {
@@ -398,6 +399,30 @@ describe("email service", () => {
       expect(await pending).toMatchObject({ success: false, error: "Email send timed out" });
       expect(mockSend).toHaveBeenCalledTimes(3);
       expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("alerts the support address about lost queued emails without recipient details", async () => {
+      const a = "00000000-0000-4000-8000-00000000000a";
+      const b = "00000000-0000-4000-8000-00000000000b";
+      await sendOutboxFinalFailureAlert([
+        { id: b, kind: "payment_completed" },
+        { id: a, kind: "post_expired" },
+      ]);
+      await sendOutboxFinalFailureAlert([
+        { id: a, kind: "post_expired" },
+        { id: b, kind: "payment_completed" },
+      ]);
+      const [payload, options] = mockSend.mock.calls[0];
+      expect(payload).toMatchObject({
+        to: "support@verifymzansi.com",
+        subject: expect.stringContaining("2 queued emails"),
+        text: expect.stringContaining(`payment completed: ${b}`),
+      });
+      expect(payload.subject).toContain("(1 payment)");
+      expect(payload.html).toContain(a);
+      expect(options.idempotencyKey).toMatch(/^outbox-final-failure\/[0-9a-f]{64}$/);
+      expect(mockSend.mock.calls[1][1].idempotencyKey).toBe(options.idempotencyKey);
+      expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
     });
 
     it("routes payment support to billing with an authenticated queue link", async () => {
