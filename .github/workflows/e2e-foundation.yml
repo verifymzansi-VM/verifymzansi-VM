@@ -10,11 +10,17 @@ name: E2E foundation
 #
 # Non-blocking while it proves itself: `e2e-foundation` is not a required
 # check in .github/rulesets/protect-main.json, so a red run is visible on the
-# pull request but does not block merging. It becomes required after five
-# green days in a row (the nightly run counts them). The check to require is
+# pull request but does not block merging. It becomes required (and part of
+# the release gate) after 10 consecutive green runs on main. The check to require is
 # the aggregate job `e2e-foundation`, which fails unless every browser project
 # passed; the per-project jobs need not be listed.
+#
+# Runs on main are a separate workflow run, outside the deploy gate (deploy
+# waits only for workflow "CI"), so a red run here alerts (workflow "Failure
+# alert") but never holds back a release until then.
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -24,9 +30,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels its older run. Runs on main and
+# scheduled runs are never cancelled: each commit gets its own group.
 concurrency:
-  group: e2e-foundation-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: e2e-foundation-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # One job per Playwright project, each on its own runner with its own test

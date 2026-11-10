@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
@@ -187,5 +187,88 @@ describe("scheduled monitoring reports what it checked", () => {
     // The URL is the credential: it is passed to curl only, never echoed.
     expect(heartbeat.run).not.toMatch(/echo[^\n]*HEARTBEAT_URL/);
     expect(heartbeat.run).not.toMatch(/set -x|--verbose|-v /);
+  });
+});
+
+describe("production-matching suites on main and the failure alert", () => {
+  type Workflow = {
+    name: string;
+    on: Record<string, unknown>;
+    concurrency?: { group: string; "cancel-in-progress": string | boolean };
+    permissions?: Record<string, string>;
+    jobs: Record<
+      string,
+      Job & {
+        permissions?: Record<string, string>;
+        steps: (Step & { uses?: string })[];
+      }
+    >;
+  };
+  const load = (file: string) =>
+    parse(readFileSync(`.github/workflows/${file}`, "utf8")) as Workflow;
+  const files = readdirSync(".github/workflows").filter((file) => file.endsWith(".yml"));
+
+  it("runs foundation-native and e2e-foundation on every push to main, never cancelling a main run", () => {
+    for (const file of ["foundation-native.yml", "e2e-foundation.yml"]) {
+      const workflow = load(file);
+      expect(workflow.on.push, file).toEqual({ branches: ["main"] });
+      expect(workflow.on.pull_request, file).toEqual({ branches: ["main"] });
+      expect(workflow.concurrency?.group, file).toContain("github.event.pull_request.number ||");
+      expect(workflow.concurrency?.group, file).toContain("github.sha");
+      expect(workflow.concurrency?.group, file).not.toContain("github.ref");
+      expect(workflow.concurrency?.["cancel-in-progress"], file).toBe(
+        "${{ github.event_name == 'pull_request' }}"
+      );
+      // Separate runs: CI does not call them, so they stay outside the deploy gate.
+      expect(readFileSync(".github/workflows/ci.yml", "utf8")).not.toContain(file);
+    }
+    const deploy = load("deploy.yml").on.workflow_run as { workflows: string[] };
+    expect(deploy.workflows).toEqual(["CI"]);
+  });
+
+  it("names the failed native checks from the redacted results when the suite fails", () => {
+    const steps = load("foundation-native.yml").jobs["foundation-native"].steps;
+    const tests = steps.findIndex((step) => step.run === "pnpm test:foundation:native");
+    const summary = steps.findIndex((step) =>
+      (step.run ?? "").includes("scripts/foundation-native-failure-summary.mjs")
+    );
+    expect(summary).toBeGreaterThan(tests);
+    expect(steps[summary].if).toBe("failure() && steps.scope.outputs.run == 'true'");
+    const upload = steps.find((step) => step.name === "Preserve the redacted native results");
+    expect(upload?.if).toBe("always() && steps.scope.outputs.run == 'true'");
+  });
+
+  it("alerts on a failed main or scheduled run of every workflow that has one", () => {
+    const alert = load("failure-alert.yml");
+    const watched = (alert.on.workflow_run as { workflows: string[]; types: string[] }).workflows;
+    expect((alert.on.workflow_run as { types: string[] }).types).toEqual(["completed"]);
+    for (const file of files.filter((name) => name !== "failure-alert.yml")) {
+      const workflow = load(file);
+      const push = workflow.on.push as { branches?: string[] } | undefined;
+      const unattended =
+        "schedule" in workflow.on ||
+        "workflow_run" in workflow.on ||
+        push?.branches?.includes("main");
+      if (unattended) expect(watched, file).toContain(workflow.name);
+    }
+    for (const name of watched)
+      expect(
+        files.some((file) => load(file).name === name),
+        name
+      ).toBe(true);
+
+    const job = alert.jobs.alert;
+    expect(job.if).toContain("github.event.workflow_run.conclusion == 'failure'");
+    expect(job.if).toContain("github.event.workflow_run.event == 'schedule'");
+    expect(job.if).toContain("github.event.workflow_run.head_branch == 'main'");
+    expect(job.if).not.toContain("pull_request");
+    expect(alert.permissions).toEqual({});
+    expect(job.permissions).toEqual({ issues: "write" });
+    // No code from the failed run is checked out or executed, and no event
+    // value is pasted into the script (all arrive through env).
+    for (const step of job.steps) {
+      expect(step.uses).toBeUndefined();
+      expect(step.run ?? "").not.toContain("${{");
+    }
   });
 });
