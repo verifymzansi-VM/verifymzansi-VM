@@ -81,6 +81,17 @@ test.describe.configure({ mode: "serial" });
 
 type Reply = { method: string; path: string; status: number; body: unknown };
 
+/** Playwright's own errors for a request still in flight when the test's
+ * context closes: a page can start a request (for example the verification
+ * page's session start) just as its test finishes. Only these exact messages
+ * count; any other error, including a timeout, still fails the test. */
+const ENDED_WITH_TEST =
+  /^[\w.]+: (?:Test ended\.|Target page, context or browser has been closed|Response has been disposed)(?:\n|$)/;
+
+function endedWithTest(error: unknown) {
+  return error instanceof Error && ENDED_WITH_TEST.test(error.message);
+}
+
 /** Lets only loopback requests to the copy through, records the website's API
  * replies, and swaps the CAPTCHA test-mode token on /register (see above). */
 async function guard(context: BrowserContext) {
@@ -118,7 +129,7 @@ async function guard(context: BrowserContext) {
       bytes = await response.body();
     } catch (error) {
       // The test already ended (its page closed mid-request); nothing to record.
-      if (/disposed|closed/i.test(String(error))) return;
+      if (endedWithTest(error)) return;
       throw error;
     }
     // Binary replies (evidence images) are passed on untouched, never as text.

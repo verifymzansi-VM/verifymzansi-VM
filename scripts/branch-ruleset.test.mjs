@@ -75,6 +75,8 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     "e2e-smoke (chromium)",
     "e2e-smoke (mobile-chrome)",
     "launch-flows-bundle",
+    "Visual regression (chosen frontend)",
+    "foundation-native",
   ]) {
     assert.ok(requiredContexts(ruleset).includes(name), `${name} must be required`);
   }

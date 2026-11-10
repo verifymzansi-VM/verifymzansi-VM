@@ -3,3 +3,7 @@
 # public label. Never real credentials. Exact fingerprints only.
 525f24baac4fcd80b137817f80dae399c6025cf5:scripts/lib/foundation-e2e-target.mjs:generic-api-key:35
 525f24baac4fcd80b137817f80dae399c6025cf5:scripts/lib/foundation-e2e-target.mjs:generic-api-key:37
+
+# Test input, not a credential: a made-up storage path that the evidence route
+# test sends to prove a forged object key is refused. Exact fingerprint only.
+381f404a9a1ed6629497c93e59128c8249ce523c:src/lib/foundation/evidence-route.test.ts:generic-api-key:88

@@ -448,17 +448,12 @@ jobs:
   # M0.12): the ten main public pages at 375, 800 and 1280 px plus dark mode
   # for home, pricing and login, compared with approved Linux pictures. Runs in
   # the pinned Playwright image (same browser build and fonts as when the
-  # pictures were made). Not a required check yet: today's code still differs
-  # from the chosen frontend on some screens (the phone and tablet filter,
-  # listed in FRONTEND-CHANGES.md for the owner's decision). Once those are
-  # resolved this job becomes required. Until then continue-on-error keeps a
-  # difference from failing the workflow (deploy needs a green CI run) while
-  # the job itself still shows red and lists every difference.
+  # pictures were made). A required check: a difference from an approved
+  # picture fails the workflow, so it also blocks the deploy.
   visual-regression:
     name: Visual regression (chosen frontend)
     runs-on: ubuntu-latest
     needs: lint-type-security
-    continue-on-error: true
     timeout-minutes: 40
     container:
       image: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f # secret-scan: allow image digest
