@@ -521,7 +521,12 @@ describe("email change on the foundation backend", () => {
       503,
       { error: "Your email change could not be confirmed. Try again shortly." },
     ],
-    [new Error("synthetic"), 503, UNAVAILABLE],
+    // An unexpected failure is logged; the reply carries its reference.
+    [
+      new Error("synthetic"),
+      503,
+      { ...UNAVAILABLE, reference: expect.stringMatching(/^[0-9a-f]{16}$/) },
+    ],
   ])("maps Auth's refusal %o", async (error, status, body) => {
     changeEmail.mockRejectedValue(error);
     const response = await POST(request());

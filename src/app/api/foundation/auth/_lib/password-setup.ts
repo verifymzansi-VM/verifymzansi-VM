@@ -29,6 +29,7 @@ import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { openedByResetLink, RECOVERY_SESSION_REFUSAL } from "./recovery-session";
 import { limiterAddressKey } from "@/lib/foundation/limiter-key";
 
@@ -200,7 +201,12 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
         status = 429;
         body = { ...refuse.emails().body };
       } else log.warn("Password setup email unavailable");
-    } else log.error("Foundation password setup unavailable");
+    } else
+      body.reference = logRequestFailure(log, "Foundation password setup unavailable", {
+        request,
+        error,
+        action: "auth:password-setup",
+      });
     const response = reply(status, body);
     if (status === 429) response.headers.set("Retry-After", "60");
     return context.respond(response);

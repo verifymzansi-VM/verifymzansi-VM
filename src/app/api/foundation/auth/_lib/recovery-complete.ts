@@ -16,6 +16,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { resolveAppOrigin } from "@/lib/utils/auth-redirect";
 import {
   readRecoveryBinding,
@@ -199,7 +200,11 @@ export async function handleFoundationRecoveryCompletion(request: NextRequest, m
           error.status
         )
       );
-    log.error("Foundation recovery unavailable");
-    return context.respond(reply({ error: "Recovery could not be confirmed" }, 503));
+    const reference = logRequestFailure(log, "Foundation recovery unavailable", {
+      request,
+      error,
+      action: mutate ? "auth:reset-password" : "auth:recovery-check",
+    });
+    return context.respond(reply({ error: "Recovery could not be confirmed", reference }, 503));
   }
 }

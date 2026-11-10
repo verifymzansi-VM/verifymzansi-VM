@@ -21,6 +21,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { createLogger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { holdAnswer } from "@/lib/foundation/answer-floor";
 import { limiterAccountAddressKey, limiterAddressKey } from "@/lib/foundation/limiter-key";
 import { openedByResetLink } from "./recovery-session";
@@ -233,7 +234,12 @@ export async function handleFoundationEmailChange(request: NextRequest) {
         log.warn("Email change could not be confirmed");
         body = { error: "Your email change could not be confirmed. Try again shortly." };
       }
-    } else log.error("Foundation email change unavailable");
+    } else
+      body.reference = logRequestFailure(log, "Foundation email change unavailable", {
+        request,
+        error,
+        action: "account:email-change",
+      });
     const response = reply(status, body);
     if (status === 429) response.headers.set("Retry-After", "60");
     return context.respond(response);

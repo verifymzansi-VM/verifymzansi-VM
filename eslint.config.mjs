@@ -4,6 +4,7 @@ const require = createRequire(import.meta.url);
 const nextConfig = require("eslint-config-next");
 const tseslint = require("typescript-eslint");
 const security = require("eslint-plugin-security");
+const { default: localRules } = await import("./scripts/eslint-rules/no-silent-error-handler.mjs");
 
 const eslintConfig = [
   ...nextConfig,
@@ -76,6 +77,17 @@ const eslintConfig = [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+    },
+  },
+  {
+    // Server code must not swallow failures silently: a handler logs, rethrows,
+    // returns something the caller checks, or carries a comment saying why
+    // ignoring the error is safe.
+    files: ["src/app/api/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/__tests__/**"],
+    plugins: { local: localRules },
+    rules: {
+      "local/no-silent-error-handler": "error",
     },
   },
 ];
