@@ -72,6 +72,58 @@ jobs:
           fi
       - name: Check the API manifests and runtime types against the replay
         run: pnpm db:foundation:api-check
+      # Safe order: every update file has an applied-register line, and an API
+      # command or argument removed or renamed against the base commit needs a
+      # recorded second step (database/foundation/contract-steps.json).
+      - name: Check the update register and API removals against the base commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+          node scripts/check-foundation-update-order.mjs --base "$BASE_SHA"
+
+  # Updates reach staging before merge. Inert (a notice) until the owner
+  # creates staging and sets the FOUNDATION_STAGING_* secrets; then it fails a
+  # pull request whose updates staging has not received. Read-only: anonymous
+  # probes with the staging publishable key.
+  staging-database:
+    name: Staging database in step
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check staging configuration
+        id: check
+        env:
+          STAGING_URL: ${{ secrets.FOUNDATION_STAGING_SUPABASE_URL }}
+        run: |
+          if [ -n "$STAGING_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Staging is not configured (FOUNDATION_STAGING_* secrets unset): the staging database check is inert."
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.check.outputs.configured == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.check.outputs.configured == 'true'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.check.outputs.configured == 'true'
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - if: steps.check.outputs.configured == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Compare staging with this commit's updates
+        if: steps.check.outputs.configured == 'true'
+        env:
+          FOUNDATION_STAGING_SUPABASE_URL: ${{ secrets.FOUNDATION_STAGING_SUPABASE_URL }}
+          FOUNDATION_STAGING_PROJECT_REF: ${{ secrets.FOUNDATION_STAGING_PROJECT_REF }}
+          FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_STAGING_SUPABASE_PUBLISHABLE_KEY }}
+        run: pnpm exec tsx scripts/check-foundation-update-drift.ts --target=staging
 
   # plpgsql_check over every plpgsql function of the replayed schema, in a
   # throwaway network-less Postgres 17 container (the Supabase image that ships

@@ -28,3 +28,6 @@ docs/backend-foundation/evidence/
 docs/backend-foundation/schema-map.json
 docs/backend-foundation/post-field-proposals.json
 src/lib/domains/taxonomy/reference.json
+
+# Hand-written reviewed list of contract steps.
+!database/foundation/contract-steps.json

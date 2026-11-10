@@ -36,14 +36,20 @@ baseline. Read `FRONTEND-RESTORE.md` before continuing integration work.
    `<UTC timestamp>_<what_it_does>.sql`, using full `create or replace`
    definitions. Never edit `candidate.sql` or an update that has been applied.
 2. Expand, then contract: add new pieces first, switch the code, remove old
-   pieces in a later change, so code and database never disagree.
+   pieces in a later change, so code and database never disagree. Removing or
+   renaming an API command or argument needs an entry in
+   `database/foundation/contract-steps.json` naming the earlier, applied expand
+   update; CI (`scripts/check-foundation-update-order.mjs`) enforces it.
 3. Prove it locally: `pnpm test:foundation:native` (needs Docker Desktop's
    `desktop-linux` context) and the replay and contract steps in
    `database/foundation/README.md`.
 4. The change travels in the same pull request as the code that needs it. The
    owner applies it to production (or explicitly approves applying it) after the
-   merge and **before** that code is deployed; record the applied date in
-   `database/foundation/updates/README.md`.
+   merge and **before** that code is deployed. The new file starts as `pending`
+   in the applied register at the end of `database/foundation/updates/README.md`
+   (and in `fingerprint.json` `pendingApplication`); record the applied time
+   there afterwards. Once staging exists, updates reach it before merge. The
+   order is written out in that README under "Safe order for a database change".
 5. Never run SQL against the production database from an agent session, and
    never replay `supabase/migrations/` on any foundation project.
 
