@@ -418,6 +418,16 @@ describe("email service", () => {
       }
     );
 
+    it("marks lost emails that may have been delivered in the alert", async () => {
+      await sendOutboxFinalFailureAlert([
+        { id: "00000000-0000-4000-8000-00000000000c", kind: "post_kept", maybeDelivered: true },
+      ]);
+      expect(mockSend.mock.calls[0][0].text).toContain(
+        "post kept (may have been delivered): 00000000-0000-4000-8000-00000000000c"
+      );
+      expect(mockSend.mock.calls[0][0].html).toContain("may have been delivered");
+    });
+
     it("alerts the support address about lost queued emails without recipient details", async () => {
       const a = "00000000-0000-4000-8000-00000000000a";
       const b = "00000000-0000-4000-8000-00000000000b";

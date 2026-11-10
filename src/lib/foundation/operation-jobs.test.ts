@@ -463,8 +463,8 @@ describe("batch size, order and time limit", () => {
     for (const signal of signals) expect(signal.aborted).toBe(false);
   });
 
-  it("records an unknown outcome without counting the message as lost", async () => {
-    queue(job({ attempts: OUTBOX_FINAL_ATTEMPT }));
+  it("records an unknown outcome and retries it", async () => {
+    queue(job({ attempts: 3 }));
     deliver.mockResolvedValue({ success: false, outcomeUnknown: true });
     expect(await run()).toMatchObject({ retrying: 1, lost: 0, failed: [] });
     expect(alertStaff).not.toHaveBeenCalled();
@@ -474,6 +474,35 @@ describe("batch size, order and time limit", () => {
       p_ok: false,
       p_error: "outcome_unknown",
     });
+  });
+
+  it("reports a last-attempt unknown outcome as possibly delivered", async () => {
+    queue(job({ attempts: OUTBOX_FINAL_ATTEMPT }));
+    deliver.mockResolvedValue({ success: false, outcomeUnknown: true });
+    expect(await run()).toMatchObject({ retrying: 1, failed: [] });
+    expect(alertStaff).toHaveBeenCalledExactlyOnceWith([
+      { id, kind: "payment_completed", maybeDelivered: true },
+    ]);
+  });
+
+  it("claims the next message early only while a slow record cannot push it past the window", async () => {
+    // A takes 11.5 s to send and 1.5 s to record; B and C are on their last attempt.
+    const clock = start();
+    const rows = world(
+      clock,
+      uuids(3, 100).map((id) => ({ id, kind: "payment_completed", attempts: 7 })),
+      150
+    );
+    const base = rpc.getMockImplementation()!;
+    let records = 0;
+    rpc.mockImplementation(async (name, args) => {
+      if (name === "complete_notification_outbox" && ++records === 1) clock.t += 1_350;
+      return base(name, args);
+    });
+    expect(await run(timed(clock, 11_500))).toMatchObject({ succeeded: 1, lost: 0, failed: [] });
+    expect(rows.map((r) => r.attempts)).toEqual([8, 7, 7]);
+    expect(deferred(rows)).toEqual([]);
+    expect(alertStaff).not.toHaveBeenCalled();
   });
 });
 
@@ -532,6 +561,40 @@ describe("last attempt", () => {
     });
     expect(await run({ now: () => clock })).toMatchObject({ lost: 1, failed: [] });
     expect(order).toEqual([`foundation-outbox/${id}`, "alert", `foundation-outbox/${other}`]);
+  });
+
+  it("reports a loss on the last payment slot before the privacy notices", async () => {
+    const clock = start();
+    const all = uuids(OUTBOX_RUN_LIMIT, 100);
+    world(
+      clock,
+      all.map((id, i) => ({
+        id,
+        kind: "payment_completed",
+        attempts: i === OUTBOX_RUN_LIMIT - 1 ? 7 : 0,
+      }))
+    );
+    deliver.mockImplementation(async (_to, _kind, key) => ({
+      success: !key.endsWith(all[OUTBOX_RUN_LIMIT - 1]),
+    }));
+    const order: string[] = [];
+    alertStaff.mockImplementation(async () => {
+      order.push("alert");
+      return { success: true };
+    });
+    privacy.mockImplementation(async () => {
+      order.push("privacy");
+      return "empty";
+    });
+    await run({ now: () => clock.t });
+    expect(order).toEqual(["alert", "privacy"]);
+  });
+
+  it("counts an alert refused as a repeat of its own request as sent", async () => {
+    queue(job(last));
+    deliver.mockResolvedValue({ success: false });
+    alertStaff.mockResolvedValue({ success: false, outcomeUnknown: true });
+    expect(await run()).toMatchObject({ lost: 1, failed: [] });
   });
 
   it("does not start an alert that a worst-case send no longer fits", async () => {

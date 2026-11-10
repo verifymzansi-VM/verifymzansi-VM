@@ -788,17 +788,20 @@ until the owner does those steps.
   privacy-request notices (up to five), then every other kind. Every claim uses
   up one of a message's eight attempts, so messages are claimed one at a time,
   only while a worst-case send still fits, and each is sent straight away; the
-  next claim runs while the previous outcome is recorded. Sends are paced to the
-  email provider's rate. The worker gives the request 50 seconds from its own
-  start (including dispatch and start-up), so the run aims to end within 44
-  seconds: database calls are cut off then, and no claim or send (including the
-  staff alert) starts after 13 seconds. Even a send that uses all its provider
-  retries, and the record of its outcome, then end in time.
+  next claim runs while the previous outcome is recorded, except near the end of
+  the send window, where a slow record could otherwise push it past the window.
+  Sends are paced to the email provider's rate. The worker gives the request 50
+  seconds from its own start (including dispatch and start-up), so the run aims
+  to end within 44 seconds: database calls are cut off then, and no claim or
+  send (including the staff alert) starts after 13 seconds. Even a send that
+  uses all its provider retries, and the record of its outcome, then end in
+  time.
 - **Unknown outcome.** When the provider refuses a repeat of an earlier request
   with the same key (still in progress, or sent with different content), the
   earlier request may have been delivered. The message is recorded with the
   error `outcome_unknown` and retried later; on its last attempt it is logged
-  (`Queued email outcome unknown at its last attempt`) but not reported as lost.
+  (`Queued email outcome unknown at its last attempt`) and listed in the staff
+  alert marked "may have been delivered".
 - **Last attempt.** A queued email is tried at most eight times. When one fails
   on its eighth attempt, the run logs `Queued email reached its last attempt`
   (kind and queue id only) straight away and, before any further send, emails
@@ -822,6 +825,10 @@ until the owner does those steps.
 
   `delivery_error` is `delivery_failed`, `deferred` or `outcome_unknown`. There
   is no retry button yet; tell the account owner directly if the email mattered.
+  Run this query too whenever a run fails with a `claim:payment` or
+  `claim:other` step: a claim that was cut off or lost on the way back can use
+  up an email's last attempt without the app seeing the email, so no alert names
+  it.
 
 - Known gap: an email that fails an earlier attempt is retried later and does
   not fail the run, and a storage object that could not be deleted yet does not

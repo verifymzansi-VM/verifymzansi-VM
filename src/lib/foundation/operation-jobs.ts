@@ -76,6 +76,11 @@ const SEND_BUDGET_MS = 31_000;
 // and is cut off this long before the window closes, so what it returns can
 // still be sent.
 const CLAIM_MARGIN_MS = 500;
+// The part of the send budget allowed for recording an outcome. The next
+// claim starts early (while the previous outcome is recorded) only with this
+// much more of the send window left, so a slow record cannot push the claimed
+// message past the window and cost it an attempt.
+const RECORD_ALLOWANCE_MS = 3_000;
 // A send needs this much lease left, or another run could claim the message
 // while it is still being sent.
 const LEASE_RESERVE_MS = SEND_BUDGET_MS;
@@ -129,7 +134,8 @@ type Delivery = (
   details?: PostLifecycleDetails
 ) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
 type RpcResult = { data: unknown; error: { code?: string; message?: string } | null };
-type StaffAlert = (lost: Array<{ id: string; kind: string }>) => Promise<{ success: boolean }>;
+type Lost = { id: string; kind: string; maybeDelivered?: boolean };
+type StaffAlert = (lost: Lost[]) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
 export interface OperationJobOptions {
   alertStaff?: StaffAlert;
   now?: () => number;
@@ -166,7 +172,7 @@ export async function runFoundationOperationJobs(
   const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
-  const lost: Array<{ id: string; kind: string }> = [];
+  const lost: Lost[] = [];
   const fail = (step: string) => {
     if (!failed.includes(step)) failed.push(step);
   };
@@ -179,6 +185,7 @@ export async function runFoundationOperationJobs(
   const windowLeft = () => deadline - SEND_BUDGET_MS - now();
   const timeToSend = () => windowLeft() >= 0;
   const timeToClaim = () => windowLeft() >= 2 * CLAIM_MARGIN_MS;
+  const timeToClaimAhead = () => windowLeft() >= 2 * CLAIM_MARGIN_MS + RECORD_ALLOWANCE_MS;
   const runSignal = () => AbortSignal.timeout(Math.max(1, deadline - now()));
   const claimSignal = () => AbortSignal.timeout(Math.max(1, windowLeft() - CLAIM_MARGIN_MS));
   const call = async (
@@ -308,9 +315,11 @@ export async function runFoundationOperationJobs(
     if (done.error || done.data !== true || !success) summary.retrying++;
     else summary.succeeded++;
     if (!isFinal(job.attempts) || success) return;
-    if (unknown)
+    if (unknown) {
+      // Reported too, marked as possibly delivered.
+      lost.push({ id: job.id, kind: job.kind, maybeDelivered: true });
       log.warn("Queued email outcome unknown at its last attempt", { kind: job.kind, id: job.id });
-    else lose(job.id, job.kind);
+    } else lose(job.id, job.kind);
   };
 
   let alertsSent = 0;
@@ -328,7 +337,9 @@ export async function runFoundationOperationJobs(
     alertsSent++;
     let alerted = false;
     try {
-      alerted = (await paced(() => alertStaff(batch))).success;
+      const result = await paced(() => alertStaff(batch));
+      // A refused repeat of the alert's own request means it was probably sent.
+      alerted = result.success || result.outcomeUnknown === true;
     } catch {
       alerted = false;
     }
@@ -348,7 +359,7 @@ export async function runFoundationOperationJobs(
       await handle(rows[0], (lostNow) => {
         // Claim the next message while this outcome is recorded, unless an
         // alert has to go out first.
-        if (!lostNow && handled < limit && timeToClaim() && !alertDue())
+        if (!lostNow && handled < limit && timeToClaimAhead() && !alertDue())
           ahead.claim = claim(step, kinds());
       });
     }
@@ -359,6 +370,8 @@ export async function runFoundationOperationJobs(
     // Payment messages first, then privacy-request notices (legally timed,
     // rare), then every other kind.
     const payments = await outbox("claim:payment", () => paymentKinds, OUTBOX_RUN_LIMIT);
+    // A loss on the last payment slot is reported before the privacy notices.
+    if (alertDue()) await alertLost();
     for (let i = 0; i < PRIVACY_RUN_LIMIT && timeToClaim(); i++) {
       let privacy;
       try {
