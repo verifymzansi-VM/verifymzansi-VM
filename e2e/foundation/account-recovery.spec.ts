@@ -6,6 +6,7 @@ import {
   registerGoogleMember,
   type GoogleMember,
 } from "./support/google-member";
+import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
   latestMailTo,
@@ -237,7 +238,7 @@ async function guard(context: BrowserContext) {
       bytes = await response.body();
     } catch (error) {
       // The test already ended (its page closed mid-request); nothing to record.
-      if (/disposed|closed/i.test(String(error))) return;
+      if (endedWithTest(error)) return;
       // Recorded, not thrown: every step checks `failures`, and an error in a
       // route handler would otherwise fail a marked test outside its pin.
       const message = error instanceof Error ? error.message : String(error);

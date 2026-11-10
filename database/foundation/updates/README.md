@@ -35,18 +35,25 @@ establish that a hosted project has received it.
 
 ## Post commands with a target post, 9 November 2026
 
-`20261109224337_fix_post_command_target.sql` is **not applied yet**. It fixes
-saving an edit of an existing event. `internal.consume_frontend_post_command`
-(from `20261104002445_restored_post_commands.sql`) built the edited event window
-with `input->'detail'-'contact_channels'`; `-` binds tighter than `->`, so
-PostgreSQL read `input->('detail'-'contact_channels')` and every command that
-reached that line failed with 42725 ("operator is not unique"). That line runs
-only for an event command with a `target_id`, which the website sends when a
-member saves an edit of an existing event (`PUT /api/promotions/<id>`), in any
-state the edit flow allows: draft, rejected, paused, expired or live (a live
-event's edit becomes a review copy). Creating an event and editing a listing or
-business never reach it. The SQL lint gate found it (`../lint-baseline.json`
-recorded it as its only known error until this update).
+`20261109224337_fix_post_command_target.sql` is applied: the owner applied it to
+production on 10 November 2026, after the Posting Terms v3 update and after its
+preflight returned only the summary row. Production's fingerprint then matched
+the replay through this update in every category (`../fingerprint.json`,
+`productionCheck`), apart from the known `schema_grants` item that the Auth hook
+adds (`knownDifferences`).
+
+It fixes saving an edit of an existing event.
+`internal.consume_frontend_post_command` (from
+`20261104002445_restored_post_commands.sql`) built the edited event window with
+`input->'detail'-'contact_channels'`; `-` binds tighter than `->`, so PostgreSQL
+read `input->('detail'-'contact_channels')` and every command that reached that
+line failed with 42725 ("operator is not unique"). That line runs only for an
+event command with a `target_id`, which the website sends when a member saves an
+edit of an existing event (`PUT /api/promotions/<id>`), in any state the edit
+flow allows: draft, rejected, paused, expired or live (a live event's edit
+becomes a review copy). Creating an event and editing a listing or business
+never reach it. The SQL lint gate found it (`../lint-baseline.json` recorded it
+as its only known error until this update).
 
 The update replaces that function with the same body and one change, the
 parentheses: `(input->'detail')-'contact_channels'` (the event's start, end and
@@ -56,11 +63,15 @@ the fixed one, so a repeated run changes nothing.
 
 `pnpm db:foundation:lifecycle-test` proves, on the throwaway database, that
 draft, rejected, paused and live event edits fail with 42725 before the update
-and save the new window after it (a live event's edit becomes a review copy and
-the public event is unchanged), that an edit staged before the update and sent
-again is saved once, that the preflight is read only and reports a body it does
-not expect, that the update and the rollback refuse an unexpected body, and that
-apply, rollback and re-apply return the same fingerprints.
+and save the new window after it (draft, rejected and paused edits also save a
+new contact choice; a live event's edit becomes a review copy and the public
+event is unchanged), that an expired event's edit saves the new window and keeps
+its status and deletion date, that another member's edit (42501) and an edit of
+an event awaiting review (PT409) are refused and change nothing, that an edit
+staged before the update and sent again is saved once, that the preflight is
+read only and reports a body it does not expect, that the update and the
+rollback refuse an unexpected body, and that apply, rollback and re-apply return
+the same fingerprints.
 
 **Applying.** Production already has every earlier update (the last,
 `20261109173012_posting_terms_v3.sql`, was applied on 9 November 2026), and no

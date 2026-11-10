@@ -8,6 +8,7 @@ import {
 } from "@playwright/test";
 import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
+import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
   caughtMailFor,
@@ -80,17 +81,6 @@ test.use({ serviceWorkers: "block" });
 test.describe.configure({ mode: "serial" });
 
 type Reply = { method: string; path: string; status: number; body: unknown };
-
-/** Playwright's own errors for a request still in flight when the test's
- * context closes: a page can start a request (for example the verification
- * page's session start) just as its test finishes. Only these exact messages
- * count; any other error, including a timeout, still fails the test. */
-const ENDED_WITH_TEST =
-  /^[\w.]+: (?:Test ended\.|Target page, context or browser has been closed|Response has been disposed)(?:\n|$)/;
-
-function endedWithTest(error: unknown) {
-  return error instanceof Error && ENDED_WITH_TEST.test(error.message);
-}
 
 /** Lets only loopback requests to the copy through, records the website's API
  * replies, and swaps the CAPTCHA test-mode token on /register (see above). */

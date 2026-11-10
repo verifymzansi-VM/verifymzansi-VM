@@ -309,13 +309,14 @@ try {
         })
       )
     );
-  // The restored event form's edit with a new event window.
-  const eventEdit = (owner, id, window) =>
+  // The restored event form's edit with a new event window (and, optionally,
+  // a new contact choice; fixture posts start with the form channel only).
+  const eventEdit = (owner, id, window, contactMethods = ["form"]) =>
     stageEdit(owner, "promotions", id, {
       title: "Edited fixture event",
       description: "An edited synthetic event description long enough for every rule.",
       promotion_type: "event",
-      contact_methods: ["form"],
+      contact_methods: contactMethods,
       start_date: window.starts_at,
       end_date: window.ends_at,
       event_details: { event_type: row(id).activity_key },
@@ -711,6 +712,10 @@ try {
     json(
       `select jsonb_build_object('starts_at',to_char(starts_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'ends_at',to_char(ends_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'timezone',timezone) from private.event_details where post_id='${id}';`
     );
+  const channels = (id) =>
+    scalar(
+      `select array_to_string(channels,',') from private.post_contacts where post_id='${id}';`
+    );
   const fixPreflight = () => preflight(TARGET_FIX_PREFLIGHT);
   const refusedEdit = (request) => {
     const stderr = fails(consume(nandi, request), "42725");
@@ -828,7 +833,8 @@ try {
       ]) {
         const window = eventWindow(40);
         const before = row(id);
-        const answer = json(consume(nandi, eventEdit(nandi, id, window)));
+        assert.equal(channels(id), "form");
+        const answer = json(consume(nandi, eventEdit(nandi, id, window, ["call", "form"])));
         assert.equal(answer.id, id);
         assert.equal(answer.original_id, id);
         assert.equal(answer.edit_of, null);
@@ -840,12 +846,7 @@ try {
           scalar(`select title from private.posts where id='${id}';`),
           "Edited fixture event"
         );
-        assert.equal(
-          scalar(
-            `select array_to_string(channels,',') from private.post_contacts where post_id='${id}';`
-          ),
-          "form"
-        );
+        assert.equal(channels(id), "call,form", "the new contact choice is saved");
       }
     }
   );
@@ -866,6 +867,65 @@ try {
         "the public event is unchanged until review"
       );
       assert.deepEqual(savedWindow(answer.id), window);
+    }
+  );
+  await check(
+    "post command target: an expired event edit saves the new window, stays expired and keeps its deletion date",
+    () => {
+      const expired = post(nandi, "event", "expired");
+      const before = row(expired);
+      assert.equal(before.status, "expired");
+      assert.ok(before.ended_at && before.deletes_at, JSON.stringify(before));
+      const window = eventWindow(50);
+      const answer = json(consume(nandi, eventEdit(nandi, expired, window, ["call", "form"])));
+      assert.equal(answer.id, expired);
+      assert.equal(answer.original_id, expired);
+      assert.equal(answer.edit_of, null);
+      assert.equal(answer.status, "expired");
+      const after = row(expired);
+      assert.equal(after.status, "expired");
+      assert.ok(after.revision > before.revision);
+      assert.equal(after.ended_at, before.ended_at, "the run's end is unchanged");
+      assert.equal(after.deletes_at, before.deletes_at, "the deletion date is unchanged");
+      assert.deepEqual(savedWindow(expired), window);
+      assert.equal(channels(expired), "call,form");
+      // Removed again: the cutover checks below expect every ended post to be
+      // one that ended before the expiry rules were applied.
+      q(`delete from private.posts where id='${expired}';`);
+      assert.equal(exists(expired), false);
+    }
+  );
+  await check(
+    "post command target: another member's edit of an event is refused and changes nothing",
+    () => {
+      const other = user("olwethu");
+      const before = row(targetDraft);
+      const window = savedWindow(targetDraft);
+      const contacts = channels(targetDraft);
+      const stderr = fails(
+        consume(other, eventEdit(other, targetDraft, eventWindow(55), ["whatsapp"])),
+        "42501"
+      );
+      assert.match(stderr, /owned post unavailable/);
+      assert.deepEqual(row(targetDraft), before);
+      assert.deepEqual(savedWindow(targetDraft), window);
+      assert.equal(channels(targetDraft), contacts);
+    }
+  );
+  await check(
+    "post command target: an event awaiting review cannot be edited and is unchanged",
+    () => {
+      const pending = post(nandi, "event", "pending_moderation", 0, 1);
+      const before = row(pending);
+      const window = savedWindow(pending);
+      const stderr = fails(
+        consume(nandi, eventEdit(nandi, pending, eventWindow(60), ["call", "form"])),
+        "PT409"
+      );
+      assert.match(stderr, /post cannot be edited now/);
+      assert.deepEqual(row(pending), before);
+      assert.deepEqual(savedWindow(pending), window);
+      assert.equal(channels(pending), "form");
     }
   );
   applySteps(database, steps.slice(fixIndex + 1));
