@@ -113,8 +113,15 @@ const platformNotices = {
   ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
-/** What the notification job knows about the post a lifecycle notice is about. */
-export type PostLifecycleDetails = { deletesAt?: string | null; holdsSlot?: boolean | null };
+/** What the notification job knows about the post a lifecycle notice is about,
+ * or, for trial_started, when the introductory trial ends and whether it
+ * already pays for a post (a staff or service grant does not). */
+export type PostLifecycleDetails = {
+  deletesAt?: string | null;
+  holdsSlot?: boolean | null;
+  trialEndsAt?: string | null;
+  trialFundsPost?: boolean | null;
+};
 function deletionTime(iso: string | null | undefined): string | null {
   const ms = iso ? Date.parse(iso) : Number.NaN;
   if (!Number.isFinite(ms)) return null;
@@ -128,6 +135,15 @@ function deletionTime(iso: string | null | undefined): string | null {
   });
 }
 function postLifecycleIntro(kind: PlatformNoticeKind, details?: PostLifecycleDetails) {
+  if (kind === "trial_started") {
+    // The trial starts when the member's first post is approved; a staff or
+    // service grant starts at once and pays for no post yet.
+    const ends = deletionTime(details?.trialEndsAt);
+    if (!ends) return null;
+    return details?.trialFundsPost === true
+      ? `Your free introductory post is live until ${ends} (South African time). After that, buy a plan within 3 days to reactivate it, or it is deleted with its photos and videos.`
+      : `Your introductory posting allowance runs until ${ends} (South African time).`;
+  }
   const when = deletionTime(details?.deletesAt);
   if (!when) return null;
   if (kind === "post_expired")

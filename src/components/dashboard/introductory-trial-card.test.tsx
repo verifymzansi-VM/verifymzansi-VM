@@ -25,6 +25,7 @@ import { IntroductoryTrialCard } from "./introductory-trial-card";
 
 describe("account grants on the dashboard", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     usage.mockResolvedValue({ available: false, offer: { eligible: false } });
     maybeSingle.mockResolvedValue({
       data: {
@@ -47,6 +48,50 @@ describe("account grants on the dashboard", () => {
       "30 days from approval"
     );
     expect(screen.queryByText(/your free launch offer/i)).not.toBeInTheDocument();
+  });
+  it("shows the new backend's running free week with its end date, without reading itself", () => {
+    render(
+      <IntroductoryTrialCard
+        foundationClaim={{
+          id: "intro-trial",
+          duration_days: 7,
+          admin_granted: false,
+          activated_at: "2026-11-10T08:00:00+00:00",
+          expires_at: "2026-11-17T08:00:00+00:00",
+          released_at: null,
+          converted_at: null,
+        }}
+      />
+    );
+    expect(screen.getByText("Your 7-day introductory trial")).toBeInTheDocument();
+    expect(screen.getByText(/^Visible until 17 November 2026\./)).toBeInTheDocument();
+    // The retired renewal route is hidden; the plan and posts links stay.
+    expect(screen.queryByRole("button", { name: /Renew using my paid plan/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Choose a paid plan" })).toHaveAttribute(
+      "href",
+      "/billing"
+    );
+    expect(usage).not.toHaveBeenCalled();
+    expect(maybeSingle).not.toHaveBeenCalled();
+  });
+  it("shows a free week waiting for its post's approval, and nothing without one", () => {
+    const { container, rerender } = render(
+      <IntroductoryTrialCard
+        foundationClaim={{
+          id: "intro-trial",
+          duration_days: 7,
+          admin_granted: false,
+          activated_at: null,
+          expires_at: null,
+          released_at: null,
+          converted_at: null,
+        }}
+      />
+    );
+    expect(screen.getByText("In review. The trial starts when approved.")).toBeInTheDocument();
+    rerender(<IntroductoryTrialCard foundationClaim={null} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(usage).not.toHaveBeenCalled();
   });
   it("does not offer to downgrade an account grant to seven days", async () => {
     render(<IntroductoryTrialCard />);

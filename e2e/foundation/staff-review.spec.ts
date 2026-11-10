@@ -334,8 +334,8 @@ test.describe("staff review with an authenticator", () => {
     copy = readTestCopy();
     returned = { ...(await registerUnreviewedMember("returned")), idNumber: syntheticIdNumber() };
     poster = { ...(await registerUnreviewedMember("poster")), idNumber: syntheticIdNumber() };
-    // Owns the post that stays waiting for review (the introductory allowance
-    // funds one business post per member). Verified through the production
+    // Owns the post that stays waiting for review (the free week covers one
+    // post per member). Verified through the production
     // commands, as in checkout-fulfilment.spec.ts.
     waiter = await registerVerifiedMember("waiter");
     const ref = poster.lastName.slice(-8);
@@ -639,10 +639,10 @@ test.describe("staff review with an authenticator", () => {
     test.setTimeout(150_000);
     const mark = readOutboundAttempts().length;
     const { outside, failures } = await guard(context);
-    // The every-minute job gives each newly verified member the introductory
-    // allowance (one business post).
-    for (let run = 0; run < 5 && !hasIntroAllowance(waiter); run++) await runOpsJob(request);
-    expect(hasIntroAllowance(poster) && hasIntroAllowance(waiter)).toBe(true);
+    // Verification grants nothing, not even after the every-minute job: each
+    // member's free week (one post) starts when their first post is approved.
+    await runOpsJob(request);
+    expect(hasIntroAllowance(poster) || hasIntroAllowance(waiter)).toBe(false);
     await signInBrowser(context, poster);
     await submitBusiness(page, poster, posts.approved, ["KwaZulu-Natal", "Richards Bay"]);
     const other = await otherBrowser(browser, waiter);
@@ -679,6 +679,9 @@ test.describe("staff review with an authenticator", () => {
     }
     expect(postStatus(posts.approved.id)).toBe("live");
     expect(postStatus(posts.waiting.id)).toBe("pending_moderation");
+    // The approval started the poster's free week; the waiting post's has not.
+    expect(hasIntroAllowance(poster)).toBe(true);
+    expect(hasIntroAllowance(waiter)).toBe(false);
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);

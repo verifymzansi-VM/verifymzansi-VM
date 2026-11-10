@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION internal.consume_frontend_post_command(p_request uuid
  SET search_path TO 'pg_catalog'
 AS $function$
 declare actor uuid:=internal.price_draft_actor(); command private.frontend_post_commands; input jsonb;
-  post private.posts; created jsonb; changed jsonb; terms jsonb; answer jsonb; trial jsonb; rev integer; target uuid; wants_edit boolean:=false;original_status text;
+  post private.posts; created jsonb; changed jsonb; terms jsonb; answer jsonb; rev integer; target uuid; wants_edit boolean:=false;original_status text;
 begin
   perform internal.lock_verification_subject(actor);
   perform internal.price_draft_actor();
@@ -78,10 +78,10 @@ begin
      else begin
     answer:=internal.submit_post(post.id,rev);
   exception when sqlstate 'PT402' then
+    -- internal.submit_post queues an eligible member's free week itself; a
+    -- PT402 here means no plan covers the post and no free week is left.
     if post.kind='event' or wants_edit or input->>'trial_days' is null then raise; end if;
-    trial:=internal.grant_verified_intro_trial(actor,(input->>'trial_days')::integer);
-    if not coalesce((trial->>'granted')::boolean,false) then raise exception 'an active posting plan is required' using errcode='PT402'; end if;
-    answer:=internal.submit_post(post.id,rev);
+    raise exception 'an active posting plan is required' using errcode='PT402';
   end;
   end if; answer:=answer||jsonb_build_object('original_id',coalesce(post.edit_of,post.id),'edit_of',post.edit_of);
   update private.frontend_post_commands set result=answer,payload=null where owner_id=actor and request_id=p_request;

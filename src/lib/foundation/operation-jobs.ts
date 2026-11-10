@@ -111,6 +111,9 @@ const jobSchema = z
     notice_reason: z.string().min(10).max(500).nullable().optional(),
     deletes_at: z.iso.datetime({ offset: true }).nullable().optional(),
     holds_slot: z.boolean().nullable().optional(),
+    // Only for trial_started, from update 20261110045944 on.
+    trial_ends_at: z.iso.datetime({ offset: true }).nullable().optional(),
+    trial_funds_post: z.boolean().nullable().optional(),
   })
   .refine(
     (job) =>
@@ -294,7 +297,12 @@ export async function runFoundationOperationJobs(
                   deletesAt: job.deletes_at ?? null,
                   holdsSlot: job.holds_slot ?? null,
                 })
-              : deliver(recipient, job.kind, key)
+              : job.kind === "trial_started"
+                ? deliver(recipient, job.kind, key, undefined, {
+                    trialEndsAt: job.trial_ends_at ?? null,
+                    trialFundsPost: job.trial_funds_post ?? null,
+                  })
+                : deliver(recipient, job.kind, key)
         );
         success = result.success;
         unknown = !success && result.outcomeUnknown === true;

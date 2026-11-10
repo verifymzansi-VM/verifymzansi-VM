@@ -4,8 +4,9 @@
 // clock, kept event submissions) and 20261109104020_post_expiry_rules.sql
 // (3-day grace, sold and paused posts keep their slot, events deleted at
 // their end, late-payment extension, cutover dates, owner reads with the
-// deletion date), and 20261109224337_fix_post_command_target.sql (saving an
-// edit of an existing event).
+// deletion date), 20261109224337_fix_post_command_target.sql (saving an
+// edit of an existing event) and 20261110045944_intro_trial_at_first_approval.sql
+// (the free week starts when the first post is approved).
 //
 // Replays database/foundation (prelude, candidate.sql, every update) into the
 // throwaway, network-less Postgres 17 container used by the SQL lint gate,
@@ -42,6 +43,7 @@ const GUARDS = "20261109073519_post_lifecycle_guards.sql";
 const RULES = "20261109104020_post_expiry_rules.sql";
 const TERMS_V3 = "20261109173012_posting_terms_v3.sql";
 const TARGET_FIX = "20261109224337_fix_post_command_target.sql";
+const TRIAL = "20261110045944_intro_trial_at_first_approval.sql";
 const companion = (folder, update, suffix) =>
   readFileSync(`database/foundation/${folder}/${update.replace(/\.sql$/, suffix)}`, "utf8");
 const GUARDS_PREFLIGHT = companion("preflight", GUARDS, ".check.sql");
@@ -52,6 +54,8 @@ const TERMS_V3_PREFLIGHT = companion("preflight", TERMS_V3, ".check.sql");
 const TERMS_V3_ROLLBACK = companion("rollback", TERMS_V3, ".down.sql");
 const TARGET_FIX_PREFLIGHT = companion("preflight", TARGET_FIX, ".check.sql");
 const TARGET_FIX_ROLLBACK = companion("rollback", TARGET_FIX, ".down.sql");
+const TRIAL_PREFLIGHT = companion("preflight", TRIAL, ".check.sql");
+const TRIAL_ROLLBACK = companion("rollback", TRIAL, ".down.sql");
 const CATALOGUE = JSON.parse(readFileSync("src/lib/legal/terms-documents/catalogue.json", "utf8"));
 const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const TERMS = {
@@ -123,6 +127,39 @@ try {
   const job = () => json(service("select api.run_post_lifecycle(500);"));
   const cleanup = () => json(service("select api.claim_media_cleanup(500);"));
   const scalar = (sql) => q(sql);
+
+  // A separate psql session, for the concurrency checks.
+  const session = (sql) =>
+    new Promise((resolve) => {
+      const child = spawn(
+        "docker",
+        [
+          "exec",
+          "-i",
+          database.name,
+          "psql",
+          "-X",
+          "-q",
+          "-A",
+          "-t",
+          "-v",
+          "ON_ERROR_STOP=1",
+          "-U",
+          "postgres",
+          "-d",
+          "postgres",
+        ],
+        { windowsHide: true }
+      );
+      let stdout = "",
+        stderr = "";
+      child.stdout.on("data", (data) => (stdout += data));
+      child.stderr.on("data", (data) => (stderr += data));
+      child.on("close", (status) => resolve({ status, stdout, stderr }));
+      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
+    });
+  const later = (ms, sql) =>
+    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
 
   // ------------------------------------------------------- synthetic world
   q(`create schema vmtest;
@@ -928,8 +965,819 @@ try {
       assert.equal(channels(pending), "form");
     }
   );
-  applySteps(database, steps.slice(fixIndex + 1));
-  console.log(`Applied ${TARGET_FIX} and any later updates.`);
+  // --------------------------- the free week starts at the first approval
+  // 20261110045944_intro_trial_at_first_approval.sql: verification no longer
+  // starts the 7-day trial; a post submitted without a plan waits for it, and
+  // its approval starts it. Staff decisions go through the real queue claim
+  // and moderation commands.
+  const trialIndex = steps.findIndex((step) => step.label === TRIAL);
+  assert.ok(trialIndex > fixIndex, `${TRIAL} is missing`);
+  applySteps(database, steps.slice(fixIndex + 1, trialIndex));
+  const trialStep = steps[trialIndex];
+  // For this section the identity stand-in gives each member a fingerprint of
+  // the production form (the accepted identity fact's, when the member has
+  // one), so trial grants and identity records work as in production.
+  const sharedIdentity = q(
+    "select pg_get_functiondef('internal.current_verified_identity(uuid)'::regprocedure);"
+  );
+  q(`create or replace function internal.current_verified_identity(p_owner uuid) returns text
+      language sql set search_path=pg_catalog as $$
+      select coalesce((select f.identity_hmac from private.accepted_identity_facts f
+          where f.owner_id=p_owner and f.revoked_at is null order by f.reviewed_at desc limit 1),
+        left(translate(encode(sha256(convert_to(p_owner::text,'UTF8')),'base64'),'+/=','-_'),42)||'A')
+      where exists(select 1 from private.current_account_access a where a.id=p_owner) $$;
+    -- The verification facts the earlier job looked for (accepted identity,
+    -- phone, area); their review records are not needed here.
+    create function vmtest.verified(p_owner uuid,p_staff uuid) returns text language plpgsql as $$
+    declare fp text:=left(translate(encode(sha256(convert_to('fact-'||p_owner::text,'UTF8')),'base64'),'+/=','-_'),42)||'A'; begin
+      perform set_config('session_replication_role','replica',true);
+      insert into private.accepted_identity_facts(owner_id,submission_id,identity_hmac,reviewed_by)
+        values(p_owner,gen_random_uuid(),fp,p_staff);
+      insert into private.verification_phone_proofs(owner_id,challenge_id,phone)
+        values(p_owner,gen_random_uuid(),'+2782'||lpad((abs(hashtext(p_owner::text))%10000000)::text,7,'0'));
+      insert into private.verification_localities(owner_id,province_id,city_id) values(p_owner,'gp','gp_johannesburg');
+      perform set_config('session_replication_role','origin',true);
+      return fp;
+    end$$;`);
+  const moderator = json(`select vmtest.staff('trialmod','moderator');`);
+  const verified = (label) => {
+    const m = user(label);
+    m.fingerprint = scalar(`select vmtest.verified('${m.id}','${staff.id}');`);
+    return m;
+  };
+  const trials = (owner) =>
+    json(
+      `select coalesce(jsonb_agg(jsonb_build_object('id',id,'status',status,'starts_at',starts_at,'ends_at',ends_at,
+         'seconds',extract(epoch from ends_at-starts_at)::bigint,'revoked_reason',revoked_reason) order by created_at),'[]')
+       from private.entitlements where owner_id='${owner.id}' and source='intro_trial';`
+    );
+  const activeTrials = (owner) => trials(owner).filter((t) => t.status === "active");
+  const identityRows = (owner) =>
+    Number(scalar(`select count(*) from private.trial_identities where owner_id='${owner.id}';`));
+  const waits = (id) =>
+    scalar(`select count(*) from private.intro_trial_requests where post_id='${id}';`) === "1";
+  const openActivation = (id) =>
+    scalar(
+      `select coalesce((select entitlement_id::text from private.post_activations where post_id='${id}' and released_at is null),'');`
+    );
+  const submitPost = (owner, id) =>
+    member(owner, `select api.submit_post('${id}',${row(id).revision});`);
+  const decide = (id, decision, reason = null) => {
+    const lease = json(staffMember(moderator, `select api.claim_queue_item('post','${id}');`));
+    return staffMember(
+      moderator,
+      `select api.moderate_post(p_post_id=>'${id}',p_expected_revision=>${row(id).revision},p_decision=>'${decision}',
+        p_reason=>${reason ? `'${reason}'` : "null"},p_claim_generation=>'${lease.claim_generation}',p_claim_nonce=>'${lease.claim_nonce}');`
+    );
+  };
+  const freeWeek = (owner) => json(member(owner, "select api.get_my_intro_trial();"));
+  const allowance = (owner, area = "market") =>
+    json(member(owner, `select api.get_my_frontend_posting_allowance_v2('${area}');`));
+  const allowanceV1 = (owner, area = "market") =>
+    json(member(owner, `select api.get_my_frontend_posting_allowance('${area}');`));
+  const reconcile = () => Number(scalar(service("select api.reconcile_intro_trials(20);")));
+  // The restored listing form's new-post command, staged by the server and
+  // consumed by the member, as the website does (with a fresh upload).
+  const stageNew = (owner, trialDays = 7) => {
+    const media = scalar(`select vmtest.media('${owner.id}');`);
+    const request = randomUUID();
+    const input = buildRestoredPostInput("listings", {
+      postRequestId: request,
+      postingTerms: TERMS,
+      title: "Free week fixture listing",
+      description: "A synthetic description long enough for every rule of the form.",
+      price_zar: 150,
+      category: "other_items",
+      attributes: {},
+      condition: "good",
+      contactMethods: ["form"],
+      province: "Gauteng",
+      city: "Johannesburg",
+      images: [`https://media.verifymzansi.com/media/${media}`],
+      trialDays,
+      termsAccepted: true,
+    });
+    const bound = {
+      ...input,
+      media: input.media.map(({ object_key, ...item }) => {
+        assert.equal(object_key, `media/${media}`);
+        return { ...item, object_id: media };
+      }),
+    };
+    const digest = createHash("sha256").update(JSON.stringify(bound)).digest("hex");
+    q(
+      service(
+        `select api.stage_frontend_post_command('${owner.id}','${request}','${digest}',$payload$${JSON.stringify(bound)}$payload$::jsonb);`
+      )
+    );
+    return request;
+  };
+  const trialPreflight = () => preflight(TRIAL_PREFLIGHT);
+  const DAY_S = 86_400;
+
+  // State under the earlier rule: three verified members whose trials the
+  // job started at verification; one never posts, one has a post awaiting
+  // review in the trial's slot, one has a published post.
+  const ayanda = verified("ayanda"),
+    sipho = verified("sipho"),
+    lerato = verified("lerato");
+  let siphoListing, leratoListing;
+  await check("free week: before the update, verification starts the 7-day trial (BL-03)", () => {
+    assert.equal(reconcile(), 3);
+    for (const m of [ayanda, sipho, lerato]) {
+      const [trial] = trials(m);
+      assert.equal(trial.status, "active");
+      assert.equal(trial.seconds, 7 * DAY_S);
+      assert.equal(identityRows(m), 1, "the identity is recorded as used at verification");
+    }
+    siphoListing = post(sipho, "listing", "draft");
+    assert.equal(json(submitPost(sipho, siphoListing)).status, "pending_moderation");
+    assert.equal(openActivation(siphoListing), trials(sipho)[0].id);
+    leratoListing = post(lerato, "listing", "draft");
+    q(submitPost(lerato, leratoListing));
+    const published = json(decide(leratoListing, "approve"));
+    assert.equal(published.status, "live");
+    assert.equal(
+      Date.parse(published.visible_until),
+      Date.parse(trials(lerato)[0].ends_at),
+      "the earlier rule: the trial began at verification and the post ends with it"
+    );
+  });
+  // Two more earlier-rule trials that look used but never paid for a
+  // published post: one whose post was rejected in it and then published
+  // under a plan, one holding a post that was published earlier under a plan
+  // and is back in review. And one that did pay for a published post without
+  // review (an unchanged post reactivated in it, then archived), and one of a
+  // member sponsored after verification.
+  const kagiso = verified("kagiso"),
+    thabo = verified("thabo"),
+    vuyo = verified("vuyo"),
+    sizwe = verified("sizwe"),
+    thandeka = verified("thandeka");
+  let kagisoListing, thaboListing, thaboPlan, vuyoListing, sizweSponsorship, thandekaSponsorship;
+  const sponsorshipOf = (owner) =>
+    scalar(
+      `insert into private.entitlements(owner_id,source,area,sponsorship_id,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+        values('${owner.id}','sponsorship','business',gen_random_uuid(),1,10,1,now(),now()+interval '180 days') returning id;`
+    );
+  // A post published under a plan, which then expires (its slot released).
+  const publishedThenExpired = (owner) => {
+    const plan = scalar(`select vmtest.slot('${owner.id}','${staff.id}',1,20);`);
+    const listing = post(owner, "listing", "draft");
+    q(submitPost(owner, listing));
+    assert.equal(json(decide(listing, "approve")).status, "live");
+    q(`update private.post_activations set released_at=now(),release_reason='expired'
+         where post_id='${listing}' and released_at is null;
+       update private.posts set status='expired',status_reason='Visibility period ended',
+         visible_until=now()-interval '1 second' where id='${listing}';`);
+    return [listing, plan];
+  };
+  const ownerAction = (owner, id, name) => {
+    const p = row(id);
+    return json(
+      member(
+        owner,
+        `select api.execute_my_frontend_post_action('${randomUUID()}','${id}',${p.revision},'${name}','${p.kind}','${p.area}');`
+      )
+    );
+  };
+  await check(
+    "free week: before the update, a trial can look used without paying for a published post",
+    () => {
+      // Thabo's and Vuyo's posts are published under a plan before any trial,
+      // then expire.
+      [thaboListing, thaboPlan] = publishedThenExpired(thabo);
+      [vuyoListing] = publishedThenExpired(vuyo);
+      assert.equal(reconcile(), 5);
+      // Kagiso's post is rejected in the trial, then published under a plan
+      // that ends sooner (so it is chosen first).
+      kagisoListing = post(kagiso, "listing", "draft");
+      q(submitPost(kagiso, kagisoListing));
+      assert.equal(openActivation(kagisoListing), trials(kagiso)[0].id);
+      assert.equal(
+        json(decide(kagisoListing, "reject", "Synthetic rejection reason")).status,
+        "rejected"
+      );
+      const plan = scalar(`select vmtest.slot('${kagiso.id}','${staff.id}',1,3);`);
+      assert.equal(ownerAction(kagiso, kagisoListing, "resubmit").status, "pending_moderation");
+      assert.equal(openActivation(kagisoListing), plan);
+      assert.equal(json(decide(kagisoListing, "approve")).status, "live");
+      // Thabo's expired post goes back to review, into the trial's slot.
+      assert.equal(ownerAction(thabo, thaboListing, "resubmit").status, "pending_moderation");
+      assert.equal(openActivation(thaboListing), trials(thabo)[0].id);
+      // Vuyo reactivates the unchanged post: it goes live in the trial's slot
+      // without a review, and is then archived (its slot released by the owner).
+      assert.equal(ownerAction(vuyo, vuyoListing, "reactivate").status, "live");
+      assert.equal(openActivation(vuyoListing), trials(vuyo)[0].id);
+      q(
+        member(
+          vuyo,
+          `select api.set_post_state('${vuyoListing}',${row(vuyoListing).revision},'archive');`
+        )
+      );
+      assert.equal(row(vuyoListing).status, "archived");
+      // Sizwe and Thandeka are sponsored after verification: the
+      // sponsorship's own identity record is not written, because the trial's
+      // holds the identity (internal.start_sponsorship, on conflict do
+      // nothing). Sizwe's trial still runs; Thandeka's has lapsed unused.
+      sizweSponsorship = sponsorshipOf(sizwe);
+      thandekaSponsorship = sponsorshipOf(thandeka);
+      q(`update private.entitlements set starts_at=now()-interval '8 days',ends_at=now()-interval '1 day'
+           where owner_id='${thandeka.id}' and source='intro_trial';`);
+    }
+  );
+  await check("free week preflight: read only, summary only, counts the earlier trials", () => {
+    const rows = trialPreflight();
+    assert.deepEqual(
+      rows.map((r) => r[0]),
+      ["summary"],
+      JSON.stringify(rows)
+    );
+    assert.equal(
+      rows[0][1],
+      "free week: reviewed live bodies, update not applied; trials to restart: 5 (posts awaiting review among them: 2); sponsored members whose record moves to the sponsorship: 1; trials kept: 3 (running trials of sponsored members among them: 1); members with an unfunded post awaiting review: 0; emails not yet sent: 5"
+    );
+    const write = database.psql(
+      `${TRIAL_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
+      ["-A", "-t", "-1", "-v", "VERBOSITY=verbose"]
+    );
+    assert.notEqual(write.status, 0);
+    assert.match(write.stderr, /ERROR:\s+25006:/);
+  });
+  await check("free week: drift and a premature rollback are refused", () => {
+    const before = fingerprint();
+    assert.match(fails(TRIAL_ROLLBACK, "55000"), /rollback precondition/);
+    assert.equal(fingerprint(), before);
+    const live = q(
+      "select pg_get_functiondef('internal.moderate_post(uuid,integer,text,text,text,uuid)'::regprocedure);"
+    );
+    q(
+      `do $$begin execute replace(pg_get_functiondef('internal.moderate_post(uuid,integer,text,text,text,uuid)'::regprocedure),'end;\n$function$','end;\n\n$function$'); end$$;`
+    );
+    const rows = trialPreflight();
+    assert.equal(rows.length, 2, JSON.stringify(rows));
+    assert.match(rows[1][1], /internal\.moderate_post.* is not the reviewed body/);
+    assert.match(fails(trialStep.sql, "55000"), /free week drift: internal\.moderate_post/);
+    q(`${live};`);
+    assert.equal(fingerprint(), before);
+    assert.equal(trialPreflight().length, 1);
+  });
+
+  const trialBefore = fingerprint();
+  applySteps(database, [trialStep]);
+  const trialAfter = fingerprint();
+  await check("free week: earlier trials that never paid for a published post restart", () => {
+    assert.notEqual(trialAfter, trialBefore);
+    // Never used: withdrawn, the identity free again, the unsent email dropped.
+    const [ayandaTrial] = trials(ayanda);
+    assert.equal(ayandaTrial.status, "revoked");
+    assert.equal(ayandaTrial.revoked_reason, "intro_trial_restarts_at_first_approval");
+    assert.equal(identityRows(ayanda), 0);
+    assert.equal(
+      scalar(
+        `select count(*) from private.outbox_events where kind='trial_started' and subject_id='${ayandaTrial.id}' and processed_at is null;`
+      ),
+      "0"
+    );
+    // Its slot held a post awaiting review: the post waits for the free week.
+    assert.equal(trials(sipho)[0].status, "revoked");
+    assert.equal(identityRows(sipho), 0);
+    assert.equal(row(siphoListing).status, "pending_moderation");
+    assert.equal(openActivation(siphoListing), "");
+    assert.equal(waits(siphoListing), true);
+    assert.equal(
+      scalar(`select count(*) from private.post_trial_claims where post_id='${siphoListing}';`),
+      "0"
+    );
+    // Paid for a published post: kept as it is.
+    assert.deepEqual(
+      activeTrials(lerato).map((t) => t.id),
+      [trials(lerato)[0].id]
+    );
+    assert.equal(identityRows(lerato), 1);
+    assert.equal(row(leratoListing).status, "live");
+    // Looked used but never paid for a published post: restarted too.
+    assert.equal(trials(kagiso)[0].status, "revoked");
+    assert.equal(identityRows(kagiso), 0);
+    assert.equal(row(kagisoListing).status, "live", "the post published under the plan stays");
+    assert.equal(trials(thabo)[0].status, "revoked");
+    assert.equal(waits(thaboListing), true);
+    assert.equal(openActivation(thaboListing), "");
+    // Paid for a published post without a review, then archived: kept.
+    assert.equal(activeTrials(vuyo).length, 1);
+    assert.equal(identityRows(vuyo), 1);
+    // A sponsored member's trial that still runs is kept (the sponsorship
+    // pays only for business posts): a Market listing still uses it.
+    const [sizweTrial] = trials(sizwe);
+    assert.equal(sizweTrial.status, "active");
+    assert.equal(
+      scalar(`select entitlement_id from private.trial_identities where owner_id='${sizwe.id}';`),
+      sizweTrial.id
+    );
+    const sizweListing = post(sizwe, "listing", "draft");
+    assert.equal(json(submitPost(sizwe, sizweListing)).status, "pending_moderation");
+    assert.equal(openActivation(sizweListing), sizweTrial.id);
+    assert.equal(
+      scalar(`select count(*) from private.entitlements where id='${sizweSponsorship}';`),
+      "1"
+    );
+    // Once lapsed, the trial is withdrawn but the identity record moves to
+    // the sponsorship: still no later trial.
+    assert.equal(trials(thandeka)[0].status, "revoked");
+    assert.equal(
+      scalar(
+        `select entitlement_id from private.trial_identities where owner_id='${thandeka.id}';`
+      ),
+      thandekaSponsorship
+    );
+    assert.equal(freeWeek(thandeka).status, "used");
+    const thandekaListing = post(thandeka, "listing", "draft");
+    assert.match(
+      fails(submitPost(thandeka, thandekaListing), "PT402"),
+      /no active plan covers this post/
+    );
+    assert.equal(waits(thandekaListing), false);
+    assert.match(
+      trialPreflight()[0][1],
+      /^free week: already applied; trials to restart: 0 \(posts awaiting review among them: 0\); sponsored members whose record moves to the sponsorship: 0; trials kept: 3 \(running trials of sponsored members among them: 1\); members with an unfunded post awaiting review: 2;/
+    );
+    // Removed: the cutover checks below expect only earlier ended posts.
+    q(`delete from private.posts where id='${vuyoListing}';`);
+  });
+  await check("free week: apply, roll back and apply again are clean", () => {
+    // A waiting post that got a slot of its own meanwhile.
+    const zanele = verified("zanele");
+    const funded = post(zanele, "listing", "draft");
+    q(submitPost(zanele, funded));
+    const zanelePlan = scalar(`select vmtest.slot('${zanele.id}','${staff.id}',1,20);`);
+    q(member(zanele, `select api.activate_post('${funded}');`));
+    assert.equal(waits(funded), true);
+    applySteps(database, [{ label: "free week rollback", sql: TRIAL_ROLLBACK }]);
+    assert.equal(fingerprint(), trialBefore, "the rollback leaves the pre-update schema");
+    // The waiting post got the earlier behaviour: a trial from now, in its slot.
+    const [restarted] = activeTrials(sipho);
+    assert.ok(restarted, "the rollback grants the waiting post's member a trial");
+    assert.equal(openActivation(siphoListing), restarted.id);
+    assert.equal(identityRows(sipho), 1);
+    assert.equal(activeTrials(ayanda).length, 0, "a withdrawn trial stays withdrawn");
+    // A member with a free slot gets it, not a trial; a post with a slot keeps it.
+    assert.equal(openActivation(thaboListing), thaboPlan);
+    assert.equal(activeTrials(thabo).length, 0);
+    assert.equal(openActivation(funded), zanelePlan);
+    assert.deepEqual(trials(zanele), []);
+    applySteps(database, [trialStep]);
+    assert.equal(fingerprint(), trialAfter, "re-applying gives the same schema");
+    // The re-application restarts the trial the rollback granted.
+    assert.equal(activeTrials(sipho).length, 0);
+    assert.equal(waits(siphoListing), true);
+    assert.equal(openActivation(siphoListing), "");
+    applySteps(database, [trialStep]);
+    assert.equal(fingerprint(), trialAfter, "a repeated run changes nothing");
+    assert.equal(waits(siphoListing), true);
+    assert.equal(waits(thaboListing), false, "the post the rollback funded keeps its slot");
+    assert.equal(openActivation(thaboListing), thaboPlan);
+    assert.equal(activeTrials(lerato).length, 1);
+  });
+  await check(
+    "free week: a repeated run lets an unfunded post in review wait for an unused free week",
+    () => {
+      // Posts in review that no slot pays for any more (made directly here).
+      const mpho = verified("mpho");
+      const newer = post(mpho, "listing", "pending_moderation", 0, 2);
+      const older = post(mpho, "listing", "pending_moderation", 0, 3);
+      const used = post(lerato, "listing", "pending_moderation", 0, 1);
+      applySteps(database, [trialStep]);
+      assert.equal(fingerprint(), trialAfter);
+      assert.equal(waits(older), true, "the oldest one per member waits");
+      assert.equal(waits(newer), false);
+      assert.equal(waits(used), false, "a member whose week is used gets nothing");
+      json(decide(older, "approve"));
+      assert.equal(trials(mpho)[0].seconds, 7 * DAY_S);
+      // Removed again: the later checks expect only their own posts in review.
+      q(`delete from private.posts where id in('${newer}','${used}');`);
+    }
+  );
+  const bongi = verified("bongi");
+  await check("free week: verification creates no trial", () => {
+    assert.equal(reconcile(), 0);
+    assert.deepEqual(trials(bongi), []);
+    assert.equal(trials(ayanda).length, 1, "the restarted member gets nothing either");
+    assert.equal(identityRows(bongi) + identityRows(ayanda), 0);
+    assert.deepEqual(freeWeek(bongi), { status: "available", starts_at: null, ends_at: null });
+    const offer = allowance(bongi).trial_offer;
+    assert.equal(offer.eligible, true);
+    assert.equal(offer.sevenDayAvailable, true);
+    assert.equal(offer.thirtyDayAvailable, false, "the free week is 7 days");
+    assert.equal(allowanceV1(bongi).trial_offer.thirtyDayAvailable, false);
+    fails(service("select api.reconcile_intro_trials(0);"), "22023");
+  });
+  let bongiListing;
+  await check("free week: a post submitted without a plan waits for it and holds no slot", () => {
+    bongiListing = post(bongi, "listing", "draft");
+    const answer = json(submitPost(bongi, bongiListing));
+    assert.equal(answer.status, "pending_moderation");
+    assert.equal(waits(bongiListing), true);
+    assert.equal(openActivation(bongiListing), "");
+    assert.deepEqual(trials(bongi), [], "nothing is granted at submission");
+    assert.equal(identityRows(bongi), 0);
+    assert.deepEqual(freeWeek(bongi), {
+      status: "awaiting_approval",
+      starts_at: null,
+      ends_at: null,
+    });
+    for (const read of [allowance(bongi), allowanceV1(bongi)]) {
+      assert.equal(read.capacity, 0);
+      assert.equal(read.trial_ends_at, null);
+      assert.equal(read.trial_used, false);
+      assert.equal(read.trial_offer.eligible, false, "the offer is in use while it waits");
+      assert.equal(read.trial_offer.sevenDayAvailable, false);
+      assert.equal(read.max_photos, 0);
+    }
+  });
+  await check("free week: only one post at a time waits for it; events are unaffected", () => {
+    const second = post(bongi, "listing", "draft");
+    assert.match(fails(submitPost(bongi, second), "PT409"), /all posting capacity is in use/);
+    assert.equal(row(second).status, "draft");
+    assert.equal(waits(second), false);
+    // Through the form too (its command is refused and stays unconsumed).
+    assert.match(
+      fails(
+        member(bongi, `select api.consume_frontend_post_command('${stageNew(bongi)}');`),
+        "PT409"
+      ),
+      /all posting capacity is in use/
+    );
+    const event = post(bongi, "event", "draft");
+    assert.equal(json(submitPost(bongi, event)).status, "pending_moderation");
+    assert.equal(waits(event), false);
+  });
+  await check(
+    "free week: the first approval starts 7 days from approval; moderation time does not shorten it",
+    () => {
+      // Ten days in review, more than the whole week.
+      q(
+        `update private.posts set submitted_at=now()-interval '10 days' where id='${bongiListing}';
+         update private.intro_trial_requests set requested_at=now()-interval '10 days' where post_id='${bongiListing}';`
+      );
+      const answer = json(decide(bongiListing, "approve"));
+      assert.equal(answer.status, "live");
+      const live = row(bongiListing);
+      const [trial] = trials(bongi);
+      assert.equal(trials(bongi).length, 1);
+      assert.equal(trial.status, "active");
+      assert.equal(trial.seconds, 7 * DAY_S);
+      assert.equal(
+        Date.parse(trial.starts_at),
+        Date.parse(live.published_at),
+        "it starts at approval"
+      );
+      assert.equal(Date.parse(live.visible_until), Date.parse(trial.ends_at));
+      assert.equal(Date.parse(answer.visible_until), Date.parse(trial.ends_at));
+      assert.equal(openActivation(bongiListing), trial.id);
+      assert.equal(waits(bongiListing), false);
+      assert.equal(identityRows(bongi), 1);
+      assert.equal(
+        scalar(`select identity_hmac from private.trial_identities where owner_id='${bongi.id}';`),
+        scalar(`select internal.current_verified_identity('${bongi.id}');`)
+      );
+      assert.equal(
+        scalar(
+          `select count(*) from private.post_trial_claims where post_id='${bongiListing}' and trial_entitlement_id='${trial.id}';`
+        ),
+        "1"
+      );
+      assert.equal(outbox(trial.id, "trial_started"), 1);
+      assert.deepEqual(freeWeek(bongi), {
+        status: "running",
+        starts_at: trial.starts_at,
+        ends_at: trial.ends_at,
+      });
+      const read = allowance(bongi);
+      assert.equal(Date.parse(read.trial_ends_at), Date.parse(trial.ends_at));
+      assert.equal(read.trial_used, true);
+      assert.equal(read.trial_offer.eligible, false);
+      // The trial's single slot is now in use; a second post is refused as before.
+      const second = post(bongi, "listing", "draft");
+      assert.match(fails(submitPost(bongi, second), "PT409"), /all posting capacity is in use/);
+    }
+  );
+  const pule = verified("pule");
+  await check("free week: the mail claim gives the trial's end with its email", () => {
+    const [trial] = trials(bongi);
+    const claimed = json(
+      service("select api.claim_supported_notification_outbox(array['trial_started'],50);")
+    );
+    const mail = claimed.find((item) => item.subject_id === trial.id);
+    assert.ok(mail, "the trial_started email is claimed");
+    assert.equal(Date.parse(mail.trial_ends_at), Date.parse(trial.ends_at));
+    assert.equal(mail.trial_funds_post, true);
+    // Paused, the post is no longer live: the email does not say it is.
+    q(
+      member(
+        bongi,
+        `select api.set_post_state('${bongiListing}',${row(bongiListing).revision},'pause');`
+      )
+    );
+    q(
+      `insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values('trial_started','${trial.id}','${bongi.id}','free-week-paused:${trial.id}');`
+    );
+    const paused = json(
+      service("select api.claim_supported_notification_outbox(array['trial_started'],50);")
+    ).find((item) => item.subject_id === trial.id);
+    assert.equal(paused.trial_funds_post, false);
+    // A service grant pays for no post yet: its email says so.
+    q(service(`select api.grant_verified_intro_trial('${pule.id}',7);`));
+    const [grant] = trials(pule);
+    const grantMail = json(
+      service("select api.claim_supported_notification_outbox(array['trial_started'],50);")
+    ).find((item) => item.subject_id === grant.id);
+    assert.equal(Date.parse(grantMail.trial_ends_at), Date.parse(grant.ends_at));
+    assert.equal(grantMail.trial_funds_post, false);
+    // Another kind carries no trial end.
+    const deleted = post(bongi, "listing", "draft");
+    q(
+      `insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values('post_deleted','${deleted}','${bongi.id}','free-week-check:${deleted}');`
+    );
+    const other = json(
+      service("select api.claim_supported_notification_outbox(array['post_deleted'],50);")
+    ).find((item) => item.subject_id === deleted);
+    assert.equal(other.trial_ends_at, null);
+    assert.equal(other.trial_funds_post, null);
+  });
+  await check(
+    "free week: a later run leaves trials granted after the first application alone",
+    () => {
+      // As if the first application was an hour ago: Pule's service grant is
+      // newer and stays, although it pays for no post.
+      q("update private.intro_trial_rule set first_applied_at=now()-interval '1 hour';");
+      applySteps(database, [trialStep]);
+      assert.equal(activeTrials(pule).length, 1);
+      assert.equal(identityRows(pule), 1);
+    }
+  );
+  await check(
+    "free week: a rejected post does not use it; resubmitting it waits again and its approval starts it",
+    () => {
+      const chris = verified("chris");
+      const listing = post(chris, "listing", "draft");
+      q(submitPost(chris, listing));
+      assert.equal(waits(listing), true);
+      assert.equal(
+        json(decide(listing, "reject", "Synthetic rejection reason")).status,
+        "rejected"
+      );
+      assert.equal(row(listing).status, "rejected");
+      assert.equal(waits(listing), false);
+      assert.deepEqual(trials(chris), []);
+      assert.equal(identityRows(chris), 0);
+      assert.equal(freeWeek(chris).status, "available");
+      assert.equal(allowance(chris).trial_offer.eligible, true);
+      // Resubmitted through the owner action the website uses.
+      const p = row(listing);
+      const resubmitted = json(
+        member(
+          chris,
+          `select api.execute_my_frontend_post_action('${randomUUID()}','${listing}',${p.revision},'resubmit','listing','market');`
+        )
+      );
+      assert.equal(resubmitted.status, "pending_moderation");
+      assert.equal(waits(listing), true);
+      q(`update private.posts set submitted_at=now()-interval '3 days' where id='${listing}';`);
+      json(decide(listing, "approve"));
+      const [trial] = trials(chris);
+      assert.equal(trial.seconds, 7 * DAY_S);
+      assert.equal(Date.parse(trial.starts_at), Date.parse(row(listing).published_at));
+    }
+  );
+  await check(
+    "free week: the form's submission waits for the free week, whatever length it picked",
+    () => {
+      const dumi = verified("dumi");
+      const answer = json(
+        member(dumi, `select api.consume_frontend_post_command('${stageNew(dumi, 30)}');`)
+      );
+      assert.equal(answer.status, "pending_moderation");
+      assert.equal(waits(answer.id), true);
+      assert.deepEqual(trials(dumi), [], "the form no longer grants a trial at submission");
+      json(decide(answer.id, "approve"));
+      assert.equal(trials(dumi)[0].seconds, 7 * DAY_S, "the free week is 7 days");
+    }
+  );
+  await check("free week: the earlier trial's waiting post gets the full week at approval", () => {
+    json(decide(siphoListing, "approve"));
+    const [trial] = activeTrials(sipho);
+    assert.equal(trial.seconds, 7 * DAY_S);
+    assert.equal(Date.parse(trial.starts_at), Date.parse(row(siphoListing).published_at));
+    assert.equal(openActivation(siphoListing), trial.id);
+  });
+  await check(
+    "free week: taken while the post waited, approval uses a slot the member has, or is refused",
+    () => {
+      // A staff grant recorded the identity meanwhile: its running trial pays.
+      const lindi = verified("lindi");
+      const listing = post(lindi, "listing", "draft");
+      q(submitPost(lindi, listing));
+      assert.equal(waits(listing), true);
+      q(service(`select api.grant_verified_intro_trial('${lindi.id}',7);`));
+      const [granted] = trials(lindi);
+      // A running trial is what the member sees, even while a post still waits.
+      assert.deepEqual(freeWeek(lindi), {
+        status: "running",
+        starts_at: granted.starts_at,
+        ends_at: granted.ends_at,
+      });
+      assert.equal(json(decide(listing, "approve")).status, "live");
+      assert.equal(trials(lindi).length, 1, "no second trial");
+      assert.equal(openActivation(listing), granted.id);
+      assert.equal(waits(listing), false);
+      // A banned identity with no slot: refused, the post stays in review.
+      const mandla = verified("mandla");
+      const banned = post(mandla, "listing", "draft");
+      q(submitPost(mandla, banned));
+      q(`select set_config('session_replication_role','replica',false);
+        insert into private.banned_identities(identity_hmac,decision_id,category,banned_at,retain_until)
+          values('${mandla.fingerprint}',gen_random_uuid(),'fraud',now(),now()+interval '5 years');
+        select set_config('session_replication_role','origin',false);`);
+      // The card does not promise a week that approval would refuse.
+      assert.equal(freeWeek(mandla).status, "unavailable");
+      assert.match(
+        fails(decide(banned, "approve"), "PT402"),
+        /no plan or free week covers this post/
+      );
+      assert.equal(row(banned).status, "pending_moderation");
+      assert.deepEqual(trials(mandla), []);
+      // A plan that ends within the week, or one that does not allow the
+      // post's photos, does not pay for it: the week is granted.
+      const kopano = verified("kopano");
+      const soon = post(kopano, "listing", "draft");
+      q(submitPost(kopano, soon));
+      const shortPlan = scalar(`select vmtest.slot('${kopano.id}','${staff.id}',1,2);`);
+      assert.equal(json(decide(soon, "approve")).status, "live");
+      const [kopanoWeek] = trials(kopano);
+      assert.equal(kopanoWeek.seconds, 7 * DAY_S);
+      assert.equal(openActivation(soon), kopanoWeek.id);
+      assert.notEqual(openActivation(soon), shortPlan);
+      const lebo = verified("lebo");
+      const photographed = post(lebo, "listing", "draft");
+      q(`insert into private.post_media(post_id,object_id,purpose,position)
+           values('${photographed}',vmtest.media('${lebo.id}'),'gallery',1);`);
+      q(submitPost(lebo, photographed));
+      const onePhoto = scalar(
+        `insert into private.entitlements(owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+          values('${lebo.id}','staff_grant','${staff.id}',1,1,0,now()-interval '1 day',now()+interval '30 days') returning id;`
+      );
+      assert.equal(json(decide(photographed, "approve")).status, "live");
+      const [leboWeek] = trials(lebo);
+      assert.equal(openActivation(photographed), leboWeek.id);
+      assert.notEqual(openActivation(photographed), onePhoto);
+      // A plan bought while the post waited pays for it; the week stays unused.
+      const tumi = verified("tumi");
+      const bought = post(tumi, "listing", "draft");
+      q(submitPost(tumi, bought));
+      const tumiPlan = scalar(`select vmtest.slot('${tumi.id}','${staff.id}',1,20);`);
+      assert.equal(json(decide(bought, "approve")).status, "live");
+      assert.equal(openActivation(bought), tumiPlan);
+      assert.deepEqual(trials(tumi), []);
+      assert.equal(freeWeek(tumi).status, "available");
+      // A waiting post that got a slot of its own no longer holds the free week.
+      const nomvula = verified("nomvula");
+      const own = post(nomvula, "listing", "draft");
+      q(submitPost(nomvula, own));
+      const plan = scalar(`select vmtest.slot('${nomvula.id}','${staff.id}',1,20);`);
+      q(member(nomvula, `select api.activate_post('${own}');`));
+      assert.equal(freeWeek(nomvula).status, "available");
+      assert.equal(json(decide(own, "approve")).status, "live");
+      assert.equal(openActivation(own), plan);
+      assert.deepEqual(trials(nomvula), [], "the plan paid; the free week is still unused");
+    }
+  );
+  await check("free week: none is left after it ends, or for a banned identity", () => {
+    // Bongi's week is over (its post is gone): a new post needs a plan.
+    q(`update private.entitlements set starts_at=now()-interval '8 days',ends_at=now()-interval '1 second'
+         where owner_id='${bongi.id}' and source='intro_trial';
+       delete from private.posts where id='${bongiListing}';`);
+    assert.equal(freeWeek(bongi).status, "used");
+    const next = post(bongi, "listing", "draft");
+    assert.match(fails(submitPost(bongi, next), "PT402"), /no active plan covers this post/);
+    assert.equal(waits(next), false);
+    assert.match(
+      fails(
+        member(bongi, `select api.consume_frontend_post_command('${stageNew(bongi)}');`),
+        "PT402"
+      ),
+      /an active posting plan is required/
+    );
+    // A banned identity gets no free week.
+    const eli = verified("eli");
+    q(`select set_config('session_replication_role','replica',false);
+      insert into private.banned_identities(identity_hmac,decision_id,category,banned_at,retain_until)
+        values('${eli.fingerprint}',gen_random_uuid(),'fraud',now(),now()+interval '5 years');
+      select set_config('session_replication_role','origin',false);`);
+    const banned = post(eli, "listing", "draft");
+    fails(submitPost(eli, banned), "PT402");
+    assert.equal(freeWeek(eli).status, "unavailable");
+    assert.equal(allowance(eli).trial_offer.eligible, false);
+  });
+  await check("free week: another member can neither read nor decide it", () => {
+    const fana = verified("fana");
+    const listing = post(fana, "listing", "draft");
+    q(submitPost(fana, listing));
+    // Each member reads only their own free week.
+    assert.equal(freeWeek(fana).status, "awaiting_approval");
+    assert.equal(freeWeek(lerato).status, "running");
+    // A member cannot submit or moderate someone else's post.
+    fails(
+      member(lerato, `select api.submit_post('${listing}',${row(listing).revision});`),
+      "22023"
+    );
+    fails(
+      member(
+        lerato,
+        `select api.moderate_post(p_post_id=>'${listing}',p_expected_revision=>${row(listing).revision},p_decision=>'approve',p_claim_generation=>'1',p_claim_nonce=>'${randomUUID()}');`
+      ),
+      "42501"
+    );
+    assert.equal(waits(listing), true);
+    assert.deepEqual(trials(fana), []);
+    // The helpers are not callable by members.
+    fails(member(fana, `select internal.start_intro_trial('${listing}');`), "42501");
+    fails(member(fana, `select internal.queue_intro_trial('${listing}');`), "42501");
+    q(`delete from private.posts where id='${listing}';`);
+    assert.equal(waits(listing), false, "deleting the post removes its request");
+  });
+  await check("free week concurrency: two submissions at once queue exactly one", async () => {
+    const gift = verified("gift");
+    const [a, b] = [post(gift, "listing", "draft"), post(gift, "listing", "draft")];
+    const results = await Promise.all([session(submitPost(gift, a)), session(submitPost(gift, b))]);
+    assert.deepEqual(
+      results.map((r) => r.status).sort(),
+      [0, 3],
+      JSON.stringify(results.map((r) => r.stderr))
+    );
+    assert.match(results.find((r) => r.status !== 0).stderr, /ERROR:\s+PT409:/);
+    assert.equal(Number(waits(a)) + Number(waits(b)), 1);
+  });
+  await check(
+    "free week concurrency: two moderators approving at once start one trial",
+    async () => {
+      const hlengi = verified("hlengi");
+      const listing = post(hlengi, "listing", "draft");
+      q(submitPost(hlengi, listing));
+      const second = json(`select vmtest.staff('trialmod2','moderator');`);
+      const lease = json(
+        staffMember(moderator, `select api.claim_queue_item('post','${listing}');`)
+      );
+      const approve = (staffUser) =>
+        staffMember(
+          staffUser,
+          `select api.moderate_post(p_post_id=>'${listing}',p_expected_revision=>${row(listing).revision},p_decision=>'approve',
+          p_claim_generation=>'${lease.claim_generation}',p_claim_nonce=>'${lease.claim_nonce}');`
+        );
+      const results = await Promise.all([
+        session(`begin;\n${approve(moderator)}\nselect pg_sleep(2); commit;`),
+        later(700, approve(second)),
+      ]);
+      assert.equal(results[0].status, 0, results[0].stderr);
+      assert.notEqual(results[1].status, 0);
+      assert.equal(row(listing).status, "live");
+      assert.equal(trials(hlengi).length, 1);
+      assert.equal(identityRows(hlengi), 1);
+    }
+  );
+  await check(
+    "free week concurrency: a submission racing the first approval never gets a second trial",
+    async () => {
+      const ivy = verified("ivy");
+      const first = post(ivy, "listing", "draft");
+      q(submitPost(ivy, first));
+      const next = post(ivy, "listing", "draft");
+      // Staged before the race: synchronous commands would stall the sessions.
+      const formRequest = stageNew(ivy);
+      const lease = json(staffMember(moderator, `select api.claim_queue_item('post','${first}');`));
+      const [approval, submitted] = await Promise.all([
+        session(
+          `begin;\n${staffMember(
+            moderator,
+            `select api.moderate_post(p_post_id=>'${first}',p_expected_revision=>${row(first).revision},p_decision=>'approve',
+              p_claim_generation=>'${lease.claim_generation}',p_claim_nonce=>'${lease.claim_nonce}');`
+          )}\nselect pg_sleep(2); commit;`
+        ),
+        later(700, member(ivy, `select api.consume_frontend_post_command('${formRequest}');`)),
+        later(900, submitPost(ivy, next)),
+      ]).then(([a, b, c]) => [a, [b, c]]);
+      assert.equal(approval.status, 0, approval.stderr);
+      // The form waits for the member's subject lock and finds the trial's
+      // slot taken; a direct submission finds the slot taken or the week used.
+      assert.match(submitted[0].stderr, /ERROR:\s+PT409:/);
+      assert.match(submitted[1].stderr, /ERROR:\s+PT40[29]:/);
+      assert.equal(trials(ivy).length, 1);
+      assert.equal(row(next).status, "draft");
+    }
+  );
+  // The later checks keep the stand-in they were written with.
+  q(`${sharedIdentity};`);
+  applySteps(database, steps.slice(trialIndex + 1));
+  console.log(`Applied ${TRIAL} and any later updates.`);
 
   // ----------------------------------------------------- cutover safety
   const endedRows = () =>
@@ -2220,38 +3068,6 @@ try {
   );
 
   // ----------------------------------------------------------- concurrency
-  const session = (sql) =>
-    new Promise((resolve) => {
-      const child = spawn(
-        "docker",
-        [
-          "exec",
-          "-i",
-          database.name,
-          "psql",
-          "-X",
-          "-q",
-          "-A",
-          "-t",
-          "-v",
-          "ON_ERROR_STOP=1",
-          "-U",
-          "postgres",
-          "-d",
-          "postgres",
-        ],
-        { windowsHide: true }
-      );
-      let stdout = "",
-        stderr = "";
-      child.stdout.on("data", (data) => (stdout += data));
-      child.stderr.on("data", (data) => (stderr += data));
-      child.on("close", (status) => resolve({ status, stdout, stderr }));
-      child.stdin.end(`\\set VERBOSITY verbose\n${sql}`);
-    });
-  const later = (ms, sql) =>
-    new Promise((resolve) => setTimeout(resolve, ms)).then(() => session(sql));
-
   await check("concurrency: two submissions at the limit admit exactly one", async () => {
     const [a, b] = [draft(fikile), draft(fikile)];
     const results = await Promise.all([session(submit(fikile, a)), session(submit(fikile, b))]);

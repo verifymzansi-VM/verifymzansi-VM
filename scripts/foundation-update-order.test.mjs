@@ -47,7 +47,7 @@ const manifests = (...functions) => [{ functions }];
 const register = (lines) =>
   `<!-- applied-register:start -->\n${lines.join("\n")}\n<!-- applied-register:end -->\n`;
 
-test("the committed register lists every update with an applied time and matches fingerprint.json", () => {
+test("the committed register lists every update, applied with a time or pending as fingerprint.json says", () => {
   const { rows, errors } = parseUpdateRegister(readme);
   assert.deepEqual(errors, []);
   assert.deepEqual(
@@ -55,7 +55,14 @@ test("the committed register lists every update with an applied time and matches
     files
   );
   assert.deepEqual(checkUpdateRegister({ files, rows, fingerprint }), []);
-  assert.ok(rows.every((row) => row.kind === "applied" && row.date && row.evidence));
+  const pending = fingerprint.productionCheck.pendingApplication;
+  assert.ok(
+    rows.every((row) =>
+      row.kind === "applied"
+        ? Boolean(row.date && row.evidence) && !pending.includes(row.file)
+        : row.kind === "pending" && pending.includes(row.file)
+    )
+  );
   assert.deepEqual(parseContractSteps(readJsonFile(repo, CONTRACT_STEPS)).errors, []);
 });
 

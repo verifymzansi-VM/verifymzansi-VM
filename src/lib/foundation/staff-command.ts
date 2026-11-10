@@ -25,6 +25,12 @@ export async function settleStaffCommand<T>(
         mfa
       );
     }
+    // Approving a post that no plan or free week can fund any more.
+    if (error.code === "PT402")
+      throw new FoundationStaffCommandError(
+        409,
+        "No plan or free week is left to fund this post. Reject it with a reason, or ask the member to choose a plan."
+      );
     throw new FoundationStaffCommandError(
       error.code === "PT409"
         ? 409

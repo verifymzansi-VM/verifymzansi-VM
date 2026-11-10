@@ -8,17 +8,24 @@ import {
   dashboardPosts,
 } from "./owner-dashboard";
 import { readRestoredOwnerPost } from "./restored-owner-posts";
+import { readIntroTrial, restoredTrialClaim } from "./intro-trial";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 
 export const readRestoredOwnerDashboard = cache(async (accountId: string) => {
   const current = await readFoundationServerSession();
   if (current.user.id !== accountId) throw new Error("Dashboard account changed");
   const snapshot = await readFoundationOwnerDashboard(current.api, accountId);
+  const [posts, introTrial] = await Promise.all([
+    withDeletionDates(current.api, dashboardPosts(snapshot)),
+    // The trial card's record; without it the card shows nothing, as before.
+    readIntroTrial(current.api).then(restoredTrialClaim, () => null),
+  ]);
   return {
     snapshot,
     profile: presentedDashboardProfile(snapshot, current.account, current.user),
     verificationSteps: dashboardVerificationSteps(snapshot),
-    posts: await withDeletionDates(current.api, dashboardPosts(snapshot)),
+    posts,
+    introTrial,
   };
 });
 // The dashboard snapshot has no deletion date. Only an ended Market post (the

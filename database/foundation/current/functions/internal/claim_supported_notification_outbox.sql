@@ -24,10 +24,15 @@ begin
     'attempts',o.delivery_attempts,'recipient',case when u.email_confirmed_at is not null and not u.is_anonymous and (o.kind not in('account_warning','content_hidden','account_suspended','account_banned','appeal_decided','business_check_update') or not exists(select 1 from private.account_closures c where c.user_id=u.id)) then u.email end,
     'post_title',p.title,'post_id',p.id,'created_at',o.created_at,'notice_reason',case when o.kind='account_warning' then (select r.reason from private.frontend_report_action_receipts r join private.frontend_account_warnings w on w.receipt_id=r.id where r.id=o.subject_id and w.account_id=o.owner_id) end,
     'deletes_at',p.deletes_at,
-    'holds_slot',case when p.id is not null then exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) end) order by o.created_at,o.id),'[]'::jsonb)
+    'holds_slot',case when p.id is not null then exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) end,
+    'trial_ends_at',tr.ends_at,
+    'trial_funds_post',case when tr.id is not null then exists(select 1 from private.post_activations a
+      join private.posts fp on fp.id=a.post_id where a.entitlement_id=tr.id and a.released_at is null and fp.status='live') end) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
-    left join private.posts p on p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end;
+    left join private.posts p on p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end
+    left join private.entitlements tr on o.kind='trial_started' and tr.id=o.subject_id and tr.source='intro_trial'
+      and tr.owner_id=o.owner_id and tr.status='active';
   return result;
 end;
 $function$;

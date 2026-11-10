@@ -31,10 +31,9 @@ import {
 //   form, submitting, a moderator's approval, the post in the showroom and in
 //   search, and the free week.
 //
-// One step is broken today and is marked test.fail(), pinned to its exact
-// known symptom (characterise below); any other outcome turns the run red:
-// - "free week starts at approval": BL-03, fixed by M2.3. The every-minute job
-//   starts the 7-day trial as soon as verification completes, before any post.
+// The free week (BL-03, fixed by M2.3) starts when the first post is approved:
+// the test checks its start and length, its email with the end date (mail
+// catcher) and the end date on the dashboard's trial card.
 //
 // The create forms' page check asks the database for the member's readiness:
 // a member waiting for review is sent to /verification, an accepted member
@@ -66,7 +65,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const BL03 = "BL-03, fixed by M2.3";
 const CAPTCHA_STAND_IN = "local-fixture-captcha-stand-in";
 const SEVEN_DAYS_S = 7 * 86_400;
 /** The staff identity viewer's three confirmations (foundation mode). */
@@ -212,31 +210,6 @@ function syntheticIdNumber() {
     if (sum % 10 === 0) return candidate;
   }
   throw new Error("No checksum digit");
-}
-
-/** Thrown only when the exact known symptom is observed. */
-class KnownBreak extends Error {
-  override name = "KnownBreak";
-}
-
-/**
- * Pins an expected failure to its known cause (as in showroom-contact.spec.ts).
- * While the test is marked test.fail(), only a KnownBreak may fail it; any other
- * failure is recorded and swallowed, so the test passes and Playwright reports
- * "expected to fail, but passed": the run turns red. The same happens when the
- * break is fixed but the mark is still there. Once the mark is removed, every
- * failure is reported as usual.
- */
-async function characterise(note: string, body: () => Promise<void>) {
-  const expectingFailure = test.info().expectedStatus === "failed";
-  try {
-    await body();
-  } catch (error) {
-    if (!expectingFailure || (error instanceof Error && error.name === "KnownBreak")) throw error;
-    const message = error instanceof Error ? error.message.split("\n")[0] : String(error);
-    test.info().annotations.push({ type: "not the known break", description: message });
-    console.error(`[${note}] failed for another reason, so the run must turn red: ${message}`);
-  }
 }
 
 const sql = (value: string) => {
@@ -695,49 +668,68 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     expect(outside).toEqual([]);
   });
 
-  test("free week starts at approval", async ({ context, page }) => {
-    test.fail(true, BL03);
-    await characterise(BL03, async () => {
-      const { outside } = await guard(context);
-      const trials = queryTestCopy(
-        "select extract(epoch from e.starts_at)::bigint, extract(epoch from e.ends_at - e.starts_at)::bigint " +
-          "from private.entitlements e " +
-          `where e.owner_id = '${member.id}' and e.source = 'intro_trial' and e.status = 'active';`
+  test("free week starts at approval", async ({ context, page, request }) => {
+    test.setTimeout(120_000);
+    const { outside } = await guard(context);
+    const trials = queryTestCopy(
+      "select e.id, extract(epoch from e.starts_at)::bigint, extract(epoch from e.ends_at)::bigint " +
+        "from private.entitlements e " +
+        `where e.owner_id = '${member.id}' and e.source = 'intro_trial' and e.status = 'active';`
+    )
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split("|"));
+    const [submittedAt, publishedAt] = queryTestCopy(
+      "select extract(epoch from submitted_at)::bigint, extract(epoch from published_at)::bigint " +
+        `from private.posts where id = '${business.id}';`
+    )
+      .split("|")
+      .map(Number);
+    const acceptedAt = Number(
+      queryTestCopy(
+        "select extract(epoch from reviewed_at)::bigint from private.accepted_identity_facts " +
+          `where owner_id = '${member.id}' and revoked_at is null;`
       )
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => line.split("|").map(Number));
-      const [submittedAt, publishedAt] = queryTestCopy(
-        "select extract(epoch from submitted_at)::bigint, extract(epoch from published_at)::bigint " +
-          `from private.posts where id = '${business.id}';`
-      )
-        .split("|")
-        .map(Number);
-      const acceptedAt = Number(
-        queryTestCopy(
-          "select extract(epoch from reviewed_at)::bigint from private.accepted_identity_facts " +
-            `where owner_id = '${member.id}' and revoked_at is null;`
-        )
-      );
-      expect(trials).toHaveLength(1);
-      const [[startsAt, length]] = trials;
-      if (startsAt < submittedAt && startsAt >= acceptedAt && length === SEVEN_DAYS_S) {
-        // BL-03 as recorded: the 7-day trial began when verification completed
-        // (the job's reconciliation), before the member had posted anything,
-        // so review and moderation time came out of the free week.
-        throw new KnownBreak(
-          `${BL03}: the trial started ${submittedAt - startsAt} s before the post was submitted`
-        );
-      }
-      // Promised: the free week starts when the first post is approved and the
-      // member sees its end date on the dashboard.
-      expect(Math.abs(startsAt - publishedAt)).toBeLessThanOrEqual(120);
-      expect(length).toBe(SEVEN_DAYS_S);
-      await signInBrowser(context, member);
-      await page.goto("/dashboard");
-      const card = page.getByRole("region", { name: "Free posts and trials" });
-      await expect(card).toContainText("Visible until");
-      expect(outside).toEqual([]);
+    );
+    expect(trials).toHaveLength(1);
+    const [[trialId, startsAt, endsAt]] = trials.map(([id, starts, ends]) => [
+      id,
+      Number(starts),
+      Number(ends),
+    ]) as [string, number, number][];
+    // The free week starts when the first post is approved (BL-03, M2.3): not
+    // at verification, and review time is not taken from it.
+    expect(acceptedAt).toBeLessThan(submittedAt);
+    expect(startsAt).toBeGreaterThanOrEqual(submittedAt);
+    expect(Math.abs(startsAt - publishedAt)).toBeLessThanOrEqual(120);
+    expect(endsAt - startsAt).toBe(SEVEN_DAYS_S);
+    const endDate = new Date(endsAt * 1000).toLocaleDateString("en-ZA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Africa/Johannesburg",
     });
+
+    // The email job sends the trial's email with its end date.
+    const outboxId = queryTestCopy(
+      "select id from private.outbox_events where kind = 'trial_started' " +
+        `and subject_id = '${trialId}' and owner_id = '${member.id}';`
+    );
+    expect(outboxId).toMatch(UUID);
+    for (let run = 0; run < 30 && !outboxState(outboxId).processed; run++) {
+      expect((await runOpsJob(request)).retrying).toBe(0);
+    }
+    expect(outboxState(outboxId)).toEqual({ processed: true, attempts: 1, error: null });
+    const mail = await caughtMailFor(member.email, `foundation-outbox/${outboxId}`);
+    expect(mail.subject).toBe("Your introductory posting allowance is ready");
+    expect(mail.text).toContain(`Your free introductory post is live until ${endDate}`);
+
+    // The dashboard's trial card shows the end date.
+    await signInBrowser(context, member);
+    await page.goto("/dashboard");
+    const card = page.getByRole("region", { name: "Free posts and trials" });
+    await expect(card).toContainText("Your 7-day introductory trial");
+    await expect(card).toContainText(`Visible until ${endDate}.`);
+    expect(outside).toEqual([]);
   });
 });

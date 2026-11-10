@@ -7,24 +7,11 @@ CREATE OR REPLACE FUNCTION internal.reconcile_intro_trials(p_limit integer DEFAU
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare target record; granted integer:=0;
 begin
+  -- The free week starts when the member's first post is approved
+  -- (internal.start_intro_trial), not when verification completes.
   if p_limit is null or p_limit not between 1 and 100 then raise exception 'invalid limit' using errcode='22023'; end if;
-  for target in select u.id from private.current_account_access u
-    join private.accepted_identity_facts f on f.owner_id=u.id and f.revoked_at is null
-    where internal.current_verified_identity(u.id) is not null
-      and exists(select 1 from private.verification_phone_proofs p where p.owner_id=u.id and p.revoked_at is null)
-      and exists(select 1 from private.verification_localities l where l.owner_id=u.id)
-      and not exists(select 1 from private.trial_identities t where t.identity_hmac=f.identity_hmac)
-    order by u.id limit p_limit
-  loop
-    begin
-      perform internal.grant_verified_intro_trial(target.id,7);
-      granted:=granted+1;
-    exception when sqlstate '42501' or sqlstate 'PT409' then null;
-    end;
-  end loop;
-  return granted;
+  return 0;
 end;
 $function$;
 alter function internal.reconcile_intro_trials(integer) owner to postgres;
