@@ -5,16 +5,60 @@ These are separately reviewed SQL update artifacts, not the retired root
 Application status is recorded per update; file presence alone does not
 establish that a hosted project has received it.
 
-## Rules for new updates
+## Safe order for a database change
 
-- One new file per change, named `<UTC timestamp>_<what_it_does>.sql`, with full
-  `create or replace` definitions. Never edit `../candidate.sql` or an applied
-  update.
-- Expand, then contract: add first, switch the code, remove in a later update.
-- The update travels in the same pull request as the code that needs it and is
-  proven locally (`pnpm test:foundation:native`, replay and contracts).
-- The owner applies it to production after the merge and before that code is
-  deployed, and its section below records when it was applied.
+Code and database must never disagree, so every change follows this order:
+
+1. **Expand in the pull request that needs it.** Write one new file named
+   `<UTC timestamp>_<what_it_does>.sql` with full `create or replace`
+   definitions; never edit `../candidate.sql` or an applied update. Only add:
+   new commands, new optional arguments, new fields. Add its line to the
+   [applied register](#applied-register) as `pending` and list it in
+   `../fingerprint.json` `productionCheck.pendingApplication`.
+2. **Prove it locally and in CI** (`pnpm test:foundation:native`, replay,
+   snapshot, contracts and lint; see below). CI also runs
+   `scripts/check-foundation-update-order.mjs`, which fails when the register
+   misses a file or when the API manifests remove or rename a command or
+   argument compared with `main`.
+3. **Staging first.** Once a staging project exists, the update is applied there
+   before merge; the pull request job `staging-database` then fails when staging
+   lacks a command the change expects. Until staging is configured that job is
+   skipped. It never runs on `main`, so staging cannot block a deploy.
+4. **Merge, then apply to production.** The owner applies the update (or
+   explicitly approves applying it) after the merge and before the code that
+   needs it is deployed. The release preflight compares what production answers
+   with what the commit expects and warns "database behind by N" or "database
+   ahead by N". Afterwards, one pull request records it, changing together:
+   - its register line, from `pending` to
+     `applied YYYY-MM-DD HH:MM UTC; <how it was applied>`;
+   - `../fingerprint.json` `productionCheck`: the owner's read-only fingerprint
+     capture moves `capturedOn`, `matchedThroughUpdate` and
+     `matchedFingerprints` to this update, and it leaves `pendingApplication`.
+
+   Updates are recorded in filename order: `pendingApplication` must be exactly
+   the updates after `matchedThroughUpdate`, so an update applied before an
+   earlier pending one stays `pending` until the earlier one is applied too.
+
+5. **Contract in a later pull request.** Removing or renaming a command or
+   argument, changing an argument or return type, making an argument required or
+   removing an execute grant happens only after the code has switched. That pull
+   request adds a new entry to `../contract-steps.json` naming the earlier
+   expand update and its pull request number. The expand update must already be
+   on `main` and recorded there as applied (the check reads `main`'s register,
+   not the pull request's), a replacement must already exist on `main`, and a
+   removed command may no longer be named in `src/` or `workers/`. An entry
+   authorises only the pull request that adds it; a later change of the same
+   kind needs a new entry with its own expand update. Reverting an expand step
+   that production never received (its update still `pending` on `main`, or its
+   file deleted in the same change) needs no entry.
+
+The manifest comparison sees command names, argument names and types, which
+arguments are required, return types and execute grants. It does not see fields
+inside `jsonb` results or inputs, or changed argument defaults: review those by
+hand and keep them additive.
+
+A code rollback (reverting a pull request) never undoes a database update: the
+preflight then reports the database ahead, and a forward fix is preferred.
 
 ## How to write a new update
 
@@ -1128,3 +1172,156 @@ of public businesses and listed organisations. The logo requires recorded
 permission, and a founding place does not appear as organisation-funded support.
 The isolated fixture checks both funding types and revocation. London recorded
 this migration as `20261105203919` and the empty anonymous probe passed.
+
+## Applied register
+
+One line per file in this folder, in filename order, with when production
+received it. CI (`scripts/check-foundation-update-order.mjs`) fails when a file
+has no line, a line names a missing file, or a line disagrees with
+`../fingerprint.json` `productionCheck`. Each line reads
+``- `<file>`: <status>; <evidence>``, where the status is one of:
+
+- `pending`: not yet applied to production (also listed in
+  `pendingApplication`).
+- `applied YYYY-MM-DD HH:MM UTC`: the recorded application time. Required for
+  every update after `20261109224337_fix_post_command_target.sql`.
+- `applied YYYY-MM-DD (SAST date, time not recorded)`: older updates only; the
+  day is recorded, the time is not.
+- `applied before YYYY-MM-DD HH:MM UTC (exact time not recorded)`: older updates
+  only, whose application time was not written down; the time is that of the
+  commit that first recorded them as applied, or of the first production
+  fingerprint match.
+
+Dates and times must be real (CI rejects, for example, `2026-02-30`).
+
+<!-- applied-register:start -->
+
+- `20261028213020_repair_verified_runtime_contracts.sql`: applied 2026-11-04
+  (SAST date, time not recorded); section Owner admin setup and signup hook,
+  recorded in c6610937
+- `20261029191349_restore_public_browse_contract.sql`: applied 2026-11-03 (SAST
+  date, time not recorded); section Restored public browsing and contacts,
+  recorded in ace0e249
+- `20261103152035_owner_admin_setup.sql`: applied before 2026-11-03 23:32 UTC
+  (exact time not recorded); recorded as applied in c6610937
+- `20261103152812_restored_staff_dashboard.sql`: applied before 2026-11-03 23:32
+  UTC (exact time not recorded); recorded as applied in c6610937
+- `20261103154538_owner_signup_access.sql`: applied before 2026-11-03 23:32 UTC
+  (exact time not recorded); recorded as applied in c6610937
+- `20261103180512_restored_owner_dashboard.sql`: applied before 2026-11-03 23:32
+  UTC (exact time not recorded); recorded as applied in c6610937
+- `20261103182231_restored_profile_update.sql`: applied before 2026-11-03 23:32
+  UTC (exact time not recorded); recorded as applied in c6610937
+- `20261103183017_repair_dashboard_identity_lookup.sql`: applied before
+  2026-11-03 23:32 UTC (exact time not recorded); recorded as applied in
+  c6610937
+- `20261103192835_restored_enquiry_post_area.sql`: applied before 2026-11-07
+  05:06 UTC (exact time not recorded); production fingerprint matched on
+  2026-11-06 (aafa2de3)
+- `20261103231355_owner_notification_dismissals.sql`: applied before 2026-11-03
+  23:32 UTC (exact time not recorded); recorded as applied in c6610937
+- `20261104000046_restored_verification_transport.sql`: applied before
+  2026-11-04 00:22 UTC (exact time not recorded); recorded as applied in
+  63531466
+- `20261104001222_restore_full_admin_capabilities.sql`: applied before
+  2026-11-04 00:22 UTC (exact time not recorded); recorded as applied in
+  63531466
+- `20261104002445_restored_post_commands.sql`: applied before 2026-11-04 05:00
+  UTC (exact time not recorded); recorded as applied in 0dba79fa
+- `20261104042501_preserve_existing_edit_consent.sql`: applied before 2026-11-04
+  05:00 UTC (exact time not recorded); recorded as applied in 0dba79fa
+- `20261104043441_restored_post_manager.sql`: applied before 2026-11-04 05:00
+  UTC (exact time not recorded); recorded as applied in 0dba79fa
+- `20261104044439_preserve_post_contact_privacy.sql`: applied before 2026-11-04
+  05:00 UTC (exact time not recorded); recorded as applied in 0dba79fa
+- `20261104045254_align_frontend_receipt_retention.sql`: applied before
+  2026-11-04 05:00 UTC (exact time not recorded); recorded as applied in
+  0dba79fa
+- `20261104052154_repeatable_frontend_media_uploads.sql`: applied before
+  2026-11-04 10:10 UTC (exact time not recorded); recorded as applied in
+  d951a763
+- `20261104101932_restored_owner_post_actions.sql`: applied before 2026-11-04
+  11:02 UTC (exact time not recorded); recorded as applied in 7fdcdb9b
+- `20261104105223_preserve_nonlive_edit_flow.sql`: applied before 2026-11-04
+  11:02 UTC (exact time not recorded); recorded as applied in 7fdcdb9b
+- `20261104105449_enforce_nonlive_review_budget.sql`: applied before 2026-11-04
+  11:02 UTC (exact time not recorded); recorded as applied in 7fdcdb9b
+- `20261104110442_restored_posting_allowance.sql`: applied before 2026-11-04
+  11:19 UTC (exact time not recorded); recorded as applied in 9b2e76f3
+- `20261104111941_restored_staff_moderation_queue.sql`: applied before
+  2026-11-04 16:16 UTC (exact time not recorded); recorded as applied in
+  23ee4a4a
+- `20261104155022_restored_staff_claim_controls.sql`: applied before 2026-11-04
+  16:16 UTC (exact time not recorded); recorded as applied in 23ee4a4a
+- `20261104162910_preserved_identity_review_workflow.sql`: applied before
+  2026-11-04 21:50 UTC (exact time not recorded); recorded as applied in
+  8d6be9c2
+- `20261104214751_preserve_reviewed_identity_status.sql`: applied before
+  2026-11-04 21:50 UTC (exact time not recorded); recorded as applied in
+  8d6be9c2
+- `20261104214932_restored_governance_decisions.sql`: applied before 2026-11-04
+  22:02 UTC (exact time not recorded); recorded as applied in 212ae0ae
+- `20261104220316_restored_runtime_controls.sql`: applied before 2026-11-04
+  22:15 UTC (exact time not recorded); recorded as applied in 3e7f18aa
+- `20261104221219_restored_staff_audit_page.sql`: applied before 2026-11-04
+  22:28 UTC (exact time not recorded); recorded as applied in f31fb7f4
+- `20261104222400_restored_report_workflow.sql`: applied before 2026-11-04 22:41
+  UTC (exact time not recorded); recorded as applied in 5a5b9592
+- `20261104224230_restored_staff_report_queue.sql`: applied before 2026-11-04
+  23:14 UTC (exact time not recorded); recorded as applied in 8415c852
+- `20261104231625_restored_report_actions.sql`: applied before 2026-11-04 23:33
+  UTC (exact time not recorded); recorded as applied in 48f56f49
+- `20261105035413_native_report_warning_delivery.sql`: applied before 2026-11-05
+  04:20 UTC (exact time not recorded); recorded as applied in 7b0d8132
+- `20261105043010_native_report_content_holds.sql`: applied before 2026-11-05
+  05:00 UTC (exact time not recorded); recorded as applied in bf39e228
+- `20261105050356_native_report_account_restrictions.sql`: applied before
+  2026-11-07 05:06 UTC (exact time not recorded); production fingerprint matched
+  on 2026-11-06 (aafa2de3)
+- `20261105052337_restored_enforcement_views.sql`: applied before 2026-11-07
+  05:06 UTC (exact time not recorded); production fingerprint matched on
+  2026-11-06 (aafa2de3)
+- `20261105053049_restored_creation_allowance.sql`: applied before 2026-11-07
+  05:06 UTC (exact time not recorded); production fingerprint matched on
+  2026-11-06 (aafa2de3)
+- `20261105053509_restored_member_appeals.sql`: applied before 2026-11-07 05:06
+  UTC (exact time not recorded); production fingerprint matched on 2026-11-06
+  (aafa2de3)
+- `20261105085900_restored_privacy_requests.sql`: applied before 2026-11-07
+  05:06 UTC (exact time not recorded); production fingerprint matched on
+  2026-11-06 (aafa2de3)
+- `20261105091725_restored_support_inbox.sql`: applied before 2026-11-07 05:06
+  UTC (exact time not recorded); production fingerprint matched on 2026-11-06
+  (aafa2de3)
+- `20261105092547_restored_partner_workflows.sql`: applied before 2026-11-07
+  05:06 UTC (exact time not recorded); production fingerprint matched on
+  2026-11-06 (aafa2de3)
+- `20261105093342_restored_staff_role_review.sql`: applied before 2026-11-07
+  05:06 UTC (exact time not recorded); production fingerprint matched on
+  2026-11-06 (aafa2de3)
+- `20261105094316_restored_business_seen_requests.sql`: applied before
+  2026-11-07 05:06 UTC (exact time not recorded); production fingerprint matched
+  on 2026-11-06 (aafa2de3)
+- `20261105150107_restored_cipc_review.sql`: applied before 2026-11-07 05:06 UTC
+  (exact time not recorded); production fingerprint matched on 2026-11-06
+  (aafa2de3)
+- `20261105153628_restored_affiliation_workspace.sql`: applied 2026-11-05 20:02
+  UTC; London migration version 20261105200230
+- `20261105200401_restored_staff_organisation_workspace.sql`: applied 2026-11-05
+  20:14 UTC; London migration version 20261105201428
+- `20261105201822_restored_staff_payments.sql`: applied 2026-11-05 20:22 UTC;
+  London migration version 20261105202246
+- `20261105202617_restored_form_autosave.sql`: applied 2026-11-05 20:31 UTC;
+  London migration version 20261105203132
+- `20261105203431_restored_public_affiliation_badges.sql`: applied 2026-11-05
+  20:39 UTC; London migration version 20261105203919
+- `20261109073519_post_lifecycle_guards.sql`: applied 2026-11-09 (SAST date,
+  time not recorded); recorded in 38e1ce41
+- `20261109104020_post_expiry_rules.sql`: applied 2026-11-09 (SAST date, time
+  not recorded); recorded in 38e1ce41
+- `20261109173012_posting_terms_v3.sql`: applied 2026-11-09 (SAST date, time not
+  recorded); recorded in b7de37ee
+- `20261109224337_fix_post_command_target.sql`: applied 2026-11-10 (SAST date,
+  time not recorded); recorded in febb1aa2
+
+<!-- applied-register:end -->

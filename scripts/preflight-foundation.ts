@@ -1,13 +1,34 @@
 import { loadEnvConfig } from "@next/env";
-import { FoundationReleasePending } from "./lib/foundation-deployment";
+import {
+  FoundationReleasePending,
+  verifyFoundationDeploymentConnection,
+} from "./lib/foundation-deployment";
+import { printUpdateDrift, readFoundationUpdateDrift } from "./lib/foundation-update-order.mjs";
 import { verifyFoundationRuntime } from "./lib/foundation-runtime-readiness";
 
 loadEnvConfig(process.cwd());
+
+/** Warns when production is behind or ahead of the updates this commit expects.
+ * Read-only (anonymous probes with the publishable key); never fails the
+ * preflight on its own, the checks after it decide. */
+async function reportUpdateDrift() {
+  try {
+    const connection = verifyFoundationDeploymentConnection(process.env);
+    const { lines } = await readFoundationUpdateDrift(connection, { target: "production" });
+    printUpdateDrift(lines);
+  } catch {
+    printUpdateDrift([
+      { level: "warning", text: "Database update order could not be compared with production." },
+    ]);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2).filter((arg) => arg !== "--");
   if (args.length > 1 || (args.length === 1 && args[0] !== "--provisioned-runtime"))
     throw new Error("Unsupported foundation preflight argument");
   const runtimeOnly = args[0] === "--provisioned-runtime";
+  if (runtimeOnly) await reportUpdateDrift();
   await verifyFoundationRuntime(process.env, runtimeOnly);
   console.log(
     runtimeOnly
