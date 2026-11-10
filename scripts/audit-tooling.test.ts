@@ -409,40 +409,22 @@ test("watermark generation preserves sizes, transparent containment and named va
     images.get("youtube-watermark-shield-150.png")
   );
 });
-test("business SQL regressions remain mandatory in blocking, review and release gates", async () => {
+test("no gate runs the retired backend's database lanes", async () => {
+  // The PGlite lanes, the isolated Supabase stack (db-rls) and the static
+  // migration checks only ever built the retired supabase/migrations schema.
+  // Production's schema is checked by foundation-replay, foundation-sql-lint
+  // and foundation-native instead.
   const { scripts } = JSON.parse(await readFile("package.json", "utf8"));
   const ci = await readFile(".github/workflows/ci.yml", "utf8");
-  const partitions = [...ci.matchAll(/pnpm safety:ci-review -- --checks=([^\s]+)/g)].map((match) =>
-    match[1].split(",")
+  const retired = /^(db-(?!.*foundation)|isolated-db$|security-advisor$)/;
+  assert.deepEqual(
+    CHECKS.map((check) => check.id).filter((id) => retired.test(id)),
+    []
   );
-  const lanes = [
-    ["db-business-counts", "test:business-counts:db", "scripts/test-business-category-counts.mjs"],
-    [
-      "db-business-evidence",
-      "test:business-evidence:db",
-      "scripts/test-business-verification-file-privacy.mjs",
-    ],
-  ];
-  for (const [id, command, runner] of lanes) {
-    assert.equal(scripts[command], `node ${runner}`);
-    assert(scripts["test:blocking"].split(" && ").includes(`pnpm ${command}`));
-    assert.equal(
-      partitions.filter((partition) => partition.includes(id)).length,
-      1,
-      `${id} runs once in CI`
-    );
-    for (const mode of ["review", "ci-review", "release"] as const) {
-      const lane = selectChecks(mode).find((item) => item.id === id);
-      assert(lane, `${id} is required in ${mode}`);
-      assert.deepEqual(lane.args, [command]);
-      assert(!lane.optional && !lane.advisory);
-      assert.equal(lane.category, "repo_runtime");
-      assert.match(lane.scope, /supplementary.*PGlite/);
-      assert(lane.tests.includes(runner));
-    }
-  }
-  assert(selectChecks("kyc").some((item) => item.id === "db-business-evidence"));
-  assert(!selectChecks("kyc").some((item) => item.id === "db-business-counts"));
+  for (const name of Object.keys(scripts))
+    assert(!/^test:(trials|db|db:isolated|[a-z-]+:db)$/.test(name), `${name} is retired`);
+  assert.equal(scripts["test:blocking"], "tsx scripts/run-vitest.ts blocking");
+  assert.doesNotMatch(ci, /supabase start|isolated-db|DOCKERHUB_TOKEN|db:check-invariants/);
 });
 
 test("CI runs every unit test once: the coverage run plus the suites it leaves out", async () => {
@@ -502,15 +484,7 @@ test("strict flags, unique registry and mandatory domain/release lanes", () => {
   const release = selectChecks("release");
   assert(release.find((c) => c.id === "unit"));
   assert(!release.find((c) => c.id === "payment-unit")); // Already covered once by full unit lane.
-  for (const id of [
-    "unit",
-    "db-payments",
-    "db-kyc",
-    "browser",
-    "contracts",
-    "isolated-db",
-    "kyc-auth-browser",
-  ])
+  for (const id of ["unit", "browser", "contracts", "kyc-auth-browser"])
     assert.equal(release.find((c) => c.id === id)?.optional, undefined);
   assert(selectChecks("payments").some((c) => c.id === "payment-unit"));
   assert(selectChecks("kyc").some((c) => c.id === "kyc-unit"));

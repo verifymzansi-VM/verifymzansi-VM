@@ -37,13 +37,14 @@ with a retryable response; there is no fallback to the old separate writes.
 
 ## Validation before release
 
-Local checks: `pnpm test:payments:db` executes the actual migration in an
-in-memory PGlite database built from core schema definitions plus later
-compatibility fields. It tests role denial, rollback on invoice/audit failure,
-duplicate responses, stable dates/VAT, plan-change reactivation, restricted
-accounts, cross-owner access for all ten add-ons, older purchases,
-invoice-number collision and legacy recovery. It is part of the blocking test
-command and has a dedicated blocking CI step.
+Local checks: the former `pnpm test:payments:db` (removed on 11 November 2026
+with the retired source schema) executed the actual migration in an in-memory
+PGlite database built from core schema definitions plus later compatibility
+fields. It tests role denial, rollback on invoice/audit failure, duplicate
+responses, stable dates/VAT, plan-change reactivation, restricted accounts,
+cross-owner access for all ten add-ons, older purchases, invoice-number
+collision and legacy recovery. It is part of the blocking test command and has a
+dedicated blocking CI step.
 
 This is not a full migration replay or a multi-session PostgREST test. Browser
 checkout uses an explicitly simulated subscription RPC; it does not certify

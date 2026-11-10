@@ -225,17 +225,9 @@ R2 files, or database roles; keep the private R2 KYC bucket private and use its
 own recovery process. Copy production backups to an access-controlled location
 outside the workspace.
 
-To check live Supabase Security Advisor findings from workspace env:
-
-```bash
-pnpm supabase:advisor:security
-pnpm supabase:advisor:security -- --json
-pnpm supabase:advisor:security:strict
-```
-
-The advisor script classifies plan-gated findings separately. On free Supabase
-plans, `auth_leaked_password_protection` is reported as plan-blocked instead of
-being treated as an unresolved repo-owned issue.
+The former `supabase:advisor:security` command checked the retired source schema
+and was removed. The live schema's access rules are checked in CI
+(`foundation-replay`, `foundation-native`).
 
 To check live Supabase Performance Advisor findings from workspace env:
 

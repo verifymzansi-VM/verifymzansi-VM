@@ -114,8 +114,9 @@ platform automatically.
    release. Roll forward on application problems; do not restore the old
    free-claim RPC or erase identity history as a rollback shortcut.
 
-`pnpm test:trials` executes the SQL migrations and behavioral checks using a
-local embedded PostgreSQL engine with synthetic data. This catches SQL syntax,
+The former `pnpm test:trials` (removed on 11 November 2026 with the retired
+source schema) executed the SQL migrations and behavioral checks using a local
+embedded PostgreSQL engine with synthetic data. This catches SQL syntax,
 trigger, permission, identity and lifecycle failures. Its minimal schema and
 serialized connection are not substitutes for full-schema, multi-connection
 staging contention tests. The normal safety gate also runs lint, types, blocking
