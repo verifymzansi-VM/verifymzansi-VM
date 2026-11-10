@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-type Step = { name?: string; if?: string; run?: string };
+type Step = {
+  name?: string;
+  if?: string;
+  run?: string;
+  env?: Record<string, string>;
+  "continue-on-error"?: boolean;
+};
 type Job = { name?: string; if?: string; needs?: string | string[]; steps: Step[] };
 
 const ci = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
@@ -44,5 +50,59 @@ describe("CI reports what it ran", () => {
       expect(run).not.toContain("--reporter");
       expect(JSON.stringify(ci.jobs[job])).not.toContain("PLAYWRIGHT_SKIP_GUARD");
     }
+  });
+});
+
+describe("scheduled monitoring reports what it checked", () => {
+  const load = (name: string) =>
+    parse(readFileSync(`.github/workflows/${name}.yml`, "utf8")) as {
+      jobs: Record<string, Job>;
+    };
+
+  it("has no synthetic monitoring step that turns green without checking", () => {
+    const monitoring = load("synthetic-monitoring");
+    // The old worker-health job echoed "skipping" and exited 0 when its URLs
+    // were unset, so it always reported success while checking nothing.
+    expect(Object.keys(monitoring.jobs)).toEqual(["production-smoke"]);
+    expect(monitoring.jobs["production-smoke"].if).toBeUndefined();
+    const steps = monitoring.jobs["production-smoke"].steps;
+    for (const step of steps) {
+      expect(step.if).toBeUndefined();
+      expect(step["continue-on-error"]).toBeUndefined();
+      expect(step.run ?? "").not.toMatch(/skipping|skip=true|exit 0|\|\| true/i);
+    }
+    const runs = steps.map((step) => step.run ?? "").join("\n");
+    expect(runs).toContain("exit 1");
+    expect(runs).toContain("scripts/check-public-edge.ts");
+    expect(runs).toContain("scripts/check-site-monitor.ts");
+  });
+
+  it("pings the backup heartbeat last, only after the upload, and never fails the backup", () => {
+    const job = load("database-backup").jobs.backup;
+    const steps = job.steps;
+    // Every earlier step must be able to stop the run before the heartbeat.
+    expect(job.if).toBeUndefined();
+    for (const step of steps.slice(0, -1)) {
+      expect(step.if).toBeUndefined();
+      expect(step["continue-on-error"]).toBeUndefined();
+      expect(step.run ?? "").not.toMatch(/\|\| true/);
+    }
+    expect(steps.find((step) => step.name === "Encrypt the backup")!.run).toContain(
+      "set -o pipefail"
+    );
+    const heartbeat = steps.at(-1)!;
+    expect(steps.at(-2)!.name).toBe("Upload to the private R2 bucket");
+    // No `if:` means it runs only when every earlier step succeeded.
+    expect(heartbeat.if).toBeUndefined();
+    expect(heartbeat["continue-on-error"]).toBe(true);
+    expect(heartbeat.env).toEqual({
+      HEARTBEAT_URL: "${{ secrets.HEARTBEAT_URL_DATABASE_BACKUP }}",
+    });
+    expect(heartbeat.run).toContain('if [ -z "$HEARTBEAT_URL" ]');
+    expect(heartbeat.run).toContain("--max-time 10");
+    expect(heartbeat.run).toContain("--proto '=https'");
+    // The URL is the credential: it is passed to curl only, never echoed.
+    expect(heartbeat.run).not.toMatch(/echo[^\n]*HEARTBEAT_URL/);
+    expect(heartbeat.run).not.toMatch(/set -x|--verbose|-v /);
   });
 });

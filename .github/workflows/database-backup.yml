@@ -98,6 +98,8 @@ jobs:
 
       - name: Encrypt the backup
         run: |
+          # A failed tar must fail the run, not encrypt a truncated archive.
+          set -o pipefail
           cd "$RUNNER_TEMP/backup"
           stamp=$(date -u +%Y%m%dT%H%M%SZ)
           name="verifymzansi-db-${stamp}.tar.gz.gpg"
@@ -129,3 +131,22 @@ jobs:
             exit 1
           fi
           echo "Stored ${BACKUP_KEY} (${local_size} bytes, encrypted)"
+
+      # Optional dead man's switch: only a fully stored backup pings, so the
+      # monitor alerts when backups stop. Unset = nothing is sent. The ping can
+      # never fail the backup and its URL is never printed.
+      - name: Report the stored backup to the heartbeat monitor
+        continue-on-error: true
+        env:
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL_DATABASE_BACKUP }}
+        run: |
+          if [ -z "$HEARTBEAT_URL" ]; then
+            echo "No backup heartbeat is configured."
+            exit 0
+          fi
+          code=$(curl --silent --proto '=https' --max-time 10 --retry 2 --output /dev/null \
+            --write-out '%{http_code}' "$HEARTBEAT_URL" 2>/dev/null) || code=000
+          case "$code" in
+            2??) echo "Backup heartbeat sent." ;;
+            *) echo "::warning::The backup heartbeat was not accepted (HTTP ${code})." ;;
+          esac

@@ -22,6 +22,7 @@
 - [Audit Logs](#audit-logs)
 - [Deployment & Rollback](#deployment--rollback)
 - [Database Backups](#database-backups)
+- [Monitoring and Alerts](#monitoring-and-alerts)
 - [Sentry Bug Finding](#sentry-bug-finding)
 - [KYC Provider Management](#kyc-provider-management)
 - [Incident Response](#incident-response)
@@ -643,9 +644,9 @@ required.
 and runs the shared anonymous smoke scenarios plus deep readiness through an app
 service binding. It forwards no caller cookies or authentication to the app.
 Public-edge delivery is checked separately. A specifically identified Cloudflare
-automation challenge is reported as unverified edge delivery; it cannot make a
-failed service smoke or readiness check pass. A regular 403/503 remains a
-failure.
+automation challenge is reported as **inconclusive** (a warning and a line in
+the run summary), never as a pass, and it cannot make a failed service smoke or
+readiness check pass. A regular 403/503 remains a failure.
 
 The foundation payment, retention and operations workers call the main
 `verifymzansi` Worker through the `APP` service binding. The internal requests
@@ -657,8 +658,9 @@ After editing companion configuration, run `pnpm cloudflare:types:companions`,
 then `pnpm cloudflare:types:companions:check` and
 `pnpm test:cloudflare:companions`. The latter executes all three scheduled
 handlers in isolated workerd with a local app fixture and synthetic credentials.
-Worker health URLs prove process liveness; app deep readiness and recorded job
-outcomes establish integration health.
+Worker health URLs prove process liveness only; app deep readiness, failed-run
+records and heartbeats establish job health (see
+[Monitoring and Alerts](#monitoring-and-alerts)).
 
 ```bash
 # Deploy individual workers
@@ -712,7 +714,10 @@ after 35 days.
   Supabase.
 - **Failure alerts:** GitHub emails the owner when a scheduled run fails. GitHub
   pauses schedules in public repositories after 60 days without commits;
-  re-enable the workflow if that happens.
+  re-enable the workflow if that happens. A paused or missing run sends no
+  email, so the optional `HEARTBEAT_URL_DATABASE_BACKUP` heartbeat (see
+  [Monitoring and Alerts](#monitoring-and-alerts)) is what catches backups that
+  silently stop.
 
 ### Restoring
 
@@ -739,6 +744,92 @@ after 35 days.
 4. Point the app at the restored project only after checking accounts, posts and
    payments. Uploaded media and ID documents live in R2 and are not part of this
    backup.
+
+---
+
+## Monitoring and Alerts
+
+The goal is that a broken site or a stopped timed job reaches a person within
+minutes. The code side is in place; the accounts, phone numbers and URLs that
+turn it into alerts are owner steps, listed below. Nothing here is configured
+until the owner does those steps.
+
+### What the code does
+
+- **Synthetic Monitoring** (`.github/workflows/synthetic-monitoring.yml`, every
+  30 minutes) checks the public homepage and the authenticated site monitor. A
+  missing setting fails the run; there are no skip-and-pass steps. A Cloudflare
+  challenge on the public check is reported as inconclusive, not as a pass.
+  Cloudflare's error page on a 503 counts as a failure. Inconclusive runs send
+  no email, so if every run is inconclusive the public homepage goes unchecked
+  from GitHub; the external public homepage check (owner step 1) covers that.
+  GitHub emails one account when a scheduled run fails, and schedules can be
+  delayed or paused, so this is a backstop rather than the main alert.
+- **Timed Workers** (`verifymzansi-ops-jobs` every minute,
+  `verifymzansi-payment-cleanup` every 10 minutes,
+  `verifymzansi-retention-cleanup` every 5 minutes): when the app cannot finish
+  a run, the scheduled handler fails, so Cloudflare records the run as failed in
+  the Worker's logs instead of logging an error and reporting success. After a
+  successful scheduled run each Worker pings its own optional heartbeat URL.
+  Authenticated manual runs do not ping, so a heartbeat means the schedule
+  itself is firing.
+- **Database backup** pings its optional heartbeat URL only after the encrypted
+  backup is uploaded and its size checked.
+- A heartbeat is a plain HTTPS GET with no credentials and a short timeout. An
+  unset URL sends nothing; a failed ping logs only the job name and never fails
+  the job. The URL itself is treated as a secret and is never logged.
+- Known gap: items the app queues for a later retry (an email that could not be
+  sent, a storage object that could not be deleted yet) do not fail the run, so
+  a lasting email or storage outage shows neither a failed run nor a missing
+  heartbeat. Payment checks with failures do fail the run.
+
+### Owner steps (not done in code)
+
+1. **External uptime monitor on the authenticated site monitor.** In a
+   monitoring service that can send a request header and keep it secret, add a
+   check of `GET https://verifymzansi-site-monitor.verifymzansi.workers.dev/`
+   with the header `Authorization: Bearer <SITE_MONITOR_API_KEY value>`. Alert
+   when the answer is not HTTP 200 or the JSON `status` is not `ok`, after two
+   failed checks in a row, checking every 1 to 5 minutes. The key only runs the
+   fixed anonymous smoke checks; if it is ever rotated, update the GitHub
+   secret, the Worker secret `MONITOR_API_KEY` and this monitor together. In the
+   same service add a plain check of `https://verifymzansi.com/` that alerts
+   when the page does not load, so the public edge is watched from outside
+   GitHub too.
+2. **One heartbeat check per timed job** in a heartbeat ("dead man's switch")
+   monitor that accepts an HTTPS GET. Store each URL only as a secret, never in
+   a `wrangler.*.toml` `[vars]` block or in the repository:
+
+   | Job               | Secret name                       | Where it is set                                           | Runs every | Suggested grace |
+   | ----------------- | --------------------------------- | --------------------------------------------------------- | ---------- | --------------- |
+   | Operations jobs   | `HEARTBEAT_URL_OPS_JOBS`          | Worker secret, `--config wrangler.ops-jobs.toml`          | 1 minute   | 5 minutes       |
+   | Payment check     | `HEARTBEAT_URL_PAYMENT_CLEANUP`   | Worker secret, `--config wrangler.payment-cleanup.toml`   | 10 minutes | 30 minutes      |
+   | Retention cleanup | `HEARTBEAT_URL_RETENTION_CLEANUP` | Worker secret, `--config wrangler.retention-cleanup.toml` | 5 minutes  | 20 minutes      |
+   | Database backup   | `HEARTBEAT_URL_DATABASE_BACKUP`   | GitHub repository secret                                  | daily      | 6 hours         |
+
+   Set a Worker secret with
+   `pnpm exec wrangler secret put HEARTBEAT_URL_OPS_JOBS --config wrangler.ops-jobs.toml`
+   (and likewise for the others). GitHub starts scheduled runs late, recently by
+   three to four hours, hence the long backup grace. Deploys keep Worker secrets
+   that are not in the deploy's secrets file. The Worker code that reads these
+   must already be deployed; until a URL is set no heartbeat is sent.
+
+3. **A second person.** Add a second person's phone (app push or SMS) to both
+   monitors' alert contacts, so one unavailable person does not mean no
+   response. GitHub's failed-run email reaches only one account.
+4. **Error reporting.** Sentry event delivery needs `NEXT_PUBLIC_SENTRY_DSN`
+   (see [Sentry Bug Finding](#sentry-bug-finding)); it is a separate owner step.
+
+### When an alert arrives
+
+- **Site monitor down:** follow [Service Down](#service-down). The JSON answer
+  lists which smoke check failed.
+- **Heartbeat missing:** open the Worker in the Cloudflare dashboard (Workers &
+  Pages, the Worker, Logs) and look for failed scheduled runs and their error
+  message (`App job returned HTTP <status>`, `App job request failed` or
+  `Invalid job configuration`). Then check the app Worker's logs for the
+  matching route. For the backup, open the failed Database Backup run in GitHub
+  Actions.
 
 ---
 

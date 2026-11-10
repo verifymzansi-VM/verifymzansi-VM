@@ -23,6 +23,7 @@ import { fetchWithoutRedirects } from "../src/lib/utils/fetch-without-redirects"
 
 import { supabaseServiceHeaders } from "./supabase-headers";
 import { triggerFoundationJob, type FoundationJobEnv } from "./app-job-trigger";
+import { sendHeartbeat } from "./heartbeat";
 import { withVariantKeys } from "../src/lib/media/variant-keys";
 import type { ScheduledWorker } from "./handler-types";
 
@@ -424,15 +425,21 @@ async function expireElapsedPosts(
   return { listings, businesses, promotions };
 }
 
-const worker: ScheduledWorker<Env | FoundationJobEnv> = {
+type FoundationEnv = FoundationJobEnv & { HEARTBEAT_URL_RETENTION_CLEANUP?: string };
+
+const worker: ScheduledWorker<Env | FoundationEnv> = {
   /**
    * Foundation: every 5 minutes; the app's journal-backed cleanup does the
-   * work (src/lib/foundation/retention-jobs.ts).
+   * work (src/lib/foundation/retention-jobs.ts). An incomplete run (app HTTP
+   * 503) throws, so Cloudflare marks the run failed and no heartbeat is sent.
    * Source backend: daily at 03:00 UTC, processing r2_cleanup_queue.
    */
-  async scheduled(_event, env, _ctx) {
+  async scheduled(event, env, _ctx) {
     if (env.DATA_BACKEND === "foundation") {
       await triggerFoundationJob(env, "/api/internal/retention/run");
+      // Manual runs do not count as the schedule firing.
+      if (event.cron !== "manual")
+        await sendHeartbeat("retention-cleanup", env.HEARTBEAT_URL_RETENTION_CLEANUP);
       return;
     }
     const supabaseUrl = env.SUPABASE_URL;
@@ -703,7 +710,7 @@ const worker: ScheduledWorker<Env | FoundationJobEnv> = {
   /**
    * HTTP handler — health check / manual trigger
    */
-  async fetch(request: Request, env: Env | FoundationJobEnv, ctx): Promise<Response> {
+  async fetch(request: Request, env: Env | FoundationEnv, ctx): Promise<Response> {
     if (request.method === "POST") {
       return runAuthorizedWorkerTrigger(request, env.WORKER_API_KEY, () =>
         this.scheduled!({ cron: "manual", scheduledTime: Date.now() }, env, ctx)
