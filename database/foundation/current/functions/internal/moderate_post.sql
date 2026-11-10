@@ -22,6 +22,9 @@ begin
     or (p_decision = 'reject' and length(btrim(coalesce(p_reason, ''))) not between 5 and 500) then
     raise exception 'decision and, for rejections, a reason are required' using errcode = '22023';
   end if;
+  -- The owner's subject lock first, as every owner command takes it, so that
+  -- starting the free week below never waits for it beneath the post rows.
+  perform internal.lock_evidence_subject(p.owner_id) from private.posts p where p.id = p_post_id;
   -- An edit locks its live post before the copy, like every owner command.
   select p.edit_of into original_id from private.posts p where p.id = p_post_id;
   if original_id is not null then
@@ -44,6 +47,8 @@ begin
       where post_id = post.id and released_at is null;
     update private.posts set status = 'rejected', status_reason = btrim(p_reason), revision = revision + 1
       where id = post.id;
+    -- A rejected post does not use the free week.
+    delete from private.intro_trial_requests r where r.post_id = post.id;
   elsif original_id is not null then
     merged := internal.apply_post_edit(original_id, post.id);
     rev := (merged->>'revision')::integer;
@@ -52,6 +57,13 @@ begin
     if not exists(select 1 from private.current_account_access u where u.id=post.owner_id) then
       raise exception 'post owner is no longer eligible' using errcode='PT409';
     end if;
+    -- A post submitted without a plan waits for the free week: its 7 days
+    -- start now, at approval.
+    if post.kind <> 'event' and exists(select 1 from private.intro_trial_requests r where r.post_id = post.id)
+      and not exists(select 1 from internal.post_funding(post.id)) then
+      perform internal.start_intro_trial(post.id);
+    end if;
+    delete from private.intro_trial_requests r where r.post_id = post.id;
     select f.funded_until, f.max_photos, f.max_videos into funded_until, photo_limit, video_limit
       from internal.post_funding(post.id) f;
     if funded_until is null or funded_until <= (case when post.kind='event' then clock_timestamp() else statement_timestamp() end) then

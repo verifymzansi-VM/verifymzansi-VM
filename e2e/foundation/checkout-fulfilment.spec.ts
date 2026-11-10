@@ -864,9 +864,7 @@ test.describe("checkout to fulfilment", () => {
       .poll(() => reply("/api/content/delete").map((entry) => entry.status))
       .toEqual([200]);
     expect(postExists(business.id)).toBe(false);
-    // The plan's slot is free again for the rest of the plan. (Capacity is not
-    // checked: the email job's trial sweep has by now also given the member
-    // the introductory allowance, BL-03.)
+    // The plan's slot is free again for the rest of the plan.
     expect(
       queryTestCopy(
         "select count(*) from private.post_activations a " +

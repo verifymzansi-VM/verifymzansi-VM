@@ -421,6 +421,7 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_kind: string; p_area?: string; p_limit?: number; p_offset?: number };
         Returns: Json;
       };
+      get_my_intro_trial: { Args: Record<PropertyKey, never>; Returns: Json };
       consume_frontend_post_command: { Args: { p_request: string }; Returns: Json };
       reserve_frontend_verification_upload: {
         Args: {

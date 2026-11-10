@@ -81,6 +81,41 @@ describe("email service", () => {
     expect(kept.text).toMatch(/kept until 12 November 2026/);
     expect(sold.text).toContain("/dashboard");
   });
+  it("tells the member when the free introductory post ends", async () => {
+    await sendPlatformNotice("owner@example.invalid", "trial_started", "outbox/trial", undefined, {
+      trialEndsAt: "2026-11-17T08:30:00Z", // 10:30 in South Africa
+      trialFundsPost: true,
+    });
+    await sendPlatformNotice("owner@example.invalid", "trial_started", "outbox/earlier");
+    const [dated, undated] = mockSend.mock.calls.map(([message]) => message);
+    expect(dated.subject).toBe("Your introductory posting allowance is ready");
+    expect(dated.text).toMatch(/live until 17 November 2026.*10:30 \(South African time\)/);
+    expect(dated.text).toContain("buy a plan within 3 days to reactivate it");
+    expect(dated.html).toContain("17 November 2026");
+    expect(undated.subject).toBe(dated.subject);
+    expect(undated.text).toContain("Your eligible introductory allowance is now recorded");
+    expect(undated.text).not.toMatch(/until [0-9]/);
+  });
+  it("words a staff or service grant that pays for no post without a post", async () => {
+    for (const trialFundsPost of [false, null, undefined])
+      await sendPlatformNotice(
+        "owner@example.invalid",
+        "trial_started",
+        "outbox/grant",
+        undefined,
+        {
+          trialEndsAt: "2026-11-17T08:30:00Z",
+          trialFundsPost,
+        }
+      );
+    for (const [message] of mockSend.mock.calls) {
+      expect(message.subject).toBe("Your introductory posting allowance is ready");
+      expect(message.text).toMatch(
+        /Your introductory posting allowance runs until 17 November 2026.*10:30 \(South African time\)\./
+      );
+      expect(message.text).not.toMatch(/post is live|reactivate|deleted/);
+    }
+  });
   it("words lifecycle notices without a date when the job does not know it", async () => {
     await sendPlatformNotice("owner@example.invalid", "post_expired", "outbox/expired");
     await sendPlatformNotice("owner@example.invalid", "post_sold", "outbox/sold", undefined, {

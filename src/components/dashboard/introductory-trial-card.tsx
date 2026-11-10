@@ -18,14 +18,20 @@ type Claim = {
   released_at: string | null;
   converted_at: string | null;
 };
-export function IntroductoryTrialCard() {
+/** With the new backend the dashboard page passes the member's free week as
+ * `foundationClaim` (null when there is none to show) and the card reads
+ * nothing itself. */
+export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim?: Claim | null }) {
+  const foundation = foundationClaim !== undefined;
   const [eligible, setEligible] = useState(false);
   const [freePostsRemaining, setFreePostsRemaining] = useState(0);
-  const [claim, setClaim] = useState<Claim | null>(null);
+  const [legacyClaim, setClaim] = useState<Claim | null>(null);
+  const claim = foundation ? foundationClaim : legacyClaim;
   const [lengths, setLengths] = useState({ short: 7, long: 30 });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    if (foundation) return;
     let alive = true;
     async function load() {
       const client = createClient();
@@ -59,7 +65,7 @@ export function IntroductoryTrialCard() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [foundation]);
   async function update(action: "renew" | "choose_seven") {
     if (!claim) return;
     setBusy(true);
@@ -133,14 +139,17 @@ export function IntroductoryTrialCard() {
         </Button>
       ) : (
         <div className="mt-4 flex flex-col gap-2">
-          <Button
-            disabled={busy}
-            onClick={() => update("renew")}
-            variant="trust-verified"
-            className="h-11 rounded-full"
-          >
-            Renew using my paid plan
-          </Button>
+          {/* Renewing through the retired trial route is hidden with the new backend. */}
+          {!foundation && (
+            <Button
+              disabled={busy}
+              onClick={() => update("renew")}
+              variant="trust-verified"
+              className="h-11 rounded-full"
+            >
+              Renew using my paid plan
+            </Button>
+          )}
           {!claim?.admin_granted && !claim?.activated_at && claim?.duration_days === 30 && (
             <Button
               variant="outline"

@@ -127,3 +127,19 @@ it("preserves native authority refusals and never replays an uncertain decision"
   expect((await handleRestoredModerationDecision(request(body()), false)).status).toBe(503);
   expect(rpc).toHaveBeenCalledTimes(2);
 });
+it("tells staff when no plan or free week is left to fund the approved post", async () => {
+  rpc.mockImplementation(async (name: string) =>
+    name === "staff_review_post"
+      ? { data: { id, kind: "listing", area: "market", revision: 7, edit_of: null }, error: null }
+      : {
+          data: null,
+          error: { code: "PT402", message: "no plan or free week covers this post" },
+        }
+  );
+  const refused = await handleRestoredModerationDecision(request(body()), false);
+  expect(refused.status).toBe(409);
+  expect(await refused.json()).toMatchObject({
+    error: expect.stringMatching(/^No plan or free week is left to fund this post\./),
+    reason: "staff_command_refused",
+  });
+});

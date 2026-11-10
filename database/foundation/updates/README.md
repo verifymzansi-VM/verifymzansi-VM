@@ -77,6 +77,125 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## The free week starts at the first approved post, 10 November 2026
+
+`20261110045944_intro_trial_at_first_approval.sql` is not applied yet. It needs
+`20261109104020_post_expiry_rules.sql` and refuses to run without it. The
+website release that reads `api.get_my_intro_trial` must not be deployed before
+it (the release checks every API command it uses).
+
+Until now the every-minute job (`internal.reconcile_intro_trials`) gave every
+fully verified member a 7-day introductory trial as soon as verification
+completed, and recorded the member's identity as used. Drafting and review time
+came out of the 7 days, approval was refused once they had run out, and a member
+who did not post within the week lost the free post for good. From this update:
+
+- **Verification creates no trial.** The job's command keeps its signature and
+  grants nothing.
+- **Submitting without a plan.** A new Market or Business post submitted without
+  a plan, by a member whose free week is unused (no trial or sponsored place
+  holds the identity, and it is not banned), goes to review waiting for the free
+  week (`private.intro_trial_requests`, added by `internal.queue_intro_trial`,
+  which `internal.submit_post` calls where it used to refuse with PT402). It
+  holds no slot and nothing is granted. One post at a time can wait; another one
+  is refused like a full slot (PT409 "all posting capacity is in use").
+  `internal.consume_frontend_post_command` no longer grants a trial at
+  submission.
+- **Approval starts it.** When staff approve that post
+  (`internal.moderate_post`), the member's 7-day trial is granted from that
+  moment (`internal.start_intro_trial`, through the unchanged
+  `internal.grant_intro_trial`, which records the identity and queues the
+  `trial_started` email) and the post is shown until the trial ends. Review time
+  no longer shortens it. If the free week was taken while the post waited (a
+  staff grant or a sponsored place recorded the identity, or it was banned), the
+  post takes a free slot the member already has, as a submission would; with
+  none, approval is refused and staff are told to reject the post or ask the
+  member to choose a plan. `internal.moderate_post` now takes the owner's
+  subject lock before the post rows, as owner commands do.
+- **Rejection does not use it.** The request is removed; resubmitting the post,
+  or another post, waits for the free week again.
+- **Reads.** The posting allowance reads report the offer as unavailable while a
+  post waits for it, and the 30-day choice as unavailable (same fields; the
+  posting form then shows its 30-day option disabled). New
+  `api.get_my_intro_trial()` (members) gives the free week's status
+  (`available`, `awaiting_approval`, `running`, `used`, `unavailable`) and,
+  while it runs, its start and end; the dashboard's trial card shows the end.
+  The mail claim adds `trial_ends_at` and `trial_funds_post` to `trial_started`
+  notices, so the email states the end date: for a trial that pays for the
+  approved post, that the post is live until then; for a staff or service grant
+  that pays for no post yet, only that the allowance runs until then. The
+  website deployed before this update keeps working with all of these, and the
+  website after it works with a database that does not have it yet (the trial
+  card then stays hidden and the email has no date).
+- **Trials granted under the earlier rule** (on every application, so running
+  the update again catches up). The update withdraws every active introductory
+  trial that never paid for a published post (status `revoked`, reason
+  `intro_trial_restarts_at_first_approval`), removes its unconverted post claims
+  and its identity record, and drops its unsent `trial_started` email, so the
+  member gets the full week from their first approved post. A trial counts as
+  used, and is kept unchanged, when a post it funds is live, paused or sold, a
+  post expired in it, staff approved a post while it held the post's slot, or a
+  post it funded was deleted. A post awaiting review in a withdrawn trial's slot
+  leaves the slot and waits for the free week. Unused trials granted by staff or
+  the service are withdrawn too.
+- **Posts in review with no funding.** A new Market or Business post awaiting
+  review that no current slot pays for (its plan ended during review) cannot be
+  approved today. The update lets the oldest such post of each member wait for
+  the member's free week, when that week is unused.
+
+The free week is 7 days (OD-08 b). Staff and service grants through
+`api.grant_verified_intro_trial` still start at once. A member who reactivates
+an unchanged, earlier-approved post without a plan is asked for a plan, as
+before; resubmitting a changed post uses the free week.
+
+`pnpm db:foundation:lifecycle-test` proves, on the throwaway database, that
+before the update the job starts the trial at verification; that the preflight
+is read only and counts the earlier trials; that the update and the rollback
+refuse unexpected bodies; the conversion of the earlier trials, including two
+that look used (a post rejected in the trial and later published under a plan; a
+post published earlier under a plan and back in review in the trial's slot);
+that apply, rollback (which gives a waiting post a trial from that moment and
+its slot) and re-apply return the same fingerprints and a repeated run changes
+nothing; that a repeated run lets the oldest unfunded post in review of a member
+with an unused week wait for it; that verification creates no trial and the
+30-day choice is unavailable; that a post submitted without a plan, through the
+API or the form (whatever length it picked), waits without a slot or a grant,
+and only one at a time; that its approval after 10 days in review starts exactly
+7 days from the approval and the post ends with it; the mail claim's trial end;
+that a rejected post leaves the free week unused and its resubmission waits
+again; that a week taken while the post waited makes approval use the member's
+running trial, and refuses a banned member with no slot; that a waiting post
+which got its own slot leaves the week unused; that no free week is left after
+it ends or for a banned identity; that another member can neither read nor
+decide it; and that concurrent submissions, two moderators approving at once,
+and submissions racing the first approval never grant a second trial.
+
+**Applying.** Production has every earlier update:
+
+1. Run `../preflight/20261110045944_intro_trial_at_first_approval.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "reviewed live bodies, update not applied";
+   it also counts the earlier trials the update restarts or keeps and the
+   members with an unfunded post in review.
+2. Run the update. It waits at most 5 seconds for anything it needs and stops
+   without changing anything if it cannot (or if Postgres reports a deadlock
+   with a member's command); run it again. Run the preflight again: it must now
+   read "already applied; trials to restart: 0". If a member was verified while
+   the update ran, it shows 1 or more; run the update again.
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   move `matchedThroughUpdate` and `matchedFingerprints` forward.
+4. Then merge and deploy the website release.
+
+The reviewed rollback is
+`../rollback/20261110045944_intro_trial_at_first_approval.down.sql` (only with
+the owner's decision, after reverting and deploying the website release; prefer
+a forward fix). It restores the earlier bodies, so verification starts a trial
+again; a post still waiting for the free week first gets a trial from that
+moment and its slot. Trials the update withdrew stay withdrawn and their members
+get a new one from the job.
+
 ## Post commands with a target post, 9 November 2026
 
 `20261109224337_fix_post_command_target.sql` is applied: the owner applied it to
@@ -1323,5 +1442,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   recorded); recorded in b7de37ee
 - `20261109224337_fix_post_command_target.sql`: applied 2026-11-10 (SAST date,
   time not recorded); recorded in febb1aa2
+- `20261110045944_intro_trial_at_first_approval.sql`: pending
 
 <!-- applied-register:end -->

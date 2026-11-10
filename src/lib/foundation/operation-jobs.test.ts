@@ -792,3 +792,31 @@ describe("a database without the newer kinds", () => {
     expect(calls("claim_supported_notification_outbox")).toHaveLength(2);
   });
 });
+it("passes the trial's end with the trial_started notice, and none from an earlier database", async () => {
+  const other = "00000000-0000-4000-8000-000000000003";
+  queue(
+    job({
+      kind: "trial_started",
+      trial_ends_at: "2026-11-17T08:00:00+00:00",
+      trial_funds_post: true,
+    }),
+    job({ id: other, kind: "trial_started" })
+  );
+  expect(await run()).toMatchObject({ claimed: 2, succeeded: 2, failed: [] });
+  expect(deliver.mock.calls).toEqual([
+    [
+      "synthetic@example.invalid",
+      "trial_started",
+      `foundation-outbox/${id}`,
+      undefined,
+      { trialEndsAt: "2026-11-17T08:00:00+00:00", trialFundsPost: true },
+    ],
+    [
+      "synthetic@example.invalid",
+      "trial_started",
+      `foundation-outbox/${other}`,
+      undefined,
+      { trialEndsAt: null, trialFundsPost: null },
+    ],
+  ]);
+});

@@ -3105,6 +3105,19 @@
       "authority": "Live confirmed active member; bounded self-only original-post collection and exact count, each post with its deletion date"
     },
     {
+      "name": "get_my_intro_trial",
+      "updates": ["updates/20261110045944_intro_trial_at_first_approval.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Live confirmed active member; self-only status of the member's free week (available, awaiting approval, running with its start and end, used or unavailable)"
+    },
+    {
       "name": "consume_frontend_post_command",
       "updates": [
         "updates/20261104002445_restored_post_commands.sql",

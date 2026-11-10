@@ -13,7 +13,10 @@ begin
     raise exception 'posting area required' using errcode='22023';end if;
   fingerprint:=internal.current_verified_identity(actor);
   claimed:=exists(select 1 from private.trial_identities t where t.owner_id=actor or t.identity_hmac=fingerprint);
-  eligible:=not claimed and not exists(select 1 from private.banned_identities b where b.identity_hmac=fingerprint and b.retain_until>clock_timestamp());
+  -- A post waiting for the free week (internal.queue_intro_trial) uses the
+  -- offer. The free week is 7 days: the 30-day choice is not available.
+  eligible:=not claimed and not exists(select 1 from private.banned_identities b where b.identity_hmac=fingerprint and b.retain_until>clock_timestamp())
+    and not internal.intro_trial_waiting(actor);
   -- Eligibility here is a display hint, including before identity review. The
   -- existing grant derives the verified identity and rechecks claims atomically.
   with usable as (
@@ -34,7 +37,7 @@ begin
       from usable x where x.source='retail_paid' order by (x.snapshot->>'duration_days')::integer desc,x.id limit 1),'active') end,
     'trial_ends_at',max(u.ends_at) filter(where u.source='intro_trial'),
     'trial_used',claimed,'trial_offer',jsonb_build_object('eligible',eligible,'sevenDayAvailable',eligible,
-      'thirtyDayAvailable',eligible,'remaining',null,'launchEnabled',true,'shortDays',7,'longDays',30)
+      'thirtyDayAvailable',false,'remaining',null,'launchEnabled',true,'shortDays',7,'longDays',30)
   ) into result from usable u;
   perform internal.price_draft_actor();return result;
 end$function$;

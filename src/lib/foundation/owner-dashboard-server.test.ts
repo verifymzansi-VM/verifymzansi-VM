@@ -50,3 +50,23 @@ it("reads the deletion date only for ended posts and tolerates a failed read", a
   ]);
   expect(vi.mocked(readRestoredOwnerPost).mock.calls[0][0]).toBe(api);
 });
+it("gives the trial card the member's running free week, and nothing when it cannot be read", async () => {
+  vi.mocked(dashboardPosts).mockReturnValue([]);
+  api.rpc.mockResolvedValueOnce({
+    data: {
+      status: "running",
+      starts_at: "2026-11-10T08:00:00+00:00",
+      ends_at: "2026-11-17T08:00:00+00:00",
+    },
+    error: null,
+  });
+  const { introTrial } = await readRestoredOwnerDashboard("owner");
+  expect(api.rpc).toHaveBeenCalledWith("get_my_intro_trial", {}, { get: false });
+  expect(introTrial).toMatchObject({
+    duration_days: 7,
+    activated_at: "2026-11-10T08:00:00+00:00",
+    expires_at: "2026-11-17T08:00:00+00:00",
+  });
+  api.rpc.mockResolvedValueOnce({ data: null, error: { code: "42883" } });
+  expect((await readRestoredOwnerDashboard("owner")).introTrial).toBeNull();
+});

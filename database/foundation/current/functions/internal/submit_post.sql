@@ -98,10 +98,18 @@ begin
       raise exception 'event fair-use limit reached' using errcode = 'PT429';
     end if;
   else
-    perform internal.activate_post(post.id);
+    begin
+      perform internal.activate_post(post.id);
+      delete from private.intro_trial_requests r where r.post_id=post.id;
+    exception when sqlstate 'PT402' then
+      -- No plan covers this post: it waits for the member's free week, which
+      -- starts when it is approved (10 photos and 1 video).
+      perform internal.queue_intro_trial(post.id);
+    end;
     select e.max_photos,e.max_videos into photo_limit,video_limit
       from private.post_activations a join private.entitlements e on e.id=a.entitlement_id
       where a.post_id=post.id and a.released_at is null;
+    if not found then photo_limit:=10; video_limit:=1; end if;
     if (select count(distinct pm.object_id) from private.post_media pm where pm.post_id=post.id and pm.purpose<>'video')>photo_limit
       or videos>video_limit then
       raise exception 'media exceed the funded post allowance' using errcode='22023';

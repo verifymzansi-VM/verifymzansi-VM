@@ -561,7 +561,9 @@ export default async function DashboardPage({
         </div>
 
         <aside aria-label="More for your account" className="min-w-0 space-y-6">
-          <IntroductoryTrialCard />
+          <IntroductoryTrialCard
+            foundationClaim={foundationDashboard ? foundationDashboard.introTrial : undefined}
+          />
           <QuickLinks planLabel={planLabel} />
         </aside>
       </div>
