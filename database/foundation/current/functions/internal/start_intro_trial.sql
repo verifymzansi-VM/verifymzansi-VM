@@ -18,31 +18,32 @@ begin
   if fingerprint is null then
     raise exception 'complete identity verification before posting' using errcode='42501',detail='posting_verification_required';
   end if;
-  if not exists(select 1 from private.trial_identities t where t.owner_id=post.owner_id and t.identity_hmac<>fingerprint) then
-    granted:=internal.grant_intro_trial(post.owner_id,fingerprint,7);
-  end if;
-  if coalesce((granted->>'granted')::boolean,false) then
+  for candidate in
+    select e.* from private.entitlements e
+    where internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+      and (e.area is null or e.area=post.area)
+      and (e.owner_id=post.owner_id or exists(select 1 from private.entitlement_members m
+        where m.entitlement_id=e.id and m.member_id=post.owner_id))
+    order by e.ends_at,e.id
+    for update
+  loop
+    continue when not internal.entitlement_for_post_eligible(candidate.id,post.id,post.owner_id)
+      or (select count(*) from private.post_activations a where a.entitlement_id=candidate.id and a.released_at is null)
+        >=candidate.slot_capacity
+      or (candidate.activations_per_period is not null and (select count(*) from private.post_activations a
+        where a.entitlement_id=candidate.id and a.activated_at>statement_timestamp()-make_interval(days=>candidate.activation_period_days))
+        >=candidate.activations_per_period);
+    ent:=candidate.id;
+    exit;
+  end loop;
+  if ent is null then
+    if not exists(select 1 from private.trial_identities t where t.owner_id=post.owner_id and t.identity_hmac<>fingerprint) then
+      granted:=internal.grant_intro_trial(post.owner_id,fingerprint,7);
+    end if;
+    if not coalesce((granted->>'granted')::boolean,false) then
+      raise exception 'no plan or free week covers this post' using errcode='PT402';
+    end if;
     ent:=(granted->>'entitlement_id')::uuid;
-  else
-    for candidate in
-      select e.* from private.entitlements e
-      where internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
-        and (e.area is null or e.area=post.area)
-        and (e.owner_id=post.owner_id or exists(select 1 from private.entitlement_members m
-          where m.entitlement_id=e.id and m.member_id=post.owner_id))
-      order by e.ends_at,e.id
-      for update
-    loop
-      continue when not internal.entitlement_for_post_eligible(candidate.id,post.id,post.owner_id)
-        or (select count(*) from private.post_activations a where a.entitlement_id=candidate.id and a.released_at is null)
-          >=candidate.slot_capacity
-        or (candidate.activations_per_period is not null and (select count(*) from private.post_activations a
-          where a.entitlement_id=candidate.id and a.activated_at>statement_timestamp()-make_interval(days=>candidate.activation_period_days))
-          >=candidate.activations_per_period);
-      ent:=candidate.id;
-      exit;
-    end loop;
-    if ent is null then raise exception 'no plan or free week covers this post' using errcode='PT402'; end if;
   end if;
   update private.post_activations set released_at=statement_timestamp(),release_reason='entitlement_ended'
     where post_id=post.id and released_at is null;

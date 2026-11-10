@@ -17,14 +17,15 @@
 --    internal.submit_post where it used to raise PT402). It holds no slot and
 --    nothing is granted. Only one post at a time can wait: another one is
 --    refused like a full slot (PT409 'all posting capacity is in use').
--- 3. When staff approve that post (internal.moderate_post), the member's
---    7-day trial is granted from that moment (internal.start_intro_trial,
---    through the existing internal.grant_intro_trial, which records the
---    identity and queues the trial_started email) and the post goes live
---    until the trial ends. Moderation time no longer shortens it. If the free
---    week was taken meanwhile (a staff grant or a sponsored place recorded the
---    identity, or it was banned), the post uses a slot the member already has,
---    as a submission would; with none, approval is refused (PT402).
+-- 3. When staff approve that post (internal.moderate_post), a free slot the
+--    member already has (a plan bought while the post waited, a sponsored
+--    place, a trial granted by staff) pays for it and the free week stays
+--    unused. Otherwise the member's 7-day trial is granted from that moment
+--    (internal.start_intro_trial, through the existing
+--    internal.grant_intro_trial, which records the identity and queues the
+--    trial_started email) and the post goes live until the trial ends.
+--    Moderation time no longer shortens it. With neither (the week was used
+--    meanwhile, or the identity banned), approval is refused (PT402).
 -- 4. A rejected post does not use the free week: its request is removed, and
 --    resubmitting it, or another post, waits for the free week again.
 -- 5. internal.consume_frontend_post_command no longer grants a trial at
@@ -36,19 +37,23 @@
 --    deployed before this update keeps reading them. New read
 --    api.get_my_intro_trial() gives the member's free week status and, once it
 --    runs, its start and end. The mail claim adds trial_ends_at and
---    trial_funds_post (whether the trial already pays for a post; a staff or
+--    trial_funds_post (whether the trial pays for a live post; a staff or
 --    service grant does not) to trial_started notices.
 -- 7. Earlier trials (run on every application, so a run after a member was
---    verified while the update ran, or after a rollback, catches up):
+--    verified while the update ran, or after a rollback, catches up; trials
+--    granted later than one minute after the first application, recorded in
+--    private.intro_trial_rule, are left alone):
 --    a) An active introductory trial that never paid for a published post is
 --       withdrawn (status revoked) with its identity record, unconverted post
 --       claims and unsent trial_started email, so the member gets the full
 --       week from their first approval; a post awaiting review in its slot
 --       waits for the free week instead. A trial counts as used when a post it
---       funds is live, paused or sold, a post expired in it, staff approved a
---       post while it held the post's slot, or a post it funded was deleted.
---       Used trials are kept unchanged. Unused trials granted by staff or the
---       service are withdrawn too.
+--       funds is live, paused or sold, a post expired, was sold or was
+--       archived in it, staff approved a post while it held the post's slot,
+--       or a post it funded was deleted. Used trials are kept unchanged. A
+--       sponsored member's identity record moves to the sponsorship instead
+--       of being removed (no later trial). Unused trials granted by staff or
+--       the service before the first application are withdrawn too.
 --    b) A new Market or Business post awaiting review with no funding (its
 --       plan ended during review, or a rollback could not fund it) waits for
 --       its owner's free week when that week is unused, one post per member.
@@ -107,7 +112,7 @@ do $$begin
     raise exception 'free week drift: internal.get_my_frontend_posting_allowance_v2 is not the reviewed body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)
-      not in('039b1e461ee382e1e2ae7afc31f9d304','d1c34cc391c73fb4caa96e64025f5e27') then
+      not in('039b1e461ee382e1e2ae7afc31f9d304','f0a000c6709e523e5aa2ef59af2f1948') then
     raise exception 'free week drift: internal.claim_supported_notification_outbox is not the reviewed body' using errcode='55000';
   end if;
   if to_regclass('private.intro_trial_requests') is not null
@@ -138,14 +143,26 @@ create table if not exists private.intro_trial_requests(
 create index if not exists intro_trial_requests_owner_idx on private.intro_trial_requests(owner_id);
 alter table private.intro_trial_requests enable row level security;
 revoke all on private.intro_trial_requests from public,anon,authenticated,service_role;
+-- When this update was first applied (plus one minute, so a trial the earlier
+-- job granted while it ran still counts as earlier): later runs of step 7
+-- leave trials granted after it alone.
+create table if not exists private.intro_trial_rule(
+  singleton boolean primary key default true check(singleton),
+  first_applied_at timestamptz not null
+);
+alter table private.intro_trial_rule enable row level security;
+revoke all on private.intro_trial_rule from public,anon,authenticated,service_role;
 
 -- 7. Earlier trials and unfunded posts awaiting review.
 do $$
-declare t record; fingerprint text;
+declare t record; fingerprint text; sponsored boolean; sponsorship uuid;
 begin
-  -- a) Active introductory trials that never paid for a published post.
+  -- a) Active introductory trials, granted before this update was first
+  -- applied, that never paid for a published post.
   for t in select e.id,e.owner_id from private.entitlements e
-    where e.source='intro_trial' and e.status='active' order by e.owner_id,e.id
+    where e.source='intro_trial' and e.status='active'
+      and e.created_at<coalesce((select r.first_applied_at from private.intro_trial_rule r),'infinity')
+    order by e.owner_id,e.id
   loop
     -- The owner's subject lock before any of the owner's rows, as owner commands take it.
     perform internal.lock_evidence_subject(t.owner_id);
@@ -153,10 +170,20 @@ begin
     continue when not found or exists(select 1 from private.post_activations a left join private.posts p on p.id=a.post_id
       where a.entitlement_id=t.id and (a.post_id is null
         or (a.released_at is null and p.status in('live','paused','sold'))
-        or a.release_reason='expired'
+        or a.release_reason in('expired','owner','sold')
         or exists(select 1 from private.moderation_log m where m.post_id=a.post_id and m.edit_id is null
           and m.decision='approve' and m.decided_at>=a.activated_at
           and m.decided_at<=coalesce(a.released_at,statement_timestamp()))));
+    -- A sponsored member keeps the identity record (no later trial): it moves
+    -- to the sponsorship (whose own record was not written because this one
+    -- held the identity). A sponsored member without a free sponsorship
+    -- entitlement keeps the trial.
+    sponsored:=exists(select 1 from private.entitlements e where e.owner_id=t.owner_id and e.source='sponsorship');
+    select e.id into sponsorship from private.entitlements e
+      where e.owner_id=t.owner_id and e.source='sponsorship'
+        and not exists(select 1 from private.trial_identities x where x.entitlement_id=e.id)
+      order by e.created_at desc,e.id limit 1;
+    continue when sponsored and sponsorship is null;
     insert into private.intro_trial_requests(post_id,owner_id)
       select a.post_id,t.owner_id from private.post_activations a join private.posts p on p.id=a.post_id
       where a.entitlement_id=t.id and a.released_at is null and p.owner_id=t.owner_id
@@ -165,7 +192,11 @@ begin
     update private.post_activations set released_at=statement_timestamp(),release_reason='entitlement_ended'
       where entitlement_id=t.id and released_at is null;
     delete from private.post_trial_claims c where c.trial_entitlement_id=t.id and c.converted_at is null;
-    delete from private.trial_identities i where i.entitlement_id=t.id;
+    if sponsorship is not null then
+      update private.trial_identities i set entitlement_id=sponsorship where i.entitlement_id=t.id;
+    else
+      delete from private.trial_identities i where i.entitlement_id=t.id;
+    end if;
     update private.outbox_events set processed_at=statement_timestamp()
       where kind='trial_started' and subject_id=t.id and processed_at is null;
     update private.entitlements set status='revoked',revoked_reason='intro_trial_restarts_at_first_approval'
@@ -240,10 +271,11 @@ revoke all on function internal.queue_intro_trial(uuid) from public,anon,authent
 
 -- 3. Called by internal.moderate_post when it approves a post that waits for
 -- the free week; the caller holds the owner's subject lock and the post row.
--- Grants the owner's 7-day trial from now and puts the post in its slot. If
--- the free week was taken meanwhile (a staff grant or a sponsored place
--- recorded the identity, or it was banned), the post takes a free slot the
--- member already has, chosen as internal.activate_post chooses; with none,
+-- A free slot the member already has (a plan bought while the post waited, a
+-- sponsored place, or a trial granted by staff meanwhile), chosen as
+-- internal.activate_post chooses, pays for the post and the free week stays
+-- unused. Otherwise the owner's 7-day trial is granted from now and the post
+-- takes its slot. With neither (the week was used, or the identity banned),
 -- PT402.
 create or replace function internal.start_intro_trial(p_post_id uuid)
 returns uuid language plpgsql security definer set search_path=pg_catalog as $function$
@@ -258,31 +290,32 @@ begin
   if fingerprint is null then
     raise exception 'complete identity verification before posting' using errcode='42501',detail='posting_verification_required';
   end if;
-  if not exists(select 1 from private.trial_identities t where t.owner_id=post.owner_id and t.identity_hmac<>fingerprint) then
-    granted:=internal.grant_intro_trial(post.owner_id,fingerprint,7);
-  end if;
-  if coalesce((granted->>'granted')::boolean,false) then
+  for candidate in
+    select e.* from private.entitlements e
+    where internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+      and (e.area is null or e.area=post.area)
+      and (e.owner_id=post.owner_id or exists(select 1 from private.entitlement_members m
+        where m.entitlement_id=e.id and m.member_id=post.owner_id))
+    order by e.ends_at,e.id
+    for update
+  loop
+    continue when not internal.entitlement_for_post_eligible(candidate.id,post.id,post.owner_id)
+      or (select count(*) from private.post_activations a where a.entitlement_id=candidate.id and a.released_at is null)
+        >=candidate.slot_capacity
+      or (candidate.activations_per_period is not null and (select count(*) from private.post_activations a
+        where a.entitlement_id=candidate.id and a.activated_at>statement_timestamp()-make_interval(days=>candidate.activation_period_days))
+        >=candidate.activations_per_period);
+    ent:=candidate.id;
+    exit;
+  end loop;
+  if ent is null then
+    if not exists(select 1 from private.trial_identities t where t.owner_id=post.owner_id and t.identity_hmac<>fingerprint) then
+      granted:=internal.grant_intro_trial(post.owner_id,fingerprint,7);
+    end if;
+    if not coalesce((granted->>'granted')::boolean,false) then
+      raise exception 'no plan or free week covers this post' using errcode='PT402';
+    end if;
     ent:=(granted->>'entitlement_id')::uuid;
-  else
-    for candidate in
-      select e.* from private.entitlements e
-      where internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
-        and (e.area is null or e.area=post.area)
-        and (e.owner_id=post.owner_id or exists(select 1 from private.entitlement_members m
-          where m.entitlement_id=e.id and m.member_id=post.owner_id))
-      order by e.ends_at,e.id
-      for update
-    loop
-      continue when not internal.entitlement_for_post_eligible(candidate.id,post.id,post.owner_id)
-        or (select count(*) from private.post_activations a where a.entitlement_id=candidate.id and a.released_at is null)
-          >=candidate.slot_capacity
-        or (candidate.activations_per_period is not null and (select count(*) from private.post_activations a
-          where a.entitlement_id=candidate.id and a.activated_at>statement_timestamp()-make_interval(days=>candidate.activation_period_days))
-          >=candidate.activations_per_period);
-      ent:=candidate.id;
-      exit;
-    end loop;
-    if ent is null then raise exception 'no plan or free week covers this post' using errcode='PT402'; end if;
   end if;
   update private.post_activations set released_at=statement_timestamp(),release_reason='entitlement_ended'
     where post_id=post.id and released_at is null;
@@ -724,9 +757,9 @@ begin
   fingerprint:=internal.current_verified_identity(actor);
   result:=jsonb_build_object('status',case
       when running.id is not null then 'running'
-      when internal.intro_trial_waiting(actor) then 'awaiting_approval'
       when exists(select 1 from private.trial_identities t where t.owner_id=actor or t.identity_hmac=fingerprint) then 'used'
       when exists(select 1 from private.banned_identities b where b.identity_hmac=fingerprint and b.retain_until>clock_timestamp()) then 'unavailable'
+      when internal.intro_trial_waiting(actor) then 'awaiting_approval'
       else 'available' end,
     'starts_at',running.starts_at,'ends_at',running.ends_at);
   perform internal.price_draft_actor();
@@ -763,7 +796,8 @@ begin
     'deletes_at',p.deletes_at,
     'holds_slot',case when p.id is not null then exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) end,
     'trial_ends_at',tr.ends_at,
-    'trial_funds_post',case when tr.id is not null then exists(select 1 from private.post_activations a where a.entitlement_id=tr.id) end) order by o.created_at,o.id),'[]'::jsonb)
+    'trial_funds_post',case when tr.id is not null then exists(select 1 from private.post_activations a
+      join private.posts fp on fp.id=a.post_id where a.entitlement_id=tr.id and a.released_at is null and fp.status='live') end) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
     left join private.posts p on p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end
@@ -775,6 +809,9 @@ $function$;
 revoke all on function internal.claim_supported_notification_outbox(text[],integer) from public,anon,authenticated,service_role;
 grant execute on function internal.claim_supported_notification_outbox(text[],integer) to service_role;
 
+insert into private.intro_trial_rule(first_applied_at) values(clock_timestamp()+interval '1 minute')
+  on conflict(singleton) do nothing;
+
 do $$begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.reconcile_intro_trials(integer)'::regprocedure)<>'41dcbbcf881420460765abac8cc67462'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.submit_post(uuid,integer)'::regprocedure)<>'56b073acfb683f53c9ae5639a3f0fa0e'
@@ -782,7 +819,7 @@ do $$begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.consume_frontend_post_command(uuid)'::regprocedure)<>'d765f1d3ae821aadea6f73e5f524b784'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.get_my_frontend_posting_allowance(text)'::regprocedure)<>'b7d28c21cea2627ff8a1a5edec8fd69c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.get_my_frontend_posting_allowance_v2(text)'::regprocedure)<>'5f289349861a6c403d88221437d6ff51'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)<>'d1c34cc391c73fb4caa96e64025f5e27' then
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)<>'f0a000c6709e523e5aa2ef59af2f1948' then
     raise exception 'free week update was not applied';
   end if;
 end$$;

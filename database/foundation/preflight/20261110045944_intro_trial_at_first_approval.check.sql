@@ -9,14 +9,19 @@
 -- The summary says whether the seven functions the update replaces are the
 -- reviewed live bodies (the update replaces them) or already the updated ones,
 -- and counts what step 7 of the update does now:
--- - "trials to restart": active introductory trials that never paid for a
---   published post (no post they fund is live, paused or sold, none expired in
---   them, staff approved none while they held its slot, and none of their
---   posts was deleted). The update withdraws them and frees their identity, so
---   each member gets the full free week from their first approved post.
+-- - "trials to restart": active introductory trials granted before the update
+--   was first applied that never paid for a published post (no post they fund
+--   is live, paused or sold, none expired, was sold or archived in them, staff
+--   approved none while they held its slot, and none of their posts was
+--   deleted). The update withdraws them and frees their identity, so each
+--   member gets the full free week from their first approved post; a long
+--   lapsed trial that was never used gives its member a new week too.
 --   "awaiting review" counts the posts in their slot that will wait for the
---   free week instead.
--- - "trials kept": the other active introductory trials; unchanged.
+--   free week instead. "sponsored" counts members with a sponsored place: their
+--   identity record moves to the sponsorship, so they still get no later trial.
+-- - "trials kept": the other active introductory trials (used, granted after
+--   the first application, or of a sponsored member whose sponsorship already
+--   holds a record); unchanged.
 -- - "members with an unfunded post awaiting review": members with a new
 --   Market or Business post in review that no current slot pays for. Before
 --   the update such a post cannot be approved; the update lets the oldest one
@@ -39,7 +44,7 @@ with bodies as (
     ('internal.consume_frontend_post_command(uuid)', '48f301b07ef97551cc810c17c4512283', 'd765f1d3ae821aadea6f73e5f524b784'),
     ('internal.get_my_frontend_posting_allowance(text)', '19d54312c05833a2403231868a41f3eb', 'b7d28c21cea2627ff8a1a5edec8fd69c'),
     ('internal.get_my_frontend_posting_allowance_v2(text)', 'e7d1b414d321c7aa2c84e49b25c59af1', '5f289349861a6c403d88221437d6ff51'),
-    ('internal.claim_supported_notification_outbox(text[],integer)', '039b1e461ee382e1e2ae7afc31f9d304', 'd1c34cc391c73fb4caa96e64025f5e27')
+    ('internal.claim_supported_notification_outbox(text[],integer)', '039b1e461ee382e1e2ae7afc31f9d304', 'f0a000c6709e523e5aa2ef59af2f1948')
   ) v(sig, reviewed, updated)
 ),
 state as (
@@ -48,17 +53,33 @@ state as (
     count(*) as total
   from bodies
 ),
-trials as (
-  select e.id,
+-- After the first application: trials granted later are left alone.
+rule as (
+  select case when to_regclass('private.intro_trial_rule') is not null then
+    (xpath('//first_applied_at/text()',
+      query_to_xml('select first_applied_at from private.intro_trial_rule', false, false, '')))[1]::text::timestamptz
+    end as first_applied_at
+),
+candidates as (
+  select e.id, e.owner_id,
     exists(select 1 from private.post_activations a left join private.posts p on p.id = a.post_id
       where a.entitlement_id = e.id and (a.post_id is null
         or (a.released_at is null and p.status in ('live', 'paused', 'sold'))
-        or a.release_reason = 'expired'
+        or a.release_reason in ('expired', 'owner', 'sold')
         or exists(select 1 from private.moderation_log m where m.post_id = a.post_id and m.edit_id is null
           and m.decision = 'approve' and m.decided_at >= a.activated_at
-          and m.decided_at <= coalesce(a.released_at, statement_timestamp())))) as used
+          and m.decided_at <= coalesce(a.released_at, statement_timestamp())))) as paid_for_post,
+    e.created_at >= coalesce((select first_applied_at from rule), 'infinity') as later,
+    exists(select 1 from private.entitlements x where x.owner_id = e.owner_id and x.source = 'sponsorship') as sponsored,
+    exists(select 1 from private.entitlements x where x.owner_id = e.owner_id and x.source = 'sponsorship'
+      and not exists(select 1 from private.trial_identities i where i.entitlement_id = x.id)) as sponsorship_free
   from private.entitlements e
   where e.source = 'intro_trial' and e.status = 'active'
+),
+trials as (
+  select id, owner_id, sponsored,
+    paid_for_post or later or (sponsored and not sponsorship_free) as used
+  from candidates
 ),
 unfunded as (
   select distinct p.owner_id from private.posts p
@@ -95,6 +116,8 @@ select 'summary' as kind,
          join private.post_activations a on a.entitlement_id = t.id and a.released_at is null
          join private.posts p on p.id = a.post_id
          where not t.used and p.status = 'pending_moderation' and p.kind <> 'event' and p.edit_of is null)
+    || '; sponsored, record moves to the sponsorship: '
+    || (select count(*) from trials t where not t.used and t.sponsored)
     || '); trials kept: ' || (select count(*) from trials t where t.used)
     || '; members with an unfunded post awaiting review: ' || (select count(*) from unfunded)
     || '; emails not yet sent: '

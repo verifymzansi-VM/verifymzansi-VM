@@ -9,10 +9,12 @@
 -- trial again: the every-minute job grants one to every fully verified member
 -- whose identity holds none, within a minute.
 --
--- Posts still waiting for the free week first get the earlier behaviour: the
--- member's 7-day trial is granted now and the post takes its slot, so staff
--- can still approve it. If the member's verification is no longer complete or
--- the identity already holds a trial, the post stays in review unfunded and
+-- Posts still waiting for the free week first get funding, so staff can still
+-- approve them: a post that already has a slot keeps it; otherwise a free slot
+-- the member has (chosen as internal.activate_post chooses) or, as before the
+-- update, the member's 7-day trial granted now. If the member's verification is
+-- no longer complete or the identity already holds a trial and there is no
+-- free slot, the post stays in review unfunded and
 -- cannot be approved; staff reject it and the member resubmits (applying the
 -- update again lets it wait for an unused free week). Trials the update
 -- withdrew stay withdrawn; their identities are free again, so the job grants
@@ -21,7 +23,7 @@ begin;
 set local lock_timeout='5s';
 
 do $$begin
-  if to_regclass('private.intro_trial_requests') is null then
+  if to_regclass('private.intro_trial_requests') is null or to_regclass('private.intro_trial_rule') is null then
     raise exception 'rollback precondition: private.intro_trial_requests is missing' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.reconcile_intro_trials(integer)'::regprocedure)
@@ -49,29 +51,52 @@ do $$begin
     raise exception 'rollback precondition: internal.get_my_frontend_posting_allowance_v2 is not the updated body' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.claim_supported_notification_outbox(text[],integer)'::regprocedure)
-      <>'d1c34cc391c73fb4caa96e64025f5e27' then
+      <>'f0a000c6709e523e5aa2ef59af2f1948' then
     raise exception 'rollback precondition: internal.claim_supported_notification_outbox is not the updated body' using errcode='55000';
   end if;
 end$$;
 
--- Posts waiting for the free week: a trial from now, and the post in its slot.
+-- Posts waiting for the free week: the slot they have, a free slot of the
+-- member, or a trial from now.
 do $$
-declare r record; granted jsonb;
+declare r record; granted jsonb; ent uuid; candidate private.entitlements;
 begin
-  for r in select q.post_id,q.owner_id from private.intro_trial_requests q
+  for r in select q.post_id,q.owner_id,p.area from private.intro_trial_requests q
       join private.posts p on p.id=q.post_id and p.owner_id=q.owner_id
     where p.status='pending_moderation' order by q.owner_id,q.post_id
   loop
-    begin
-      granted:=internal.grant_verified_intro_trial(r.owner_id,7);
-    exception when sqlstate '42501' or sqlstate 'PT409' then granted:=null;
-    end;
-    if coalesce((granted->>'granted')::boolean,false) then
-      update private.post_activations set released_at=statement_timestamp(),release_reason='entitlement_ended'
-        where post_id=r.post_id and released_at is null;
-      insert into private.post_activations(post_id,entitlement_id,owner_id)
-        values(r.post_id,(granted->>'entitlement_id')::uuid,r.owner_id);
+    perform internal.lock_verification_subject(r.owner_id);
+    continue when exists(select 1 from internal.post_funding(r.post_id));
+    ent:=null;
+    for candidate in
+      select e.* from private.entitlements e
+      where internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
+        and (e.area is null or e.area=r.area)
+        and (e.owner_id=r.owner_id or exists(select 1 from private.entitlement_members m
+          where m.entitlement_id=e.id and m.member_id=r.owner_id))
+      order by e.ends_at,e.id
+      for update
+    loop
+      continue when not internal.entitlement_for_post_eligible(candidate.id,r.post_id,r.owner_id)
+        or (select count(*) from private.post_activations a where a.entitlement_id=candidate.id and a.released_at is null)
+          >=candidate.slot_capacity
+        or (candidate.activations_per_period is not null and (select count(*) from private.post_activations a
+          where a.entitlement_id=candidate.id and a.activated_at>statement_timestamp()-make_interval(days=>candidate.activation_period_days))
+          >=candidate.activations_per_period);
+      ent:=candidate.id;
+      exit;
+    end loop;
+    if ent is null then
+      begin
+        granted:=internal.grant_verified_intro_trial(r.owner_id,7);
+      exception when sqlstate '42501' or sqlstate 'PT409' then granted:=null;
+      end;
+      if coalesce((granted->>'granted')::boolean,false) then ent:=(granted->>'entitlement_id')::uuid; end if;
     end if;
+    continue when ent is null;
+    update private.post_activations set released_at=statement_timestamp(),release_reason='entitlement_ended'
+      where post_id=r.post_id and released_at is null;
+    insert into private.post_activations(post_id,entitlement_id,owner_id) values(r.post_id,ent,r.owner_id);
   end loop;
 end$$;
 
@@ -508,6 +533,7 @@ drop function internal.start_intro_trial(uuid);
 drop function internal.queue_intro_trial(uuid);
 drop function internal.intro_trial_waiting(uuid);
 drop table private.intro_trial_requests;
+drop table private.intro_trial_rule;
 
 do $$begin
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.reconcile_intro_trials(integer)'::regprocedure)<>'f70eb13f358548e6866e6e6444e362a2'

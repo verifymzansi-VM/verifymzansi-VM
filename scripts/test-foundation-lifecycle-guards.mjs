@@ -1106,10 +1106,26 @@ try {
   // Two more earlier-rule trials that look used but never paid for a
   // published post: one whose post was rejected in it and then published
   // under a plan, one holding a post that was published earlier under a plan
-  // and is back in review.
+  // and is back in review. And one that did pay for a published post without
+  // review (an unchanged post reactivated in it, then archived), and one of a
+  // member sponsored after verification.
   const kagiso = verified("kagiso"),
-    thabo = verified("thabo");
-  let kagisoListing, thaboListing;
+    thabo = verified("thabo"),
+    vuyo = verified("vuyo"),
+    sizwe = verified("sizwe");
+  let kagisoListing, thaboListing, thaboPlan, vuyoListing, sizweSponsorship;
+  // A post published under a plan, which then expires (its slot released).
+  const publishedThenExpired = (owner) => {
+    const plan = scalar(`select vmtest.slot('${owner.id}','${staff.id}',1,20);`);
+    const listing = post(owner, "listing", "draft");
+    q(submitPost(owner, listing));
+    assert.equal(json(decide(listing, "approve")).status, "live");
+    q(`update private.post_activations set released_at=now(),release_reason='expired'
+         where post_id='${listing}' and released_at is null;
+       update private.posts set status='expired',status_reason='Visibility period ended',
+         visible_until=now()-interval '1 second' where id='${listing}';`);
+    return [listing, plan];
+  };
   const ownerAction = (owner, id, name) => {
     const p = row(id);
     return json(
@@ -1122,16 +1138,11 @@ try {
   await check(
     "free week: before the update, a trial can look used without paying for a published post",
     () => {
-      // Thabo's post is published under a plan before any trial, then expires.
-      scalar(`select vmtest.slot('${thabo.id}','${staff.id}',1,20);`);
-      thaboListing = post(thabo, "listing", "draft");
-      q(submitPost(thabo, thaboListing));
-      assert.equal(json(decide(thaboListing, "approve")).status, "live");
-      q(`update private.post_activations set released_at=now(),release_reason='expired'
-           where post_id='${thaboListing}' and released_at is null;
-         update private.posts set status='expired',status_reason='Visibility period ended',
-           visible_until=now()-interval '1 second' where id='${thaboListing}';`);
-      assert.equal(reconcile(), 2);
+      // Thabo's and Vuyo's posts are published under a plan before any trial,
+      // then expire.
+      [thaboListing, thaboPlan] = publishedThenExpired(thabo);
+      [vuyoListing] = publishedThenExpired(vuyo);
+      assert.equal(reconcile(), 4);
       // Kagiso's post is rejected in the trial, then published under a plan
       // that ends sooner (so it is chosen first).
       kagisoListing = post(kagiso, "listing", "draft");
@@ -1148,6 +1159,24 @@ try {
       // Thabo's expired post goes back to review, into the trial's slot.
       assert.equal(ownerAction(thabo, thaboListing, "resubmit").status, "pending_moderation");
       assert.equal(openActivation(thaboListing), trials(thabo)[0].id);
+      // Vuyo reactivates the unchanged post: it goes live in the trial's slot
+      // without a review, and is then archived (its slot released by the owner).
+      assert.equal(ownerAction(vuyo, vuyoListing, "reactivate").status, "live");
+      assert.equal(openActivation(vuyoListing), trials(vuyo)[0].id);
+      q(
+        member(
+          vuyo,
+          `select api.set_post_state('${vuyoListing}',${row(vuyoListing).revision},'archive');`
+        )
+      );
+      assert.equal(row(vuyoListing).status, "archived");
+      // Sizwe is sponsored after verification: the sponsorship's own identity
+      // record is not written, because the trial's holds the identity
+      // (internal.start_sponsorship, on conflict do nothing).
+      sizweSponsorship = scalar(
+        `insert into private.entitlements(owner_id,source,area,sponsorship_id,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+          values('${sizwe.id}','sponsorship','business',gen_random_uuid(),1,10,1,now(),now()+interval '180 days') returning id;`
+      );
     }
   );
   await check("free week preflight: read only, summary only, counts the earlier trials", () => {
@@ -1159,7 +1188,7 @@ try {
     );
     assert.equal(
       rows[0][1],
-      "free week: reviewed live bodies, update not applied; trials to restart: 4 (posts awaiting review among them: 2); trials kept: 1; members with an unfunded post awaiting review: 0; emails not yet sent: 4"
+      "free week: reviewed live bodies, update not applied; trials to restart: 5 (posts awaiting review among them: 2; sponsored, record moves to the sponsorship: 1); trials kept: 2; members with an unfunded post awaiting review: 0; emails not yet sent: 5"
     );
     const write = database.psql(
       `${TRIAL_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
@@ -1227,12 +1256,38 @@ try {
     assert.equal(trials(thabo)[0].status, "revoked");
     assert.equal(waits(thaboListing), true);
     assert.equal(openActivation(thaboListing), "");
+    // Paid for a published post without a review, then archived: kept.
+    assert.equal(activeTrials(vuyo).length, 1);
+    assert.equal(identityRows(vuyo), 1);
+    // The sponsored member's identity record moves to the sponsorship: still
+    // no later trial.
+    assert.equal(trials(sizwe)[0].status, "revoked");
+    assert.equal(
+      scalar(`select entitlement_id from private.trial_identities where owner_id='${sizwe.id}';`),
+      sizweSponsorship
+    );
+    assert.equal(freeWeek(sizwe).status, "used");
+    const sizweListing = post(sizwe, "listing", "draft");
+    assert.match(
+      fails(submitPost(sizwe, sizweListing), "PT402"),
+      /no active plan covers this post/
+    );
+    assert.equal(waits(sizweListing), false);
     assert.match(
       trialPreflight()[0][1],
-      /^free week: already applied; trials to restart: 0 \(posts awaiting review among them: 0\); trials kept: 1; members with an unfunded post awaiting review: 2;/
+      /^free week: already applied; trials to restart: 0 \(posts awaiting review among them: 0; sponsored, record moves to the sponsorship: 0\); trials kept: 2; members with an unfunded post awaiting review: 2;/
     );
+    // Removed: the cutover checks below expect only earlier ended posts.
+    q(`delete from private.posts where id='${vuyoListing}';`);
   });
   await check("free week: apply, roll back and apply again are clean", () => {
+    // A waiting post that got a slot of its own meanwhile.
+    const zanele = verified("zanele");
+    const funded = post(zanele, "listing", "draft");
+    q(submitPost(zanele, funded));
+    const zanelePlan = scalar(`select vmtest.slot('${zanele.id}','${staff.id}',1,20);`);
+    q(member(zanele, `select api.activate_post('${funded}');`));
+    assert.equal(waits(funded), true);
     applySteps(database, [{ label: "free week rollback", sql: TRIAL_ROLLBACK }]);
     assert.equal(fingerprint(), trialBefore, "the rollback leaves the pre-update schema");
     // The waiting post got the earlier behaviour: a trial from now, in its slot.
@@ -1241,6 +1296,11 @@ try {
     assert.equal(openActivation(siphoListing), restarted.id);
     assert.equal(identityRows(sipho), 1);
     assert.equal(activeTrials(ayanda).length, 0, "a withdrawn trial stays withdrawn");
+    // A member with a free slot gets it, not a trial; a post with a slot keeps it.
+    assert.equal(openActivation(thaboListing), thaboPlan);
+    assert.equal(activeTrials(thabo).length, 0);
+    assert.equal(openActivation(funded), zanelePlan);
+    assert.deepEqual(trials(zanele), []);
     applySteps(database, [trialStep]);
     assert.equal(fingerprint(), trialAfter, "re-applying gives the same schema");
     // The re-application restarts the trial the rollback granted.
@@ -1250,7 +1310,8 @@ try {
     applySteps(database, [trialStep]);
     assert.equal(fingerprint(), trialAfter, "a repeated run changes nothing");
     assert.equal(waits(siphoListing), true);
-    assert.equal(waits(thaboListing), true);
+    assert.equal(waits(thaboListing), false, "the post the rollback funded keeps its slot");
+    assert.equal(openActivation(thaboListing), thaboPlan);
     assert.equal(activeTrials(lerato).length, 1);
   });
   await check(
@@ -1376,6 +1437,7 @@ try {
       assert.match(fails(submitPost(bongi, second), "PT409"), /all posting capacity is in use/);
     }
   );
+  const pule = verified("pule");
   await check("free week: the mail claim gives the trial's end with its email", () => {
     const [trial] = trials(bongi);
     const claimed = json(
@@ -1385,8 +1447,21 @@ try {
     assert.ok(mail, "the trial_started email is claimed");
     assert.equal(Date.parse(mail.trial_ends_at), Date.parse(trial.ends_at));
     assert.equal(mail.trial_funds_post, true);
+    // Paused, the post is no longer live: the email does not say it is.
+    q(
+      member(
+        bongi,
+        `select api.set_post_state('${bongiListing}',${row(bongiListing).revision},'pause');`
+      )
+    );
+    q(
+      `insert into private.outbox_events(kind,subject_id,owner_id,dedupe_key) values('trial_started','${trial.id}','${bongi.id}','free-week-paused:${trial.id}');`
+    );
+    const paused = json(
+      service("select api.claim_supported_notification_outbox(array['trial_started'],50);")
+    ).find((item) => item.subject_id === trial.id);
+    assert.equal(paused.trial_funds_post, false);
     // A service grant pays for no post yet: its email says so.
-    const pule = verified("pule");
     q(service(`select api.grant_verified_intro_trial('${pule.id}',7);`));
     const [grant] = trials(pule);
     const grantMail = json(
@@ -1405,6 +1480,17 @@ try {
     assert.equal(other.trial_ends_at, null);
     assert.equal(other.trial_funds_post, null);
   });
+  await check(
+    "free week: a later run leaves trials granted after the first application alone",
+    () => {
+      // As if the first application was an hour ago: Pule's service grant is
+      // newer and stays, although it pays for no post.
+      q("update private.intro_trial_rule set first_applied_at=now()-interval '1 hour';");
+      applySteps(database, [trialStep]);
+      assert.equal(activeTrials(pule).length, 1);
+      assert.equal(identityRows(pule), 1);
+    }
+  );
   await check(
     "free week: a rejected post does not use it; resubmitting it waits again and its approval starts it",
     () => {
@@ -1488,12 +1574,23 @@ try {
         insert into private.banned_identities(identity_hmac,decision_id,category,banned_at,retain_until)
           values('${mandla.fingerprint}',gen_random_uuid(),'fraud',now(),now()+interval '5 years');
         select set_config('session_replication_role','origin',false);`);
+      // The card does not promise a week that approval would refuse.
+      assert.equal(freeWeek(mandla).status, "unavailable");
       assert.match(
         fails(decide(banned, "approve"), "PT402"),
         /no plan or free week covers this post/
       );
       assert.equal(row(banned).status, "pending_moderation");
       assert.deepEqual(trials(mandla), []);
+      // A plan bought while the post waited pays for it; the week stays unused.
+      const tumi = verified("tumi");
+      const bought = post(tumi, "listing", "draft");
+      q(submitPost(tumi, bought));
+      const tumiPlan = scalar(`select vmtest.slot('${tumi.id}','${staff.id}',1,20);`);
+      assert.equal(json(decide(bought, "approve")).status, "live");
+      assert.equal(openActivation(bought), tumiPlan);
+      assert.deepEqual(trials(tumi), []);
+      assert.equal(freeWeek(tumi).status, "available");
       // A waiting post that got a slot of its own no longer holds the free week.
       const nomvula = verified("nomvula");
       const own = post(nomvula, "listing", "draft");

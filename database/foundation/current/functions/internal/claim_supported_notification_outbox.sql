@@ -26,7 +26,8 @@ begin
     'deletes_at',p.deletes_at,
     'holds_slot',case when p.id is not null then exists(select 1 from private.post_activations a where a.post_id=p.id and a.released_at is null) end,
     'trial_ends_at',tr.ends_at,
-    'trial_funds_post',case when tr.id is not null then exists(select 1 from private.post_activations a where a.entitlement_id=tr.id) end) order by o.created_at,o.id),'[]'::jsonb)
+    'trial_funds_post',case when tr.id is not null then exists(select 1 from private.post_activations a
+      join private.posts fp on fp.id=a.post_id where a.entitlement_id=tr.id and a.released_at is null and fp.status='live') end) order by o.created_at,o.id),'[]'::jsonb)
     into result from claimed o left join auth.users u on u.id=o.owner_id
     left join private.enquiries e on o.kind='enquiry_received' and e.id=o.subject_id
     left join private.posts p on p.id=case when o.kind='enquiry_received' then e.post_id else o.subject_id end

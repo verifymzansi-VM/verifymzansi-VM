@@ -15,9 +15,9 @@ begin
   fingerprint:=internal.current_verified_identity(actor);
   result:=jsonb_build_object('status',case
       when running.id is not null then 'running'
-      when internal.intro_trial_waiting(actor) then 'awaiting_approval'
       when exists(select 1 from private.trial_identities t where t.owner_id=actor or t.identity_hmac=fingerprint) then 'used'
       when exists(select 1 from private.banned_identities b where b.identity_hmac=fingerprint and b.retain_until>clock_timestamp()) then 'unavailable'
+      when internal.intro_trial_waiting(actor) then 'awaiting_approval'
       else 'available' end,
     'starts_at',running.starts_at,'ends_at',running.ends_at);
   perform internal.price_draft_actor();
