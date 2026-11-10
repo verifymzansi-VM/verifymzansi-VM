@@ -52,13 +52,15 @@ such a check would block every pull request.
   - `Secret scan (Gitleaks)`, `Semgrep static analysis` (new findings only),
     `Dependency vulnerabilities (OSV-Scanner)`, and CodeQL's
     `Analyze (javascript-typescript)`.
-  - `Foundation Worker runtime`: builds and exercises the Worker artifact.
   - `unit-api-contract`: every unit test once (the coverage run plus the few
     DOM-heavy suites it leaves out), PGlite lanes and contracts.
   - `payment-kyc-regressions`.
   - `audit-tooling-platforms (ubuntu-latest)` and
-    `audit-tooling-platforms (windows-latest)`.
-  - `build-route-verify`, `bundle-analysis`.
+    `audit-tooling-platforms (windows-latest)`: the tooling tests
+    (`pnpm test:tooling`) on Linux and Windows.
+  - `build-route-verify`: builds the Worker, starts it in workerd, checks its
+    size and routes, and keeps the runtime proof (artifact
+    `foundation-worker-runtime`). `bundle-analysis`.
   - `db-rls`.
   - `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`,
     and `e2e-full-matrix` (chromium, firefox, mobile-chrome).
@@ -81,19 +83,17 @@ cancelled, so every release commit gets a complete result. Every job has a time
 limit of about one and a half times its usual longest run.
 
 Every CI job that runs on a pull request is required, except
-`lighthouse-advisory` (advisory, `continue-on-error`) and
-`safety-gate-snapshot: plan only (runs no checks)` (a dry-run plan that executes
-no checks). This keeps `main` deployable: the deploy needs the whole CI run on
-`main` to succeed. `perf-baseline` and `k6-advisory` run only after a push to
-`main` and cannot be required on pull requests; when no staging address
-(`STAGING_APP_URL`) is configured they show as skipped, not as a success
-(`Staging address configured` decides this in a job-level condition). Later
-slices add their jobs here and to the ruleset file (foundation browser tests,
-frontend ledger). `e2e-foundation` (workflow "E2E foundation") runs on every
-pull request but stays optional until it has five green nights in a row. When it
-becomes required, list only the aggregate check `e2e-foundation`: it passes only
-when both per-project jobs, `e2e-foundation (chromium)` and
-`e2e-foundation (mobile-chrome)`, passed.
+`lighthouse-advisory` (advisory, `continue-on-error`). This keeps `main`
+deployable: the deploy needs the whole CI run on `main` to succeed.
+`perf-baseline` and `k6-advisory` run only after a push to `main` and cannot be
+required on pull requests; when no staging address (`STAGING_APP_URL`) is
+configured they show as skipped, not as a success (`Staging address configured`
+decides this in a job-level condition). Later slices add their jobs here and to
+the ruleset file (foundation browser tests, frontend ledger). `e2e-foundation`
+(workflow "E2E foundation") runs on every pull request but stays optional until
+it has five green nights in a row. When it becomes required, list only the
+aggregate check `e2e-foundation`: it passes only when both per-project jobs,
+`e2e-foundation (chromium)` and `e2e-foundation (mobile-chrome)`, passed.
 
 ## How the owner applies it
 
