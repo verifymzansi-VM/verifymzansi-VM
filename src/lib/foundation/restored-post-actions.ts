@@ -21,6 +21,7 @@ const lifecycle = z.strictObject({
 const STAFF_HOLD_MESSAGE =
   "This post is hidden while our team reviews it. You can't republish, sell or delete it until the review is finished.";
 class ActionRefusal extends Error {
+  override name = "ActionRefusal";
   constructor(readonly refusal: FoundationRefusal) {
     super(refusal.error);
   }

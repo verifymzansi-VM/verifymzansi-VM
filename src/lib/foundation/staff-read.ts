@@ -122,6 +122,7 @@ export const foundationDecisionPage = z
   );
 
 export class FoundationStaffReadError extends Error {
+  override name = "FoundationStaffReadError";
   constructor(
     readonly status: 400 | 403 | 503,
     readonly mfaRequired = false

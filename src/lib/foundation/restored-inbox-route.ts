@@ -19,7 +19,9 @@ const querySchema = z.object({
   countOnly: createBooleanFlagSchema(false),
   limit: createBoundedIntegerSchema({ defaultValue: 25, min: 1, max: 50, fieldName: "limit" }),
 });
-class MissingEnquiry extends Error {}
+class MissingEnquiry extends Error {
+  override name = "MissingEnquiry";
+}
 export function handleRestoredInbox(request: NextRequest, mutate: boolean) {
   return handleFoundationOwnerRoute({
     request,

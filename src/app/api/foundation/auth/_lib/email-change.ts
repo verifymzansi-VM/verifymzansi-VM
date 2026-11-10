@@ -40,16 +40,19 @@ const ACCEPTED = {
 } as const;
 
 class ChangeRefusal extends Error {
+  override name = "ChangeRefusal";
   constructor(
     readonly status: number,
-    readonly body: { error: string; code?: string; reason?: string }
+    readonly body: { error: string; code?: string; reason?: string },
+    /** Logged only (never sent): why the request is unavailable. */
+    readonly reason?: string
   ) {
     super(body.error);
   }
 }
 
 const refuse = {
-  unavailable: () => new ChangeRefusal(503, { error: UNAVAILABLE }),
+  unavailable: (reason: string) => new ChangeRefusal(503, { error: UNAVAILABLE }, reason),
   attempts: () =>
     new ChangeRefusal(429, { error: "Too many attempts; try again shortly", code: "rate_limited" }),
   requests: () =>
@@ -131,7 +134,7 @@ export async function handleFoundationEmailChange(request: NextRequest) {
       action: "account:email-change",
       degradedMode: "block",
     });
-    if (network.degraded) throw refuse.unavailable();
+    if (network.degraded) throw refuse.unavailable("limiter_degraded");
     if (network.limited) throw refuse.attempts();
     const caller = await context.authenticateCaller();
     if (openedByResetLink(caller))
@@ -160,7 +163,7 @@ export async function handleFoundationEmailChange(request: NextRequest) {
         code: "reauthentication_required",
       });
     const account = await readFoundationAccountContext(caller.api);
-    if (account.account_id !== caller.accountId) throw refuse.unavailable();
+    if (account.account_id !== caller.accountId) throw refuse.unavailable("account_mismatch");
     // Staff change a sign-in address only right after their authenticator
     // step, as for the database's sensitive staff capabilities.
     if (
@@ -181,7 +184,7 @@ export async function handleFoundationEmailChange(request: NextRequest) {
       { key: "global", action: "account:email-change:global" },
     ]) {
       const result = await checkRateLimit({ ...budget, degradedMode: "block" });
-      if (result.degraded) throw refuse.unavailable();
+      if (result.degraded) throw refuse.unavailable("limiter_degraded");
       if (result.limited) throw refuse.requests();
     }
     // The links return to the callback's email change landing
@@ -194,7 +197,7 @@ export async function handleFoundationEmailChange(request: NextRequest) {
     if (outcome === "applied") {
       // Secure settings never change the address without both confirmations.
       log.error("Email change applied without confirmation; check Auth email settings");
-      throw refuse.unavailable();
+      throw refuse.unavailable("applied_without_confirmation");
     }
     // Auth checks whether another account has the address before some of its
     // email limits, so a limit refusal gets the accepted answer too (the
@@ -230,11 +233,10 @@ export async function handleFoundationEmailChange(request: NextRequest) {
       } else if (error.reason === "invalid_email") {
         status = 400;
         body = { error: "Enter a valid email address", code: "invalid_email" };
-      } else {
-        log.warn("Email change could not be confirmed");
-        body = { error: "Your email change could not be confirmed. Try again shortly." };
-      }
-    } else
+      } else body = { error: "Your email change could not be confirmed. Try again shortly." };
+    }
+    // Every "unavailable" answer is a failure to explain: log it with a reference.
+    if (status >= 500)
       body.reference = logRequestFailure(log, "Foundation email change unavailable", {
         request,
         error,

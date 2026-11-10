@@ -38,9 +38,12 @@ const UNAVAILABLE = "Password setup is temporarily unavailable";
 const inputSchema = z.strictObject({ email: foundationAuthEmail });
 
 class SetupRefusal extends Error {
+  override name = "SetupRefusal";
   constructor(
     readonly status: number,
-    readonly body: { error: string; code?: string; reason?: string }
+    readonly body: { error: string; code?: string; reason?: string },
+    /** Logged only (never sent): why the request is unavailable. */
+    readonly reason?: string
   ) {
     super(body.error);
   }
@@ -54,7 +57,7 @@ const refuse = {
       error: "Too many password emails; try again later",
       code: "rate_limited",
     }),
-  unavailable: () => new SetupRefusal(503, { error: UNAVAILABLE }),
+  unavailable: (reason: string) => new SetupRefusal(503, { error: UNAVAILABLE }, reason),
 };
 
 /**
@@ -107,7 +110,7 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
       action: "auth:forgot-password",
       degradedMode: "block",
     });
-    if (network.degraded) throw refuse.unavailable();
+    if (network.degraded) throw refuse.unavailable("limiter_degraded");
     if (network.limited) throw refuse.limited();
     const caller = await context.authenticateCaller();
     if (openedByResetLink(caller)) throw new SetupRefusal(403, RECOVERY_SESSION_REFUSAL);
@@ -138,7 +141,7 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
         code: "reauthentication_required",
       });
     const account = await readFoundationAccountContext(caller.api);
-    if (account.account_id !== caller.accountId) throw refuse.unavailable();
+    if (account.account_id !== caller.accountId) throw refuse.unavailable("account_mismatch");
     // Staff add a sign-in method only right after their authenticator step,
     // as for the database's sensitive staff capabilities.
     if (
@@ -154,7 +157,7 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
       { key: "global", action: "auth:password-setup:global" },
     ]) {
       const result = await checkRateLimit({ ...budget, degradedMode: "block" });
-      if (result.degraded) throw refuse.unavailable();
+      if (result.degraded) throw refuse.unavailable("limiter_degraded");
       if (result.limited) throw refuse.emails();
     }
     const callback = new URL(buildAuthCallbackUrl(request, "/reset-password"));
@@ -200,8 +203,10 @@ export async function handleFoundationPasswordSetup(request: NextRequest, input:
       if (error.status === 429) {
         status = 429;
         body = { ...refuse.emails().body };
-      } else log.warn("Password setup email unavailable");
-    } else
+      }
+    }
+    // Every "unavailable" answer is a failure to explain: log it with a reference.
+    if (status >= 500)
       body.reference = logRequestFailure(log, "Foundation password setup unavailable", {
         request,
         error,

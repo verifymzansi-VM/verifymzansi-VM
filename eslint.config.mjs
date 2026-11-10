@@ -82,8 +82,8 @@ const eslintConfig = [
   {
     // Server code must not swallow failures silently: a handler logs, rethrows,
     // returns something the caller checks, or carries a comment saying why
-    // ignoring the error is safe.
-    files: ["src/app/api/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
+    // ignoring the error is safe. Modules marked "use client" are skipped.
+    files: ["src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "workers/**/*.ts"],
     ignores: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/__tests__/**"],
     plugins: { local: localRules },
     rules: {

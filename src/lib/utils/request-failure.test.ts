@@ -13,7 +13,11 @@ import {
   requestReference,
 } from "./request-reference";
 import { createFoundationCallRecorder } from "@/lib/foundation/call-failures";
-import { defaultFallbackCount, recordDefaultFallback } from "./fallback-events";
+import {
+  defaultFallbackCount,
+  recordDefaultFallback,
+  resetFallbackLogTimesForTests,
+} from "./fallback-events";
 
 const RAY = "8f1a2b3c4d5e6f70-JNB";
 // Synthetic personal details that must never reach a log line.
@@ -82,6 +86,7 @@ describe("failure log lines", () => {
       body: JSON.stringify({ p_display_name: "Thando Dlamini", p_id_number: ID_NUMBER }),
     });
     class FoundationProfileError extends Error {
+      override name = "FoundationProfileError";
       readonly reason = "unavailable";
     }
     const reference = logRequestFailure(createLogger("Test"), "Foundation owner request failed", {
@@ -136,6 +141,55 @@ describe("failure log lines", () => {
     });
   });
 
+  it("attributes a command only while its failure is the latest outcome", async () => {
+    let reply = Response.json({ code: "42501" }, { status: 403 });
+    const recorder = createFoundationCallRecorder(async () => reply);
+    const api = recorder.attach({});
+    await recorder.fetch("https://project.supabase.co/rest/v1/rpc/first_step");
+    expect(describeRequestFailure(new Error("x"), api)).toMatchObject({ command: "first_step" });
+    reply = Response.json({ ok: true });
+    await recorder.fetch("https://project.supabase.co/rest/v1/rpc/second_step");
+    expect(describeRequestFailure(new Error("x"), api)).toEqual({ errorType: "Error" });
+  });
+
+  it("prefers the thrown error's own code over the recorded one", async () => {
+    const recorder = createFoundationCallRecorder(async () =>
+      Response.json({ code: "42501" }, { status: 403 })
+    );
+    const api = recorder.attach({});
+    await recorder.fetch("https://project.supabase.co/rest/v1/rpc/save_my_profile");
+    expect(describeRequestFailure({ code: "PT409" }, api)).toMatchObject({
+      command: "save_my_profile",
+      errorCode: "PT409",
+    });
+  });
+
+  it("does not read error bodies beyond 8 KB", async () => {
+    const recorder = createFoundationCallRecorder(
+      async () =>
+        new Response(JSON.stringify({ code: "42501", padding: "x".repeat(20_000) }), {
+          status: 500,
+        })
+    );
+    const api = recorder.attach({});
+    const response = await recorder.fetch("https://project.supabase.co/rest/v1/rpc/big_reply");
+    expect((await response.text()).length).toBeGreaterThan(20_000);
+    expect(describeRequestFailure(null, api)).toEqual({
+      errorType: "null",
+      command: "big_reply",
+      httpStatus: 500,
+    });
+  });
+
+  it("logs the error's own name, never a (minified) constructor name", () => {
+    class Minified extends Error {}
+    class Named extends Error {
+      override name = "FoundationSessionError";
+    }
+    expect(describeRequestFailure(new Minified("x")).errorType).toBe("Error");
+    expect(describeRequestFailure(new Named("x")).errorType).toBe("FoundationSessionError");
+  });
+
   it("drops error codes and reasons that could hold personal data", () => {
     expect(describeRequestFailure({ code: PHONE, reason: EMAIL })).toEqual({
       errorType: "object",
@@ -145,6 +199,9 @@ describe("failure log lines", () => {
       errorCode: "PGRST202",
     });
     expect(describeRequestFailure("plain text")).toEqual({ errorType: "string" });
+    expect(describeRequestFailure({ reason: "user.name@example" })).toEqual({
+      errorType: "object",
+    });
   });
 
   it("logs server render errors with digest and route file, never the visited path", () => {
@@ -184,18 +241,22 @@ describe("failure log lines", () => {
 });
 
 describe("default-value fallbacks", () => {
-  it("logs a counted warning each time", () => {
+  it("counts every fallback but warns at most once every five minutes", () => {
+    resetFallbackLogTimesForTests();
     const before = defaultFallbackCount("commercial_settings");
     const log = createLogger("Test");
-    recordDefaultFallback(log, "commercial_settings", { errorCode: "42P01" });
-    recordDefaultFallback(log, "commercial_settings", { usedCachedValue: true });
-    expect(defaultFallbackCount("commercial_settings")).toBe(before + 2);
+    const start = 1_000_000;
+    recordDefaultFallback(log, "commercial_settings", { errorCode: "42P01" }, start);
+    for (let i = 1; i <= 50; i++)
+      recordDefaultFallback(log, "commercial_settings", {}, start + i * 1000);
+    recordDefaultFallback(log, "commercial_settings", { usedCachedValue: true }, start + 300_000);
+    expect(defaultFallbackCount("commercial_settings")).toBe(before + 52);
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('"event":"fallback_to_default"');
     expect(lines[0]).toContain('"fallback":"commercial_settings"');
     expect(lines[0]).toContain(`"count":${before + 1}`);
     expect(lines[0]).toContain('"errorCode":"42P01"');
-    expect(lines[1]).toContain(`"count":${before + 2}`);
+    expect(lines[1]).toContain(`"count":${before + 52}`);
     expect(lines[1]).toContain('"usedCachedValue":true');
   });
 });

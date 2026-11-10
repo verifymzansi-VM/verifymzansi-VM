@@ -31,7 +31,8 @@ export function describeRequestFailure(error: unknown, api?: unknown): RequestFa
   const fields: Record<string, unknown> =
     error && typeof error === "object" ? (error as Record<string, unknown>) : {};
   const errorReason = safeReason(fields.reason);
-  const errorCode = call?.errorCode ?? safeErrorCode(fields.code);
+  // The thrown error's own code wins over the recorded command's code.
+  const errorCode = safeErrorCode(fields.code) ?? call?.errorCode;
   return {
     errorType: errorTypeOf(error),
     ...(errorReason ? { errorReason } : {}),
@@ -40,6 +41,14 @@ export function describeRequestFailure(error: unknown, api?: unknown): RequestFa
     ...(call?.status ? { httpStatus: call.status } : {}),
     ...(call?.errorType ? { callErrorType: call.errorType } : {}),
   };
+}
+
+/**
+ * A read that may degrade (the page shows less) but must not fail silently:
+ * logs a warning with the same safe facts and a stable event name.
+ */
+export function logDegradedRead(log: Logger, message: string, error: unknown): void {
+  log.warn(message, { event: "read_degraded", ...describeRequestFailure(error) });
 }
 
 const ACTION = /^[a-z][a-z0-9_:.-]{0,59}$/;

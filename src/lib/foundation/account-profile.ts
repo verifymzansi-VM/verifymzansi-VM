@@ -39,6 +39,7 @@ export type FoundationAccountProfile = z.infer<typeof profile>;
 export const foundationAccountProfileSchema = profile;
 
 export class FoundationProfileError extends Error {
+  override name = "FoundationProfileError";
   constructor(
     readonly reason:
       | "invalid"

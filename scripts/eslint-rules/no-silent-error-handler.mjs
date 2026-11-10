@@ -3,21 +3,39 @@
  *
  *   try { ... } catch {}
  *   promise.catch(() => {})
+ *   promise.catch(() => undefined)
  *   promise.then(onDone, () => {})
  *
- * A handler passes when it does something (logs, rethrows, returns a value the
- * caller checks) or when it holds a comment saying why ignoring the error is
- * safe. The comment is the explicit, reviewable annotation.
+ * A handler passes when it does something (logs, rethrows, returns a real value
+ * such as null that the caller checks) or when it holds a comment saying why
+ * ignoring the error is safe. The comment is the explicit, reviewable
+ * annotation; a bare TODO, FIXME or XXX note is not a reason.
  */
+
+const PLACEHOLDER = /^(?:todo|fixme|xxx)\b/i;
+
+function hasReason(node, sourceCode) {
+  return sourceCode.getCommentsInside(node).some((comment) => {
+    const text = comment.value.replace(/^[\s*]+/, "").trim();
+    return text.length > 0 && !PLACEHOLDER.test(text);
+  });
+}
+
+function isUndefinedValue(node) {
+  return (
+    (node.type === "Identifier" && node.name === "undefined") ||
+    (node.type === "UnaryExpression" &&
+      node.operator === "void" &&
+      node.argument.type === "Literal")
+  );
+}
 
 function isSilentFunction(node, sourceCode) {
   if (!node || (node.type !== "ArrowFunctionExpression" && node.type !== "FunctionExpression"))
     return false;
-  return (
-    node.body.type === "BlockStatement" &&
-    node.body.body.length === 0 &&
-    sourceCode.getCommentsInside(node.body).length === 0
-  );
+  const empty =
+    node.body.type === "BlockStatement" ? node.body.body.length === 0 : isUndefinedValue(node.body);
+  return empty && !hasReason(node, sourceCode);
 }
 
 function calledMethod(node) {
@@ -34,15 +52,21 @@ const MESSAGE =
 export const noSilentErrorHandler = {
   meta: {
     type: "problem",
-    docs: { description: "Refuse empty error handlers in server code" },
+    docs: { description: "Refuse silent error handlers in server code" },
     schema: [],
     messages: { silent: MESSAGE },
   },
   create(context) {
     const sourceCode = context.sourceCode;
+    // Browser code ("use client") is out of scope: this rule is for server code.
+    const clientModule = sourceCode.ast.body.some(
+      (statement) =>
+        statement.type === "ExpressionStatement" && statement.directive === "use client"
+    );
+    if (clientModule) return {};
     return {
       CatchClause(node) {
-        if (node.body.body.length === 0 && sourceCode.getCommentsInside(node.body).length === 0)
+        if (node.body.body.length === 0 && !hasReason(node.body, sourceCode))
           context.report({ node, messageId: "silent" });
       },
       CallExpression(node) {

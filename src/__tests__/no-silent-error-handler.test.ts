@@ -22,6 +22,19 @@ it("refuses empty catch blocks and empty promise error handlers", () => {
   expect(problems("work().catch(() => {});")).toHaveLength(1);
   expect(problems("work().catch(function () {});")).toHaveLength(1);
   expect(problems("work().then(done, () => {});")).toHaveLength(1);
+  expect(problems("work().catch(() => undefined);")).toHaveLength(1);
+  expect(problems("work().catch(() => void 0);")).toHaveLength(1);
+});
+
+it("does not accept a bare TODO or FIXME note as the reason", () => {
+  expect(problems("try { run(); } catch { /* TODO */ }")).toHaveLength(1);
+  expect(problems("work().catch(() => {\n  // FIXME: handle this\n});")).toHaveLength(1);
+  expect(problems("try { run(); } catch {\n  // XXX later\n}")).toHaveLength(1);
+});
+
+it("leaves browser modules alone", () => {
+  expect(problems('"use client";\ntry { run(); } catch {}')).toEqual([]);
+  expect(problems('"use server";\ntry { run(); } catch {}')).toHaveLength(1);
 });
 
 it("accepts handlers that act, and empty ones that explain themselves", () => {

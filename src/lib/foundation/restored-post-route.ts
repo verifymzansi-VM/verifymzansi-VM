@@ -16,6 +16,7 @@ import { createLogger } from "../utils/logger";
 import type { Json } from "../../../database/foundation/api.types";
 const log = createLogger("RestoredPostCommands");
 class PostRefusal extends Error {
+  override name = "PostRefusal";
   constructor(readonly refusal: FoundationRefusal) {
     super(refusal.error);
   }

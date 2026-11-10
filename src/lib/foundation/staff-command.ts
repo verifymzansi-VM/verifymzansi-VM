@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationRefusal } from "./owner-route";
 export class FoundationStaffCommandError extends Error {
+  override name = "FoundationStaffCommandError";
   constructor(
     readonly status: number,
     message: string,

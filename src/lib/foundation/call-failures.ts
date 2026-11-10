@@ -1,6 +1,8 @@
 /**
- * Remembers the last failed database command of one foundation API client, so
- * a route that answers "unavailable" can log which command failed and why.
+ * Remembers how the most recently completed database command of one foundation
+ * API client ended, so a route that answers "unavailable" can log which command
+ * failed and why. A later successful command clears it: only a failure that is
+ * still the latest outcome is attributed, never an older one.
  *
  * Only the command name (an `api.*` function), the HTTP status and the database
  * error code (for example `42501`, `PT409` or `PGRST202`) are kept. Messages,
@@ -15,16 +17,17 @@ type FoundationCallFailure = {
   errorCode?: string;
   /** Set when no reply arrived, for example "TimeoutError". */
   errorType?: string;
-  /** Orders failures across clients; never logged. */
-  sequence: number;
 };
+
+/** The latest completed call of one client: a failure, or null for a success. */
+type CallOutcome = { sequence: number; failure: FoundationCallFailure | null };
 
 let sequence = 0;
 
 const COMMAND = /\/rest\/v1\/rpc\/([a-z][a-z0-9_]{0,62})(?:[/?#]|$)/;
 const ERROR_CODE = /^[A-Za-z0-9_]{1,16}$/;
-const ERROR_TYPE = /^[A-Za-z][A-Za-z0-9_.]{0,59}$/;
-const MAX_ERROR_BODY_CHARS = 8192;
+const ERROR_TYPE = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
+const MAX_ERROR_BODY_BYTES = 8192;
 
 function requestUrl(input: Parameters<typeof fetch>[0]): string {
   if (typeof input === "string") return input;
@@ -44,16 +47,14 @@ function foundationCommandName(input: Parameters<typeof fetch>[0]): string {
   return path.startsWith("/auth/") ? "auth" : "other";
 }
 
-/** A short, stable error class name that is safe to log. */
+/**
+ * A short, stable error type that is safe to log: the error's own `name`.
+ * Class names are minified in production builds, so every server error class
+ * sets `override name = "<ClassName>"` (enforced by a test) and the constructor
+ * name is never used.
+ */
 export function errorTypeOf(error: unknown): string {
-  const name =
-    error instanceof Error
-      ? error.name && error.name !== "Error"
-        ? error.name
-        : error.constructor?.name
-      : error === null
-        ? "null"
-        : typeof error;
+  const name = error instanceof Error ? error.name : error === null ? "null" : typeof error;
   return name && ERROR_TYPE.test(name) ? name : "Error";
 }
 
@@ -67,7 +68,8 @@ export function safeErrorCode(value: unknown): string | undefined {
     : undefined;
 }
 
-const REASON = /^[a-z][a-z0-9_:.-]{0,59}$/;
+// Enum-like reasons only, for example "legal_name_required".
+const REASON = /^[a-z][a-z0-9_]{0,59}$/;
 
 /** A stable reason such as "legal_name_required", or undefined. */
 export function safeReason(value: unknown): string | undefined {
@@ -76,10 +78,38 @@ export function safeReason(value: unknown): string | undefined {
     : undefined;
 }
 
+/** Reads at most MAX_ERROR_BODY_BYTES of a copy of the reply; larger bodies are skipped. */
+async function readBoundedText(response: Response): Promise<string | undefined> {
+  const reader = response.clone().body?.getReader();
+  if (!reader) return undefined;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_ERROR_BODY_BYTES) {
+      // Not awaited: a cancelled copy settles only once the original is done too.
+      void reader.cancel().catch(() => {
+        // Only the copy is cancelled; the caller still reads the original reply.
+      });
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function readErrorCode(response: Response): Promise<string | undefined> {
   try {
-    const text = await response.clone().text();
-    if (text.length > MAX_ERROR_BODY_CHARS) return undefined;
+    const text = await readBoundedText(response);
+    if (text === undefined) return undefined;
     const body = JSON.parse(text) as unknown;
     return body && typeof body === "object"
       ? safeErrorCode((body as Record<string, unknown>).code)
@@ -90,28 +120,27 @@ async function readErrorCode(response: Response): Promise<string | undefined> {
   }
 }
 
-const recorders = new WeakMap<object, () => FoundationCallFailure | null>();
+const recorders = new WeakMap<object, () => CallOutcome | null>();
 
-/** Wraps a fetch so failed replies and lost requests are remembered. */
+/** Wraps a fetch so the outcome of the latest completed call is remembered. */
 export function createFoundationCallRecorder(fetcher: typeof fetch) {
-  let last: FoundationCallFailure | null = null;
+  let last: CallOutcome | null = null;
+  const settle = (failure: FoundationCallFailure | null) => {
+    last = { sequence: ++sequence, failure };
+  };
   const recordingFetch: typeof fetch = async (input, init) => {
     const command = foundationCommandName(input);
     let response: Response;
     try {
       response = await fetcher(input, init);
     } catch (error) {
-      last = { command, errorType: errorTypeOf(error), sequence: ++sequence };
+      settle({ command, errorType: errorTypeOf(error) });
       throw error;
     }
-    if (!response.ok) {
+    if (response.ok) settle(null);
+    else {
       const errorCode = await readErrorCode(response);
-      last = {
-        command,
-        status: response.status,
-        ...(errorCode ? { errorCode } : {}),
-        sequence: ++sequence,
-      };
+      settle({ command, status: response.status, ...(errorCode ? { errorCode } : {}) });
     }
     return response;
   };
@@ -125,13 +154,16 @@ export function createFoundationCallRecorder(fetcher: typeof fetch) {
   };
 }
 
-/** The most recent failed command of one or more foundation API clients. */
+/**
+ * The failed command of one or more foundation API clients, when the latest
+ * completed call among them failed. A later success among them returns null.
+ */
 export function lastFoundationFailure(apis: unknown): FoundationCallFailure | null {
-  let latest: FoundationCallFailure | null = null;
+  let latest: CallOutcome | null = null;
   for (const api of Array.isArray(apis) ? apis : [apis]) {
     if (!api || (typeof api !== "object" && typeof api !== "function")) continue;
-    const failure = recorders.get(api)?.() ?? null;
-    if (failure && (!latest || failure.sequence > latest.sequence)) latest = failure;
+    const outcome = recorders.get(api)?.() ?? null;
+    if (outcome && (!latest || outcome.sequence > latest.sequence)) latest = outcome;
   }
-  return latest;
+  return latest?.failure ?? null;
 }
