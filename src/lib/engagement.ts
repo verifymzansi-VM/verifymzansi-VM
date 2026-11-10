@@ -11,10 +11,6 @@ interface _ContentEngagementSnapshot {
   viewerHasLiked?: boolean;
 }
 
-export function isContentTargetType(value: string): value is ContentTargetType {
-  return CONTENT_TARGET_TYPES.includes(value as ContentTargetType);
-}
-
 export function createAnonymousViewerId() {
   return crypto.randomUUID();
 }

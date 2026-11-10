@@ -65,6 +65,7 @@ import {
   SOCIAL_LABELS,
 } from "@/lib/presentation/business-facts";
 import { placeLine } from "@/lib/utils/place-line";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { BusinessStickers } from "@/components/trust/business-stickers";
 import { ID_REVIEWED_TRUST_LEVEL } from "@/lib/business-verification/public";
 
@@ -544,10 +545,12 @@ export function UnifiedLayout({
         <p className="text-sm text-muted-foreground">{business.location_address}</p>
       ) : null}
 
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Eye className="h-4 w-4 text-brand-blue" />
-        <span>{viewCountLabel}</span>
-      </div>
+      {SHOW_ENGAGEMENT_TOTALS ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Eye className="h-4 w-4 text-brand-blue" />
+          <span>{viewCountLabel}</span>
+        </div>
+      ) : null}
 
       {business.description ? (
         <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">

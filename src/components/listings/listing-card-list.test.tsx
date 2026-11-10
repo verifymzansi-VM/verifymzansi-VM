@@ -98,8 +98,9 @@ describe("ListingCardList", () => {
     );
   });
 
-  it("hides view counts and keeps the like control in the metadata area", () => {
-    const { container } = render(
+  // Roadmap M2.8: likes are not stored by the live backend, so the button is hidden.
+  it("hides view counts and the like button", () => {
+    render(
       <ListingCardList
         id="listing-2"
         title="Compact Engagement Listing"
@@ -114,8 +115,9 @@ describe("ListingCardList", () => {
       />
     );
 
+    expect(screen.getByText("Compact Engagement Listing")).toBeInTheDocument();
     expect(screen.queryByText(/views/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /unlike this card/i })).toHaveTextContent("999");
-    expect(container.querySelector(".bottom-3.right-3")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /like this card/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("999")).not.toBeInTheDocument();
   });
 });

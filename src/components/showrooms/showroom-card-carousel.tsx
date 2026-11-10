@@ -3,6 +3,7 @@
 import { feedSourceAttribute } from "@/lib/feed/session";
 import { trackCommercialEvents } from "@/lib/analytics/commercial-events";
 import { ShowroomProvinceChip } from "./showroom-province-chip";
+import { SHOW_SHOWROOM_PROVINCE_CHIP } from "@/lib/hidden-features";
 import {
   ShowroomSectionShell as SectionShell,
   getBackgroundOverlayClasses,
@@ -884,7 +885,9 @@ export function ShowroomCardCarousel({
         </SectionShell>
         {/* An empty feed has no province to change, but keep the chip's room so the
           page below stays where the loading skeleton put it. */}
-        {visitorProvince ? <div className="h-14" aria-hidden="true" /> : null}
+        {SHOW_SHOWROOM_PROVINCE_CHIP && visitorProvince ? (
+          <div className="h-14" aria-hidden="true" />
+        ) : null}
       </>
     );
   }
@@ -1077,7 +1080,9 @@ export function ShowroomCardCarousel({
         )}
       </SectionShell>
       {/* Below the showroom, so it never sits behind a card. */}
-      {visitorProvince ? <ShowroomProvinceChip {...visitorProvince} /> : null}
+      {SHOW_SHOWROOM_PROVINCE_CHIP && visitorProvince ? (
+        <ShowroomProvinceChip {...visitorProvince} />
+      ) : null}
     </>
   );
 }

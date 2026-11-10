@@ -72,6 +72,7 @@ import {
   type PromotionType,
 } from "@/types/enums";
 import { FREE_POST_CONFIG } from "@/lib/constants/pricing";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 
 const LISTING_DASHBOARD_FALLBACK_FIELDS = ["view_count", "featured_until", "urgent_until"] as const;
 const BUSINESS_DASHBOARD_FALLBACK_FIELDS = ["view_count", "expires_at"] as const;
@@ -817,11 +818,13 @@ function ItemMeta({ item }: { item: DashboardItem }) {
             {PROMOTION_TYPE_LABELS[item.promotion_type as PromotionType]}
           </Badge>
         )}
-      <span className="inline-flex items-center gap-1">
-        <Eye aria-hidden="true" className="h-3.5 w-3.5" />
-        <span>{item.view_count ?? 0}</span>
-        <span>{getViewCountLabel(item.view_count)}</span>
-      </span>
+      {SHOW_ENGAGEMENT_TOTALS ? (
+        <span className="inline-flex items-center gap-1">
+          <Eye aria-hidden="true" className="h-3.5 w-3.5" />
+          <span>{item.view_count ?? 0}</span>
+          <span>{getViewCountLabel(item.view_count)}</span>
+        </span>
+      ) : null}
       <span>Posted {formatRelativeTime(item.created_at || new Date().toISOString())}</span>
       {item.deletes_at ? <span>Will be deleted on {formatSaLongDate(item.deletes_at)}</span> : null}
     </div>

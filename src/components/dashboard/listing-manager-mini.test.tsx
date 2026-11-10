@@ -19,7 +19,8 @@ describe("ListingManagerMini", () => {
     vi.useRealTimers();
   });
 
-  it("shows a zero view count so owners can see posts with no views yet", () => {
+  // Roadmap M2.8: views are not stored by the live backend, so no count is shown.
+  it("shows no view count, not even zero", () => {
     render(
       <ListingManagerMini
         posts={[
@@ -38,7 +39,8 @@ describe("ListingManagerMini", () => {
     );
 
     expect(screen.getByText("Starter listing")).toBeInTheDocument();
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(screen.queryByText("views")).not.toBeInTheDocument();
   });
 
   it("shows a countdown when a live post is close to expiry", () => {

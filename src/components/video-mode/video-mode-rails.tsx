@@ -39,6 +39,7 @@ import type { FeedSlide, FeedVertical } from "@/lib/feed/types";
 import { cn } from "@/lib/utils";
 import { contactPhone, whatsappLink } from "@/lib/utils/contact-links";
 import { formatCompactCount } from "@/lib/utils/format";
+import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { getOpenStatus } from "@/lib/business/open-status";
 
 /** Dark circle with a light ring: readable over any photo or video. 40px inside a 44px target. */
@@ -174,15 +175,17 @@ export function ActionRail({ slide, views }: { slide: FeedSlide; views: number }
       className="vm-actions flex flex-col items-center gap-2.5"
     >
       {/* First, in the same circle as Like; not a button: views only count. */}
-      <div className="flex min-w-11 flex-col items-center gap-1 p-0.5">
-        <span className={VM_CIRCLE} aria-hidden="true">
-          <Eye className={VM_GLYPH} />
-        </span>
-        <span className={RAIL_TEXT} aria-hidden="true">
-          {formatCompactCount(views)}
-        </span>
-        <span className="sr-only">{views === 1 ? "1 view" : `${views} views`}</span>
-      </div>
+      {SHOW_ENGAGEMENT_TOTALS ? (
+        <div className="flex min-w-11 flex-col items-center gap-1 p-0.5">
+          <span className={VM_CIRCLE} aria-hidden="true">
+            <Eye className={VM_GLYPH} />
+          </span>
+          <span className={RAIL_TEXT} aria-hidden="true">
+            {formatCompactCount(views)}
+          </span>
+          <span className="sr-only">{views === 1 ? "1 view" : `${views} views`}</span>
+        </div>
+      ) : null}
 
       <ContentLikeButton
         key={slide.key}
