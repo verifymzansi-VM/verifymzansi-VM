@@ -106,14 +106,16 @@ who did not post within the week lost the free post for good. From this update:
 - **Approval.** When staff approve that post (`internal.moderate_post`,
   `internal.start_intro_trial`), a free slot the member already has (a plan
   bought while the post waited, a sponsored place, a trial granted by staff)
-  pays for it and the free week stays unused (owner decision). Otherwise the
-  member's 7-day trial is granted from that moment, through the unchanged
+  that runs at least 7 more days and allows the post's photos and videos pays
+  for it and the free week stays unused (owner decision). Otherwise the member's
+  7-day trial is granted from that moment, through the unchanged
   `internal.grant_intro_trial` (which records the identity and queues the
   `trial_started` email), and the post is shown until the trial ends. Review
-  time no longer shortens it. With neither (the week was used meanwhile, or the
-  identity banned), approval is refused and staff are told to reject the post or
-  ask the member to choose a plan. `internal.moderate_post` now takes the
-  owner's subject lock before the post rows, as owner commands do.
+  time no longer shortens it. If the week was used meanwhile (or the identity is
+  banned), any free slot that allows the post's media pays for it; with none,
+  approval is refused and staff are told to reject the post or ask the member to
+  choose a plan. `internal.moderate_post` now takes the owner's subject lock
+  before the post rows, as owner commands do.
 - **Rejection does not use it.** The request is removed; resubmitting the post,
   or another post, waits for the free week again.
 - **Reads.** The posting allowance reads report the offer as unavailable while a
@@ -138,13 +140,15 @@ who did not post within the week lost the free post for good. From this update:
   a post expired, was sold or was archived in it; staff approved a post while it
   held the post's slot; or a post it funded was deleted. A post awaiting review
   in a withdrawn trial's slot leaves the slot and waits for the free week. A
-  sponsored member's identity record moves to the sponsorship instead of being
-  removed (a sponsorship binds the identity, and the trial's record kept the
-  sponsorship from writing its own), so they still get no later trial. This step
-  runs on every application, but only for trials granted before the first
-  application plus one minute (`private.intro_trial_rule`): running the update
-  again catches a trial the earlier job granted while it ran, and leaves later
-  staff or service grants alone.
+  sponsored member's trial that still runs is kept (the sponsorship pays only
+  for business posts); once it has lapsed, the member's identity record moves to
+  the sponsorship instead of being removed (a sponsorship binds the identity,
+  and the trial's record kept the sponsorship from writing its own), so they
+  still get no later trial. This step runs on every application, but only for
+  trials granted before the first application plus one minute
+  (`private.intro_trial_rule`): running the update again catches a trial the
+  earlier job granted while it ran, and leaves later staff or service grants
+  alone.
 - **Posts in review with no funding.** A new Market or Business post awaiting
   review that no current slot pays for (its plan ended during review) cannot be
   approved today. The update lets the oldest such post of each member wait for
@@ -173,19 +177,21 @@ refuse unexpected bodies; the conversion of the earlier trials, including two
 that look used (a post rejected in the trial and later published under a plan; a
 post published earlier under a plan and back in review in the trial's slot), one
 used without a review (an unchanged post reactivated in it, then archived; kept)
-and a sponsored member's (record moved to the sponsorship, no later week); that
-apply, rollback (which gives a waiting post its own slot, a free slot of the
-member or a trial from that moment) and re-apply return the same fingerprints
-and a repeated run changes nothing; that a repeated run lets the oldest unfunded
-post in review of a member with an unused week wait for it, and leaves a staff
-or service grant made after the first application alone; that verification
-creates no trial and the 30-day choice is unavailable; that a post submitted
-without a plan, through the API or the form (whatever length it picked), waits
-without a slot or a grant, and only one at a time; that its approval after 10
-days in review starts exactly 7 days from the approval and the post ends with
-it; the mail claim's trial end and whether the trial pays for a live post; that
-a rejected post leaves the free week unused and its resubmission waits again;
-that a plan bought while the post waited pays for it and leaves the week unused;
+and two of sponsored members (a running one kept; a lapsed one withdrawn with
+its record moved to the sponsorship, no later week); that apply, rollback (which
+gives a waiting post its own slot, a free slot of the member or a trial from
+that moment) and re-apply return the same fingerprints and a repeated run
+changes nothing; that a repeated run lets the oldest unfunded post in review of
+a member with an unused week wait for it, and leaves a staff or service grant
+made after the first application alone; that verification creates no trial and
+the 30-day choice is unavailable; that a post submitted without a plan, through
+the API or the form (whatever length it picked), waits without a slot or a
+grant, and only one at a time; that its approval after 10 days in review starts
+exactly 7 days from the approval and the post ends with it; the mail claim's
+trial end and whether the trial pays for a live post; that a rejected post
+leaves the free week unused and its resubmission waits again; that a plan bought
+while the post waited pays for it and leaves the week unused, while a plan
+ending within the week or one that does not allow the post's photos does not;
 that a week taken while the post waited makes approval use the member's running
 trial, and refuses a banned member with no slot (whose card no longer says the
 week awaits approval); that a waiting post which got its own slot leaves the

@@ -17,11 +17,16 @@
 --   member gets the full free week from their first approved post; a long
 --   lapsed trial that was never used gives its member a new week too.
 --   "awaiting review" counts the posts in their slot that will wait for the
---   free week instead. "sponsored" counts members with a sponsored place: their
---   identity record moves to the sponsorship, so they still get no later trial.
+--   free week instead.
+-- - "sponsored members whose record moves to the sponsorship": members with a
+--   sponsored place whose unused trial has lapsed. The trial is withdrawn but
+--   the identity record moves to the sponsorship, so they still get no later
+--   trial. They are counted among the trials to restart.
 -- - "trials kept": the other active introductory trials (used, granted after
---   the first application, or of a sponsored member whose sponsorship already
---   holds a record); unchanged.
+--   the first application, a sponsored member's trial that is still running,
+--   or one whose sponsorship already holds a record); unchanged. "running
+--   trials of sponsored members" counts the sponsored members' trials kept
+--   because they still run (the sponsorship pays only for business posts).
 -- - "members with an unfunded post awaiting review": members with a new
 --   Market or Business post in review that no current slot pays for. Before
 --   the update such a post cannot be approved; the update lets the oldest one
@@ -70,6 +75,7 @@ candidates as (
           and m.decision = 'approve' and m.decided_at >= a.activated_at
           and m.decided_at <= coalesce(a.released_at, statement_timestamp())))) as paid_for_post,
     e.created_at >= coalesce((select first_applied_at from rule), 'infinity') as later,
+    e.ends_at > statement_timestamp() as running,
     exists(select 1 from private.entitlements x where x.owner_id = e.owner_id and x.source = 'sponsorship') as sponsored,
     exists(select 1 from private.entitlements x where x.owner_id = e.owner_id and x.source = 'sponsorship'
       and not exists(select 1 from private.trial_identities i where i.entitlement_id = x.id)) as sponsorship_free
@@ -77,8 +83,8 @@ candidates as (
   where e.source = 'intro_trial' and e.status = 'active'
 ),
 trials as (
-  select id, owner_id, sponsored,
-    paid_for_post or later or (sponsored and not sponsorship_free) as used
+  select id, owner_id, sponsored, running,
+    paid_for_post or later or (sponsored and (running or not sponsorship_free)) as used
   from candidates
 ),
 unfunded as (
@@ -116,9 +122,11 @@ select 'summary' as kind,
          join private.post_activations a on a.entitlement_id = t.id and a.released_at is null
          join private.posts p on p.id = a.post_id
          where not t.used and p.status = 'pending_moderation' and p.kind <> 'event' and p.edit_of is null)
-    || '; sponsored, record moves to the sponsorship: '
+    || '); sponsored members whose record moves to the sponsorship: '
     || (select count(*) from trials t where not t.used and t.sponsored)
-    || '); trials kept: ' || (select count(*) from trials t where t.used)
+    || '; trials kept: ' || (select count(*) from trials t where t.used)
+    || ' (running trials of sponsored members among them: '
+    || (select count(*) from trials t where t.used and t.sponsored and t.running) || ')'
     || '; members with an unfunded post awaiting review: ' || (select count(*) from unfunded)
     || '; emails not yet sent: '
     || (select count(*) from trials t

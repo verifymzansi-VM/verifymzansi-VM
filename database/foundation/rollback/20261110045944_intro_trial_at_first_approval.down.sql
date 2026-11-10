@@ -18,13 +18,14 @@
 -- cannot be approved; staff reject it and the member resubmits (applying the
 -- update again lets it wait for an unused free week). Trials the update
 -- withdrew stay withdrawn; their identities are free again, so the job grants
--- those members a new trial.
+-- those members a new trial, except sponsored members, whose identity record
+-- the update moved to their sponsorship (they get no later trial).
 begin;
 set local lock_timeout='5s';
 
 do $$begin
   if to_regclass('private.intro_trial_requests') is null or to_regclass('private.intro_trial_rule') is null then
-    raise exception 'rollback precondition: private.intro_trial_requests is missing' using errcode='55000';
+    raise exception 'rollback precondition: private.intro_trial_requests or private.intro_trial_rule is missing' using errcode='55000';
   end if;
   if (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid='internal.reconcile_intro_trials(integer)'::regprocedure)
       <>'41dcbbcf881420460765abac8cc67462' then

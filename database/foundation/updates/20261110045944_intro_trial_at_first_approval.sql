@@ -19,13 +19,15 @@
 --    refused like a full slot (PT409 'all posting capacity is in use').
 -- 3. When staff approve that post (internal.moderate_post), a free slot the
 --    member already has (a plan bought while the post waited, a sponsored
---    place, a trial granted by staff) pays for it and the free week stays
+--    place, a trial granted by staff) that runs at least 7 more days and
+--    allows the post's photos and videos pays for it and the free week stays
 --    unused. Otherwise the member's 7-day trial is granted from that moment
 --    (internal.start_intro_trial, through the existing
 --    internal.grant_intro_trial, which records the identity and queues the
 --    trial_started email) and the post goes live until the trial ends.
---    Moderation time no longer shortens it. With neither (the week was used
---    meanwhile, or the identity banned), approval is refused (PT402).
+--    Moderation time no longer shortens it. If the week was used meanwhile
+--    (or the identity is banned), any free slot that allows the post's media
+--    pays for it; with none, approval is refused (PT402).
 -- 4. A rejected post does not use the free week: its request is removed, and
 --    resubmitting it, or another post, waits for the free week again.
 -- 5. internal.consume_frontend_post_command no longer grants a trial at
@@ -51,9 +53,11 @@
 --       funds is live, paused or sold, a post expired, was sold or was
 --       archived in it, staff approved a post while it held the post's slot,
 --       or a post it funded was deleted. Used trials are kept unchanged. A
---       sponsored member's identity record moves to the sponsorship instead
---       of being removed (no later trial). Unused trials granted by staff or
---       the service before the first application are withdrawn too.
+--       sponsored member's trial that is still running is kept too (the
+--       sponsorship pays only for business posts); once it has lapsed, the
+--       member's identity record moves to the sponsorship instead of being
+--       removed (no later trial). Unused trials granted by staff or the
+--       service before the first application are withdrawn too.
 --    b) A new Market or Business post awaiting review with no funding (its
 --       plan ended during review, or a rollback could not fund it) waits for
 --       its owner's free week when that week is unused, one post per member.
@@ -159,7 +163,7 @@ declare t record; fingerprint text; sponsored boolean; sponsorship uuid;
 begin
   -- a) Active introductory trials, granted before this update was first
   -- applied, that never paid for a published post.
-  for t in select e.id,e.owner_id from private.entitlements e
+  for t in select e.id,e.owner_id,e.ends_at from private.entitlements e
     where e.source='intro_trial' and e.status='active'
       and e.created_at<coalesce((select r.first_applied_at from private.intro_trial_rule r),'infinity')
     order by e.owner_id,e.id
@@ -176,14 +180,15 @@ begin
           and m.decided_at<=coalesce(a.released_at,statement_timestamp()))));
     -- A sponsored member keeps the identity record (no later trial): it moves
     -- to the sponsorship (whose own record was not written because this one
-    -- held the identity). A sponsored member without a free sponsorship
-    -- entitlement keeps the trial.
+    -- held the identity). A sponsored member keeps a trial that is still
+    -- running (the sponsorship pays only for business posts), and one without
+    -- a free sponsorship entitlement keeps the trial too.
     sponsored:=exists(select 1 from private.entitlements e where e.owner_id=t.owner_id and e.source='sponsorship');
     select e.id into sponsorship from private.entitlements e
       where e.owner_id=t.owner_id and e.source='sponsorship'
         and not exists(select 1 from private.trial_identities x where x.entitlement_id=e.id)
       order by e.created_at desc,e.id limit 1;
-    continue when sponsored and sponsorship is null;
+    continue when sponsored and (sponsorship is null or t.ends_at>statement_timestamp());
     insert into private.intro_trial_requests(post_id,owner_id)
       select a.post_id,t.owner_id from private.post_activations a join private.posts p on p.id=a.post_id
       where a.entitlement_id=t.id and a.released_at is null and p.owner_id=t.owner_id
@@ -272,14 +277,16 @@ revoke all on function internal.queue_intro_trial(uuid) from public,anon,authent
 -- 3. Called by internal.moderate_post when it approves a post that waits for
 -- the free week; the caller holds the owner's subject lock and the post row.
 -- A free slot the member already has (a plan bought while the post waited, a
--- sponsored place, or a trial granted by staff meanwhile), chosen as
--- internal.activate_post chooses, pays for the post and the free week stays
--- unused. Otherwise the owner's 7-day trial is granted from now and the post
--- takes its slot. With neither (the week was used, or the identity banned),
--- PT402.
+-- sponsored place, or a trial granted by staff meanwhile) that runs at least 7
+-- more days and allows the post's photos and videos pays for the post, and the
+-- free week stays unused. Otherwise the owner's 7-day trial is granted from now
+-- and the post takes its slot. If the week is no longer available (used, or the
+-- identity banned), any free slot that allows the post's media pays for it,
+-- chosen as internal.activate_post chooses; with none, PT402.
 create or replace function internal.start_intro_trial(p_post_id uuid)
 returns uuid language plpgsql security definer set search_path=pg_catalog as $function$
-declare post private.posts; fingerprint text; granted jsonb; ent uuid; candidate private.entitlements;
+declare post private.posts; fingerprint text; granted jsonb; ent uuid; fallback uuid; candidate private.entitlements;
+  photos integer; videos integer;
 begin
   select * into post from private.posts p where p.id=p_post_id;
   if not found or post.kind='event' or post.edit_of is not null
@@ -290,6 +297,8 @@ begin
   if fingerprint is null then
     raise exception 'complete identity verification before posting' using errcode='42501',detail='posting_verification_required';
   end if;
+  select count(distinct pm.object_id) filter(where pm.purpose<>'video'),count(distinct pm.object_id) filter(where pm.purpose='video')
+    into photos,videos from private.post_media pm where pm.post_id=post.id;
   for candidate in
     select e.* from private.entitlements e
     where internal.entitlement_usable(e.status,e.starts_at,e.ends_at)
@@ -300,22 +309,26 @@ begin
     for update
   loop
     continue when not internal.entitlement_for_post_eligible(candidate.id,post.id,post.owner_id)
+      or photos>candidate.max_photos or videos>candidate.max_videos
       or (select count(*) from private.post_activations a where a.entitlement_id=candidate.id and a.released_at is null)
         >=candidate.slot_capacity
       or (candidate.activations_per_period is not null and (select count(*) from private.post_activations a
         where a.entitlement_id=candidate.id and a.activated_at>statement_timestamp()-make_interval(days=>candidate.activation_period_days))
         >=candidate.activations_per_period);
-    ent:=candidate.id;
-    exit;
+    fallback:=coalesce(fallback,candidate.id);
+    if candidate.ends_at>=statement_timestamp()+interval '7 days' then
+      ent:=candidate.id;
+      exit;
+    end if;
   end loop;
   if ent is null then
     if not exists(select 1 from private.trial_identities t where t.owner_id=post.owner_id and t.identity_hmac<>fingerprint) then
       granted:=internal.grant_intro_trial(post.owner_id,fingerprint,7);
     end if;
-    if not coalesce((granted->>'granted')::boolean,false) then
+    ent:=coalesce((granted->>'entitlement_id')::uuid,fallback);
+    if ent is null then
       raise exception 'no plan or free week covers this post' using errcode='PT402';
     end if;
-    ent:=(granted->>'entitlement_id')::uuid;
   end if;
   update private.post_activations set released_at=statement_timestamp(),release_reason='entitlement_ended'
     where post_id=post.id and released_at is null;

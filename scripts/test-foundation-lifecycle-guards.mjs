@@ -1112,8 +1112,14 @@ try {
   const kagiso = verified("kagiso"),
     thabo = verified("thabo"),
     vuyo = verified("vuyo"),
-    sizwe = verified("sizwe");
-  let kagisoListing, thaboListing, thaboPlan, vuyoListing, sizweSponsorship;
+    sizwe = verified("sizwe"),
+    thandeka = verified("thandeka");
+  let kagisoListing, thaboListing, thaboPlan, vuyoListing, sizweSponsorship, thandekaSponsorship;
+  const sponsorshipOf = (owner) =>
+    scalar(
+      `insert into private.entitlements(owner_id,source,area,sponsorship_id,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+        values('${owner.id}','sponsorship','business',gen_random_uuid(),1,10,1,now(),now()+interval '180 days') returning id;`
+    );
   // A post published under a plan, which then expires (its slot released).
   const publishedThenExpired = (owner) => {
     const plan = scalar(`select vmtest.slot('${owner.id}','${staff.id}',1,20);`);
@@ -1142,7 +1148,7 @@ try {
       // then expire.
       [thaboListing, thaboPlan] = publishedThenExpired(thabo);
       [vuyoListing] = publishedThenExpired(vuyo);
-      assert.equal(reconcile(), 4);
+      assert.equal(reconcile(), 5);
       // Kagiso's post is rejected in the trial, then published under a plan
       // that ends sooner (so it is chosen first).
       kagisoListing = post(kagiso, "listing", "draft");
@@ -1170,13 +1176,14 @@ try {
         )
       );
       assert.equal(row(vuyoListing).status, "archived");
-      // Sizwe is sponsored after verification: the sponsorship's own identity
-      // record is not written, because the trial's holds the identity
-      // (internal.start_sponsorship, on conflict do nothing).
-      sizweSponsorship = scalar(
-        `insert into private.entitlements(owner_id,source,area,sponsorship_id,slot_capacity,max_photos,max_videos,starts_at,ends_at)
-          values('${sizwe.id}','sponsorship','business',gen_random_uuid(),1,10,1,now(),now()+interval '180 days') returning id;`
-      );
+      // Sizwe and Thandeka are sponsored after verification: the
+      // sponsorship's own identity record is not written, because the trial's
+      // holds the identity (internal.start_sponsorship, on conflict do
+      // nothing). Sizwe's trial still runs; Thandeka's has lapsed unused.
+      sizweSponsorship = sponsorshipOf(sizwe);
+      thandekaSponsorship = sponsorshipOf(thandeka);
+      q(`update private.entitlements set starts_at=now()-interval '8 days',ends_at=now()-interval '1 day'
+           where owner_id='${thandeka.id}' and source='intro_trial';`);
     }
   );
   await check("free week preflight: read only, summary only, counts the earlier trials", () => {
@@ -1188,7 +1195,7 @@ try {
     );
     assert.equal(
       rows[0][1],
-      "free week: reviewed live bodies, update not applied; trials to restart: 5 (posts awaiting review among them: 2; sponsored, record moves to the sponsorship: 1); trials kept: 2; members with an unfunded post awaiting review: 0; emails not yet sent: 5"
+      "free week: reviewed live bodies, update not applied; trials to restart: 5 (posts awaiting review among them: 2); sponsored members whose record moves to the sponsorship: 1; trials kept: 3 (running trials of sponsored members among them: 1); members with an unfunded post awaiting review: 0; emails not yet sent: 5"
     );
     const write = database.psql(
       `${TRIAL_PREFLIGHT}\ninsert into vmtest.marker values(gen_random_uuid());`,
@@ -1259,23 +1266,40 @@ try {
     // Paid for a published post without a review, then archived: kept.
     assert.equal(activeTrials(vuyo).length, 1);
     assert.equal(identityRows(vuyo), 1);
-    // The sponsored member's identity record moves to the sponsorship: still
-    // no later trial.
-    assert.equal(trials(sizwe)[0].status, "revoked");
+    // A sponsored member's trial that still runs is kept (the sponsorship
+    // pays only for business posts): a Market listing still uses it.
+    const [sizweTrial] = trials(sizwe);
+    assert.equal(sizweTrial.status, "active");
     assert.equal(
       scalar(`select entitlement_id from private.trial_identities where owner_id='${sizwe.id}';`),
-      sizweSponsorship
+      sizweTrial.id
     );
-    assert.equal(freeWeek(sizwe).status, "used");
     const sizweListing = post(sizwe, "listing", "draft");
+    assert.equal(json(submitPost(sizwe, sizweListing)).status, "pending_moderation");
+    assert.equal(openActivation(sizweListing), sizweTrial.id);
+    assert.equal(
+      scalar(`select count(*) from private.entitlements where id='${sizweSponsorship}';`),
+      "1"
+    );
+    // Once lapsed, the trial is withdrawn but the identity record moves to
+    // the sponsorship: still no later trial.
+    assert.equal(trials(thandeka)[0].status, "revoked");
+    assert.equal(
+      scalar(
+        `select entitlement_id from private.trial_identities where owner_id='${thandeka.id}';`
+      ),
+      thandekaSponsorship
+    );
+    assert.equal(freeWeek(thandeka).status, "used");
+    const thandekaListing = post(thandeka, "listing", "draft");
     assert.match(
-      fails(submitPost(sizwe, sizweListing), "PT402"),
+      fails(submitPost(thandeka, thandekaListing), "PT402"),
       /no active plan covers this post/
     );
-    assert.equal(waits(sizweListing), false);
+    assert.equal(waits(thandekaListing), false);
     assert.match(
       trialPreflight()[0][1],
-      /^free week: already applied; trials to restart: 0 \(posts awaiting review among them: 0; sponsored, record moves to the sponsorship: 0\); trials kept: 2; members with an unfunded post awaiting review: 2;/
+      /^free week: already applied; trials to restart: 0 \(posts awaiting review among them: 0\); sponsored members whose record moves to the sponsorship: 0; trials kept: 3 \(running trials of sponsored members among them: 1\); members with an unfunded post awaiting review: 2;/
     );
     // Removed: the cutover checks below expect only earlier ended posts.
     q(`delete from private.posts where id='${vuyoListing}';`);
@@ -1582,6 +1606,30 @@ try {
       );
       assert.equal(row(banned).status, "pending_moderation");
       assert.deepEqual(trials(mandla), []);
+      // A plan that ends within the week, or one that does not allow the
+      // post's photos, does not pay for it: the week is granted.
+      const kopano = verified("kopano");
+      const soon = post(kopano, "listing", "draft");
+      q(submitPost(kopano, soon));
+      const shortPlan = scalar(`select vmtest.slot('${kopano.id}','${staff.id}',1,2);`);
+      assert.equal(json(decide(soon, "approve")).status, "live");
+      const [kopanoWeek] = trials(kopano);
+      assert.equal(kopanoWeek.seconds, 7 * DAY_S);
+      assert.equal(openActivation(soon), kopanoWeek.id);
+      assert.notEqual(openActivation(soon), shortPlan);
+      const lebo = verified("lebo");
+      const photographed = post(lebo, "listing", "draft");
+      q(`insert into private.post_media(post_id,object_id,purpose,position)
+           values('${photographed}',vmtest.media('${lebo.id}'),'gallery',1);`);
+      q(submitPost(lebo, photographed));
+      const onePhoto = scalar(
+        `insert into private.entitlements(owner_id,source,granted_by,slot_capacity,max_photos,max_videos,starts_at,ends_at)
+          values('${lebo.id}','staff_grant','${staff.id}',1,1,0,now()-interval '1 day',now()+interval '30 days') returning id;`
+      );
+      assert.equal(json(decide(photographed, "approve")).status, "live");
+      const [leboWeek] = trials(lebo);
+      assert.equal(openActivation(photographed), leboWeek.id);
+      assert.notEqual(openActivation(photographed), onePhoto);
       // A plan bought while the post waited pays for it; the week stays unused.
       const tumi = verified("tumi");
       const bought = post(tumi, "listing", "draft");
