@@ -20,7 +20,10 @@ const RAY = "8f1a2b3c4d5e6f70-JNB";
 const EMAIL = "thando.dlamini@example.com";
 const PHONE = "0821234567";
 const ID_NUMBER = "8001015009087";
-const TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl";
+// Token-shaped, assembled at run time so it is clearly synthetic.
+const TOKEN = ["header", "payload", "signature"]
+  .map((part) => Buffer.from(`synthetic-${part}`).toString("base64url"))
+  .join(".");
 const PERSONAL = [EMAIL, PHONE, ID_NUMBER, TOKEN, "Thando", "Dlamini", "secret-cookie"];
 
 let lines: string[];
