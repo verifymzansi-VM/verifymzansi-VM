@@ -1,9 +1,7 @@
 import "server-only";
-import { getDataBackend } from "@/lib/data-backend";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
 
@@ -30,7 +28,8 @@ export async function openFeedRequest(request: NextRequest, action: string, maxP
   return {
     response: null,
     supabase,
-    admin: getDataBackend() === "foundation" ? null : tryCreateAdminClient(),
+    // Foundation serves slides through its own reads; no service client is used.
+    admin: null,
     viewerKey: buildViewerKey(viewerId, user?.id),
   } as const;
 }

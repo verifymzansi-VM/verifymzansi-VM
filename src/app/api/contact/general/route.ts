@@ -1,15 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyTurnstileToken } from "@/lib/utils/turnstile";
 import { createLogger } from "@/lib/utils/logger";
 import { checkRateLimit, getClientIp } from "@/lib/utils/rate-limit";
-import { sanitizeUserMessage } from "@/lib/utils/sanitize-html";
 import { enforceSameOriginMutation } from "@/lib/utils/mutation-origin";
-import { notifyStaffForAdminEvent } from "@/lib/notifications";
 import { sendSupportAcknowledgement, sendSupportRequestNotification } from "@/lib/services/email";
-import { logAuditEvent } from "@/lib/services/audit";
 import { supportReference } from "@/lib/contact-email";
 import {
   emailSchema,
@@ -17,7 +13,6 @@ import {
   trimmedTurnstileTokenSchema,
 } from "@/lib/validations/shared";
 import { z } from "zod";
-import { getDataBackend } from "@/lib/data-backend";
 import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 
 const log = createLogger("ContactGeneral");
@@ -115,7 +110,6 @@ async function storeNativeContact(input: z.infer<typeof contactFormSchema>) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const native = getDataBackend() === "foundation";
     const originBlock = enforceSameOriginMutation(request, log);
     if (originBlock) return originBlock;
 
@@ -128,21 +122,19 @@ export async function POST(request: NextRequest) {
       return bodyResult.response;
     }
 
-    const { name, email, category, message, turnstileToken } = bodyResult.data;
+    const { email, turnstileToken } = bodyResult.data;
 
     // ── CAPTCHA verification ─────────────────────────────────
     if (process.env.TURNSTILE_SECRET_KEY) {
-      const forwardedFor = request.headers.get("x-forwarded-for");
-      const remoteIp = native
-        ? getClientIp(request)
-        : forwardedFor?.split(",")[0].trim() || undefined;
-      const captchaResult = await verifyTurnstileToken({ token: turnstileToken, remoteIp });
-      if (native && captchaResult.temporary)
+      const captchaResult = await verifyTurnstileToken({
+        token: turnstileToken,
+        remoteIp: getClientIp(request),
+      });
+      if (captchaResult.temporary)
         return NextResponse.json({ error: "CAPTCHA service unavailable" }, { status: 503 });
       if (
         !captchaResult.success ||
-        (native &&
-          process.env.NODE_ENV === "production" &&
+        (process.env.NODE_ENV === "production" &&
           captchaResult.hostname !==
             new URL(process.env.NEXT_PUBLIC_APP_URL ?? request.url).hostname)
       ) {
@@ -155,12 +147,8 @@ export async function POST(request: NextRequest) {
 
     // ── Rate limit ──────────────────────────────────────────
     const ip = getClientIp(request);
-    const rl = await checkRateLimit({
-      key: ip,
-      action: "contact:general",
-      ...(native ? { degradedMode: "block" as const } : {}),
-    });
-    if (native && rl.degraded)
+    const rl = await checkRateLimit({ key: ip, action: "contact:general", degradedMode: "block" });
+    if (rl.degraded)
       return NextResponse.json(
         { error: "Submission protection is temporarily unavailable" },
         { status: 503 }
@@ -178,7 +166,7 @@ export async function POST(request: NextRequest) {
       action: "contact:general",
       degradedMode: "block",
     });
-    if (native && emailLimit.degraded)
+    if (emailLimit.degraded)
       return NextResponse.json(
         { error: "Submission protection is temporarily unavailable" },
         { status: 503 }
@@ -189,76 +177,7 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { "Retry-After": String(emailLimit.retryAfter ?? 60) } }
       );
     }
-    if (native) return await storeNativeContact(bodyResult.data);
-
-    // ── Sanitize message: escape HTML entities + strip tags to prevent stored XSS ──
-    const sanitizedMessage = sanitizeUserMessage(`[${category}] ${message}`);
-
-    // ── Store inquiry ────────────────────────────────────────
-    const admin = createAdminClient();
-    const submissionId = crypto.randomUUID();
-    const { error: insertError } = await admin.from("contact_submissions").insert({
-      id: submissionId,
-      name,
-      email,
-      message: sanitizedMessage,
-      status: "new",
-    });
-
-    if (insertError) {
-      log.error("Failed to store contact submission", { error: insertError.message });
-      return NextResponse.json({ error: "Failed to submit message" }, { status: 500 });
-    }
-
-    // The submission is already stored: notification failures must not invite duplicate submissions.
-    await notifyStaffForAdminEvent({
-      capability: "queue:view",
-      title: "New support request submitted",
-      message: `${name} submitted a ${category.replace(/_/g, " ")} request.`,
-      href: "/admin/support",
-    }).catch(() => log.warn("Support request stored but staff notification failed"));
-
-    const recordEmail = async (
-      template: string,
-      send: () => ReturnType<typeof sendSupportAcknowledgement>
-    ) => {
-      const result = await send().catch(() => ({ success: false, error: "Email send failed" }));
-      await logAuditEvent({
-        actorId: "00000000-0000-0000-0000-000000000000",
-        actorRole: "system",
-        action: result.success ? "communication_email_sent" : "communication_email_failed",
-        targetType: "contact_submission",
-        targetId: submissionId,
-        metadata: {
-          template,
-          messageId: "messageId" in result ? result.messageId : undefined,
-          error: result.error,
-        },
-      });
-      if (!result.success)
-        log.warn("Support request stored but email failed", { submissionId, template });
-      return result.success;
-    };
-    const [, acknowledgementAccepted] = await Promise.all([
-      recordEmail("support_staff_alert", () =>
-        sendSupportRequestNotification(category, submissionId)
-      ),
-      recordEmail("support_acknowledgement", () =>
-        sendSupportAcknowledgement(email, submissionId, category)
-      ),
-    ]);
-
-    log.info("Contact form submission received", {
-      name,
-      category,
-      email: email.slice(0, 3) + "***",
-    });
-
-    return NextResponse.json({
-      success: true,
-      reference: supportReference(submissionId),
-      acknowledgement: acknowledgementAccepted ? "accepted" : "failed",
-    });
+    return await storeNativeContact(bodyResult.data);
   } catch (err) {
     log.error("Unexpected error", {
       error: err instanceof Error ? err.message : "unknown",

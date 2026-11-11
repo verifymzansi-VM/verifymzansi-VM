@@ -1,19 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { createLogger } from "@/lib/utils/logger";
-import { mapCommercialError } from "@/lib/commercial/errors";
-import { verifyCapabilityRoleFromDb } from "@/lib/auth/admin-access";
-import { checkStaffApiMfa } from "@/lib/auth/staff-mfa-guard";
-import { getDataBackend } from "@/lib/data-backend";
 import { handleOrganisationRoute } from "@/app/api/foundation/_lib/organisation-route";
 import { input, settle } from "@/lib/foundation/organisations";
 
-const log = createLogger("OrganisationManage");
 const uuid = z.uuid();
 
 const schema = z.discriminatedUnion("action", [
@@ -53,167 +42,54 @@ const schema = z.discriminatedUnion("action", [
  * caller administers the organisation that owns the record.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  if (getDataBackend() === "foundation")
-    return handleOrganisationRoute(
-      request instanceof NextRequest ? request : new NextRequest(request),
-      "organisation:manage",
-      true,
-      async (api, body) => {
-        const org = input(uuid, (await context.params).id);
-        const value = input(schema, body);
-        const item =
-          value.action === "decide"
-            ? value.applicationId
-            : value.action === "end_sponsorship"
-              ? value.sponsorshipId
-              : value.affiliationId;
-        let args: { p_value?: string; p_note?: string } = {};
-        switch (value.action) {
-          case "decide":
-            args = { p_value: value.decision, ...(value.note ? { p_note: value.note } : {}) };
-            break;
-          case "revoke":
-            args = { p_value: value.reason };
-            break;
-          case "set_type":
-            args = { p_value: value.affiliationType };
-            break;
-          case "sponsor":
-            args = {
-              p_value: value.sponsorType === "ORGANISATION" ? "organisation" : "founding",
-              p_note: value.reason,
-            };
-            break;
-          case "end_sponsorship":
-            args = { p_note: value.reason };
-            break;
-        }
-        const data = await settle(
-          api.rpc(
-            "execute_frontend_organisation_action",
-            {
-              p_org: org,
-              p_item: item,
-              p_action: value.action,
-              ...args,
-            },
-            { get: false }
-          ),
-          z.looseObject({ id: z.uuid() })
-        );
-        return { success: true, data };
+  return handleOrganisationRoute(
+    request instanceof NextRequest ? request : new NextRequest(request),
+    "organisation:manage",
+    true,
+    async (api, body) => {
+      const org = input(uuid, (await context.params).id);
+      const value = input(schema, body);
+      const item =
+        value.action === "decide"
+          ? value.applicationId
+          : value.action === "end_sponsorship"
+            ? value.sponsorshipId
+            : value.affiliationId;
+      let args: { p_value?: string; p_note?: string } = {};
+      switch (value.action) {
+        case "decide":
+          args = { p_value: value.decision, ...(value.note ? { p_note: value.note } : {}) };
+          break;
+        case "revoke":
+          args = { p_value: value.reason };
+          break;
+        case "set_type":
+          args = { p_value: value.affiliationType };
+          break;
+        case "sponsor":
+          args = {
+            p_value: value.sponsorType === "ORGANISATION" ? "organisation" : "founding",
+            p_note: value.reason,
+          };
+          break;
+        case "end_sponsorship":
+          args = { p_note: value.reason };
+          break;
       }
-    );
-  const blocked = enforceMutationRequest(request, log);
-  if (blocked) return blocked;
-
-  const { id } = await context.params;
-  if (!uuid.safeParse(id).success) {
-    return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const rl = checkLocalRateLimit(user.id, "organisation:manage", 60);
-  if (rl.limited) {
-    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 });
-  }
-
-  const parsed = await parseAndValidateJsonRequest(request, schema, {
-    invalidJsonMessage: "Invalid JSON payload",
-    validationErrorMessage: "Invalid request",
-    includeValidationDetails: false,
-  });
-  if (!parsed.success) return parsed.response;
-  const body = parsed.data;
-  const db = createAdminClient();
-
-  // Every record must belong to this organisation (the RPCs check the caller).
-  const ownership =
-    body.action === "decide"
-      ? await db
-          .from("organisation_applications")
-          .select("organisation_id")
-          .eq("id", body.applicationId)
-          .maybeSingle()
-      : body.action === "end_sponsorship"
-        ? await db
-            .from("organisation_sponsorships")
-            .select("organisation_id")
-            .eq("id", body.sponsorshipId)
-            .maybeSingle()
-        : await db
-            .from("organisation_affiliations")
-            .select("organisation_id")
-            .eq("id", body.affiliationId)
-            .maybeSingle();
-  if (ownership.error || ownership.data?.organisation_id !== id) {
-    return NextResponse.json({ error: "Record not found" }, { status: 404 });
-  }
-
-  // The RPCs also accept VerifyMzansi commercial staff (is_commercial_admin),
-  // which reads the raw auth role. Anyone who is not an administrator of this
-  // organisation is acting as staff, so hold them to the back-office rules:
-  // a current DB-verified staff capability and the staff MFA policy.
-  const orgAdmin = await db.rpc("is_organisation_admin", { p_org: id, p_user: user.id });
-  if (orgAdmin.error) {
-    log.error("Organisation admin check failed", { code: orgAdmin.error.code });
-    return NextResponse.json({ error: "The change could not be applied." }, { status: 503 });
-  }
-  if (orgAdmin.data !== true) {
-    const staffRole = await verifyCapabilityRoleFromDb(user, "organisations:manage");
-    if (!staffRole) {
-      return NextResponse.json({ error: "Organisation access required" }, { status: 403 });
+      const data = await settle(
+        api.rpc(
+          "execute_frontend_organisation_action",
+          {
+            p_org: org,
+            p_item: item,
+            p_action: value.action,
+            ...args,
+          },
+          { get: false }
+        ),
+        z.looseObject({ id: z.uuid() })
+      );
+      return { success: true, data };
     }
-    const mfaBlock = await checkStaffApiMfa(supabase, user.id);
-    if (mfaBlock) return mfaBlock;
-  }
-
-  const result =
-    body.action === "decide"
-      ? await db.rpc("org_decide_application", {
-          p_user: user.id,
-          p_application: body.applicationId,
-          p_decision: body.decision,
-          p_note: body.note ?? null,
-        })
-      : body.action === "revoke"
-        ? await db.rpc("org_revoke_affiliation", {
-            p_user: user.id,
-            p_affiliation: body.affiliationId,
-            p_reason: body.reason,
-          })
-        : body.action === "set_type"
-          ? await db.rpc("org_set_affiliation_type", {
-              p_user: user.id,
-              p_affiliation: body.affiliationId,
-              p_type: body.affiliationType,
-            })
-          : body.action === "sponsor"
-            ? await db.rpc("sponsor_business", {
-                p_user: user.id,
-                p_affiliation: body.affiliationId,
-                p_sponsor_type: body.sponsorType,
-                p_reason: body.reason,
-              })
-            : await db.rpc("end_sponsorship", {
-                p_user: user.id,
-                p_sponsorship: body.sponsorshipId,
-                p_reason: body.reason,
-              });
-
-  if (result.error) {
-    const mapped = mapCommercialError(result.error.message);
-    if (!mapped)
-      log.warn("Organisation action failed", { action: body.action, code: result.error.code });
-    return NextResponse.json(
-      { error: mapped?.message ?? "The change could not be applied." },
-      { status: mapped?.status ?? 409 }
-    );
-  }
-  return NextResponse.json({ success: true, data: result.data ?? null });
+  );
 }

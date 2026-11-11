@@ -1,19 +1,6 @@
-import { createHash } from "node:crypto";
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { mapCommercialError } from "@/lib/commercial/errors";
-import { parseAndValidateJsonRequest } from "@/lib/utils/api";
-import { enforceMutationRequest } from "@/lib/utils/mutation-guard";
-import { checkLocalRateLimit } from "@/lib/utils/rate-limit";
-import { createLogger } from "@/lib/utils/logger";
-import { getDataBackend } from "@/lib/data-backend";
+import { NextRequest } from "next/server";
 import { handleOrganisationRoute } from "@/app/api/foundation/_lib/organisation-route";
 import { acceptFoundationOrganisationInvite } from "@/lib/foundation/organisations";
-
-const log = createLogger("OrganisationInviteAccept");
-const schema = z.object({ token: z.string().min(20).max(200) });
 
 /**
  * POST /api/organisations/invites/accept
@@ -22,51 +9,16 @@ const schema = z.object({ token: z.string().min(20).max(200) });
  * matches the invitation and that their identity has been reviewed.
  */
 export async function POST(request: Request) {
-  if (getDataBackend() === "foundation") {
-    return handleOrganisationRoute(
-      request instanceof NextRequest ? request : new NextRequest(request),
-      "organisation:invite",
-      true,
-      async (api, body) => {
-        const data = await acceptFoundationOrganisationInvite(api, body);
-        return {
-          success: true,
-          data: { organisationSlug: data.organisation_slug, role: data.role },
-        };
-      }
-    );
-  }
-  const blocked = enforceMutationRequest(request, log);
-  if (blocked) return blocked;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in to accept" }, { status: 401 });
-
-  if (checkLocalRateLimit(user.id, "organisation:invite-accept", 10).limited) {
-    return NextResponse.json({ error: "Too many attempts. Please wait." }, { status: 429 });
-  }
-  const parsed = await parseAndValidateJsonRequest(request, schema, {
-    invalidJsonMessage: "Invalid request",
-    validationErrorMessage: "Invalid invitation link",
-    includeValidationDetails: false,
-  });
-  if (!parsed.success) return parsed.response;
-
-  const tokenHash = createHash("sha256").update(parsed.data.token).digest("hex");
-  const { data, error } = await createAdminClient().rpc("accept_organisation_admin_invite", {
-    p_user: user.id,
-    p_token_hash: tokenHash,
-  });
-  if (error) {
-    const mapped = mapCommercialError(error.message);
-    if (!mapped) log.warn("Invite acceptance failed", { code: error.code });
-    return NextResponse.json(
-      { error: mapped?.message ?? "The invitation could not be accepted." },
-      { status: mapped?.status ?? 409 }
-    );
-  }
-  return NextResponse.json({ success: true, data });
+  return handleOrganisationRoute(
+    request instanceof NextRequest ? request : new NextRequest(request),
+    "organisation:invite",
+    true,
+    async (api, body) => {
+      const data = await acceptFoundationOrganisationInvite(api, body);
+      return {
+        success: true,
+        data: { organisationSlug: data.organisation_slug, role: data.role },
+      };
+    }
+  );
 }

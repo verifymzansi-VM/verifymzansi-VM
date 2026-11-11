@@ -716,30 +716,6 @@ export async function sendDsarRejectedEmail(
   return sendEmail({ to: email, subject, html, text, idempotencyKey });
 }
 
-export async function sendAlreadyRegisteredEmail(email: string): Promise<SendEmailResult> {
-  const appUrl = sanitizeAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  const subject = "VerifyMzansi - Sign-in attempt with your email";
-  const html = brandedEmail({
-    tone: "info",
-    eyebrow: "Account notice",
-    title: "Account already exists",
-    intro: "This security notice was sent because this email address was used on VerifyMzansi.",
-    bodyHtml: `
-      ${paragraph("Hi,")}
-      ${paragraph("Someone tried to create a new VerifyMzansi account with this email address, but you already have an account.")}
-      ${paragraph("If this was you, sign in or reset your password. If it was not you, you can safely ignore this email.")}
-    `,
-    cta: { label: "Sign in", href: `${appUrl}/login`, tone: "success" },
-    secondaryCta: { label: "Reset password", href: `${appUrl}/forgot-password`, tone: "info" },
-    reason:
-      "A registration attempt used an email address that already belongs to a VerifyMzansi account.",
-  });
-
-  const text = `Hi,\n\nSomeone tried to create a new VerifyMzansi account with this email address, but you already have an account.\n\nSign in: ${appUrl}/login\nReset password: ${appUrl}/forgot-password\n\nIf you did not attempt to register, you can safely ignore this email.`;
-
-  return sendEmail({ to: email, subject, html, text });
-}
-
 export async function sendContactFormNotification(
   email: string,
   ownerName: string,
@@ -996,19 +972,6 @@ export async function sendPasswordChangeNotification(email: string): Promise<Sen
     title: "Password changed",
     changed: "Your VerifyMzansi account password was just changed.",
     ifNotYou: "please reset your password immediately:",
-  });
-}
-
-/** The verified phone is the number buyers reach, so a change is announced by email. */
-export async function sendPhoneChangeNotification(
-  email: string,
-  newPhoneLast3: string
-): Promise<SendEmailResult> {
-  return sendAccountChangeNotice(email, {
-    thing: "phone number",
-    title: "Phone number changed",
-    changed: `The verified phone number on your VerifyMzansi account was changed to a number ending in ${newPhoneLast3}. Buyers who tap to see your number now see this one.`,
-    ifNotYou: "reset your password immediately and contact support:",
   });
 }
 

@@ -65,22 +65,6 @@ export const otpVerifySchema = z.object({
     .regex(/^\d{6}$/, "OTP must be numeric"),
 });
 
-/** Zod schema for changing password (current + new + confirmation). */
-export const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "Current password is required").max(128),
-    newPassword: passwordSchema,
-    confirmNewPassword: z.string().max(128),
-  })
-  .refine((data) => data.newPassword === data.confirmNewPassword, {
-    message: "Passwords do not match",
-    path: ["confirmNewPassword"],
-  })
-  .refine((data) => data.newPassword !== data.currentPassword, {
-    message: "New password must be different from current password",
-    path: ["newPassword"],
-  });
-
 /** Zod schema for initiating Google OAuth via the backend route. */
 export const googleOAuthInitSchema = z.object({
   returnUrl: z.string().max(2048, "Return URL is too long").nullable().optional(),
@@ -96,7 +80,5 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 /** Inferred input type for {@link otpVerifySchema}. */
 type _OtpVerifyInput = z.infer<typeof otpVerifySchema>;
-/** Inferred input type for {@link changePasswordSchema}. */
-type _ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 /** Inferred input type for {@link googleOAuthInitSchema}. */
 type _GoogleOAuthInitInput = z.infer<typeof googleOAuthInitSchema>;

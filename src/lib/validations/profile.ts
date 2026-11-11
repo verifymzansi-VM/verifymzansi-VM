@@ -42,7 +42,7 @@ export const profileUpdateSchema = z.object({
 });
 
 /** Avatars are only ever served from this project's Supabase avatars bucket. */
-export function isAvatarStorageUrl(value: string, userId?: string): boolean {
+function isAvatarStorageUrl(value: string, userId?: string): boolean {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!supabaseUrl) return false;
   try {
