@@ -292,6 +292,33 @@ describe("production-matching suites on main and the failure alert", () => {
     parse(readFileSync(`.github/workflows/${file}`, "utf8")) as Workflow;
   const files = readdirSync(".github/workflows").filter((file) => file.endsWith(".yml"));
 
+  // Evaluates the few expressions the concurrency groups use, for one event.
+  const evaluate = (template: string, event: "push" | "pull_request") => {
+    const values: Record<string, string | undefined> = {
+      "github.sha": "a".repeat(40),
+      "github.event_name": event,
+      "github.event.pull_request.number": event === "pull_request" ? "7" : undefined,
+      "github.ref": event === "pull_request" ? "refs/pull/7/merge" : "refs/heads/main",
+    };
+    const term = (text: string): string | undefined => {
+      const call = /^format\('([^']*)',\s*(.+)\)$/.exec(text.trim());
+      if (call) {
+        const args = call[2].split(",").map((arg) => term(arg) ?? "");
+        return call[1].replace(/\{(\d+)\}/g, (_, i) => args[Number(i)]);
+      }
+      if (!(text.trim() in values)) throw new Error(`Unknown expression ${text}`);
+      return values[text.trim()];
+    };
+    return template.replace(
+      /\$\{\{\s*(.+?)\s*\}\}/g,
+      (_, expression: string) =>
+        expression
+          .split("||")
+          .map(term)
+          .reduce((left, right) => left || right, undefined as string | undefined) ?? ""
+    );
+  };
+
   it("makes foundation-native and e2e-foundation part of the main release gate, never cancelling a main run", () => {
     const ci = load("ci.yml");
     for (const [file, caller] of [
@@ -303,14 +330,12 @@ describe("production-matching suites on main and the failure alert", () => {
       expect(workflow.on.push, file).toBeUndefined();
       expect(workflow.on).toHaveProperty("workflow_call");
       expect(workflow.on.pull_request, file).toEqual({ branches: ["main"] });
-      expect(workflow.concurrency?.group, file).toContain("github.event.pull_request.number ||");
-      expect(workflow.concurrency?.group, file).toContain("github.sha");
-      expect(workflow.concurrency?.group, file).not.toContain("github.ref");
       expect(workflow.concurrency?.["cancel-in-progress"], file).toBe(
         "${{ github.event_name == 'pull_request' }}"
       );
-      // CI calls each one on pushes to main only, in a per-commit group that
-      // never cancels, so a later merge cannot cancel an earlier gate.
+      // CI calls each one for every event except pull requests (manual runs
+      // included, so a branch can prove the gate), in a per-commit group that
+      // never cancels.
       const job = ci.jobs[caller] as unknown as {
         uses: string;
         if: string;
@@ -318,13 +343,44 @@ describe("production-matching suites on main and the failure alert", () => {
         permissions: Record<string, string>;
       };
       expect(job.uses, caller).toBe(`./.github/workflows/${file}`);
-      expect(job.if, caller).toBe("github.event_name == 'push'");
-      expect(job.concurrency.group, caller).toContain("${{ github.sha }}");
+      expect(job.if, caller).toBe("github.event_name != 'pull_request'");
       expect(job.concurrency["cancel-in-progress"], caller).toBe(false);
       expect(job.permissions, caller).toEqual({ contents: "read" });
-      // The called workflow's group can never equal CI's own group.
-      expect(workflow.concurrency?.group).not.toBe(ci.concurrency?.group);
+      // Evaluated, the three groups of a main run differ (a called group equal
+      // to its caller's deadlocks and is cancelled), and a pull request's group
+      // differs from a main run's.
+      const groups = [
+        ci.concurrency?.group,
+        job.concurrency.group,
+        workflow.concurrency?.group,
+      ].map((group) => evaluate(String(group), "push"));
+      expect(new Set(groups).size, caller).toBe(3);
+      for (const group of groups) expect(group, caller).toContain("a".repeat(40));
+      expect(evaluate(String(workflow.concurrency?.group), "pull_request")).not.toBe(groups[2]);
+      // Nothing inside the called workflow can turn a failure into a pass or
+      // skip the suite: no job condition except the aggregate's, no
+      // continue-on-error anywhere.
+      for (const [id, called] of Object.entries(workflow.jobs)) {
+        expect(JSON.stringify(called), `${file} ${id}`).not.toContain("continue-on-error");
+        if (id === "e2e-foundation") expect(called.if).toBe("${{ !cancelled() }}");
+        else expect(called.if, `${file} ${id}`).toBeUndefined();
+      }
     }
+    // The native suite runs in full for every event except a pull request.
+    const native = load("foundation-native.yml").jobs["foundation-native"].steps;
+    const scope = native.find(
+      (step) => step.name === "Decide whether the native suite inputs changed"
+    );
+    expect(scope?.env?.EVENT_NAME).toBe("${{ github.event_name }}");
+    expect(scope?.run?.trimStart()).toMatch(
+      /^if \[ "\$EVENT_NAME" != "pull_request" \]; then\n\s+echo "run=true" >> "\$GITHUB_OUTPUT"\n[^\n]*\n\s+exit 0\n\s*fi/
+    );
+    // The aggregate check fails unless every browser project passed.
+    const aggregate = load("e2e-foundation.yml").jobs["e2e-foundation"];
+    expect(aggregate.needs).toBe("browser");
+    expect(aggregate.steps[0].env?.RESULT).toBe("${{ needs.browser.result }}");
+    expect(aggregate.steps[0].run).toContain('if [ "$RESULT" != "success" ]; then');
+    expect(aggregate.steps[0].run).toMatch(/exit 1\n\s*fi/);
     expect(ci.on.push).toEqual({ branches: ["main"] });
     // Deploy still waits for the whole main CI run, which now holds both suites.
     const deploy = load("deploy.yml").on.workflow_run as { workflows: string[] };

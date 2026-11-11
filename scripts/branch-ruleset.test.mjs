@@ -78,6 +78,11 @@ test("the committed ruleset only requires checks that run on pull requests to ma
   ]) {
     assert.ok(requiredContexts(ruleset).includes(name), `${name} must be required`);
   }
+  // Matrix jobs are named as GitHub reports them; the release-gate callers in
+  // CI never run on pull requests, so they can never be required.
+  for (const name of ["e2e-foundation (chromium)", "e2e-foundation (mobile-chrome)"])
+    assert.ok(available.has(name), name);
+  for (const name of available) assert.doesNotMatch(name, /\$\{\{|Release gate/, name);
 });
 
 test("validation rejects renamed checks, bypass actors and missing rules", () => {

@@ -125,7 +125,8 @@ export function pullRequestCheckNames(text) {
   for (const job of jobs) {
     if (
       job.condition &&
-      /github\.event_name\s*==\s*'(push|schedule|workflow_dispatch)'/.test(job.condition)
+      (/github\.event_name\s*==\s*'(push|schedule|workflow_dispatch)'/.test(job.condition) ||
+        /github\.event_name\s*!=\s*'pull_request'/.test(job.condition))
     ) {
       continue;
     }
@@ -133,7 +134,14 @@ export function pullRequestCheckNames(text) {
     if (job.matrix.length === 0) {
       names.push(base);
     } else if (job.matrix.length === 1) {
-      for (const value of job.matrix[0]) names.push(`${base} (${value})`);
+      // GitHub names a matrix job by its `name:` with `${{ matrix.<dim> }}`
+      // filled in, or by the job name followed by the value in brackets.
+      for (const value of job.matrix[0])
+        names.push(
+          /\$\{\{\s*matrix\.[\w-]+\s*\}\}/.test(base)
+            ? base.replace(/\$\{\{\s*matrix\.[\w-]+\s*\}\}/g, value)
+            : `${base} (${value})`
+        );
     } else {
       throw new Error(
         `Job ${job.id} has a multi-dimension matrix; extend branch-ruleset.mjs first.`

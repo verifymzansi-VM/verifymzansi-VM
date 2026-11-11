@@ -740,13 +740,15 @@ jobs:
   # production (foundation) schema are part of this CI run, so the deploy,
   # which needs the whole main CI run to succeed, waits for them. On pull
   # requests they run as their own workflows and report their own checks
-  # (`foundation-native`, `e2e-foundation`), so they are not called here.
+  # (`foundation-native`, `e2e-foundation`), so they are not called here. A
+  # manual CI run calls them too, which lets a branch prove the gate before it
+  # merges; it cannot deploy (deploy accepts only main push runs).
   # Each caller has a concurrency group per commit and never cancels: a later
   # merge cannot cancel an earlier commit's gate (a cancelled call would fail
   # this run).
   foundation-native-gate:
     name: Release gate (foundation native)
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     concurrency:
       group: release-gate-foundation-native-${{ github.sha }}
       cancel-in-progress: false
@@ -756,7 +758,7 @@ jobs:
 
   e2e-foundation-gate:
     name: Release gate (e2e foundation)
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     concurrency:
       group: release-gate-e2e-foundation-${{ github.sha }}
       cancel-in-progress: false
