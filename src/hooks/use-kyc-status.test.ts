@@ -5,8 +5,8 @@ const mockGetUser = vi.fn();
 const mockMaybeSingle = vi.fn();
 const mockStepsSelect = vi.fn();
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: { getUser: mockGetUser },
     from: (table: string) => {
       if (table === "account_profiles") {

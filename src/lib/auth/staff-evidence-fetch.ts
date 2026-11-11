@@ -1,5 +1,5 @@
 import { staffVerifyHref } from "./staff-mfa-links";
-import { createClient } from "../supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 
 /** Preserve API error bodies while giving reviewers a safe re-verification path. */
 export async function fetchStaffEvidence(

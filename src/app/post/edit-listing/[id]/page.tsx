@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { PackageRulesNote } from "@/components/posting/package-rules-note";
 import { editLimitReachedMessage } from "@/lib/posting/package-rules";
 import { useToast } from "@/hooks/use-toast";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { loadOwnListing } from "./load-own-listing";
 import { CategoryPicker } from "@/components/listings/category-picker";
 import { MediaUpload } from "@/components/ui/media-upload";

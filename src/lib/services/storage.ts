@@ -10,18 +10,14 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { R2Bucket } from "@cloudflare/workers-types";
 import { encryptFile, decryptFile } from "@/lib/utils/encryption";
 import { createLogger } from "@/lib/utils/logger";
-import {
-  isPlaywrightFoundationCopy,
-  isPlaywrightSupabaseStubMode,
-  isPlaywrightTestMode,
-} from "@/lib/supabase/playwright-mode";
+import { isPlaywrightFoundationCopy } from "@/lib/supabase/playwright-mode";
 
 const log = createLogger("Storage");
 
-/** Local files instead of R2: the stub browser suite and the local foundation
- * test copy only. Both require test mode, which production can never enable. */
+/** Local files instead of R2: the local foundation test copy only. It requires
+ * test mode, which production can never enable. */
 function shouldUsePlaywrightStorage(): boolean {
-  return isPlaywrightTestMode() && (isPlaywrightSupabaseStubMode() || isPlaywrightFoundationCopy());
+  return isPlaywrightFoundationCopy();
 }
 
 async function playwrightStoragePath(bucket: string, key: string): Promise<string | null> {

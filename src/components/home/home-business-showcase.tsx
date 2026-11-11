@@ -8,26 +8,15 @@ import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
 import { Building2 } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
-import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 function provinceCode(name: string): string {
   return SA_PROVINCES.find((p) => p.name.toLowerCase() === name?.toLowerCase())?.code ?? name;
 }
 
 export async function HomeBusinessShowcase() {
-  const cookieStore = await getOptionalCookieStore();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
-  );
   const { data: businesses } = await restoredHomeCollection("businesses");
 
   const items = (businesses ?? [])
-    .filter((business) => !shouldHidePlaywrightFixtureRowWhenEnabled(business, hideFixtures))
     .filter(
       (business) => !isPlaceholderMarketplaceContent(business.business_name, business.description)
     )

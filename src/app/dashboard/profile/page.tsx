@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { clearClientAccountState, signOutBrowserSession } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { getProvinceNames, getCitiesForProvince } from "@/lib/constants/sa-provinces";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { profileUpdateSchema } from "@/lib/validations/profile";

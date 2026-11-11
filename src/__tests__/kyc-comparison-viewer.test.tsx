@@ -75,8 +75,8 @@ vi.mock("lucide-react", () => ({
 
 const mockFetch = vi.fn();
 const { getNativeUser } = vi.hoisted(() => ({ getNativeUser: vi.fn() }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser: getNativeUser } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser: getNativeUser } }),
 }));
 vi.stubGlobal("fetch", mockFetch);
 

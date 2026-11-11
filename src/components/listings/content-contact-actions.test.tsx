@@ -1,8 +1,10 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
+    auth: { getUser: async () => ({ data: { user: null } }) },
+  }),
 }));
 
 vi.mock("@/components/ui/turnstile-widget", () => ({

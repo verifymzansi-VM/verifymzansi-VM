@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useId } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { createLogger } from "@/lib/utils/logger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { subscribeFoundationOwnerInbox } from "@/lib/foundation/owner-inbox-realtime";

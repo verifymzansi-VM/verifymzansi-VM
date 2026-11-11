@@ -10,7 +10,6 @@ vi.mock("next/dist/server/app-render/work-async-storage.external", () => ({
   workAsyncStorage: { getStore: mocks.getStore },
 }));
 vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createSupabaseClient }));
-vi.mock("@/lib/supabase/playwright-mode", () => ({ isPlaywrightSupabaseStubMode: () => false }));
 
 type SignalModule = typeof SignalModuleType;
 

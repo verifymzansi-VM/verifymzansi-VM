@@ -8,12 +8,6 @@ import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { PackageOpen } from "lucide-react";
-import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 
 const log = createLogger("HomeMzansiMarketShowcase");
 
@@ -22,10 +16,6 @@ function provinceCode(name: string): string {
 }
 
 export async function HomeMzansiMarketShowcase() {
-  const cookieStore = await getOptionalCookieStore();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
-  );
   const { data: listings, error } = await restoredHomeCollection("listings");
 
   if (error) {
@@ -34,7 +24,6 @@ export async function HomeMzansiMarketShowcase() {
   }
 
   const items = (listings ?? [])
-    .filter((listing) => !shouldHidePlaywrightFixtureRowWhenEnabled(listing, hideFixtures))
     .filter((listing) => !isPlaceholderMarketplaceContent(listing.title, listing.description))
     .slice(0, 8);
   if (items.length === 0) {

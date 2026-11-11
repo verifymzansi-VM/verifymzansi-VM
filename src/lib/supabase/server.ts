@@ -2,8 +2,6 @@ import "server-only";
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createPlaywrightStubSupabaseClient } from "@/lib/supabase/playwright-stub";
-import { isPlaywrightSupabaseStubMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
 import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
@@ -14,9 +12,6 @@ const logger = createLogger("Supabase");
 /** Anonymous public reads: never inherit auth cookies into a shared cache. */
 export function createPublicClient(): SupabaseClient {
   noteLegacyClientCreated("public");
-  if (isPlaywrightSupabaseStubMode()) {
-    return createPlaywrightStubSupabaseClient() as unknown as SupabaseClient;
-  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("Missing public Supabase credentials");
@@ -33,26 +28,6 @@ export function createPublicClient(): SupabaseClient {
 export async function createClient(): Promise<SupabaseClient> {
   noteLegacyClientCreated("server");
   const cookieStore = await getOptionalCookieStore();
-
-  if (isPlaywrightSupabaseStubMode()) {
-    return createPlaywrightStubSupabaseClient({
-      cookies: {
-        get(name: string) {
-          return readCookieValue(cookieStore, name);
-        },
-        set(name: string, value: string, options?: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch {}
-        },
-        remove(name: string, options?: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: "", ...options });
-          } catch {}
-        },
-      },
-    }) as unknown as SupabaseClient;
-  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

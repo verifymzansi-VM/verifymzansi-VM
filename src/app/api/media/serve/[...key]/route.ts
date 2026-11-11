@@ -347,15 +347,11 @@ async function serveMediaForKey(request: NextRequest, key: string): Promise<Next
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
   const isVideo = VIDEO_EXTENSIONS.has(ext);
 
-  // ── Playwright e2e stub: serve uploads written to public/e2e-media ──
-  // uploadToR2 writes to the local filesystem in stub mode, but this route
-  // otherwise falls through to the S3 API with fake credentials — producing
-  // TLS handshake errors and test timeouts. Serve the local file directly.
-  // The local foundation test copy (M0.7) stores its media the same way.
-  if (
-    (process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub") ||
-    isPlaywrightFoundationCopy()
-  ) {
+  // ── Local foundation test copy (M0.7): serve uploads written to
+  // public/e2e-media. uploadToR2 writes to the local filesystem there, but this
+  // route otherwise falls through to the S3 API with fake credentials. Serve
+  // the local file directly.
+  if (isPlaywrightFoundationCopy()) {
     try {
       const fs = await import("node:fs/promises");
       const path = await import("node:path");
@@ -583,14 +579,9 @@ async function getMediaResponse(
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  // Rate-limit: generous threshold (public CDN-cached content). The Playwright
-  // e2e suite issues hundreds of media requests (image retries, video range
-  // probes, retries of failed tests) from a single IP, so skip the local
-  // in-memory limiter in stub mode to avoid starving the server.
-  const isE2eStub =
-    process.env.PLAYWRIGHT_TEST_MODE === "1" && process.env.PLAYWRIGHT_SUPABASE_MODE === "stub";
+  // Rate-limit: generous threshold (public CDN-cached content).
   const ip = getClientIp(request);
-  const rl = isE2eStub ? { limited: false } : checkLocalRateLimit(ip, "media:serve", 300);
+  const rl = checkLocalRateLimit(ip, "media:serve", 300);
   if (rl.limited) {
     return NextResponse.json(
       { error: "Too many requests" },

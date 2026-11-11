@@ -13,11 +13,6 @@ import { MarketplaceUrlFilterSync } from "./url-filter-sync";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
@@ -54,10 +49,6 @@ export default async function MzansiMarketPage() {
     },
     about: ["classified ads", "local marketplace", "ID-reviewed members", "South Africa"],
   };
-  const cookieStore = await getOptionalCookieStore();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
-  );
 
   return (
     <DisableMobileAutoplay>
@@ -74,7 +65,6 @@ export default async function MzansiMarketPage() {
         <StreamedShowroom
           feed="market"
           surface="showroom:market"
-          hideFixtures={hideFixtures}
           emptyTitle="Mzansi Market"
           emptyDescription={categorySeo.description}
           emptyMediaUrl="/images/fallbacks/hero-listing.svg"

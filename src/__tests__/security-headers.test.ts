@@ -1,14 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 
-vi.mock("@/lib/supabase/playwright-session", () => ({
-  PLAYWRIGHT_SESSION_COOKIE: "vmz_pw_session",
-}));
-
-vi.mock("@/lib/supabase/playwright-mode", () => ({
-  isPlaywrightSupabaseStubMode: () => false,
-}));
-
 vi.mock("@/lib/utils/csrf", () => ({
   ensureCsrfCookie: (_req: NextRequest, _res: NextResponse) => "test-csrf-token",
   CSRF_HEADER_NAME: "x-csrf-token",

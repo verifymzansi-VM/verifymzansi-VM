@@ -5,12 +5,7 @@ import { tourismEventsShowroomBackground } from "@/components/showrooms/showroom
 import { StreamedShowroom } from "@/components/showrooms/streamed-showroom";
 import { DisableMobileAutoplay } from "@/contexts/autoplay-policy-context";
 
-import {
-  PLAYWRIGHT_HIDE_FIXTURES_COOKIE,
-  shouldHidePlaywrightFixtures,
-} from "@/lib/supabase/playwright-visual-fixtures";
 import { PromotionsExplorer } from "./client";
-import { getOptionalCookieStore, readCookieValue } from "@/lib/utils/request-context";
 import { getRequiredVerifyMzansiCategorySeo } from "@/lib/seo/public-categories";
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
@@ -46,10 +41,6 @@ export default async function PromotionsPage() {
     },
     about: ["tourism", "accommodation", "experiences", "events", "South Africa"],
   };
-  const cookieStore = await getOptionalCookieStore();
-  const hideFixtures = shouldHidePlaywrightFixtures(
-    readCookieValue(cookieStore, PLAYWRIGHT_HIDE_FIXTURES_COOKIE)
-  );
 
   return (
     <DisableMobileAutoplay>
@@ -62,7 +53,6 @@ export default async function PromotionsPage() {
         <StreamedShowroom
           feed="tourism"
           surface="showroom:tourism"
-          hideFixtures={hideFixtures}
           emptyTitle="Tourism & Events"
           emptyDescription={categorySeo.description}
           emptyItem={{

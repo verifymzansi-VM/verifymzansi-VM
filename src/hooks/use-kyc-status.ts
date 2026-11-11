@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ACCOUNT_PROFILE_WRITE_TABLE, readAccountVerificationStatus } from "@/lib/account/compat";
-import { createClient } from "@/lib/supabase/client";
+import { getRestoredFoundationBrowserClient as createClient } from "@/lib/foundation/restored-browser-client";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("useKycStatus");

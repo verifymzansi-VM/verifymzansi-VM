@@ -46,7 +46,8 @@ export function ContentEnquiryAction({
     if (!messageOpen) return;
     let cancelled = false;
     void (async () => {
-      const { createClient } = await import("@/lib/supabase/client");
+      const { getRestoredFoundationBrowserClient: createClient } =
+        await import("@/lib/foundation/restored-browser-client");
       const client = createClient();
       const {
         data: { user },

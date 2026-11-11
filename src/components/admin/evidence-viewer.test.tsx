@@ -14,7 +14,9 @@ import {
 import { EvidenceViewer } from "./evidence-viewer";
 
 const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser } }) }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser } }),
+}));
 
 const EVIDENCE_PATH = "/api/admin/verification/evidence";
 const csrfToken = "c".repeat(64);

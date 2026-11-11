@@ -31,8 +31,8 @@ vi.mock("@/lib/utils/csrf", () => ({
   withCsrfHeaders: (h: Record<string, string>) => h,
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({
     auth: {
       getUser: mockGetUser,
       signOut: mockSignOut,

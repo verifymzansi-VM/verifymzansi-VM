@@ -5,7 +5,9 @@ import { subscribeFoundationOwnerInbox } from "@/lib/foundation/owner-inbox-real
 vi.mock("@/lib/foundation/owner-inbox-realtime", () => ({
   subscribeFoundationOwnerInbox: vi.fn(),
 }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => client }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => client,
+}));
 const owner = "11111111-1111-4111-8111-111111111111";
 const stop = vi.fn();
 const client = { auth: { getSession: vi.fn() }, channel: vi.fn(), removeChannel: vi.fn() };

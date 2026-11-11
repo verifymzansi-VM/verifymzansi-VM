@@ -128,7 +128,6 @@ describe("proxy — missing Supabase env", () => {
 describe("proxy security headers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.PLAYWRIGHT_SUPABASE_MODE;
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     vi.stubEnv("NODE_ENV", "development");
@@ -235,7 +234,7 @@ describe("proxy security headers", () => {
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
-  it("clears stale Playwright session cookies outside stub mode", async () => {
+  it("clears stale cookies from the retired stub browser suite", async () => {
     const res = await middleware(
       createMockRequest("/", { cookieHeader: "vmz_pw_session=persona%3Aold" })
     );

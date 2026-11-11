@@ -13,7 +13,6 @@ export interface StreamedShowroomProps {
   /** View-reporting surface passed to the carousel, e.g. "showroom:market". */
   surface: string;
   background: ShowroomDecorativeBackground;
-  hideFixtures: boolean;
   emptyTitle: string;
   emptyDescription: string;
   emptyMediaUrl?: string;

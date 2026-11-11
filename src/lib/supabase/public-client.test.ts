@@ -6,7 +6,6 @@ vi.mock("@/lib/utils/request-context", () => ({
   getOptionalCookieStore: mocks.cookies,
   readCookieValue: vi.fn(),
 }));
-vi.mock("@/lib/supabase/playwright-mode", () => ({ isPlaywrightSupabaseStubMode: () => false }));
 import { createPublicClient } from "./server";
 
 afterEach(() => {

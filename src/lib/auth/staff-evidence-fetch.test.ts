@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchStaffEvidence } from "./staff-evidence-fetch";
 const { getUser } = vi.hoisted(() => ({ getUser: vi.fn() }));
-vi.mock("../supabase/client", () => ({ createClient: () => ({ auth: { getUser } }) }));
+vi.mock("@/lib/foundation/restored-browser-client", () => ({
+  getRestoredFoundationBrowserClient: () => ({ auth: { getUser } }),
+}));
 describe("staff evidence re-verification", () => {
   afterEach(() => vi.unstubAllGlobals());
   it.each(["mfa_required", "step_up_required"])(

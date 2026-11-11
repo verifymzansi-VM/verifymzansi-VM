@@ -598,7 +598,8 @@ commands in Git Bash, or use the PowerShell equivalents noted).
 2. **Check it is a foundation build.**
    `git show <sha>:wrangler.toml | grep NEXT_PUBLIC_DATA_BACKEND` (PowerShell:
    `git show <sha>:wrangler.toml | Select-String NEXT_PUBLIC_DATA_BACKEND`) must
-   print `foundation`;
+   print `foundation` or nothing (builds after the retired backend was removed
+   no longer set it; they cannot run the retired backend at all);
    `pnpm exec wrangler versions view <version-id> --env production` shows the
    version's own variables. Never roll back to a build made for the retired
    source backend.
