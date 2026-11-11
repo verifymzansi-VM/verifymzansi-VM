@@ -45,7 +45,7 @@ such a check would block every pull request.
     that rebuilt schema in a throwaway local Postgres 17 and compares the result
     with `database/foundation/lint-baseline.json`.
   - `lint-type-security`: lint, typecheck, OpenAPI/import checks, secrets,
-    dependencies, licences and database invariants.
+    dependencies and licences.
   - `knip`: dead code and dependencies.
   - `Duplication budget` (job `jscpd-advisory`; the historical ID does not make
     it advisory).
@@ -53,15 +53,13 @@ such a check would block every pull request.
     `Dependency vulnerabilities (OSV-Scanner)`, and CodeQL's
     `Analyze (javascript-typescript)`.
   - `unit-api-contract`: every unit test once (the coverage run plus the few
-    DOM-heavy suites it leaves out), PGlite lanes and contracts.
-  - `payment-kyc-regressions`.
+    DOM-heavy suites it leaves out) and contracts.
   - `audit-tooling-platforms (ubuntu-latest)` and
     `audit-tooling-platforms (windows-latest)`: the tooling tests
     (`pnpm test:tooling`) on Linux and Windows.
   - `build-route-verify`: builds the Worker, starts it in workerd, checks its
     size and routes, and keeps the runtime proof (artifact
     `foundation-worker-runtime`). `bundle-analysis`.
-  - `db-rls`.
   - `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`,
     and `e2e-full-matrix` (chromium, firefox, mobile-chrome).
   - `Visual regression (chosen frontend)`: compares the main public screens with

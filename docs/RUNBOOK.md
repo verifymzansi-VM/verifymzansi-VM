@@ -276,13 +276,13 @@ To register or update the VerifyMzansi webhook endpoint with Ozow:
 
 Before deploying the callback handler, apply
 `20260930170000_atomic_kyc_provider_webhook.sql` through the normal backed-up
-migration workflow (`pnpm supabase:db:push:safe`). Run `pnpm test:kyc:db`
-locally first. The service-only `apply_kyc_provider_webhook` RPC commits
-provider evidence, pending-step risk and audit in one transaction. Missing
-migrations or failed writes return HTTP 500 so the provider retries; duplicates
-return HTTP 200 without replaying risk changes. Staff-decided steps and uploads
-replaced in the verification session are preserved. Callback bodies are limited
-to 256 KiB and HMAC signatures must be exactly 64 hexadecimal characters.
+migration workflow (`pnpm supabase:db:push:safe`). The service-only
+`apply_kyc_provider_webhook` RPC commits provider evidence, pending-step risk
+and audit in one transaction. Missing migrations or failed writes return HTTP
+500 so the provider retries; duplicates return HTTP 200 without replaying risk
+changes. Staff-decided steps and uploads replaced in the verification session
+are preserved. Callback bodies are limited to 256 KiB and HMAC signatures must
+be exactly 64 hexadecimal characters.
 
 This migration does not replay callbacks previously acknowledged by the old
 handler. If a real asynchronous provider was used, reconcile its delivery
@@ -513,9 +513,9 @@ code; the owner applies it after the merge and before that code is deployed
 ([AGENTS.md](../AGENTS.md#database-changes)).
 
 Historical: describes the retired source backend. For the 30 September 2026
-audit changes, run `pnpm test:kyc:db`, `pnpm test:staff-roles:db` and
-`pnpm test:commercial:db`, then apply the pending migrations through
-`pnpm supabase:db:push:safe` before deploying the application.
+audit changes, the pending migrations were applied through
+`pnpm supabase:db:push:safe` before deploying the application (the database test
+lanes run then were removed on 11 November 2026).
 `20260930170000_atomic_kyc_provider_webhook.sql` supplies the callback RPC;
 `20260930180000_role_predicates_security_invoker.sql` removes unnecessary
 elevation from three caller-scoped predicates while preserving their grants. The
