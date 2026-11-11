@@ -227,8 +227,9 @@ outside the workspace.
 
 The former `supabase:advisor:security` command checked the retired source schema
 and was removed. The live schema's structure, grants and row level security are
-checked in CI against a recorded fingerprint (`foundation-replay`), and its
-access rules by the native suite (`foundation-native`).
+checked in CI against a recorded fingerprint and access-policy invariants
+(`foundation-replay`), and its access rules by the native suite
+(`foundation-native`).
 
 To check live Supabase Performance Advisor findings from workspace env:
 
