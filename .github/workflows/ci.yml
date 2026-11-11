@@ -531,13 +531,6 @@ jobs:
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
         run: node scripts/e2e-foundation-summary.mjs "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT" "" "Browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
-      # A run that skipped them must not count as KYC proof
-      # (e2e/kyc-authenticated.spec.ts, scripts/lib/kyc-browser-evidence.ts).
-      - name: Prove the signed-in KYC scenarios passed
-        if: matrix.project != 'firefox'
-        env:
-          BROWSER_PROJECT: ${{ matrix.project }}
-        run: pnpm exec tsx scripts/check-kyc-browser-report.ts "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT"
       - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

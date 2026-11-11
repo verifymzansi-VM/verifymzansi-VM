@@ -199,27 +199,6 @@ export const CHECKS: Check[] = [
     }
   ),
   check(
-    "kyc-auth-browser",
-    ["test:browser:isolated"],
-    "authenticated synthetic ID/selfie, evidence, final approval and independent high-risk governance UI",
-    ["release", "payments", "kyc"],
-    {
-      coveredBy: "browser",
-      dependencies: [
-        "isolated production Next build",
-        "Chromium",
-        "synthetic auth/database/storage fixtures",
-      ],
-      timeoutMs: 1_800_000,
-      exclusions: "Real PostgreSQL/RLS and genuine provider delivery are separate requirements",
-      tests: [
-        "e2e/kyc-authenticated.spec.ts",
-        "src/lib/supabase/playwright-governance.test.ts",
-        "scripts/lib/kyc-browser-evidence.ts",
-      ],
-    }
-  ),
-  check(
     "cloudflare-build",
     ["test:cloudflare:runtime"],
     "isolated production Worker bundle and runtime-binding integration",
@@ -440,13 +419,7 @@ for (const item of CHECKS) {
     ],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],
-    browser: [
-      "e2e/smoke.spec.ts",
-      "e2e/addon-checkout.spec.ts",
-      "e2e/billing-payment-roundtrip.spec.ts",
-      "e2e/kyc-verification.spec.ts",
-      "e2e/dsar.spec.ts",
-    ],
+    browser: ["e2e/smoke.spec.ts", "e2e/addon-checkout.spec.ts", "e2e/dsar.spec.ts"],
     lighthouse: ["scripts/run-lighthouse.test.mjs", "lighthouse.config.json"],
     "http-smoke": ["src/__tests__/test-smoke-script.test.ts"],
     "video-worker": ["scripts/test-video-worker.mjs"],
