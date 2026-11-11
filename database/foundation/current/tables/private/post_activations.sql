@@ -21,6 +21,7 @@ alter table private.post_activations owner to postgres;
 alter table private.post_activations enable row level security;
 CREATE INDEX post_activations_entitlement_idx ON private.post_activations USING btree (entitlement_id, activated_at);
 CREATE UNIQUE INDEX post_activations_one_active_idx ON private.post_activations USING btree (post_id) WHERE (released_at IS NULL);
+CREATE INDEX post_activations_owner_id_idx ON private.post_activations USING btree (owner_id);
 CREATE TRIGGER post_activation_not_edit BEFORE INSERT OR UPDATE ON private.post_activations FOR EACH ROW EXECUTE FUNCTION internal.post_activation_edit_guard();
 CREATE TRIGGER post_activation_trial_provenance AFTER INSERT ON private.post_activations FOR EACH ROW EXECUTE FUNCTION internal.track_post_trial_funding();
 revoke all on private.post_activations from public;

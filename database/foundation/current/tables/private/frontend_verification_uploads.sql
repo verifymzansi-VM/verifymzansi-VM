@@ -36,4 +36,5 @@ alter table private.frontend_verification_uploads owner to postgres;
 alter table private.frontend_verification_uploads enable row level security;
 CREATE INDEX frontend_verification_case_idx ON private.frontend_verification_uploads USING btree (owner_id, case_id, purpose, created_at DESC);
 CREATE INDEX frontend_verification_upload_parent_idx ON private.frontend_verification_uploads USING btree (owner_id, id_request) WHERE (id_request IS NOT NULL);
+CREATE INDEX frontend_verification_uploads_submission_id_idx ON private.frontend_verification_uploads USING btree (submission_id) WHERE (submission_id IS NOT NULL);
 revoke all on private.frontend_verification_uploads from public;

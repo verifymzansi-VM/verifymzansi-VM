@@ -19,7 +19,9 @@ create table private.staff_roles (
 );
 alter table private.staff_roles owner to postgres;
 alter table private.staff_roles enable row level security;
+CREATE INDEX staff_roles_granted_by_idx ON private.staff_roles USING btree (granted_by) WHERE (granted_by IS NOT NULL);
 CREATE UNIQUE INDEX staff_roles_one_active_idx ON private.staff_roles USING btree (user_id) WHERE (revoked_at IS NULL);
+CREATE INDEX staff_roles_revoked_by_idx ON private.staff_roles USING btree (revoked_by) WHERE (revoked_by IS NOT NULL);
 CREATE TRIGGER staff_last_admin BEFORE UPDATE ON private.staff_roles FOR EACH ROW EXECUTE FUNCTION internal.staff_last_admin_guard();
 CREATE TRIGGER staff_roles_release_queue_claims AFTER UPDATE OF revoked_at, role ON private.staff_roles FOR EACH ROW EXECUTE FUNCTION internal.release_queue_claims_on_revocation();
 revoke all on private.staff_roles from public;
