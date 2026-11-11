@@ -368,6 +368,8 @@ describe("production-matching suites on main and the failure alert", () => {
     const alert = load("failure-alert.yml");
     const watched = (alert.on.workflow_run as { workflows: string[]; types: string[] }).workflows;
     expect((alert.on.workflow_run as { types: string[] }).types).toEqual(["completed"]);
+    // Branch runs cannot alert, so they must not start a skipped run.
+    expect((alert.on.workflow_run as { branches: string[] }).branches).toEqual(["main"]);
     for (const file of files.filter((name) => name !== "failure-alert.yml")) {
       const workflow = load(file);
       const push = workflow.on.push as { branches?: string[] } | undefined;
