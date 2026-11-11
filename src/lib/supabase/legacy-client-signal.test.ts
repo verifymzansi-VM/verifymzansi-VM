@@ -27,7 +27,6 @@ function entries() {
 
 beforeEach(() => {
   vi.stubEnv("NODE_ENV", "production");
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   mocks.getStore.mockReturnValue(undefined);
 });
@@ -116,16 +115,6 @@ describe("legacy_client_in_foundation log line", () => {
     ]);
   });
 
-  it("stays silent on the source backend", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-    mocks.getStore.mockReturnValue({ route: "/api/contact" });
-    const { noteLegacyClientCreated } = await freshSignal();
-
-    noteLegacyClientCreated("admin");
-
-    expect(warn).not.toHaveBeenCalled();
-  });
-
   it("never throws, whatever fails underneath", async () => {
     const { noteLegacyClientCreated } = await freshSignal();
     mocks.getStore.mockImplementation(() => {
@@ -138,9 +127,6 @@ describe("legacy_client_in_foundation log line", () => {
       throw new Error("console unavailable");
     });
     expect(() => noteLegacyClientCreated("admin")).not.toThrow();
-
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "invalid");
-    expect(() => noteLegacyClientCreated("server")).not.toThrow();
   });
 });
 
@@ -165,7 +151,7 @@ describe("retired client factories", () => {
     ]);
   });
 
-  it("createPublicClient logs in foundation mode and not in source mode", async () => {
+  it("createPublicClient logs once per route", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-fixture");
     mocks.getStore.mockReturnValue({ route: "/listing/[id]" });
@@ -177,8 +163,6 @@ describe("retired client factories", () => {
       expect.objectContaining({ meta: { route: "/listing/[id]", client: "public" } }),
     ]);
 
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-    mocks.getStore.mockReturnValue({ route: "/pricing" });
     createPublicClient();
     expect(warn).toHaveBeenCalledTimes(1);
   });

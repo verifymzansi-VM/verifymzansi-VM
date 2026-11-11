@@ -90,7 +90,6 @@ function request(body?: unknown, valid = true) {
 beforeEach(() => {
   vi.clearAllMocks();
   confirmed = false;
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false });
   vi.mocked(readFoundationAccountContext).mockResolvedValue({ account_id: owner } as Awaited<

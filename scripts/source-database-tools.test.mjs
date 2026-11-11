@@ -6,13 +6,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { assertSourceDatabaseTool, isSourceSchemaOperation } from "./lib/source-database-tools.mjs";
 
-test("source tools refuse foundation mode, configured project and explicit target", () => {
+test("source tools refuse the foundation project wherever it is configured or targeted", () => {
   for (const env of [
-    { NEXT_PUBLIC_DATA_BACKEND: "foundation" },
-    {
-      NEXT_PUBLIC_DATA_BACKEND: "source",
-      NEXT_PUBLIC_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co",
-    },
+    { NEXT_PUBLIC_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co" },
+    { FOUNDATION_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co" },
+    { FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy" },
     { SUPABASE_PROJECT_REF: "gntzjtuncsyefujajmjy" },
   ])
     assert.throws(() => assertSourceDatabaseTool("Fixture", env), /retired source schema/);
@@ -21,10 +19,7 @@ test("source tools refuse foundation mode, configured project and explicit targe
     /retired source schema/
   );
   assert.doesNotThrow(() =>
-    assertSourceDatabaseTool("Fixture", {
-      NEXT_PUBLIC_DATA_BACKEND: "source",
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
-    })
+    assertSourceDatabaseTool("Fixture", { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321" })
   );
 });
 
@@ -57,7 +52,7 @@ test("actual wrapper rejects root push before credentials or network access", ()
     {
       env: {
         ...process.env,
-        NEXT_PUBLIC_DATA_BACKEND: "foundation",
+        FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy",
         SUPABASE_ACCESS_TOKEN: "",
         SUPABASE_DB_PASSWORD: "",
       },
@@ -67,17 +62,6 @@ test("actual wrapper rejects root push before credentials or network access", ()
   assert.equal(result.status, 1);
   assert.match(result.stderr, /retired source schema/);
   assert.doesNotMatch(result.stderr, /Missing required environment variables/);
-});
-
-test("legacy bootstrap, export and reset stop before accessing the new project", () => {
-  for (const script of ["bootstrap-operator.ts", "backup-supabase.ts", "reset-launch-data.ts"]) {
-    const result = spawnSync(process.execPath, ["--import", "tsx", `scripts/${script}`], {
-      env: { ...process.env, NEXT_PUBLIC_DATA_BACKEND: "foundation" },
-      encoding: "utf8",
-    });
-    assert.equal(result.status, 1, script);
-    assert.match(result.stderr, /retired source schema/, script);
-  }
 });
 
 test("actual wrapper passes shell metacharacters as one literal argument", () => {

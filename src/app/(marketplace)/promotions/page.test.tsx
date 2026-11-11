@@ -72,7 +72,6 @@ vi.mock("./client", () => ({
 
 vi.mock("@/lib/account/compat", () => ({
   getOwnerColumn: mockGetOwnerColumn,
-  withOwnerColumn: (fields: string) => fields,
 }));
 
 vi.mock("@/lib/utils/media-url", () => ({
@@ -156,7 +155,7 @@ describe("PromotionsPage", () => {
     mockGetVisitorProvince.mockResolvedValue({ province: null, source: null });
   });
 
-  it("shows tourism businesses and events in fair rotation order, local first", async () => {
+  it("shows tourism businesses and events from the showroom feed", async () => {
     const supabase = createSupabaseClient({ businesses: [], promotions: [] });
     mockCreateClient.mockResolvedValue(supabase);
     mockGetVisitorProvince.mockResolvedValue({ province: "Western Cape", source: "detected" });
@@ -168,11 +167,7 @@ describe("PromotionsPage", () => {
 
     await renderPage();
 
-    expect(mockLoadShowroomItems).toHaveBeenCalledWith("tourism", {
-      province: "Western Cape",
-      hideFixtures: false,
-      client: supabase,
-    });
+    expect(mockLoadShowroomItems).toHaveBeenCalledWith("tourism");
     expect(carouselSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         items,

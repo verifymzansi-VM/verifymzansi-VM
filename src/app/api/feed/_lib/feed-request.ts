@@ -1,11 +1,9 @@
 import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { buildViewerKey, ENGAGEMENT_VIEWER_COOKIE } from "@/lib/engagement";
-import { createClient } from "@/lib/supabase/server";
 import { checkLocalRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
 
-/** Viewer-specific (likes) and session-specific: never cached anywhere. */
+/** Viewer-specific and session-specific: never cached anywhere. */
 export const PRIVATE_NO_STORE = { "Cache-Control": "private, no-store" };
 
 export function feedError(status: number, error: string) {
@@ -13,23 +11,10 @@ export function feedError(status: number, error: string) {
 }
 
 /**
- * Shared front door for the viewer's read endpoints: rate limit and the
- * visitor's own Supabase client (RLS still decides what they can read).
+ * Shared front door for the viewer's read endpoints: a rate limit. The posts
+ * themselves come from the foundation's public reads.
  */
-export async function openFeedRequest(request: NextRequest, action: string, maxPerMinute: number) {
+export function openFeedRequest(request: NextRequest, action: string, maxPerMinute: number) {
   const limit = checkLocalRateLimit(getClientRateLimitKey(request), action, maxPerMinute);
-  if (limit.limited) return { response: feedError(429, "Too many requests") } as const;
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const viewerId = request.cookies.get(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null;
-  return {
-    response: null,
-    supabase,
-    // Foundation serves slides through its own reads; no service client is used.
-    admin: null,
-    viewerKey: buildViewerKey(viewerId, user?.id),
-  } as const;
+  return limit.limited ? feedError(429, "Too many requests") : null;
 }

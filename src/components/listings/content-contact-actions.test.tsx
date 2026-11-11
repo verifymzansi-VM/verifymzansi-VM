@@ -16,7 +16,6 @@ describe("seller contact actions", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(() => vi.unstubAllEnvs());
   it("requests a fresh challenge before revealing private foundation contact numbers", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(

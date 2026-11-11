@@ -191,7 +191,7 @@ test("the website runs in foundation mode against the copy only, with the existi
     const env = foundationWebsiteEnv(status, {
       root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
     });
-    assert.equal(env.NEXT_PUBLIC_DATA_BACKEND, "foundation");
+    assert.equal(env.NEXT_PUBLIC_DATA_BACKEND, undefined);
     assert.equal(env.NEXT_PUBLIC_SUPABASE_URL, API);
     assert.equal(env.FOUNDATION_SUPABASE_URL, API);
     assert.equal(env.FOUNDATION_PROJECT_REF, E2E_FIXTURE.projectRef);

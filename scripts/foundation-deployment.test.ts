@@ -11,7 +11,6 @@ import {
 } from "./lib/foundation-deployment";
 
 const env = {
-  NEXT_PUBLIC_DATA_BACKEND: "foundation",
   FOUNDATION_SUPABASE_URL: "https://gntzjtuncsyefujajmjy.supabase.co",
   FOUNDATION_PROJECT_REF: "gntzjtuncsyefujajmjy",
   FOUNDATION_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic_deployment",
@@ -27,7 +26,6 @@ test("deployment uses one approved London connection for browser and server", ()
   );
 });
 for (const [label, change] of [
-  ["fixture mode", { NEXT_PUBLIC_DATA_BACKEND: "source" }],
   ["retired browser URL", { NEXT_PUBLIC_SUPABASE_URL: "https://tnygdgormnofpgjknlhr.supabase.co" }],
   [
     "another server project",
@@ -98,7 +96,7 @@ test("deployment and runtime configuration never select the deleted database", (
   const config = readFileSync("wrangler.toml", "utf8");
   assert.equal(config.includes("tnygdgormnofpgjknlhr"), false);
   const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
-  assert.ok(workflow.includes("NEXT_PUBLIC_DATA_BACKEND: foundation"));
+  assert.equal(workflow.includes("NEXT_PUBLIC_DATA_BACKEND"), false);
   assert.ok(workflow.includes("secrets.FOUNDATION_SUPABASE_SECRET_KEY"));
   assert.ok(workflow.includes("pnpm run preflight:foundation"));
   assert.ok(workflow.includes("preflight:foundation -- --provisioned-runtime"));

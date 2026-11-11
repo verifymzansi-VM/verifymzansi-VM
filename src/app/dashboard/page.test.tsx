@@ -3,20 +3,10 @@ import { render, screen } from "@testing-library/react";
 import DashboardPage from "./page";
 import { createClient } from "@/lib/supabase/server";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
-import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
-}));
-
-vi.mock("@/lib/engagement-server", () => ({
-  getOptionalContentViewCountMap: vi.fn(
-    (_admin: unknown, _targetType: string, targetIds: string[]) => ({
-      ok: true,
-      data: new Map(targetIds.map((targetId) => [targetId, targetId === "listing-1" ? 23 : 0])),
-    })
-  ),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -229,7 +219,6 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Native 1:0")).toBeInTheDocument();
     expect(screen.queryByText(/dashboard-onboarding:/)).not.toBeInTheDocument();
     expect(mockSupabase.from).not.toHaveBeenCalled();
-    expect(getOptionalContentViewCountMap).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith("get_my_dashboard", {}, { get: false });
   });
 });

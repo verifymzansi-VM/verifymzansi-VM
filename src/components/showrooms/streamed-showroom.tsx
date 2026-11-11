@@ -5,9 +5,8 @@ import {
   preloadShowroomBackground,
   type ShowroomDecorativeBackground,
 } from "./showroom-section-shell";
-import { loadShowroomItems, type ShowroomClient, type ShowroomSurface } from "@/lib/showroom/feed";
+import { loadShowroomItems, type ShowroomSurface } from "@/lib/showroom/feed";
 import { getVisitorProvince } from "@/lib/showroom/visitor-province";
-import { createClient } from "@/lib/supabase/server";
 
 export interface StreamedShowroomProps {
   feed: Exclude<ShowroomSurface, "home">;
@@ -40,19 +39,13 @@ export async function ShowroomWithData({
   feed,
   surface,
   background,
-  hideFixtures,
   emptyTitle,
   emptyDescription,
   emptyMediaUrl,
   emptyItem,
 }: StreamedShowroomProps) {
   const visitor = await getVisitorProvince();
-  const supabase = await createClient();
-  const items = await loadShowroomItems(feed, {
-    province: visitor.province,
-    hideFixtures,
-    client: supabase as unknown as ShowroomClient,
-  });
+  const items = await loadShowroomItems(feed);
 
   return (
     <ShowroomCardCarousel

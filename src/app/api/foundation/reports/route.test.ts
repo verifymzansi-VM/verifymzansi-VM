@@ -52,7 +52,6 @@ function request(body: unknown = input(), valid = true) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://verifymzansi.com");
   vi.stubEnv("IP_HASH_SECRET", "h".repeat(64));
   authenticateCaller.mockResolvedValue({ accountId: id(2) });

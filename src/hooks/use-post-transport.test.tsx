@@ -2,7 +2,6 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, it, expect, vi } from "vitest";
 import { usePostTransport } from "./use-post-transport";
 beforeEach(() => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({

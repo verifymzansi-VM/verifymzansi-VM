@@ -1,78 +1,54 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveCurrentUserPaymentStatus } from "./resolve-payment-status";
-import { createClient } from "@/lib/supabase/server";
-import type { PaymentStatusView } from "./status-view";
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(),
+const { readFoundationServerSession, readFoundationPayment } = vi.hoisted(() => ({
+  readFoundationServerSession: vi.fn(),
+  readFoundationPayment: vi.fn(),
 }));
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/foundation/server-session", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readFoundationServerSession,
+}));
+vi.mock("@/lib/foundation/billing-runtime", () => ({ readFoundationPayment }));
+
+import { FoundationServerSessionError } from "@/lib/foundation/server-session";
+import { resolveCurrentUserPaymentStatus } from "./resolve-payment-status";
 
 const PAYMENT_ID = "550e8400-e29b-41d4-a716-446655440000";
-
-function mockAuthenticated(paymentResult: {
-  data: { status: string } | null;
-  error?: { message: string } | null;
-}) {
-  vi.mocked(createClient).mockResolvedValue({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
-    },
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue(paymentResult),
-          }),
-        }),
-      }),
-    }),
-  } as never);
-}
+const api = { rpc: vi.fn() };
 
 describe("resolveCurrentUserPaymentStatus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    readFoundationServerSession.mockResolvedValue({ api });
   });
 
-  it("returns missing when no payment id is provided", async () => {
+  it("returns missing for an absent or malformed payment id without a read", async () => {
     await expect(resolveCurrentUserPaymentStatus(undefined)).resolves.toBe("missing");
-    expect(createClient).not.toHaveBeenCalled();
+    await expect(resolveCurrentUserPaymentStatus("not-a-payment")).resolves.toBe("missing");
+    expect(readFoundationServerSession).not.toHaveBeenCalled();
   });
 
-  it("returns missing when there is no authenticated user", async () => {
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
-    } as never);
+  it("reads the caller's own payment and keeps funds and access apart", async () => {
+    readFoundationPayment.mockResolvedValue({
+      status: "complete",
+      fulfillment_status: "fulfilled",
+    });
+    await expect(resolveCurrentUserPaymentStatus(PAYMENT_ID)).resolves.toBe("complete");
+    expect(readFoundationPayment).toHaveBeenCalledExactlyOnceWith(api, PAYMENT_ID);
 
+    readFoundationPayment.mockResolvedValue({ status: "complete", fulfillment_status: "pending" });
+    await expect(resolveCurrentUserPaymentStatus(PAYMENT_ID)).resolves.toBe("needs_reconciliation");
+
+    readFoundationPayment.mockResolvedValue(null);
     await expect(resolveCurrentUserPaymentStatus(PAYMENT_ID)).resolves.toBe("missing");
   });
 
-  const statusCases: Array<{ dbStatus: string; expected: PaymentStatusView }> = [
-    { dbStatus: "complete", expected: "complete" },
-    { dbStatus: "pending", expected: "pending" },
-    { dbStatus: "processing", expected: "pending" },
-    { dbStatus: "failed", expected: "failed" },
-    { dbStatus: "expired", expected: "expired" },
-  ];
-
-  it.each(statusCases)(
-    "maps stored status $dbStatus to $expected",
-    async ({ dbStatus, expected }) => {
-      mockAuthenticated({ data: { status: dbStatus }, error: null });
-
-      await expect(resolveCurrentUserPaymentStatus(PAYMENT_ID)).resolves.toBe(expected);
-    }
-  );
-
-  it("returns missing when the payment row does not exist", async () => {
-    mockAuthenticated({ data: null, error: null });
-
+  it("returns missing when signed out and pending when the read fails", async () => {
+    readFoundationServerSession.mockRejectedValueOnce(new FoundationServerSessionError(401));
     await expect(resolveCurrentUserPaymentStatus(PAYMENT_ID)).resolves.toBe("missing");
-  });
 
-  it("returns pending instead of missing when the payment query hits a DB error", async () => {
-    mockAuthenticated({ data: null, error: { message: "connection reset by peer" } });
-
+    readFoundationPayment.mockRejectedValueOnce(new Error("down"));
     await expect(resolveCurrentUserPaymentStatus(PAYMENT_ID)).resolves.toBe("pending");
   });
 });

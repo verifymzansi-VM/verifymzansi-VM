@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { resolveAccountVerification } from "@/lib/account/resolved-verification";
-import { buildVerificationRedirectUrl, isVerifiedMember } from "@/app/post/_lib/post-access";
-import { getDataBackend } from "@/lib/data-backend";
+import { buildVerificationRedirectUrl } from "@/app/post/_lib/post-access";
 import { buildLoginUrl } from "@/lib/utils/navigation";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -14,7 +11,7 @@ type FoundationPostAccess = "allowed" | "verification" | "login" | "forbidden";
  * Early page check for the create-post forms. It only decides where to send
  * the member; the database still refuses an unverified submit and approval.
  *
- * Foundation: asks the replacement database for the signed-in member's own
+ * It asks the foundation database for the signed-in member's own
  * readiness (identity accepted, phone proven and area confirmed). Anything
  * other than a clear "ready" — including an unavailable or malformed answer —
  * sends the member to /verification, which never redirects back by itself.
@@ -52,29 +49,10 @@ async function readFoundationPostAccess(): Promise<FoundationPostAccess> {
 }
 
 export async function requireVerifiedPostAccess(returnUrl: string) {
-  if (getDataBackend() === "foundation") {
-    // redirect() throws, so it stays outside the try blocks above.
-    const access = await readFoundationPostAccess();
-    if (access === "allowed") return;
-    if (access === "login") redirect(buildLoginUrl(returnUrl));
-    if (access === "forbidden") redirect("/error?reason=forbidden");
-    redirect(buildVerificationRedirectUrl(returnUrl));
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return;
-  }
-
-  const verification = await resolveAccountVerification(supabase, user.id, {
-    includeStepsWhenVerified: true,
-  });
-
-  if (!isVerifiedMember(verification.accountVerificationStatus)) {
-    redirect(buildVerificationRedirectUrl(returnUrl));
-  }
+  // redirect() throws, so it stays outside the try blocks above.
+  const access = await readFoundationPostAccess();
+  if (access === "allowed") return;
+  if (access === "login") redirect(buildLoginUrl(returnUrl));
+  if (access === "forbidden") redirect("/error?reason=forbidden");
+  redirect(buildVerificationRedirectUrl(returnUrl));
 }

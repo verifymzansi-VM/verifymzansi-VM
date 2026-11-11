@@ -2,9 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { staffGuard } from "@/test/staff-guard";
 
-const { mockCreateClient, mockCreateAdminClient, mockRedirect, mockNotFound } = vi.hoisted(() => ({
-  mockCreateClient: vi.fn(),
-  mockCreateAdminClient: vi.fn(),
+const { readRestoredGovernancePage, mockRedirect, mockNotFound } = vi.hoisted(() => ({
+  readRestoredGovernancePage: vi.fn(),
   mockRedirect: vi.fn(),
   mockNotFound: vi.fn(),
 }));
@@ -14,13 +13,7 @@ vi.mock(
   async () => (await import("@/test/staff-guard")).staffGuardModule
 );
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: mockCreateClient,
-}));
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: mockCreateAdminClient,
-}));
+vi.mock("@/lib/foundation/governance-server", () => ({ readRestoredGovernancePage }));
 
 vi.mock("@/lib/auth/roles", () => ({
   hasCapability: vi.fn(() => true),
@@ -78,72 +71,39 @@ vi.mock("lucide-react", async (importOriginal) => {
 
 import DecisionDetailPage from "@/app/admin/governance/escalations/[id]/page";
 
-function createEqSingle(data: Record<string, unknown> | null) {
-  return vi.fn().mockReturnValue({
-    // A missing row is not an error; the page shows "not found" for it.
-    maybeSingle: vi.fn().mockResolvedValue({ data, error: null }),
-  });
-}
-
 describe("governance page regressions", () => {
   beforeEach(() => {
     staffGuard.reset();
     vi.clearAllMocks();
-    mockCreateClient.mockResolvedValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: "gov-1", app_metadata: { role: "governance_controller" } } },
-        }),
-      },
-    });
   });
 
-  it("renders escalation detail and event timeline from decision_record_events", async () => {
-    mockCreateAdminClient.mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "decision_records") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: createEqSingle({
-                id: "decision-1",
-                action_category: "account_ban",
-                status: "approved",
-                case_type: "report",
-                case_id: "report-77",
-                recommender_id: "moderator-123456",
-                correlation_id: "corr-123456",
-                created_at: "2026-03-26T09:00:00.000Z",
-                recommendation: "ban",
-                approval_rationale: "Repeated fraud reports",
-                approver_id: "governance-123456",
-                decided_at: "2026-03-26T11:00:00.000Z",
-              }),
-            }),
-          };
-        }
-
-        if (table === "decision_record_events") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                order: vi.fn().mockResolvedValue({
-                  data: [
-                    {
-                      id: "evt-1",
-                      event_type: "recommended",
-                      detail: { by: "moderator-123456", recommendation: "ban" },
-                      created_at: "2026-03-26T09:05:00.000Z",
-                    },
-                  ],
-                }),
-              }),
-            }),
-          };
-        }
-
-        throw new Error(`Unexpected table ${table}`);
-      }),
-    });
+  it("renders escalation detail and its event timeline", async () => {
+    readRestoredGovernancePage.mockResolvedValue([
+      {
+        id: "decision-1",
+        action_category: "account_ban",
+        status: "approved",
+        case_type: "report",
+        case_id: "report-77",
+        recommender_id: "moderator-123456",
+        correlation_id: "corr-123456",
+        created_at: "2026-03-26T09:00:00.000Z",
+        recommendation: "ban",
+        approval_rationale: "Repeated fraud reports",
+        approver_id: "governance-123456",
+        decided_at: "2026-03-26T11:00:00.000Z",
+        payload_version: 1,
+        execution_status: null,
+        timeline: [
+          {
+            id: "evt-1",
+            event_type: "recommended",
+            detail: { by: "moderator-123456", recommendation: "ban" },
+            created_at: "2026-03-26T09:05:00.000Z",
+          },
+        ],
+      },
+    ]);
 
     render(await DecisionDetailPage({ params: Promise.resolve({ id: "decision-1" }) }));
 
@@ -151,5 +111,6 @@ describe("governance page regressions", () => {
     expect(screen.getByText(/report:report-77/i)).toBeDefined();
     expect(screen.getByText(/Repeated fraud reports/i)).toBeDefined();
     expect(screen.getByText(/\{"by":"moderator-123456","recommendation":"ban"\}/i)).toBeDefined();
+    expect(readRestoredGovernancePage).toHaveBeenCalledWith(1, "decision-1");
   });
 });

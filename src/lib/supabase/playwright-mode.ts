@@ -40,7 +40,6 @@ export function isPlaywrightFoundationCopy(): boolean {
   if (typeof window !== "undefined" || process.env.ENVIRONMENT === "production") return false;
   return (
     isPlaywrightTestMode() &&
-    process.env.NEXT_PUBLIC_DATA_BACKEND === "foundation" &&
     process.env.FOUNDATION_PROJECT_REF === "local-foundation" &&
     /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(process.env.FOUNDATION_SUPABASE_URL ?? "")
   );

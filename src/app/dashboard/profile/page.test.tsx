@@ -122,7 +122,6 @@ describe("ProfilePage", () => {
   });
 
   it("saves a bio with the loaded native revision even when the locked legal name exceeds the editable-name limit", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     const originalFrom = mockFrom.getMockImplementation()!;
     const legalName = `${"A".repeat(50)} ${"B".repeat(50)}`;
     mockFrom.mockImplementation((table: string) =>

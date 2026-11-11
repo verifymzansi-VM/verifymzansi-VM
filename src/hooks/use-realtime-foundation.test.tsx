@@ -11,7 +11,6 @@ const stop = vi.fn();
 const client = { auth: { getSession: vi.fn() }, channel: vi.fn(), removeChannel: vi.fn() };
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
   client.auth.getSession.mockResolvedValue({
     data: { session: { user: { id: owner }, access_token: "fixture" } },
   });

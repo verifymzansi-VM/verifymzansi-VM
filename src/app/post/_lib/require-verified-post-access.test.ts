@@ -6,25 +6,19 @@ import {
   FoundationServerSessionError,
 } from "@/lib/foundation/server-session";
 import type { FoundationAuthenticatedApi } from "@/lib/foundation/authenticated-api";
-import { createClient } from "@/lib/supabase/server";
-import { resolveAccountVerification } from "@/lib/account/resolved-verification";
 
-const { redirect, backend, warn } = vi.hoisted(() => ({
+const { redirect, warn } = vi.hoisted(() => ({
   redirect: vi.fn((path: string) => {
     throw new Error("redirect:" + path);
   }),
-  backend: { mode: "foundation" as "foundation" | "source" },
   warn: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/lib/data-backend", () => ({ getDataBackend: () => backend.mode }));
 vi.mock("@/lib/foundation/server-session", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   readFoundationServerSession: vi.fn(),
 }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
-vi.mock("@/lib/account/resolved-verification", () => ({ resolveAccountVerification: vi.fn() }));
 vi.mock("@/lib/utils/logger", () => ({
   createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() }),
 }));
@@ -48,7 +42,6 @@ const readiness = (ready: boolean, phone = ready, locality = ready) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  backend.mode = "foundation";
   read.mockResolvedValue(session());
   rpc.mockResolvedValue(readiness(true));
 });
@@ -59,9 +52,6 @@ describe("foundation backend", () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith("get_owner_verification_readiness", {});
     expect(redirect).not.toHaveBeenCalled();
-    // Never the retired backend's tables or client.
-    expect(createClient).not.toHaveBeenCalled();
-    expect(resolveAccountVerification).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -73,7 +63,6 @@ describe("foundation backend", () => {
     rpc.mockResolvedValue(reply);
     await expect(requireVerifiedPostAccess(RETURN)).rejects.toThrow("redirect:" + VERIFY);
     expect(redirect).toHaveBeenCalledTimes(1);
-    expect(createClient).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -118,7 +107,6 @@ describe("foundation backend", () => {
       "redirect:/login?returnUrl=%2Fpost%2Fcreate-business"
     );
     expect(rpc).not.toHaveBeenCalled();
-    expect(createClient).not.toHaveBeenCalled();
   });
 
   it("sends a refused account to the forbidden page", async () => {
@@ -209,47 +197,6 @@ describe("foundation backend", () => {
   });
 });
 
-// legacy-backend: these cases cover the old ("source") backend path and run in the
-// foundation vitest project with getDataBackend mocked. Delete them together with
-// the old backend (see src/test/legacy-backend-suites.ts).
-describe("source backend (unchanged)", () => {
-  function legacyClient(user: { id: string } | null) {
-    vi.mocked(createClient).mockResolvedValue({
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user } }) },
-    } as unknown as Awaited<ReturnType<typeof createClient>>);
-  }
-  beforeEach(() => {
-    backend.mode = "source";
-  });
-
-  it("lets a verified member through without the foundation session", async () => {
-    legacyClient({ id: "user-1" });
-    vi.mocked(resolveAccountVerification).mockResolvedValue({
-      accountVerificationStatus: "verified",
-    } as Awaited<ReturnType<typeof resolveAccountVerification>>);
-    await expect(requireVerifiedPostAccess(RETURN)).resolves.toBeUndefined();
-    expect(read).not.toHaveBeenCalled();
-    expect(resolveAccountVerification).toHaveBeenCalledWith(expect.anything(), "user-1", {
-      includeStepsWhenVerified: true,
-    });
-  });
-
-  it("sends an unverified member to /verification", async () => {
-    legacyClient({ id: "user-1" });
-    vi.mocked(resolveAccountVerification).mockResolvedValue({
-      accountVerificationStatus: "pending_review",
-    } as Awaited<ReturnType<typeof resolveAccountVerification>>);
-    await expect(requireVerifiedPostAccess(RETURN)).rejects.toThrow("redirect:" + VERIFY);
-  });
-
-  it("leaves a signed-out visitor to the page, as before", async () => {
-    legacyClient(null);
-    await expect(requireVerifiedPostAccess(RETURN)).resolves.toBeUndefined();
-    expect(redirect).not.toHaveBeenCalled();
-    expect(resolveAccountVerification).not.toHaveBeenCalled();
-  });
-});
-
 describe("the three create-form layouts (foundation backend)", () => {
   const layouts = {
     "/post/create-listing": () => import("@/app/post/create-listing/layout"),
@@ -266,7 +213,6 @@ describe("the three create-form layouts (foundation backend)", () => {
       await expect(layout({ children: "form" })).rejects.toThrow(
         "redirect:/verification?returnUrl=" + encodeURIComponent(path)
       );
-      expect(createClient).not.toHaveBeenCalled();
     }
   );
 });
