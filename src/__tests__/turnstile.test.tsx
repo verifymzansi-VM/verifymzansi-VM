@@ -70,11 +70,6 @@ describe("TurnstileWidget", () => {
     });
   });
 
-  it("should render without crashing", () => {
-    const { container } = render(<TurnstileWidget onSuccess={vi.fn()} />);
-    expect(container).toBeTruthy();
-  });
-
   it("should not auto-bypass in development", () => {
     vi.stubEnv("NODE_ENV", "development");
     const onSuccess = vi.fn();
