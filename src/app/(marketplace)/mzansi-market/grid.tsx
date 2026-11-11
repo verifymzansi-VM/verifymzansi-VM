@@ -100,6 +100,7 @@ function getListingCardProps(listing: ListingRow) {
     negotiable: listing.price_negotiable,
     imageUrl: videoUrl || listing.photos?.[0],
     posterUrl: listing.video_thumbnail || listing.photos?.[0] || undefined,
+    isVideo: Boolean(videoUrl),
     logoUrl: listing.logo_url,
     province: listing.location_province,
     city: listing.location_city,
