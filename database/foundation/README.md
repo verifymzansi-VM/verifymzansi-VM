@@ -183,10 +183,11 @@ What each part of `pnpm test:foundation:native` proves:
   `candidate.sql` was assembled from, plus fixture-only drivers, with **none**
   of the files in `updates/` applied. The suite checks that every installed
   function body matches those prototypes, so its results describe the baseline
-  behaviour, not the bodies production runs after the updates. Behaviour that
-  an update changed is tested on the replayed schema by
-  `scripts/test-foundation-lifecycle-guards.mjs` (`pnpm db:foundation:lifecycle-test`,
-  CI job `foundation-sql-lint`), which builds `candidate.sql` plus every update.
+  behaviour, not the bodies production runs after the updates. Behaviour that an
+  update changed is tested on the replayed schema by
+  `scripts/test-foundation-lifecycle-guards.mjs`
+  (`pnpm db:foundation:lifecycle-test`, CI job `foundation-sql-lint`), which
+  builds `candidate.sql` plus every update.
 - `scripts/test-restored-post-commands.mjs` applies a fixed list of 44 of the
   update files on top of that prototype fixture inside one transaction, tests
   the restored-frontend commands (posting forms, staff moderation, identity
@@ -194,8 +195,8 @@ What each part of `pnpm test:foundation:native` proves:
   partners, organisations, autosave) and rolls everything back. It does not
   apply the later updates or five earlier ones, so it is a regression net for
   those commands, not proof of the production schema. Its redacted record is
-  written to `tmp/backend-reconciliation/native-post-commands.json` and
-  uploaded with the other native results.
+  written to `tmp/backend-reconciliation/native-post-commands.json` and uploaded
+  with the other native results.
 
 If replay changes generated types captured by the native run, repeat steps 2–4
 with the refreshed inputs. The final native source hashes and clean replay must

@@ -918,8 +918,8 @@ The following updates are applied to the approved project:
   records the same cleanup grace period as ordinary post media.
 
 `scripts/test-restored-post-commands.mjs` (run by `pnpm test:foundation:native`
-and the `foundation-native` CI job) checks these updates on the isolated
-native PostgreSQL fixture, with real local GoTrue owner/reviewer sessions and a
+and the `foundation-native` CI job) checks these updates on the isolated native
+PostgreSQL fixture, with real local GoTrue owner/reviewer sessions and a
 verified local authenticator. It exercises listing, business and event form
 commands; moderation and edit merges; ownership, duplicate-request, funding and
 consent boundaries; actual owner DTO parsing; private-address/public-visibility
