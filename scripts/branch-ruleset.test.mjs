@@ -74,6 +74,7 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     "Workflow lint (actionlint)",
     "Browser test build",
     "foundation-native",
+    "e2e-foundation",
   ]) {
     assert.ok(requiredContexts(ruleset).includes(name), `${name} must be required`);
   }

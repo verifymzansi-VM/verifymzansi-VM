@@ -9,7 +9,8 @@ type Step = {
   env?: Record<string, string>;
   "continue-on-error"?: boolean;
 };
-type Job = { name?: string; if?: string; needs?: string | string[]; steps: Step[] };
+// Jobs that call another workflow (`uses:`) have no steps of their own.
+type Job = { name?: string; if?: string; needs?: string | string[]; uses?: string; steps: Step[] };
 
 const ci = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
   jobs: Record<string, Job>;
@@ -36,7 +37,7 @@ describe("CI reports what it ran", () => {
     // A job that only lists the safety gate's checks turns green without
     // checking anything. audit-tooling-platforms also runs the tooling tests.
     for (const [id, job] of Object.entries(ci.jobs)) {
-      const runs = job.steps.map((step) => step.run ?? "").filter(Boolean);
+      const runs = (job.steps ?? []).map((step) => step.run ?? "").filter(Boolean);
       if (runs.some((run) => run.includes("--dry-run")))
         expect(
           runs.some((run) => run.includes("pnpm test:tooling")),
@@ -47,7 +48,7 @@ describe("CI reports what it ran", () => {
 
   it("builds the Worker once and keeps its runtime proof", () => {
     const builds = Object.entries(ci.jobs).filter(([, job]) =>
-      job.steps.some((step) => (step.run ?? "").includes("build:cloudflare"))
+      (job.steps ?? []).some((step) => (step.run ?? "").includes("build:cloudflare"))
     );
     expect(builds.map(([id]) => id)).toEqual(["build-route-verify"]);
     const steps = ci.jobs["build-route-verify"].steps as (Step & {
@@ -66,7 +67,9 @@ describe("CI reports what it ran", () => {
 
   it("runs the tooling tests once per operating system", () => {
     const tooling = Object.entries(ci.jobs).filter(([, job]) =>
-      job.steps.some((step) => /pnpm test:tooling|--checks=[^\s]*\btooling\b/.test(step.run ?? ""))
+      (job.steps ?? []).some((step) =>
+        /pnpm test:tooling|--checks=[^\s]*\btooling\b/.test(step.run ?? "")
+      )
     );
     expect(tooling.map(([id]) => id)).toEqual(["audit-tooling-platforms"]);
     const platforms = (
@@ -153,6 +156,18 @@ describe("CI job graph", () => {
 
   it("gives every job a time limit instead of the six-hour default", () => {
     for (const [id, job] of Object.entries(workflow.jobs)) {
+      // A job calling another workflow cannot set its own limit; every job of
+      // the called workflow must (the native suite may take up to an hour).
+      if (job.uses) {
+        const called = parse(readFileSync(job.uses.replace(/^\.\//, ""), "utf8")) as {
+          jobs: Record<string, { "timeout-minutes"?: number }>;
+        };
+        for (const [calledId, calledJob] of Object.entries(called.jobs)) {
+          expect(typeof calledJob["timeout-minutes"], `${id} / ${calledId}`).toBe("number");
+          expect(calledJob["timeout-minutes"], `${id} / ${calledId}`).toBeLessThanOrEqual(60);
+        }
+        continue;
+      }
       const limit = job["timeout-minutes"];
       expect(typeof limit, id).toBe("number");
       expect(limit, id).toBeGreaterThan(0);
@@ -277,10 +292,16 @@ describe("production-matching suites on main and the failure alert", () => {
     parse(readFileSync(`.github/workflows/${file}`, "utf8")) as Workflow;
   const files = readdirSync(".github/workflows").filter((file) => file.endsWith(".yml"));
 
-  it("runs foundation-native and e2e-foundation on every push to main, never cancelling a main run", () => {
-    for (const file of ["foundation-native.yml", "e2e-foundation.yml"]) {
+  it("makes foundation-native and e2e-foundation part of the main release gate, never cancelling a main run", () => {
+    const ci = load("ci.yml");
+    for (const [file, caller] of [
+      ["foundation-native.yml", "foundation-native-gate"],
+      ["e2e-foundation.yml", "e2e-foundation-gate"],
+    ] as const) {
       const workflow = load(file);
-      expect(workflow.on.push, file).toEqual({ branches: ["main"] });
+      // On main they run only inside CI (no separate push run to double up).
+      expect(workflow.on.push, file).toBeUndefined();
+      expect(workflow.on).toHaveProperty("workflow_call");
       expect(workflow.on.pull_request, file).toEqual({ branches: ["main"] });
       expect(workflow.concurrency?.group, file).toContain("github.event.pull_request.number ||");
       expect(workflow.concurrency?.group, file).toContain("github.sha");
@@ -288,9 +309,24 @@ describe("production-matching suites on main and the failure alert", () => {
       expect(workflow.concurrency?.["cancel-in-progress"], file).toBe(
         "${{ github.event_name == 'pull_request' }}"
       );
-      // Separate runs: CI does not call them, so they stay outside the deploy gate.
-      expect(readFileSync(".github/workflows/ci.yml", "utf8")).not.toContain(file);
+      // CI calls each one on pushes to main only, in a per-commit group that
+      // never cancels, so a later merge cannot cancel an earlier gate.
+      const job = ci.jobs[caller] as unknown as {
+        uses: string;
+        if: string;
+        concurrency: { group: string; "cancel-in-progress": boolean };
+        permissions: Record<string, string>;
+      };
+      expect(job.uses, caller).toBe(`./.github/workflows/${file}`);
+      expect(job.if, caller).toBe("github.event_name == 'push'");
+      expect(job.concurrency.group, caller).toContain("${{ github.sha }}");
+      expect(job.concurrency["cancel-in-progress"], caller).toBe(false);
+      expect(job.permissions, caller).toEqual({ contents: "read" });
+      // The called workflow's group can never equal CI's own group.
+      expect(workflow.concurrency?.group).not.toBe(ci.concurrency?.group);
     }
+    expect(ci.on.push).toEqual({ branches: ["main"] });
+    // Deploy still waits for the whole main CI run, which now holds both suites.
     const deploy = load("deploy.yml").on.workflow_run as { workflows: string[] };
     expect(deploy.workflows).toEqual(["CI"]);
   });

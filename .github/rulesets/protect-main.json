@@ -49,6 +49,7 @@
           { "context": "Workflow lint (actionlint)", "integration_id": 15368 },
           { "context": "Browser test build", "integration_id": 15368 },
           { "context": "foundation-native", "integration_id": 15368 },
+          { "context": "e2e-foundation", "integration_id": 15368 },
           { "context": "Analyze (javascript-typescript)", "integration_id": 15368 }
         ]
       }

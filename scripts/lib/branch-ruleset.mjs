@@ -11,6 +11,7 @@ export const PULL_REQUEST_WORKFLOWS = [
   ".github/workflows/ci.yml",
   ".github/workflows/codeql.yml",
   ".github/workflows/foundation-native.yml",
+  ".github/workflows/e2e-foundation.yml",
 ];
 
 function indentOf(line) {
