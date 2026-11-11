@@ -115,8 +115,8 @@ export function compareFingerprints(recorded, replay) {
 // Access-policy invariants of the replayed schema. Unlike the fingerprint,
 // which only notices that something changed, these say what must always hold.
 // Execute grants to anon/authenticated on `internal` functions are expected
-// (the `api` wrappers run as the caller and call them), so they are not
-// listed here; PUBLIC must never have them.
+// (the `api` wrappers run as the caller and call them), but only for internal
+// functions an api function actually reaches; PUBLIC must never have them.
 export const POLICY_INVARIANTS = [
   {
     id: "rls-on-every-table",
@@ -153,6 +153,65 @@ export const POLICY_INVARIANTS = [
           select 1 from unnest(coalesce(p.proconfig, '{}'::text[])) setting
           where setting like 'search_path=%')`,
   },
+  {
+    id: "internal-execute-only-behind-api",
+    rule: "anon and authenticated may execute an internal function only when an api function calls it (directly, or through internal functions that run as the caller)",
+    // Calls are read from function bodies (`internal.<name>(`). A SECURITY
+    // DEFINER function runs as its owner, so what it calls needs no grant to
+    // the caller; an invoker function passes the caller on, so what it calls
+    // is reachable too. Row level security policies run as the caller.
+    sql: `with recursive fns as (
+        select p.oid, n.nspname, p.proname, p.prosecdef, p.prosrc
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('api', 'internal')),
+      refs as (
+        select f.oid as from_oid, t.oid as to_oid
+        from fns f cross join lateral regexp_matches(f.prosrc, 'internal\\.([a-z0-9_]+)\\s*\\(', 'g') m
+        join fns t on t.nspname = 'internal' and t.proname = m[1]),
+      policy_refs as (
+        select t.oid
+        from pg_policy pol
+        cross join lateral regexp_matches(
+          coalesce(pg_get_expr(pol.polqual, pol.polrelid), '') || ' ' ||
+          coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), ''),
+          'internal\\.([a-z0-9_]+)\\s*\\(', 'g') m
+        join fns t on t.nspname = 'internal' and t.proname = m[1]),
+      reach(oid) as (
+        select r.to_oid from refs r join fns f on f.oid = r.from_oid where f.nspname = 'api'
+        union select oid from policy_refs
+        union
+        select r.to_oid from reach x join fns f on f.oid = x.oid and not f.prosecdef
+          join refs r on r.from_oid = f.oid)
+      select f.nspname || '.' || f.proname || '(' || pg_get_function_identity_arguments(f.oid) || ')' as item
+      from fns f
+      where f.nspname = 'internal'
+        and (has_function_privilege('anon', f.oid, 'EXECUTE')
+          or has_function_privilege('authenticated', f.oid, 'EXECUTE'))
+        and f.oid not in (select oid from reach)`,
+    // Reviewed exceptions. Each must still be flagged, or the check fails so
+    // the entry is removed.
+    allowed: {
+      // Called by the realtime.messages policy owner_inbox_receive, which the
+      // candidate creates only where Realtime exists (hosted, not this replay);
+      // policies run as the caller.
+      "internal.can_receive_owner_topic(p_topic text)": "Realtime channel policy",
+      // Called only from SECURITY DEFINER functions, so the grant to
+      // authenticated is not needed. Revoke in a database update, then delete
+      // these entries.
+      "internal.entitlement_usable(p_status text, p_starts timestamp with time zone, p_ends timestamp with time zone)":
+        "unneeded grant (definer callers only)",
+      "internal.organisation_actor(p_org uuid)": "unneeded grant (definer callers only)",
+      "internal.price_draft_actor()": "unneeded grant (definer callers only)",
+      "internal.staff_actor(p_capability text)": "unneeded grant (definer callers only)",
+    },
+  },
+  {
+    id: "no-functions-in-private",
+    rule: "schema private holds data only: no functions",
+    sql: `select n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as item
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'private'`,
+  },
 ];
 
 /** Returns [{ id, rule, items }] for every invariant that does not hold. */
@@ -160,7 +219,15 @@ export async function policyInvariantProblems(db, invariants = POLICY_INVARIANTS
   const problems = [];
   for (const invariant of invariants) {
     const result = await db.query(invariant.sql);
-    const items = result.rows.map((row) => row.item).sort();
+    const allowed = invariant.allowed ?? {};
+    const found = result.rows.map((row) => row.item);
+    const items = [
+      ...found.filter((item) => !(item in allowed)),
+      // A reviewed exception that no longer occurs must be removed from the list.
+      ...Object.keys(allowed)
+        .filter((item) => !found.includes(item))
+        .map((item) => `${item} (listed exception no longer needed; remove it)`),
+    ].sort();
     if (items.length > 0) problems.push({ id: invariant.id, rule: invariant.rule, items });
   }
   return problems;
