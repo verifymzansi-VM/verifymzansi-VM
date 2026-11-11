@@ -53,8 +53,8 @@ such a check would block every pull request.
     `Dependency vulnerabilities (OSV-Scanner)`, and CodeQL's
     `Analyze (javascript-typescript)`.
   - `Foundation Worker runtime`: builds and exercises the Worker artifact.
-  - `unit-api-contract`: unit tests, coverage, PGlite lanes, contracts and
-    security canaries.
+  - `unit-api-contract`: every unit test once (the coverage run plus the few
+    DOM-heavy suites it leaves out), PGlite lanes and contracts.
   - `payment-kyc-regressions`.
   - `audit-tooling-platforms (ubuntu-latest)` and
     `audit-tooling-platforms (windows-latest)`.
@@ -114,8 +114,9 @@ itself once every required check is green.
 The source of truth is `vitest.config.ts`. Regular core-coverage thresholds are
 74% statements, 63% branches, 81% functions and 75% lines. Strict main-push
 thresholds are 75%, 64%, 82% and 76%, respectively, selected by
-`STRICT_COVERAGE`. The coverage lane excludes documented sensitive UI suites;
-the blocking lane still runs those tests.
+`STRICT_COVERAGE`. The coverage lane excludes the sensitive UI suites listed in
+`src/test/coverage-excluded-suites.ts`; CI runs them in their own lane
+(`unit-coverage-excluded`) and the local blocking lane still runs them.
 
 ## Deployment enforcement
 
@@ -150,7 +151,7 @@ interpreting an overall green workflow as proof of provider availability.
 
 The maintained check policy is `scripts/lib/check-registry.ts`. CI partitions
 must use its IDs and retain version-2 reports with skips and unavailable
-results. `test:mutation` remains an alias for security canaries and must not be
-presented as mutation coverage. A missing/disabled CodeQL job is explicitly
-unavailable security coverage. Required local omissions are INCOMPLETE, never
-release GO.
+results. There is no mutation testing; the former security canaries (four
+assertions already made by unit tests) were removed. A missing/disabled CodeQL
+job is explicitly unavailable security coverage. Required local omissions are
+INCOMPLETE, never release GO.
