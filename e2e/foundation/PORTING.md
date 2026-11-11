@@ -1,11 +1,12 @@
 # Porting the stub suite to the foundation suite
 
-The stub suite (`playwright.config.ts`, `e2e/*.spec.ts`) runs the website on the
-retired backend with an in-memory stand-in. It will be retired once the
-foundation suite (`playwright.foundation.config.ts`, this folder) is a required
-check. Before that, every check the stub suite holds must either live here or
-have a recorded reason why not. The stub specs stay unchanged until then: they
-back the required `e2e-full-matrix` check.
+The stub suite (`playwright.config.ts`, `e2e/*.spec.ts`) ran the website on the
+retired backend with an in-memory stand-in. Before it was retired, every check
+it held had to either live here or have a recorded reason why not; this file is
+that record. The owner retired it on 2026-11-11 and made the foundation suite
+(`playwright.foundation.config.ts`, this folder; CI check `e2e-foundation`) the
+required browser check in place of `e2e-full-matrix`. The stub files named below
+are deleted; the git history keeps them.
 
 Classes:
 
@@ -56,7 +57,7 @@ are recorded in `VISUAL-BASELINES.md`.
 | `billing-payment-roundtrip.spec.ts` | b     | `checkout-smoke.spec.ts`, `checkout-fulfilment.spec.ts` (mock Ozow round trip, declined payment, lost notification).                                                                                                                                                                                                   |
 | `dashboard-status.spec.ts`        | b       | `member-post-publish.spec.ts` ("the member is shown as verified").                                                                                                                                                                                                                                                      |
 | `profile-completion.spec.ts`      | b       | `member-post-publish.spec.ts` (phone code from the SMS sink).                                                                                                                                                                                                                                                           |
-| `verification-flow.spec.ts`       | b       | `member-post-publish.spec.ts`, `staff-review.spec.ts` (ID and selfie photos through the website).                                                                                                                                                                                                                        |
+| `verification-flow.spec.ts`       | a + b   | Camera steps: `verification-camera.spec.ts` (fake Chromium camera: ID frame scrolled into view with the capture control focused, full-screen uncropped selfie in portrait and landscape, manual-review selfie, captured photos uploaded; phone code from the SMS sink). Submission and review: `member-post-publish.spec.ts`, `staff-review.spec.ts`. |
 | `kyc-authenticated.spec.ts`       | b + c   | Submission and review: `staff-review.spec.ts`. The high-risk governance escalation uses stub personas and has no foundation counterpart yet.                                                                                                                                                                             |
 | `posting.chromium.spec.ts`        | c       | Fills in the posting forms; the form path waits for roadmap M1.1 (see `member-post-publish.spec.ts`).                                                                                                                                                                                                                   |
 | `posting.mobile.spec.ts`          | c       | As above.                                                                                                                                                                                                                                                                                                               |
@@ -70,6 +71,14 @@ are recorded in `VISUAL-BASELINES.md`.
   for every plan, so the restored pricing page shows no saving. The ported
   pricing check leaves those two lines out; the owner decides whether this is
   intended.
+- Phone step: the stub's wizard asked for the phone code on /verification
+  itself. Here the phone gate first sends a member without a verified phone to
+  `/dashboard/complete-profile?returnUrl=/verification`. Seen while porting:
+  right after the code is accepted, that page's "Continue" button stays on the
+  page, because the client router still holds the redirect it prefetched for
+  /verification before the phone was verified. `verification-camera.spec.ts`
+  opens /verification with a full page load instead; the owner decides whether
+  the button needs a fix.
 
 ## Time budget
 
@@ -81,7 +90,8 @@ minutes per project (`PLAYWRIGHT_GLOBAL_TIMEOUT_MS` in
 a clean run instead of the 1.8 the workflow was sized for. The largest
 additions are `a11y.spec.ts` (about 50 s per project), `public-pages.spec.ts`
 (25 to 50 s), `immersive-viewer.spec.ts` (45 s, chromium) and
-`video-mode.spec.ts` (40 s, mobile-chrome).
+`video-mode.spec.ts` (40 s, mobile-chrome). `verification-camera.spec.ts`,
+moved later, adds about 20 s to each project.
 
 ## Rules for specs moved here
 

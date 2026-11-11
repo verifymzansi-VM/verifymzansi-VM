@@ -30,7 +30,10 @@ import {
   writeBuildStamp,
 } from "./lib/foundation-e2e-website.mjs";
 import { startLocalLimiter } from "./lib/foundation-e2e-limiter.mjs";
-import { testFixtureSecretFindings } from "./lib/test-fixture-secrets.mjs";
+import {
+  RETIRED_STUB_OZOW_WEBHOOK_SECRET,
+  testFixtureSecretFindings,
+} from "./lib/test-fixture-secrets.mjs";
 import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
 import {
   IDEMPOTENCY_HEADER,
@@ -202,7 +205,7 @@ test("the website runs in foundation mode against the copy only, with the existi
     assert.equal(env.ADDON_SALES_ENABLED, "false");
     assert.equal(env.PLAYWRIGHT_SUPABASE_MODE, undefined);
     assert.equal(env.NEXT_PUBLIC_PLAYWRIGHT_SUPABASE_MODE, undefined);
-    // Reused switches from scripts/start-playwright-server.cjs.
+    // The fixed browser-test switches.
     assert.equal(env.ENVIRONMENT, "test");
     assert.equal(env.VERIFYMZANSI_RUNTIME_MODE, "e2e");
     assert.equal(env.PLAYWRIGHT_TEST_MODE, "1");
@@ -564,11 +567,9 @@ test("the production launch check refuses the test suites' secrets", () => {
   // Production-shaped settings with fresh random values: nothing to refuse.
   const production = createCloudflareStartupFixture();
   assert.deepEqual(testFixtureSecretFindings(production), []);
-  const require = createRequire(import.meta.url);
-  const stub = require("./start-playwright-server.cjs").createDeterministicEnv();
   const cases = [
     ["OZOW_WEBHOOK_SECRET", LOCAL_OZOW_WEBHOOK_SECRET],
-    ["OZOW_WEBHOOK_SECRET", stub.OZOW_WEBHOOK_SECRET],
+    ["OZOW_WEBHOOK_SECRET", RETIRED_STUB_OZOW_WEBHOOK_SECRET],
     ["INTERNAL_JOBS_SECRET", LOCAL_INTERNAL_JOBS_SECRET],
     ["OPS_JOBS_SECRET", LOCAL_OPS_JOBS_SECRET],
     ["FOUNDATION_PHONE_OTP_KEY", LOCAL_PHONE_OTP_KEY],

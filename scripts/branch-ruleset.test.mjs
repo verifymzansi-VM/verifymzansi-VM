@@ -30,6 +30,12 @@ jobs:
       matrix:
         project: [chromium, mobile-chrome] # comment
     runs-on: ubuntu-latest
+  named-matrix:
+    name: browser (\${{ matrix.project }})
+    strategy:
+      matrix:
+        project: [chromium, mobile-chrome]
+    runs-on: ubuntu-latest
   push-only:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -42,6 +48,8 @@ test("workflow parser lists the check names a pull request produces", () => {
     "Duplication budget",
     "matrixed (chromium)",
     "matrixed (mobile-chrome)",
+    "browser (chromium)",
+    "browser (mobile-chrome)",
   ]);
 });
 
@@ -72,11 +80,18 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     "build-route-verify",
     "Visual regression (chosen frontend)",
     "Workflow lint (actionlint)",
-    "Browser test build",
     "foundation-native",
+    // The browser tests on the foundation test copy (owner decision 2026-11-11).
+    "e2e-foundation",
   ]) {
     assert.ok(requiredContexts(ruleset).includes(name), `${name} must be required`);
   }
+  // The retired stub browser suite and its shared build are gone.
+  for (const name of requiredContexts(ruleset))
+    assert.doesNotMatch(name, /^e2e-full-matrix|^Browser test build$/, name);
+  // The aggregate job is the required one; the per-project jobs need not be.
+  assert.ok(available.has("e2e-foundation (chromium)"));
+  assert.ok(available.has("e2e-foundation (mobile-chrome)"));
 });
 
 test("validation rejects renamed checks, bypass actors and missing rules", () => {

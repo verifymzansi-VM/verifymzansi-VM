@@ -8,16 +8,16 @@ name: E2E foundation
 # e2e mock, email the local mail catcher. Nothing here reaches a hosted
 # project or a real provider, and the job needs no secrets.
 #
-# Non-blocking while it proves itself: `e2e-foundation` is not a required
-# check in .github/rulesets/protect-main.json, so a red run is visible on the
-# pull request but does not block merging. It becomes required (and part of
-# the release gate) after 10 consecutive green runs on main. The check to require is
-# the aggregate job `e2e-foundation`, which fails unless every browser project
-# passed; the per-project jobs need not be listed.
+# The required browser check: the owner made `e2e-foundation` required on
+# 2026-11-11 (.github/rulesets/protect-main.json), in place of the retired
+# stub suite's `e2e-full-matrix`, so a red run blocks merging. The required
+# check is the aggregate job `e2e-foundation`, which fails unless every
+# browser project passed; the per-project jobs need not be listed.
 #
 # Runs on main are a separate workflow run, outside the deploy gate (deploy
-# waits only for workflow "CI"), so a red run here alerts (workflow "Failure
-# alert") but never holds back a release until then.
+# waits only for workflow "CI"): a red run on main alerts (workflow "Failure
+# alert") but does not hold back that release. The pull request run before
+# the merge is what gates the change.
 on:
   push:
     branches: [main]
@@ -118,7 +118,7 @@ jobs:
         if: always()
         run: node --import tsx scripts/foundation-e2e.mjs down
 
-  # The single check name for the whole workflow (the one to require): green
+  # The single check name for the whole workflow (the required one): green
   # only when every browser project passed.
   e2e-foundation:
     name: e2e-foundation

@@ -16,7 +16,7 @@ pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
-pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+pnpm test:e2e --project=chromium
 ```
 
 Run the deeper confidence lane before higher-risk releases, larger refactors, or
@@ -167,8 +167,9 @@ Canonical path:
 1. Merge or push to `master`
 2. Let GitHub Actions run the blocking CI gate on Node `22.x`: `pnpm lint`,
    `pnpm typecheck`, `pnpm test:blocking`, `pnpm preflight`, `pnpm secret-scan`,
-   `pnpm security:audit`, `pnpm licenses:check`, `pnpm build`, and Playwright
-   smoke on `chromium` plus `mobile-chrome`
+   `pnpm security:audit`, `pnpm licenses:check`, `pnpm build`, and the browser
+   tests on the foundation test copy (`e2e-foundation`, `chromium` plus
+   `mobile-chrome`)
 3. Let the deploy workflow run `pnpm secret-scan`, `pnpm security:audit`,
    `pnpm licenses:check`, `pnpm validate:launch-env`, and `pnpm preflight:prod`
 4. Verify the workflow passes the post-deploy `/api/health` gate

@@ -141,7 +141,7 @@ tied to fields (`aria-describedby`); meaningful `alt` text (empty `alt=""` for
 decorative images); one `h1` per page and a logical heading order; dialogs trap
 and return focus; nothing depends on colour alone. The Playwright
 `@axe-core/playwright` package is installed for automated checks
-(`e2e/a11y.spec.ts`).
+(`e2e/foundation/a11y.spec.ts`).
 
 ## Engineering rules
 

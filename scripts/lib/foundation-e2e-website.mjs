@@ -1,12 +1,10 @@
 // Environment for the website when it runs against the foundation test copy
-// (M0.7). It reuses the existing browser-test switches from
-// scripts/start-playwright-server.cjs (test mode, mock Ozow, Turnstile test
-// keys, e2e runtime, synthetic provider placeholders) and swaps the retired
-// stub database for the local foundation stack. The result always passes
-// assertLocalFoundationTarget, so the website cannot be pointed elsewhere.
+// (M0.7): the browser-test switches (test mode, mock Ozow, Turnstile test
+// keys, e2e runtime, synthetic provider placeholders) plus the local
+// foundation stack. The result always passes assertLocalFoundationTarget, so
+// the website cannot be pointed elsewhere.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import {
   E2E_FIXTURE,
@@ -19,14 +17,41 @@ import {
   assertLocalFoundationTarget,
 } from "./foundation-e2e-target.mjs";
 
-const require = createRequire(import.meta.url);
-const { createDeterministicEnv } = require("../start-playwright-server.cjs");
-
 export const E2E_APP_URL = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
+
+/** Fixed, non-secret browser-test settings, taken over unchanged from the
+ * retired stub suite's server script so the copy's build (and its approved
+ * pictures) stays the same. foundationWebsiteEnv sets everything that names a
+ * database, a port, an address or a key the copy checks. */
+const BROWSER_TEST_SETTINGS = {
+  PLAYWRIGHT_TEST_MODE: "1",
+  ENABLE_MOCK_OZOW: "true",
+  VERIFYMZANSI_RUNTIME_MODE: "e2e",
+  VERIFYMZANSI_VALIDATION_MODE: "e2e",
+  ENVIRONMENT: "test",
+  NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE: "1",
+  R2_ACCOUNT_ID: "playwright-r2-account",
+  R2_ACCESS_KEY_ID: "playwright-r2-access-key",
+  R2_SECRET_ACCESS_KEY: "playwright-r2-secret-key",
+  R2_PUBLIC_BUCKET: "verifymzansi-public",
+  R2_PRIVATE_BUCKET: "verifymzansi-private",
+  KYC_ENCRYPTION_KEY: "a".repeat(64),
+  // Must clear the kyc-engine low-entropy guard (>= 8 distinct chars) while
+  // remaining a deterministic, non-secret fixture value.
+  HMAC_SECRET: "0123456789abcdef".repeat(4),
+  IP_HASH_SECRET: "playwright-ip-hash-secret-32-chars",
+  AFRICASTALKING_API_KEY: "playwright-africas-talking-key",
+  AFRICASTALKING_USERNAME: "sandbox",
+  AFRICASTALKING_SENDER_ID: "verifymzansi",
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key",
+  TURNSTILE_SECRET_KEY: "dummy_secret_key", // secret-scan: allow deterministic fixture
+  TEST_PHONE_NUMBERS: "",
+  DEV_EXPOSE_OTP: "",
+};
 
 /** Inherited settings that could point the website at another database,
  * switch on the retired stub's persona shortcuts, or carry real provider and
- * operations credentials the stub suite does not replace; always replaced or
+ * operations credentials; always replaced or
  * removed (and blanked when an .env file names them). Every Ozow setting is
  * dropped; the copy sets the few it needs. Case-insensitive: Windows treats
  * names case-insensitively, so a parent's "Ozow_Client_Id" would reach the
@@ -76,9 +101,9 @@ export const LOCAL_MAIL_RELAY_KEY = "re_local_fixture_mail_relay";
 const NEXT_MANAGED = new Set(["NODE_ENV"]);
 
 export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
-  // createDeterministicEnv() is the caller's environment plus the stub
-  // suite's fixed test values; database and persona settings are dropped.
-  const inherited = createDeterministicEnv();
+  // The caller's environment plus the fixed test values; database, persona
+  // and provider settings are dropped.
+  const inherited = { ...process.env, ...BROWSER_TEST_SETTINGS };
   const base = Object.fromEntries(
     Object.entries(inherited).filter(([key, value]) => value !== undefined && !DROPPED.test(key))
   );
@@ -104,10 +129,10 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     ADDON_SALES_ENABLED: "false",
     KYC_PROVIDER: "manual",
     // Phone codes and ID numbers: synthetic keys in the shape the website
-    // requires (the stub suite's ID key repeats one digit and is refused).
+    // requires (a key that repeats one digit is refused).
     FOUNDATION_PHONE_OTP_KEY: LOCAL_PHONE_OTP_KEY,
     ID_ENCRYPTION_KEY: LOCAL_ID_ENCRYPTION_KEY,
-    // The stub suite unsets these; unset keys would be refilled from .env files.
+    // Unset, these would be refilled from .env files.
     // The e2e runtime validates the environment strictly (a limiter key needs a
     // limiter URL, formatted keys reject ""), so these get neutral valid
     // values. The limiter is the copy's own loopback stub (started by `serve`),
@@ -116,7 +141,7 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     // Production's value: a loaded Windows runner can take more than 500 ms.
     OTP_RATE_LIMITER_TIMEOUT_MS: "2500",
     RATE_LIMITER_API_KEY: LOCAL_LIMITER_KEY,
-    // Ozow: mock mode (the stub suite's ENABLE_MOCK_OZOW) against the test
+    // Ozow: mock mode (ENABLE_MOCK_OZOW above) against the test
     // system, with synthetic values only. The base URL is the code's own
     // default for staging and a valid URL (the runtime rejects ""); mock Ozow
     // never contacts it (src/lib/payments/ozow.ts refuses provider requests;
