@@ -7,12 +7,14 @@ pull request whose required checks pass.
 
 ## What is enforced
 
-| Date       | State                                                                                                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-02 | Ruleset "Protect main" (id 24360296) blocks deleting `main` and force pushes. Pull requests and status checks are **not** required.                                                   |
-| 2026-11-07 | Reviewed ruleset file `.github/rulesets/protect-main.json` prepared. It adds "require a pull request" and the required checks below. Not enforced until the owner applies it.         |
-| 2026-11-10 | Ruleset file adds `Visual regression (chosen frontend)` and `foundation-native` to the required checks. Not enforced until the owner applies it.                                      |
-| 2026-11-11 | The owner has applied the reviewed file: `pnpm check:branch-ruleset -- --live` reports that the live ruleset matches it, so pull requests and the required checks below are enforced. |
+| Date       | State                                                                                                                                                                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-02 | Ruleset "Protect main" (id 24360296) blocks deleting `main` and force pushes. Pull requests and status checks are **not** required.                                                                                                                            |
+| 2026-11-07 | Reviewed ruleset file `.github/rulesets/protect-main.json` prepared. It adds "require a pull request" and the required checks below. Not enforced until the owner applies it.                                                                                  |
+| 2026-11-10 | Ruleset file adds `Visual regression (chosen frontend)` and `foundation-native` to the required checks. Not enforced until the owner applies it.                                                                                                               |
+| 2026-11-11 | The owner has applied the reviewed file: `pnpm check:branch-ruleset -- --live` reports that the live ruleset matches it, so pull requests and the required checks below are enforced.                                                                          |
+| 2026-11-11 | CI clean-up: removed the checks of deleted jobs (`Foundation Worker runtime`, `db-rls`, `payment-kyc-regressions`, `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`), each just before the pull request that deleted its job merged. |
+| 2026-11-11 | Added `Workflow lint (actionlint)` and `Browser test build` after both jobs had run on `main`.                                                                                                                                                                 |
 
 Update this table when GitHub's enforced ruleset changes. Verify at any time,
 read-only:
@@ -56,6 +58,7 @@ such a check would block every pull request.
   - `Secret scan (Gitleaks)`, `Semgrep static analysis` (new findings only),
     `Dependency vulnerabilities (OSV-Scanner)`, and CodeQL's
     `Analyze (javascript-typescript)`.
+  - `Workflow lint (actionlint)`: checks the workflow files themselves.
   - `unit-api-contract`: every unit test once (the coverage run plus the few
     DOM-heavy suites it leaves out) and contracts.
   - `audit-tooling-platforms (ubuntu-latest)` and
@@ -93,21 +96,19 @@ limit of about one and a half times its usual longest run.
 
 Every CI job that runs on a pull request is required, except
 `Workflow security audit (zizmor, advisory)` (advisory, `continue-on-error`).
-The Lighthouse audit is an advisory step inside `bundle-analysis`.
-`Workflow lint (actionlint)` and `Browser test build` are added to the required
-checks once they have run on `main`. This keeps `main` deployable: the deploy
-needs the whole CI run on `main` to succeed. `perf-baseline` and `k6-advisory`
-run only after a push to `main` and cannot be required on pull requests; when no
-staging address (`STAGING_APP_URL`) is configured they show as skipped, not as a
-success (`Staging address configured` decides this in a job-level condition).
-Later slices add their jobs here and to the ruleset file (foundation browser
-tests, frontend ledger). `e2e-foundation` (workflow "E2E foundation") runs on
-every pull request and every push to `main` but stays optional until it has
-passed on 10 consecutive `main` runs. Its `main` runs, like those of
-`foundation-native`, are separate workflow runs outside the deploy gate; a
-failed `main` or scheduled run of any workflow opens or updates one GitHub issue
-(workflow "Failure alert"). When it becomes required, list only the aggregate
-check `e2e-foundation`: it passes only when both per-project jobs,
+The Lighthouse audit is an advisory step inside `bundle-analysis`. This keeps
+`main` deployable: the deploy needs the whole CI run on `main` to succeed.
+`perf-baseline` and `k6-advisory` run only after a push to `main` and cannot be
+required on pull requests; when no staging address (`STAGING_APP_URL`) is
+configured they show as skipped, not as a success (`Staging address configured`
+decides this in a job-level condition). Later slices add their jobs here and to
+the ruleset file (foundation browser tests, frontend ledger). `e2e-foundation`
+(workflow "E2E foundation") runs on every pull request and every push to `main`
+but stays optional until it has passed on 10 consecutive `main` runs. Its `main`
+runs, like those of `foundation-native`, are separate workflow runs outside the
+deploy gate; a failed `main` or scheduled run of any workflow opens or updates
+one GitHub issue (workflow "Failure alert"). When it becomes required, list only
+the aggregate check `e2e-foundation`: it passes only when both per-project jobs,
 `e2e-foundation (chromium)` and `e2e-foundation (mobile-chrome)`, passed.
 
 ## How the owner applies it

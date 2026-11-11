@@ -46,6 +46,8 @@
           { "context": "e2e-full-matrix (firefox)", "integration_id": 15368 },
           { "context": "e2e-full-matrix (mobile-chrome)", "integration_id": 15368 },
           { "context": "Visual regression (chosen frontend)", "integration_id": 15368 },
+          { "context": "Workflow lint (actionlint)", "integration_id": 15368 },
+          { "context": "Browser test build", "integration_id": 15368 },
           { "context": "foundation-native", "integration_id": 15368 },
           { "context": "Analyze (javascript-typescript)", "integration_id": 15368 }
         ]
