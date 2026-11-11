@@ -15,6 +15,15 @@ runs:
           # archive, then an HTTPS mirror outside ubuntu.com (runners have lost DNS
           # for every ubuntu.com host at once), then the runner's original entries.
           # Package indexes are signed, so a fallback cannot change what gets installed.
+          # Each failed lookup costs apt about 20 s per file, so when the archive
+          # does not resolve right now, try the outside mirror first.
+          archive_priority=1
+          fallback_priority=2
+          if ! timeout 5 getent hosts archive.ubuntu.com > /dev/null; then
+            echo "archive.ubuntu.com does not resolve; trying mirrors.edge.kernel.org first"
+            archive_priority=3
+            fallback_priority=1
+          fi
           for mirror_file in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
             if [ -f "$mirror_file" ]; then
               sed \
@@ -23,8 +32,8 @@ runs:
                 -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
                 "$mirror_file" > "$RUNNER_TEMP/apt-mirrors-https.txt"
               {
-                awk 'NF { print $1 "\tpriority:1" }' "$RUNNER_TEMP/apt-mirrors-https.txt"
-                printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:2\n'
+                awk -v p="$archive_priority" 'NF { print $1 "\tpriority:" p }' "$RUNNER_TEMP/apt-mirrors-https.txt"
+                printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:%s\n' "$fallback_priority"
                 awk 'NF { print $1 "\tpriority:9" }' "$mirror_file"
               } | awk '!seen[$1]++' > "$RUNNER_TEMP/apt-mirrors-merged.txt"
               sudo cp "$RUNNER_TEMP/apt-mirrors-merged.txt" "$mirror_file"
