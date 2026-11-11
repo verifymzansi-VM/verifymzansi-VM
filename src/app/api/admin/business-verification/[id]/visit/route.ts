@@ -1,19 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { MIN_SEEN_PHOTOS, PREMISES_TYPES, type SeenState } from "@/lib/business-verification/seen";
-import { createNotification } from "@/lib/notifications";
-import { checkQueueClaim, releaseDecidedClaim } from "@/lib/services/queue-claims";
-import { logAuditEvent } from "@/lib/services/audit";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { internalApiError, logApiError, parseAndValidateJsonRequest } from "@/lib/utils/api";
+import { PREMISES_TYPES } from "@/lib/business-verification/seen";
 import { createLogger } from "@/lib/utils/logger";
-import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { settleStaffCommand, staffCommandRefusal } from "@/lib/foundation/staff-command";
 import { currentBusinessClaim } from "@/lib/foundation/business-seen";
-
-import { loadOpenSeenCase, requireStaffCase } from "../../_lib/staff-guard";
 
 const log = createLogger("AdminBusinessVerificationVisit");
 
@@ -44,178 +36,46 @@ const schema = z.discriminatedUnion("action", [
  * took it records what they saw; a different staff member approves.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (getDataBackend() === "foundation")
-    return handleFoundationOwnerRoute({
-      request: request instanceof NextRequest ? request : new NextRequest(request),
-      log,
-      action: "business-verification:visit",
-      mutate: true,
-      requireCaller: true,
-      maxBytes: 10000,
-      signInMessage: "Sign in to work on business checks",
-      unavailableMessage: "The check could not be updated. Reload the case.",
-      refusal: staffCommandRefusal,
-      command: async (api, payload, caller) => {
-        const id = z.uuid().parse((await params).id);
-        const input = schema.parse(payload);
-        const expected = z.iso.datetime({ offset: true }).parse(input.expectedUpdatedAt);
-        if (!caller) throw new Error("Verified reviewer required");
-        let rpc;
-        if (input.action === "schedule") {
-          const claim = await currentBusinessClaim(api, caller.accountId, id, false);
-          rpc = api.rpc(
-            "schedule_frontend_seen_check",
-            {
-              p_case: id,
-              p_expected: expected,
-              p_scheduled: input.scheduledFor,
-              ...(claim ? { p_generation: claim.generation, p_nonce: claim.nonce } : {}),
-            },
-            { get: false }
-          );
-        } else {
-          const { action: _action, expectedUpdatedAt: _expected, ...report } = input;
-          rpc = api.rpc(
-            "report_frontend_seen_check",
-            { p_case: id, p_expected: expected, p_report: report },
-            { get: false }
-          );
-        }
-        return settleStaffCommand(
-          rpc,
-          z.strictObject({ ok: z.literal(true), updatedAt: z.iso.datetime({ offset: true }) })
-        );
-      },
-    });
-  try {
-    // Claims are checked below: the assigned verifier keeps working their
-    // booked check without re-claiming it.
-    const guard = await requireStaffCase(request, params, {
-      log,
-      capability: "queue:claim",
-      requireClaim: false,
-    });
-    if (guard instanceof NextResponse) return guard;
-
-    const body = await parseAndValidateJsonRequest(request, schema, {
-      includeValidationDetails: true,
-    });
-    if (!body.success) return body.response;
-
-    const row = await loadOpenSeenCase(guard);
-    if (row instanceof NextResponse) return row;
-    const admin = createAdminClient();
-    const seen = row.seen;
-    let next: SeenState;
-
-    const previousVerifier =
-      seen.assignedTo && seen.assignedTo !== guard.user.id ? seen.assignedTo : null;
-    if (body.data.action === "schedule") {
-      if (seen.report) {
-        return NextResponse.json(
-          { error: "The report is already sent; this check can't be rebooked." },
-          { status: 409 }
-        );
-      }
-      if (previousVerifier && !["governance_controller", "admin"].includes(guard.actorRole)) {
-        return NextResponse.json(
+  return handleFoundationOwnerRoute({
+    request: request instanceof NextRequest ? request : new NextRequest(request),
+    log,
+    action: "business-verification:visit",
+    mutate: true,
+    requireCaller: true,
+    maxBytes: 10000,
+    signInMessage: "Sign in to work on business checks",
+    unavailableMessage: "The check could not be updated. Reload the case.",
+    refusal: staffCommandRefusal,
+    command: async (api, payload, caller) => {
+      const id = z.uuid().parse((await params).id);
+      const input = schema.parse(payload);
+      const expected = z.iso.datetime({ offset: true }).parse(input.expectedUpdatedAt);
+      if (!caller) throw new Error("Verified reviewer required");
+      let rpc;
+      if (input.action === "schedule") {
+        const claim = await currentBusinessClaim(api, caller.accountId, id, false);
+        rpc = api.rpc(
+          "schedule_frontend_seen_check",
           {
-            error:
-              "Another verifier booked this check. Ask a governance controller to reassign it.",
+            p_case: id,
+            p_expected: expected,
+            p_scheduled: input.scheduledFor,
+            ...(claim ? { p_generation: claim.generation, p_nonce: claim.nonce } : {}),
           },
-          { status: 403 }
+          { get: false }
+        );
+      } else {
+        const { action: _action, expectedUpdatedAt: _expected, ...report } = input;
+        rpc = api.rpc(
+          "report_frontend_seen_check",
+          { p_case: id, p_expected: expected, p_report: report },
+          { get: false }
         );
       }
-      if (seen.assignedTo !== guard.user.id) {
-        const refused = await checkQueueClaim(guard.user.id, {
-          type: "business_verification",
-          id: row.id,
-        });
-        if (refused) return refused;
-      }
-      if (Date.parse(body.data.scheduledFor) < Date.now() - 3_600_000) {
-        return NextResponse.json({ error: "Choose a time in the future." }, { status: 400 });
-      }
-      next = { ...seen, assignedTo: guard.user.id, scheduledFor: body.data.scheduledFor };
-    } else {
-      if (seen.assignedTo !== guard.user.id) {
-        return NextResponse.json(
-          { error: "Only the verifier who booked this check can report on it." },
-          { status: 403 }
-        );
-      }
-      const myPhotos = (seen.photos ?? []).filter((p) => p.by === guard.user.id);
-      if (body.data.outcome === "seen" && myPhotos.length < MIN_SEEN_PHOTOS) {
-        return NextResponse.json(
-          { error: `Add at least ${MIN_SEEN_PHOTOS} photos or screenshots first.` },
-          { status: 400 }
-        );
-      }
-      const { action: _a, expectedUpdatedAt: _e, ...report } = body.data;
-      next = { ...seen, report: { ...report, by: guard.user.id, at: new Date().toISOString() } };
-    }
-
-    const { data: updated, error: updateError } = await admin
-      .from("business_verifications")
-      .update({ seen: next })
-      .eq("id", row.id)
-      .eq("updated_at", body.data.expectedUpdatedAt)
-      .select("id");
-    if (updateError) throw new Error(updateError.message);
-    if (!updated?.length) {
-      return NextResponse.json(
-        { error: "This case changed. Reload and check again." },
-        { status: 409 }
+      return settleStaffCommand(
+        rpc,
+        z.strictObject({ ok: z.literal(true), updatedAt: z.iso.datetime({ offset: true }) })
       );
-    }
-
-    if (body.data.action === "schedule") {
-      const { data: profile } = await admin
-        .from("account_profiles")
-        .select("display_name")
-        .eq("user_id", guard.user.id)
-        .maybeSingle();
-      const firstName = String(profile?.display_name ?? "").split(/\s+/)[0] || "our verifier";
-      const when = new Date(body.data.scheduledFor).toLocaleString("en-ZA", {
-        timeZone: "Africa/Johannesburg",
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
-      await createNotification({
-        userId: row.owner_id,
-        type: "info",
-        title: seen.method === "visit" ? "Your visit is booked" : "Your video check is booked",
-        message: `${when} with ${firstName} from VerifyMzansi. Reply on your Verify page to change it.`,
-        href: `/dashboard/businesses/${row.business_id}/verification`,
-      });
-      if (previousVerifier) {
-        await createNotification({
-          userId: previousVerifier,
-          type: "info",
-          title: "A Seen check was reassigned",
-          message: `${firstName} now runs this check (${when}).`,
-          href: `/admin/business-verification/${row.id}`,
-        });
-      }
-    }
-
-    if (body.data.action === "report") {
-      // A different staff member approves the report, so let them claim it.
-      await releaseDecidedClaim(guard.user.id, { type: "business_verification", id: row.id });
-    }
-
-    await logAuditEvent({
-      actorId: guard.user.id,
-      actorRole: guard.actorRole,
-      action: `business_verification_seen_${body.data.action}`,
-      targetType: "business",
-      targetId: row.business_id,
-      area: "MZANSI_BUSINESS",
-      metadata: { caseId: row.id },
-    });
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    logApiError(log, "Seen visit action failed", error);
-    return internalApiError();
-  }
+    },
+  });
 }

@@ -139,7 +139,7 @@ export const COMMERCIAL_SETTING_LABELS: Record<CommercialSettingKey, string> = {
   features: "Feature toggles",
 };
 
-export function isCommercialSettingKey(key: string): key is CommercialSettingKey {
+function isCommercialSettingKey(key: string): key is CommercialSettingKey {
   return Object.prototype.hasOwnProperty.call(COMMERCIAL_SETTING_SCHEMAS, key);
 }
 
@@ -180,10 +180,6 @@ export async function getCommercialSettings(client: SettingsReader): Promise<Com
   const value = resolveCommercialSettings(data);
   cache = { at: Date.now(), value };
   return value;
-}
-
-export function clearCommercialSettingsCache(): void {
-  cache = null;
 }
 
 /**

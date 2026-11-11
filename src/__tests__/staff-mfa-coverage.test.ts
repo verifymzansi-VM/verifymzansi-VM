@@ -7,8 +7,9 @@ import { describe, expect, it } from "vitest";
  * policy (authenticator app, re-verified every 12 hours, 15 minutes for
  * sensitive actions). These helpers all run checkStaffApiMfa/evaluateStaffMfa.
  */
-const MFA_GUARDS =
-  /\b(requireStaff|requireStaffCase|checkStaffApiMfa|enforceAdminMutationGuard|evaluateStaffMfa|authorizeEvidenceRequest)\(/;
+const MFA_GUARDS = /\b(requireStaff|checkStaffApiMfa|enforceAdminMutationGuard|evaluateStaffMfa)\(/;
+// Foundation handlers, whose staff commands check the policy in the database.
+const FOUNDATION_HANDLER = /from "@\/lib\/foundation\//;
 const STAFF_AUTHORITY = /\b(verify[A-Za-z]*FromDb|readStaffAccessFromDb)\(/;
 // The modules that define the role lookups and the MFA guards themselves.
 const DEFINITIONS = new Set(["src/lib/auth/admin-access.ts"]);
@@ -33,10 +34,24 @@ describe("staff two-step coverage", () => {
     expect(missing).toEqual([]);
   });
 
+  // Routes on the foundation backend reach the database only through api
+  // commands, and every staff command resolves its caller with
+  // internal.staff_actor, which applies the same policy in the database.
   it("guards every back-office API route", () => {
     const routes = files("src/app/api/admin").filter((file) => file.endsWith("/route.ts"));
     expect(routes.length).toBeGreaterThan(20);
-    expect(routes.filter((file) => !MFA_GUARDS.test(source(file)))).toEqual([]);
+    const unguarded = routes.filter(
+      (file) => !MFA_GUARDS.test(source(file)) && !FOUNDATION_HANDLER.test(source(file))
+    );
+    expect(unguarded).toEqual([]);
+  });
+
+  it("applies the two-step policy to every foundation staff command", () => {
+    const staffActor = source("database/foundation/current/functions/internal/staff_actor.sql");
+    expect(staffActor).toMatch(/claims->>'aal' is distinct from 'aal2'/);
+    expect(staffActor).toMatch(/factor_type = 'totp' and f\.status = 'verified'/);
+    expect(staffActor).toMatch(/interval '12 hours'/);
+    expect(staffActor).toMatch(/needs_mfa and totp_at < .*interval '15 minutes'/);
   });
 
   it("guards every back-office page itself, not only through the layout", () => {

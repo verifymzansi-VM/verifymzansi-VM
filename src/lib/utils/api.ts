@@ -146,30 +146,6 @@ export function parseAndValidateSearchParams<TSchema extends ZodTypeAny>(
   return { success: true, data: parsed.data };
 }
 
-export function parseAndValidateFormData<TSchema extends ZodTypeAny>(
-  formData: Pick<FormData, "entries">,
-  schema: TSchema,
-  options: ParseValidatedJsonOptions = {}
-):
-  | {
-      success: true;
-      data: output<TSchema>;
-    }
-  | {
-      success: false;
-      response: NextResponse;
-    } {
-  const parsed = schema.safeParse(coerceEntriesToObject(formData));
-  if (!parsed.success) {
-    return {
-      success: false,
-      response: buildValidationErrorResponse(parsed.error, options),
-    };
-  }
-
-  return { success: true, data: parsed.data };
-}
-
 export function parseAndValidateRouteParams<TSchema extends ZodTypeAny>(
   params: unknown,
   schema: TSchema,
@@ -222,22 +198,8 @@ export function forbiddenResponse(message = "Forbidden", reason?: string): NextR
   return NextResponse.json(body, { status: 403 });
 }
 
-export function notFoundResponse(message = "Not found"): NextResponse {
-  return NextResponse.json({ error: message }, { status: 404 });
-}
-
 export function badRequestResponse(message = "Bad request", details?: string): NextResponse {
   const body: Record<string, string> = { error: message };
   if (details) body.details = details;
   return NextResponse.json(body, { status: 400 });
-}
-
-export function rateLimitResponse(retryAfter?: number): NextResponse {
-  const body: Record<string, unknown> = {
-    error: "Too many requests. Please try again later.",
-  };
-  if (retryAfter != null) body.retryAfter = retryAfter;
-  const headers: HeadersInit = {};
-  if (retryAfter != null) headers["Retry-After"] = String(retryAfter);
-  return NextResponse.json(body, { status: 429, headers });
 }
