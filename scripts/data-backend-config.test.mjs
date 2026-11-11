@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import { test } from "node:test";
+
+const requireReal = createRequire(import.meta.url);
 
 const source = readFileSync("next.config.js", "utf8");
 function buildConfig(env) {
@@ -12,6 +15,8 @@ function buildConfig(env) {
     URL,
     require: (name) => {
       if (name === "./package.json") return { version: "synthetic-build" };
+      if (name === "./scripts/lib/next-typecheck-skip.cjs")
+        return requireReal("./lib/next-typecheck-skip.cjs");
       assert.equal(name, "@sentry/nextjs/config");
       return { withSentryConfig: (config) => config };
     },
@@ -96,4 +101,18 @@ test("local foundation builds require the isolated runtime and a loopback app", 
       () => buildConfig({ ...local, NEXT_PUBLIC_APP_URL: app }),
       /approved public connection/
     );
+});
+
+test("Next keeps its TypeScript check unless a CI test or bundle build opts out", () => {
+  assert.equal(buildConfig(foundation).typescript.ignoreBuildErrors, false);
+  assert.equal(
+    buildConfig({ ...foundation, VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1" }).typescript
+      .ignoreBuildErrors,
+    false
+  );
+  assert.equal(
+    buildConfig({ ...foundation, VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1", CI: "true" }).typescript
+      .ignoreBuildErrors,
+    true
+  );
 });
