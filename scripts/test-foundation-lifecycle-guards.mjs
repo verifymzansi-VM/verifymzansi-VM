@@ -2179,9 +2179,6 @@ try {
     fails(submit(cara, draft(cara)), "PT429");
   });
   await check("events: the member's privacy export includes their submissions", () => {
-    // Hosted Auth has this column; the replay prelude models only what the
-    // schema itself references.
-    q("alter table auth.users add column if not exists phone_confirmed_at timestamptz;");
     const exported = json(`select internal.frontend_privacy_export_data('${cara.id}');`);
     assert.equal(Object.keys(exported).length, 33);
     const rows = exported.event_submissions;
