@@ -294,7 +294,9 @@ try {
     fails(staff(zola, queueView), "42501", /capability not granted/);
     const kagiso = staffUser("kagiso", "moderator");
     assert.equal(json(staff(kagiso, queueView)).own_count, 0);
-    q(`update private.staff_roles set revoked_at=now(),revoked_by='${admin.id}' where user_id='${kagiso.id}';`);
+    q(
+      `update private.staff_roles set revoked_at=now(),revoked_by='${admin.id}' where user_id='${kagiso.id}';`
+    );
     fails(staff(kagiso, queueView), "42501", /capability not granted/);
   });
 
