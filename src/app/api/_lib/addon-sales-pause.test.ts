@@ -2,18 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { handleFoundationBillingRoute } from "@/lib/foundation/billing-route";
-import { createHostedCheckout } from "@/lib/payments/checkout";
-import type * as Checkout from "@/lib/payments/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Every website URL that can start a paid add-on purchase, on either backend,
-// refuses while add-on sales are paused (src/lib/billing/addon-sales.ts).
+// Every website URL that can start a paid add-on purchase refuses while add-on
+// sales are paused (src/lib/billing/addon-sales.ts).
 vi.mock("@/lib/foundation/billing-route", () => ({ handleFoundationBillingRoute: vi.fn() }));
-vi.mock("@/lib/payments/checkout", async (importOriginal) => ({
-  ...(await importOriginal<typeof Checkout>()),
-  createHostedCheckout: vi.fn(),
-}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
@@ -52,7 +46,6 @@ const request = (path: string, body?: unknown) =>
 
 function expectNothingStarted() {
   expect(handleFoundationBillingRoute).not.toHaveBeenCalled();
-  expect(createHostedCheckout).not.toHaveBeenCalled();
   expect(createClient).not.toHaveBeenCalled();
   expect(createAdminClient).not.toHaveBeenCalled();
 }
@@ -94,18 +87,6 @@ describe.each(routes)("POST /api/%s while add-on sales are paused", (path, load)
     expect(await response.json()).toEqual(paused);
     expectNothingStarted();
   });
-
-  // legacy-backend: this case covers the old ("source") backend path and runs in
-  // the foundation vitest project with the backend stubbed. Delete it together
-  // with the old backend (see src/test/legacy-backend-suites.ts).
-  it("refuses on the old backend before any session, table or provider work", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-    const { POST } = await load();
-    const response = await POST(request(path), { params: Promise.resolve({ id }) });
-    expect(response.status).toBe(403);
-    expect(await response.json()).toEqual(paused);
-    expectNothingStarted();
-  });
 });
 
 describe.each(routes)("POST /api/%s once add-on sales are switched on", (path, load) => {
@@ -125,5 +106,13 @@ describe.each(routes)("POST /api/%s once add-on sales are switched on", (path, l
     );
     expect(createClient).not.toHaveBeenCalled();
     expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("refuses an invalid post id before foundation billing", async () => {
+    vi.stubEnv("ADDON_SALES_ENABLED", "true");
+    const { POST } = await load();
+    const response = await POST(request(path), { params: Promise.resolve({ id: "not-a-post" }) });
+    expect(response.status).toBe(400);
+    expect(handleFoundationBillingRoute).not.toHaveBeenCalled();
   });
 });

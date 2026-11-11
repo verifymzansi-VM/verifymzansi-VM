@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { runOperationJobs, runFoundationOperationJobs, logError, Incomplete } = vi.hoisted(() => ({
-  runOperationJobs: vi.fn(),
+const { runFoundationOperationJobs, logError, Incomplete } = vi.hoisted(() => ({
   runFoundationOperationJobs: vi.fn(),
   logError: vi.fn(),
   Incomplete: class extends Error {
@@ -13,7 +12,6 @@ const { runOperationJobs, runFoundationOperationJobs, logError, Incomplete } = v
     }
   },
 }));
-vi.mock("@/lib/services/operation-jobs", () => ({ runOperationJobs }));
 vi.mock("@/lib/foundation/operation-jobs", () => ({
   runFoundationOperationJobs,
   OperationJobsIncompleteError: Incomplete,
@@ -35,36 +33,35 @@ describe("POST /api/webhooks/ops-jobs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv("OPS_JOBS_SECRET", SECRET);
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-    runOperationJobs.mockResolvedValue({ claimed: 2, succeeded: 2, retrying: 0, dead: 0 });
+    runFoundationOperationJobs.mockResolvedValue({
+      claimed: 25,
+      succeeded: 25,
+      retrying: 0,
+      lost: 0,
+      failed: [],
+    });
   });
   afterEach(() => vi.unstubAllEnvs());
 
-  it("runs jobs for the worker holding the shared secret", async () => {
-    const res = await POST(request(`Bearer ${SECRET}`));
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ succeeded: 2 });
-  });
-
   it.each([undefined, "Bearer wrong", `Basic ${SECRET}`])("refuses %s", async (auth) => {
     expect((await POST(request(auth))).status).toBe(401);
-    expect(runOperationJobs).not.toHaveBeenCalled();
+    expect(runFoundationOperationJobs).not.toHaveBeenCalled();
   });
 
   it("fails closed when the secret is missing or too short", async () => {
     vi.stubEnv("OPS_JOBS_SECRET", "short");
     expect((await POST(request("Bearer short"))).status).toBe(401);
+    expect(runFoundationOperationJobs).not.toHaveBeenCalled();
   });
 
   it("returns 500 without details when the run fails", async () => {
-    runOperationJobs.mockRejectedValue(new Error("db exploded"));
+    runFoundationOperationJobs.mockRejectedValue(new Error("db exploded"));
     const res = await POST(request(`Bearer ${SECRET}`));
     expect(res.status).toBe(500);
     expect(await res.text()).not.toContain("exploded");
   });
 
-  it("answers 500 and names the failed steps when a foundation run is incomplete", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
+  it("answers 500 and names the failed steps when a run is incomplete", async () => {
     runFoundationOperationJobs.mockRejectedValue(
       new Incomplete(["sweep:sweep_sponsorships", "staff_alert"], { lost: 2 })
     );
@@ -78,18 +75,9 @@ describe("POST /api/webhooks/ops-jobs", () => {
     });
   });
 
-  it("returns the foundation run summary when every step succeeds", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
-    runFoundationOperationJobs.mockResolvedValue({
-      claimed: 25,
-      succeeded: 25,
-      retrying: 0,
-      lost: 0,
-      failed: [],
-    });
+  it("returns the run summary for the worker holding the shared secret", async () => {
     const res = await POST(request(`Bearer ${SECRET}`));
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ claimed: 25, succeeded: 25, retrying: 0 });
-    expect(runOperationJobs).not.toHaveBeenCalled();
   });
 });

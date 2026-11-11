@@ -53,7 +53,7 @@ const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
 
 /**
  * Pre-generated variant widths (must match VARIANT_WIDTHS in
- * src/lib/services/image-variants.ts). Cloudflare Image Resizing is not
+ * src/lib/media/variant-keys.ts). Cloudflare Image Resizing is not
  * enabled on the zone, so responsive delivery relies on variants generated
  * at upload time. The loader maps a requested width to the nearest variant
  * key; the serve route falls back to the original when the variant object

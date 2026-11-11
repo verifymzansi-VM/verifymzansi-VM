@@ -6,7 +6,6 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 import { mapCommercialError } from "./errors";
 import { DEFAULT_COMMERCIAL_SETTINGS, resolveCommercialSettings } from "./settings";
 import { buildCommercialCatalog } from "./plans";
-import { parsePostingAllowance } from "./allowance";
 
 describe("commercial error mapping", () => {
   it("maps database guard codes to member-facing messages", () => {
@@ -95,14 +94,5 @@ describe("commercial catalogue", () => {
     const hidden = { ...retailRow("MZANSI_MARKET", "month", 100), public: false };
     const catalog = buildCommercialCatalog([hidden] as never);
     expect(catalog.retail.find((offer) => offer.tier === "month")?.priceCents).toBe(5000);
-  });
-});
-
-describe("posting allowance parsing", () => {
-  it("treats malformed RPC data as no paid plan", () => {
-    expect(parsePostingAllowance(null)).toMatchObject({ hasPaidPlan: false, capacity: 0 });
-    expect(
-      parsePostingAllowance({ hasPaidPlan: true, capacity: 25, maxPhotos: 10, maxVideos: 1 })
-    ).toMatchObject({ hasPaidPlan: true, capacity: 25 });
   });
 });

@@ -120,7 +120,7 @@ export function canCreateListing(
 }
 
 /** Plain-language explanation shown when every active posting slot is in use. */
-export function slotLimitReason(capacity: number): string {
+function slotLimitReason(capacity: number): string {
   const slots =
     capacity === 1 ? "Your active posting slot is" : `All ${capacity} active posting slots are`;
   return `${slots} in use. Mark a post as sold, deactivate one, or add a slot from R50 / 30 days.`;

@@ -49,7 +49,7 @@ export interface EngagementReadResult<T> {
   errorCode?: EngagementReadErrorCode;
 }
 
-export async function getContentViewCountMap(
+async function getContentViewCountMap(
   admin: SupabaseClient,
   targetType: ContentTargetType,
   targetIds: string[]
@@ -133,7 +133,7 @@ export async function getOptionalContentViewCountMap(
   return getContentViewCountMap(admin, targetType, targetIds);
 }
 
-export async function getContentLikeSummaryMap(
+async function getContentLikeSummaryMap(
   admin: SupabaseClient,
   targetType: ContentTargetType,
   targetIds: string[],
