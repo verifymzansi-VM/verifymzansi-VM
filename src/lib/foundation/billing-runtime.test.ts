@@ -154,15 +154,77 @@ it("uses the server quote and durable provider keys, then attaches only with its
     p_checkout_url: checkoutUrl,
   });
 });
-it("reuses an existing provider checkout without creating another", async () => {
+// The restored checkout page's reply for an open request (PAY-12, M3.1).
+const openRequest = (change: Record<string, unknown> = {}) => ({
+  ...claimDto(),
+  claim_token: null,
+  provider_request_id: requestId,
+  checkout_url: checkoutUrl,
+  ...change,
+});
+it("answers a plan's open request with continue, status and cancel, creating nothing", async () => {
+  machine.mockResolvedValueOnce({ data: openRequest(), error: null });
+  await expect(
+    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+  ).rejects.toMatchObject({
+    status: 409,
+    code: "PENDING_PAYMENT_EXISTS",
+    message:
+      "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.",
+    pendingPayment: {
+      id: payment,
+      checkoutUrl,
+      statusUrl: `https://verifymzansi.com/billing/success?payment=${payment}`,
+      canCancel: true,
+    },
+  });
+  expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_checkout_request"]);
+});
+it("offers no continue link once the open request's window has passed", async () => {
   machine.mockResolvedValueOnce({
-    data: { ...claimDto(), claim_token: null, checkout_url: checkoutUrl },
+    data: openRequest({ checkout_expires_at: "2020-01-01T00:00:00Z" }),
     error: null,
   });
-  expect(
-    await startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
-  ).toEqual({ paymentId: payment, checkoutUrl });
-  expect(createOzowHostedPayment).not.toHaveBeenCalled();
+  await expect(
+    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+  ).rejects.toMatchObject({
+    status: 409,
+    pendingPayment: { id: payment, checkoutUrl: null, canCancel: true },
+  });
+});
+it("never offers a provider address it would not redirect to", async () => {
+  machine.mockResolvedValueOnce({
+    data: openRequest({ checkout_url: "https://one.ozow.com.untrusted.invalid/" }),
+    error: null,
+  });
+  await expect(
+    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+  ).rejects.toMatchObject({ status: 503 });
+});
+it("offers no cancel for a mock checkout outside the test copy", async () => {
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  machine.mockResolvedValueOnce({
+    data: openRequest({ provider_request_id: `mock-${payment}` }),
+    error: null,
+  });
+  await expect(
+    startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service)
+  ).rejects.toMatchObject({ status: 409, pendingPayment: { canCancel: false } });
+});
+// PAY-03 (M3.1): after a failed first call, the database gives the next lease a
+// fresh window and key; the website sends exactly what the lease returned.
+it("sends a retried lease's own window and key to the provider", async () => {
+  const retried = {
+    ...claimDto(),
+    checkout_expires_at: "2031-02-03T04:05:06Z",
+    idempotency_key: uuid(11),
+  };
+  machine.mockResolvedValueOnce({ data: retried, error: null });
+  await startFoundationCheckout(api, owner, product, null, "https://verifymzansi.com", service);
+  expect(createOzowHostedPayment).toHaveBeenCalledWith(
+    expect.objectContaining({ idempotencyKey: uuid(11), expireAt: "2031-02-03T04:05:06Z" })
+  );
 });
 it.each([{ owner_id: uuid(9) }, { amount_cents: "1" }])(
   "refuses an owner/quote mismatch before contacting the provider",
@@ -239,11 +301,76 @@ it("expires a stored checkout only after an authoritative expired request with n
   expect(await reconcileFoundationPayment(payment, service)).toEqual({
     checked: true,
     pendingTransaction: false,
+    closed: true,
   });
   expect(machine).toHaveBeenLastCalledWith("finish_unpaid_checkout", {
     p_payment_id: payment,
     p_status: "expired",
   });
+});
+it("records a declined or cancelled bank attempt as not paid, as its notice would", async () => {
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+    { ...notification(), status: "Error" },
+  ]);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+    closed: true,
+  });
+  expect(machine).toHaveBeenLastCalledWith("apply_provider_event", {
+    p_event: expect.objectContaining({ status: "error", provider_transaction_id: transactionId }),
+  });
+  expect(getOzowPaymentRequestStatus).not.toHaveBeenCalled();
+});
+it("leaves a payment pending while any attempt is still pending", async () => {
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+    { ...notification(), status: "Error" },
+    { ...notification(), transactionId: uuid(12), status: "Pending" },
+  ]);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: true,
+  });
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+});
+it("does not record an attempt again once the payment is no longer pending", async () => {
+  machine.mockResolvedValueOnce({ data: { ...paymentDto(), status: "failed" }, error: null });
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+    { ...notification(), status: "Error" },
+  ]);
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+  });
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+});
+it("closes a pending payment whose request the provider reports cancelled", async () => {
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Cancelled");
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+    closed: true,
+  });
+  expect(machine).toHaveBeenLastCalledWith("finish_unpaid_checkout", {
+    p_payment_id: payment,
+    p_status: "cancelled",
+  });
+});
+it("leaves an open request with no attempt pending", async () => {
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Created");
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+  });
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+});
+it("a member's cancel succeeds when the status check already closed the payment", async () => {
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Cancelled");
+  expect(await cancelFoundationPendingPayment(api, payment, service)).toEqual({ success: true });
+  expect(cancelOzowPaymentRequest).toHaveBeenCalledExactlyOnceWith(requestId);
+  expect(machine.mock.calls.filter(([name]) => name === "finish_unpaid_checkout")).toEqual([
+    ["finish_unpaid_checkout", { p_payment_id: payment, p_status: "cancelled" }],
+  ]);
 });
 it("preserves a concurrent bank settlement when cancellation races it", async () => {
   vi.mocked(listOzowPaymentTransactions).mockResolvedValue([notification()]);
@@ -298,6 +425,7 @@ it("refuses to cancel a mock checkout, without a provider call", async () => {
   expect(machine).not.toHaveBeenCalled();
 });
 it("with mock Ozow off, cancels a real checkout through the provider as before", async () => {
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Created");
   expect(await cancelFoundationPendingPayment(api, payment, service)).toEqual({ success: true });
   expect(cancelOzowPaymentRequest).toHaveBeenCalledExactlyOnceWith(requestId);
   expect(listOzowPaymentTransactions).toHaveBeenCalledOnce();
@@ -391,15 +519,59 @@ it("in the test copy, the status-check job settles a mock checkout", async () =>
   stubSettings(COPY_ENV);
   vi.mocked(isMockOzowEnabled).mockReturnValue(true);
   machine
+    .mockResolvedValueOnce({ data: 0, error: null })
     .mockResolvedValueOnce({ data: [mockCheckout()], error: null })
     .mockResolvedValueOnce({ data: mockCheckout(), error: null });
   vi.mocked(listOzowPaymentTransactions).mockResolvedValueOnce([standInTransaction()]);
-  expect(await runFoundationPaymentReconciliation(service)).toEqual({ checked: 1, failures: 0 });
+  expect(await runFoundationPaymentReconciliation(service)).toEqual({
+    checked: 1,
+    failures: 0,
+    expired: 0,
+  });
   expect(machine.mock.calls.map(([name]) => name)).toEqual([
+    "expire_stale_checkouts",
     "list_reconcilable_payments",
     "claim_payment_reconciliation",
     "apply_provider_event",
   ]);
+});
+it("in the test copy, cancels a mock checkout at the stand-in", async () => {
+  stubSettings(COPY_ENV);
+  vi.mocked(isMockOzowEnabled).mockReturnValue(true);
+  rpc.mockResolvedValueOnce({ data: mockCheckout(), error: null });
+  machine.mockResolvedValueOnce({ data: mockCheckout(), error: null });
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Cancelled");
+  expect(await cancelFoundationPendingPayment(api, payment, service)).toEqual({ success: true });
+  expect(cancelOzowPaymentRequest).toHaveBeenCalledExactlyOnceWith(mockRequest);
+  expect(machine).toHaveBeenLastCalledWith("finish_unpaid_checkout", {
+    p_payment_id: payment,
+    p_status: "cancelled",
+  });
+});
+it("the status-check job first closes payments that never got a request", async () => {
+  machine
+    .mockResolvedValueOnce({ data: 3, error: null })
+    .mockResolvedValueOnce({ data: [], error: null });
+  expect(await runFoundationPaymentReconciliation(service)).toEqual({
+    checked: 0,
+    failures: 0,
+    expired: 3,
+  });
+  expect(machine.mock.calls).toEqual([
+    ["expire_stale_checkouts", { p_limit: 100 }],
+    ["list_reconcilable_payments", { p_limit: 20 }],
+  ]);
+});
+it("a failed sweep is reported and the status checks still run", async () => {
+  machine
+    .mockResolvedValueOnce({ data: null, error: { code: "PGRST202" } })
+    .mockResolvedValueOnce({ data: [paymentDto()], error: null });
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Created");
+  expect(await runFoundationPaymentReconciliation(service)).toEqual({
+    checked: 1,
+    failures: 1,
+    expired: 0,
+  });
 });
 it("with the copy's settings but mock Ozow off, reconciles exactly as production", async () => {
   stubSettings(COPY_ENV);

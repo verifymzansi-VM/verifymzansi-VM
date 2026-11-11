@@ -690,14 +690,21 @@ export async function getOzowPaymentRequestStatus(paymentRequestId: string): Pro
   const data = (await (
     await ozowRequest(`/v1/payments/${encodeURIComponent(paymentRequestId)}`)
   ).json()) as Record<string, unknown>;
-  if (data.id !== paymentRequestId || !["Created", "Expired"].includes(String(data.status))) {
+  // "Cancelled": a request closed by a cancellation (ours or the member's at
+  // Ozow). Any other status is refused, as before.
+  if (
+    data.id !== paymentRequestId ||
+    !["Created", "Expired", "Cancelled"].includes(String(data.status))
+  ) {
     throw new OzowProviderError("Invalid Ozow payment request status");
   }
   return String(data.status);
 }
 
 export async function cancelOzowPaymentRequest(paymentRequestId: string): Promise<void> {
-  if (isMockOzowEnabled()) return;
+  // Mock mode never contacts Ozow. Only the private test copy has a provider to
+  // tell: its loopback stand-in (testCopyProviderRequest, through ozowRequest).
+  if (isMockOzowEnabled() && !testCopyCheckout()) return;
   await ozowRequest(`/v1/payments/${encodeURIComponent(paymentRequestId)}/cancel`, "POST");
 }
 

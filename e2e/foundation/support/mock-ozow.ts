@@ -4,13 +4,16 @@
 // - The payment page: the website's mock checkout sends the browser to
 //   https://127.0.0.1:55455/checkout (src/lib/payments/ozow.ts, test copy only),
 //   which the spec serves through Playwright routing (handle below). Its
-//   buttons pay or decline at a "test bank".
+//   buttons pay, decline or cancel at a "test bank"; a cancel is recorded as
+//   an Error transaction, as the code assumes Ozow reports one.
 // - The notification: paying signs a complete transaction notice with the
 //   copy's synthetic signing secret and POSTs it to the website's real
 //   notification route, as the provider's signing service would. It can be
 //   withheld to model a lost notification.
 // - The lookup API: a loopback HTTP stand-in on 127.0.0.1:55448 answers the
-//   website's status checks (payment request status and its transactions). The
+//   website's status checks (payment request status and its transactions) and
+//   its cancellation of a pending request (afterwards the request reads
+//   "Cancelled"). The
 //   website sends lookups there only in the test copy with mock Ozow on
 //   (testCopyCheckout().providerOrigin). Every lookup is recorded.
 //
@@ -73,7 +76,9 @@ function storedRequest(paymentId: string) {
 export class MockOzow {
   /** Lookups the website sent to the stand-in, in order. */
   readonly lookups: ProviderLookup[] = [];
-  /** Payments made or declined at the test bank, in order. */
+  /** Requests the website cancelled at the stand-in. */
+  readonly cancelled = new Set<string>();
+  /** Payments made, declined or cancelled at the test bank, in order. */
   readonly made: { paymentId: string; transactionId: string; status: string }[] = [];
   /** Notifications sent to the website, with its replies. */
   readonly notifications: SentNotification[] = [];
@@ -114,6 +119,12 @@ export class MockOzow {
       response.writeHead(status, { "Content-Type": "application/json" });
       response.end(JSON.stringify(body));
     };
+    const cancel = /^\/v1\/payments\/([^/]+)\/cancel$/.exec(url.pathname);
+    if (cancel && request.method === "POST") {
+      const id = decodeURIComponent(cancel[1]);
+      this.cancelled.add(id);
+      return json(200, { id, status: "Cancelled" });
+    }
     if (request.method !== "GET") return json(405, { title: "Method not allowed" });
     const list = /^\/v1\/payments\/([^/]+)\/transactions$/.exec(url.pathname);
     if (list)
@@ -122,8 +133,12 @@ export class MockOzow {
         links: { next: null },
       });
     const payment = /^\/v1\/payments\/([^/]+)$/.exec(url.pathname);
-    // Not modelled: expiry. Every request the stand-in is asked about is open.
-    if (payment) return json(200, { id: decodeURIComponent(payment[1]), status: "Created" });
+    // Not modelled: expiry. Every request the stand-in is asked about is open
+    // until the website cancels it.
+    if (payment) {
+      const id = decodeURIComponent(payment[1]);
+      return json(200, { id, status: this.cancelled.has(id) ? "Cancelled" : "Created" });
+    }
     const single = /^\/v1\/transactions\/([^/]+)$/.exec(url.pathname);
     if (single) {
       const id = decodeURIComponent(single[1]);
@@ -151,11 +166,15 @@ export class MockOzow {
           `<input type="hidden" name="returnUrl" value="${escapeHtml(returnUrl)}">` +
           '<button type="submit" name="outcome" value="paid">Pay with the test bank</button>' +
           '<button type="submit" name="outcome" value="declined">Decline at the test bank</button>' +
+          '<button type="submit" name="outcome" value="cancelled">Cancel at the test bank</button>' +
           "</form>"
       );
     }
     const outcome = url.searchParams.get("outcome");
-    if (url.pathname !== "/pay" || (outcome !== "paid" && outcome !== "declined"))
+    if (
+      url.pathname !== "/pay" ||
+      (outcome !== "paid" && outcome !== "declined" && outcome !== "cancelled")
+    )
       return { ...page("Mock Ozow", "<h1>Unknown action</h1>"), status: 400 };
     await this.settle(paymentId, outcome === "paid" ? "Successful" : "Error");
     if (!this.memberReturns)
@@ -170,7 +189,11 @@ export class MockOzow {
   private async settle(paymentId: string, status: "Successful" | "Error") {
     const stored = storedRequest(paymentId);
     // The provider only knows requests it created: the copy's mock checkout.
-    if (stored.requestId !== `mock-${paymentId}` || stored.status !== "pending")
+    if (
+      stored.requestId !== `mock-${paymentId}` ||
+      stored.status !== "pending" ||
+      this.cancelled.has(stored.requestId)
+    )
       throw new Error("The mock provider has no open request for this payment");
     const transactionId = randomUUID();
     const amount = (stored.amountCents / 100).toFixed(2);

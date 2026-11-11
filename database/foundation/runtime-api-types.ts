@@ -465,6 +465,7 @@ export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
       purge_frontend_form_drafts: { Args: { p_limit: number }; Returns: number };
+      expire_stale_checkouts: { Args: { p_limit: number }; Returns: number };
       start_frontend_cipc_email: {
         Args: {
           p_owner: string;

@@ -18,6 +18,7 @@ import { readPostingAllowance } from "./posting-allowance";
 import {
   cancelFoundationPendingPayment,
   FoundationBillingError,
+  FoundationPendingPaymentError,
   manageFoundationPlanMember,
   readFoundationBilling,
   readFoundationPayment,
@@ -210,10 +211,15 @@ export async function handleFoundationBillingRoute(
             ? "Check the billing details"
             : "Billing is temporarily unavailable";
     const code = error instanceof FoundationBillingError ? error.code : undefined;
-    const response = NextResponse.json(code ? { error: message, code } : { error: message }, {
-      status,
-      headers: noStore,
-    });
+    // The restored checkout page shows Continue, Check status and Cancel from this.
+    const pendingPayment =
+      error instanceof FoundationPendingPaymentError ? error.pendingPayment : undefined;
+    const response = NextResponse.json(
+      code
+        ? { error: message, code, ...(pendingPayment && { pendingPayment }) }
+        : { error: message },
+      { status, headers: noStore }
+    );
     return context ? context.respond(response) : response;
   }
 }
