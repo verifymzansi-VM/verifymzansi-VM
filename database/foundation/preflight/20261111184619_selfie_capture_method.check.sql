@@ -6,62 +6,54 @@
 -- "summary" row, then one row per problem. Apply the update only when the
 -- summary is the only row.
 --
--- The summary says whether the upload completion is the reviewed
--- seven-argument body (the update replaces it) or already the update's
--- nine-argument one with the staff read, and counts:
+-- The summary says whether the receipt scrub is the reviewed body and the
+-- update's two commands and two columns are absent (the update adds them), or
+-- everything is already the update's, and counts:
 -- - "selfie receipts": completed selfie upload receipts so far;
--- - "with a capture method": how many of them carry the browser's answer
+-- - "with a capture method": how many receipts carry the browser's answer
 --   (0 before the update; earlier receipts stay empty).
--- Apply the update before the website release that sends these values is
--- deployed (see updates/README.md).
+-- Apply the update before the website release that uses it is deployed (see
+-- updates/README.md).
 do $$begin
   set transaction read only;
 end$$;
 with bodies as (
-  select v.sig, v.expected,
+  select v.sig, v.reviewed, v.updated,
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
-    ('internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer)', '737041e48e8be2f17d7eb0e4a3dd2ba3'),
-    ('api.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer)', '4bd0236e450555b0340a319891244e87'),
-    ('internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer,text,boolean)', 'edd196d8ef77532f8f07fd4a02ca9c4f'),
-    ('api.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer,text,boolean)', '4a17f8bbad56ecd3191a72d45287511e'),
-    ('internal.get_frontend_staff_selfie_capture(uuid,text,uuid)', '409db62cee2182fa6151df48406dc394'),
-    ('api.get_frontend_staff_selfie_capture(uuid,text,uuid)', '774a7b78891fffc1758eb1ce34728c17')
-  ) v(sig, expected)
+    ('internal.scrub_frontend_verification_receipt()', 'a2bcb31f73b232d41b605c4b8b51b155', '8e9a4a32bfe4f789bb94d74edf6d4f76'),
+    ('internal.record_my_selfie_capture(uuid,text,boolean)', null, '4ad4bbe1cfe3f8276dfd73e113c34f2f'),
+    ('api.record_my_selfie_capture(uuid,text,boolean)', null, '5a227ba0cea8a58d5d0e55a35f2d6afb'),
+    ('internal.get_frontend_staff_selfie_capture(uuid,text,uuid)', null, '409db62cee2182fa6151df48406dc394'),
+    ('api.get_frontend_staff_selfie_capture(uuid,text,uuid)', null, '774a7b78891fffc1758eb1ce34728c17')
+  ) v(sig, reviewed, updated)
 ),
 state as (
   select
-    count(*) filter (where sig like '%,integer)' and body is not null) as old_present,
-    count(*) filter (where sig like '%,integer)' and body = expected) as old_reviewed,
-    count(*) filter (where sig not like '%,integer)' and body is not null) as new_present,
-    count(*) filter (where sig not like '%,integer)' and body = expected) as new_updated,
+    count(*) filter (where body is not distinct from reviewed) as reviewed,
+    count(*) filter (where body = updated) as updated,
+    count(*) as total,
     (select count(*) from pg_attribute a where a.attrelid = 'private.frontend_verification_uploads'::regclass
       and a.attname in ('capture_method', 'browser_liveness_passed') and not a.attisdropped) as columns
   from bodies
 ),
 problems as (
-  select 'problem' as kind, sig || ' is not the reviewed body (md5 ' || body || '); do not apply the update' as detail
-    from bodies where body is not null and body <> expected
+  select 'problem' as kind, sig || ' is not the reviewed body (md5 ' || coalesce(body, 'missing') || '); do not apply the update' as detail
+    from bodies where body is distinct from reviewed and body is distinct from updated
   union all
-  select 'problem', 'both the old and the new upload completion exist' from state where old_present > 0 and new_present > 0
-  union all
-  select 'problem', 'the upload completion is missing' from state where old_present = 0 and new_present = 0
-  union all
-  select 'problem', 'only part of the update is present' from state
-    where old_present = 0 and new_present > 0 and (new_present < 4 or columns < 2)
-  union all
-  select 'problem', 'the capture columns exist before the update' from state where old_present > 0 and (columns > 0 or new_present > 0)
+  select 'problem', 'only part of the update is present'
+    from state where not (reviewed = total and columns = 0) and not (updated = total and columns = 2)
+      and not exists (select 1 from bodies where body is distinct from reviewed and body is distinct from updated)
 )
 select 'summary' as kind,
   'selfie capture method: '
-    || case when s.new_updated = 4 and s.columns = 2 and s.old_present = 0 then 'already applied'
-         when s.old_reviewed = 2 and s.new_present = 0 and s.columns = 0 then 'reviewed bodies, update not applied (apply before the website release that sends these values is deployed)'
+    || case when s.updated = s.total and s.columns = 2 then 'already applied'
+         when s.reviewed = s.total and s.columns = 0 then 'reviewed bodies, update not applied (apply before the website release that uses it is deployed)'
          else 'unexpected state' end
     || '; selfie receipts: '
     || (select count(*) from private.frontend_verification_uploads where purpose = 'selfie' and completed_at is not null)
     || '; with a capture method: '
-    || case when s.columns = 2 then (select count(*) from private.frontend_verification_uploads u
-         where (to_jsonb(u) ->> 'capture_method') is not null)::text else '0' end as detail
+    || (select count(*) from private.frontend_verification_uploads u where (to_jsonb(u) ->> 'capture_method') is not null) as detail
 from state s
 union all
 select kind, detail from problems;

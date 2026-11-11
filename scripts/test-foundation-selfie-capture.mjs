@@ -9,10 +9,10 @@
 // gate, sends members' ID and selfie through the production upload commands
 // (member calls as `authenticated` with synthetic claims and a live session
 // row, the website's server calls as `service_role`), runs the update's
-// read-only preflight, applies the update, checks what is stored and who can
-// read it, and proves that apply -> rollback -> apply returns the schema
-// fingerprint to the same values each time. Any later updates are applied at
-// the end and the stored answers are checked again.
+// read-only preflight, applies the update, checks what is stored, who can
+// write and read it and when it goes, and proves that apply -> rollback ->
+// apply returns the schema fingerprint to the same values each time. Any later
+// updates are applied at the end and the stored answers are checked again.
 //
 //   node --import tsx scripts/test-foundation-selfie-capture.mjs
 //
@@ -32,9 +32,10 @@ const companion = (folder, suffix) =>
 const PREFLIGHT = companion("preflight", ".check.sql");
 const ROLLBACK = companion("rollback", ".down.sql");
 const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
-const OLD = "(uuid,uuid,text,text,integer,jsonb,integer)";
-const NEW = "(uuid,uuid,text,text,integer,jsonb,integer,text,boolean)";
-const READ = "(uuid,text,uuid)";
+const RECORD = "record_my_selfie_capture(uuid,text,boolean)";
+const READ = "get_frontend_staff_selfie_capture(uuid,text,uuid)";
+const SCRUB = "internal.scrub_frontend_verification_receipt()";
+const COMPLETE = "complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer)";
 
 const checks = [];
 let current = "start";
@@ -99,6 +100,10 @@ try {
       .filter(Boolean)
       .map((line) => line.split("|"));
   const hex = (bytes) => randomBytes(bytes).toString("hex");
+  const bodyOf = (sig) =>
+    q(
+      `select coalesce((select md5(replace(prosrc,E'\\r\\n',E'\\n')) from pg_proc where oid=to_regprocedure('${sig}')),'missing');`
+    );
 
   // ------------------------------------------------------- synthetic world
   q(`create schema vmtest;
@@ -141,26 +146,37 @@ try {
     assert.equal(reserved.completed, false);
     return { request, artifact: reserved.artifact_id };
   };
-  /** The website's server completing an upload; `extra` is SQL for the
-   * optional arguments (named), exactly as PostgREST passes them. */
-  const completeSql = (owner, request, purpose, extra = "") =>
-    service(
-      `select api.complete_frontend_verification_upload(p_owner=>'${owner.id}',p_request=>'${request}',` +
-        `p_stored_sha256=>'${hex(32)}',p_content_sha256=>'${hex(32)}',p_size=>128,` +
-        (purpose === "id_front"
-          ? `p_identity=>'${JSON.stringify(identityReceipt())}'::jsonb`
-          : "p_risk_score=>10") +
-        `${extra});`
+  /** The website's server completing an upload (unchanged by the update). */
+  const complete = (owner, request, purpose) =>
+    json(
+      service(
+        `select api.complete_frontend_verification_upload('${owner.id}','${request}','${hex(32)}','${hex(32)}',128,` +
+          (purpose === "id_front"
+            ? `'${JSON.stringify(identityReceipt())}'::jsonb,null);`
+            : "null,10);")
+      )
     );
-  /** ID and selfie of a new member through the production upload commands.
-   * Returns the member, the case and the selfie's receipt. */
-  const submit = (label, extra = "") => {
+  /** The website recording the browser's answer with the member's session. */
+  const recordSql = (owner, request, method, passed) =>
+    member(owner, `select api.record_my_selfie_capture('${request}',${method},${passed});`);
+  const record = (owner, request, method, passed) =>
+    json(recordSql(owner, request, `'${method}'`, passed));
+  /** ID and selfie of a new member through the production upload commands,
+   * with the browser's answer recorded before completion when given. */
+  const submit = (label, report) => {
     const owner = user(label);
     const id = reserve(owner, "id_front");
-    q(completeSql(owner, id.request, "id_front"));
+    complete(owner, id.request, "id_front");
     const selfie = reserve(owner, "selfie");
-    const done = json(completeSql(owner, selfie.request, "selfie", extra));
-    assert.deepEqual(done, { completed: true, artifact_id: selfie.artifact, purpose: "selfie" });
+    if (report)
+      assert.deepEqual(record(owner, selfie.request, ...report), {
+        recorded: true,
+      });
+    assert.deepEqual(complete(owner, selfie.request, "selfie"), {
+      completed: true,
+      artifact_id: selfie.artifact,
+      purpose: "selfie",
+    });
     const caseId = q(
       `select case_id from private.frontend_verification_uploads where request_id='${selfie.request}';`
     );
@@ -172,33 +188,21 @@ try {
       `select jsonb_build_object('capture_method',to_jsonb(u)->'capture_method','browser_liveness_passed',to_jsonb(u)->'browser_liveness_passed') ` +
         `from private.frontend_verification_uploads u where request_id='${receipt.request}';`
     );
+  const none = { capture_method: null, browser_liveness_passed: null };
   const lease = (caseId) => json(staff(reviewer, `select api.claim_evidence_case('${caseId}');`));
   const readCapture = (caseId, held, who = reviewer) =>
     staff(
       who,
       `select api.get_frontend_staff_selfie_capture('${caseId}','${held.claim_generation}','${held.claim_nonce}');`
     );
-  const bodyOf = (sig) =>
-    q(
-      `select coalesce((select md5(replace(prosrc,E'\\r\\n',E'\\n')) from pg_proc where oid=to_regprocedure('${sig}')),'missing');`
-    );
 
   // ------------------------------------------------------------ before
   let early;
-  await check("before the update: uploads complete without a capture report", () => {
-    assert.equal(bodyOf(`internal.complete_frontend_verification_upload${OLD}`).length, 32);
-    assert.equal(bodyOf(`internal.complete_frontend_verification_upload${NEW}`), "missing");
+  await check("before the update: the commands do not exist and uploads complete", () => {
+    assert.equal(bodyOf(`api.${RECORD}`), "missing");
+    assert.equal(bodyOf(`api.${READ}`), "missing");
     early = submit("early");
-    // The website's new arguments are unknown to the database before the update.
-    fails(
-      completeSql(
-        early.owner,
-        randomUUID(),
-        "selfie",
-        ",p_capture_method=>'camera',p_browser_liveness_passed=>true"
-      ),
-      "42883"
-    );
+    fails(recordSql(early.owner, randomUUID(), "'camera'", true), "42883");
   });
   await check("preflight: read only, summary only, before the update", () => {
     const rows = preflight();
@@ -209,7 +213,7 @@ try {
     );
     assert.match(
       rows[0][1],
-      /^selfie capture method: reviewed bodies, update not applied \(apply before the website release that sends these values is deployed\); selfie receipts: [1-9]\d*; with a capture method: 0$/
+      /^selfie capture method: reviewed bodies, update not applied \(apply before the website release that uses it is deployed\); selfie receipts: [1-9]\d*; with a capture method: 0$/
     );
     const write = database.psql(`${PREFLIGHT}\ncreate table vmtest.marker(id uuid);`, [
       "-A",
@@ -225,45 +229,35 @@ try {
     const before = fingerprint();
     assert.match(fails(ROLLBACK, "55000"), /rollback precondition/);
     assert.equal(fingerprint(), before);
-    for (const sig of [
-      `internal.complete_frontend_verification_upload${OLD}`,
-      `api.complete_frontend_verification_upload${OLD}`,
-    ]) {
-      const live = q(`select pg_get_functiondef('${sig}'::regprocedure);`);
-      // The same function with one more space at the start of its body.
-      q(
-        `do $$begin execute replace(pg_get_functiondef('${sig}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
-      );
-      const rows = preflight();
-      assert.equal(rows.length, 2, JSON.stringify(rows));
-      assert.match(rows[1][1], /is not the reviewed body/);
-      assert.match(fails(step.sql, "55000"), /upload completion drift/);
-      q(`${live};`);
-    }
+    const live = q(`select pg_get_functiondef('${SCRUB}'::regprocedure);`);
+    // The same function with one more space at the start of its body.
+    q(
+      `do $$begin execute replace(pg_get_functiondef('${SCRUB}'::regprocedure),'AS $function$','AS $function$ '); end$$;`
+    );
+    const rows = preflight();
+    assert.equal(rows.length, 2, JSON.stringify(rows));
+    assert.match(rows[1][1], /is not the reviewed body/);
+    assert.match(fails(step.sql, "55000"), /receipt scrub drift/);
+    q(`${live};`);
     assert.equal(fingerprint(), before);
   });
 
   // ------------------------------------------------------------- apply
   const before = fingerprint();
+  const completeBody = bodyOf(`internal.${COMPLETE}`);
   applySteps(database, [step]);
   const after = fingerprint();
   let uploaded, live, unverified, silent;
   await check("the selfie's capture report is stored with the case", () => {
     assert.notEqual(after, before);
-    assert.equal(bodyOf(`internal.complete_frontend_verification_upload${OLD}`), "missing");
-    assert.equal(bodyOf(`api.complete_frontend_verification_upload${OLD}`), "missing");
+    // The upload completion is untouched.
+    assert.equal(bodyOf(`internal.${COMPLETE}`), completeBody);
     assert.match(preflight()[0][1], /^selfie capture method: already applied; /);
     assert.equal(preflight().length, 1);
-    uploaded = submit(
-      "uploaded",
-      ",p_capture_method=>'file_upload',p_browser_liveness_passed=>false"
-    );
-    live = submit("live", ",p_capture_method=>'camera',p_browser_liveness_passed=>true");
-    unverified = submit(
-      "unverified",
-      ",p_capture_method=>'camera',p_browser_liveness_passed=>false"
-    );
-    // The website deployed before the update leaves both out.
+    uploaded = submit("uploaded", ["file_upload", false]);
+    live = submit("live", ["camera", true]);
+    unverified = submit("unverified", ["camera", false]);
+    // The website deployed before the update records nothing.
     silent = submit("silent");
     assert.deepEqual(stored(uploaded.selfie), {
       capture_method: "file_upload",
@@ -277,13 +271,9 @@ try {
       capture_method: "camera",
       browser_liveness_passed: false,
     });
-    assert.deepEqual(stored(silent.selfie), {
-      capture_method: null,
-      browser_liveness_passed: null,
-    });
-    assert.deepEqual(stored(early.selfie), { capture_method: null, browser_liveness_passed: null });
-    // The ID's receipt never carries one.
-    assert.deepEqual(stored(uploaded.id), { capture_method: null, browser_liveness_passed: null });
+    assert.deepEqual(stored(silent.selfie), none);
+    assert.deepEqual(stored(early.selfie), none);
+    assert.deepEqual(stored(uploaded.id), none);
     // The receipt belongs to the case's current submission.
     assert.equal(
       q(
@@ -294,74 +284,90 @@ try {
     );
     assert.match(preflight()[0][1], /; with a capture method: 3$/);
   });
-  await check("a capture report outside the closed set is refused and stores nothing", () => {
-    const owner = user("refused");
-    const id = reserve(owner, "id_front");
-    // Only a selfie carries a report.
-    fails(
-      completeSql(
-        owner,
-        id.request,
-        "id_front",
-        ",p_capture_method=>'file_upload',p_browser_liveness_passed=>false"
-      ),
-      "22023",
-      /browser capture report invalid/
-    );
-    q(completeSql(owner, id.request, "id_front"));
-    const selfie = reserve(owner, "selfie");
-    for (const extra of [
-      ",p_capture_method=>'screen',p_browser_liveness_passed=>false",
-      ",p_capture_method=>'file_upload',p_browser_liveness_passed=>true",
-      ",p_capture_method=>'camera'",
-      ",p_browser_liveness_passed=>true",
-      ",p_capture_method=>'Camera',p_browser_liveness_passed=>false",
-    ])
+  await check(
+    "only the member's own uncompleted selfie takes a report, from the closed set",
+    () => {
+      const owner = user("refused");
+      const id = reserve(owner, "id_front");
+      // Not on the ID document's receipt.
       fails(
-        completeSql(owner, selfie.request, "selfie", extra),
+        recordSql(owner, id.request, "'file_upload'", false),
+        "22023",
+        /selfie upload request required/
+      );
+      complete(owner, id.request, "id_front");
+      const selfie = reserve(owner, "selfie");
+      for (const [method, passed] of [
+        ["'screen'", false],
+        ["'file_upload'", true],
+        ["'Camera'", false],
+        ["'camera'", null],
+        ["null", false],
+      ])
+        fails(
+          recordSql(owner, selfie.request, method, passed),
+          "22023",
+          /browser capture report invalid/
+        );
+      fails(
+        member(owner, `select api.record_my_selfie_capture(null,'camera',true);`),
         "22023",
         /browser capture report invalid/
       );
-    assert.equal(
-      q(
-        `select count(*) from private.frontend_verification_uploads where owner_id='${owner.id}' and completed_at is not null;`
-      ),
-      "1"
-    );
-    // The table refuses inconsistent values written any other way.
-    for (const set of [
-      "capture_method='camera',browser_liveness_passed=null",
-      "capture_method='screen',browser_liveness_passed=false",
-      "capture_method='file_upload',browser_liveness_passed=true",
-    ])
+      // Not on another member's receipt, nor an unknown one.
       fails(
-        `update private.frontend_verification_uploads set ${set} where request_id='${selfie.request}';`,
+        recordSql(live.owner, selfie.request, "'camera'", true),
+        "22023",
+        /selfie upload request required/
+      );
+      fails(
+        recordSql(owner, randomUUID(), "'camera'", true),
+        "22023",
+        /selfie upload request required/
+      );
+      assert.deepEqual(stored(selfie), none);
+      // Before completion the latest answer counts; afterwards nothing changes.
+      record(owner, selfie.request, "camera", true);
+      assert.deepEqual(record(owner, selfie.request, "file_upload", false), { recorded: true });
+      complete(owner, selfie.request, "selfie");
+      assert.deepEqual(record(owner, selfie.request, "camera", true), { recorded: false });
+      assert.deepEqual(stored(selfie), {
+        capture_method: "file_upload",
+        browser_liveness_passed: false,
+      });
+      // An expired upload request takes no report.
+      const other = user("expired");
+      const otherId = reserve(other, "id_front");
+      complete(other, otherId.request, "id_front");
+      const late = reserve(other, "selfie");
+      q(
+        `update private.frontend_verification_uploads set created_at=clock_timestamp()-interval '2 days',expires_at=clock_timestamp()-interval '1 day' where request_id='${late.request}';`
+      );
+      fails(recordSql(other, late.request, "'camera'", true), "PT409");
+      // A member without a live session cannot record.
+      fails(
+        as(
+          { ...claims(other), session_id: randomUUID() },
+          recordSql(other, late.request, "'camera'", true).split("\n").at(-1)
+        ),
+        "42501"
+      );
+      // The table refuses inconsistent values written any other way.
+      for (const set of [
+        "capture_method='camera',browser_liveness_passed=null",
+        "capture_method='screen',browser_liveness_passed=false",
+        "capture_method='file_upload',browser_liveness_passed=true",
+      ])
+        fails(
+          `update private.frontend_verification_uploads set ${set} where request_id='${selfie.request}';`,
+          "23514"
+        );
+      fails(
+        `update private.frontend_verification_uploads set capture_method='camera',browser_liveness_passed=true where request_id='${id.request}';`,
         "23514"
       );
-    fails(
-      `update private.frontend_verification_uploads set capture_method='camera',browser_liveness_passed=true where request_id='${id.request}';`,
-      "23514"
-    );
-  });
-  await check("a retried completion keeps the first report", () => {
-    const again = json(
-      completeSql(
-        uploaded.owner,
-        uploaded.selfie.request,
-        "selfie",
-        ",p_capture_method=>'camera',p_browser_liveness_passed=>true"
-      )
-    );
-    assert.deepEqual(again, {
-      completed: true,
-      artifact_id: uploaded.selfie.artifact,
-      purpose: "selfie",
-    });
-    assert.deepEqual(stored(uploaded.selfie), {
-      capture_method: "file_upload",
-      browser_liveness_passed: false,
-    });
-  });
+    }
+  );
   await check("staff holding the case read the capture report", () => {
     const expected = [
       [uploaded, "file_upload", false],
@@ -436,81 +442,79 @@ try {
       ),
       "42501"
     );
-    const grants = json(`select jsonb_build_object(
-      'read', (select jsonb_object_agg(r, has_function_privilege(r,'api.get_frontend_staff_selfie_capture${READ}','execute')) from unnest(array['anon','authenticated','service_role']) r),
-      'complete', (select jsonb_object_agg(r, has_function_privilege(r,'api.complete_frontend_verification_upload${NEW}','execute')) from unnest(array['anon','authenticated','service_role']) r),
-      'internal_complete', (select jsonb_object_agg(r, has_function_privilege(r,'internal.complete_frontend_verification_upload${NEW}','execute')) from unnest(array['anon','authenticated','service_role']) r),
-      'definer', (select jsonb_object_agg(p.oid::regprocedure::text, p.prosecdef) from pg_proc p where p.proname in('complete_frontend_verification_upload','get_frontend_staff_selfie_capture')));`);
-    assert.deepEqual(grants.read, { anon: false, authenticated: true, service_role: false });
-    assert.deepEqual(grants.complete, { anon: false, authenticated: false, service_role: true });
-    assert.deepEqual(grants.internal_complete, {
-      anon: false,
-      authenticated: false,
-      service_role: true,
+    // Only members record, and only through their own session.
+    const recordCall = `select api.record_my_selfie_capture('${randomUUID()}','camera',true);`;
+    fails(anon(recordCall), "42501");
+    fails(service(recordCall), "42501");
+    const grants =
+      json(`select jsonb_object_agg(f, (select jsonb_object_agg(r, has_function_privilege(r,f,'execute'))
+        from unnest(array['anon','authenticated','service_role']) r))
+      from unnest(array['api.${READ}','internal.${READ}','api.${RECORD}','internal.${RECORD}','api.${COMPLETE}','internal.${COMPLETE}','${SCRUB}']) f;`);
+    const member_ = { anon: false, authenticated: true, service_role: false };
+    const server = { anon: false, authenticated: false, service_role: true };
+    const nobody = { anon: false, authenticated: false, service_role: false };
+    assert.deepEqual(grants, {
+      [`api.${READ}`]: member_,
+      [`internal.${READ}`]: member_,
+      [`api.${RECORD}`]: member_,
+      [`internal.${RECORD}`]: member_,
+      [`api.${COMPLETE}`]: server,
+      [`internal.${COMPLETE}`]: server,
+      [SCRUB]: nobody,
     });
-    assert.deepEqual(grants.definer, {
-      [`api.complete_frontend_verification_upload${NEW}`]: false,
-      [`internal.complete_frontend_verification_upload${NEW}`]: true,
-      [`api.get_frontend_staff_selfie_capture${READ}`]: false,
-      [`internal.get_frontend_staff_selfie_capture${READ}`]: true,
+    const definer =
+      json(`select jsonb_object_agg(p.oid::regprocedure::text, p.prosecdef) from pg_proc p
+      where p.proname in('record_my_selfie_capture','get_frontend_staff_selfie_capture');`);
+    assert.deepEqual(definer, {
+      [`api.${RECORD}`]: false,
+      [`internal.${RECORD}`]: true,
+      [`api.${READ}`]: false,
+      [`internal.${READ}`]: true,
     });
-    // A member cannot complete an upload or write the report themselves.
-    fails(
-      member(
-        live.owner,
-        `select api.complete_frontend_verification_upload('${live.owner.id}','${randomUUID()}','${hex(32)}','${hex(32)}',128,null,10,'camera',true);`
-      ),
-      "42501"
-    );
   });
-  await check("the report is removed with the member's identity history", () => {
-    // The identity history purge (internal.retention_verification, five years
-    // after the account closed) deletes the submissions and then the evidence
-    // records, in this order; the receipts, and the report with them, follow.
-    const owner = unverified.owner.id;
-    q(`begin;
-      delete from private.identity_submission_names where owner_id='${owner}';
-      delete from private.verification_current_submissions where case_id='${unverified.caseId}';
-      delete from private.evidence_access_log where case_id='${unverified.caseId}';
-      delete from private.verification_identity_submissions where owner_id='${owner}';
-      delete from private.evidence_artifacts where owner_id='${owner}';
-      commit;`);
-    assert.equal(
-      q(`select count(*) from private.frontend_verification_uploads where owner_id='${owner}';`),
-      "0"
+  await check("the report goes when the selfie file is deleted", () => {
+    // Evidence retention marks the file deleted; the receipt scrub clears the
+    // report with the ID number receipt.
+    q(
+      `update private.evidence_artifacts set state='cleanup_required' where id='${live.selfie.artifact}';
+` + `update private.evidence_artifacts set state='deleted',deleted_at=clock_timestamp() where id='${live.selfie.artifact}';`
     );
+    assert.deepEqual(stored(live.selfie), none);
+    assert.deepEqual(stored(uploaded.selfie), {
+      capture_method: "file_upload",
+      browser_liveness_passed: false,
+    });
   });
   await check("apply, roll back and apply again are clean", () => {
     applySteps(database, [{ label: "selfie capture rollback", sql: ROLLBACK }]);
     assert.equal(fingerprint(), before, "the rollback leaves the pre-update schema");
-    assert.equal(bodyOf(`internal.complete_frontend_verification_upload${NEW}`), "missing");
-    assert.equal(bodyOf(`api.get_frontend_staff_selfie_capture${READ}`), "missing");
+    assert.equal(bodyOf(`api.${RECORD}`), "missing");
+    assert.equal(bodyOf(`api.${READ}`), "missing");
     assert.match(preflight()[0][1], /^selfie capture method: reviewed bodies, update not applied/);
-    // The seven-argument completion works again after the rollback.
     submit("after-rollback");
     applySteps(database, [step]);
     assert.equal(fingerprint(), after, "re-applying gives the same schema");
     applySteps(database, [step]);
     assert.equal(fingerprint(), after, "a repeated run changes nothing");
-    const again = submit(
-      "reapplied",
-      ",p_capture_method=>'file_upload',p_browser_liveness_passed=>false"
-    );
+    const again = submit("reapplied", ["file_upload", false]);
     assert.deepEqual(stored(again.selfie), {
       capture_method: "file_upload",
       browser_liveness_passed: false,
     });
+    uploaded = again;
   });
 
   const later = steps.slice(index + 1);
   if (later.length) {
     applySteps(database, later);
-    await check("later updates keep the stored reports and the staff read", () => {
-      assert.deepEqual(stored(live.selfie), {
-        capture_method: "camera",
-        browser_liveness_passed: true,
+    await check("later updates keep the stored reports and the commands", () => {
+      assert.deepEqual(stored(uploaded.selfie), {
+        capture_method: "file_upload",
+        browser_liveness_passed: false,
       });
-      assert.equal(json(readCapture(live.caseId, live.held)).capture_method, "camera");
+      const held = lease(uploaded.caseId);
+      assert.equal(json(readCapture(uploaded.caseId, held)).capture_method, "file_upload");
+      submit("later", ["camera", true]);
     });
   }
 } catch (error) {

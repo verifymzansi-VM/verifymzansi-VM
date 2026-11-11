@@ -91,33 +91,39 @@ its "Uploaded file" warning. From this update:
 - **Stored with the selfie's upload receipt.**
   `private.frontend_verification_uploads` gains `capture_method` and
   `browser_liveness_passed`, both nullable. They are what the browser reported,
-  not a proof: the website checks them against a closed set and nothing grants,
-  approves or scores anything from them. Constraints keep them consistent (both
-  set or both empty, only on a selfie, a passed liveness challenge only with the
-  camera). Receipts recorded before the update stay empty ("not recorded"). The
-  values are removed with the receipt, which follows the evidence retention.
-- **Completion.** `api.complete_frontend_verification_upload` (service role
-  only) gains two optional arguments, `p_capture_method` and
-  `p_browser_liveness_passed`, validated and stored in the statement that
-  completes the selfie. The seven-argument function is dropped and recreated
-  with them in the same transaction, so one function answers both forms of the
-  call; its grants are unchanged. A caller that leaves them out stores nothing.
+  not a proof: nothing grants, approves or scores anything from them.
+  Constraints keep them consistent (both set or both empty, only on a selfie, a
+  passed liveness challenge only with the camera). Receipts recorded before the
+  update stay empty ("not recorded").
+- **Recording.** New member command
+  `api.record_my_selfie_capture(request, method, liveness)`. The website checks
+  the two form fields against the closed set and calls it with the member's own
+  session after reserving the selfie upload and before completing it. It accepts
+  only the member's own selfie receipt while that upload is not completed; after
+  completion it changes nothing. Calling it directly gives a member nothing that
+  sending the form would not.
 - **Staff read.** New
   `api.get_frontend_staff_selfie_capture(case, claim generation, claim nonce)`
   returns, to staff with `evidence:view` holding a live claim on an open
   identity case that is not their own, the current submission, its selfie and
-  the recorded answers. It opens no evidence and writes no access log row; the
-  evidence metadata read that the viewer makes first records the access. The
-  website turns the answers into the viewer's existing signals: "Uploaded file",
-  "Liveness not verified", or "Browser liveness check completed" (labelled as
-  not an attestation).
+  the recorded answer. It opens no evidence and writes no access log row (a
+  deliberate exception: the answer is review context, not identity evidence, and
+  the evidence metadata read that the viewer makes first records the access).
+  The website turns the answer into the viewer's existing signals: "Uploaded
+  file", "Liveness not verified", or "Browser liveness check completed"
+  (labelled as not an attestation).
+- **Retention.** `internal.scrub_frontend_verification_receipt`, which clears
+  the ID number receipt when an evidence file is deleted, also clears the
+  answer, so it goes with the selfie file (30 days after the case decision); the
+  receipt itself follows the identity history.
+- No existing API command changes signature, grant or owner. The upload
+  completion is unchanged.
 
 **Order: apply first, then merge.** The website release from the same pull
-request calls the new staff read and passes the new arguments, and the deploy
-preflight probes every command in `../runtime-api-manifest.json`, so a deploy
-without the update stops there. The website deployed before it keeps working
-with the update applied: it calls the completion without the new arguments and
-never calls the new read.
+request calls the two new commands, and the deploy preflight probes every
+command in `../runtime-api-manifest.json`, so a deploy without the update stops
+there. Earlier website releases do not use the new commands and pass the deploy
+preflight with the update applied, so they can still be deployed or redeployed.
 
 **Applying.**
 
@@ -132,10 +138,10 @@ never calls the new read.
 
 The reviewed rollback is
 `../rollback/20261111184619_selfie_capture_method.down.sql` (only with the
-owner's decision; prefer a forward fix). Revert the website release first: the
-rollback removes the new staff read and the two arguments the release uses. It
-restores the seven-argument completion byte for byte and drops the two columns
-with the answers recorded so far.
+owner's decision; prefer a forward fix). Revert and deploy the website release
+first: the rollback removes the two commands that release calls. It restores the
+receipt scrub byte for byte and drops the two columns with the answers recorded
+so far.
 
 ## The free week starts at the first approved post, 10 November 2026
 

@@ -1,7 +1,7 @@
 -- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.
 -- Do not edit; change the schema with a reviewed file in database/foundation/updates/.
 
-CREATE OR REPLACE FUNCTION internal.complete_frontend_verification_upload(p_owner uuid, p_request uuid, p_stored_sha256 text, p_content_sha256 text, p_size integer, p_identity jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer, p_capture_method text DEFAULT NULL::text, p_browser_liveness_passed boolean DEFAULT NULL::boolean)
+CREATE OR REPLACE FUNCTION internal.complete_frontend_verification_upload(p_owner uuid, p_request uuid, p_stored_sha256 text, p_content_sha256 text, p_size integer, p_identity jsonb DEFAULT NULL::jsonb, p_risk_score integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
@@ -12,12 +12,6 @@ begin
   ctx:=internal.frontend_verification_upload_context(p_owner,p_request);
   if (ctx->>'completed')::boolean then return ctx; end if;
   select * into r from private.frontend_verification_uploads where owner_id=p_owner and request_id=p_request;
-  -- How the browser says the selfie was taken: review context for staff, never
-  -- authority. Only a selfie carries it; both values or neither.
-  if (p_capture_method is null)<>(p_browser_liveness_passed is null)
-    or (p_capture_method is not null and (r.purpose<>'selfie' or p_capture_method not in('camera','file_upload')
-      or (p_browser_liveness_passed and p_capture_method<>'camera'))) then
-    raise exception 'browser capture report invalid' using errcode='22023'; end if;
   if r.purpose='id_front' then
     if p_identity is null or jsonb_typeof(p_identity)<>'object' or p_identity-array['fingerprint','encrypted_number']<>'{}'::jsonb
       or not(p_identity ?& array['fingerprint','encrypted_number'])
@@ -49,8 +43,6 @@ begin
   update private.frontend_verification_uploads set completed_at=clock_timestamp(),
     fingerprint=case when r.purpose='id_front' then p_identity->>'fingerprint' end,
     encrypted_number=case when r.purpose='id_front' then p_identity->'encrypted_number' end,
-    capture_method=case when r.purpose='selfie' then p_capture_method end,
-    browser_liveness_passed=case when r.purpose='selfie' then p_browser_liveness_passed end,
     submission_id=(submitted->>'submission_id')::uuid where owner_id=p_owner and request_id=p_request;
   -- Session revocation during an in-flight object write must prevent submission.
   if not exists(select 1 from auth.sessions s where s.id=r.session_id and s.user_id=p_owner
@@ -58,6 +50,6 @@ begin
     raise exception 'upload session expired' using errcode='42501'; end if;
   return jsonb_build_object('completed',true,'artifact_id',r.artifact_id,'purpose',r.purpose);
 end$function$;
-alter function internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer,text,boolean) owner to postgres;
-revoke all on function internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer,text,boolean) from public;
-grant execute on function internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer,text,boolean) to service_role;
+alter function internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer) owner to postgres;
+revoke all on function internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer) from public;
+grant execute on function internal.complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer) to service_role;

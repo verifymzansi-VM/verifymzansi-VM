@@ -221,3 +221,18 @@ it("refuses a capture answer for another submission or one outside the closed se
   capture = { capture_method: "screen", browser_liveness_passed: false };
   expect((await handleRestoredIdentityMetadata(request({ userId: owner }))).status).toBe(503);
 });
+it("fails closed when the capture read is unavailable or the claim changed", async () => {
+  const base = rpc.getMockImplementation()!;
+  for (const [code, status] of [
+    ["PGRST202", 503],
+    ["42501", 403],
+    ["PT409", 409],
+  ] as const) {
+    rpc.mockImplementation(async (name: string, ...rest: unknown[]) =>
+      name === "get_frontend_staff_selfie_capture"
+        ? { data: null, error: { code, message: "fixture" } }
+        : base(name, ...rest)
+    );
+    expect((await handleRestoredIdentityMetadata(request({ userId: owner }))).status).toBe(status);
+  }
+});

@@ -190,6 +190,16 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
         throw new Error("Upload target changed");
       let score: number | undefined;
       if (selfie) {
+        if (capture) {
+          // Recorded with the member's own session, on their own selfie
+          // receipt, before completion: review context for staff only.
+          const recorded = await caller.api.rpc("record_my_selfie_capture", {
+            p_request: requestId.data,
+            p_capture_method: capture.captureMethod,
+            p_browser_liveness_passed: capture.browserLivenessPassed,
+          });
+          if (recorded.error) rpcFailure(recorded.error);
+        }
         const fp = z
           .string()
           .regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/)
@@ -238,12 +248,6 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
             }
           : {}),
         ...(score !== undefined ? { p_risk_score: score } : {}),
-        ...(capture
-          ? {
-              p_capture_method: capture.captureMethod,
-              p_browser_liveness_passed: capture.browserLivenessPassed,
-            }
-          : {}),
       });
       if (finished.error) rpcFailure(finished.error);
       const saved = doneSchema.parse(finished.data);

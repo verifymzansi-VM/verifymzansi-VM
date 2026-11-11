@@ -33,7 +33,9 @@
       "row_level_security": "e908b6555891cd91ae353da5b7183c56",
       "triggers": "cbed8a32da7aa1ca298aaa7eca019d1f"
     },
-    "pendingApplication": ["20261111184619_selfie_capture_method.sql"]
+    "pendingApplication": [
+      "20261111184619_selfie_capture_method.sql"
+    ]
   },
   "knownDifferences": [
     "Reference data is not fingerprinted. candidate.sql seeds posting-terms version posting-v2, which production does not hold: production has posting-v1 and posting-v3 (current since 20261109173012_posting_terms_v3.sql).",
@@ -59,16 +61,16 @@
       "fingerprint": "821f7d069c595c075754fad9309136ac"
     },
     "function_bodies": {
-      "items": 751,
-      "fingerprint": "8e829efe817eb02377576b6b57331602"
+      "items": 753,
+      "fingerprint": "e6a6ae19bcc0062ce74aed312fccb939"
     },
     "function_grants": {
-      "items": 603,
-      "fingerprint": "7843b3d76274c8b76a1af5e99d822ea4"
+      "items": 605,
+      "fingerprint": "8b1b50883406993fa60240a78f24cfaa"
     },
     "function_metadata": {
-      "items": 751,
-      "fingerprint": "fc9d1cbcd7b88dcc5c91dde287cc2516"
+      "items": 753,
+      "fingerprint": "fd889ddb03878044de741bd347bffa2b"
     },
     "indexes": {
       "items": 375,

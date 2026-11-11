@@ -144,10 +144,7 @@ it("uses native pair fraud assessment for selfie and never trusts the liveness h
 });
 it("records how the browser says the selfie was taken, for staff review only", async () => {
   selfie = true;
-  const completion = () =>
-    serviceRpc.mock.calls
-      .filter((c) => c[0] === "complete_frontend_verification_upload")
-      .at(-1)![1];
+  const recorded = () => rpc.mock.calls.filter((c) => c[0] === "record_my_selfie_capture");
   const cases: [Record<string, string>, Record<string, unknown>][] = [
     [
       { captureMethod: "camera", livenessPassed: "true" },
@@ -164,14 +161,42 @@ it("records how the browser says the selfie was taken, for staff review only", a
     ],
   ];
   for (const [fields, expected] of cases) {
+    rpc.mockClear();
+    serviceRpc.mockClear();
     expect((await POST(request(fields))).status).toBe(200);
-    // The risk score still comes from the server's own assessment.
-    expect(completion()).toMatchObject({ ...expected, p_risk_score: 10 });
+    // With the member's own session, for this upload request, before completion.
+    expect(recorded()).toEqual([["record_my_selfie_capture", { p_request: receipt, ...expected }]]);
+    const order =
+      rpc.mock.invocationCallOrder[
+        rpc.mock.calls.findIndex((c) => c[0] === "record_my_selfie_capture")
+      ];
+    const completion = serviceRpc.mock.calls.findIndex(
+      (c) => c[0] === "complete_frontend_verification_upload"
+    );
+    expect(order).toBeLessThan(serviceRpc.mock.invocationCallOrder[completion]);
+    // The risk score still comes from the server's own assessment only.
+    expect(serviceRpc.mock.calls[completion][1]).toEqual(
+      expect.not.objectContaining({ p_capture_method: expect.anything() })
+    );
+    expect(serviceRpc.mock.calls[completion][1]).toMatchObject({ p_risk_score: 10 });
   }
   // Nothing reported: nothing recorded (the viewer says "Liveness unknown").
+  rpc.mockClear();
   expect((await POST(request())).status).toBe(200);
-  expect(completion()).not.toHaveProperty("p_capture_method");
-  expect(completion()).not.toHaveProperty("p_browser_liveness_passed");
+  expect(recorded()).toEqual([]);
+});
+it("refuses the upload when the report cannot be recorded, before storing evidence", async () => {
+  selfie = true;
+  rpc.mockImplementation(async (name: string) =>
+    name === "record_my_selfie_capture"
+      ? { data: null, error: { code: "PT409" } }
+      : { data: { artifact_id: artifact, completed: false }, error: null }
+  );
+  expect((await POST(request({ captureMethod: "camera" }))).status).toBe(409);
+  expect(putImmutableR2Bytes).not.toHaveBeenCalled();
+  expect(serviceRpc.mock.calls.some((c) => c[0] === "complete_frontend_verification_upload")).toBe(
+    false
+  );
 });
 it("rejects a capture report outside the closed set before reserving or storing evidence", async () => {
   selfie = true;
@@ -189,13 +214,9 @@ it("rejects a capture report outside the closed set before reserving or storing 
   expect(rpc).not.toHaveBeenCalled();
   expect(putImmutableR2Bytes).not.toHaveBeenCalled();
 });
-it("never sends a capture report with the ID document", async () => {
+it("never records a capture report for the ID document", async () => {
   expect((await POST(request({ captureMethod: "file_upload" }))).status).toBe(200);
-  const completedArgs = serviceRpc.mock.calls.find(
-    (c) => c[0] === "complete_frontend_verification_upload"
-  )![1];
-  expect(completedArgs).not.toHaveProperty("p_capture_method");
-  expect(completedArgs).not.toHaveProperty("p_browser_liveness_passed");
+  expect(rpc.mock.calls.some((c) => c[0] === "record_my_selfie_capture")).toBe(false);
 });
 it("rejects cross-origin writes and forged owner fields before reserving or storing evidence", async () => {
   expect((await POST(request({}, "https://untrusted.example"))).status).toBe(403);
