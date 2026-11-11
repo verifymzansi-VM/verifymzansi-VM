@@ -465,13 +465,18 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Build the site for the browser tests
-        run: node scripts/start-playwright-server.cjs --build-only
+        run: |
+          node scripts/start-playwright-server.cjs --build-only
+          test -f .next/BUILD_ID
+      # Named per run, not per attempt: re-running only a failed browser job
+      # reuses this build (the build job itself is not re-run).
       - name: Keep the build for the browser jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-build-${{ github.run_id }}-${{ github.run_attempt }}
+          name: e2e-build-${{ github.run_id }}
+          overwrite: true
           include-hidden-files: true
-          retention-days: 1
+          retention-days: 3
           if-no-files-found: error
           path: |
             .next
@@ -512,7 +517,7 @@ jobs:
       - name: Use the shared browser test build
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: e2e-build-${{ github.run_id }}-${{ github.run_attempt }}
+          name: e2e-build-${{ github.run_id }}
       # Picture checks (@visual) run only in the visual-regression job's pinned
       # container, where browser and fonts match the approved pictures.
       - run: pnpm exec playwright test --project "$BROWSER_PROJECT" --grep-invert @visual
@@ -692,15 +697,20 @@ jobs:
         run: pnpm run check:bundle-budget
       - name: Install Chromium for Lighthouse
         continue-on-error: true
+        timeout-minutes: 3
         run: |
           pnpm exec playwright install chromium
           CHROME_PATH=$(node -e 'process.stdout.write(require("playwright").chromium.executablePath())')
           echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      # Advisory: a step limit and continue-on-error keep it from failing
+      # bundle-analysis (a job-level timeout would ignore continue-on-error).
       - name: Lighthouse quality audit (advisory)
         continue-on-error: true
+        timeout-minutes: 5
         run: pnpm run quality:lighthouse
       - name: Upload Lighthouse reports
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lighthouse-${{ github.run_id }}-${{ github.run_attempt }}

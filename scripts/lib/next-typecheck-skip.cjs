@@ -9,6 +9,10 @@ const SKIP_NEXT_TYPECHECK = "VERIFYMZANSI_SKIP_NEXT_TYPECHECK";
 
 /** @param {Record<string, string | undefined>} env */
 function shouldSkipNextTypecheck(env) {
+  // OpenNext (build:cloudflare) sets NEXT_PRIVATE_STANDALONE=true just before
+  // it runs `next build`: never skip there, even if the flag arrived some
+  // other way (for example from a .env file Next loads itself).
+  if (env.NEXT_PRIVATE_STANDALONE === "true") return false;
   return env[SKIP_NEXT_TYPECHECK] === "1" && env.CI === "true";
 }
 

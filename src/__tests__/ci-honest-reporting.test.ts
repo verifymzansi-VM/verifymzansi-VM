@@ -97,8 +97,8 @@ describe("CI job graph", () => {
   };
 
   it("lets browser jobs start after the static checks instead of waiting for unit tests", () => {
-    // They use nothing the unit or build jobs produce. Every job stays a
-    // required check, so a merge still needs all of them green.
+    // They use only the shared browser-test build, never the unit or
+    // Worker build jobs. A merge still needs every required check green.
     for (const id of ["e2e-full-matrix"])
       expect([workflow.jobs[id].needs].flat(), id).toEqual(["lint-type-security", "build-e2e"]);
     // The shared build starts at minute 0.
@@ -108,9 +108,10 @@ describe("CI job graph", () => {
   it("builds the browser-test site once and serves that build in every browser job", () => {
     type ArtifactStep = Step & { uses?: string; with?: Record<string, string | boolean | number> };
     const build = workflow.jobs["build-e2e"].steps as ArtifactStep[];
-    expect(build.map((step) => step.run ?? "")).toContain(
-      "node scripts/start-playwright-server.cjs --build-only"
-    );
+    const buildRun = build.map((step) => step.run ?? "").join("\n");
+    expect(buildRun).toContain("node scripts/start-playwright-server.cjs --build-only");
+    // An empty build must fail here, not later as a confusing server error.
+    expect(buildRun).toContain("test -f .next/BUILD_ID");
     const upload = build.find((step) => step.uses?.startsWith("actions/upload-artifact@"));
     expect(upload?.with?.["include-hidden-files"]).toBe(true);
     expect(upload?.with?.["if-no-files-found"]).toBe("error");

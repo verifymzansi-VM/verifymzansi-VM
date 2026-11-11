@@ -21,14 +21,18 @@ test("Next skips its TypeScript pass only for an explicit CI opt-in", () => {
     { [SKIP_NEXT_TYPECHECK]: "true", CI: "true" },
     { [SKIP_NEXT_TYPECHECK]: "0", CI: "true" },
     { [SKIP_NEXT_TYPECHECK]: "1", CI: "1" },
+    // OpenNext's `next build` (build:cloudflare) never skips.
+    { [SKIP_NEXT_TYPECHECK]: "1", CI: "true", NEXT_PRIVATE_STANDALONE: "true" },
   ])
     assert.equal(shouldSkipNextTypecheck(env), false, JSON.stringify(env));
   const config = readFileSync("next.config.js", "utf8");
+  // Exactly one typescript setting, and it is the guarded one.
+  assert.equal(config.match(/\btypescript\s*:/g)?.length, 1);
+  assert.equal(config.match(/ignoreBuildErrors/g)?.length, 1);
   assert.match(
     config,
     /typescript: \{ ignoreBuildErrors: shouldSkipNextTypecheck\(process\.env\) \}/
   );
-  assert.doesNotMatch(config, /ignoreBuildErrors: true/);
 });
 
 test("a Cloudflare build refuses to start when the skip is requested", () => {
@@ -55,13 +59,23 @@ test("a Cloudflare build refuses to start when the skip is requested", () => {
 });
 
 test("only the browser-test and bundle builds in CI opt in; release builds never do", () => {
-  for (const file of readdirSync(".github/workflows").filter((name) => name.endsWith(".yml"))) {
-    const text = readFileSync(`.github/workflows/${file}`, "utf8");
-    if (file !== "ci.yml") {
+  const yaml = (dir) =>
+    readdirSync(dir, { recursive: true })
+      .map(String)
+      .filter((name) => /\.ya?ml$/.test(name))
+      .map((name) => `${dir}/${name.replace(/\\/g, "/")}`);
+  const files = [...yaml(".github/workflows"), ...yaml(".github/actions")];
+  assert(files.includes(".github/workflows/ci.yml"));
+  for (const file of files) {
+    const text = readFileSync(file, "utf8");
+    if (file !== ".github/workflows/ci.yml") {
       assert.doesNotMatch(text, new RegExp(SKIP_NEXT_TYPECHECK), file);
       continue;
     }
-    const jobs = parse(text).jobs;
+    const workflow = parse(text);
+    // Never for the whole workflow (that would include build-route-verify).
+    assert.doesNotMatch(JSON.stringify(workflow.env ?? {}), new RegExp(SKIP_NEXT_TYPECHECK));
+    const jobs = workflow.jobs;
     const optedIn = Object.entries(jobs)
       .filter(([, job]) => JSON.stringify(job).includes(SKIP_NEXT_TYPECHECK))
       .map(([id]) => id);
