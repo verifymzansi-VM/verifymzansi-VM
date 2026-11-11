@@ -231,6 +231,14 @@ describe("GET /api/media/serve for keys without a file extension", () => {
       expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
     });
 
+    it("falls back to a download type when the stored type is empty", async () => {
+      storedObject("", 3);
+      const res = await serve(VIDEO_KEY, { range: "bytes=0-1" });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
+      expect(res.headers.get("Accept-Ranges")).toBeNull();
+    });
+
     it("never takes a type from the object prototype for odd extensions", async () => {
       storedObject("image/png", 3);
       for (const name of ["x.constructor", "x.__proto__", "x.hasOwnProperty"]) {

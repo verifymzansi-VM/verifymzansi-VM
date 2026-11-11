@@ -170,7 +170,7 @@ function extensionContentType(ext: string): string | undefined {
  * the upload recorded after checking the file's own bytes.
  */
 function contentTypeFor(ext: string, storedType: string | undefined): string {
-  return extensionContentType(ext) ?? storedType ?? "application/octet-stream";
+  return extensionContentType(ext) ?? (storedType || "application/octet-stream");
 }
 
 /** Whether the object could be a video, before its stored type is read. */

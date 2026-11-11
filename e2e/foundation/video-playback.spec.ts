@@ -18,7 +18,9 @@ import {
 // short video through the production commands; a moderator approves it. The
 // live backend names media `media/<uuid>` with no file extension, so the card
 // must take "video" from the post's media and the media route must answer byte
-// ranges by the stored type.
+// ranges for videos. The test copy keeps media as local files with no stored
+// type, so the route reads the type from the file's first bytes here; reading
+// the type R2 stored is covered by src/__tests__/media-serve-range.test.ts.
 //
 // The roadmap names a mobile-safari project. This config has none (WebKit is
 // not installed in CI), so the spec runs in the phone project mobile-chrome and
@@ -207,7 +209,7 @@ test.describe("Video posts", () => {
       const size = readFileSync(VIDEO_FIXTURE).length;
       const videoPath = `/api/media/serve/${event.video.key}`;
 
-      await test.step("the media route answers byte ranges by the stored type", async () => {
+      await test.step("the media route answers byte ranges for the video", async () => {
         const part = await request.get(videoPath, { headers: { Range: "bytes=0-1023" } });
         expect(part.status()).toBe(206);
         expect(part.headers()["content-range"]).toBe(`bytes 0-1023/${size}`);
