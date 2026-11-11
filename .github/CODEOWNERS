@@ -10,10 +10,9 @@
 
 # KYC verification pipeline — sensitive, POPIA-regulated
 /src/lib/services/kyc-engine.ts @verifymzansi-VM
-/src/app/api/kyc/ @verifymzansi-VM
-/supabase/migrations/ @verifymzansi-VM
 
-# Foundation backend (live) — database updates and server adapters
+# Foundation backend (live) — database updates and server adapters.
+# (The retired backend's supabase/migrations/ is no longer listed.)
 /database/foundation/ @verifymzansi-VM
 /src/lib/foundation/ @verifymzansi-VM
 

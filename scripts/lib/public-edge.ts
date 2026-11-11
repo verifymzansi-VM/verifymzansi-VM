@@ -28,8 +28,13 @@ export function classifyPublicEdge(
     : "fail";
 }
 
-/** What the scheduled check prints, adds to the run summary and exits with. */
-export function publicEdgeReport(verdict: PublicEdgeVerdict, status: number) {
+/** What the scheduled check prints, adds to the run summary and exits with.
+ * `headerProblems` lists missing security headers on an otherwise good page. */
+export function publicEdgeReport(
+  verdict: PublicEdgeVerdict,
+  status: number,
+  headerProblems: string[] = []
+) {
   if (verdict === "pass")
     return {
       line: "PASS: the public homepage serves the deployed foundation configuration.",
@@ -41,6 +46,12 @@ export function publicEdgeReport(verdict: PublicEdgeVerdict, status: number) {
       line: `::warning title=Public edge check inconclusive::INCONCLUSIVE: Cloudflare challenged the automated request (HTTP ${status}), so the public homepage was not checked. This is not a pass; the authenticated smoke and readiness check must still pass on its own.`,
       summary: `Public edge: INCONCLUSIVE (Cloudflare challenge, HTTP ${status}); not a pass`,
       exitCode: 0,
+    };
+  if (headerProblems.length > 0)
+    return {
+      line: `::error::FAIL: the public homepage is missing required security headers: ${headerProblems.join("; ")}.`,
+      summary: `Public edge: FAIL (security headers: ${headerProblems.join("; ")})`,
+      exitCode: 1,
     };
   return {
     line: `::error::FAIL: the public homepage failed deployment alignment (HTTP ${status}).`,

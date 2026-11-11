@@ -64,16 +64,15 @@ block both local and CI gates. Baseline updates require review of exact debt;
 environment variables cannot increase the budget. Lint/Knip failures remain
 visible until a precise non-security baseline or correction is reviewed.
 
-The Supabase security advisor retains raw findings and separately verifies
-intentional controls in `scripts/security-reviews/supabase-controls.json`.
-Reviewed states require exact function-body hashes, signatures, return types,
-ownership, fixed search paths and grants across the complete public helper
-dependency graph. Service-only tables require RLS, no policies and no effective
-browser-role table or column grants. Browser roles must lack superuser, RLS
-bypass and public-schema creation rights. New overloads, changed helpers,
-missing metadata or changed privileges lose attestation and block strict mode.
-This is a control review, not a security-debt baseline. Native leaked-password
-protection remains separately blocking in strict mode when plan-blocked.
+The former Supabase security advisor check (`supabase:advisor:security`, check
+`security-advisor`) reviewed controls of the retired source schema and was
+retired with it. The live foundation schema is rebuilt and compared with its
+recorded fingerprint (including grants and row level security) by
+`foundation-replay`, which also checks access-policy invariants (row level
+security on every table, no PUBLIC execute, no SECURITY DEFINER in `api`, a
+fixed `search_path` on every function), and its access rules are exercised by
+the native suite (`foundation-native`). A check of the hosted project's own
+security settings is not part of the release gate any more.
 
 License reports fail closed on JSON/shape errors, unknown expressions and
 restricted license terms. The existing FFmpeg 0.12.9 exception requires the
@@ -108,12 +107,10 @@ remain in place. The seven-day release-age guard remains enabled, with exact
 security-release exceptions documented in `.npmrc`. No advisory is suppressed by
 this compatibility patch.
 
-PGlite tests execute selected schema/functions and supplement static migration
-checks. `test:db:isolated` starts a uniquely named local Supabase stack, applies
-the complete migration history and checks final RPC grants, PostgREST RLS and
-independent HTTP session races. It never uses application database credentials.
-Docker absence is INCOMPLETE. The new full-state lane needs execution on Linux;
-its local non-execution is not PostgreSQL proof.
+The PGlite lanes, `test:db:isolated` and the static migration checks covered
+only the retired `supabase/migrations` schema and were retired with it.
+Production's schema is rebuilt and checked by `foundation-replay`,
+`foundation-sql-lint` and `foundation-native`.
 
 `test:browser:isolated` copies the working tree into an isolated build directory
 under `tmp/isolated-browser`, installs the frozen dependencies there, builds and

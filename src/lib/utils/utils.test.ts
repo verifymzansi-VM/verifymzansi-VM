@@ -34,6 +34,10 @@ describe("slugify", () => {
   it("handles empty string", () => {
     expect(slugify("")).toBe("");
   });
+  it("drops punctuation and collapses and trims spaces", () => {
+    expect(slugify("Product 123!")).toBe("product-123");
+    expect(slugify("  Multiple   Spaces  ")).toBe("multiple-spaces");
+  });
 });
 
 describe("truncate", () => {
@@ -50,6 +54,10 @@ describe("truncate", () => {
 
   it("handles exact length", () => {
     expect(truncate("exact", 5)).toBe("exact");
+  });
+
+  it("keeps exactly the limit before the ellipsis", () => {
+    expect(truncate("Hello World", 5)).toBe("Hello…");
   });
 });
 

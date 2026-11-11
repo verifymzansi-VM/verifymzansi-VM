@@ -6,6 +6,7 @@ import path from "node:path";
 import { parse } from "smol-toml";
 import { createTestHarness } from "wrangler";
 import { createCloudflareStartupFixture } from "./lib/cloudflare-startup-fixture.mjs";
+import { securityHeaderProblems } from "./lib/security-header-policy.mjs";
 
 // Exercise the actual OpenNext artifact in workerd. A successful `next start`
 // does not prove that the adapter inlined every manifest Next loads at startup.
@@ -130,6 +131,11 @@ try {
   assert.equal(login.status, 200, "Built Worker must render the login page through middleware");
   assert.match(login.headers.get("content-type") ?? "", /text\/html/);
   assert.match(login.headers.get("content-security-policy") ?? "", /default-src 'self'/);
+  assert.deepEqual(
+    securityHeaderProblems(login.headers),
+    [],
+    "Built Worker must send the production security headers on HTML pages"
+  );
   assert.match(await login.text(), /<html/);
   const fingerprint = JSON.parse(
     await readFile(path.join(root, ".open-next/build-fingerprint.json"), "utf8")
@@ -158,6 +164,7 @@ try {
           workerdStartup: true,
           anonymousJobsDenied: true,
           loginHtmlAndCsp: true,
+          loginSecurityHeaders: true,
           anonymousBindingProbeDenied: true,
           compiledPublicConfiguration: true,
           syntheticPrivateBindings: true,
@@ -172,7 +179,7 @@ try {
     ) + "\n"
   );
   console.log(
-    "Cloudflare startup PASS: health200, unauthorized jobs401, login HTML/CSP, compiled public configuration and private runtime binding match/mismatch proofs in workerd."
+    "Cloudflare startup PASS: health200, unauthorized jobs401, login HTML/CSP and security headers, compiled public configuration and private runtime binding match/mismatch proofs in workerd."
   );
 } catch (error) {
   // Only synthetic runtime credentials are installed above. Preserve the

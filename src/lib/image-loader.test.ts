@@ -91,4 +91,15 @@ describe("cloudflareImageLoader", () => {
     });
     expect(result).toBe("/cdn-cgi/image/width=640,quality=80,format=auto/photos/hero.jpg");
   });
+
+  it("keeps existing query parameters and the hash when adding width and quality", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CF_IMAGE_RESIZING", "true");
+    const { default: loader } = await import("./image-loader");
+    expect(loader({ src: "/images/logo.png?fit=cover#hero", width: 320, quality: 80 })).toBe(
+      "/images/logo.png?fit=cover&w=320&q=80#hero"
+    );
+    expect(
+      loader({ src: "https://images.unsplash.com/photo-123?auto=format#preview", width: 640 })
+    ).toBe("https://images.unsplash.com/photo-123?auto=format&w=640&q=75#preview");
+  });
 });

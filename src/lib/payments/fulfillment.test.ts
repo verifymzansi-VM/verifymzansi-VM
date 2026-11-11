@@ -61,7 +61,7 @@ function client(rows: Array<Record<string, unknown>> = [plan]) {
   return { from, rpc };
 }
 
-describe("atomic payment fulfillment adapter (effects are tested in test-payment-fulfillment.mjs)", () => {
+describe("atomic payment fulfillment adapter", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("validates the canonical plan and sends one RPC with the exact metadata snapshot", async () => {

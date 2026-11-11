@@ -116,16 +116,10 @@ export const CHECKS: Check[] = [
     { evidence: ["public/vendor/ffmpeg-core/NOTICE.txt", "per-run licenses.log"] }
   ),
   check(
-    "db-static",
-    ["db:check-invariants"],
-    "static migration corpus invariants; supplementary only"
-  ),
-  check(
     "contracts",
     ["test:contract"],
     "clean foundation API artifact drift; Ozow full/thin official event fixtures, shared KYC schema, SMS/email"
   ),
-  check("canaries", ["test:security-canaries"], "security assertions; no mutation score"),
   check(
     "unit",
     ["exec", "vitest", "run"],
@@ -147,42 +141,21 @@ export const CHECKS: Check[] = [
     ["kyc", "release"],
     { coveredBy: "unit" }
   ),
-  ...[
-    "trials",
-    "commercial:db",
-    "payments:db",
-    "media:db",
-    "visits:db",
-    "staff-roles:db",
-    "decisions:db",
-    "queue-claims:db",
-    "operation-jobs:db",
-    "dsar:db",
-    "dashboard:db",
-    "admin-lists:db",
-    "kyc:db",
-    "business-counts:db",
-    "business-evidence:db",
-  ].map((lane) =>
-    check(
-      `db-${lane.replace(/:db$/, "")}`,
-      [`test:${lane}`],
-      lane.startsWith("business-")
-        ? "supplementary isolated PGlite assertions; limited schema/role model; hosted PostgreSQL/PostgREST proof remains separate"
-        : "isolated PGlite assertions; limited migration/concurrency model",
-      lane === "payments:db"
-        ? [...full, "payments"]
-        : lane === "kyc:db" || lane === "business-evidence:db"
-          ? [...full, "kyc"]
-          : full
-    )
-  ),
   check(
     "coverage",
     ["test:coverage:core"],
-    "core thresholds unchanged; six DOM-heavy suites run in unit",
+    "core thresholds unchanged; DOM-heavy suites in src/test/coverage-excluded-suites.ts run in unit-coverage-excluded",
     full,
     { evidence: ["coverage/coverage-final.json"], timeoutMs: 1_800_000 }
+  ),
+  // CI runs coverage plus this lane instead of unit, so every unit test runs
+  // once. Where unit runs (review, release) it already includes these suites.
+  check(
+    "unit-coverage-excluded",
+    ["test:coverage:excluded"],
+    "the DOM-heavy suites the coverage lane leaves out (src/test/coverage-excluded-suites.ts), without coverage",
+    full,
+    { coveredBy: "unit", timeoutMs: 600_000 }
   ),
   check("preflight", ["preflight"], "local development environment", local, {
     category: "local_production_env",
@@ -194,13 +167,6 @@ export const CHECKS: Check[] = [
     "production config plus read-only service authentication/reachability; no payments",
     ["release", "payments", "kyc"],
     { category: "local_production_env", external: true }
-  ),
-  check(
-    "isolated-db",
-    ["test:db:isolated"],
-    "full migrations, PostgreSQL/PostgREST RLS, independent-session races",
-    ["release", "payments", "kyc"],
-    { dependencies: ["Docker daemon", "Supabase CLI"], timeoutMs: 1_800_000 }
   ),
   check(
     "browser",
@@ -291,13 +257,6 @@ export const CHECKS: Check[] = [
     external: true,
     category: "live_deployment",
   }),
-  check(
-    "security-advisor",
-    ["supabase:advisor:security:strict"],
-    "read-only security advisor",
-    ["release"],
-    { external: true, category: "live_deployment" }
-  ),
   check(
     "performance-advisor",
     ["supabase:advisor:performance"],
@@ -462,7 +421,6 @@ for (const item of CHECKS) {
       "scripts/audit-tooling.test.ts",
     ],
     contracts: ["scripts/test-contract.ts", "src/test/contracts", "src/test/fixtures/contracts"],
-    canaries: ["scripts/test-mutation.ts"],
     unit: ["vitest.config.ts", "src/**/*.test.{ts,tsx}"],
     "payment-unit": [
       "scripts/run-domain-tests.ts payments",
@@ -474,12 +432,14 @@ for (const item of CHECKS) {
       "src/lib/validations/kyc-webhook.test.ts",
       "src/app/api/webhooks/kyc/provider/route.test.ts",
     ],
-    "db-business-counts": ["scripts/test-business-category-counts.mjs"],
-    "db-business-evidence": ["scripts/test-business-verification-file-privacy.mjs"],
     coverage: ["vitest.config.ts", "scripts/run-vitest.ts coverage-core"],
+    "unit-coverage-excluded": [
+      "vitest.config.ts",
+      "src/test/coverage-excluded-suites.ts",
+      "scripts/run-vitest.ts coverage-excluded",
+    ],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],
-    "isolated-db": ["scripts/test-isolated-db.ts", "scripts/test-db.ts", "supabase/migrations"],
     browser: [
       "e2e/smoke.spec.ts",
       "e2e/addon-checkout.spec.ts",

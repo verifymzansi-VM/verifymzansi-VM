@@ -29,6 +29,8 @@ if (
   process.exit(1);
 }
 const validateOnly = args.has("--validate-only");
+// Production Worker builds always run Next's TypeScript check.
+require("./lib/next-typecheck-skip.cjs").assertNextTypecheckNotSkipped(process.env);
 
 const repoRoot = path.join(__dirname, "..");
 const wranglerTomlPath = path.join(repoRoot, "wrangler.toml");
