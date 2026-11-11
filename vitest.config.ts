@@ -83,8 +83,6 @@ export default defineConfig({
         // Generated OpenAPI declarations are type-only and non-executable.
         "src/lib/api/v1.d.ts",
         // Barrel files only re-export symbols and don't contain runtime logic.
-        "src/lib/validations/index.ts",
-        "src/lib/services/index.ts",
         "src/stores/index.ts",
         // Playwright E2E infrastructure — imports `server-only`, runs only in E2E context
         "src/lib/supabase/playwright-stub.ts",
