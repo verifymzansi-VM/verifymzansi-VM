@@ -80,7 +80,7 @@ describe("readFrontendStaffClaimViews", () => {
     }));
     vi.mocked(readFrontendStaffClaims).mockResolvedValue({ account_id: staff, items: [] } as never);
     await readFrontendStaffClaimViews(staff, items);
-    expect(vi.mocked(readFrontendStaffClaims).mock.calls.map(([, batch]) => batch.length)).toEqual([
+    expect(vi.mocked(readFrontendStaffClaims).mock.calls.map(([, batch]) => batch?.length)).toEqual([
       300, 300, 50,
     ]);
   });
