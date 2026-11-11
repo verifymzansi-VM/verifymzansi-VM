@@ -25,6 +25,9 @@ const baseURL = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 
 export default defineConfig({
   testDir: "./e2e/foundation",
+  // The picture checks run only inside the pinned Playwright image
+  // (scripts/foundation-visual.mjs, playwright.visual.config.ts).
+  testIgnore: "visual-regression.spec.ts",
   globalSetup: "./e2e/foundation/global.setup.ts",
   outputDir: "test-results/foundation",
   fullyParallel: false,

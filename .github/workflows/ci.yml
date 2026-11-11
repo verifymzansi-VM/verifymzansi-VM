@@ -440,7 +440,7 @@ jobs:
   # Builds the site once, at minute 0, with the fixed browser-test settings
   # (scripts/start-playwright-server.cjs). The browser jobs download it and
   # serve it with PLAYWRIGHT_SKIP_BUILD=1 instead of each building it again.
-  # The visual job still builds its own (its container differs).
+  # The visual job builds its own, for the foundation test copy.
   build-e2e:
     name: Browser test build
     runs-on: ubuntu-latest
@@ -554,30 +554,53 @@ jobs:
   # the pinned Playwright image (same browser build and fonts as when the
   # pictures were made). A required check: a difference from an approved
   # picture fails the workflow, so it also blocks the deploy.
+  # Picture checks of the chosen frontend, served by the live backend's code
+  # (foundation) from the private local test copy, as in workflow "E2E
+  # foundation": a throwaway Supabase stack on the runner's own Docker, built
+  # only from database/foundation/, no secrets, nothing hosted. The stack needs
+  # Docker, so this job runs on the runner, not in a container; the pictures
+  # need the pinned browser build and fonts, so scripts/foundation-visual.mjs
+  # runs Playwright inside the pinned Playwright image (`docker run --network
+  # host`, image pinned by digest in that script) against the website on the
+  # runner's 127.0.0.1. Approved pictures:
+  # e2e/foundation/visual-regression.spec.ts-snapshots/.
   visual-regression:
     name: Visual regression (chosen frontend)
     runs-on: ubuntu-latest
     needs: lint-type-security
+    # Expected about 12-14 minutes (install, stack, build, image, 33 pictures);
+    # locally on 4 cores: fresh stack 0.5-1, build 4.6, pictures about 2.
+    # Step ceilings: stack 5, build 10, image 5, pictures 10.
     timeout-minutes: 40
-    container:
-      image: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f # secret-scan: allow image digest
-      options: --ipc=host
     env:
-      PLAYWRIGHT_TEST_MODE: "1"
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
-      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      NODE_OPTIONS: --max-old-space-size=6144
       PLAYWRIGHT_JSON_REPORT: test-results/visual-report.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      # Same reason as in workflow "E2E foundation": the copy's fixed ports must
+      # never be handed out to outgoing connections.
+      - name: Keep the test copy's ports out of the ephemeral range
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
+      - name: Start the test copy (local stack, schema proof, test people)
+        timeout-minutes: 5
+        run: node --import tsx scripts/foundation-e2e.mjs up
+      - name: Build the website for the test copy
+        timeout-minutes: 10
+        run: node --import tsx scripts/foundation-e2e.mjs build
+      - name: Fetch the pinned browser image
+        timeout-minutes: 5
+        run: node --import tsx scripts/foundation-visual.mjs pull
       - name: Compare the main screens with the approved pictures
-        run: pnpm exec playwright test e2e/visual-regression.spec.ts --project=chromium --retries=1
+        timeout-minutes: 10
+        run: node --import tsx scripts/foundation-visual.mjs --retries=1
       - name: List the screens that differ
         if: always()
         run: node scripts/visual-diff-summary.mjs test-results/visual-report.json | tee -a "$GITHUB_STEP_SUMMARY"
@@ -587,9 +610,13 @@ jobs:
         with:
           name: visual-regression-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            playwright-report/
+            playwright-report/visual
             test-results/
+            tmp/foundation-e2e/visual-website.log
           if-no-files-found: warn
+      - name: Delete the test copy
+        if: always()
+        run: node --import tsx scripts/foundation-e2e.mjs down
 
   # Decides once whether a staging address exists. The jobs that need one test
   # this output in their job-level `if:`, so without it they show as skipped
