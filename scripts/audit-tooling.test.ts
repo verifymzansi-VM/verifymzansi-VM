@@ -26,7 +26,8 @@ import { dependencyAuditVerdict } from "./dependency-audit-policy";
 import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
-import { assertKycAuthenticatedScenarios } from "./lib/kyc-browser-evidence";
+import { assertKycAuthenticatedScenarios, scenariosFromReport } from "./lib/kyc-browser-evidence";
+import { missingBuiltRoutes, REQUIRED_BUILT_ROUTES } from "./lib/built-routes.mjs";
 
 test("responsive CSS includes both mobile dialog docking and short-screen spacing", async () => {
   const result = await postcss([
@@ -90,6 +91,52 @@ test("authenticated KYC evidence cannot be replaced by smoke tests, missing proj
       assertKycAuthenticatedScenarios(rows.map((row) => ({ ...row, file: "e2e/smoke.spec.ts" }))),
     /Required KYC scenario/
   );
+  // One CI job per browser project checks only its own project.
+  const mobile = rows.filter((row) => row.project === "mobile-chrome");
+  assert.doesNotThrow(() => assertKycAuthenticatedScenarios(mobile, ["mobile-chrome"]));
+  assert.throws(() => assertKycAuthenticatedScenarios(mobile, ["chromium"]), /chromium/);
+  assert.throws(() => assertKycAuthenticatedScenarios(rows, []), /No browser project/);
+  // The same rows come out of a Playwright JSON report.
+  const report = {
+    suites: [
+      {
+        suites: [
+          {
+            specs: titles.map((title, line) => ({
+              file: "e2e/kyc-authenticated.spec.ts",
+              line,
+              title,
+              tests: [
+                {
+                  status: "expected",
+                  projectName: "chromium",
+                  expectedStatus: "passed",
+                  results: [{ status: "failed" }, { status: "passed" }],
+                },
+              ],
+            })),
+          },
+        ],
+      },
+    ],
+  };
+  const fromReport = scenariosFromReport(report);
+  assert.equal(fromReport.length, titles.length);
+  assert.doesNotThrow(() => assertKycAuthenticatedScenarios(fromReport, ["chromium"]));
+  assert.throws(() => assertKycAuthenticatedScenarios(fromReport, ["mobile-chrome"]));
+});
+
+test("the build must contain the payment, KYC, verification and pricing routes", () => {
+  const manifest = Object.fromEntries(
+    REQUIRED_BUILT_ROUTES.map((route) => [`/(group)${route}`, `app${route}.js`])
+  );
+  assert.equal(REQUIRED_BUILT_ROUTES.length, 4);
+  assert.deepEqual(missingBuiltRoutes(manifest), []);
+  const { ["/(group)/pricing/page"]: _pricing, ...withoutPricing } = manifest;
+  assert.deepEqual(missingBuiltRoutes(withoutPricing), ["/pricing/page"]);
+  assert.deepEqual(missingBuiltRoutes({}), REQUIRED_BUILT_ROUTES);
+  // A suffix match must not accept a different route that merely ends alike.
+  assert.deepEqual(missingBuiltRoutes({ "/x/api/webhooks/ozow/route-old": "" }).length, 4);
 });
 import { sanitizeCloudflareEnvModule } from "./lib/cloudflare-env-policy";
 import { copyWorkingTreeSnapshot } from "./lib/working-tree-snapshot";

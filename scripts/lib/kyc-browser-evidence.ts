@@ -12,9 +12,15 @@ const requiredTitles = [
   "high-risk approval stays pending until an independent governor approves through the governance UI",
 ];
 
+export const KYC_BROWSER_PROJECTS = ["chromium", "mobile-chrome"] as const;
+
 /** A smoke-only browser run must not attest the required authenticated KYC lane. */
-export function assertKycAuthenticatedScenarios(scenarios: BrowserScenario[]) {
-  for (const project of ["chromium", "mobile-chrome"]) {
+export function assertKycAuthenticatedScenarios(
+  scenarios: BrowserScenario[],
+  projects: readonly string[] = KYC_BROWSER_PROJECTS
+) {
+  if (projects.length === 0) throw new Error("No browser project to check");
+  for (const project of projects) {
     for (const title of requiredTitles) {
       const matches = scenarios.filter(
         (row) =>
@@ -32,4 +38,45 @@ export function assertKycAuthenticatedScenarios(scenarios: BrowserScenario[]) {
       }
     }
   }
+}
+
+type ReportSuite = {
+  specs?: Array<{
+    file: string;
+    line: number;
+    title: string;
+    tests?: Array<{
+      status: string;
+      projectName: string;
+      expectedStatus: string;
+      results?: Array<{ status: string }>;
+    }>;
+  }>;
+  suites?: ReportSuite[];
+};
+
+/** Every test result of a Playwright JSON report, one row per test and project. */
+export function scenariosFromReport(report: {
+  suites?: ReportSuite[];
+}): Array<BrowserScenario & { key: string }> {
+  const scenarios: Array<BrowserScenario & { key: string }> = [];
+  const collect = (suites: ReportSuite[]) => {
+    for (const suite of suites) {
+      for (const spec of suite.specs ?? []) {
+        for (const test of spec.tests ?? [])
+          scenarios.push({
+            key: `${spec.file}:${spec.line}:${spec.title}`,
+            status: test.status,
+            file: spec.file,
+            title: spec.title,
+            project: test.projectName,
+            expectedStatus: test.expectedStatus,
+            resultStatus: test.results?.at(-1)?.status ?? "missing",
+          });
+      }
+      collect(suite.suites ?? []);
+    }
+  };
+  collect(report.suites ?? []);
+  return scenarios;
 }

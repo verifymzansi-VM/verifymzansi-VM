@@ -80,7 +80,7 @@ describe("CI reports what it ran", () => {
     expect(config).toContain("./e2e/support/skip-guard-reporter.ts");
     const reporter = readFileSync("e2e/support/skip-guard-reporter.ts", "utf8");
     expect(reporter).toContain('return { status: "failed" }');
-    for (const job of ["e2e-smoke", "e2e-full-matrix"]) {
+    for (const job of ["e2e-full-matrix"]) {
       const run = ci.jobs[job].steps.map((step) => step.run ?? "").join("\n");
       // A command-line --reporter would replace the configured skip guard.
       expect(run).toContain("playwright test");
@@ -99,7 +99,7 @@ describe("CI job graph", () => {
   it("lets browser jobs start after the static checks instead of waiting for unit tests", () => {
     // They use nothing the unit or build jobs produce. Every job stays a
     // required check, so a merge still needs all of them green.
-    for (const id of ["e2e-smoke", "launch-flows-bundle", "e2e-full-matrix"])
+    for (const id of ["e2e-full-matrix"])
       expect([workflow.jobs[id].needs].flat(), id).toEqual(["lint-type-security"]);
   });
 
@@ -121,8 +121,38 @@ describe("CI job graph", () => {
     }
   });
 
+  it("keeps the checks only the removed launch-flows job made", () => {
+    // The smoke subset runs inside the full matrix; these two checks did not.
+    const build = workflow.jobs["build-route-verify"].steps;
+    const built = build.findIndex((step) => step.run === "pnpm run build:cloudflare");
+    const routes = build.findIndex((step) => step.run === "node scripts/check-built-routes.mjs");
+    expect(built).toBeGreaterThan(-1);
+    expect(routes).toBeGreaterThan(built);
+    expect(build[routes].if).toBeUndefined();
+    const matrix = workflow.jobs["e2e-full-matrix"] as Job & {
+      strategy: { matrix: { project: string[] } };
+    };
+    expect(matrix.strategy.matrix.project).toEqual(
+      expect.arrayContaining(["chromium", "mobile-chrome"])
+    );
+    const steps = matrix.steps;
+    const tests = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
+    const proof = steps.findIndex((step) =>
+      (step.run ?? "").includes("scripts/check-kyc-browser-report.ts")
+    );
+    expect(proof).toBeGreaterThan(tests);
+    expect(steps[proof].if).toBe("matrix.project != 'firefox'");
+    expect(steps[proof].run).toContain('"test-results/e2e-full-$BROWSER_PROJECT.json"');
+    expect(steps[tests].env?.PLAYWRIGHT_JSON_REPORT).toBe(
+      "test-results/e2e-full-${{ matrix.project }}.json"
+    );
+    expect(Object.keys(workflow.jobs)).not.toEqual(
+      expect.arrayContaining(["e2e-smoke", "launch-flows-bundle"])
+    );
+  });
+
   it("counts tests that passed only on retry in each browser job's summary", () => {
-    for (const id of ["e2e-smoke", "e2e-full-matrix"]) {
+    for (const id of ["e2e-full-matrix"]) {
       const steps = workflow.jobs[id].steps;
       const run = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
       const report = steps[run].env?.PLAYWRIGHT_JSON_REPORT ?? "";

@@ -420,6 +420,10 @@ jobs:
             exit 1
           fi
           echo "All critical payment routes verified in build output."
+      # Payment and KYC provider callbacks, verification start and pricing
+      # (scripts/lib/built-routes.mjs), checked in the generated route manifest.
+      - name: Verify required routes in the build manifest
+        run: node scripts/check-built-routes.mjs
       # The Worker runtime proof (the startup check's report and the build
       # fingerprint), formerly uploaded by the separate "Foundation Worker
       # runtime" job, which built the same Worker a second time.
@@ -432,79 +436,6 @@ jobs:
           path: |
             tmp/cloudflare-runtime/latest.json
             .open-next/build-fingerprint.json
-
-  e2e-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: lint-type-security
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium, mobile-chrome]
-    env:
-      PLAYWRIGHT_TEST_MODE: "1"
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
-      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - uses: ./.github/actions/install-browsers
-      - run: pnpm exec playwright test --grep "@smoke" --project "$BROWSER_PROJECT"
-        env:
-          BROWSER_PROJECT: ${{ matrix.project }}
-          PLAYWRIGHT_JSON_REPORT: test-results/e2e-smoke-${{ matrix.project }}.json
-      # Retries (playwright.config.ts) can hide new flakiness: count it.
-      - name: Summarise results, including tests that passed only on retry
-        if: always()
-        env:
-          BROWSER_PROJECT: ${{ matrix.project }}
-        run: node scripts/e2e-foundation-summary.mjs "test-results/e2e-smoke-$BROWSER_PROJECT.json" "$BROWSER_PROJECT" "" "Smoke browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
-
-  launch-flows-bundle:
-    runs-on: ubuntu-latest
-    timeout-minutes: 14
-    needs: lint-type-security
-    env:
-      PLAYWRIGHT_TEST_MODE: "1"
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
-      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - uses: ./.github/actions/install-browsers
-      - name: Isolated payment, KYC and DSAR browser verification
-        run: pnpm safety:release -- --checks=browser
-      - name: Upload isolated browser diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: isolated-browser-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            tmp/isolated-browser/*.log
-            tmp/isolated-browser/*.json
-            tmp/isolated-browser/checkout-*/test-results/**
-            tmp/safety-gate/**
-          if-no-files-found: warn
 
   e2e-full-matrix:
     runs-on: ubuntu-latest
@@ -549,6 +480,13 @@ jobs:
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
         run: node scripts/e2e-foundation-summary.mjs "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT" "" "Browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
+      # A run that skipped them must not count as KYC proof
+      # (e2e/kyc-authenticated.spec.ts, scripts/lib/kyc-browser-evidence.ts).
+      - name: Prove the signed-in KYC scenarios passed
+        if: matrix.project != 'firefox'
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
+        run: pnpm exec tsx scripts/check-kyc-browser-report.ts "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT"
       - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

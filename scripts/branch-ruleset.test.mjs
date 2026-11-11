@@ -70,9 +70,6 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     "audit-tooling-platforms (ubuntu-latest)",
     "audit-tooling-platforms (windows-latest)",
     "build-route-verify",
-    "e2e-smoke (chromium)",
-    "e2e-smoke (mobile-chrome)",
-    "launch-flows-bundle",
     "Visual regression (chosen frontend)",
     "foundation-native",
   ]) {
