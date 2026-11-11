@@ -3,7 +3,6 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { LeadsFeed } from "./leads-feed";
 import { useRealtime } from "@/hooks/use-realtime";
 vi.mock("@/hooks/use-realtime", () => ({ useRealtime: vi.fn() }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
 vi.mock("@/lib/utils/csrf", () => ({ withCsrfHeaders: (headers: unknown) => headers }));
 const lead = {
   id: "lead-1",
@@ -32,16 +31,7 @@ describe("seller enquiry inbox", () => {
     expect(decodeURIComponent(href)).toContain("thanks for your enquiry about Community event");
     expect(decodeURIComponent(href)).toContain("/tourism-events/post-1");
   });
-  it("restores status and reports network failures", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Offline"));
-    render(<LeadsFeed initialLeads={[lead]} ownerColumn="owner_id" ownerId="owner" />);
-    fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not update"));
-    expect(screen.getByRole("button", { name: "Mark as read" })).toBeInTheDocument();
-    fetchMock.mockRestore();
-  });
   it("settles an uncertain native status update by reading, without replaying the mutation", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockRejectedValueOnce(new Error("Connection lost"))
@@ -57,7 +47,6 @@ describe("seller enquiry inbox", () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PATCH")).toHaveLength(1);
   });
   it("ignores out-of-order private refreshes and does not consume row data from the signal", async () => {
-    vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "foundation");
     let first: ((r: Response) => void) | undefined, second: ((r: Response) => void) | undefined;
     vi.spyOn(globalThis, "fetch")
       .mockReturnValueOnce(

@@ -5,9 +5,8 @@ import { QueueClaimsProvider } from "@/components/admin/queue-claims";
 import { PageHeader } from "@/components/layout/page-header";
 import { roleHasCapability } from "@/lib/auth/admin-access";
 import { requireStaff } from "@/lib/auth/require-staff";
-import { getCaseDetail, type CaseDetail } from "@/lib/business-verification/admin-queries";
+import type { CaseDetail } from "@/lib/business-verification/admin-queries";
 import { getClaimsForItems } from "@/lib/services/queue-claims";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readStaffSeenCase } from "@/lib/foundation/business-seen";
 import { readStaffCipcCase } from "@/lib/foundation/business-cipc";
@@ -70,10 +69,7 @@ export default async function BusinessVerificationCasePage({
   const { user, role } = await requireStaff("queue:view");
   const { id } = await params;
   if (!UUID.test(id)) notFound();
-  const detail =
-    getDataBackend() === "foundation"
-      ? await readNativeDetail(id.toLowerCase())
-      : await getCaseDetail(id);
+  const detail = await readNativeDetail(id.toLowerCase());
   if (!detail) notFound();
 
   const name = detail.business?.business_name ?? "Business";

@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { HomeMzansiMarketShowcase } from "./home-mzansi-market-showcase";
-import { createClient } from "@/lib/supabase/server";
+import { restoredHomeCollection } from "@/lib/foundation/marketplace-server";
 
 const { marketCardSpy, warnSpy } = vi.hoisted(() => ({
   marketCardSpy: vi.fn(),
   warnSpy: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(),
+vi.mock("@/lib/foundation/marketplace-server", () => ({
+  restoredHomeCollection: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -58,27 +58,14 @@ vi.mock("./market-preview-card", () => ({
   },
 }));
 
-function createSupabaseMock({
+function mockHomeCollection({
   data,
   error = null,
 }: {
   data: unknown[];
   error?: { message: string } | null;
 }) {
-  const builder = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    not: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue({ data, error }),
-  };
-
-  return {
-    client: {
-      from: vi.fn().mockReturnValue(builder),
-    },
-    builder,
-  };
+  vi.mocked(restoredHomeCollection).mockResolvedValue({ data, error } as never);
 }
 
 describe("HomeMzansiMarketShowcase", () => {
@@ -87,7 +74,7 @@ describe("HomeMzansiMarketShowcase", () => {
   });
 
   it("prefers listing video when available", async () => {
-    const { client } = createSupabaseMock({
+    mockHomeCollection({
       data: [
         {
           id: "list-1",
@@ -103,7 +90,6 @@ describe("HomeMzansiMarketShowcase", () => {
         },
       ],
     });
-    vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
@@ -120,7 +106,7 @@ describe("HomeMzansiMarketShowcase", () => {
   });
 
   it("falls back to first photo when listing has no video", async () => {
-    const { client } = createSupabaseMock({
+    mockHomeCollection({
       data: [
         {
           id: "list-2",
@@ -135,7 +121,6 @@ describe("HomeMzansiMarketShowcase", () => {
         },
       ],
     });
-    vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
@@ -147,7 +132,7 @@ describe("HomeMzansiMarketShowcase", () => {
   });
 
   it("renders listings inside the shared auto-scroll rail", async () => {
-    const { client } = createSupabaseMock({
+    mockHomeCollection({
       data: [
         {
           id: "list-3",
@@ -162,7 +147,6 @@ describe("HomeMzansiMarketShowcase", () => {
         },
       ],
     });
-    vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
@@ -171,8 +155,7 @@ describe("HomeMzansiMarketShowcase", () => {
   });
 
   it("renders a branded empty state when no listings are available", async () => {
-    const { client } = createSupabaseMock({ data: [] });
-    vi.mocked(createClient).mockResolvedValue(client as never);
+    mockHomeCollection({ data: [] });
 
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
@@ -185,7 +168,7 @@ describe("HomeMzansiMarketShowcase", () => {
   });
 
   it("filters placeholder listings before rendering the rail", async () => {
-    const { client } = createSupabaseMock({
+    mockHomeCollection({
       data: [
         {
           id: "list-seed",
@@ -213,7 +196,6 @@ describe("HomeMzansiMarketShowcase", () => {
         },
       ],
     });
-    vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
@@ -224,40 +206,11 @@ describe("HomeMzansiMarketShowcase", () => {
     expect(props.title).toBe("MacBook Pro");
   });
 
-  it("queries listing fixture rows in a schema-tolerant way", async () => {
-    const { client, builder } = createSupabaseMock({
-      data: [
-        {
-          id: "list-4",
-          title: "Camera",
-          description: "Creator bundle",
-          price_cents: 250000,
-          videos: [],
-          video_thumbnail: null,
-          photos: ["https://example.com/camera.jpg"],
-          location_city: "Cape Town",
-          location_province: "Western Cape",
-          boost_until: null,
-        },
-      ],
-    });
-    vi.mocked(createClient).mockResolvedValue(client as never);
-
-    await HomeMzansiMarketShowcase();
-
-    // Card columns only: never "*", and never the private street address.
-    const columns = String((builder.select as ReturnType<typeof vi.fn>).mock.calls[0][0]);
-    expect(columns).toContain("owner_id");
-    expect(columns).not.toContain("*");
-    expect(columns).not.toContain("location_address");
-  });
-
   it("returns null and logs a warning when the listings query fails", async () => {
-    const { client } = createSupabaseMock({
+    mockHomeCollection({
       data: [],
       error: { message: "column listings.logo_url does not exist" },
     });
-    vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
 

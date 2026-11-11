@@ -2,21 +2,29 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
-const { getUser, maybeSingle, onAuthStateChange } = vi.hoisted(() => ({
+const { getUser, onAuthStateChange, fetchFoundationAccountSession } = vi.hoisted(() => ({
   getUser: vi.fn(),
-  maybeSingle: vi.fn(),
   onAuthStateChange: vi.fn(),
+  fetchFoundationAccountSession: vi.fn(),
 }));
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    auth: { getUser, onAuthStateChange },
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }),
+  createClient: () => ({ auth: { getUser, onAuthStateChange } }),
+}));
+vi.mock("@/lib/foundation/account-session-client", () => ({ fetchFoundationAccountSession }));
+vi.mock("@/lib/foundation/verification-runtime-client", () => ({
+  readFoundationVerificationStatus: vi.fn(async () => ({})),
+}));
+vi.mock("@/lib/foundation/restored-profile", () => ({
+  restoredAccountProfile: (account: { account_id: string }) => ({
+    user_id: account.account_id,
+    display_name: account.account_id,
   }),
 }));
 
 import { useAuth } from "@/hooks/use-auth";
 import { useAuthStore } from "@/stores/auth-store";
 
+type Account = { account_id: string; email: string; staff: null };
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
@@ -29,6 +37,11 @@ const user = (id: string) => ({
   email: `${id}@example.com`,
   user_metadata: {},
   app_metadata: {},
+});
+const account = (id: string): Account => ({
+  account_id: id,
+  email: `${id}@example.com`,
+  staff: null,
 });
 
 describe("auth session request races", () => {
@@ -53,40 +66,48 @@ describe("auth session request races", () => {
       lookup.resolve({ data: { user: user("old") } });
     });
     expect(useAuthStore.getState().user).toBeNull();
-    expect(maybeSingle).not.toHaveBeenCalled();
+    expect(fetchFoundationAccountSession).not.toHaveBeenCalled();
   });
 
-  it("discards a pending profile after the session ends", async () => {
-    const profile = deferred<{ data: { user_id: string }; error: null }>();
+  it("discards a pending account after the session ends", async () => {
+    const pending = deferred<Account>();
     getUser.mockResolvedValue({ data: { user: user("old") } });
-    maybeSingle.mockReturnValue(profile.promise);
+    fetchFoundationAccountSession.mockReturnValue(pending.promise);
     renderHook(() => useAuth());
-    await waitFor(() => expect(maybeSingle).toHaveBeenCalled());
+    await waitFor(() => expect(fetchFoundationAccountSession).toHaveBeenCalled());
     await act(async () => {
       authChanged("SIGNED_OUT", null);
-      profile.resolve({ data: { user_id: "old" }, error: null });
+      pending.resolve(account("old"));
     });
     expect(useAuthStore.getState().user).toBeNull();
     expect(useAuthStore.getState().profile).toBeNull();
   });
 
   it("keeps the new account profile when an older account request finishes last", async () => {
-    const oldProfile = deferred<{ data: { user_id: string }; error: null }>();
+    const oldAccount = deferred<Account>();
     getUser
       .mockResolvedValueOnce({ data: { user: user("old") } })
       .mockResolvedValueOnce({ data: { user: user("new") } });
-    maybeSingle
-      .mockReturnValueOnce(oldProfile.promise)
-      .mockResolvedValueOnce({ data: { user_id: "new" }, error: null });
+    fetchFoundationAccountSession
+      .mockReturnValueOnce(oldAccount.promise)
+      .mockResolvedValueOnce(account("new"));
     const { result } = renderHook(() => useAuth());
-    await waitFor(() => expect(maybeSingle).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetchFoundationAccountSession).toHaveBeenCalledTimes(1));
     await act(async () => {
       await result.current.refresh();
     });
     await act(async () => {
-      oldProfile.resolve({ data: { user_id: "old" }, error: null });
+      oldAccount.resolve(account("old"));
     });
     expect(useAuthStore.getState().user?.id).toBe("new");
-    expect(useAuthStore.getState().profile).toEqual({ user_id: "new" });
+    expect(useAuthStore.getState().profile).toEqual({ user_id: "new", display_name: "new" });
+  });
+
+  it("signs out when the account session belongs to someone else", async () => {
+    getUser.mockResolvedValue({ data: { user: user("old") } });
+    fetchFoundationAccountSession.mockResolvedValue(account("other"));
+    renderHook(() => useAuth());
+    await waitFor(() => expect(useAuthStore.getState().isLoading).toBe(false));
+    expect(useAuthStore.getState().user).toBeNull();
   });
 });

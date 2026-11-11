@@ -1,118 +1,22 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { PLANS, getPlanCheckoutHref } from "@/lib/constants/pricing";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/post/create-listing",
 }));
 
-// Mock Supabase client
-const mockGetUser = vi.fn();
-const mockFrom = vi.fn();
-const mockTrialRpc = vi.fn();
-
+const { fetchPostingAllowance, onAuthStateChange } = vi.hoisted(() => ({
+  fetchPostingAllowance: vi.fn(),
+  onAuthStateChange: vi.fn(),
+}));
+vi.mock("@/lib/foundation/posting-allowance-client", () => ({ fetchPostingAllowance }));
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
-    from: mockFrom,
-    rpc: mockTrialRpc,
-  })),
-}));
-
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
-  toast: vi.fn(),
-}));
-
-const mockWithCsrfHeaders = vi.fn((headers?: HeadersInit) => {
-  const nextHeaders = new Headers(headers);
-  nextHeaders.set("x-csrf-token", "a".repeat(64));
-  return nextHeaders;
-});
-
-vi.mock("@/lib/utils/csrf", () => ({
-  withCsrfHeaders: (headers?: HeadersInit) => mockWithCsrfHeaders(headers),
-}));
-
-vi.mock("@/lib/constants/pricing", () => ({
-  ENTERPRISE_QUOTE_ABOVE_SLOTS: 100,
-  PLANS: [
-    {
-      area: "MZANSI_MARKET",
-      tier: "starter",
-      name: "Starter",
-      priceCents: 10000,
-      billingFrequency: "30_days",
-      features: {
-        maxListings: 5,
-        maxPhotos: 5,
-        videoAllowed: true,
-        maxVideos: 1,
-        boostAllowed: false,
-        featuredAllowed: false,
-        urgentAllowed: false,
-        maxPostsPerMonth: 5,
-      },
-    },
-    {
-      area: "MZANSI_MARKET",
-      tier: "pro",
-      name: "Pro",
-      priceCents: 25000,
-      billingFrequency: "30_days",
-      features: {
-        maxListings: 20,
-        maxPhotos: 10,
-        videoAllowed: true,
-        maxVideos: 3,
-        boostAllowed: true,
-        featuredAllowed: true,
-        urgentAllowed: true,
-        maxPostsPerMonth: 20,
-      },
-    },
-  ],
-  TRIAL_CONFIG: { durationDays: 30, tier: "starter", maxListings: 1 },
-  FREE_POST_CONFIG: {
-    durationDays: 30,
-    maxPhotos: 5,
-    maxVideos: 1,
-    videoAllowed: true,
-    maxAllowed: 1,
-  },
-  getPlanCheckoutId: (plan: { tier: string; area: string }) => `${plan.area}-${plan.tier}`,
-  getPlanCheckoutHref: (plan: { tier: string; area: string }) =>
-    `/billing/checkout?plan=${plan.area}-${plan.tier}`,
-  formatPlanPrice: (cents: number) => `R${cents / 100}`,
-  formatThirtyDayEquivalent: (cents: number, days: number) =>
-    days > 30 ? `R${Math.round((cents * 30) / days) / 100}` : null,
-}));
-
-vi.mock("@/lib/services/entitlements", () => ({
-  getEntitlements: vi.fn().mockReturnValue({
-    tier: "free",
-    isTrial: false,
-    trialDaysLeft: 0,
-    currentCount: 1,
-    maxAllowed: 3,
-    maxPhotos: 3,
-    videoAllowed: false,
-  }),
-}));
-
-vi.mock("@/types/enums", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual: typeof import("@/types/enums") = await importOriginal();
-  return { ...actual };
-});
-
-vi.mock("@/lib/account/compat", () => ({
-  normalizeUserRole: (role: string | null) => role,
-  getOwnerColumn: vi.fn().mockResolvedValue("owner_id"),
-  OWNER_COMPAT_TABLES: ["listings", "businesses", "promotions", "leads", "contact_events"],
+  createClient: () => ({ auth: { onAuthStateChange } }),
 }));
 
 vi.mock("next/link", () => ({
@@ -121,525 +25,181 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-const { PlanGate } = await import("@/components/billing/plan-gate");
+const { PlanGate, usePlanMaxPhotos } = await import("@/components/billing/plan-gate");
 
-function createCountQuery(count: number, eqCalls?: Array<{ column: string; value: unknown }>) {
-  const query = {
-    eq: vi.fn((column: string, value: unknown) => {
-      eqCalls?.push({ column, value });
-      return query;
-    }),
-    not: vi.fn().mockResolvedValue({ count, error: null }),
-  };
+const OWNER = "11111111-1111-4111-8111-111111111111";
 
+/** The allowance the server returns for the signed-in member (self-only). */
+function allowance(overrides: Record<string, unknown> = {}) {
   return {
-    select: vi.fn().mockReturnValue(query),
+    account_id: OWNER,
+    profile_exists: true,
+    capacity: 0,
+    used: 0,
+    creation_remaining: 0,
+    max_photos: 10,
+    max_videos: 1,
+    tier: "free",
+    trial_ends_at: null,
+    trial_used: true,
+    trial_offer: {
+      eligible: false,
+      sevenDayAvailable: false,
+      thirtyDayAvailable: false,
+      remaining: null,
+      launchEnabled: true,
+      shortDays: 7,
+      longDays: 30,
+    },
+    catalogue: {
+      plans: [
+        {
+          area: "market",
+          slot_capacity: 1,
+          duration_days: 30,
+          label: "30 Days",
+          price_cents: 5000,
+          max_photos: 10,
+          max_videos: 1,
+          activations_per_period: null,
+          addon_capabilities: [],
+        },
+      ],
+      addons: [],
+    },
+    ...overrides,
   };
 }
 
+function renderGate(props: Partial<React.ComponentProps<typeof PlanGate>> = {}) {
+  return render(
+    <PlanGate area="MZANSI_MARKET" {...props}>
+      <div>Protected Content</div>
+    </PlanGate>
+  );
+}
+
 describe("PlanGate", () => {
+  let authChanged: (event: string, session: { user: { id: string } } | null) => void;
+  const unsubscribe = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockTrialRpc.mockResolvedValue({
-      data: {
-        eligible: false,
-        sevenDayAvailable: false,
-        thirtyDayAvailable: false,
-        remaining: 50,
-        launchEnabled: true,
-      },
-      error: null,
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ checkoutUrl: "https://checkout.example.test" }),
-      })
-    );
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: "u1" } },
-      error: null,
-    });
-    // Mock the from() calls for account_profiles, entitlements, and listings
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: "sp-1", created_at: new Date().toISOString() },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  gt: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: vi.fn().mockResolvedValue({
-                          data: {
-                            tier: "starter",
-                            type: "subscription",
-                            status: "active",
-                            started_at: new Date().toISOString(),
-                            expires_at: null,
-                          },
-                          error: null,
-                        }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      if (
-        table === "listings" ||
-        table === "storefronts" ||
-        table === "business_profiles" ||
-        table === "businesses" ||
-        table === "promotions"
-      ) {
-        return createCountQuery(0);
-      }
-      if (table === "free_posts_used") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 0, error: null }),
-              }),
-            }),
-          }),
-        };
-      }
-      return {};
+    fetchPostingAllowance.mockResolvedValue(allowance());
+    onAuthStateChange.mockImplementation((callback) => {
+      authChanged = callback;
+      return { data: { subscription: { unsubscribe } } };
     });
   });
 
-  it("should render children content", async () => {
-    render(
-      <PlanGate area={"MZANSI_MARKET" as never}>
-        <div>Protected Content</div>
-      </PlanGate>
-    );
+  afterEach(() => vi.unstubAllGlobals());
 
-    await waitFor(() => {
-      expect(screen.getByText("Protected Content")).toBeTruthy();
-    });
+  it("shows the form with the plan bar when a paid slot is free", async () => {
+    fetchPostingAllowance.mockResolvedValue(
+      allowance({ tier: "month", capacity: 1, used: 0, creation_remaining: 1 })
+    );
+    renderGate();
+
+    expect(await screen.findByText("Protected Content")).toBeInTheDocument();
+    expect(screen.getByText("30 Days plan")).toBeInTheDocument();
+    expect(screen.getByText("0/1 listings used")).toBeInTheDocument();
+    expect(fetchPostingAllowance).toHaveBeenCalledWith("MZANSI_MARKET");
   });
 
-  it("should render without crashing when user is null", async () => {
-    mockGetUser.mockResolvedValue({
-      data: { user: null },
-      error: null,
-    });
+  it("asks a signed-out visitor to sign in", async () => {
+    fetchPostingAllowance.mockRejectedValue(new Error("not_authenticated"));
+    renderGate();
 
-    const { container } = render(
-      <PlanGate area={"MZANSI_MARKET" as never}>
-        <div>Content</div>
-      </PlanGate>
-    );
-
-    await waitFor(() => {
-      expect(container).toBeTruthy();
-    });
+    expect(await screen.findByText("Sign in to post")).toBeInTheDocument();
+    expect(screen.queryByText("Protected Content")).toBeNull();
   });
 
-  it("sends signed-in users without a profile to phone setup with a returnUrl", async () => {
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: null, error: null }),
-            }),
-          }),
-        };
-      }
+  it("sends signed-in members without a profile to phone setup with a returnUrl", async () => {
+    fetchPostingAllowance.mockResolvedValue(allowance({ profile_exists: false }));
+    renderGate();
 
-      return {};
-    });
-
-    render(
-      <PlanGate area={"MZANSI_MARKET" as never}>
-        <div>Protected Content</div>
-      </PlanGate>
+    expect(await screen.findByRole("link", { name: /add phone number/i })).toHaveAttribute(
+      "href",
+      "/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate-listing"
     );
+  });
 
-    await waitFor(() => {
-      expect(screen.getByRole("link", { name: /add phone number/i })).toHaveAttribute(
-        "href",
-        "/dashboard/complete-profile?returnUrl=%2Fpost%2Fcreate-listing"
-      );
-    });
+  it("does not open the form when the allowance cannot be loaded", async () => {
+    fetchPostingAllowance.mockRejectedValue(new Error("failed"));
+    renderGate();
+
+    expect(await screen.findByRole("button", { name: "Refresh page" })).toBeInTheDocument();
+    expect(screen.queryByText("Protected Content")).toBeNull();
   });
 
   it("sends members to the checkout confirmation page when choosing a plan", async () => {
-    const originalLocation = window.location;
     const assign = vi.fn();
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: { href: "http://localhost/post/create-listing", assign },
-    });
+    vi.stubGlobal("location", { ...window.location, assign });
+    renderGate();
 
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: "sp-1", created_at: new Date().toISOString() },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  gt: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: vi.fn().mockResolvedValue({
-                          data: null,
-                          error: null,
-                        }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "listings") {
-        return createCountQuery(0);
-      }
-      if (table === "free_posts_used") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
-              }),
-            }),
-          }),
-        };
-      }
+    fireEvent.click(await screen.findByRole("button", { name: "Choose 30 Days" }));
 
-      return {};
-    });
-
-    render(
-      <PlanGate area={"MZANSI_MARKET" as never}>
-        <div>Protected Content</div>
-      </PlanGate>
-    );
-
-    await screen.findByRole("button", { name: /choose starter/i });
-    fireEvent.click(screen.getByRole("button", { name: /choose starter/i }));
-
-    // Checkout confirms price, dates, slots and renewal before any payment call.
-    await waitFor(() => {
-      expect(assign).toHaveBeenCalledWith("/billing/checkout?plan=MZANSI_MARKET-starter");
-    });
-    expect(global.fetch).not.toHaveBeenCalledWith(
-      "/api/billing/create-checkout",
-      expect.anything()
-    );
-
-    Object.defineProperty(window, "location", {
-      configurable: true,
-      value: originalLocation,
-    });
+    const plan = PLANS.find((p) => p.area === "MZANSI_MARKET" && p.durationDays === 30)!;
+    expect(assign).toHaveBeenCalledWith(getPlanCheckoutHref(plan));
+    expect(screen.queryByText("Protected Content")).toBeNull();
   });
 
-  it.each([false, true])(
-    "shows the correct free-post flow (account grant: %s)",
-    async (accountGrant) => {
-      const selectedTrial = vi.fn();
-      mockTrialRpc.mockResolvedValue({
-        data: {
+  it("offers the introductory free week and opens the form when it is chosen", async () => {
+    const selectedTrial = vi.fn();
+    fetchPostingAllowance.mockResolvedValue(
+      allowance({
+        trial_used: false,
+        trial_offer: {
           eligible: true,
-          sevenDayAvailable: !accountGrant,
-          thirtyDayAvailable: true,
-          adminFreePostsRemaining: accountGrant ? 3 : 0,
-          remaining: 50,
+          sevenDayAvailable: true,
+          thirtyDayAvailable: false,
+          remaining: null,
           launchEnabled: true,
+          shortDays: 7,
+          longDays: 30,
         },
-        error: null,
-      });
-      mockFrom.mockImplementation((table: string) => {
-        if (table === "account_profiles") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({
-                  data: { id: "sp-1", created_at: new Date().toISOString() },
-                  error: null,
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === "entitlements") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockReturnValue({
-                    gt: vi.fn().mockReturnValue({
-                      order: vi.fn().mockReturnValue({
-                        limit: vi.fn().mockReturnValue({
-                          maybeSingle: vi.fn().mockResolvedValue({
-                            data: null,
-                            error: null,
-                          }),
-                        }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          };
-        }
-        if (table === "listings") {
-          return createCountQuery(0);
-        }
-        if (table === "free_posts_used") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  is: vi.fn().mockResolvedValue({ count: 0, error: null }),
-                }),
-              }),
-            }),
-          };
-        }
-
-        return {};
-      });
-
-      render(
-        <PlanGate area={"MZANSI_MARKET" as never} onTrialSelected={selectedTrial}>
-          <div>Protected Content</div>
-        </PlanGate>
-      );
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(
-            accountGrant
-              ? /3 extra free posts remaining/i
-              : /One introductory post across all three areas/i
-          )
-        ).toBeTruthy();
-      });
-      expect(
-        screen.getByRole("button", {
-          name: accountGrant ? /Use 30-Day Free Post/i : /Choose 7 Days Free/i,
-        })
-      ).toBeTruthy();
-      expect(screen.queryByText(/used your free post/i)).toBeNull();
-      // Selecting the launch offer opens the form without reserving or consuming
-      // an entitlement. The posting API receives the duration through the callback.
-      fireEvent.click(
-        screen.getByRole("button", {
-          name: accountGrant ? /Use 30-Day Free Post/i : /Choose 30 Days Free/i,
-        })
-      );
-      expect(screen.getByText("Protected Content")).toBeTruthy();
-      expect(
-        screen.getByText(
-          accountGrant ? /Account free post — 30 days/i : /Introductory trial — 30 days/i
-        )
-      ).toBeTruthy();
-      expect(selectedTrial).toHaveBeenCalledWith(30);
-      expect(mockTrialRpc.mock.calls.every(([name]) => name === "intro_trial_offer")).toBe(true);
-    }
-  );
-
-  it("keeps tourism business rows from consuming the Mzansi Business gate", async () => {
-    mockTrialRpc.mockResolvedValue({
-      data: {
-        eligible: true,
-        sevenDayAvailable: true,
-        thirtyDayAvailable: true,
-        remaining: 50,
-        launchEnabled: true,
-      },
-      error: null,
-    });
-    const businessCountEqCalls: Array<{ column: string; value: unknown }> = [];
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: "sp-1", created_at: new Date().toISOString() },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  gt: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: vi.fn().mockResolvedValue({
-                          data: null,
-                          error: null,
-                        }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "businesses") {
-        return createCountQuery(0, businessCountEqCalls);
-      }
-      if (table === "free_posts_used") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 0, error: null }),
-              }),
-            }),
-          }),
-        };
-      }
-
-      return {};
-    });
-
-    render(
-      <PlanGate area={"MZANSI_BUSINESS" as never}>
-        <div>Business Form</div>
-      </PlanGate>
+      })
     );
+    renderGate({ onTrialSelected: selectedTrial });
 
-    await waitFor(() => {
-      expect(screen.getByText(/One introductory post across all three areas/i)).toBeTruthy();
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "Choose 7 days free" }));
 
-    expect(businessCountEqCalls).toEqual(
-      expect.arrayContaining([
-        { column: "owner_id", value: "u1" },
-        { column: "area", value: "MZANSI_BUSINESS" },
-      ])
-    );
-    expect(screen.queryByText(/posting limit reached/i)).toBeNull();
+    expect(selectedTrial).toHaveBeenCalledWith(7);
+    expect(screen.getByText("Protected Content")).toBeInTheDocument();
+    expect(screen.getByText(/Introductory trial — 7 days/)).toBeInTheDocument();
   });
 
-  it("counts Tourism & Events promotions and tourism businesses together", async () => {
-    const promotionCountEqCalls: Array<{ column: string; value: unknown }> = [];
-    const businessCountEqCalls: Array<{ column: string; value: unknown }> = [];
+  it("reads the allowance again when the signed-in account changes", async () => {
+    const { unmount } = renderGate();
+    await screen.findByRole("button", { name: "Choose 30 Days" });
+    expect(fetchPostingAllowance).toHaveBeenCalledTimes(1);
 
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "account_profiles") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: "sp-1", created_at: new Date().toISOString() },
-                error: null,
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "entitlements") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  gt: vi.fn().mockReturnValue({
-                    order: vi.fn().mockReturnValue({
-                      limit: vi.fn().mockReturnValue({
-                        maybeSingle: vi.fn().mockResolvedValue({
-                          data: null,
-                          error: null,
-                        }),
-                      }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        };
-      }
-      if (table === "promotions") {
-        return createCountQuery(1, promotionCountEqCalls);
-      }
-      if (table === "businesses") {
-        return createCountQuery(1, businessCountEqCalls);
-      }
-      if (table === "free_posts_used") {
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                is: vi.fn().mockResolvedValue({ count: 1, error: null }),
-              }),
-            }),
-          }),
-        };
-      }
-
-      return {};
+    await act(async () => {
+      authChanged("SIGNED_IN", { user: { id: OWNER } });
     });
+    await waitFor(() => expect(fetchPostingAllowance).toHaveBeenCalledTimes(2));
 
-    render(
-      <PlanGate area={"PROMOTIONS_EVENTS" as never}>
-        <div>Tourism Form</div>
-      </PlanGate>
-    );
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+});
 
-    await waitFor(() => {
-      expect(screen.getByText(/choose your plan to start posting/i)).toBeTruthy();
-    });
+describe("usePlanMaxPhotos", () => {
+  function MaxPhotos() {
+    return <p>{usePlanMaxPhotos("MZANSI_MARKET")} photos</p>;
+  }
 
-    expect(promotionCountEqCalls).toEqual(
-      expect.arrayContaining([{ column: "owner_id", value: "u1" }])
-    );
-    expect(businessCountEqCalls).toEqual(
-      expect.arrayContaining([
-        { column: "owner_id", value: "u1" },
-        { column: "area", value: "PROMOTIONS_EVENTS" },
-      ])
-    );
+  beforeEach(() => vi.clearAllMocks());
+
+  it("uses the photo limit from the allowance", async () => {
+    fetchPostingAllowance.mockResolvedValue(allowance({ max_photos: 7 }));
+    render(<MaxPhotos />);
+    expect(await screen.findByText("7 photos")).toBeInTheDocument();
+  });
+
+  it("allows no photos when the allowance cannot be loaded", async () => {
+    fetchPostingAllowance.mockRejectedValue(new Error("failed"));
+    render(<MaxPhotos />);
+    expect(await screen.findByText("0 photos")).toBeInTheDocument();
   });
 });

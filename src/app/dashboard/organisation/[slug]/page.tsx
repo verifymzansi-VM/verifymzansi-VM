@@ -1,25 +1,19 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, Download } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { DEFAULT_COMMERCIAL_SETTINGS, getCommercialSettings } from "@/lib/commercial/settings";
+import { DEFAULT_COMMERCIAL_SETTINGS } from "@/lib/commercial/settings";
 import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ApplicationsReview,
   MembersManager,
-  type OrganisationApplicationRow,
-  type OrganisationMemberRow,
 } from "@/components/organisations/organisation-management";
 import {
   PerformanceReport,
   parsePerformanceReport,
 } from "@/components/organisations/performance-report";
 import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
-import { getOpenOfferForOrganisation } from "@/lib/trials/extension-offers";
 
-import { getDataBackend } from "@/lib/data-backend";
 import {
   FoundationServerSessionError,
   readFoundationServerSession,
@@ -102,66 +96,6 @@ async function readNativeDashboard(slug: string) {
   };
 }
 
-async function readSourceDashboard(slug: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect(`/login?returnUrl=${encodeURIComponent(`/dashboard/organisation/${slug}`)}`);
-
-  const db = createAdminClient();
-  const { data: org } = await db
-    .from("organisations")
-    .select(
-      "id, slug, name, programme_status, trial_starts_at, trial_ends_at, is_public, affiliation_wording"
-    )
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!org) notFound();
-  const { data: isAdmin } = await db.rpc("is_organisation_admin", {
-    p_org: org.id,
-    p_user: user.id,
-  });
-  if (isAdmin !== true) notFound();
-
-  const window = reportWindow(org.trial_starts_at);
-  const [summary, applications, members, admins, report, settings, offer] = await Promise.all([
-    db.rpc("organisation_admin_summary", { p_user: user.id, p_org: org.id }),
-    db.rpc("org_list_applications", { p_user: user.id, p_org: org.id, p_status: null }),
-    db.rpc("org_list_members", { p_user: user.id, p_org: org.id }),
-    db.from("organisation_admins").select("user_id, role").eq("organisation_id", org.id),
-    db.rpc("organisation_performance_report", {
-      p_user: user.id,
-      p_org: org.id,
-      p_from: window.from,
-      p_to: window.to,
-    }),
-    getCommercialSettings(db as never),
-    getOpenOfferForOrganisation(org.id).catch(() => null),
-  ]);
-  const adminRows = admins.data ?? [];
-  const adminIds = adminRows.map((a) => a.user_id);
-  const adminProfiles = adminIds.length
-    ? await db.from("account_profiles").select("user_id, display_name").in("user_id", adminIds)
-    : { data: [] as Array<{ user_id: string; display_name: string | null }> };
-  return {
-    org,
-    summary: (summary.data ?? {}) as Partial<Summary>,
-    applications: (applications.data ?? []) as OrganisationApplicationRow[],
-    members: (members.data ?? []) as OrganisationMemberRow[],
-    admins: adminRows.map((row) => ({
-      ...row,
-      display_name: (adminProfiles.data ?? []).find((profile) => profile.user_id === row.user_id)
-        ?.display_name,
-    })),
-    isOwner: adminRows.some((a) => a.user_id === user.id && a.role === "owner"),
-    canSponsor: ["founding_trial", "active_paid"].includes(org.programme_status),
-    settings,
-    report: report.data,
-    offer,
-  };
-}
-
 export default async function OrganisationDashboardPage({
   params,
 }: {
@@ -180,9 +114,7 @@ export default async function OrganisationDashboardPage({
     settings,
     report,
     offer,
-  } = getDataBackend() === "foundation"
-    ? await readNativeDashboard(slug)
-    : await readSourceDashboard(slug);
+  } = await readNativeDashboard(slug);
   const window = reportWindow(org.trial_starts_at);
   const parsedReport = parsePerformanceReport(report);
   // Alerts start at the earliest configured threshold (default 60/30/14/7 days).

@@ -1,11 +1,7 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { formatPlanPrice } from "@/lib/constants/pricing";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationPartnerDashboard } from "@/lib/foundation/partners";
 
@@ -42,25 +38,10 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 export default async function PartnerDashboardPage() {
-  const native = getDataBackend() === "foundation";
-  const partner: PartnerDashboard | null = native
-    ? await readNativeDashboard()
-    : await readSourceDashboard();
+  const partner = await readNativeDashboard();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
 
-  return <PartnerDashboardContent partner={partner} appUrl={appUrl} native={native} />;
-}
-
-async function readSourceDashboard() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login?returnUrl=/dashboard/partner");
-
-  const { data, error } = await createAdminClient().rpc("partner_dashboard", { p_user: user.id });
-  if (error) throw new Error("Partner dashboard could not be loaded");
-  return (data ?? null) as PartnerDashboard | null;
+  return <PartnerDashboardContent partner={partner} appUrl={appUrl} />;
 }
 
 async function readNativeDashboard(): Promise<PartnerDashboard | null> {
@@ -91,11 +72,9 @@ async function readNativeDashboard(): Promise<PartnerDashboard | null> {
 function PartnerDashboardContent({
   partner,
   appUrl,
-  native,
 }: {
   partner: PartnerDashboard | null;
   appUrl: string;
-  native: boolean;
 }) {
   return (
     <div className="min-w-0 space-y-6">
@@ -183,7 +162,6 @@ function PartnerDashboardContent({
           <p className="text-xs text-muted-foreground">
             No commission is paid on free trials, free events, invitation-only programmes,
             organisation-sponsored accounts, your own purchases, refunds or chargebacks.
-            {!native && " Organisation and enterprise contracts are approved individually."}
           </p>
         </>
       )}

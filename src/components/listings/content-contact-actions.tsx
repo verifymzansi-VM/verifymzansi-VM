@@ -20,7 +20,6 @@ import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { ContentEnquiryAction } from "./content-enquiry-action";
 import { shareContent } from "@/lib/sharing/share-content";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
-import { getDataBackend } from "@/lib/data-backend";
 
 import type { ContactActionConfig } from "./contact-action-types";
 
@@ -202,10 +201,8 @@ function ContactActionsForTarget({
             className="w-full gap-2"
             size="lg"
             onClick={() => {
-              if (getDataBackend() === "foundation") {
-                setRevealError(null);
-                setRevealChallenge(true);
-              } else void reveal();
+              setRevealError(null);
+              setRevealChallenge(true);
             }}
             disabled={revealing || revealChallenge}
           >

@@ -214,12 +214,3 @@ export async function checkStorageQuota(
   }
   return null;
 }
-
-/** Kill switch for every public organisation surface (pages, badges, filters, showrooms). */
-export async function organisationsPublicEnabled(client: SettingsReader): Promise<boolean> {
-  try {
-    return (await getCommercialSettings(client)).features.organisationsPublic;
-  } catch {
-    return true;
-  }
-}

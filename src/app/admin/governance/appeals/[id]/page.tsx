@@ -1,13 +1,11 @@
 import { requireStaff } from "@/lib/auth/require-staff";
 import { notFound, redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, MessageSquare } from "lucide-react";
 import { AppealResolveForm } from "./appeal-resolve-form";
 import { formatDateTime } from "@/lib/utils/format";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFrontendAppeals } from "@/lib/foundation/member-appeals";
 import { FoundationStaffCommandError } from "@/lib/foundation/staff-command";
@@ -20,31 +18,6 @@ export const metadata = {
 
 interface Props {
   params: Promise<{ id: string }>;
-}
-
-async function readSourceAppeal(id: string) {
-  const admin = createAdminClient();
-
-  const { data: appeal, error } = await admin
-    .from("appeal_cases")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-
-  // A failed read is an error page with a retry, never a misleading "not found".
-  if (error) throw new Error(`Appeal could not be loaded: ${error.message}`);
-  if (!appeal) notFound();
-
-  // Get linked decision record
-  const { data: decision, error: decisionError } = await admin
-    .from("decision_records")
-    .select("*")
-    .eq("id", appeal.decision_id)
-    .maybeSingle();
-  if (decisionError) {
-    throw new Error(`Appealed decision could not be loaded: ${decisionError.message}`);
-  }
-  return { appeal, decision, canResolve: true, effectVersion: undefined, canShorten: true };
 }
 
 async function readNativeAppeal(id: string, userId: string) {
@@ -66,7 +39,8 @@ async function readNativeAppeal(id: string, userId: string) {
     content_hidden: "content_removal",
   } as const;
   return {
-    appeal: item,
+    // Status as text: the screen also handles the older "under_review" status.
+    appeal: item as Omit<typeof item, "status"> & { status: string },
     decision: item.decision_reason
       ? {
           action_category: categories[item.kind],
@@ -87,10 +61,10 @@ export default async function AppealDetailPage({ params }: Props) {
   const { id } = await params;
   const { user } = await requireStaff("appeal:decide");
   if (!z.uuid().safeParse(id).success) notFound();
-  const { appeal, decision, canResolve, effectVersion, canShorten } =
-    getDataBackend() === "foundation"
-      ? await readNativeAppeal(id, user.id)
-      : await readSourceAppeal(id);
+  const { appeal, decision, canResolve, effectVersion, canShorten } = await readNativeAppeal(
+    id,
+    user.id
+  );
 
   const statusColor = (s: string) => {
     switch (s) {

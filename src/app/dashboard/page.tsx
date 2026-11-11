@@ -1,10 +1,6 @@
 import { getVerificationLevel, VERIFICATION_LEVEL_LABELS } from "@/lib/account/verification-level";
-import { PLAN_TIER_LABELS, type PlanTier } from "@/types/enums";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
-import { ExtensionOfferCard } from "@/components/trials/extension-offer-card";
-import { getOpenOffersForUser, type ExtensionOffer } from "@/lib/trials/extension-offers";
 import { createClient } from "@/lib/supabase/server";
-import { tryCreateAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -17,15 +13,8 @@ import {
 import { LayoutList, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VerifiedTick } from "@/components/trust/verified-tick";
-import {
-  ACCOUNT_PROFILE_TABLE,
-  applyOwnerFilter,
-  getOwnerColumn,
-  type OwnerColumn,
-} from "@/lib/account/compat";
 import { summarizeVerification } from "@/lib/account/verification-summary";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
-import { getOptionalContentViewCountMap } from "@/lib/engagement-server";
 import { EmailConfirmedToast } from "@/components/dashboard/email-confirmed-toast";
 import { DashboardOnboarding } from "@/components/dashboard/dashboard-onboarding";
 import {
@@ -34,28 +23,14 @@ import {
 } from "@/components/dashboard/listing-manager-mini";
 import { QuickLinks } from "@/components/dashboard/quick-links";
 import { DashboardLiveLeadAlerts } from "@/components/dashboard/dashboard-live-lead-alerts";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
 import { RecentLeads, type RecentLead } from "@/components/dashboard/recent-leads";
 import { VerificationStatusCard } from "@/components/dashboard/verification-status-card";
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
-import { getDataBackend } from "@/lib/data-backend";
 import { readSelfReviewSession } from "@/lib/foundation/self-review-session";
 import {
   readRestoredOwnerDashboard,
   restoredDashboardResults,
 } from "@/lib/foundation/owner-dashboard-server";
-
-/** Safely resolve owner column — fall back to "owner_id" on error. */
-async function safeGetOwnerColumn(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  table: Parameters<typeof getOwnerColumn>[1]
-): Promise<OwnerColumn> {
-  try {
-    return await getOwnerColumn(supabase, table);
-  } catch {
-    return "owner_id";
-  }
-}
 
 /** Supabase-shaped empty response for use as a fallback. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -84,8 +59,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ suspended?: string | string[] }>;
 }) {
-  const foundation = getDataBackend() === "foundation";
-  if (foundation && (await searchParams).suspended === "true") {
+  if ((await searchParams).suspended === "true") {
     const restriction = await readSelfReviewSession();
     if (!restriction) redirect("/error?reason=forbidden");
     if (restriction.status === "banned") redirect("/banned");
@@ -100,178 +74,9 @@ export default async function DashboardPage({
 
   if (!user) redirect("/login");
 
-  const foundationDashboard = foundation ? await readRestoredOwnerDashboard(user.id) : null;
+  const foundationDashboard = await readRestoredOwnerDashboard(user.id);
 
-  const nowDate = new Date();
-  const now = nowDate.toISOString();
-  const sevenDaysFromNow = new Date(nowDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const fortyEightHoursFromNow = new Date(nowDate.getTime() + 48 * 60 * 60 * 1000).toISOString();
-
-  const [listingOwnerColumn, businessOwnerColumn, leadsOwnerColumn, promotionsOwnerColumn] =
-    foundationDashboard
-      ? (["owner_id", "owner_id", "owner_id", "owner_id"] as const)
-      : await Promise.all([
-          safeGetOwnerColumn(supabase, "listings"),
-          safeGetOwnerColumn(supabase, "businesses"),
-          safeGetOwnerColumn(supabase, "leads"),
-          safeGetOwnerColumn(supabase, "promotions"),
-        ]);
-
-  // Fetch dashboard data in parallel — allSettled for resilience on slow connections
-  const results = foundationDashboard
-    ? restoredDashboardResults(foundationDashboard)
-    : await Promise.allSettled([
-        /* 0 */ supabase
-          .from(ACCOUNT_PROFILE_TABLE)
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        /* 1 */ supabase
-          .from("verification_steps")
-          .select("step_type, status, reviewed_at")
-          .eq("user_id", user.id),
-        /* 2 — recent listings (broader fetch: 10 items with all statuses for mini-manager) */
-        applyOwnerFilter(
-          supabase
-            .from("listings")
-            .select(
-              "id, title, status, area, photos, view_count, expires_at, created_at, updated_at"
-            )
-            .order("updated_at", { ascending: false })
-            .limit(10),
-          listingOwnerColumn,
-          user.id
-        ),
-        /* 3 */ applyOwnerFilter(
-          supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
-          leadsOwnerColumn,
-          user.id
-        ),
-        /* 4 — active listings count */
-        applyOwnerFilter(
-          applyVisibleExpiryFilter(
-            supabase
-              .from("listings")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "live"),
-            now
-          ),
-          listingOwnerColumn,
-          user.id
-        ),
-        /* 5 — active promotions count */
-        applyOwnerFilter(
-          applyVisibleExpiryFilter(
-            supabase
-              .from("promotions")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "live")
-              .eq("promotion_type", "event")
-              .or(`end_date.is.null,end_date.gte.${now}`),
-            now
-          ),
-          promotionsOwnerColumn,
-          user.id
-        ),
-        /* 6 — rejected listings count */
-        applyOwnerFilter(
-          supabase
-            .from("listings")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "rejected"),
-          listingOwnerColumn,
-          user.id
-        ),
-        /* 7 — pending moderation count */
-        applyOwnerFilter(
-          supabase
-            .from("listings")
-            .select("id", { count: "exact", head: true })
-            .in("status", ["pending_moderation", "flagged_for_review"]),
-          listingOwnerColumn,
-          user.id
-        ),
-        /* 8 — expiring listings */
-        applyOwnerFilter(
-          supabase
-            .from("listings")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "live")
-            .lt("expires_at", sevenDaysFromNow)
-            .gt("expires_at", now),
-          listingOwnerColumn,
-          user.id
-        ),
-        /* 9 — expiring promotions */
-        applyOwnerFilter(
-          supabase
-            .from("promotions")
-            .select("id", { count: "exact", head: true })
-            .eq("status", "live")
-            .eq("promotion_type", "event")
-            .gt("end_date", now)
-            .lt("end_date", fortyEightHoursFromNow),
-          promotionsOwnerColumn,
-          user.id
-        ),
-        /* 10 — business count */
-        applyOwnerFilter(
-          supabase
-            .from("businesses")
-            .select("id", { count: "exact", head: true })
-            .neq("category", "tourism_hospitality")
-            .or("area.is.null,area.neq.PROMOTIONS_EVENTS"),
-          businessOwnerColumn,
-          user.id
-        ),
-        /* 11 — tourism business count */
-        applyOwnerFilter(
-          supabase
-            .from("businesses")
-            .select("id", { count: "exact", head: true })
-            .or("area.eq.PROMOTIONS_EVENTS,category.eq.tourism_hospitality"),
-          businessOwnerColumn,
-          user.id
-        ),
-        /* 12 — active entitlements (for plan label on quick links) */
-        supabase
-          .from("entitlements")
-          .select("area, tier, status")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .gt("expires_at", now),
-        /* 13 — organisation administrator (verification representative level) */
-        supabase
-          .from("organisation_admins")
-          .select("organisation_id", { count: "exact", head: true })
-          .eq("user_id", user.id),
-        /* 14 — latest enquiries for the recent leads card */
-        applyOwnerFilter(
-          supabase
-            .from("leads")
-            .select("id, target_id, target_type, message, status, buyer_name, created_at")
-            .order("created_at", { ascending: false })
-            .limit(3),
-          leadsOwnerColumn,
-          user.id
-        ),
-        /* 15 — live Mzansi Business profiles without a CIPC or Seen sticker */
-        applyOwnerFilter(
-          applyVisibleExpiryFilter(
-            supabase
-              .from("businesses")
-              .select("id")
-              .eq("status", "live")
-              .neq("category", "tourism_hospitality")
-              .or("area.is.null,area.neq.PROMOTIONS_EVENTS")
-              .is("cipc_verified_at", null)
-              .is("seen_verified_at", null)
-              .limit(50)
-          ),
-          businessOwnerColumn,
-          user.id
-        ),
-      ]);
+  const results = restoredDashboardResults(foundationDashboard);
 
   const profileResult = settled(results[0], EMPTY_OK);
   const verificationStepsResult = settled(results[1], EMPTY_LIST_OK);
@@ -285,7 +90,6 @@ export default async function DashboardPage({
   const expiringPromosResult = settled(results[9], EMPTY_OK);
   const businessCountResult = settled(results[10], EMPTY_OK);
   const tourismBusinessCountResult = settled(results[11], EMPTY_OK);
-  const entitlementsResult = settled(results[12], EMPTY_LIST_OK);
 
   const profile = profileResult.data;
   const verificationSteps = verificationStepsResult.data;
@@ -297,23 +101,10 @@ export default async function DashboardPage({
   const expiringListingCount = expiringListingsResult.count || 0;
   const expiringPromoCount = expiringPromosResult.count || 0;
   const businessCount = businessCountResult.count || 0;
-  // Businesses with a request already in review don't need a nudge.
-  const unstickeredIds = (
+  // Live businesses without a CIPC or Seen sticker (none from the new backend).
+  const unstickered = (
     (settled(results[15], EMPTY_LIST_OK).data ?? []) as Array<{ id: string }>
   ).map((row) => row.id);
-  const inReview = new Set<string>();
-  const verificationAdmin = unstickeredIds.length ? tryCreateAdminClient() : null;
-  if (verificationAdmin) {
-    const { data: openCases } = await verificationAdmin
-      .from("business_verifications")
-      .select("business_id")
-      .in("business_id", unstickeredIds)
-      .in("status", ["pending", "info_requested"]);
-    for (const row of (openCases ?? []) as Array<{ business_id: string }>) {
-      inReview.add(row.business_id);
-    }
-  }
-  const unstickered = unstickeredIds.filter((id) => !inReview.has(id));
   const tourismEventsCount = activePromos + (tourismBusinessCountResult.count || 0);
 
   const verificationSummary = summarizeVerification(
@@ -333,12 +124,6 @@ export default async function DashboardPage({
 
   // Build posts for the mini listing manager
   const listingRows = ownerListingsResult.data ?? [];
-  const listingIds = listingRows.map((listing: { id: string }) => listing.id);
-  const listingViewCounts =
-    !foundationDashboard && listingIds.length > 0
-      ? await getOptionalContentViewCountMap(tryCreateAdminClient(), "listing", listingIds)
-      : { data: new Map<string, number>() };
-
   const posts: MiniListingPost[] = listingRows.map(
     (l: {
       id: string;
@@ -357,7 +142,7 @@ export default async function DashboardPage({
       status: l.status,
       area: l.area,
       photos: l.photos,
-      view_count: listingViewCounts.data.get(l.id) ?? l.view_count ?? null,
+      view_count: l.view_count ?? null,
       expires_at: l.expires_at,
       deletes_at: l.deletes_at ?? null,
       created_at: l.created_at,
@@ -366,31 +151,7 @@ export default async function DashboardPage({
   );
 
   // Plan tier label for quick links
-  const activeEntitlements = entitlementsResult.data ?? [];
-  const topTier =
-    activeEntitlements.length > 0
-      ? activeEntitlements.reduce((best: string, ent: { tier?: string }) => {
-          const rank: Record<string, number> = {
-            enterprise: 9,
-            year: 8,
-            half_year: 7,
-            quarter: 6,
-            month: 5,
-            pro: 4,
-            growth: 3,
-            starter: 2,
-            basic: 1,
-          };
-          const current = rank[ent.tier ?? ""] ?? 0;
-          const bestRank = rank[best] ?? 0;
-          return current > bestRank ? (ent.tier ?? best) : best;
-        }, activeEntitlements[0]?.tier ?? "basic")
-      : null;
-  const planLabel = foundationDashboard
-    ? (foundationDashboard.snapshot.paid_plans[0]?.label ?? undefined)
-    : topTier
-      ? `${PLAN_TIER_LABELS[topTier as PlanTier] ?? topTier} plan`
-      : undefined;
+  const planLabel = foundationDashboard.snapshot.paid_plans[0]?.label ?? undefined;
 
   // Verification chip helpers
   const isVerified = trustLevel >= 3;
@@ -409,52 +170,20 @@ export default async function DashboardPage({
   const hasAnyPosts = posts.length > 0;
   const showDashboardOnboarding = !hasAnyPosts && businessCount === 0 && tourismEventsCount === 0;
 
-  // Recent leads — titles resolved in one query per content type
+  // Recent leads with the titles of the posts they are about
   const recentLeadRows = (
     (settled(results[14], EMPTY_LIST_OK).data ?? []) as Array<
       Omit<RecentLead, "title"> & { target_id: string }
     >
   ).slice(0, 3);
   const leadTitles = new Map<string, string>();
-  if (foundationDashboard) {
-    for (const row of foundationDashboard.snapshot.recent_leads) {
-      if (row.title) leadTitles.set(`${row.target_type}:${row.target_id}`, row.title);
-    }
+  for (const row of foundationDashboard.snapshot.recent_leads) {
+    if (row.title) leadTitles.set(`${row.target_type}:${row.target_id}`, row.title);
   }
-  if (!foundationDashboard)
-    await Promise.all(
-      (["listing", "promotion"] as const).map(async (type) => {
-        const ids = [
-          ...new Set(
-            recentLeadRows.filter((row) => row.target_type === type).map((row) => row.target_id)
-          ),
-        ];
-        if (ids.length === 0) return;
-        try {
-          const { data } = await supabase
-            .from(type === "promotion" ? "promotions" : "listings")
-            .select("id, title")
-            .in("id", ids);
-          for (const item of (data ?? []) as Array<{ id: string; title: string | null }>) {
-            if (item.title) leadTitles.set(`${type}:${item.id}`, item.title);
-          }
-        } catch {
-          // Titles are a nicety; the card still works without them.
-        }
-      })
-    );
   const recentLeads: RecentLead[] = recentLeadRows.map((row) => ({
     ...row,
     title: leadTitles.get(`${row.target_type}:${row.target_id}`) ?? null,
   }));
-
-  // Free-access extension offers (Document 08 §6): shown next to the posts.
-  let extensionOffers: ExtensionOffer[] = [];
-  try {
-    if (!foundationDashboard) extensionOffers = await getOpenOffersForUser(user.id);
-  } catch {
-    // Offers are also notified and emailed; the dashboard still works without them.
-  }
 
   return (
     <div className="space-y-6">
@@ -542,9 +271,6 @@ export default async function DashboardPage({
       {/* ───── Main content ───── */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
-          {extensionOffers.map((offer) => (
-            <ExtensionOfferCard key={offer.id} offer={offer} />
-          ))}
           {showDashboardOnboarding ? (
             <DashboardOnboarding
               isVerified={isVerified}
@@ -561,9 +287,7 @@ export default async function DashboardPage({
         </div>
 
         <aside aria-label="More for your account" className="min-w-0 space-y-6">
-          <IntroductoryTrialCard
-            foundationClaim={foundationDashboard ? foundationDashboard.introTrial : undefined}
-          />
+          <IntroductoryTrialCard foundationClaim={foundationDashboard.introTrial} />
           <QuickLinks planLabel={planLabel} />
         </aside>
       </div>

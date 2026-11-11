@@ -90,16 +90,3 @@ it("does not close a newly selected review when an earlier reply arrives", async
   expect(complete).not.toHaveBeenCalled();
   expect(result.current.loading).toBe(false);
 });
-it("preserves the source request contract in isolated historical fixtures", async () => {
-  vi.stubEnv("NEXT_PUBLIC_DATA_BACKEND", "source");
-  fetcher.mockResolvedValue(Response.json({ success: true }));
-  const { result } = setup();
-  act(() => result.current.openReview({ id }, "approve"));
-  await act(() => result.current.submitDecision());
-  expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({
-    itemId: id,
-    area: "MZANSI_MARKET",
-    contentType: "listing",
-    decision: "approve",
-  });
-});

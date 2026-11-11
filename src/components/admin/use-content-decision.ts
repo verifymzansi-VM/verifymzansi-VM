@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import type { NativeContentReview } from "@/lib/admin/native-content-review";
-import { getDataBackend } from "@/lib/data-backend";
 import { fetchStaffEvidence } from "@/lib/auth/staff-evidence-fetch";
 
 import { withCsrfHeaders } from "@/lib/utils/csrf";
@@ -57,7 +56,7 @@ export function useContentDecision<T extends { id: string; foundation?: NativeCo
       return;
     }
 
-    if (getDataBackend() === "foundation" && !selectedItem.foundation) {
+    if (!selectedItem.foundation) {
       setError("Claim this item and reload the queue before deciding it.");
       return;
     }
@@ -83,7 +82,7 @@ export function useContentDecision<T extends { id: string; foundation?: NativeCo
               }),
           decision,
           reason: decision === "reject" ? rejectReason : undefined,
-          ...(getDataBackend() === "foundation" ? selectedItem.foundation : {}),
+          ...selectedItem.foundation,
         }),
       });
 

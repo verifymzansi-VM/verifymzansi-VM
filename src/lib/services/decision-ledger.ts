@@ -249,28 +249,3 @@ export async function getPendingDecisions(limit = 50) {
 
   return data;
 }
-
-/**
- * Get pending appeals awaiting review.
- */
-export async function getPendingAppeals(limit = 50) {
-  const supabase = createAdminClient();
-
-  const { data, error } = await supabase
-    .from("appeal_cases")
-    .select(
-      `
-      *,
-      decision_records(*)
-    `
-    )
-    .in("status", ["submitted", "under_review"])
-    .order("created_at", { ascending: true })
-    .limit(limit);
-
-  if (error) {
-    throw new Error("Failed to fetch pending appeals");
-  }
-
-  return data;
-}

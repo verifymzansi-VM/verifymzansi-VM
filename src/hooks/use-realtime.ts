@@ -4,7 +4,6 @@ import { useEffect, useRef, useCallback, useId } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { createLogger } from "@/lib/utils/logger";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { getDataBackend } from "@/lib/data-backend";
 import { subscribeFoundationOwnerInbox } from "@/lib/foundation/owner-inbox-realtime";
 
 const log = createLogger("useRealtime");
@@ -75,7 +74,7 @@ export function useRealtime({
     }
 
     const supabase = createClient();
-    if (getDataBackend() === "foundation" && (table === "leads" || table === "notifications")) {
+    if (table === "leads" || table === "notifications") {
       if (!filterValue) return cleanup;
       let cancelled = false;
       void supabase.auth
