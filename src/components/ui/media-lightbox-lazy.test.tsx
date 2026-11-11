@@ -43,7 +43,10 @@ describe("lazy MediaLightbox", () => {
     expect(screen.queryByTestId("viewer")).toBeNull();
 
     rerender(<MediaLightbox items={items} startIndex={1} isOpen onClose={onClose} />);
+    // While the code is on its way, an invisible layer takes further taps.
+    expect(document.querySelector("[data-lightbox-wait]")).not.toBeNull();
     const viewer = await screen.findByTestId("viewer");
+    expect(document.querySelector("[data-lightbox-wait]")).toBeNull();
     expect(viewer).toHaveAttribute("data-open", "true");
     expect(viewer).toHaveTextContent("photo 1");
 
@@ -51,6 +54,20 @@ describe("lazy MediaLightbox", () => {
     rerender(<MediaLightbox items={items} startIndex={1} isOpen={false} onClose={onClose} />);
     expect(screen.getByTestId("viewer")).toHaveAttribute("data-open", "false");
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("starts fetching the code on the first touch anywhere on the page", async () => {
+    vi.useFakeTimers();
+    const { MediaLightbox } = await loadWrapper();
+    const { rerender } = render(
+      <MediaLightbox items={items} startIndex={0} isOpen={false} onClose={() => {}} />
+    );
+    window.dispatchEvent(new Event("pointerdown"));
+    vi.useRealTimers();
+    // The download began on the touch, before the idle timer: opening is immediate.
+    await vi.dynamicImportSettled();
+    rerender(<MediaLightbox items={items} startIndex={0} isOpen onClose={() => {}} />);
+    expect(screen.getByTestId("viewer")).toHaveAttribute("data-open", "true");
   });
 
   it("opens in the same render once the code has been fetched in advance", async () => {
@@ -70,8 +87,13 @@ describe("lazy MediaLightbox", () => {
     });
     const { MediaLightbox } = await import("./media-lightbox-lazy");
     const onClose = vi.fn();
-    render(<MediaLightbox items={items} startIndex={0} isOpen onClose={onClose} />);
+    const { rerender } = render(
+      <MediaLightbox items={items} startIndex={0} isOpen onClose={onClose} />
+    );
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId("viewer")).toBeNull();
+    // The page's closed state comes back through onClose; with it the layer goes.
+    rerender(<MediaLightbox items={items} startIndex={0} isOpen={false} onClose={onClose} />);
+    expect(document.querySelector("[data-lightbox-wait]")).toBeNull();
   });
 });

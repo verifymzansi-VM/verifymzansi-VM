@@ -50,12 +50,27 @@ export type ReadCustomerAccess = {
 
 const INVALID = Symbol("invalid");
 
+/**
+ * Unicode code points, as zod counts a string's length: a surrogate pair
+ * (an emoji, for example) counts once, a lone surrogate counts as itself.
+ */
+function codePointLength(text: string): number {
+  let count = text.length;
+  for (let i = 0; i < text.length - 1; i++) {
+    if ((text.charCodeAt(i) & 0xfc00) === 0xd800 && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      count--;
+      i++;
+    }
+  }
+  return count;
+}
+
 /** An optional trimmed string of at most `max` characters, as zod's `string().trim().max()`. */
 function optionalText(value: unknown, max: number): string | undefined | typeof INVALID {
   if (value === undefined) return undefined;
   if (typeof value !== "string") return INVALID;
   const trimmed = value.trim();
-  return trimmed.length > max ? INVALID : trimmed;
+  return codePointLength(trimmed) > max ? INVALID : trimmed;
 }
 
 function listsSomething(value: string | undefined): boolean {
@@ -74,8 +89,11 @@ export function readPublishedCustomerAccess(value: unknown): ReadCustomerAccess 
   if (input.version !== 2) return null;
   const methods = input.methods;
   if (!Array.isArray(methods) || methods.length < 1) return null;
-  if (!methods.every((method) => typeof method === "string" && METHODS.includes(method)))
-    return null;
+  // An index loop, not every(): every() skips the holes of a sparse array.
+  for (let i = 0; i < methods.length; i++) {
+    const method: unknown = methods[i];
+    if (typeof method !== "string" || !METHODS.includes(method)) return null;
+  }
 
   const premises = input.premises;
   if (premises !== undefined && (typeof premises !== "string" || !PREMISES.includes(premises)))

@@ -30,10 +30,13 @@ type IdleWindow = Window & {
 /**
  * The same full-screen photo and video viewer as `media-lightbox`, with the
  * same props, but its code is not part of the page's first download: it is
- * fetched when the browser is idle after the page has loaded (so the first tap
- * still opens it at once), or on the first open if that comes sooner. Nothing
+ * fetched when the browser is idle after the page has loaded, or as soon as
+ * the visitor first touches the page or presses a key (so a tap on a photo
+ * usually finds it ready), or on the first open if that comes sooner. Nothing
  * is rendered until it is first opened; afterwards it stays mounted, so it
- * closes with its usual animation.
+ * closes with its usual animation. If a tap does arrive before the code, an
+ * invisible layer takes further taps until the viewer appears, as the
+ * viewer's own backdrop would have.
  */
 export function MediaLightbox(props: MediaLightboxProps) {
   const { isOpen } = props;
@@ -46,6 +49,19 @@ export function MediaLightbox(props: MediaLightboxProps) {
 
   // Remember the first open during render, so the viewer mounts in the same pass.
   if (isOpen && !opened) setOpened(true);
+
+  // The first touch or key press anywhere starts the download.
+  useEffect(() => {
+    if (loadedLightbox) return;
+    const start = () => void loadMediaLightbox().catch(() => {});
+    const options = { capture: true, passive: true } as const;
+    window.addEventListener("pointerdown", start, options);
+    window.addEventListener("keydown", start, options);
+    return () => {
+      window.removeEventListener("pointerdown", start, options);
+      window.removeEventListener("keydown", start, options);
+    };
+  }, []);
 
   useEffect(() => {
     if (loadedLightbox) return;
@@ -83,5 +99,10 @@ export function MediaLightbox(props: MediaLightboxProps) {
   }, [isOpen]);
 
   const Lightbox = loadedLightbox;
-  return opened && Lightbox ? <Lightbox {...props} /> : null;
+  if (opened && Lightbox) return <Lightbox {...props} />;
+  // Waiting for the code after a tap: nothing to see, but a second tap must
+  // not reach the page (it would run the page's open handler again).
+  if (isOpen)
+    return <div aria-hidden="true" data-lightbox-wait="" className="fixed inset-0 z-[100]" />;
+  return null;
 }

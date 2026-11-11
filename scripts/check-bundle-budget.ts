@@ -182,6 +182,8 @@ function checkKeyRouteBudgets(buildManifest: BuildManifest | null): void {
   const stylesheets = existsSync(cssDir)
     ? readdirSync(cssDir).filter((f) => f.endsWith(".css"))
     : [];
+  // An app build always has its global stylesheet; none means the build moved it.
+  if (stylesheets.length === 0) fail(`No stylesheets found in ${cssDir}.`);
   const css = stylesheets.reduce((sum, file) => sum + gzipKb(join(cssDir, file)), 0);
   console.warn(
     `Stylesheets: ${Math.round(css)}KB gzip in ${stylesheets.length} files (budget ${STYLESHEET_FAIL_GZIP_KB}KB)`

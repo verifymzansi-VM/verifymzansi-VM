@@ -165,6 +165,41 @@ describe("readPublishedCustomerAccess", () => {
     expect(accepted).toBeLessThan(19_500);
   });
 
+  it("counts length in characters as zod does, emoji and rare CJK included", () => {
+    const emoji = "🏪"; // two UTF-16 units, one character
+    const cjk = "𠀀"; // CJK Extension B, also two units
+    const values: string[] = [
+      emoji.repeat(160),
+      emoji.repeat(161),
+      `${emoji.repeat(80)}a`,
+      cjk.repeat(160),
+      ` ${cjk.repeat(159)}b `,
+      "�".repeat(160), // lone high surrogates count one each
+      "�".repeat(161),
+      "��".repeat(80),
+    ];
+    for (const venue of values) {
+      expectSameAsSchema({ version: 2, methods: ["visit"], premises: "mall_store", venue });
+    }
+    for (const serviceAreas of [emoji.repeat(2000), emoji.repeat(2001), cjk.repeat(1500)]) {
+      expectSameAsSchema({ version: 2, methods: ["travel"], serviceAreas });
+    }
+    // The form saves these; the page must show them.
+    expect(
+      readPublishedCustomerAccess({
+        version: 2,
+        methods: ["visit"],
+        premises: "mall_store",
+        venue: `${emoji.repeat(80)}a`,
+      })
+    ).not.toBeNull();
+  });
+
+  it("rejects sparse method lists as the schema does", () => {
+    expectSameAsSchema({ version: 2, methods: [, "online"] });
+    expect(readPublishedCustomerAccess({ version: 2, methods: new Array(1) })).toBeNull();
+  });
+
   it("keeps the option list the forms use", () => {
     expect(CUSTOMER_ACCESS_OPTIONS.map((option) => option.value)).toEqual([
       "visit",
