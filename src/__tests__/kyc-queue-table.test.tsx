@@ -428,7 +428,7 @@ describe("KycQueueTable", () => {
     renderQueue({ onDecisionComplete });
     fireEvent.click(screen.getAllByTitle("Reject")[1]);
     fireEvent.change(screen.getByTitle("Reason code"), { target: { value: "mismatch" } });
-    fireEvent.change(screen.getByPlaceholderText("Optional: provide additional context..."), {
+    fireEvent.change(screen.getByLabelText(/Note to the member/), {
       target: { value: "The selfie does not match the ID portrait." },
     });
     fireEvent.click(screen.getByRole("button", { name: /Confirm Reject/ }));
@@ -446,15 +446,24 @@ describe("KycQueueTable", () => {
     expect(restoredDecisionInput.safeParse(body).success).toBe(true);
   });
 
-  // Product bug: the dialog labels the note "Optional", but the decide route
-  // requires a written explanation for every rejection or retake request, so
-  // a rejection without a note is always refused ("Reload the queue and check
-  // the decision details."). Remove `.fails` once the dialog asks for the note.
-  it.fails("sends a rejection the server accepts when the note is left empty", async () => {
+  // The decide route requires a written explanation for every rejection or
+  // retake request (adminVerificationDecideSchema), so the dialog asks for it
+  // before sending instead of letting the server refuse an empty note.
+  it("asks for a note to the member before sending a rejection", async () => {
     fetchMock().mockResolvedValue(staffJson({ success: true }));
     renderQueue();
     fireEvent.click(screen.getAllByTitle("Reject")[0]);
     fireEvent.change(screen.getByTitle("Reason code"), { target: { value: "blurry_image" } });
+    fireEvent.change(screen.getByLabelText(/Note to the member/), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /Confirm Reject/ }));
+    expect(
+      await screen.findByText("Please write a note telling the member what to fix.")
+    ).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/Note to the member/), {
+      target: { value: "Please retake the photo without glare." },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Confirm Reject/ }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     expect(restoredDecisionInput.safeParse(decideBody()).success).toBe(true);
