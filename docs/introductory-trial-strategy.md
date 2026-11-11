@@ -110,18 +110,17 @@ platform automatically.
    campaign, staff publishing, post rejection, expiry, media-compatible paid
    renewal, and direct database permission denial. Verify public lists and
    detail routes hide elapsed posts while owner dashboards retain them.
-6. Review current deployment/schema/security-advisor gates before production
-   release. Roll forward on application problems; do not restore the old
-   free-claim RPC or erase identity history as a rollback shortcut.
+6. Review current deployment and schema gates before production release. Roll
+   forward on application problems; do not restore the old free-claim RPC or
+   erase identity history as a rollback shortcut.
 
 The former `pnpm test:trials` (removed on 11 November 2026 with the retired
 source schema) executed the SQL migrations and behavioral checks using a local
-embedded PostgreSQL engine with synthetic data. This catches SQL syntax,
-trigger, permission, identity and lifecycle failures. Its minimal schema and
-serialized connection are not substitutes for full-schema, multi-connection
-staging contention tests. The normal safety gate also runs lint, types, blocking
-tests, preflight, secret/dependency/license checks and database invariants;
-consult its latest artifacts for the result of this run.
+embedded PostgreSQL engine with synthetic data. It caught SQL syntax, trigger,
+permission, identity and lifecycle failures of the retired schema. The normal
+safety gate runs lint, types, blocking tests, preflight and
+secret/dependency/license checks; consult its latest artifacts for the result of
+a run.
 
 ## Verification on 6 September 2026
 

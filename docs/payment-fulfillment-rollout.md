@@ -43,8 +43,8 @@ PGlite database built from core schema definitions plus later compatibility
 fields. It tests role denial, rollback on invoice/audit failure, duplicate
 responses, stable dates/VAT, plan-change reactivation, restricted accounts,
 cross-owner access for all ten add-ons, older purchases, invoice-number
-collision and legacy recovery. It is part of the blocking test command and has a
-dedicated blocking CI step.
+collision and legacy recovery. It was part of the blocking test command and had
+a dedicated CI step until its removal.
 
 This is not a full migration replay or a multi-session PostgREST test. Browser
 checkout uses an explicitly simulated subscription RPC; it does not certify
