@@ -116,7 +116,8 @@ describe("production deployment wiring", () => {
 describe("CI browser installation", () => {
   const workflow = parse(readFileSync(".github/workflows/ci.yml", "utf8"));
   it("keeps every browser test lane and installs its dependencies without the former installer cutoff", () => {
-    for (const name of ["e2e-smoke", "launch-flows-bundle", "e2e-full-matrix"]) {
+    // e2e-smoke and launch-flows-bundle repeated subsets of the full matrix.
+    for (const name of ["e2e-full-matrix"]) {
       const job = workflow.jobs[name];
       const install = job.steps.find(
         (step: { uses?: string }) => step.uses === "./.github/actions/install-browsers"

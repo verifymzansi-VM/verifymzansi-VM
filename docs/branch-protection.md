@@ -62,10 +62,15 @@ such a check would block every pull request.
     `audit-tooling-platforms (windows-latest)`: the tooling tests
     (`pnpm test:tooling`) on Linux and Windows.
   - `build-route-verify`: builds the Worker, starts it in workerd, checks its
-    size and routes, and keeps the runtime proof (artifact
+    size and routes (including the payment and KYC callbacks, verification start
+    and pricing in the route manifest), and keeps the runtime proof (artifact
     `foundation-worker-runtime`). `bundle-analysis`.
-  - `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`,
-    and `e2e-full-matrix` (chromium, firefox, mobile-chrome).
+  - `e2e-full-matrix` (chromium, firefox, mobile-chrome): every browser test
+    except the pictures, including the `@smoke` subset. On chromium and
+    mobile-chrome it also proves the signed-in KYC scenarios passed. (The
+    separate `e2e-smoke` and `launch-flows-bundle` jobs repeated subsets of it
+    and were removed; `pnpm test:browser:isolated` stays as a local release
+    check.)
   - `Visual regression (chosen frontend)`: compares the main public screens with
     the approved pictures of the chosen frontend.
   - `foundation-native` (workflow "Foundation native"): the native database
