@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { contactPhone } from "@/lib/utils/contact-links";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf-client";
 import { cn } from "@/lib/utils";
 import type { ContactActionConfig } from "./contact-action-types";
 

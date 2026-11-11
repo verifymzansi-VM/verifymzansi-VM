@@ -31,7 +31,7 @@ import { PromotionContactActions } from "@/components/listings/promotion-contact
 import { BusinessStickers } from "@/components/trust/business-stickers";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerifiedPosition } from "@/components/trust/verified-position";
-import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { MediaLightbox } from "@/components/ui/media-lightbox-lazy";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
 import { formatRandAmount, formatSaLongDate, formatZAR, formatZARShort } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";

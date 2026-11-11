@@ -444,15 +444,41 @@
   }
 
   /* ── Skeleton shimmer ────────────────────────────────────── */
+  /* The light band moves as a transform on its own layer, so the compositor
+     animates it without repainting the page on every frame. Same colours,
+     band width, speed and direction as the earlier background-position sweep
+     (a tile twice the element's width, moving that width every second). */
   .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background: transparent;
+  }
+  .skeleton-shimmer::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: -1;
+    width: 300%;
     background: linear-gradient(
       90deg,
       hsl(var(--muted)) 25%,
       hsl(var(--muted) / 0.5) 50%,
       hsl(var(--muted)) 75%
     );
-    background-size: 200% 100%;
-    @apply animate-shimmer;
+    background-size: calc(200% / 3) 100%;
+    pointer-events: none;
+    animation: skeleton-sweep 1s linear infinite;
+  }
+  @keyframes skeleton-sweep {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-200% / 3));
+    }
   }
 
   .inline-form-error {
@@ -1228,18 +1254,21 @@
       color: transparent;
       animation: gold-shine 6s ease-in-out infinite;
     }
+    /* A band 30% of the stripe wide, moved as a transform (no repaints); same
+       path and timing as the earlier background-position sweep. */
     .flag-sheen::after {
       content: "";
       position: absolute;
-      inset: 0;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 30%;
       background: linear-gradient(
         90deg,
         transparent 0%,
         rgba(255, 255, 255, 0.55) 50%,
         transparent 100%
       );
-      background-size: 30% 100%;
-      background-repeat: no-repeat;
       animation: flag-sheen 7s ease-in-out infinite;
     }
     .pulse-ring {
@@ -1282,13 +1311,15 @@
       background-position: -20% 0;
     }
   }
+  /* From 28% of the stripe's width off its left edge to 98% across it (the
+     band's own width is 30%), as background-position -40% to 140% did. */
   @keyframes flag-sheen {
     0% {
-      background-position: -40% 0;
+      transform: translateX(calc(-28% / 0.3));
     }
     45%,
     100% {
-      background-position: 140% 0;
+      transform: translateX(calc(98% / 0.3));
     }
   }
   @keyframes rise-in {
