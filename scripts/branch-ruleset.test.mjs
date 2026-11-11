@@ -71,6 +71,8 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     "audit-tooling-platforms (windows-latest)",
     "build-route-verify",
     "Visual regression (chosen frontend)",
+    "Workflow lint (actionlint)",
+    "Browser test build",
     "foundation-native",
   ]) {
     assert.ok(requiredContexts(ruleset).includes(name), `${name} must be required`);
