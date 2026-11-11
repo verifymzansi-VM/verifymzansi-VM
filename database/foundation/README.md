@@ -66,6 +66,19 @@ expiry rules update, applies it and every later one, and checks the post
 lifecycle guards, the expiry rules and their races through the production API
 commands (`updates/README.md`).
 
+The same command then runs `scripts/test-foundation-staff-rules.mjs`, which
+replays every file into a third throwaway container first and only then checks
+staff rules through the production API commands, as members and staff with
+synthetic sessions (staff with a verified authenticator app) or as
+`service_role`: staff role changes need an independent second staff member and
+nobody can propose or approve a change to their own role; privacy requests get
+their deadline from the rule, one extension at most, identity verification
+before completion or export, and never processing by the requester; report
+warnings, content hides and appeals keep reviewers independent; a stale mail
+outbox lease cannot acknowledge a delivery; and the activation limit per period
+holds with free slots. These checks replace ones that earlier ran only on the
+older prototype fixture (`scripts/test-restored-post-commands.mjs`).
+
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:
 `preflight/<update>.check.sql`, a read-only check the owner runs in the SQL
