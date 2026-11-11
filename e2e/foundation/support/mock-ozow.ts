@@ -5,7 +5,9 @@
 //   https://127.0.0.1:55455/checkout (src/lib/payments/ozow.ts, test copy only),
 //   which the spec serves through Playwright routing (handle below). Its
 //   buttons pay, decline or cancel at a "test bank"; a cancel is recorded as
-//   an Error transaction, as the code assumes Ozow reports one.
+//   an Error transaction and closes the request (it then reads "Cancelled"),
+//   as the code assumes Ozow reports one (to confirm in Ozow's test system,
+//   M3.5).
 // - The notification: paying signs a complete transaction notice with the
 //   copy's synthetic signing secret and POSTs it to the website's real
 //   notification route, as the provider's signing service would. It can be
@@ -177,6 +179,7 @@ export class MockOzow {
     )
       return { ...page("Mock Ozow", "<h1>Unknown action</h1>"), status: 400 };
     await this.settle(paymentId, outcome === "paid" ? "Successful" : "Error");
+    if (outcome === "cancelled") this.cancelled.add(`mock-${paymentId}`);
     if (!this.memberReturns)
       return page(
         "Mock Ozow",

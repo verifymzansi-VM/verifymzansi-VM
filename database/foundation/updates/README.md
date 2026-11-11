@@ -115,8 +115,28 @@ this update:
 The website release in the same pull request also answers a plan whose pending
 payment already has an Ozow request with the restored checkout page's 409
 `PENDING_PAYMENT_EXISTS` reply (Continue payment, Check status, Cancel pending
-payment), and its status check records a declined or cancelled bank attempt as
-not paid, as the notice would. Neither needs a database change.
+payment). Its status check, once Ozow reports the request closed (`Expired` or
+`Cancelled`), records a declined or cancelled bank attempt as not paid, as the
+notice would; while the request is open it changes nothing, because the member
+can still pay on it. A request cancelled other than by the member's Cancel
+button is recorded as expired, so a verified late success still delivers the
+plan. Neither needs a database change.
+
+Known limits, recorded for later:
+
+- If the sweep expires a payment between the member's quote and the server's
+  lease (the member clicked Pay on a payment created over an hour ago, at the
+  moment the job ran), that click gets a "Billing could not be completed" 409;
+  the next click starts a new payment.
+- The Continue link is left out once the stored request's window has passed;
+  Cancel then asks Ozow to cancel an expired request. If Ozow refuses that, the
+  page says the pending payment could not be cancelled until the next status job
+  (at most 10 minutes) records the request as expired.
+- Not yet confirmed with Ozow (M3.5, Ozow's test system): that a second payment
+  request with the same merchant reference and a new idempotency key is
+  accepted, how a cancelled attempt is reported (the code assumes an `Error`
+  transaction and a `Cancelled` request), and the request status after a
+  cancellation.
 
 **Order: apply first, then merge.** The website release from the same pull
 request calls `api.expire_stale_checkouts`, and the deploy preflight probes

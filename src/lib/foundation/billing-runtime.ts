@@ -374,9 +374,14 @@ const canAskProvider = (requestId: string) =>
     ? requestId.startsWith(MOCK_OZOW_REQUEST_PREFIX)
     : !isMockCheckout(requestId);
 
+/** `cancelling`: the member's own Cancel (cancelFoundationPendingPayment) just
+ * closed the request at Ozow, so a request that reads Cancelled is recorded as
+ * the member's cancellation. Otherwise it is recorded as expired, which still
+ * lets a verified late success deliver what was paid for. */
 export async function reconcileFoundationPayment(
   paymentId: string,
-  service = createFoundationServiceApi()
+  service = createFoundationServiceApi(),
+  { cancelling = false }: { cancelling?: boolean } = {}
 ) {
   // No provider to ask in mock mode (except the test copy's stand-in): leave
   // the stored state as it is.
@@ -408,30 +413,41 @@ export async function reconcileFoundationPayment(
     );
     return { checked: true, pendingTransaction: false, settled: true };
   }
-  const pending = transactions.some((transaction) =>
-    ["pending", "incomplete"].includes(transaction.status?.toLowerCase() ?? "")
+  // Only Successful and Error are final; any other status (Pending,
+  // Incomplete, or one this code does not know) is still being decided.
+  const pending = transactions.some(
+    (transaction) => !["successful", "error"].includes(transaction.status?.toLowerCase() ?? "")
   );
   if (pending || pay.status !== "pending") return { checked: true, pendingTransaction: pending };
-  // A declined or cancelled bank attempt (Ozow status Error) records the
-  // payment as not paid, exactly as its notice would; a later successful
-  // attempt still settles it. Without this the member waits on "Payment
-  // pending" until the notice or the request's expiry arrives.
+  // While the request is open the member can still pay on it, so a declined
+  // attempt alone closes nothing here (its notice records it, as before).
+  const request = await getOzowPaymentRequestStatus(pay.provider_request_id);
+  if (request === "Created") return { checked: true, pendingTransaction: false };
+  // The request is closed (expired, or cancelled at Ozow or by the member): no
+  // attempt can succeed any more. A declined or cancelled bank attempt (Ozow
+  // status Error) records the payment as not paid, exactly as its notice
+  // would, so the member no longer waits on "Payment pending".
   const declined = transactions.find(
     (transaction) => transaction.status?.toLowerCase() === "error"
   );
   if (declined) {
-    await applyTransaction(service, pay, declined, `reconciliation:${JSON.stringify(declined)}`);
-    return { checked: true, pendingTransaction: false, closed: true };
+    const recorded = await applyTransaction(
+      service,
+      pay,
+      declined,
+      `reconciliation:${JSON.stringify(declined)}`
+    );
+    return {
+      checked: true,
+      pendingTransaction: false,
+      closed: (recorded as { outcome?: unknown } | null)?.outcome === "not_paid",
+    };
   }
-  const request = await getOzowPaymentRequestStatus(pay.provider_request_id);
-  if (request === "Expired" || request === "Cancelled") {
-    await command(service, "finish_unpaid_checkout", {
-      p_payment_id: pay.id,
-      p_status: request === "Expired" ? "expired" : "cancelled",
-    });
-    return { checked: true, pendingTransaction: false, closed: true };
-  }
-  return { checked: true, pendingTransaction: false };
+  const finished = await command(service, "finish_unpaid_checkout", {
+    p_payment_id: pay.id,
+    p_status: request === "Cancelled" && cancelling ? "cancelled" : "expired",
+  });
+  return { checked: true, pendingTransaction: false, closed: finished === true };
 }
 
 export async function cancelFoundationPendingPayment(
@@ -452,7 +468,7 @@ export async function cancelFoundationPendingPayment(
   await cancelOzowPaymentRequest(pay.provider_request_id);
   // A simultaneous settlement must win. The private row CAS and the provider
   // evidence both have to agree before the pending checkout is closed.
-  const result = await reconcileFoundationPayment(pay.id, service);
+  const result = await reconcileFoundationPayment(pay.id, service, { cancelling: true });
   if (!result.checked || result.pendingTransaction || result.settled)
     throw new FoundationBillingError(409, "The bank transaction is still being checked");
   // The status check itself closed it from the provider's answer.

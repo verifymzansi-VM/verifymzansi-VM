@@ -308,20 +308,67 @@ it("expires a stored checkout only after an authoritative expired request with n
     p_status: "expired",
   });
 });
-it("records a declined or cancelled bank attempt as not paid, as its notice would", async () => {
+it("records a declined or cancelled bank attempt as not paid once its request is closed", async () => {
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+    { ...notification(), status: "Error" },
+  ]);
+  machine.mockImplementation(async (name) => ({
+    data:
+      name === "claim_payment_reconciliation"
+        ? paymentDto()
+        : { outcome: "not_paid", payment_id: payment },
+    error: null,
+  }));
+  for (const request of ["Expired", "Cancelled"]) {
+    machine.mockClear();
+    vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce(request);
+    expect(await reconcileFoundationPayment(payment, service)).toEqual({
+      checked: true,
+      pendingTransaction: false,
+      closed: true,
+    });
+    expect(machine).toHaveBeenLastCalledWith("apply_provider_event", {
+      p_event: expect.objectContaining({ status: "error", provider_transaction_id: transactionId }),
+    });
+    expect(machine.mock.calls.some(([name]) => name === "finish_unpaid_checkout")).toBe(false);
+  }
+});
+it("leaves a declined attempt pending while its request can still be paid", async () => {
+  vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+    { ...notification(), status: "Error" },
+  ]);
+  vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Created");
+  expect(await reconcileFoundationPayment(payment, service)).toEqual({
+    checked: true,
+    pendingTransaction: false,
+  });
+  expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+});
+it("reports not closed when the attempt was not recorded as not paid", async () => {
   vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
     { ...notification(), status: "Error" },
   ]);
   expect(await reconcileFoundationPayment(payment, service)).toEqual({
     checked: true,
     pendingTransaction: false,
-    closed: true,
+    closed: false,
   });
-  expect(machine).toHaveBeenLastCalledWith("apply_provider_event", {
-    p_event: expect.objectContaining({ status: "error", provider_transaction_id: transactionId }),
-  });
-  expect(getOzowPaymentRequestStatus).not.toHaveBeenCalled();
 });
+it.each(["Pending", "Incomplete", "Refunded"])(
+  "treats a transaction status of %j next to a declined one as not final",
+  async (status) => {
+    vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+      { ...notification(), status: "Error" },
+      { ...notification(), format: "api", isTest: null, transactionId: uuid(13), status },
+    ]);
+    expect(await reconcileFoundationPayment(payment, service)).toEqual({
+      checked: true,
+      pendingTransaction: true,
+    });
+    expect(getOzowPaymentRequestStatus).not.toHaveBeenCalled();
+    expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+  }
+);
 it("leaves a payment pending while any attempt is still pending", async () => {
   vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
     { ...notification(), status: "Error" },
@@ -344,16 +391,30 @@ it("does not record an attempt again once the payment is no longer pending", asy
   });
   expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
 });
-it("closes a pending payment whose request the provider reports cancelled", async () => {
+it.each(["PendingInvestigation", "Abandoned", ""])(
+  "refuses an unknown transaction status %j and closes nothing",
+  async (status) => {
+    vi.mocked(listOzowPaymentTransactions).mockResolvedValue([
+      { ...notification(), status: "Error" },
+      { ...notification(), transactionId: uuid(13), status },
+    ]);
+    await expect(reconcileFoundationPayment(payment, service)).rejects.toMatchObject({
+      status: 503,
+    });
+    expect(machine.mock.calls.map(([name]) => name)).toEqual(["claim_payment_reconciliation"]);
+  }
+);
+it("closes a pending payment whose request was cancelled elsewhere as expired", async () => {
   vi.mocked(getOzowPaymentRequestStatus).mockResolvedValueOnce("Cancelled");
   expect(await reconcileFoundationPayment(payment, service)).toEqual({
     checked: true,
     pendingTransaction: false,
     closed: true,
   });
+  // Expired, not cancelled: a verified late success still delivers the plan.
   expect(machine).toHaveBeenLastCalledWith("finish_unpaid_checkout", {
     p_payment_id: payment,
-    p_status: "cancelled",
+    p_status: "expired",
   });
 });
 it("leaves an open request with no attempt pending", async () => {
