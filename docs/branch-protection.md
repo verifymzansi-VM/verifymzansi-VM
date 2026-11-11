@@ -88,9 +88,12 @@ required on pull requests; when no staging address (`STAGING_APP_URL`) is
 configured they show as skipped, not as a success (`Staging address configured`
 decides this in a job-level condition). Later slices add their jobs here and to
 the ruleset file (foundation browser tests, frontend ledger). `e2e-foundation`
-(workflow "E2E foundation") runs on every pull request but stays optional until
-it has five green nights in a row. When it becomes required, list only the
-aggregate check `e2e-foundation`: it passes only when both per-project jobs,
+(workflow "E2E foundation") runs on every pull request and every push to `main`
+but stays optional until it has passed on 10 consecutive `main` runs. Its `main`
+runs, like those of `foundation-native`, are separate workflow runs outside the
+deploy gate; a failed `main` or scheduled run of any workflow opens or updates
+one GitHub issue (workflow "Failure alert"). When it becomes required, list only
+the aggregate check `e2e-foundation`: it passes only when both per-project jobs,
 `e2e-foundation (chromium)` and `e2e-foundation (mobile-chrome)`, passed.
 
 ## How the owner applies it
