@@ -10,11 +10,17 @@ name: E2E foundation
 #
 # Non-blocking while it proves itself: `e2e-foundation` is not a required
 # check in .github/rulesets/protect-main.json, so a red run is visible on the
-# pull request but does not block merging. It becomes required after five
-# green days in a row (the nightly run counts them). The check to require is
+# pull request but does not block merging. It becomes required (and part of
+# the release gate) after 10 consecutive green runs on main. The check to require is
 # the aggregate job `e2e-foundation`, which fails unless every browser project
 # passed; the per-project jobs need not be listed.
+#
+# Runs on main are a separate workflow run, outside the deploy gate (deploy
+# waits only for workflow "CI"), so a red run here alerts (workflow "Failure
+# alert") but never holds back a release until then.
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -24,16 +30,19 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels its older run. Runs on main and
+# scheduled runs are never cancelled: each commit gets its own group.
 concurrency:
-  group: e2e-foundation-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: e2e-foundation-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # One job per Playwright project, each on its own runner with its own test
   # copy (the copies never share data). Both projects in one step took about
   # 12 minutes against a 14-minute limit, so one retried test or a slow runner
-  # timed the job out with no test failure recorded. Split, each project takes
-  # about 6.5 minutes of browser tests (about 13 for the whole job).
+  # timed the job out with no test failure recorded. Split, each project took
+  # about 6.5 minutes of browser tests; with the backend-independent checks
+  # moved here from the stub suite it is about 10 (e2e/foundation/PORTING.md).
   browser:
     name: e2e-foundation (${{ matrix.project }})
     runs-on: ubuntu-latest
@@ -43,8 +52,8 @@ jobs:
         project: [chromium, mobile-chrome]
     # Roadmap budget: the browser tests finish within 25 minutes of wall time;
     # the two projects run in parallel. Step ceilings: stack 5, build 10,
-    # tests 14 (Playwright stops itself at 12 and writes its report first).
-    timeout-minutes: 35
+    # tests 22 (Playwright stops itself at 20 and writes its report first).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,6 +65,13 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/install-browsers
+      # The test copy's fixed ports (55443-55459) lie inside Linux's ephemeral
+      # range (32768-60999). A server that binds one mid-run (the mock payment
+      # provider on 55448) failed with EADDRINUSE when an ordinary outgoing
+      # connection had been given that port. Reserved ports are never handed
+      # out to outgoing connections; binding them explicitly still works.
+      - name: Keep the test copy's ports out of the ephemeral range
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
       - name: Start the test copy (local stack, schema proof, test people)
         timeout-minutes: 5
         run: node --import tsx scripts/foundation-e2e.mjs up
@@ -64,15 +80,15 @@ jobs:
         run: node --import tsx scripts/foundation-e2e.mjs build
       - name: Note when the browser tests start
         run: echo "E2E_TESTS_STARTED=$(date +%s)" >> "$GITHUB_ENV"
-      # About 6.5 minutes when clean. Playwright's own limit (12 minutes, about
-      # 1.8 times a clean run) ends the run with its reports written, so a slow
+      # About 10 minutes when clean. Playwright's own limit (20 minutes, about
+      # 2 times a clean run) ends the run with its reports written, so a slow
       # run reads "timed out" in the summary instead of being cut off; the step
       # limit is the backstop if Playwright itself hangs.
       - name: Browser tests (${{ matrix.project }})
-        timeout-minutes: 14
+        timeout-minutes: 22
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
-          PLAYWRIGHT_GLOBAL_TIMEOUT_MS: "720000"
+          PLAYWRIGHT_GLOBAL_TIMEOUT_MS: "1200000"
           PLAYWRIGHT_JSON_REPORT: test-results/foundation-${{ matrix.project }}.json
           PROJECT: ${{ matrix.project }}
         run: >-

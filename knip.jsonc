@@ -17,6 +17,8 @@
     "workers/*.ts",
     "scripts/**/*.{ts,js,mjs,cjs}",
     "remotion/*index.{ts,tsx}",
+    // Run inside the pinned browser image by scripts/foundation-visual.mjs.
+    "playwright.visual.config.ts",
   ],
   "project": [
     "src/**/*.{ts,tsx}",

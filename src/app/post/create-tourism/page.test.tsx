@@ -1,5 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  expectFoundationPostFields,
+  installFoundationPostFetch,
+} from "@/test/foundation-post-transport";
 import CreateTourismPage from "./page";
 import { fetchWithRetry } from "@/lib/utils/fetch-retry";
 import { compressVideoForUpload, VideoTranscodeError } from "@/lib/media/compress-before-upload";
@@ -283,6 +287,10 @@ function acceptPostingTerms() {
 }
 
 describe("CreateTourismPage type switch behavior", () => {
+  let fetchMock: Mock;
+  let postingTermsFetch: Mock;
+  let termsLoaded: () => Promise<void>;
+
   beforeEach(() => {
     vi.clearAllMocks();
     restoreDraftMock.mockReturnValue(null);
@@ -291,10 +299,13 @@ describe("CreateTourismPage type switch behavior", () => {
     searchParamGetMock.mockReturnValue(null);
     global.URL.createObjectURL = vi.fn(() => "blob:tourism-preview");
     global.URL.revokeObjectURL = vi.fn();
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: "ok" }),
-    }) as unknown as typeof fetch;
+    ({
+      api: fetchMock,
+      terms: postingTermsFetch,
+      termsLoaded,
+    } = installFoundationPostFetch(
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "ok" }) })
+    ));
     vi.stubGlobal(
       "confirm",
       vi.fn(() => true)
@@ -375,7 +386,7 @@ describe("CreateTourismPage type switch behavior", () => {
       expect(invalidField).toHaveAccessibleDescription(expect.stringContaining(message));
       expect(checkUploadServiceReachable).not.toHaveBeenCalled();
       expect(fetchWithRetry).not.toHaveBeenCalled();
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
     }
   );
 
@@ -388,31 +399,8 @@ describe("CreateTourismPage type switch behavior", () => {
     expect(screen.queryByLabelText("Business Name (Required)")).not.toBeInTheDocument();
   });
 
-  it("maps event API 422 photo-limit errors to the media step", async () => {
-    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
-        errors: [],
-      }),
-    });
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Maximum 10 photos allowed on your plan" }),
-          };
-        }
-
-        return {
-          ok: true,
-          json: async () => ({ id: "ok" }),
-        };
-      }
-    );
-
+  /** Fills an event up to the media step (Step 4). */
+  function fillEventToMediaStep() {
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
@@ -425,7 +413,6 @@ describe("CreateTourismPage type switch behavior", () => {
       target: { value: "festival_concert" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
     fireEvent.change(screen.getByLabelText("Start date (Required)"), {
       target: { value: "2099-12-01" },
     });
@@ -434,125 +421,16 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     fireEvent.click(screen.getByLabelText("Free entry"));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
     fireEvent.click(screen.getByLabelText("Phone Call"));
     fireEvent.click(screen.getByLabelText("Contact Form"));
-    fireEvent.change(screen.getByLabelText("Province"), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText("City"), {
-      target: { value: "Johannesburg" },
-    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  }
 
-    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
-    acceptPostingTerms();
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Maximum 10 photos allowed on your plan").length).toBeGreaterThan(
-        0
-      );
-      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
-    });
-  });
-
-  it("maps event API 422 video-limit errors to the media step", async () => {
-    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
-        errors: [],
-      }),
-    });
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Video upload is not available on your current plan." }),
-          };
-        }
-
-        return {
-          ok: true,
-          json: async () => ({ id: "ok" }),
-        };
-      }
-    );
-
-    searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
+  /** Fills a tourism business up to the media step (Step 4). */
+  function fillTourismBusinessToMediaStep() {
     render(<CreateTourismPage />);
-    fireEvent.change(screen.getByLabelText("Event name (Required)"), {
-      target: { value: "Soweto Food Festival" },
-    });
-    fireEvent.change(screen.getByLabelText("Description (Required)"), {
-      target: { value: "A detailed event description with enough content to pass validation." },
-    });
-    fireEvent.change(screen.getByLabelText("Event category (Required)"), {
-      target: { value: "festival_concert" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    fireEvent.change(screen.getByLabelText("Start date (Required)"), {
-      target: { value: "2099-12-01" },
-    });
-    fireEvent.change(screen.getByLabelText("Start time (Required)"), {
-      target: { value: "18:00" },
-    });
-    fireEvent.click(screen.getByLabelText("Free entry"));
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
-    fireEvent.change(screen.getByLabelText("Province"), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText("City"), {
-      target: { value: "Johannesburg" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
-    acceptPostingTerms();
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByText("Video upload is not available on your current plan.").length
-      ).toBeGreaterThan(0);
-      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
-    });
-  });
-
-  it("maps tourism business API 422 photo-limit errors to the media step", async () => {
-    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
-        errors: [],
-      }),
-    });
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/businesses") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Maximum 10 gallery photos allowed on your plan" }),
-          };
-        }
-
-        return {
-          ok: true,
-          json: async () => ({ id: "ok" }),
-        };
-      }
-    );
-
-    render(<CreateTourismPage />);
-
     fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
     });
@@ -565,35 +443,79 @@ describe("CreateTourismPage type switch behavior", () => {
       target: { value: "hotel_resort" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
     fireEvent.click(screen.getByLabelText("Phone Call"));
     fireEvent.click(screen.getByLabelText("Contact Form"));
-    fireEvent.change(screen.getByLabelText("Province"), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText("City"), {
-      target: { value: "Johannesburg" },
-    });
+    fireEvent.change(screen.getByLabelText("Province"), { target: { value: "Gauteng" } });
+    fireEvent.change(screen.getByLabelText("City"), { target: { value: "Johannesburg" } });
     fireEvent.change(screen.getByLabelText("Street address"), {
       target: { value: "24 Vilakazi Street" },
     });
-    fireEvent.change(screen.getByLabelText("Town"), {
-      target: { value: "Orlando West" },
-    });
+    fireEvent.change(screen.getByLabelText("Town"), { target: { value: "Orlando West" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  }
 
+  it.each([
+    ["event", "photo", "/api/promotions", "Maximum 10 photos allowed on your plan"],
+    ["event", "video", "/api/promotions", "Video upload is not available on your current plan."],
+    [
+      "tourism business",
+      "photo",
+      "/api/businesses",
+      "Maximum 10 gallery photos allowed on your plan",
+    ],
+    [
+      "tourism business",
+      "video",
+      "/api/businesses",
+      "Video upload is not available on your current plan.",
+    ],
+  ])("maps %s API 422 %s-limit errors to the media step", async (kind, _limit, endpoint, error) => {
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+      input === endpoint
+        ? { ok: false, status: 422, json: async () => ({ error }) }
+        : { ok: true, json: async () => ({ id: "ok" }) }
+    );
+
+    if (kind === "event") fillEventToMediaStep();
+    else fillTourismBusinessToMediaStep();
+    await termsLoaded();
     fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
     acceptPostingTerms();
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getAllByText("Maximum 10 gallery photos allowed on your plan").length
-      ).toBeGreaterThan(0);
+      expect(screen.getAllByText(error).length).toBeGreaterThan(0);
       expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
     });
+    expect(fetchMock).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method: "POST" }));
+  });
+
+  it("does not submit before the posting terms have loaded", async () => {
+    postingTermsFetch.mockReturnValue(new Promise(() => {}));
+    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
+        errors: [],
+      }),
+    });
+
+    fillEventToMediaStep();
+    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
+    acceptPostingTerms();
+    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
+
+    expect(await screen.findByText(/Posting terms are still loading/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(routerPushMock).not.toHaveBeenCalled();
   });
 
   it("persists tourism business social links and normalized booking URLs", async () => {
@@ -606,6 +528,7 @@ describe("CreateTourismPage type switch behavior", () => {
     });
 
     render(<CreateTourismPage />);
+    await termsLoaded();
 
     fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
       target: { value: "Kruger Sunset Lodge" },
@@ -655,15 +578,13 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/businesses",
         expect.objectContaining({ method: "POST" })
       );
     });
 
-    const businessCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([input]) => input === "/api/businesses"
-    );
+    const businessCall = fetchMock.mock.calls.find(([input]) => input === "/api/businesses");
     const body = JSON.parse(String(businessCall?.[1]?.body));
 
     expect(body.social_links).toEqual({
@@ -671,76 +592,8 @@ describe("CreateTourismPage type switch behavior", () => {
     });
     expect(body.category_details.booking_url).toBe("https://www.booking.co.za");
     expect(body.map_directions).toBe("https://maps.app.goo.gl/kruger");
-  });
-
-  it("maps tourism business API 422 video-limit errors to the media step", async () => {
-    (fetchWithRetry as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        urls: ["https://media.verifymzansi.com/tourism/photo.jpg"],
-        errors: [],
-      }),
-    });
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/businesses") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Video upload is not available on your current plan." }),
-          };
-        }
-
-        return {
-          ok: true,
-          json: async () => ({ id: "ok" }),
-        };
-      }
-    );
-
-    render(<CreateTourismPage />);
-
-    fireEvent.change(screen.getByLabelText("Business Name (Required)"), {
-      target: { value: "Kruger Sunset Lodge" },
-    });
-    fireEvent.change(screen.getByLabelText("Description (Required)"), {
-      target: {
-        value: "A detailed tourism business description with enough content to pass validation.",
-      },
-    });
-    fireEvent.change(screen.getByLabelText("Tourism category (Required)"), {
-      target: { value: "hotel_resort" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    fireEvent.click(screen.getByLabelText("Phone Call"));
-    fireEvent.click(screen.getByLabelText("Contact Form"));
-    fireEvent.change(screen.getByLabelText("Province"), {
-      target: { value: "Gauteng" },
-    });
-    fireEvent.change(screen.getByLabelText("City"), {
-      target: { value: "Johannesburg" },
-    });
-    fireEvent.change(screen.getByLabelText("Street address"), {
-      target: { value: "24 Vilakazi Street" },
-    });
-    fireEvent.change(screen.getByLabelText("Town"), {
-      target: { value: "Orlando West" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    fireEvent.click(screen.getByRole("button", { name: /Add media for Upload photos/i }));
-    acceptPostingTerms();
-    fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByText("Video upload is not available on your current plan.").length
-      ).toBeGreaterThan(0);
-      expect(screen.getByText(/Please fix 1 field on Step 4/i)).toBeInTheDocument();
-    });
+    expect(body.termsAccepted).toBe(true);
+    expectFoundationPostFields(body);
   });
 
   it("allows event submit with video only", async () => {
@@ -761,25 +614,24 @@ describe("CreateTourismPage type switch behavior", () => {
         throw new Error(`Unexpected fetchWithRetry call: ${String(input)}`);
       }
     );
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/promotions") {
-          return {
-            ok: true,
-            status: 201,
-            json: async () => ({ success: true, promotion: { id: "promo-1" } }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/promotions") {
         return {
           ok: true,
-          json: async () => ({ id: "ok" }),
+          status: 201,
+          json: async () => ({ success: true, promotion: { id: "promo-1" } }),
         };
       }
-    );
+
+      return {
+        ok: true,
+        json: async () => ({ id: "ok" }),
+      };
+    });
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
+    await termsLoaded();
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
@@ -815,7 +667,7 @@ describe("CreateTourismPage type switch behavior", () => {
     fireEvent.click(screen.getByRole("button", { name: /Submit for review/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/promotions",
         expect.objectContaining({
           method: "POST",
@@ -826,16 +678,15 @@ describe("CreateTourismPage type switch behavior", () => {
       );
     });
 
-    const promotionCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
-      ([input]) => input === "/api/promotions"
-    );
+    const promotionCall = fetchMock.mock.calls.find(([input]) => input === "/api/promotions");
     expect(promotionCall).toBeTruthy();
-    const requestBody = JSON.parse(String(promotionCall?.[1]?.body ?? "{}")) as {
-      images?: string[];
-      videos?: string[];
-    };
+    const requestBody = JSON.parse(String(promotionCall?.[1]?.body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
     expect(requestBody.images).toEqual([]);
     expect(requestBody.videos).toEqual(["https://media.verifymzansi.com/promotion/video.mp4"]);
+    expectFoundationPostFields(requestBody);
   });
 
   it("blocks event submit when validated video upload fails", async () => {
@@ -857,25 +708,24 @@ describe("CreateTourismPage type switch behavior", () => {
         throw new Error(`Unexpected fetchWithRetry call: ${String(input)}`);
       }
     );
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/promotions") {
-          return {
-            ok: true,
-            status: 201,
-            json: async () => ({ success: true, promotion: { id: "promo-1" } }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/promotions") {
         return {
           ok: true,
-          json: async () => ({ id: "ok" }),
+          status: 201,
+          json: async () => ({ success: true, promotion: { id: "promo-1" } }),
         };
       }
-    );
+
+      return {
+        ok: true,
+        json: async () => ({ id: "ok" }),
+      };
+    });
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
+    await termsLoaded();
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
@@ -921,7 +771,7 @@ describe("CreateTourismPage type switch behavior", () => {
       ).toBeGreaterThan(0);
     });
 
-    expect(global.fetch).not.toHaveBeenCalledWith(
+    expect(fetchMock).not.toHaveBeenCalledWith(
       "/api/promotions",
       expect.objectContaining({
         method: "POST",
@@ -990,6 +840,7 @@ describe("CreateTourismPage type switch behavior", () => {
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
+    await termsLoaded();
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
@@ -1034,7 +885,7 @@ describe("CreateTourismPage type switch behavior", () => {
         ).length
       ).toBeGreaterThan(0);
     });
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("maps photo upload network failures back to the tourism media step", async () => {
@@ -1044,6 +895,7 @@ describe("CreateTourismPage type switch behavior", () => {
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
+    await termsLoaded();
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
@@ -1090,7 +942,7 @@ describe("CreateTourismPage type switch behavior", () => {
         ).length
       ).toBeGreaterThan(0);
     });
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("surfaces a direct video error when MOV transcode fails", async () => {
@@ -1105,6 +957,7 @@ describe("CreateTourismPage type switch behavior", () => {
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
+    await termsLoaded();
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });
@@ -1146,7 +999,7 @@ describe("CreateTourismPage type switch behavior", () => {
         ).length
       ).toBeGreaterThan(0);
     });
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   async function fillAndSubmitEvent(promotionsResponse: { status: number; body: unknown }) {
@@ -1157,21 +1010,20 @@ describe("CreateTourismPage type switch behavior", () => {
         errors: [],
       }),
     });
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/promotions") {
-          return {
-            ok: false,
-            status: promotionsResponse.status,
-            json: async () => promotionsResponse.body,
-          };
-        }
-        return { ok: true, json: async () => ({ id: "ok" }) };
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/promotions") {
+        return {
+          ok: false,
+          status: promotionsResponse.status,
+          json: async () => promotionsResponse.body,
+        };
       }
-    );
+      return { ok: true, json: async () => ({ id: "ok" }) };
+    });
 
     searchParamGetMock.mockImplementation((key: string) => (key === "type" ? "event" : null));
     render(<CreateTourismPage />);
+    await termsLoaded();
     fireEvent.change(screen.getByLabelText("Event name (Required)"), {
       target: { value: "Soweto Food Festival" },
     });

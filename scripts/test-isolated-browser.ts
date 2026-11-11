@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execute, pnpmInvocation } from "./lib/audit-runtime";
 import { copyWorkingTreeSnapshot } from "./lib/working-tree-snapshot";
-import { assertKycAuthenticatedScenarios, type BrowserScenario } from "./lib/kyc-browser-evidence";
+import { assertKycAuthenticatedScenarios, scenariosFromReport } from "./lib/kyc-browser-evidence";
+import { missingBuiltRoutes } from "./lib/built-routes.mjs";
 async function main() {
   if (process.argv.length > 2) throw new Error("test:browser:isolated accepts no flags");
   const root = process.cwd();
@@ -114,39 +115,7 @@ async function main() {
         path.join(output, `${path.basename(checkout)}-playwright.json`),
         JSON.stringify(browserReport, null, 2)
       );
-      const scenarios: Array<BrowserScenario & { key: string }> = [];
-      type BrowserSuite = {
-        specs?: Array<{
-          file: string;
-          line: number;
-          title: string;
-          tests?: Array<{
-            status: string;
-            projectName: string;
-            expectedStatus: string;
-            results: Array<{ status: string }>;
-          }>;
-        }>;
-        suites?: BrowserSuite[];
-      };
-      const collect = (suites: BrowserSuite[]) => {
-        for (const suite of suites) {
-          for (const spec of suite.specs ?? []) {
-            for (const test of spec.tests ?? [])
-              scenarios.push({
-                key: `${spec.file}:${spec.line}:${spec.title}`,
-                status: test.status,
-                file: spec.file,
-                title: spec.title,
-                project: test.projectName,
-                expectedStatus: test.expectedStatus,
-                resultStatus: test.results.at(-1)?.status ?? "missing",
-              });
-          }
-          collect(suite.suites ?? []);
-        }
-      };
-      collect(browserReport.suites ?? []);
+      const scenarios = scenariosFromReport(browserReport);
       assertKycAuthenticatedScenarios(scenarios);
       const uncoveredSkips = scenarios.filter(
         (scenario) =>
@@ -165,15 +134,8 @@ async function main() {
       const manifest = JSON.parse(
         await readFile(path.join(checkout, ".next/server/app-paths-manifest.json"), "utf8")
       );
-      for (const route of [
-        "/api/webhooks/ozow/route",
-        "/api/webhooks/kyc/provider/route",
-        "/api/verification/session/start/route",
-        "/pricing/page",
-      ]) {
-        if (!Object.keys(manifest).some((key) => key.endsWith(route)))
-          throw new Error(`Built route missing: ${route}`);
-      }
+      const missing = missingBuiltRoutes(manifest);
+      if (missing.length > 0) throw new Error(`Built route missing: ${missing.join(", ")}`);
       results.push({
         command: "generated route manifest",
         status: "PASS",

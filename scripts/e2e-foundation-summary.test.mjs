@@ -167,3 +167,12 @@ test("a missing report means the step stopped before Playwright finished", () =>
   assert.match(text, /no test failure recorded/);
   assert.match(summariseMissing("chromium", undefined), /stopped before Playwright finished/);
 });
+
+test("the CI browser jobs reuse the summary under their own heading", () => {
+  const text = summarise(report([]), "firefox", "Browser tests");
+  assert.match(text, /^## Browser tests \(firefox\)/);
+  assert.match(
+    summariseMissing("chromium", undefined, "Smoke browser tests"),
+    /^## Smoke browser tests \(chromium\)/
+  );
+});

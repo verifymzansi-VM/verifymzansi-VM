@@ -49,21 +49,21 @@ exist. Unsupported provider names fail instead of falling back silently.
 
 ## Evidence and limitations
 
-`test:kyc` discovers maintained KYC/encryption/review regression files;
-`test:kyc:db` is PGlite supplementary evidence. `test:db:isolated` verifies the
-complete migration history on PostgreSQL/PostgREST and races separate requests.
-`test:browser:isolated` records local deterministic KYC flows and any skips.
-`e2e/kyc-authenticated.spec.ts` exercises synthetic ID submission, private
-evidence authorization/decryption, claim enforcement, reviewer resubmission,
-synthetic selfie/final approval, legal-name locking, retention scheduling and
-independent high-risk governance UI. The browser runner requires all three
-authenticated scenarios to pass in both Chrome projects; a smoke-only run cannot
-attest this gate. It uses the real HTTP routes with isolated
-auth/database/storage fixtures; PostgreSQL RLS/transactions and genuine provider
-behavior remain separate coverage requirements. Fixture storage uses the shared
-E2E mode guard, and cannot be enabled by test flags in a production environment.
-Reports live under `tmp/kyc-audit`; INCOMPLETE is required when tools or
-credentials are unavailable. Preserve only synthetic fixtures and redacted
-metadata in tracked evidence. See
+`test:kyc` discovers maintained KYC/encryption/review regression files. The
+retired source schema's database lanes (`test:kyc:db`, `test:db:isolated`) were
+removed; the live schema is checked by `foundation-replay` and
+`foundation-native`. `test:browser:isolated` records local deterministic KYC
+flows and any skips. `e2e/kyc-authenticated.spec.ts` exercises synthetic ID
+submission, private evidence authorization/decryption, claim enforcement,
+reviewer resubmission, synthetic selfie/final approval, legal-name locking,
+retention scheduling and independent high-risk governance UI. The browser runner
+requires all three authenticated scenarios to pass in both Chrome projects; a
+smoke-only run cannot attest this gate. It uses the real HTTP routes with
+isolated auth/database/storage fixtures; PostgreSQL RLS/transactions and genuine
+provider behavior remain separate coverage requirements. Fixture storage uses
+the shared E2E mode guard, and cannot be enabled by test flags in a production
+environment. Reports live under `tmp/kyc-audit`; INCOMPLETE is required when
+tools or credentials are unavailable. Preserve only synthetic fixtures and
+redacted metadata in tracked evidence. See
 [encryption and recovery](encryption-recovery.md) and
 [audit policy](audit-tools.md).

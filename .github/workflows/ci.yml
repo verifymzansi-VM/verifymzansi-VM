@@ -11,36 +11,17 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels that pull request's older run. Runs on
+# main are never cancelled (each has its own group), so every release commit
+# gets a complete result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
-  foundation-worker-runtime:
-    name: Foundation Worker runtime
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - name: Prepare isolated public configuration and synthetic bindings
-        run: node scripts/prepare-cloudflare-runtime-check.mjs
-      - name: Build and exercise the actual Worker artifact
-        run: pnpm test:cloudflare:runtime
-      - name: Preserve runtime proof
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: foundation-worker-runtime
-          include-hidden-files: true
-          path: |
-            tmp/cloudflare-runtime/latest.json
-            .open-next/build-fingerprint.json
-
   # Rebuilds the production (foundation) schema from database/foundation in an
   # embedded Postgres, compares its fingerprint with fingerprint.json, checks
   # the committed readable snapshot (database/foundation/current) and the API
@@ -52,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # The merge commit's first parent is the pull request's base.
           fetch-depth: 2
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -60,7 +42,7 @@ jobs:
           node-version: "22"
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
-      - name: Replay the foundation schema and compare its fingerprint
+      - name: Replay the foundation schema, check its access-policy invariants and fingerprint
         run: pnpm db:foundation:replay
       - name: Regenerate the readable schema snapshot (database/foundation/current)
         run: pnpm db:foundation:snapshot
@@ -177,13 +159,16 @@ jobs:
         run: docker pull "$(node -e "import('./scripts/lib/foundation-sql-lint.mjs').then((m) => console.log(m.LINT_IMAGE))")"
       - name: Lint the replayed foundation SQL with plpgsql_check
         run: pnpm db:foundation:lint
-      - name: Post lifecycle guard behaviour on the replayed schema
+      - name: Post lifecycle and staff rule behaviour on the replayed schema
         run: pnpm db:foundation:lifecycle-test
 
   lint-type-security:
     runs-on: ubuntu-latest
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -191,18 +176,21 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Shared static policy
-        run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,legacy-surface,frontend-freeze,db-static,secrets,licenses,dependencies
+        run: pnpm safety:ci-review -- --checks=format,lint,types,openapi,imports,legacy-surface,frontend-freeze,secrets,licenses,dependencies
       - name: Preserve audit evidence
         if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: static-audit
           path: tmp/safety-gate/**
 
   knip:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -215,8 +203,11 @@ jobs:
   jscpd-advisory:
     name: Duplication budget
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -232,6 +223,43 @@ jobs:
           name: jscpd-budget-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/jscpd/**
           if-no-files-found: warn
+
+  # Checks the workflow files themselves (expressions, job graph, shell
+  # scripts via shellcheck). Reviewed exceptions live in .github/actionlint.yaml.
+  workflow-lint:
+    name: Workflow lint (actionlint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint the workflows
+        run: |
+          image=rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 # secret-scan: allow image digest
+          docker run --rm --network none -v "$PWD:/repo:ro" -w /repo "$image" -no-color -oneline
+
+  # Security audit of the workflow files. Advisory while its existing findings
+  # are triaged: it reports in the log and job summary but never fails CI.
+  workflow-audit-advisory:
+    name: Workflow security audit (zizmor, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit the workflows (offline)
+        run: |
+          {
+            echo '## Workflow security audit (zizmor, advisory)'
+            echo
+            echo '```'
+            image=ghcr.io/zizmorcore/zizmor:1.14.2@sha256:d18a6c1e37733db34fbb516e1f168687db53f2e6601ca44d061700757a38ad95 # secret-scan: allow image digest
+            docker run --rm --network none -v "$PWD:/repo:ro" -w /repo "$image" --offline --no-progress --format plain .github/workflows 2>&1 | tail -n 200
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
   # Pushes and PRs scan only their new commits; security.yml rescans the whole
   # history weekly. Reviewed fixture exceptions live in .gitleaks.toml.
@@ -320,12 +348,15 @@ jobs:
 
   unit-api-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 31
     needs: lint-type-security
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -335,7 +366,7 @@ jobs:
       - name: Coverage gate
         env:
           STRICT_COVERAGE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
-        run: pnpm safety:ci-review -- --checks=unit,coverage,db-trials,db-commercial,db-media,db-visits,db-staff-roles,db-decisions,db-queue-claims,db-operation-jobs,db-dsar,db-dashboard,db-admin-lists,db-business-counts,contracts,canaries,preflight
+        run: pnpm safety:ci-review -- --checks=coverage,unit-coverage-excluded,contracts,preflight
       - name: Preserve unit, coverage and contract evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -344,9 +375,12 @@ jobs:
           path: tmp/safety-gate/**
   build-route-verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: lint-type-security
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -386,106 +420,73 @@ jobs:
             exit 1
           fi
           echo "All critical payment routes verified in build output."
-
-  db-rls:
-    runs-on: ubuntu-latest
-    env:
-      # secrets context is not allowed in step-level if conditions, so map
-      # these to env first and reference env in the Docker Hub login step.
-      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      # Anonymous Docker Hub pulls are rate-limited per runner IP and make
-      # `supabase start` flaky; logging in (when credentials are configured)
-      # raises the pull quota.
-      - name: Log in to Docker Hub
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ env.DOCKERHUB_TOKEN }}
-      - name: Full migrations, PostgreSQL/PostgREST RLS and races
-        run: pnpm safety:ci-review -- --checks=isolated-db
-      - name: Preserve database evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: isolated-database-audit
-          path: |
-            tmp/isolated-db/**
-            tmp/safety-gate/**
-
-  e2e-smoke:
-    runs-on: ubuntu-latest
-    needs: [unit-api-contract, build-route-verify]
-    strategy:
-      fail-fast: false
-      matrix:
-        project: [chromium, mobile-chrome]
-    env:
-      PLAYWRIGHT_TEST_MODE: "1"
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
-      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - uses: ./.github/actions/install-browsers
-      - run: pnpm exec playwright test --grep "@smoke" --project "$BROWSER_PROJECT"
-        env:
-          BROWSER_PROJECT: ${{ matrix.project }}
-
-  launch-flows-bundle:
-    runs-on: ubuntu-latest
-    needs: [unit-api-contract, build-route-verify]
-    env:
-      PLAYWRIGHT_TEST_MODE: "1"
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
-      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - uses: ./.github/actions/install-browsers
-      - name: Isolated payment, KYC and DSAR browser verification
-        run: pnpm safety:release -- --checks=browser
-      - name: Upload isolated browser diagnostics
+      # Payment and KYC provider callbacks, verification start and pricing
+      # (scripts/lib/built-routes.mjs), checked in the generated route manifest.
+      - name: Verify required routes in the build manifest
+        run: node scripts/check-built-routes.mjs
+      # The Worker runtime proof (the startup check's report and the build
+      # fingerprint), formerly uploaded by the separate "Foundation Worker
+      # runtime" job, which built the same Worker a second time.
+      - name: Preserve runtime proof
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: isolated-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          name: foundation-worker-runtime
+          include-hidden-files: true
           path: |
-            tmp/isolated-browser/*.log
-            tmp/isolated-browser/*.json
-            tmp/isolated-browser/checkout-*/test-results/**
-            tmp/safety-gate/**
-          if-no-files-found: warn
+            tmp/cloudflare-runtime/latest.json
+            .open-next/build-fingerprint.json
+
+  # Builds the site once, at minute 0, with the fixed browser-test settings
+  # (scripts/start-playwright-server.cjs). The browser jobs download it and
+  # serve it with PLAYWRIGHT_SKIP_BUILD=1 instead of each building it again.
+  # The visual job builds its own, for the foundation test copy.
+  build-e2e:
+    name: Browser test build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_TEST_MODE: "1"
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
+      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      # Test-serving build only; lint-type-security runs tsc on this commit.
+      VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Build the site for the browser tests
+        run: |
+          node scripts/start-playwright-server.cjs --build-only
+          test -f .next/BUILD_ID
+      # Named per run, not per attempt: re-running only a failed browser job
+      # reuses this build (the build job itself is not re-run).
+      - name: Keep the build for the browser jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-build-${{ github.run_id }}
+          overwrite: true
+          include-hidden-files: true
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            .next
+            !.next/cache
+            public/vendor
 
   e2e-full-matrix:
     runs-on: ubuntu-latest
-    needs:
-      [e2e-smoke, launch-flows-bundle, db-rls, payment-kyc-regressions, audit-tooling-platforms]
+    timeout-minutes: 27
+    needs: [lint-type-security, build-e2e]
     strategy:
       fail-fast: false
       matrix:
@@ -502,6 +503,8 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -511,11 +514,30 @@ jobs:
       - uses: ./.github/actions/install-browsers
         with:
           browsers: ${{ matrix.project == 'firefox' && 'chromium firefox' || 'chromium' }}
+      - name: Use the shared browser test build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-build-${{ github.run_id }}
       # Picture checks (@visual) run only in the visual-regression job's pinned
       # container, where browser and fonts match the approved pictures.
       - run: pnpm exec playwright test --project "$BROWSER_PROJECT" --grep-invert @visual
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_JSON_REPORT: test-results/e2e-full-${{ matrix.project }}.json
+      # Retries (playwright.config.ts) can hide new flakiness: count it.
+      - name: Summarise results, including tests that passed only on retry
+        if: always()
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
+        run: node scripts/e2e-foundation-summary.mjs "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT" "" "Browser tests" | tee -a "$GITHUB_STEP_SUMMARY"
+      # A run that skipped them must not count as KYC proof
+      # (e2e/kyc-authenticated.spec.ts, scripts/lib/kyc-browser-evidence.ts).
+      - name: Prove the signed-in KYC scenarios passed
+        if: matrix.project != 'firefox'
+        env:
+          BROWSER_PROJECT: ${{ matrix.project }}
+        run: pnpm exec tsx scripts/check-kyc-browser-report.ts "test-results/e2e-full-$BROWSER_PROJECT.json" "$BROWSER_PROJECT"
       - name: Upload browser test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -532,28 +554,53 @@ jobs:
   # the pinned Playwright image (same browser build and fonts as when the
   # pictures were made). A required check: a difference from an approved
   # picture fails the workflow, so it also blocks the deploy.
+  # Picture checks of the chosen frontend, served by the live backend's code
+  # (foundation) from the private local test copy, as in workflow "E2E
+  # foundation": a throwaway Supabase stack on the runner's own Docker, built
+  # only from database/foundation/, no secrets, nothing hosted. The stack needs
+  # Docker, so this job runs on the runner, not in a container; the pictures
+  # need the pinned browser build and fonts, so scripts/foundation-visual.mjs
+  # runs Playwright inside the pinned Playwright image (`docker run --network
+  # host`, image pinned by digest in that script) against the website on the
+  # runner's 127.0.0.1. Approved pictures:
+  # e2e/foundation/visual-regression.spec.ts-snapshots/.
   visual-regression:
     name: Visual regression (chosen frontend)
     runs-on: ubuntu-latest
     needs: lint-type-security
+    # Expected about 12-14 minutes (install, stack, build, image, 33 pictures);
+    # locally on 4 cores: fresh stack 0.5-1, build 4.6, pictures about 2.
+    # Step ceilings: stack 5, build 10, image 5, pictures 10.
     timeout-minutes: 40
-    container:
-      image: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f # secret-scan: allow image digest
-      options: --ipc=host
     env:
-      PLAYWRIGHT_TEST_MODE: "1"
-      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
-      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      NODE_OPTIONS: --max-old-space-size=6144
       PLAYWRIGHT_JSON_REPORT: test-results/visual-report.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
       - run: pnpm install --frozen-lockfile
+      # Same reason as in workflow "E2E foundation": the copy's fixed ports must
+      # never be handed out to outgoing connections.
+      - name: Keep the test copy's ports out of the ephemeral range
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55440-55460
+      - name: Start the test copy (local stack, schema proof, test people)
+        timeout-minutes: 5
+        run: node --import tsx scripts/foundation-e2e.mjs up
+      - name: Build the website for the test copy
+        timeout-minutes: 10
+        run: node --import tsx scripts/foundation-e2e.mjs build
+      - name: Fetch the pinned browser image
+        timeout-minutes: 5
+        run: node --import tsx scripts/foundation-visual.mjs pull
       - name: Compare the main screens with the approved pictures
-        run: pnpm exec playwright test e2e/visual-regression.spec.ts --project=chromium --retries=1
+        timeout-minutes: 10
+        run: node --import tsx scripts/foundation-visual.mjs --retries=1
       - name: List the screens that differ
         if: always()
         run: node scripts/visual-diff-summary.mjs test-results/visual-report.json | tee -a "$GITHUB_STEP_SUMMARY"
@@ -563,9 +610,13 @@ jobs:
         with:
           name: visual-regression-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            playwright-report/
+            playwright-report/visual
             test-results/
+            tmp/foundation-e2e/visual-website.log
           if-no-files-found: warn
+      - name: Delete the test copy
+        if: always()
+        run: node --import tsx scripts/foundation-e2e.mjs down
 
   # Decides once whether a staging address exists. The jobs that need one test
   # this output in their job-level `if:`, so without it they show as skipped
@@ -592,10 +643,13 @@ jobs:
 
   perf-baseline:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.staging-config.outputs.configured == 'true'
     needs: [e2e-full-matrix, staging-config]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -613,16 +667,20 @@ jobs:
 
   k6-advisory:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.staging-config.outputs.configured == 'true'
     continue-on-error: true
     needs: [perf-baseline, staging-config]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Run k6 advisory profile
         env:
           STAGING_URL: ${{ secrets.STAGING_APP_URL }}
         run: |
           mkdir -p tmp/k6
+          image=grafana/k6:1.3.0@sha256:3ddc8b1a33a2c3d8edc6e99b6a762ae36cba08788463458f5e6a7703e14eb77d # secret-scan: allow image digest
           echo "Running k6 advisory against ${STAGING_URL}"
           docker run --rm \
             --user "$(id -u):$(id -g)" \
@@ -630,7 +688,7 @@ jobs:
             -e K6_SCENARIOS="smoke,average" \
             -v "$PWD:/workspace" \
             -w /workspace \
-            grafana/k6:latest run --summary-export /workspace/tmp/k6/summary.json scripts/load-test.js
+            "$image" run --summary-export /workspace/tmp/k6/summary.json scripts/load-test.js
       - name: Upload k6 summary
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -639,11 +697,19 @@ jobs:
           path: tmp/k6/**
           if-no-files-found: warn
 
+  # Also runs the advisory Lighthouse audit on the same build (it used to
+  # build the app a second time in its own job).
   bundle-analysis:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: lint-type-security
+    env:
+      # Measurement build only; lint-type-security runs tsc on this commit.
+      VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -656,91 +722,40 @@ jobs:
         run: ANALYZE=true pnpm run build
       - name: Check bundle size budget
         run: pnpm run check:bundle-budget
-
-  lighthouse-advisory:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    needs: build-route-verify
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install chromium
-      - name: Resolve Chromium path for Lighthouse
+      - name: Install Chromium for Lighthouse
+        continue-on-error: true
+        timeout-minutes: 3
         run: |
+          pnpm exec playwright install chromium
           CHROME_PATH=$(node -e 'process.stdout.write(require("playwright").chromium.executablePath())')
           echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
-      - name: Prepare isolated foundation build configuration
-        run: node scripts/prepare-cloudflare-runtime-check.mjs
-      - name: Build Next.js app
-        run: pnpm run build
-      - name: Lighthouse quality audit
+      # Advisory: a step limit and continue-on-error keep it from failing
+      # bundle-analysis (a job-level timeout would ignore continue-on-error).
+      - name: Lighthouse quality audit (advisory)
+        continue-on-error: true
+        timeout-minutes: 5
         run: pnpm run quality:lighthouse
       - name: Upload Lighthouse reports
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lighthouse-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/lighthouse/**
           if-no-files-found: warn
 
-  # Writes the plan of the safety gate (which checks would run) as an artifact.
-  # It executes none of them, so its green tick proves nothing about the code.
-  safety-gate-snapshot:
-    name: "safety-gate-snapshot: plan only (runs no checks)"
-    runs-on: ubuntu-latest
-    needs: lint-type-security
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - name: List the planned safety-gate checks (dry run; runs none)
-        run: pnpm run safety:ci-review -- --dry-run
-      - name: Upload safety gate artifacts
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: safety-gate-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
-          path: tmp/safety-gate/**
-          if-no-files-found: error
-
-  payment-kyc-regressions:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm safety:ci-review -- --checks=payment-unit,kyc-unit,db-payments,db-kyc,db-business-evidence
-      - if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: payment-kyc-audit
-          path: tmp/safety-gate/**
-
   audit-tooling-platforms:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: "pnpm"

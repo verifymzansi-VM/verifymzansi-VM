@@ -67,15 +67,12 @@ test("the committed ruleset only requires checks that run on pull requests to ma
     "knip",
     "Duplication budget",
     "unit-api-contract",
-    "payment-kyc-regressions",
     "audit-tooling-platforms (ubuntu-latest)",
     "audit-tooling-platforms (windows-latest)",
     "build-route-verify",
-    "db-rls",
-    "e2e-smoke (chromium)",
-    "e2e-smoke (mobile-chrome)",
-    "launch-flows-bundle",
     "Visual regression (chosen frontend)",
+    "Workflow lint (actionlint)",
+    "Browser test build",
     "foundation-native",
   ]) {
     assert.ok(requiredContexts(ruleset).includes(name), `${name} must be required`);

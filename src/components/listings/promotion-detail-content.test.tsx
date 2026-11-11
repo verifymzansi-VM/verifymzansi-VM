@@ -192,7 +192,7 @@ describe("PromotionDetailContent", () => {
   it("shows the verified position and business stickers on the linked business", () => {
     const futureStart = "2099-03-10T00:00:00.000Z";
     const futureEnd = "2099-03-12T00:00:00.000Z";
-    const { container } = render(
+    render(
       <PromotionDetailContent
         promotion={{
           id: "promotion-1",
@@ -247,7 +247,6 @@ describe("PromotionDetailContent", () => {
       />
     );
 
-    expect(container).toBeTruthy();
     expect(screen.getAllByText("Director").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/confirmed on CIPC records/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/CIPC registered · checked/).length).toBeGreaterThan(0);
