@@ -8,7 +8,7 @@ import { LEGACY_BACKEND_SUITES } from "@/test/legacy-backend-suites";
  * number) once its code runs on foundation or is deleted. Raising it needs a
  * reviewed reason; new tests run on foundation by default.
  */
-const LEGACY_BACKEND_SUITE_LIMIT = 146;
+const LEGACY_BACKEND_SUITE_LIMIT = 140;
 
 describe("unit tests run on the foundation backend by default", () => {
   it("gives every test file outside the legacy list the foundation backend", () => {
