@@ -171,7 +171,7 @@ export const CHECKS: Check[] = [
   check(
     "browser",
     ["test:browser:isolated"],
-    "critical smoke, billing, KYC, DSAR flows; isolated build and bundle budget",
+    "critical smoke, add-on checkout and DSAR flows on the stub suite; isolated build and bundle budget (billing and KYC journeys run in e2e-foundation, part of the main release gate)",
     ["release", "payments", "kyc"],
     {
       dependencies: ["Playwright Chromium"],

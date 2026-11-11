@@ -453,7 +453,8 @@ pnpm test:launch:flows
 
 That bundle runs the billing payment route/library/worker tests, OTP route and
 verification page tests, DSAR submit/admin/page tests, then finishes with
-Chromium Playwright smoke for the billing round-trip and DSAR browser flow.
+Chromium Playwright check of the DSAR browser flow (the billing round trip runs
+in the foundation browser suite, `e2e/foundation/checkout-*.spec.ts`).
 
 For automated safety gates, use:
 

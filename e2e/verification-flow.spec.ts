@@ -1,0 +1,212 @@
+import { test, expect, type Page } from "@playwright/test";
+import path from "node:path";
+
+/**
+ * Authenticated end-to-end walkthrough of the account verification wizard:
+ * phone OTP → ID details + camera capture → selfie camera capture →
+ * province and city confirmation → submission complete.
+ *
+ * Runs only on Chromium with a fake camera device. Uses the Playwright stub
+ * server (auth, database, storage, SMS all stubbed) plus the test-only
+ * /api/e2e/verification fixture route to reset state and seed a known OTP.
+ */
+
+const PERSONA = "verify-flow";
+const KNOWN_OTP = "123456";
+const TEST_PHONE = "0712345678";
+const VALID_SA_ID = "8001015009087"; // Luhn-valid, DOB 1980-01-01
+const SCREENSHOT_DIR = path.join("test-results", "verification-flow");
+
+async function shot(page: Page, name: string) {
+  await page.screenshot({
+    path: path.join(SCREENSHOT_DIR, `${name}.png`),
+    fullPage: !name.includes("selfie-fullscreen") && !name.includes("selfie-landscape"),
+  });
+}
+
+async function expectUncroppedSelfie(page: Page) {
+  const guide = page.getByTestId("selfie-face-guide");
+  await expect(guide).toBeVisible();
+  const camera = await page.locator("video").evaluate((video: HTMLVideoElement) => {
+    const rect = video.getBoundingClientRect();
+    const scale = Math.min(rect.width / video.videoWidth, rect.height / video.videoHeight);
+    return {
+      fit: getComputedStyle(video).objectFit,
+      width: video.videoWidth * scale,
+      height: video.videoHeight * scale,
+      x: rect.x,
+      y: rect.y,
+      viewportWidth: rect.width,
+      viewportHeight: rect.height,
+    };
+  });
+  expect(camera.fit).toBe("contain");
+  const bounds = (await guide.boundingBox())!;
+  expect(bounds.width).toBeCloseTo(camera.width, 0);
+  expect(bounds.height).toBeCloseTo(camera.height, 0);
+  expect(bounds.x).toBeCloseTo(camera.x + (camera.viewportWidth - camera.width) / 2, 0);
+  expect(bounds.y).toBeCloseTo(camera.y + (camera.viewportHeight - camera.height) / 2, 0);
+}
+
+test.use({
+  launchOptions: {
+    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+  },
+  permissions: ["camera"],
+});
+
+test.describe("Verification wizard (authenticated)", () => {
+  test.skip(({ browserName }) => browserName !== "chromium", "Fake camera requires Chromium");
+
+  test("full flow: OTP → ID camera → selfie camera → province and city → submitted", async ({
+    page,
+  }) => {
+    // ── Arrange: authenticated persona with a clean, unverified profile ──
+    await page.goto(`/api/e2e/auth/session?persona=${PERSONA}&reset=1`, {
+      waitUntil: "networkidle",
+    });
+    const resetRes = await page.request.post("/api/e2e/verification", {
+      data: { action: "reset", persona: PERSONA },
+    });
+    expect(resetRes.ok()).toBeTruthy();
+
+    // ── Step 1: Phone + OTP ─────────────────────────────────────────────
+    await page.goto("/verification");
+    await expect(page.getByRole("heading", { name: /step 1: phone \+ otp/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.locator("#phone").fill(TEST_PHONE);
+    await page.getByRole("button", { name: /send code/i }).click();
+    await expect(page.locator("#otp")).toBeVisible({ timeout: 15_000 });
+
+    // Replace the server-generated challenge with a known OTP.
+    const seedRes = await page.request.post("/api/e2e/verification", {
+      data: { action: "seed_otp", persona: PERSONA, phone: TEST_PHONE, otp: KNOWN_OTP },
+    });
+    expect(seedRes.ok()).toBeTruthy();
+
+    await page.locator("#otp").fill(KNOWN_OTP);
+    await page.getByRole("button", { name: /verify code/i }).click();
+
+    // ── Step 2: ID details + camera capture ─────────────────────────────
+    await expect(page.getByRole("heading", { name: /step 2: id details/i })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    await page.locator("#firstName").fill("Test");
+    await page.locator("#lastName").fill("Member");
+    await page.locator("#idNumber").fill(VALID_SA_ID);
+    await expect(page.getByText(/id number valid/i)).toBeVisible();
+    await shot(page, "step2-id-details");
+
+    await page.getByRole("button", { name: /open camera/i }).click();
+    const video = page.locator("video");
+    await expect(video).toBeVisible({ timeout: 20_000 });
+
+    // The camera frame must be scrolled into view and the capture control
+    // focused — the user should never have to scroll to find the frame.
+    // The scroll is smooth (animated), so let it settle before measuring.
+    await page.waitForTimeout(800);
+    const frameCheck = await video.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const viewportH = window.innerHeight || document.documentElement.clientHeight;
+      const visiblePx = Math.min(rect.bottom, viewportH) - Math.max(rect.top, 0);
+      const active = document.activeElement;
+      return {
+        visibleRatio: rect.height > 0 ? visiblePx / rect.height : 0,
+        takePhotoFocused:
+          active instanceof HTMLButtonElement && /take photo/i.test(active.textContent ?? ""),
+      };
+    });
+    expect(
+      frameCheck.visibleRatio,
+      "camera frame should be (nearly) fully in the viewport"
+    ).toBeGreaterThan(0.9);
+    expect(frameCheck.takePhotoFocused, "Take Photo button should receive focus").toBe(true);
+    await shot(page, "step2-camera-streaming");
+
+    await page.getByRole("button", { name: /take photo/i }).click();
+    await expect(page.getByRole("button", { name: /retake/i })).toBeVisible();
+    await shot(page, "step2-id-captured");
+
+    await page.getByRole("button", { name: /^continue$/i }).click();
+
+    // ── Step 3: Selfie camera capture ───────────────────────────────────
+    await expect(page.getByRole("heading", { name: /step 3: selfie/i })).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // A fake camera cannot complete human movements. Exercise the explicit
+    // unsupported-device path by blocking the self-hosted MediaPipe runtime.
+    await page.route("**/vendor/mediapipe/**", (route) => route.abort());
+    await page.getByRole("button", { name: /open camera/i }).click();
+    await expect(page.locator("video")).toBeVisible({ timeout: 20_000 });
+    const selfieDialog = page.getByRole("dialog", { name: "Selfie verification" });
+    await expect(selfieDialog).toBeVisible();
+    const bounds = await selfieDialog.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(bounds?.x).toBe(0);
+    expect(bounds?.y).toBe(0);
+    expect(bounds?.width).toBe(viewport.width);
+    expect(bounds?.height).toBe(viewport.height);
+    expect(
+      await selfieDialog.evaluate((el) => el.contains(document.elementFromPoint(24, 24)))
+    ).toBe(true);
+    await expectUncroppedSelfie(page);
+    await shot(page, "step3-selfie-fullscreen");
+    await page.setViewportSize({ width: 844, height: 390 });
+    const landscapeVideo = await page.locator("video").boundingBox();
+    expect(landscapeVideo!.height).toBeGreaterThan(100);
+    expect(landscapeVideo!.y + landscapeVideo!.height).toBeLessThanOrEqual(390);
+    await expectUncroppedSelfie(page);
+    await expect(page.getByRole("button", { name: "Close camera" })).toBeInViewport();
+    await shot(page, "step3-selfie-landscape");
+    await page.setViewportSize(viewport);
+    await page.getByRole("button", { name: "Close camera" }).click();
+    await expect(selfieDialog).not.toBeVisible();
+    await page.getByRole("button", { name: /open camera/i }).click();
+    await expect(page.locator("video")).toBeVisible();
+    await expect(page.getByRole("button", { name: /complete liveness check/i })).toBeDisabled();
+    await page.getByRole("button", { name: /use manual review/i }).click();
+    await page.getByRole("button", { name: /take photo/i }).click();
+    await expect(page.getByRole("button", { name: /retake/i })).toBeVisible();
+    await expect(selfieDialog).not.toBeVisible();
+    await expect(page.getByRole("img", { name: "Captured photo" })).toBeVisible();
+    await shot(page, "step3-selfie-captured");
+
+    await page.getByRole("button", { name: /^continue$/i }).click();
+
+    // ── Step 4: Province and city ─────────────────────────────
+    await expect(
+      page.getByRole("heading", { name: /step 4: confirm your province and city/i })
+    ).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await page.locator("#province").selectOption("Gauteng");
+    await page.locator("#city").selectOption("Johannesburg");
+
+    await page.getByRole("button", { name: /detect province and city/i }).click();
+    await expect(
+      page.getByText(/could not detect|detection is unavailable|location suggested/i)
+    ).toBeVisible();
+    await expect(page.locator("#province")).toHaveValue("Gauteng");
+    await expect(page.locator("#city")).toHaveValue("Johannesburg");
+    await expect(page.locator("#town")).toHaveCount(0);
+    await shot(page, "step4-province-city");
+    await page.getByRole("button", { name: /save location & finish/i }).click();
+
+    // ── Done ────────────────────────────────────────────────────────────
+    // Both the page header (h1) and the completion card (h2) use this title.
+    await expect(
+      page.getByRole("heading", { name: /Verification submitted/i, level: 2 })
+    ).toBeVisible({ timeout: 30_000 });
+
+    // The admin-review state must be announced exactly once — the duplicate
+    // amber banner was removed in favour of the single gold banner.
+    await expect(page.getByText("Verification pending admin review.")).toHaveCount(0);
+    await expect(page.getByText(/your identity documents are in admin review/i)).toHaveCount(1);
+    await shot(page, "step5-submitted");
+  });
+});
