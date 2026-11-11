@@ -130,7 +130,7 @@ it("resolves a prior completion without another object write or identity registr
 });
 it("uses native pair fraud assessment for selfie and never trusts the liveness hint", async () => {
   selfie = true;
-  const res = await POST(request({ livenessPassed: "true" }));
+  const res = await POST(request({ captureMethod: "camera", livenessPassed: "true" }));
   expect(res.status).toBe(200);
   expect(serviceRpc).toHaveBeenCalledWith("assess_identity_upload", {
     p_owner: owner,
@@ -141,6 +141,61 @@ it("uses native pair fraud assessment for selfie and never trusts the liveness h
   expect(
     serviceRpc.mock.calls.find((c) => c[0] === "complete_frontend_verification_upload")![1]
   ).toMatchObject({ p_risk_score: 10 });
+});
+it("records how the browser says the selfie was taken, for staff review only", async () => {
+  selfie = true;
+  const completion = () =>
+    serviceRpc.mock.calls
+      .filter((c) => c[0] === "complete_frontend_verification_upload")
+      .at(-1)![1];
+  const cases: [Record<string, string>, Record<string, unknown>][] = [
+    [
+      { captureMethod: "camera", livenessPassed: "true" },
+      { p_capture_method: "camera", p_browser_liveness_passed: true },
+    ],
+    [{ captureMethod: "camera" }, { p_capture_method: "camera", p_browser_liveness_passed: false }],
+    [
+      { captureMethod: "camera", livenessPassed: "false" },
+      { p_capture_method: "camera", p_browser_liveness_passed: false },
+    ],
+    [
+      { captureMethod: "file_upload" },
+      { p_capture_method: "file_upload", p_browser_liveness_passed: false },
+    ],
+  ];
+  for (const [fields, expected] of cases) {
+    expect((await POST(request(fields))).status).toBe(200);
+    // The risk score still comes from the server's own assessment.
+    expect(completion()).toMatchObject({ ...expected, p_risk_score: 10 });
+  }
+  // Nothing reported: nothing recorded (the viewer says "Liveness unknown").
+  expect((await POST(request())).status).toBe(200);
+  expect(completion()).not.toHaveProperty("p_capture_method");
+  expect(completion()).not.toHaveProperty("p_browser_liveness_passed");
+});
+it("rejects a capture report outside the closed set before reserving or storing evidence", async () => {
+  selfie = true;
+  const refused: Record<string, string>[] = [
+    { captureMethod: "screen" },
+    { captureMethod: "file_upload", livenessPassed: "true" },
+    { captureMethod: "camera", livenessPassed: "yes" },
+    { livenessPassed: "true" },
+  ];
+  for (const fields of refused) {
+    const res = await POST(request(fields));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Retake your selfie and try again" });
+  }
+  expect(rpc).not.toHaveBeenCalled();
+  expect(putImmutableR2Bytes).not.toHaveBeenCalled();
+});
+it("never sends a capture report with the ID document", async () => {
+  expect((await POST(request({ captureMethod: "file_upload" }))).status).toBe(200);
+  const completedArgs = serviceRpc.mock.calls.find(
+    (c) => c[0] === "complete_frontend_verification_upload"
+  )![1];
+  expect(completedArgs).not.toHaveProperty("p_capture_method");
+  expect(completedArgs).not.toHaveProperty("p_browser_liveness_passed");
 });
 it("rejects cross-origin writes and forged owner fields before reserving or storing evidence", async () => {
   expect((await POST(request({}, "https://untrusted.example"))).status).toBe(403);

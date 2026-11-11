@@ -18,6 +18,7 @@ import {
   calculateAgeFromDob,
 } from "../utils/sa-id-validation";
 import { normalizePersonName, isPersonName } from "./person-name";
+import { readSelfieCaptureReport } from "./selfie-capture";
 import { encryptData, decryptData } from "../utils/encryption";
 import { putImmutableR2Bytes } from "../services/storage";
 import { enforceMutationRequest } from "../utils/mutation-guard";
@@ -144,6 +145,12 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       });
     } else if (["idNumber", "firstName", "lastName", "idDocumentType"].some((key) => form.has(key)))
       return reply(400, "Choose a selfie without identity fields");
+    // How the browser says the selfie was taken: stored for staff as review
+    // context only (never authority), so it is checked against a closed set.
+    const capture = selfie
+      ? readSelfieCaptureReport(form.get("captureMethod"), form.get("livenessPassed"))
+      : null;
+    if (capture === "invalid") return reply(400, "Retake your selfie and try again");
     const bytes = await cleanEvidence(file, selfie);
     // The digest binds every authoritative field and the original file, including
     // metadata stripped during normalization. It is not an identity fingerprint.
@@ -231,6 +238,12 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
             }
           : {}),
         ...(score !== undefined ? { p_risk_score: score } : {}),
+        ...(capture
+          ? {
+              p_capture_method: capture.captureMethod,
+              p_browser_liveness_passed: capture.browserLivenessPassed,
+            }
+          : {}),
       });
       if (finished.error) rpcFailure(finished.error);
       const saved = doneSchema.parse(finished.data);

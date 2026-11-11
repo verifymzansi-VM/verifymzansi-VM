@@ -6,6 +6,7 @@ import {
   type Browser,
   type BrowserContext,
   type Page,
+  type Request,
 } from "@playwright/test";
 import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
@@ -40,7 +41,9 @@ import {
 //     yet, a code older than 12 hours, and a code older than 15 minutes for a
 //     sensitive action), in the database and on the staff pages;
 //   - an admin sends one member's ID back with a reason and accepts the other
-//     member's ID and selfie in the identity review;
+//     member's ID and selfie in the identity review; the identity viewer warns
+//     "Uploaded file" for the selfie sent as a file and not for the one sent
+//     as a camera capture (see asCameraSelfie);
 //   - a moderator approves a post in the moderation queue;
 //   - a report filed by the moderator can never be worked by the moderator
 //     (staff cannot review themselves), and an admin decides it;
@@ -99,8 +102,9 @@ test.describe.configure({ mode: "serial" });
 type Reply = { method: string; path: string; status: number; body: unknown };
 
 /** Lets only the copy's website and its gateway through and records the
- * website's API replies (POST, PATCH, DELETE). */
-async function guard(context: BrowserContext) {
+ * website's API replies (POST, PATCH, DELETE). `rewrite` may replace the body
+ * of such a request before it is sent (see asCameraSelfie). */
+async function guard(context: BrowserContext, rewrite?: (request: Request) => Buffer | undefined) {
   const outside: string[] = [];
   const failures: string[] = [];
   const replies: Reply[] = [];
@@ -122,7 +126,8 @@ async function guard(context: BrowserContext) {
     let response;
     let bytes: Buffer;
     try {
-      response = await route.fetch({ maxRedirects: 0 });
+      const postData = rewrite?.(request);
+      response = await route.fetch({ maxRedirects: 0, ...(postData ? { postData } : {}) });
       bytes = await response.body();
     } catch (error) {
       // The test already ended (its page closed mid-request); nothing to record.
@@ -178,6 +183,35 @@ async function withoutCamera(context: BrowserContext) {
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
   });
+}
+
+/** The selfie upload as the live camera step sends it. The test browser has no
+ * camera (and a face check would need a face), so for one member the selfie
+ * request's two capture fields are changed from what the upload fallback sends
+ * (captureMethod "file_upload") to what a camera capture with a completed
+ * liveness challenge sends (captureMethod "camera", livenessPassed "true").
+ * Nothing else in the request changes; other requests pass unchanged. */
+function asCameraSelfie(request: Request): Buffer | undefined {
+  if (new URL(request.url()).pathname !== "/api/verification/upload") return undefined;
+  const boundary = /boundary=([^;]+)/.exec(request.headers()["content-type"] ?? "")?.[1];
+  const body = request.postDataBuffer();
+  if (!boundary || !body) throw new Error("the upload is not a multipart form");
+  // latin1 keeps the photo's bytes as they are.
+  const form = body.toString("latin1");
+  if (!form.includes('name="docType"\r\n\r\nselfie\r\n')) return undefined;
+  const fallback = 'name="captureMethod"\r\n\r\nfile_upload\r\n';
+  const end = `--${boundary}--`;
+  if (!form.includes(fallback) || form.includes('name="livenessPassed"') || !form.includes(end))
+    throw new Error("the selfie form is not the upload fallback's");
+  return Buffer.from(
+    form
+      .replace(fallback, 'name="captureMethod"\r\n\r\ncamera\r\n')
+      .replace(
+        end,
+        `--${boundary}\r\nContent-Disposition: form-data; name="livenessPassed"\r\n\r\ntrue\r\n${end}`
+      ),
+    "latin1"
+  );
 }
 
 /** A synthetic photo: random noise over a flat colour, never a face or a
@@ -442,7 +476,12 @@ test.describe("staff review with an authenticator", () => {
       const context = await browser.newContext({ serviceWorkers: "block" });
       try {
         await withoutCamera(context);
-        const { outside, failures, reply } = await guard(context);
+        // One member's selfie arrives as a camera capture, the other's as an
+        // uploaded file (the staff viewer tells them apart later).
+        const { outside, failures, reply } = await guard(
+          context,
+          member === returned ? asCameraSelfie : undefined
+        );
         await signInBrowser(context, member);
         const page = await context.newPage();
         await page.goto("/verification");
@@ -489,6 +528,15 @@ test.describe("staff review with an authenticator", () => {
               `where owner_id = '${member.id}';`
           )
         ).toBe("1");
+        // How the browser said the selfie was taken is stored with the case.
+        expect(
+          queryTestCopy(
+            "select u.capture_method || ':' || u.browser_liveness_passed::text " +
+              "from private.frontend_verification_uploads u " +
+              "join private.verification_current_submissions v on v.submission_id = u.submission_id " +
+              `where u.owner_id = '${member.id}' and u.purpose = 'selfie' and v.case_id = u.case_id;`
+          )
+        ).toBe(member === returned ? "camera:true" : "file_upload:false");
         expect(failures).toEqual([]);
         expect(outside).toEqual([]);
       } finally {
@@ -511,6 +559,17 @@ test.describe("staff review with an authenticator", () => {
     );
     const card = identityCard(page, returned);
     await expect(card).toHaveCount(1);
+    // This member's selfie came from the camera step with a completed liveness
+    // challenge: the viewer says so (as browser-reported context) and shows no
+    // "Uploaded file" warning.
+    await card.getByRole("button", { name: "Review", exact: true }).first().click();
+    const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
+    await expect(viewer.getByText("Selfie: Browser liveness check completed")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(viewer.getByText("Selfie: Uploaded file")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(viewer).toBeHidden();
     // The first step is the ID photo.
     await card.getByRole("button", { name: "Resubmit" }).first().click();
     const dialog = page.getByRole("dialog", { name: "Request Resubmission" });
@@ -561,6 +620,8 @@ test.describe("staff review with an authenticator", () => {
       await card.getByRole("button", { name: "Review", exact: true }).first().click();
       const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
       await expect(viewer).toBeVisible();
+      // This member's selfie was an uploaded file: the viewer warns about it.
+      await expect(viewer.getByText("Selfie: Uploaded file")).toBeVisible({ timeout: 20_000 });
       for (const check of REVIEW_CHECKS) await viewer.getByLabel(check).check();
       const approve = viewer.getByRole("button", { name: `Approve ${step}` });
       await expect(approve).toBeEnabled({ timeout: 20_000 });

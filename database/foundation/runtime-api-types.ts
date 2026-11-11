@@ -367,6 +367,10 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_owner?: string; p_artifact?: string };
         Returns: Json;
       };
+      get_frontend_staff_selfie_capture: {
+        Args: { p_case_id: string; p_claim_generation: string; p_claim_nonce: string };
+        Returns: Json;
+      };
       approve_frontend_identity_step: {
         Args: {
           p_case: string;
@@ -574,6 +578,8 @@ export type FoundationRuntimeServiceDatabase = {
           p_size: number;
           p_identity?: Json;
           p_risk_score?: number;
+          p_capture_method?: string;
+          p_browser_liveness_passed?: boolean;
         };
         Returns: Json;
       };

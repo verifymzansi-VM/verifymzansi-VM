@@ -2694,6 +2694,35 @@
       "authority": "Current independently claimed evidence reviewer; native case/version/lease checks and audited metadata/context reads. Private identity reference stays within the authorized review response."
     },
     {
+      "name": "get_frontend_staff_selfie_capture",
+      "updates": ["updates/20261111184619_selfie_capture_method.sql"],
+      "arguments": [
+        {
+          "name": "p_case_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_claim_generation",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_claim_nonce",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current live evidence claim holder with evidence:view on an open identity case that is not their own; returns only the current submission ids and the browser-reported selfie capture method and liveness answer (review context, not proof)"
+    },
+    {
       "name": "get_frontend_staff_claims",
       "updates": ["updates/20261104155022_restored_staff_claim_controls.sql"],
       "arguments": [
@@ -3259,7 +3288,10 @@
     },
     {
       "name": "complete_frontend_verification_upload",
-      "updates": ["updates/20261104000046_restored_verification_transport.sql"],
+      "updates": [
+        "updates/20261104000046_restored_verification_transport.sql",
+        "updates/20261111184619_selfie_capture_method.sql"
+      ],
       "arguments": [
         {
           "name": "p_owner",
@@ -3295,6 +3327,16 @@
           "name": "p_risk_score",
           "sqlType": "integer",
           "optional": true
+        },
+        {
+          "name": "p_capture_method",
+          "sqlType": "text",
+          "optional": true
+        },
+        {
+          "name": "p_browser_liveness_passed",
+          "sqlType": "boolean",
+          "optional": true
         }
       ],
       "returns": "jsonb",
@@ -3304,7 +3346,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Trusted scanner and encrypted object writer only; same bound receipt/session/revision checked atomically with native evidence completion and identity pair registration"
+      "authority": "Trusted scanner and encrypted object writer only; same bound receipt/session/revision checked atomically with native evidence completion and identity pair registration; optional browser-reported selfie capture method and liveness answer, validated to a closed set and stored as review context only"
     },
     {
       "name": "get_my_dashboard",

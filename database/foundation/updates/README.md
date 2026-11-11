@@ -77,6 +77,66 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## Staff see how each selfie was taken, 11 November 2026
+
+`20261111184619_selfie_capture_method.sql` is not applied yet. It needs no
+earlier pending update.
+
+The verification page sends, with the selfie, how the member's browser says it
+was taken (`camera` for the live camera step, `file_upload` for the "Or upload a
+photo" fallback) and whether the browser's liveness challenge was completed.
+Until now the website dropped both, so the staff identity viewer never showed
+its "Uploaded file" warning. From this update:
+
+- **Stored with the selfie's upload receipt.**
+  `private.frontend_verification_uploads` gains `capture_method` and
+  `browser_liveness_passed`, both nullable. They are what the browser reported,
+  not a proof: the website checks them against a closed set and nothing grants,
+  approves or scores anything from them. Constraints keep them consistent (both
+  set or both empty, only on a selfie, a passed liveness challenge only with the
+  camera). Receipts recorded before the update stay empty ("not recorded"). The
+  values are removed with the receipt, which follows the evidence retention.
+- **Completion.** `api.complete_frontend_verification_upload` (service role
+  only) gains two optional arguments, `p_capture_method` and
+  `p_browser_liveness_passed`, validated and stored in the statement that
+  completes the selfie. The seven-argument function is dropped and recreated
+  with them in the same transaction, so one function answers both forms of the
+  call; its grants are unchanged. A caller that leaves them out stores nothing.
+- **Staff read.** New
+  `api.get_frontend_staff_selfie_capture(case, claim generation, claim nonce)`
+  returns, to staff with `evidence:view` holding a live claim on an open
+  identity case that is not their own, the current submission, its selfie and
+  the recorded answers. It opens no evidence and writes no access log row; the
+  evidence metadata read that the viewer makes first records the access. The
+  website turns the answers into the viewer's existing signals: "Uploaded file",
+  "Liveness not verified", or "Browser liveness check completed" (labelled as
+  not an attestation).
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls the new staff read and passes the new arguments, and the deploy
+preflight probes every command in `../runtime-api-manifest.json`, so a deploy
+without the update stops there. The website deployed before it keeps working
+with the update applied: it calls the completion without the new arguments and
+never calls the new read.
+
+**Applying.**
+
+1. Run `../preflight/20261111184619_selfie_capture_method.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed bodies, update not applied".
+2. Run the update, then the preflight again: it must now read "already applied".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261111184619_selfie_capture_method.down.sql` (only with the
+owner's decision; prefer a forward fix). Revert the website release first: the
+rollback removes the new staff read and the two arguments the release uses. It
+restores the seven-argument completion byte for byte and drops the two columns
+with the answers recorded so far.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -1492,5 +1552,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   every count 0, after "already applied, trials to restart: 0", production
   fingerprint then matched the replay (section The free week starts at the first
   approved post)
+- `20261111184619_selfie_capture_method.sql`: pending
 
 <!-- applied-register:end -->
