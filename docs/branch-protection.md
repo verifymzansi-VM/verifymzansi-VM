@@ -65,6 +65,8 @@ such a check would block every pull request.
     size and routes (including the payment and KYC callbacks, verification start
     and pricing in the route manifest), and keeps the runtime proof (artifact
     `foundation-worker-runtime`). `bundle-analysis`.
+  - `Browser test build` (job `build-e2e`): builds the site once with the fixed
+    browser-test settings; `e2e-full-matrix` serves that build.
   - `e2e-full-matrix` (chromium, firefox, mobile-chrome): every browser test
     except the pictures, including the `@smoke` subset. On chromium and
     mobile-chrome it also proves the signed-in KYC scenarios passed. (The
@@ -90,21 +92,22 @@ cancelled, so every release commit gets a complete result. Every job has a time
 limit of about one and a half times its usual longest run.
 
 Every CI job that runs on a pull request is required, except
-`lighthouse-advisory` and `Workflow security audit (zizmor, advisory)`
-(advisory, `continue-on-error`). `Workflow lint (actionlint)` is added to the
-required checks once it has run on `main`. This keeps `main` deployable: the
-deploy needs the whole CI run on `main` to succeed. `perf-baseline` and
-`k6-advisory` run only after a push to `main` and cannot be required on pull
-requests; when no staging address (`STAGING_APP_URL`) is configured they show as
-skipped, not as a success (`Staging address configured` decides this in a
-job-level condition). Later slices add their jobs here and to the ruleset file
-(foundation browser tests, frontend ledger). `e2e-foundation` (workflow "E2E
-foundation") runs on every pull request and every push to `main` but stays
-optional until it has passed on 10 consecutive `main` runs. Its `main` runs,
-like those of `foundation-native`, are separate workflow runs outside the deploy
-gate; a failed `main` or scheduled run of any workflow opens or updates one
-GitHub issue (workflow "Failure alert"). When it becomes required, list only the
-aggregate check `e2e-foundation`: it passes only when both per-project jobs,
+`Workflow security audit (zizmor, advisory)` (advisory, `continue-on-error`).
+The Lighthouse audit is an advisory step inside `bundle-analysis`.
+`Workflow lint (actionlint)` and `Browser test build` are added to the required
+checks once they have run on `main`. This keeps `main` deployable: the deploy
+needs the whole CI run on `main` to succeed. `perf-baseline` and `k6-advisory`
+run only after a push to `main` and cannot be required on pull requests; when no
+staging address (`STAGING_APP_URL`) is configured they show as skipped, not as a
+success (`Staging address configured` decides this in a job-level condition).
+Later slices add their jobs here and to the ruleset file (foundation browser
+tests, frontend ledger). `e2e-foundation` (workflow "E2E foundation") runs on
+every pull request and every push to `main` but stays optional until it has
+passed on 10 consecutive `main` runs. Its `main` runs, like those of
+`foundation-native`, are separate workflow runs outside the deploy gate; a
+failed `main` or scheduled run of any workflow opens or updates one GitHub issue
+(workflow "Failure alert"). When it becomes required, list only the aggregate
+check `e2e-foundation`: it passes only when both per-project jobs,
 `e2e-foundation (chromium)` and `e2e-foundation (mobile-chrome)`, passed.
 
 ## How the owner applies it
@@ -126,6 +129,17 @@ itself once every required check is green.
 
 **Rollback:** Settings → Rules → Rulesets → "Protect main" → set enforcement to
 "Disabled" (or re-apply the two original rules). No code changes.
+
+## Next's built-in type check
+
+`next build` checks TypeScript unless `typescript.ignoreBuildErrors` is set.
+Only two CI builds skip it, by setting `VERIFYMZANSI_SKIP_NEXT_TYPECHECK=1`:
+`Browser test build` and `bundle-analysis`, which serve tests or measure the
+bundle. `lint-type-security` runs the full typecheck on the same commit, and
+`build-route-verify`, the Cloudflare candidate and the deploy always run Next's
+check: `build:cloudflare` refuses to start when the variable is set
+(`scripts/lib/next-typecheck-skip.cjs`, tested by
+`scripts/next-typecheck-skip.test.mjs`).
 
 ## Coverage thresholds
 

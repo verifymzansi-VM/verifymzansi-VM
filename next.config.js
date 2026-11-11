@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require("@sentry/nextjs/config");
+const { shouldSkipNextTypecheck } = require("./scripts/lib/next-typecheck-skip.cjs");
 const dataBackend = process.env.NEXT_PUBLIC_DATA_BACKEND || "foundation";
 if (!["source", "foundation"].includes(dataBackend))
   throw new Error("Invalid NEXT_PUBLIC_DATA_BACKEND");
@@ -80,6 +81,10 @@ const sharpServerExternalPackages = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Browser-test and bundle-measurement builds in CI may skip Next's own
+  // TypeScript pass (lint-type-security already runs tsc on the same commit).
+  // Never production builds: see scripts/lib/next-typecheck-skip.cjs.
+  typescript: { ignoreBuildErrors: shouldSkipNextTypecheck(process.env) },
   webpack(config) {
     // A patched dependency retains its npm version. Invalidate persistent
     // compiler output when this runtime compatibility patch changes.

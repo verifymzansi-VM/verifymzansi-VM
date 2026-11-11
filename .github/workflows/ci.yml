@@ -437,10 +437,51 @@ jobs:
             tmp/cloudflare-runtime/latest.json
             .open-next/build-fingerprint.json
 
+  # Builds the site once, at minute 0, with the fixed browser-test settings
+  # (scripts/start-playwright-server.cjs). The browser jobs download it and
+  # serve it with PLAYWRIGHT_SKIP_BUILD=1 instead of each building it again.
+  # The visual job still builds its own (its container differs).
+  build-e2e:
+    name: Browser test build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_TEST_MODE: "1"
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: "dummy_site_key"
+      TURNSTILE_SECRET_KEY: "dummy_secret_key" # secret-scan: allow
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+      # Test-serving build only; lint-type-security runs tsc on this commit.
+      VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Build the site for the browser tests
+        run: node scripts/start-playwright-server.cjs --build-only
+      - name: Keep the build for the browser jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-build-${{ github.run_id }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            .next
+            !.next/cache
+            public/vendor
+
   e2e-full-matrix:
     runs-on: ubuntu-latest
     timeout-minutes: 27
-    needs: lint-type-security
+    needs: [lint-type-security, build-e2e]
     strategy:
       fail-fast: false
       matrix:
@@ -468,11 +509,16 @@ jobs:
       - uses: ./.github/actions/install-browsers
         with:
           browsers: ${{ matrix.project == 'firefox' && 'chromium firefox' || 'chromium' }}
+      - name: Use the shared browser test build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-build-${{ github.run_id }}-${{ github.run_attempt }}
       # Picture checks (@visual) run only in the visual-regression job's pinned
       # container, where browser and fonts match the approved pictures.
       - run: pnpm exec playwright test --project "$BROWSER_PROJECT" --grep-invert @visual
         env:
           BROWSER_PROJECT: ${{ matrix.project }}
+          PLAYWRIGHT_SKIP_BUILD: "1"
           PLAYWRIGHT_JSON_REPORT: test-results/e2e-full-${{ matrix.project }}.json
       # Retries (playwright.config.ts) can hide new flakiness: count it.
       - name: Summarise results, including tests that passed only on retry
@@ -619,10 +665,15 @@ jobs:
           path: tmp/k6/**
           if-no-files-found: warn
 
+  # Also runs the advisory Lighthouse audit on the same build (it used to
+  # build the app a second time in its own job).
   bundle-analysis:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 15
     needs: lint-type-security
+    env:
+      # Measurement build only; lint-type-security runs tsc on this commit.
+      VERIFYMZANSI_SKIP_NEXT_TYPECHECK: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -639,32 +690,14 @@ jobs:
         run: ANALYZE=true pnpm run build
       - name: Check bundle size budget
         run: pnpm run check:bundle-budget
-
-  lighthouse-advisory:
-    runs-on: ubuntu-latest
-    timeout-minutes: 9
-    continue-on-error: true
-    needs: build-route-verify
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install chromium
-      - name: Resolve Chromium path for Lighthouse
+      - name: Install Chromium for Lighthouse
+        continue-on-error: true
         run: |
+          pnpm exec playwright install chromium
           CHROME_PATH=$(node -e 'process.stdout.write(require("playwright").chromium.executablePath())')
           echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
-      - name: Prepare isolated foundation build configuration
-        run: node scripts/prepare-cloudflare-runtime-check.mjs
-      - name: Build Next.js app
-        run: pnpm run build
-      - name: Lighthouse quality audit
+      - name: Lighthouse quality audit (advisory)
+        continue-on-error: true
         run: pnpm run quality:lighthouse
       - name: Upload Lighthouse reports
         if: always()
