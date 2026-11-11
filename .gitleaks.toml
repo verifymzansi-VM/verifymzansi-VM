@@ -34,6 +34,8 @@ paths = [
   '''(^|/)src/__tests__/.+\.tsx?$''',
   # The retired stub suite's server script: deleted, still in the history.
   '''(^|/)scripts/start-playwright-server\.cjs$''',
+  # Its fixed test-copy settings now live here (counting-hex values only, via the regexes below).
+  '''(^|/)scripts/lib/foundation-e2e-website\.mjs$''',
 ]
 regexes = [
   '''^0123456789abcdef(0123456789abcdef)*$''',
