@@ -15,8 +15,12 @@ import { browserSessionCookies, readTestCopy, sessionCookies, signIn } from "./s
 
 const GATEWAY = `supabase_kong_${E2E_FIXTURE.projectId}`;
 
-/** Requests to one gateway path so far (the copy's gateway access log). */
-function gatewayCount(method: string, pathname: string) {
+/** Access-log request lines for local Auth's user check and the account read. */
+const AUTH_USER = /"GET \/auth\/v1\/user[ ?]/;
+const ACCOUNT_CONTEXT = /"POST \/rest\/v1\/rpc\/get_my_account_context[ ?]/;
+
+/** Requests matching one access-log line so far (the copy's gateway log). */
+function gatewayCount(line: RegExp) {
   const fixture = openFixture();
   const result = spawnSync("docker", [...fixture.dockerArgs, "logs", GATEWAY], {
     env: fixture.env as NodeJS.ProcessEnv,
@@ -25,14 +29,13 @@ function gatewayCount(method: string, pathname: string) {
     maxBuffer: 256 * 1024 * 1024,
   });
   if (result.status !== 0) throw new Error("The test copy's gateway log is unavailable");
-  const line = new RegExp(`"${method} ${pathname.replaceAll("/", "\\/")}[ ?]`);
   return `${result.stdout}\n${result.stderr}`.split("\n").filter((entry) => line.test(entry))
     .length;
 }
 
 const signInChecks = () => ({
-  auth: gatewayCount("GET", "/auth/v1/user"),
-  account: gatewayCount("POST", "/rest/v1/rpc/get_my_account_context"),
+  auth: gatewayCount(AUTH_USER),
+  account: gatewayCount(ACCOUNT_CONTEXT),
 });
 
 test("a dashboard view checks the sign-in once", async ({ request }) => {
