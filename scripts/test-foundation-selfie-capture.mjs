@@ -24,6 +24,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
+import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
 const UPDATE = "20261111184619_selfie_capture_method.sql";
@@ -37,15 +38,7 @@ const READ = "get_frontend_staff_selfie_capture(uuid,text,uuid)";
 const SCRUB = "internal.scrub_frontend_verification_receipt()";
 const COMPLETE = "complete_frontend_verification_upload(uuid,uuid,text,text,integer,jsonb,integer)";
 
-const checks = [];
-let current = "start";
-function check(id, fn) {
-  current = id;
-  return Promise.resolve(fn()).then(() => {
-    checks.push(id);
-    console.log(`PASS ${id}`);
-  });
-}
+const { check, current, passed: checks } = createChecks();
 
 const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
@@ -57,41 +50,7 @@ try {
   applySteps(database, steps.slice(0, index));
 
   // ---------------------------------------------------------------- helpers
-  const run = (sql) => database.psql(`\\set VERBOSITY verbose\n${sql}`, ["-A", "-t"]);
-  const q = (sql) => {
-    const result = run(sql);
-    if (result.status !== 0) throw new Error(`[${current}] SQL failed: ${result.stderr.trim()}`);
-    return result.stdout.trim();
-  };
-  const json = (sql) => JSON.parse(q(sql));
-  const fails = (sql, state, message) => {
-    const result = run(sql);
-    assert.notEqual(result.status, 0, `[${current}] expected ${state}, the command succeeded`);
-    const sqlstate = /ERROR:\s+([0-9A-Z]{5}):/.exec(result.stderr)?.[1];
-    assert.equal(sqlstate, state, `[${current}] ${result.stderr}`);
-    if (message) assert.match(result.stderr, message, `[${current}] ${result.stderr}`);
-    return result.stderr;
-  };
-  const claims = (user) => ({
-    sub: user.id,
-    role: "authenticated",
-    session_id: user.session,
-    aal: "aal1",
-    is_anonymous: false,
-  });
-  const as = (payload, sql) =>
-    `\\o /dev/null\nselect set_config('request.jwt.claim.sub','${payload.sub}',false),set_config('request.jwt.claims','${JSON.stringify(payload)}',false);\n\\o\nset role authenticated;\n${sql}`;
-  const member = (user, sql) => as(claims(user), sql);
-  const staff = (user, sql) =>
-    as(
-      {
-        ...claims(user),
-        aal: "aal2",
-        amr: [{ method: "totp", timestamp: Math.floor(Date.now() / 1000) }],
-      },
-      sql
-    );
-  const service = (sql) => `set role service_role;\n${sql}`;
+  const { q, json, fails, claims, as, member, staff, service } = sqlHelpers(database, current);
   const anon = (sql) => `set role anon;\n${sql}`;
   const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
   const preflight = () =>
@@ -477,7 +436,8 @@ try {
     // report with the ID number receipt.
     q(
       `update private.evidence_artifacts set state='cleanup_required' where id='${live.selfie.artifact}';
-` + `update private.evidence_artifacts set state='deleted',deleted_at=clock_timestamp() where id='${live.selfie.artifact}';`
+` +
+        `update private.evidence_artifacts set state='deleted',deleted_at=clock_timestamp() where id='${live.selfie.artifact}';`
     );
     assert.deepEqual(stored(live.selfie), none);
     assert.deepEqual(stored(uploaded.selfie), {
@@ -518,7 +478,7 @@ try {
     });
   }
 } catch (error) {
-  console.error(`FAIL ${current}`);
+  console.error(`FAIL ${current()}`);
   throw error;
 } finally {
   database.stop();
