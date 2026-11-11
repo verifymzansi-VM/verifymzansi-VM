@@ -32,6 +32,7 @@ condition = "AND"
 paths = [
   '''(^|/)src/.+\.test\.tsx?$''',
   '''(^|/)src/__tests__/.+\.tsx?$''',
+  # The retired stub suite's server script: deleted, still in the history.
   '''(^|/)scripts/start-playwright-server\.cjs$''',
 ]
 regexes = [

@@ -32,36 +32,12 @@ export const DOCUMENTED_SKIPS: readonly { reason: string; why: string }[] = [
     why: "Real touch events are sent through the Chromium DevTools protocol, available only in mobile-chrome.",
   },
   {
-    reason: "Fake camera requires Chromium",
-    why: "The fake camera device flag exists only in Chromium.",
-  },
-  {
     reason: "Desktop drag coverage runs in Chromium only.",
     why: "Mouse-drag behaviour is desktop-only and checked once, in chromium.",
   },
   {
     reason: "This smoke runs in Chromium only.",
     why: "Runtime-error smoke of the showroom pages, checked once in chromium; other projects run the full page specs.",
-  },
-  {
-    reason: "The desktop dashboard check runs once, in the chromium project.",
-    why: "Desktop layout check, run once to avoid duplicate work.",
-  },
-  {
-    reason: "The mobile dashboard check runs once, in the mobile-chrome project.",
-    why: "Phone layout check, run once to avoid duplicate work.",
-  },
-  {
-    reason: "Desktop posting flows run once, in the chromium project.",
-    why: "The posting forms are exercised once on desktop; each run creates posts in the shared stand-in.",
-  },
-  {
-    reason: "Mobile posting flows run once, in the mobile-chrome project.",
-    why: "The posting forms are exercised once on a phone; each run creates posts in the shared stand-in.",
-  },
-  {
-    reason: "The profile completion flow runs once, in the chromium project.",
-    why: "Account flow without a layout difference; run once.",
   },
   {
     reason: "API-level account checks run once per run, in the chromium project",

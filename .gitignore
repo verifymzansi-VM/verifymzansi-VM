@@ -126,10 +126,8 @@ tmp-*
 /.codex-log-analysis/
 
 # ── Visual regression snapshots ──────────────────────────────
-e2e/visual-regression.spec.ts-snapshots/*
-# Approved Linux pictures of the chosen frontend (roadmap M0.12).
-!e2e/visual-regression.spec.ts-snapshots/*-chromium-linux.png
-# The same pictures on the foundation test copy (the required check's baseline).
+# Approved Linux pictures of the chosen frontend (roadmap M0.12) on the
+# foundation test copy (the required check's baseline).
 e2e/foundation/visual-regression.spec.ts-snapshots/*
 !e2e/foundation/visual-regression.spec.ts-snapshots/*-chromium-linux.png
 

@@ -10,6 +10,7 @@ export const RULESET_FILE = ".github/rulesets/protect-main.json";
 export const PULL_REQUEST_WORKFLOWS = [
   ".github/workflows/ci.yml",
   ".github/workflows/codeql.yml",
+  ".github/workflows/e2e-foundation.yml",
   ".github/workflows/foundation-native.yml",
 ];
 
@@ -69,7 +70,8 @@ export function triggersOnPullRequestToMain(text) {
  * Lists the check-run names a workflow produces on a pull request. Jobs whose
  * job-level `if:` mentions `github.event_name == 'push'` (or another non-PR
  * event) are push-only and excluded. Matrix jobs expand to "name (value)" for
- * a single inline-list dimension, which is all this repository uses.
+ * a single inline-list dimension, which is all this repository uses, or to
+ * the name itself with the value filled in when it names `${{ matrix.* }}`.
  */
 export function pullRequestCheckNames(text) {
   const lines = text.split(/\r?\n/);
@@ -132,7 +134,11 @@ export function pullRequestCheckNames(text) {
     if (job.matrix.length === 0) {
       names.push(base);
     } else if (job.matrix.length === 1) {
-      for (const value of job.matrix[0]) names.push(`${base} (${value})`);
+      // A name that uses the matrix value is shown as written, with the value
+      // filled in; otherwise GitHub appends the value in brackets.
+      const expression = /\$\{\{\s*matrix\.[A-Za-z0-9_-]+\s*\}\}/;
+      for (const value of job.matrix[0])
+        names.push(expression.test(base) ? base.replace(expression, value) : `${base} (${value})`);
     } else {
       throw new Error(
         `Job ${job.id} has a multi-dimension matrix; extend branch-ruleset.mjs first.`

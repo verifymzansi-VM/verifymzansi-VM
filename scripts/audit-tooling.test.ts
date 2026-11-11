@@ -26,7 +26,6 @@ import { dependencyAuditVerdict } from "./dependency-audit-policy";
 import { qualityRegressions } from "./lib/quality-policy";
 import { socialWatermarks } from "./lib/social-watermarks";
 import sharp from "sharp";
-import { assertKycAuthenticatedScenarios, scenariosFromReport } from "./lib/kyc-browser-evidence";
 import { missingBuiltRoutes, REQUIRED_BUILT_ROUTES } from "./lib/built-routes.mjs";
 
 test("responsive CSS includes both mobile dialog docking and short-screen spacing", async () => {
@@ -48,82 +47,6 @@ test("responsive CSS includes both mobile dialog docking and short-screen spacin
   };
   assert.equal(mediaFor(".max-sm\\:bottom-0").params, "not all and (min-width: 640px)");
   assert.equal(mediaFor(".short\\:p-4").params, "(max-height: 820px)");
-});
-
-test("authenticated KYC evidence cannot be replaced by smoke tests, missing projects, skips or duplicates", () => {
-  const titles = [
-    "authenticated synthetic document submission, private evidence and independent reviewer resubmission",
-    "synthetic selfie and ordinary manual approvals complete verification, lock the legal name and schedule retention",
-    "high-risk approval stays pending until an independent governor approves through the governance UI",
-  ];
-  const rows = ["chromium", "mobile-chrome"].flatMap((project) =>
-    titles.map((title) => ({
-      file: "e2e/kyc-authenticated.spec.ts",
-      title,
-      project,
-      status: "expected",
-      expectedStatus: "passed",
-      resultStatus: "passed",
-    }))
-  );
-  assert.doesNotThrow(() => assertKycAuthenticatedScenarios(rows));
-  assert.throws(() => assertKycAuthenticatedScenarios([]), /Required KYC scenario/);
-  assert.throws(() => assertKycAuthenticatedScenarios(rows.slice(0, -1)), /Required KYC scenario/);
-  assert.throws(
-    () =>
-      assertKycAuthenticatedScenarios(
-        rows.map((row, index) => (index === 0 ? { ...row, status: "skipped" } : row))
-      ),
-    /Required KYC scenario/
-  );
-  assert.throws(() => assertKycAuthenticatedScenarios([...rows, rows[0]]), /Required KYC scenario/);
-  assert.throws(
-    () =>
-      assertKycAuthenticatedScenarios(
-        rows.map((row, index) =>
-          index === 0 ? { ...row, expectedStatus: "failed", resultStatus: "failed" } : row
-        )
-      ),
-    /Required KYC scenario/
-  );
-  assert.throws(
-    () =>
-      assertKycAuthenticatedScenarios(rows.map((row) => ({ ...row, file: "e2e/smoke.spec.ts" }))),
-    /Required KYC scenario/
-  );
-  // One CI job per browser project checks only its own project.
-  const mobile = rows.filter((row) => row.project === "mobile-chrome");
-  assert.doesNotThrow(() => assertKycAuthenticatedScenarios(mobile, ["mobile-chrome"]));
-  assert.throws(() => assertKycAuthenticatedScenarios(mobile, ["chromium"]), /chromium/);
-  assert.throws(() => assertKycAuthenticatedScenarios(rows, []), /No browser project/);
-  // The same rows come out of a Playwright JSON report.
-  const report = {
-    suites: [
-      {
-        suites: [
-          {
-            specs: titles.map((title, line) => ({
-              file: "e2e/kyc-authenticated.spec.ts",
-              line,
-              title,
-              tests: [
-                {
-                  status: "expected",
-                  projectName: "chromium",
-                  expectedStatus: "passed",
-                  results: [{ status: "failed" }, { status: "passed" }],
-                },
-              ],
-            })),
-          },
-        ],
-      },
-    ],
-  };
-  const fromReport = scenariosFromReport(report);
-  assert.equal(fromReport.length, titles.length);
-  assert.doesNotThrow(() => assertKycAuthenticatedScenarios(fromReport, ["chromium"]));
-  assert.throws(() => assertKycAuthenticatedScenarios(fromReport, ["mobile-chrome"]));
 });
 
 test("the build must contain the payment, KYC, verification and pricing routes", () => {
@@ -500,7 +423,7 @@ test("strict flags, unique registry and mandatory domain/release lanes", () => {
   const release = selectChecks("release");
   assert(release.find((c) => c.id === "unit"));
   assert(!release.find((c) => c.id === "payment-unit")); // Already covered once by full unit lane.
-  for (const id of ["unit", "browser", "contracts", "kyc-auth-browser"])
+  for (const id of ["unit", "browser", "contracts"])
     assert.equal(release.find((c) => c.id === id)?.optional, undefined);
   assert(selectChecks("payments").some((c) => c.id === "payment-unit"));
   assert(selectChecks("kyc").some((c) => c.id === "kyc-unit"));

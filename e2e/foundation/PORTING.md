@@ -1,11 +1,12 @@
 # Porting the stub suite to the foundation suite
 
-The stub suite (`playwright.config.ts`, `e2e/*.spec.ts`) runs the website on the
-retired backend with an in-memory stand-in. It will be retired once the
-foundation suite (`playwright.foundation.config.ts`, this folder) is a required
-check. Before that, every check the stub suite holds must either live here or
-have a recorded reason why not. The stub specs stay unchanged until then: they
-back the required `e2e-full-matrix` check.
+The stub suite (`playwright.config.ts`, `e2e/*.spec.ts`) ran the website on the
+retired backend with an in-memory stand-in. Before it was retired, every check
+it held had to either live here or have a recorded reason why not; this file is
+that record. The owner retired it on 2026-11-11 and made the foundation suite
+(`playwright.foundation.config.ts`, this folder; CI check `e2e-foundation`) the
+required browser check in place of `e2e-full-matrix`. The stub files named below
+are deleted; the git history keeps them.
 
 Classes:
 

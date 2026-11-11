@@ -533,7 +533,7 @@ pnpm secret-scan
 pnpm security:audit
 pnpm licenses:check
 pnpm build
-pnpm exec playwright test --grep "@smoke" --project chromium --project mobile-chrome
+pnpm test:e2e --project=chromium
 
 # 2. Run the deep lane when the change set warrants it
 pnpm test:coverage:core
@@ -1030,6 +1030,6 @@ permission prompt appears, or the UI shows camera denied/blocked messages.
 Quick validation commands:
 
 ```bash
-pnpm test:e2e --project=chromium --project=mobile-chrome --grep "KYC Verification Flows"
-pnpm test:e2e --project=firefox --project=webkit --project=mobile-safari --grep "KYC Verification Flows"
+pnpm test:e2e --project=chromium --project=mobile-chrome e2e/foundation/staff-review.spec.ts
+pnpm foundation:e2e:down   # delete the local test copy afterwards
 ```
