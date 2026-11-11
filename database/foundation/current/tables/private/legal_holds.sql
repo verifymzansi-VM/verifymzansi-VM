@@ -21,5 +21,6 @@ alter table private.legal_holds enable row level security;
 CREATE INDEX legal_holds_active_idx ON private.legal_holds USING btree (subject_id) WHERE (released_at IS NULL);
 CREATE INDEX legal_holds_placed_by_idx ON private.legal_holds USING btree (placed_by);
 CREATE INDEX legal_holds_released_by_idx ON private.legal_holds USING btree (released_by) WHERE (released_by IS NOT NULL);
+CREATE INDEX legal_holds_subject_id_idx ON private.legal_holds USING btree (subject_id);
 CREATE TRIGGER evidence_deletion_legal_hold BEFORE INSERT ON private.legal_holds FOR EACH ROW EXECUTE FUNCTION internal.evidence_deletion_hold_guard();
 revoke all on private.legal_holds from public;
