@@ -826,3 +826,24 @@ test("only the copy's website server process gets the outbound fence", () => {
   const website = readFileSync(path.join("scripts", "lib", "foundation-e2e-website.mjs"), "utf8");
   assert.equal(/outbound/.test(website), false);
 });
+
+test("every test-copy port the kernel could hand to an outgoing connection is reserved", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const workflow = await readFile(".github/workflows/e2e-foundation.yml", "utf8");
+  const reserved = /sysctl -w net\.ipv4\.ip_local_reserved_ports=(\d+)-(\d+)/.exec(workflow);
+  assert(reserved, "e2e-foundation.yml reserves the test copy's ports");
+  const [low, high] = [Number(reserved[1]), Number(reserved[2])];
+  // The reservation must come before anything starts.
+  assert(workflow.indexOf(reserved[0]) < workflow.indexOf("foundation-e2e.mjs up"));
+  const config = await readFile(E2E_FIXTURE.configTemplate, "utf8");
+  const ports = [
+    ...Object.entries(E2E_FIXTURE)
+      .filter(([key]) => key.endsWith("Port"))
+      .map(([, value]) => value),
+    ...[...config.matchAll(/^\s*\w*port\s*=\s*(\d+)\s*$/gm)].map((match) => Number(match[1])),
+  ];
+  assert(ports.includes(E2E_FIXTURE.providerPort));
+  // Linux hands out 32768-60999 by default; ports below that are never chosen.
+  for (const port of ports.filter((value) => value >= 32_768 && value <= 60_999))
+    assert(port >= low && port <= high, `port ${port} is outside the reserved ${low}-${high}`);
+});
