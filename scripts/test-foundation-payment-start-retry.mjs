@@ -24,6 +24,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { replaySteps } from "./lib/foundation-replay.mjs";
+import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
 const UPDATE = "20261111212320_payment_start_retry.sql";
@@ -35,15 +36,7 @@ const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const CLAIM = "internal.claim_checkout_request(uuid,uuid)";
 const SWEEP = "expire_stale_checkouts(integer)";
 
-const checks = [];
-let current = "start";
-function check(id, fn) {
-  current = id;
-  return Promise.resolve(fn()).then(() => {
-    checks.push(id);
-    console.log(`PASS ${id}`);
-  });
-}
+const { check, current, passed: checks } = createChecks();
 
 const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
@@ -55,33 +48,8 @@ try {
   applySteps(database, steps.slice(0, index));
 
   // ---------------------------------------------------------------- helpers
-  const run = (sql) => database.psql(`\\set VERBOSITY verbose\n${sql}`, ["-A", "-t"]);
-  const q = (sql) => {
-    const result = run(sql);
-    if (result.status !== 0) throw new Error(`[${current}] SQL failed: ${result.stderr.trim()}`);
-    return result.stdout.trim();
-  };
-  const json = (sql) => JSON.parse(q(sql));
-  const fails = (sql, state, message) => {
-    const result = run(sql);
-    assert.notEqual(result.status, 0, `[${current}] expected ${state}, the command succeeded`);
-    const sqlstate = /ERROR:\s+([0-9A-Z]{5}):/.exec(result.stderr)?.[1];
-    assert.equal(sqlstate, state, `[${current}] ${result.stderr}`);
-    if (message) assert.match(result.stderr, message, `[${current}] ${result.stderr}`);
-    return result.stderr;
-  };
-  const member = (user, sql) =>
-    `\\o /dev/null\nselect set_config('request.jwt.claim.sub','${user.id}',false),set_config('request.jwt.claims','${JSON.stringify(
-      {
-        sub: user.id,
-        role: "authenticated",
-        session_id: user.session,
-        aal: "aal1",
-        is_anonymous: false,
-      }
-    )}',false);\n\\o\nset role authenticated;\n${sql}`;
+  const { q, json, fails, member, service } = sqlHelpers(database, current);
   const as = (role, sql) => `set role ${role};\n${sql}`;
-  const service = (sql) => as("service_role", sql);
   const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
   const preflight = () =>
     q(PREFLIGHT)
@@ -426,7 +394,7 @@ try {
     });
   }
 } catch (error) {
-  console.error(`FAIL ${current}`);
+  console.error(`FAIL ${current()}`);
   throw error;
 } finally {
   database.stop();
