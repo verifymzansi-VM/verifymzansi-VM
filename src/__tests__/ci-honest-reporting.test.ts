@@ -272,3 +272,81 @@ describe("production-matching suites on main and the failure alert", () => {
     }
   });
 });
+
+describe("workflow hygiene", () => {
+  const files = readdirSync(".github/workflows").filter((file) => file.endsWith(".yml"));
+  const text = (file: string) => readFileSync(`.github/workflows/${file}`, "utf8");
+  type AnyStep = { uses?: string; run?: string; with?: Record<string, unknown> };
+  const steps = (file: string) =>
+    Object.values(
+      (parse(text(file)) as { jobs: Record<string, { steps?: AnyStep[] }> }).jobs
+    ).flatMap((job) => job.steps ?? []);
+
+  it("lints the workflows on every pull request with pinned, network-less tools", () => {
+    const ci = parse(text("ci.yml")) as {
+      jobs: Record<string, { name?: string; "continue-on-error"?: boolean; steps: AnyStep[] }>;
+    };
+    const lint = ci.jobs["workflow-lint"];
+    expect(lint.name).toBe("Workflow lint (actionlint)");
+    expect(lint["continue-on-error"]).toBeUndefined();
+    const lintRun = lint.steps.map((step) => step.run ?? "").join("\n");
+    expect(lintRun).toMatch(/image=rhysd\/actionlint:[\d.]+@sha256:[0-9a-f]{64} /);
+    expect(lintRun).toContain(
+      'docker run --rm --network none -v "$PWD:/repo:ro" -w /repo "$image"'
+    );
+    const audit = ci.jobs["workflow-audit-advisory"];
+    expect(audit.name).toContain("advisory");
+    expect(audit["continue-on-error"]).toBe(true);
+    const auditRun = audit.steps.map((step) => step.run ?? "").join("\n");
+    expect(auditRun).toMatch(/image=ghcr\.io\/zizmorcore\/zizmor:[\d.]+@sha256:[0-9a-f]{64} /);
+    expect(auditRun).toContain(
+      'docker run --rm --network none -v "$PWD:/repo:ro" -w /repo "$image" --offline'
+    );
+    const codeql = parse(text("codeql.yml")) as {
+      jobs: { analyze: { strategy: { matrix: { language: string[] } } } };
+    };
+    expect(codeql.jobs.analyze.strategy.matrix.language).toEqual([
+      "javascript-typescript",
+      "actions",
+    ]);
+  });
+
+  it("pins every action and image by digest, with a readable version beside it", () => {
+    for (const file of files) {
+      for (const line of text(file).split("\n")) {
+        const action = /^\s*(?:- )?uses: ([^\s#]+)(.*)$/.exec(line);
+        if (action && !action[1].startsWith("./")) {
+          expect(action[1], `${file}: ${line.trim()}`).toMatch(/@[0-9a-f]{40}$/);
+          expect(action[2], `${file}: ${line.trim()}`).toMatch(/# v\d/);
+        }
+      }
+      expect(text(file), file).not.toMatch(/:latest\b/);
+    }
+  });
+
+  it("keeps the checkout token out of the workspace unless the job pushes", () => {
+    // deploy.yml is covered by its own change; update-visual-baselines pushes a branch.
+    const allowed = new Set(["deploy.yml", "update-visual-baselines.yml"]);
+    for (const file of files.filter((name) => !allowed.has(name))) {
+      for (const step of steps(file).filter((item) => item.uses?.startsWith("actions/checkout@")))
+        expect(step.with?.["persist-credentials"], file).toBe(false);
+    }
+  });
+
+  it("lets Dependabot open one grouped monthly pull request for actions, none for npm", () => {
+    const config = parse(readFileSync(".github/dependabot.yml", "utf8")) as {
+      updates: {
+        "package-ecosystem": string;
+        schedule: { interval: string };
+        "open-pull-requests-limit": number;
+        groups?: Record<string, { patterns?: string[] }>;
+      }[];
+    };
+    const actions = config.updates.find((item) => item["package-ecosystem"] === "github-actions");
+    expect(actions?.schedule.interval).toBe("monthly");
+    expect(actions?.["open-pull-requests-limit"]).toBe(1);
+    expect(Object.values(actions?.groups ?? {}).map((group) => group.patterns)).toEqual([["*"]]);
+    const npm = config.updates.find((item) => item["package-ecosystem"] === "npm");
+    expect(npm?.["open-pull-requests-limit"]).toBe(0);
+  });
+});

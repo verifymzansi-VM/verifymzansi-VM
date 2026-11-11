@@ -68,9 +68,11 @@ The former Supabase security advisor check (`supabase:advisor:security`, check
 `security-advisor`) reviewed controls of the retired source schema and was
 retired with it. The live foundation schema is rebuilt and compared with its
 recorded fingerprint (including grants and row level security) by
-`foundation-replay`, and its access rules are exercised by the native suite
-(`foundation-native`). A check of the hosted project's own security settings is
-not part of the release gate any more.
+`foundation-replay`, which also checks access-policy invariants (row level
+security on every table, no PUBLIC execute, no SECURITY DEFINER in `api`, a
+fixed `search_path` on every function), and its access rules are exercised by
+the native suite (`foundation-native`). A check of the hosted project's own
+security settings is not part of the release gate any more.
 
 License reports fail closed on JSON/shape errors, unknown expressions and
 restricted license terms. The existing FFmpeg 0.12.9 exception requires the
