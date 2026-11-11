@@ -40,6 +40,10 @@ export const DOCUMENTED_SKIPS: readonly { reason: string; why: string }[] = [
     why: "Runtime-error smoke of the showroom pages, checked once in chromium; other projects run the full page specs.",
   },
   {
+    reason: "The fake camera device is Chromium-only",
+    why: "The verification camera checks use Chromium's fake media device flags; other browsers have no fake camera to capture from.",
+  },
+  {
     reason: "API-level account checks run once per run, in the chromium project",
     why: "Foundation test copy: database-level checks that do not depend on the browser.",
   },
