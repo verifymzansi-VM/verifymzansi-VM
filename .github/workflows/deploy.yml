@@ -296,6 +296,24 @@ jobs:
           echo "::error title=Manual rollback needed::A production change failed or was cancelled after the deploy started. Nothing was rolled back automatically. Follow docs/RUNBOOK.md, section 'Manual rollback (all Workers)', to return every Worker to the last good release."
           exit 1
 
+      # Re-reads the live project's own security settings after every deploy,
+      # with the publishable key only (the key every browser already has): the
+      # Data API exposes only `api` (not private, internal, public or
+      # graphql_public), GraphQL answers no queries, and Auth does not confirm
+      # addresses by itself or allow anonymous sign-ins. A dashboard change to any
+      # of these fails this run (and, for an automatic deploy, opens the failure
+      # alert); the site keeps running. Fix the setting in the dashboard; no
+      # rollback is needed (docs/RUNBOOK.md). It runs after the rollback stop on
+      # purpose, so a settings failure never asks for a code rollback, and before
+      # the browser install, so a failed install cannot skip it. A network error
+      # is retried and then reported as inconclusive, never as exposure.
+      - name: Recheck live project security settings
+        timeout-minutes: 3
+        env:
+          FOUNDATION_SUPABASE_URL: ${{ secrets.FOUNDATION_SUPABASE_URL }}
+          FOUNDATION_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.FOUNDATION_SUPABASE_PUBLISHABLE_KEY }}
+        run: node scripts/check-foundation-hosted-exposure.mjs --stage=cutover
+
       - name: Install Chromium for post-deploy verification
         uses: ./.github/actions/install-browsers
 
