@@ -127,8 +127,65 @@ describe("CI job graph", () => {
     expect(tests).toBeGreaterThan(download);
     expect(steps[download].with?.name).toBe(upload?.with?.name);
     expect(steps[tests].env?.PLAYWRIGHT_SKIP_BUILD).toBe("1");
-    // The picture check keeps its own build in its pinned container.
+    // The picture check builds its own site, for the foundation test copy.
     expect(JSON.stringify(workflow.jobs["visual-regression"])).not.toContain("download-artifact");
+  });
+
+  it("compares the pictures on the foundation test copy in the pinned browser image", () => {
+    const job = workflow.jobs["visual-regression"] as Job & {
+      "runs-on"?: string;
+      container?: unknown;
+    };
+    // The required check's name must not change.
+    expect(job.name).toBe("Visual regression (chosen frontend)");
+    // The test copy needs the runner's Docker: no job container.
+    expect(job.container).toBeUndefined();
+    expect(job["runs-on"]).toBe("ubuntu-latest");
+    const runs = job.steps.map((step) => step.run ?? "");
+    const at = (command: string) => runs.findIndex((run) => run.includes(command));
+    expect(at("scripts/foundation-e2e.mjs up")).toBeGreaterThan(-1);
+    expect(at("scripts/foundation-e2e.mjs build")).toBeGreaterThan(
+      at("scripts/foundation-e2e.mjs up")
+    );
+    expect(at("scripts/foundation-visual.mjs --retries=1")).toBeGreaterThan(
+      at("scripts/foundation-e2e.mjs build")
+    );
+    const down = job.steps.find((step) => (step.run ?? "").includes("foundation-e2e.mjs down"));
+    expect(down?.if).toBe("always()");
+    // Nothing of the retired backend or its in-memory stub.
+    const text = JSON.stringify(job);
+    for (const retired of [
+      "start-playwright-server",
+      "placeholder.supabase.co",
+      "PLAYWRIGHT_TEST_MODE",
+      "e2e/visual-regression.spec.ts",
+    ])
+      expect(text).not.toContain(retired);
+
+    // The browser image is pinned by digest in one place, and its Playwright
+    // is the installed one (a mismatch would draw with another browser build).
+    const script = readFileSync("scripts/foundation-visual.mjs", "utf8");
+    const image = /"mcr\.microsoft\.com\/playwright:v([\d.]+)-noble@sha256:[0-9a-f]{64}"/.exec(
+      script
+    );
+    const installed = JSON.parse(
+      readFileSync("node_modules/@playwright/test/package.json", "utf8")
+    ) as { version: string };
+    expect(image?.[1]).toBe(installed.version);
+    expect(script).toContain('"--network",\n    "host"');
+
+    // New pictures are made the same way, into the foundation spec's folder.
+    const update = parse(readFileSync(".github/workflows/update-visual-baselines.yml", "utf8")) as {
+      jobs: Record<string, Job & { container?: unknown }>;
+    };
+    const generate = update.jobs["generate-baselines"];
+    expect(generate.container).toBeUndefined();
+    const updateRuns = generate.steps.map((step) => step.run ?? "").join("\n");
+    expect(updateRuns).toContain("scripts/foundation-e2e.mjs up");
+    expect(updateRuns).toContain("scripts/foundation-visual.mjs --update-snapshots=changed");
+    expect(updateRuns).toContain(
+      'git add "e2e/foundation/visual-regression.spec.ts-snapshots/*-chromium-linux.png"'
+    );
   });
 
   it("runs Lighthouse on the bundle-analysis build, as an advisory step", () => {

@@ -176,3 +176,38 @@ it("keeps other billing errors without a code", async () => {
     body: { error: "Check this payment's status before starting another checkout" },
   });
 });
+
+// /api/billing/change-plan and /api/billing/cancel send production here
+// (operation "retired"): plans are prepaid and never change or renew.
+describe("the retired plan-change and cancel routes", () => {
+  it("answer 410 with the retired code for a signed-in member", async () => {
+    const response = await handleFoundationBillingRoute(request({ planId }), "retired");
+    expect(await json(response)).toEqual({
+      status: 410,
+      body: {
+        error:
+          "Plans are prepaid for a fixed period and do not renew automatically. Buy another slot from Billing when you need it.",
+        code: "LEGACY_PLAN_ROUTE_RETIRED",
+      },
+    });
+    expect(startFoundationCheckout).not.toHaveBeenCalled();
+  });
+  it("still require the CSRF token before answering", async () => {
+    const forged = new NextRequest("https://verifymzansi.com/api/billing/change-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://verifymzansi.com" },
+      body: JSON.stringify({ planId }),
+    });
+    const response = await handleFoundationBillingRoute(forged, "retired");
+    expect(response.status).toBe(403);
+    expect(createFoundationRouteContext).not.toHaveBeenCalled();
+  });
+  it("are rate limited like other billing changes", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValueOnce({ limited: true, retryAfter: 30 } as never);
+    const response = await handleFoundationBillingRoute(request({ planId }), "retired");
+    expect(response.status).toBe(429);
+    expect(vi.mocked(checkRateLimit).mock.calls[0]?.[0]).toMatchObject({
+      action: "billing:checkout",
+    });
+  });
+});
