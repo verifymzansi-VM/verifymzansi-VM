@@ -515,7 +515,7 @@ test.describe("staff review with an authenticator", () => {
     await card.getByRole("button", { name: "Resubmit" }).first().click();
     const dialog = page.getByRole("dialog", { name: "Request Resubmission" });
     await dialog.getByRole("button", { name: "Glare or blur" }).click();
-    await expect(dialog.getByLabel("Additional notes")).toHaveValue(RETAKE_NOTE);
+    await expect(dialog.getByLabel(/Note to the member/)).toHaveValue(RETAKE_NOTE);
     await dialog.getByRole("button", { name: "Request Resubmission" }).click();
     await expect.poll(() => reply("/api/admin/verification/decide").length).toBe(1);
     expect(reply("/api/admin/verification/decide")[0]).toMatchObject({
