@@ -118,7 +118,7 @@
     "test:foundation:local": "node --test scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs && node scripts/test-foundation-transport.mjs",
     "test:e2e:foundation": "pnpm exec playwright test --config=playwright.foundation.config.ts",
     "foundation:e2e:down": "node --import tsx scripts/foundation-e2e.mjs down",
-    "test:foundation:native": "node --import tsx scripts/test-foundation-native.mjs && node --import tsx scripts/probe-foundation-staff-read.mjs && node scripts/probe-foundation-runtime-repairs.mjs",
+    "test:foundation:native": "node --import tsx scripts/test-foundation-native.mjs && node --import tsx scripts/probe-foundation-staff-read.mjs && node scripts/probe-foundation-runtime-repairs.mjs && node --import tsx scripts/test-restored-post-commands.mjs",
     "foundation:native:start": "node scripts/start-foundation-native.mjs",
     "foundation:native:stop": "node scripts/stop-foundation-native.mjs",
     "foundation:native:reset": "node scripts/reset-foundation-native.mjs",
