@@ -32,10 +32,47 @@ describe("CI reports what it ran", () => {
     }
   });
 
-  it("labels the dry-run safety gate as a plan that runs no checks", () => {
-    const job = ci.jobs["safety-gate-snapshot"];
-    expect(job.name).toContain("plan only (runs no checks)");
-    expect(job.steps.map((step) => step.run ?? "").join("\n")).toContain("--dry-run");
+  it("has no job whose only check is a dry-run plan", () => {
+    // A job that only lists the safety gate's checks turns green without
+    // checking anything. audit-tooling-platforms also runs the tooling tests.
+    for (const [id, job] of Object.entries(ci.jobs)) {
+      const runs = job.steps.map((step) => step.run ?? "").filter(Boolean);
+      if (runs.some((run) => run.includes("--dry-run")))
+        expect(
+          runs.some((run) => run.includes("pnpm test:tooling")),
+          id
+        ).toBe(true);
+    }
+  });
+
+  it("builds the Worker once and keeps its runtime proof", () => {
+    const builds = Object.entries(ci.jobs).filter(([, job]) =>
+      job.steps.some((step) => (step.run ?? "").includes("build:cloudflare"))
+    );
+    expect(builds.map(([id]) => id)).toEqual(["build-route-verify"]);
+    const steps = ci.jobs["build-route-verify"].steps as (Step & {
+      uses?: string;
+      with?: Record<string, string | boolean>;
+    })[];
+    const startup = steps.findIndex((step) => step.run === "pnpm test:cloudflare:startup");
+    const proof = steps.findIndex((step) => step.with?.name === "foundation-worker-runtime");
+    expect(startup).toBeGreaterThan(-1);
+    expect(proof).toBeGreaterThan(startup);
+    expect(steps[proof].if).toBe("always()");
+    expect(steps[proof].with?.["include-hidden-files"]).toBe(true);
+    expect(steps[proof].with?.path).toContain("tmp/cloudflare-runtime/latest.json");
+    expect(steps[proof].with?.path).toContain(".open-next/build-fingerprint.json");
+  });
+
+  it("runs the tooling tests once per operating system", () => {
+    const tooling = Object.entries(ci.jobs).filter(([, job]) =>
+      job.steps.some((step) => /pnpm test:tooling|--checks=[^\s]*\btooling\b/.test(step.run ?? ""))
+    );
+    expect(tooling.map(([id]) => id)).toEqual(["audit-tooling-platforms"]);
+    const platforms = (
+      ci.jobs["audit-tooling-platforms"] as Job & { strategy: { matrix: { os: string[] } } }
+    ).strategy.matrix.os;
+    expect(platforms).toEqual(["ubuntu-latest", "windows-latest"]);
   });
 
   it("fails browser runs in CI on skips that are not documented platform skips", () => {

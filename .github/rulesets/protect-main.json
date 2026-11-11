@@ -37,7 +37,6 @@
           { "context": "Secret scan (Gitleaks)", "integration_id": 15368 },
           { "context": "Semgrep static analysis", "integration_id": 15368 },
           { "context": "Dependency vulnerabilities (OSV-Scanner)", "integration_id": 15368 },
-          { "context": "Foundation Worker runtime", "integration_id": 15368 },
           { "context": "unit-api-contract", "integration_id": 15368 },
           { "context": "payment-kyc-regressions", "integration_id": 15368 },
           { "context": "audit-tooling-platforms (ubuntu-latest)", "integration_id": 15368 },

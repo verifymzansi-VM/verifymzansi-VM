@@ -22,32 +22,6 @@ env:
   NODE_OPTIONS: --max-old-space-size=4096
 
 jobs:
-  foundation-worker-runtime:
-    name: Foundation Worker runtime
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - name: Prepare isolated public configuration and synthetic bindings
-        run: node scripts/prepare-cloudflare-runtime-check.mjs
-      - name: Build and exercise the actual Worker artifact
-        run: pnpm test:cloudflare:runtime
-      - name: Preserve runtime proof
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: foundation-worker-runtime
-          include-hidden-files: true
-          path: |
-            tmp/cloudflare-runtime/latest.json
-            .open-next/build-fingerprint.json
-
   # Rebuilds the production (foundation) schema from database/foundation in an
   # embedded Postgres, compares its fingerprint with fingerprint.json, checks
   # the committed readable snapshot (database/foundation/current) and the API
@@ -199,7 +173,7 @@ jobs:
           cache: "pnpm"
       - run: pnpm install --frozen-lockfile
       - name: Shared static policy
-        run: pnpm safety:ci-review -- --checks=format,lint,types,tooling,openapi,imports,legacy-surface,frontend-freeze,db-static,secrets,licenses,dependencies
+        run: pnpm safety:ci-review -- --checks=format,lint,types,openapi,imports,legacy-surface,frontend-freeze,db-static,secrets,licenses,dependencies
       - name: Preserve audit evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -398,6 +372,18 @@ jobs:
             exit 1
           fi
           echo "All critical payment routes verified in build output."
+      # The Worker runtime proof (the startup check's report and the build
+      # fingerprint), formerly uploaded by the separate "Foundation Worker
+      # runtime" job, which built the same Worker a second time.
+      - name: Preserve runtime proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: foundation-worker-runtime
+          include-hidden-files: true
+          path: |
+            tmp/cloudflare-runtime/latest.json
+            .open-next/build-fingerprint.json
 
   db-rls:
     runs-on: ubuntu-latest
@@ -720,34 +706,6 @@ jobs:
           name: lighthouse-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/lighthouse/**
           if-no-files-found: warn
-
-  # Writes the plan of the safety gate (which checks would run) as an artifact.
-  # It executes none of them, so its green tick proves nothing about the code.
-  safety-gate-snapshot:
-    name: "safety-gate-snapshot: plan only (runs no checks)"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: lint-type-security
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "22"
-          cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - name: List the planned safety-gate checks (dry run; runs none)
-        run: pnpm run safety:ci-review -- --dry-run
-      - name: Upload safety gate artifacts
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: safety-gate-snapshot-${{ github.run_id }}-${{ github.run_attempt }}
-          path: tmp/safety-gate/**
-          if-no-files-found: error
 
   payment-kyc-regressions:
     runs-on: ubuntu-latest
