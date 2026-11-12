@@ -15,10 +15,10 @@ Application sending and Supabase Auth SMTP continue to use Resend. DMARC remains
 in monitoring mode with reports sent to `dmarc@verifymzansi.com`. Zoho TXT
 domain verification remains published.
 
-Setup screenshots confirmed the primary mailbox `senzo.mhlongo@verifymzansi.com`
+Setup screenshots confirmed the primary named mailbox
 and aliases hello, support, billing, verification, privacy, security, legal,
 appeals, noreply, team, and dmarc. Group creation succeeded for abuse and
-postmaster. Senzo was shown as an abuse-group member; postmaster membership
+postmaster. The primary mailbox was shown as an abuse-group member; postmaster membership
 still needs explicit confirmation. The optional social alias is not confirmed.
 
 Cloudflare API and authoritative DNS confirm the MX switch. Recursive resolvers
@@ -71,7 +71,7 @@ needs no additional mailbox subscription to read website requests.
 ## Current configuration (checked 21 September 2026)
 
 Cloudflare Email Routing forwards incoming domain mail to the verified
-destination `verifymzansi2s@gmail.com`. The Cloudflare account name contains a
+private Gmail inbox (kept out of this repository). The Cloudflare account name contains a
 different Gmail address; the account login is not the forwarding destination.
 Routing is enabled, synced and ready. Root MX records belong to Cloudflare.
 
