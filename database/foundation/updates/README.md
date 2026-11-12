@@ -784,6 +784,74 @@ updates publish a copy of it first (`planOnSale` in
 `scripts/lib/foundation-sql-checks.mjs`), as the browser test copy's checkout
 specs do (`e2e/foundation/support/plan-sales.ts`).
 
+## Google sign-ups start with their name, 12 November 2026
+
+`20261112181954_google_name_at_signup.sql` is not applied yet. It needs no
+earlier pending update and changes no table, grant or API command.
+
+When an Auth user is created, the trigger `create_account_profile` on
+`auth.users` (`internal.create_account_profile`) creates the member's profile.
+It read only the sign-up detail `display_name`, which the website's email
+sign-up form sends. Google sign-up stores the name as `full_name` and `name`
+(sometimes also `given_name` and `family_name`), so every Google account started
+with no display name: its profile page and public name ("Thando D.") stayed
+empty until the member typed one. From this update:
+
+- **A name from the sign-up details.** New
+  `internal.signup_display_name(details)` returns the first of `display_name`,
+  `full_name`, `name`, and `given_name` + space + `family_name` (only when both
+  are non-empty strings) that, trimmed and NFC-normalised, passes the person
+  name rule (`internal.person_name_valid`) and is not reserved
+  (`internal.person_name_reserved`); otherwise nothing. Sign-up details are
+  written by the member or the sign-in provider, so they give only a display
+  name the member could also have typed: never a legal name, a name lock, a role
+  or a verification. No API role can run it.
+- **New profiles.** `internal.create_account_profile` uses it. Anonymous users
+  are still skipped and an existing profile is left as it is.
+- **Existing profiles, once.** A profile with no display name and no locked
+  legal name, of a non-anonymous Auth user that is not deleted, gets the name
+  from that user's sign-up details, with its revision raised by one as an
+  ordinary profile save does: a page that still holds the earlier revision is
+  refused ("profile changed; reload it") and reloads. Profiles the details give
+  no valid name stay without one. Running the update again names nobody twice.
+
+**Order: any time.** No website release depends on it. Until it is applied and
+recorded, the release preflight lists it as "behind" (a warning; it has no
+command to probe). Apply and record updates in filename order: if an update with
+an earlier name is still pending, apply that one first.
+
+**Applying.**
+
+1. Run `../preflight/20261112181954_google_name_at_signup.check.sql` unchanged
+   in the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed body, update not applied". It also counts the
+   profiles without a name and those the update will name.
+2. Run the update, then the preflight again: it must now read "already applied"
+   with "of which the update names: 0".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication`. Once production's fingerprint matches,
+   record it (its register line and `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261112181954_google_name_at_signup.down.sql` (only with the
+owner's decision; prefer a forward fix). It restores the profile trigger byte
+for byte and drops the helper. Names the update gave stay: each passes the
+person name rule, and the member can change it.
+
+`node --import tsx scripts/test-foundation-google-signup-name.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database: that
+Google sign-ups got no name before; that the preflight is read only, counts the
+profiles the update will name, and reports a drifted trigger or a helper with
+another body, which the update refuses, as it refuses a premature rollback; that
+the one-time fill names unnamed profiles from `full_name`, `name` or
+`given_name` and `family_name` and leaves named, locked, anonymous, deleted,
+invalid and reserved ones untouched; that a save holding the earlier revision is
+refused; the order of the candidates, fallback past an invalid or reserved one,
+trimming and NFC, and the names refused; that sign-up details set no legal name,
+lock or role; who may run the helper; and that apply, a repeated apply, rollback
+and re-apply return the same fingerprints.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -2236,5 +2304,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261112080000_payment_problem_alerts.sql`: pending
 - `20261112122001_publish_posting_terms_v4.sql`: pending
 - `20261112173841_switch_posting_terms_v4.sql`: pending
+- `20261112181954_google_name_at_signup.sql`: pending
 
 <!-- applied-register:end -->
