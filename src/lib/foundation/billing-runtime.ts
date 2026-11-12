@@ -152,6 +152,10 @@ export class FoundationPendingPaymentError extends FoundationBillingError {
     );
   }
 }
+/** A database command's refusal or outage (`command` below). */
+class FoundationBillingCommandError extends FoundationBillingError {
+  override name = "FoundationBillingCommandError";
+}
 /** A status check that found something staff must look at. `reason` is a
  * reason code for the logs and the status-check job's report; members only
  * ever see the message. */
@@ -173,7 +177,7 @@ async function command(
 ) {
   const { data, error } = await billingRpc(api).rpc(name, args);
   if (error)
-    throw new FoundationBillingError(
+    throw new FoundationBillingCommandError(
       error.code === "42501" || error.code === "PT403"
         ? 403
         : error.code === "22023"
@@ -630,8 +634,10 @@ async function expireStaleCheckouts(service: FoundationServiceApi) {
  * problem's own reason, or the kind of outage. Never the error text. */
 export function paymentCheckFailureReason(error: unknown): string {
   if (error instanceof FoundationPaymentCheckError) return error.reason;
-  if (error instanceof FoundationBillingError)
+  if (error instanceof FoundationBillingCommandError)
     return error.status === 503 ? "database_unavailable" : "database_refused";
+  if (error instanceof FoundationBillingError)
+    return error.status >= 500 ? "billing_unavailable" : "billing_refused";
   if (error instanceof z.ZodError) return "invalid_record";
   const name = error instanceof Error ? error.name : "";
   if (name === "OzowProviderError") return "provider_unavailable";

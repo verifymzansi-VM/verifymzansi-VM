@@ -29,13 +29,13 @@ import {
  * reason codes, never a member's name or contact details.
  */
 
-export const PAYMENT_ALERT_RECIPIENTS_ENV = "PAYMENT_ALERT_EMAILS";
+const PAYMENT_ALERT_RECIPIENTS_ENV = "PAYMENT_ALERT_EMAILS";
 const MAX_RECIPIENTS = 3;
 /** Problems in one alert email. */
-export const PAYMENT_ALERT_LIMIT = 20;
+const PAYMENT_ALERT_LIMIT = 20;
 /** The daily summary goes out with the first email job run from this hour
  * (South African time). */
-export const PAYMENT_SUMMARY_HOUR = 7;
+const PAYMENT_SUMMARY_HOUR = 7;
 /** Payment numbers listed per section of the daily summary. */
 const SUMMARY_LIST_LIMIT = 20;
 
