@@ -1,11 +1,19 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { StickyContactBar } from "./sticky-contact-bar";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
+import { businessContactConfig } from "@/components/listings/contact-action-configs";
+
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
+}));
+vi.mock("@/components/ui/turnstile-widget", () => ({ TurnstileWidget: () => null }));
+
+const enquiry = businessContactConfig("biz-1", "Test", "/mzansi-business/biz-1");
 
 function makeBiz(overrides: Partial<BusinessDetailRecord> = {}): BusinessDetailRecord {
   return {
@@ -75,5 +83,33 @@ describe("StickyContactBar", () => {
       <StickyContactBar business={makeBiz({ phone: "+27611111111" })} ctaLabel="Book Appointment" />
     );
     expect(screen.getByText("Book Appointment")).toBeInTheDocument();
+  });
+
+  it("opens the enquiry form when the business shows no number but takes enquiries", () => {
+    render(<StickyContactBar business={makeBiz()} enquiry={enquiry} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send an enquiry" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Enquire about Test");
+  });
+
+  it("keeps Call and WhatsApp, not the enquiry, when numbers exist", () => {
+    render(
+      <StickyContactBar
+        business={makeBiz({ phone: "+27611111111", whatsapp: "+27722222222" })}
+        enquiry={enquiry}
+      />
+    );
+    expect(screen.getByText("Call Now")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send an enquiry" })).toBeNull();
+  });
+
+  it("keeps the jump to the contact card when the numbers are protected", () => {
+    render(
+      <StickyContactBar
+        business={makeBiz({ contact_available: { phone: true, whatsapp: false, email: false } })}
+        enquiry={enquiry}
+      />
+    );
+    expect(screen.getByRole("link", { name: /Contact/ })).toHaveAttribute("href", "#contact");
+    expect(screen.queryByRole("button", { name: "Send an enquiry" })).toBeNull();
   });
 });

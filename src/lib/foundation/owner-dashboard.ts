@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { foundationVerificationStatusSchema } from "./verification-status";
 import { restoredAccountProfile } from "./restored-profile";
 import { foundationMediaUrl } from "./public-cards";
+import { restoredAreaSchema } from "./areas";
 
 const instant = z.iso.datetime({ offset: true });
 const count = z.number().int().nonnegative();
@@ -82,7 +83,7 @@ const snapshot = z
       .array(
         z.strictObject({
           id: z.uuid(),
-          area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).nullable(),
+          area: restoredAreaSchema.nullable(),
           label: z.string().nullable(),
           tier: z.enum(["enterprise", "half_year", "quarter", "month", "year"]).nullable(),
           status: z.literal("active"),

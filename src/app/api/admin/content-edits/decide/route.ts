@@ -513,9 +513,9 @@ export async function POST(request: Request) {
       error: err instanceof Error ? err.message : "Unknown error",
     });
     if (heldClaim) {
-      await releaseApprovalClaim({ admin: createAdminClient(), ...heldClaim }).catch(
-        () => undefined
-      );
+      await releaseApprovalClaim({ admin: createAdminClient(), ...heldClaim }).catch(() => {
+        // The failure is already logged above; an unreleased claim expires on its own.
+      });
     }
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

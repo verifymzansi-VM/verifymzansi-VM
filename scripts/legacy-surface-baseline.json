@@ -1,11 +1,11 @@
 {
   "$comment": "Ratchet for pnpm check:legacy-surface (roadmap M0.11). Every value may only go down. Lower it with `pnpm check:legacy-surface --update` after removing old-backend code; raising any value needs a reviewed reason. legacyClientImporters is also the frozen import list read by .dependency-cruiser.cjs.",
   "counts": {
-    "backendSwitches": 223,
-    "legacyClientImports": 198,
+    "backendSwitches": 221,
+    "legacyClientImports": 194,
     "retiredCommandNames": 98,
     "retiredCommandCalls": 100,
-    "retiredTableReads": 523
+    "retiredTableReads": 517
   },
   "legacyClientImporters": [
     "src/app/(auth)/auth/callback/route.ts",
@@ -98,8 +98,6 @@
     "src/app/api/leads/route.ts",
     "src/app/api/listings/[id]/route.ts",
     "src/app/api/listings/route.ts",
-    "src/app/api/media/upload-complete/route.ts",
-    "src/app/api/media/upload-url/route.ts",
     "src/app/api/media/upload/route.ts",
     "src/app/api/mock-ozow/route.ts",
     "src/app/api/notifications/route.ts",
@@ -108,7 +106,6 @@
     "src/app/api/organisations/affiliations/route.ts",
     "src/app/api/organisations/invites/accept/route.ts",
     "src/app/api/organisations/search/route.ts",
-    "src/app/api/otp/health/route.ts",
     "src/app/api/otp/send/route.ts",
     "src/app/api/otp/verify/route.ts",
     "src/app/api/profile/avatar/route.ts",
@@ -116,7 +113,6 @@
     "src/app/api/promotions/[id]/route.ts",
     "src/app/api/promotions/route.ts",
     "src/app/api/reports/route.ts",
-    "src/app/api/share-preview/[type]/[id]/route.tsx",
     "src/app/api/trial-extensions/[id]/route.ts",
     "src/app/api/trials/route.ts",
     "src/app/api/verification/_lib/verification-request-prelude.ts",

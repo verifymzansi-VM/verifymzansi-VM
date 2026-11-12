@@ -82,3 +82,28 @@ it("refuses a warning without its real reason instead of fabricating a notice", 
     ).status
   ).toBe(503);
 });
+it("points a member whose ID was sent back to the verification page, without the reason", async () => {
+  rpc.mockResolvedValueOnce({
+    data: {
+      items: [{ ...notice, kind: "verification_returned", warning_reason: null }],
+      unread_count: 1,
+    },
+    error: null,
+  });
+  const response = await handleRestoredNotifications(
+    new NextRequest("https://verifymzansi.com/api/notifications"),
+    "GET"
+  );
+  expect(response.status).toBe(200);
+  expect((await response.json()).notifications).toEqual([
+    {
+      id,
+      title: "Your ID check needs another look",
+      message: "Your ID was sent back. Open verification to see why and what to do next.",
+      href: "/verification",
+      type: "warning",
+      read: false,
+      created_at: notice.created_at,
+    },
+  ]);
+});

@@ -12,4 +12,5 @@ create table private.identity_review_proposals (
 );
 alter table private.identity_review_proposals owner to postgres;
 alter table private.identity_review_proposals enable row level security;
+CREATE INDEX identity_review_proposals_submission_id_idx ON private.identity_review_proposals USING btree (submission_id);
 revoke all on private.identity_review_proposals from public;

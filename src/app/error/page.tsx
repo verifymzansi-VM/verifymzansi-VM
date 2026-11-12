@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { CloudOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
+import { ErrorPageActions } from "./error-page-actions";
 
 type ErrorPageSearchParams = {
   reason?: string;
@@ -41,16 +40,7 @@ export default async function ErrorPage({
           icon={<CloudOff />}
           title={message.title}
           description={message.description}
-          actions={
-            <>
-              <Button asChild variant="trust-verified">
-                <Link href="/dashboard">Go to dashboard</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/">Go to homepage</Link>
-              </Button>
-            </>
-          }
+          actions={<ErrorPageActions />}
           showNextSteps
         />
       </StatePanelPage>

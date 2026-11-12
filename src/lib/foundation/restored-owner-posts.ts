@@ -8,6 +8,8 @@ import {
 import { foundationMediaUrl } from "./public-media-url";
 import reference from "../domains/taxonomy/reference.json";
 import { OWNER_DEACTIVATED_REASON } from "../posting/content-status";
+import { restoredArea } from "./areas";
+import { declareNotAvailable, notAvailable } from "./not-available";
 const instant = z.iso.datetime({ offset: true });
 function presentedStatusReason(reason: string | null) {
   if (reason === "staff_hidden") return "Hidden for staff review";
@@ -97,6 +99,11 @@ export function parseRestoredOwnerPost(input: unknown) {
   return input === null ? null : owned.parse(input);
 }
 export type RestoredOwnerPost = z.infer<typeof owned> & { deletes_at?: string | null };
+/** Owner post fields the live backend does not provide. */
+export const OWNER_POST_NOT_AVAILABLE = declareNotAvailable({
+  view_count: notAvailable(null, "views are not stored"),
+  like_count: notAvailable(null, "likes are not stored"),
+});
 export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
   const images = post.media
     .filter((m) => m.kind === "image" && m.purpose !== "logo" && m.state === "ready")
@@ -130,18 +137,14 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
     categoryDetails && typeof categoryDetails === "object" && !Array.isArray(categoryDetails)
       ? ((categoryDetails as Record<string, unknown>).contact_methods ?? [])
       : [];
+  const missing = OWNER_POST_NOT_AVAILABLE.values();
   return {
     id: post.id,
     owner_id: owner,
     user_id: owner,
     seller_id: owner,
     kind: post.kind,
-    area:
-      post.area === "market"
-        ? "MZANSI_MARKET"
-        : post.area === "business"
-          ? "MZANSI_BUSINESS"
-          : "PROMOTIONS_EVENTS",
+    area: restoredArea(post.area),
     title: post.content.title ?? "",
     business_name: post.content.title ?? "",
     description: post.content.description ?? "",
@@ -200,8 +203,8 @@ export function restoredOwnerPostRow(post: RestoredOwnerPost, owner: string) {
     website: null,
     start_date: post.event_window?.starts_at ?? null,
     end_date: post.event_window?.ends_at ?? null,
-    view_count: null,
-    like_count: null,
+    view_count: missing.view_count,
+    like_count: missing.like_count,
     attributes: { ...((extras.attributes as Record<string, unknown>) ?? {}), ...attrs },
     ...Object.fromEntries(Object.entries(extras).filter(([k]) => k !== "attributes")),
   };

@@ -9,7 +9,7 @@ import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 export const FOUNDATION_DIR = "database/foundation";
 export const FINGERPRINT_FILE = `${FOUNDATION_DIR}/fingerprint.json`;
 /** The supplement must exist before this update, which replaces it. */
-export const SUPPLEMENT_BEFORE = "20261103154538_owner_signup_access.sql";
+const SUPPLEMENT_BEFORE = "20261103154538_owner_signup_access.sql";
 
 const read = (root, relative) => readFileSync(path.join(root, relative), "utf8");
 

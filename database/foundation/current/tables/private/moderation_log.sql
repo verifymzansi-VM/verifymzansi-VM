@@ -21,6 +21,7 @@ alter table private.moderation_log owner to postgres;
 alter table private.moderation_log enable row level security;
 CREATE INDEX moderation_log_approved_edits_idx ON private.moderation_log USING btree (post_id) WHERE ((edit_id IS NOT NULL) AND (decision = 'approve'::text));
 CREATE INDEX moderation_log_audit_time_idx ON private.moderation_log USING btree (decided_at DESC, id DESC);
+CREATE INDEX moderation_log_staff_id_idx ON private.moderation_log USING btree (staff_id);
 CREATE TRIGGER capture_frontend_post_approval AFTER INSERT ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.capture_frontend_post_approval();
 CREATE TRIGGER guard_frontend_offline_review_budget BEFORE INSERT ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.guard_frontend_offline_review_budget();
 CREATE TRIGGER moderation_log_append_only BEFORE DELETE OR UPDATE ON private.moderation_log FOR EACH ROW EXECUTE FUNCTION internal.append_only_guard();
