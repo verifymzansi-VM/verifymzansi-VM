@@ -452,7 +452,7 @@ export function updateDrift({ files, rows = [], runtimeManifest, probes, removed
 }
 
 /** Human-readable lines for updateDrift's result. */
-export function describeUpdateDrift(drift, target) {
+function describeUpdateDrift(drift, target) {
   const lines = [];
   const list = (files) =>
     files.length > 5 ? `${files.slice(0, 5).join(", ")}, ...` : files.join(", ");

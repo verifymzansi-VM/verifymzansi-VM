@@ -31,7 +31,7 @@
 
 ## Cloudflare MCP
 
-Use [docs/cloudflare-mcp.md](docs/cloudflare-mcp.md) as the operator guide for
+Use [docs/cloudflare-mcp.md](cloudflare-mcp.md) as the operator guide for
 Cloudflare MCP in this workspace.
 
 The intended setup is:
@@ -398,8 +398,7 @@ curl -X POST https://verifymzansi.pages.dev/api/admin/feature-flags/toggle \
 3. Or via API: `{"key": "<flag>", "enabled": false}`
 4. All changes are audit-logged
 
-See also:
-[Feature Flag Rollback Playbook](docs/playbooks/feature-flag-rollback.md)
+The feature flag rollback playbook is kept outside the public repository.
 
 ---
 
