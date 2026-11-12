@@ -35,6 +35,7 @@ END),
 );
 alter table private.organisation_sponsorships owner to postgres;
 alter table private.organisation_sponsorships enable row level security;
+CREATE INDEX organisation_sponsorships_affiliation_id_idx ON private.organisation_sponsorships USING btree (affiliation_id);
 CREATE INDEX organisation_sponsorships_due_idx ON private.organisation_sponsorships USING btree (ends_at) WHERE (status = 'active'::text);
 CREATE UNIQUE INDEX organisation_sponsorships_open_idx ON private.organisation_sponsorships USING btree (affiliation_id) WHERE (status = ANY (ARRAY['active'::text, 'waitlisted'::text]));
 CREATE INDEX organisation_sponsorships_org_idx ON private.organisation_sponsorships USING btree (organisation_id, status, created_at, id);

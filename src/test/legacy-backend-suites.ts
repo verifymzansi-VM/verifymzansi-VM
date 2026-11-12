@@ -53,8 +53,6 @@ export const LEGACY_BACKEND_SUITES: readonly string[] = [
   "src/__tests__/listing-addon-routes.test.ts",
   "src/__tests__/listing-create-route.test.ts",
   "src/__tests__/manual-location-route.test.ts",
-  "src/__tests__/media-upload-complete-route.test.ts",
-  "src/__tests__/media-upload-url-route.test.ts",
   "src/__tests__/notifications-route.test.ts",
   "src/__tests__/otp-exposure.test.ts",
   "src/__tests__/otp-send-safe-errors.test.ts",

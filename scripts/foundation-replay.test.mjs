@@ -14,20 +14,20 @@ import {
 const recorded = JSON.parse(readFileSync(FINGERPRINT_FILE, "utf8"));
 
 test("the recorded fingerprint keeps the production-matched values", () => {
-  // Captured read-only from production on 10 November 2026, through the update
+  // Captured read-only from production on 12 November 2026, through the update
   // below. Reviewed updates after it are listed as pending until the owner has
   // applied them and production is captured again.
   const check = recorded.productionCheck;
-  assert.equal(check.matchedThroughUpdate, "20261110045944_intro_trial_at_first_approval.sql");
+  assert.equal(check.matchedThroughUpdate, "20261111234521_public_default_privileges.sql");
   assert.deepEqual(check.matchedFingerprints, {
     column_grants: "11724f805587a82326eae936e0200f0c",
-    columns: "861ce3f25b51fe598e752c8bfa02ebf9",
-    constraints: "dcd860d5723cc9ae7274c662197afdde",
+    columns: "6e1dd0c6675e1271d1fc83e63008d8ec",
+    constraints: "769b61cf30c14d1447f4007af348cb5c",
     event_triggers: "821f7d069c595c075754fad9309136ac",
-    function_bodies: "05039c717539671064fff1cc0537bd65",
-    function_grants: "2921c0cef5199794e5aa882ee3962815",
-    function_metadata: "609bde76ed7c75639aa2115bc8744e0e",
-    indexes: "a5872c41378633c9426bd952ae111245",
+    function_bodies: "beb267422515fcb16e5e7ac06dabc350",
+    function_grants: "bb85cb924f8a586dfb33428fea9c6c0a",
+    function_metadata: "92b811a8ddf250daaeefa4c3ec10abed",
+    indexes: "aab0d962a64410e2b7b1f9d180452a72",
     policies: "2c1b773d5ffe29f172271087b1f36e04",
     row_level_security: "e908b6555891cd91ae353da5b7183c56",
     triggers: "cbed8a32da7aa1ca298aaa7eca019d1f",

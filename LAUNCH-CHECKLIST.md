@@ -1,3 +1,7 @@
+> Historical: describes the retired source backend. This checklist dates from 13
+> March 2026 and predates the foundation backend. Read [AGENTS.md](AGENTS.md)
+> for the checks required today.
+
 # VerifyMzansi Launch Checklist
 
 **Date:** 2026-03-13  

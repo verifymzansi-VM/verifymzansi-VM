@@ -26,10 +26,13 @@ import {
 } from "@/lib/foundation/server-session";
 import { readAffiliationOrganisationDashboard } from "@/lib/foundation/affiliation-workspace";
 import { readFoundationOrganisationManagementData } from "@/lib/foundation/organisation-management-data";
+import { createLogger } from "@/lib/utils/logger";
+import { logDegradedRead } from "@/lib/utils/request-failure";
 
 export const metadata = { title: "Organisation dashboard", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
+const log = createLogger("OrganisationDashboardPage");
 const date = new Intl.DateTimeFormat("en-ZA", {
   dateStyle: "long",
   timeZone: "Africa/Johannesburg",
@@ -137,7 +140,10 @@ async function readSourceDashboard(slug: string) {
       p_to: window.to,
     }),
     getCommercialSettings(db as never),
-    getOpenOfferForOrganisation(org.id).catch(() => null),
+    getOpenOfferForOrganisation(org.id).catch((error: unknown) => {
+      logDegradedRead(log, "Organisation extension offer unavailable", error);
+      return null;
+    }),
   ]);
   const adminRows = admins.data ?? [];
   const adminIds = adminRows.map((a) => a.user_id);

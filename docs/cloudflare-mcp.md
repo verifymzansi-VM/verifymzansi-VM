@@ -24,7 +24,7 @@ Cloudflare server through `npx`:
   "servers": {
     "cloudflare": {
       "command": "npx",
-      "args": ["-y", "@cloudflare/mcp-server-cloudflare", "run"]
+      "args": ["-y", "@cloudflare/mcp-server-cloudflare@0.2.0", "run"]
     },
     "cloudflare-remote": {
       "type": "http",
@@ -191,7 +191,7 @@ Examples of workflows that may justify a separate write-capable token:
 This workspace's startup form was validated locally with:
 
 ```bash
-npx -y @cloudflare/mcp-server-cloudflare run
+npx -y @cloudflare/mcp-server-cloudflare@0.2.0 run
 ```
 
 The validated startup indicated that the local environment already had usable

@@ -15,5 +15,6 @@ create table private.banned_identities (
 );
 alter table private.banned_identities owner to postgres;
 alter table private.banned_identities enable row level security;
+CREATE INDEX banned_identities_decision_id_idx ON private.banned_identities USING btree (decision_id);
 CREATE INDEX banned_identities_expiry_idx ON private.banned_identities USING btree (retain_until);
 revoke all on private.banned_identities from public;

@@ -13,6 +13,7 @@ import { getDataBackend } from "@/lib/data-backend";
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 
 class AppealSubmissionRefusal extends Error {
+  override name = "AppealSubmissionRefusal";
   constructor(
     readonly status: 403 | 409 | 422,
     message: string

@@ -31,9 +31,9 @@ import { PromotionContactActions } from "@/components/listings/promotion-contact
 import { BusinessStickers } from "@/components/trust/business-stickers";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { VerifiedPosition } from "@/components/trust/verified-position";
-import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { MediaLightbox } from "@/components/ui/media-lightbox-lazy";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
-import { formatRandAmount, formatSaLongDate, formatZAR, formatZARShort } from "@/lib/utils/format";
+import { formatRandAmount, formatSaLongDate, formatZARShort } from "@/lib/utils/format";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
@@ -636,7 +636,7 @@ export function PromotionDetailContent({
               </span>
               {promotion.price_cents != null && promotion.price_cents > 0 && (
                 <span className="font-bold">
-                  {formatZAR(promotion.price_cents)}
+                  {formatZARShort(promotion.price_cents)}
                   {promotion.price_negotiable && (
                     <span className="ml-1 text-xs font-normal text-brand-green">Negotiable</span>
                   )}
@@ -657,9 +657,7 @@ export function PromotionDetailContent({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {whenLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      When
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">When</p>
                     <p className="mt-1 text-sm font-medium">
                       <time dateTime={promotion.start_date ?? undefined}>{whenLabel}</time>
                     </p>
@@ -667,25 +665,19 @@ export function PromotionDetailContent({
                 ) : null}
                 {venueLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Venue
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Venue</p>
                     <p className="mt-1 text-sm font-medium">{venueLabel}</p>
                   </div>
                 ) : null}
                 {eventTypeLabel ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Event type
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Event type</p>
                     <p className="mt-1 text-sm font-medium">{eventTypeLabel}</p>
                   </div>
                 ) : null}
                 {ticketSummary ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Tickets
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Tickets</p>
                     <p className="mt-1 text-sm font-medium">{ticketSummary}</p>
                   </div>
                 ) : null}
@@ -1133,7 +1125,7 @@ export function PromotionDetailContent({
               <CardContent className="space-y-2 p-4">
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-2xl font-bold">
-                    {formatZAR(promotion.price_cents)}
+                    {formatZARShort(promotion.price_cents)}
                   </span>
                   {promotion.price_negotiable && (
                     <Badge variant="outline" className="text-brand-green">

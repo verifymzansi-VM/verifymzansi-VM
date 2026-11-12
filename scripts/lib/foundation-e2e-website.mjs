@@ -15,6 +15,7 @@ import {
   LOCAL_OPS_JOBS_SECRET,
   LOCAL_OZOW_SITE_CODE,
   LOCAL_OZOW_WEBHOOK_SECRET,
+  LOCAL_PAYMENT_ALERT_EMAIL,
   LOCAL_PHONE_OTP_KEY,
   assertLocalFoundationTarget,
 } from "./foundation-e2e-target.mjs";
@@ -136,6 +137,8 @@ export function foundationWebsiteEnv(status, { root = process.cwd() } = {}) {
     OPS_JOBS_SECRET: LOCAL_OPS_JOBS_SECRET,
     // So does the payment status-check job route; a synthetic one.
     INTERNAL_JOBS_SECRET: LOCAL_INTERNAL_JOBS_SECRET,
+    // Staff payment alerts go to the local mail catcher (a .test address).
+    PAYMENT_ALERT_EMAILS: LOCAL_PAYMENT_ALERT_EMAIL,
   };
   // A name in another letter case beside its all-capitals form (a parent's
   // "Kyc_Provider" next to KYC_PROVIDER) is dropped, so the copy's value wins.
@@ -160,7 +163,7 @@ export const BUILD_STAMP = ".next/foundation-e2e-stamp.json";
 
 /** Hash of the values that `next build` inlines or binds for the copy
  * (NEXT_PUBLIC_* and FOUNDATION_*). Only the hash is stored. */
-export function buildFingerprint(env) {
+function buildFingerprint(env) {
   const entries = Object.entries(env)
     .filter(([key]) => /^(NEXT_PUBLIC_|FOUNDATION_)/.test(key))
     .sort(([a], [b]) => a.localeCompare(b));
