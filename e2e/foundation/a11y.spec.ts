@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { registerKeyboardA11yChecks } from "../support/keyboard-a11y";
 
 // axe-core (WCAG 2.1 A/AA) on the public pages of the restored website in
 // foundation mode, moved from the stub suite's e2e/a11y.spec.ts (PORTING.md).
@@ -88,3 +89,5 @@ test.describe("accessibility (axe-core WCAG 2.1 AA)", () => {
     await expectNoSeriousViolations(page, "register validation state");
   });
 });
+
+registerKeyboardA11yChecks();

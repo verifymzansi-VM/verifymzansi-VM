@@ -10,7 +10,7 @@ vi.mock("@/components/ui/turnstile-widget", () => ({
     <button onClick={() => onSuccess("token")}>Complete CAPTCHA</button>
   ),
 }));
-vi.mock("@/lib/utils/csrf", () => ({ withCsrfHeaders: (headers: unknown) => headers }));
+vi.mock("@/lib/utils/csrf-client", () => ({ withCsrfHeaders: (headers: unknown) => headers }));
 
 describe("seller contact actions", () => {
   beforeEach(() => vi.restoreAllMocks());

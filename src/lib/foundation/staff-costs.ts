@@ -69,6 +69,7 @@ const overview = z.strictObject({
   open_alarms: z.array(alarm).max(1000),
 });
 export class FoundationCostError extends Error {
+  override name = "FoundationCostError";
   constructor(readonly status: 400 | 403 | 409 | 503) {
     super("Operations costs are temporarily unavailable");
   }

@@ -72,7 +72,9 @@ const MFA_REQUIRED = {
   code: "mfa_required",
 };
 const TOO_MANY = { error: "Too many email change requests; try again later", code: "rate_limited" };
-const UNAVAILABLE = { error: "Email change is temporarily unavailable" };
+// Every "unavailable" answer is logged and carries the log line's reference.
+const REFERENCE = expect.stringMatching(/^[0-9a-f]{16}$/);
+const UNAVAILABLE = { error: "Email change is temporarily unavailable", reference: REFERENCE };
 const INVALID = { error: "Enter a valid email address", code: "invalid_email" };
 const ANSWER_TIME = { floorMs: 3000, jitterMs: 1000 };
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -285,7 +287,7 @@ describe("email change on the foundation backend", () => {
     vi.stubEnv(name, value);
     const response = await POST(request());
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual(UNAVAILABLE);
+    expect(await response.json()).toEqual({ error: UNAVAILABLE.error });
     expect(context).not.toHaveBeenCalled();
     expect(limit).not.toHaveBeenCalled();
     expectNothingAsked();
@@ -519,7 +521,10 @@ describe("email change on the foundation backend", () => {
     [
       new FoundationEmailChangeError(503, "unavailable"),
       503,
-      { error: "Your email change could not be confirmed. Try again shortly." },
+      {
+        error: "Your email change could not be confirmed. Try again shortly.",
+        reference: REFERENCE,
+      },
     ],
     [new Error("synthetic"), 503, UNAVAILABLE],
   ])("maps Auth's refusal %o", async (error, status, body) => {

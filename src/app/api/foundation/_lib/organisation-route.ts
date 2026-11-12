@@ -6,6 +6,7 @@ import { readFoundationRuntimeConnection } from "@/lib/foundation/runtime-connec
 import type { FoundationAuthenticatedApi } from "@/lib/foundation/authenticated-api";
 import { FoundationOrganisationError } from "@/lib/foundation/organisations";
 import { createLogger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import {
   foundationNoStore,
@@ -62,6 +63,7 @@ export async function handlePublicOrganisationRead<T>(
   request: NextRequest,
   read: (api: FoundationPublicApi) => Promise<T>
 ) {
+  let api: FoundationPublicApi | undefined;
   try {
     const limit = await checkRateLimit({
       key: getClientRateLimitIdentity(request).key,
@@ -76,7 +78,8 @@ export async function handlePublicOrganisationRead<T>(
           headers: { ...foundationNoStore, "Retry-After": String(limit.retryAfter ?? 60) },
         }
       );
-    const result = await read(createFoundationPublicApi(readFoundationRuntimeConnection()));
+    api = createFoundationPublicApi(readFoundationRuntimeConnection());
+    const result = await read(api);
     return NextResponse.json(result, {
       headers: { "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=300" },
     });
@@ -87,9 +90,14 @@ export async function handlePublicOrganisationRead<T>(
         { error: known.error, reason: known.reason },
         { status: known.status, headers: foundationNoStore }
       );
-    log.error("Foundation organisation read failed");
+    const reference = logRequestFailure(log, "Foundation organisation read failed", {
+      request,
+      error,
+      api,
+      action: "organisation:public",
+    });
     return NextResponse.json(
-      { error: "Organisations are temporarily unavailable" },
+      { error: "Organisations are temporarily unavailable", reference },
       { status: 503, headers: foundationNoStore }
     );
   }

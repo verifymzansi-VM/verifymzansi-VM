@@ -202,6 +202,7 @@ export async function HomePromotionsShowcase() {
                 focalY={item.data.focal_y}
                 mediaWidth={item.data.media_width}
                 mediaHeight={item.data.media_height}
+                isVideo={Boolean(item.data.cover_video)}
               />
             ) : (
               <PromotionCard
@@ -214,6 +215,7 @@ export async function HomePromotionsShowcase() {
                   item.data.videos?.[0] || item.data.video_thumbnail || item.data.photos?.[0]
                 }
                 posterUrl={item.data.video_thumbnail || item.data.photos?.[0] || undefined}
+                isVideo={Boolean(item.data.videos?.[0])}
                 categoryLabel={getPromotionCategoryDisplayLabel(
                   item.data.category_key,
                   item.data.category

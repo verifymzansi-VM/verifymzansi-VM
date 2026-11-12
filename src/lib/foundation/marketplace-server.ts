@@ -4,13 +4,12 @@ import { z } from "zod";
 import { foundationServerPublicApi } from "./server-public";
 import {
   readRestoredCollection,
+  readRestoredPublicDetail,
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
-import { readFoundationPublicPost, readFoundationPublicContactChannels } from "./public-post";
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
-import { searchFoundationPresentedCards } from "./public-cards";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import type {
   LinkedBusinessRecord,
@@ -69,35 +68,10 @@ export async function restoredHomeCollection(collection: PublicCollection, touri
   }
 }
 
-/** A publicly live post with its presentation, as its detail page reads it.
- * The link preview asks for one kind and skips the contact-channel read it
- * does not show. */
-async function readRestoredPublicPost(
-  id: string,
-  options: { kind?: FoundationPublicPostCore["kind"]; withContactChannels: boolean }
-) {
+export const restoredPublicDetail = cache(async (id: string) => {
   if (!z.uuid().safeParse(id).success) return null;
-  const api = foundationServerPublicApi();
-  const post = await readFoundationPublicPost(api, { id });
-  if (!post || (options.kind && post.kind !== options.kind)) return null;
-  const contact_channels = options.withContactChannels
-    ? await readFoundationPublicContactChannels(api, { id })
-    : [];
-  const presentation = (
-    await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
-  ).items[0]?.presentation;
-  if (!presentation) return null;
-  return {
-    ...post,
-    contact_channels,
-    business_type: presentation.business_type,
-    frontend: presentation.frontend,
-  };
-}
-
-export const restoredPublicDetail = cache((id: string) =>
-  readRestoredPublicPost(id, { withContactChannels: true })
-);
+  return readRestoredPublicDetail(foundationServerPublicApi(), id);
+});
 
 /**
  * The link-preview card (`/api/share-preview`): title, place, price and cover
@@ -106,7 +80,11 @@ export const restoredPublicDetail = cache((id: string) =>
  * evidence field leaves here.
  */
 export async function restoredSharePreview(kind: FoundationPublicPostCore["kind"], id: string) {
-  const post = await readRestoredPublicPost(id, { kind, withContactChannels: false });
+  if (!z.uuid().safeParse(id).success) return null;
+  const post = await readRestoredPublicDetail(foundationServerPublicApi(), id, {
+    kind,
+    withContactChannels: false,
+  });
   if (!post) return null;
   const row = restoredPublicRow(post, post);
   return {

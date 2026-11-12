@@ -51,7 +51,10 @@ export function getFoundationBrowserClient() {
   if (typeof window === "undefined") return makeClient(connection);
   const key = connection.url + "|" + connection.publishableKey;
   if (cached?.key !== key) {
-    if (cached) void Promise.resolve(cached.client.auth.stopAutoRefresh()).catch(() => {});
+    if (cached)
+      void Promise.resolve(cached.client.auth.stopAutoRefresh()).catch(() => {
+        // The replaced client is discarded either way; its timer cannot act on the new one.
+      });
     cached = { key, client: makeClient(connection) };
   }
   return cached.client;

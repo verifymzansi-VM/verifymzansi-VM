@@ -39,8 +39,6 @@ import { cn } from "@/lib/utils";
 /** Card fields only: never select("*") into a public page. */
 const ORG_CARD_COLUMNS = `id, business_type, business_name, description, cover_photo, cover_video, video_thumbnail, logo_url, gallery_photos, location_province, location_city, category, subcategory, boost_until, featured_until, service_areas, focal_x, focal_y, media_width, media_height, view_count, ${CARD_STICKER_COLUMNS}`;
 
-export const revalidate = 300;
-
 const PAGE_SIZE = 24;
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const selectClass =

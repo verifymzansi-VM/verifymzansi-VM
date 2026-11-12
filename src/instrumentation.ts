@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { sanitizeTelemetry } from "@/lib/security/telemetry-privacy";
+import { logServerRequestError } from "@/lib/utils/request-failure";
 
 let hasLoggedBootstrapValidationFailure = false;
 
@@ -158,4 +159,17 @@ export function _resetInstrumentationForTesting() {
   hasLoggedBootstrapValidationFailure = false;
 }
 
-export const onRequestError = Sentry.captureRequestError;
+/**
+ * Server errors: one log line with the error type, the digest shown on the
+ * error page and Cloudflare's request reference (never the message, path or
+ * query string), then the privacy-filtered Sentry report.
+ */
+export function onRequestError(...args: Parameters<typeof Sentry.captureRequestError>): void {
+  const [error, request, context] = args;
+  try {
+    logServerRequestError(error, request, context);
+  } catch {
+    // Logging must never stop the error report below.
+  }
+  Sentry.captureRequestError(...args);
+}

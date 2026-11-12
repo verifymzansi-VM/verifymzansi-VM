@@ -111,6 +111,7 @@ export async function HomeBusinessShowcase() {
               focalY={b.focal_y as number | null | undefined}
               mediaWidth={b.media_width as number | null | undefined}
               mediaHeight={b.media_height as number | null | undefined}
+              isVideo={Boolean(b.cover_video)}
             />
           </div>
         ))}
