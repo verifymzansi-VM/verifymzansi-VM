@@ -372,7 +372,7 @@ Keep the public addresses branded on `@verifymzansi.com` and use Gmail only as
 the mailbox behind them.
 
 - Inbound receive path: Cloudflare Email Routing catch-all or explicit aliases
-  forward to `verifymzansi2s@gmail.com`
+  forward to the private Gmail inbox named in `CF_EMAIL_ROUTING_DESTINATION`
 - Public aliases to keep in the app: `hello@verifymzansi.com`,
   `support@verifymzansi.com`, `privacy@verifymzansi.com`,
   `security@verifymzansi.com`
