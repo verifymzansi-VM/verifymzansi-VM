@@ -55,9 +55,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
-/** Prices come from the live catalogue; refresh every five minutes. */
-export const revalidate = 300;
-
 const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
 
 const AREAS = [
