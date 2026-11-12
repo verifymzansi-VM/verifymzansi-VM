@@ -111,6 +111,12 @@ const platformNotices = {
     "New enquiry",
     "A member sent you an enquiry. Sign in to read it and manage the conversation.",
   ],
+  // Says only that the ID was sent back: the reviewer's reason and any identity
+  // details stay on the verification page, behind sign-in.
+  verification_returned: [
+    "Your ID check needs another look",
+    "We could not complete your ID check, so we have sent it back to you. Sign in and open the verification page to see why and what to do next.",
+  ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** What the notification job knows about the post a lifecycle notice is about,
@@ -184,7 +190,9 @@ export async function sendPlatformNotice(
           ? "/billing"
           : kind === "enquiry_received"
             ? "/dashboard/leads"
-            : kind === "identity_accepted" || kind === "verification_phone_confirmed"
+            : kind === "identity_accepted" ||
+                kind === "verification_phone_confirmed" ||
+                kind === "verification_returned"
               ? "/verification"
               : "/dashboard";
   return sendEmail({
@@ -207,13 +215,14 @@ export async function sendPlatformNotice(
 interface SendEmailParams {
   idempotencyKey?: string;
   replyTo?: string;
-  to: string;
+  /** One address, or a few staff addresses that all see each other. */
+  to: string | string[];
   subject: string;
   html: string;
   text?: string;
 }
 
-interface SendEmailResult {
+export interface SendEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
@@ -1034,6 +1043,58 @@ export async function sendOutboxFinalFailureAlert(
       tone: "warning",
     }),
     text: [intro, rows.map(([kind, id]) => `${kind}: ${id}`).join(EOL), next].join(EOL + EOL),
+  });
+}
+
+export interface StaffEmailSection {
+  heading?: string;
+  rows: Array<[string, string]>;
+}
+
+/**
+ * A staff operations email (the payment alert and the daily payment summary,
+ * src/lib/foundation/payment-alerts.ts). The caller builds the content from
+ * payment numbers, reason codes and counts only, never member details, and
+ * picks a key that is the same for the same content, so a retry is never
+ * delivered twice.
+ */
+export async function sendStaffOperationsEmail(params: {
+  to: readonly string[];
+  idempotencyKey: string;
+  subject: string;
+  title: string;
+  intro: string;
+  sections: readonly StaffEmailSection[];
+  closing: string;
+  reason: string;
+  tone: "warning" | "info";
+}): Promise<SendEmailResult> {
+  const body = params.sections
+    .map(
+      (section) => `${section.heading ? paragraph(section.heading) : ""}${detailList(section.rows)}`
+    )
+    .join("");
+  const text = [
+    params.intro,
+    ...params.sections.map((section) =>
+      [section.heading, ...section.rows.map(([label, value]) => `${label}: ${value}`)]
+        .filter(Boolean)
+        .join(EOL)
+    ),
+    params.closing,
+  ].join(EOL + EOL);
+  return sendEmail({
+    idempotencyKey: params.idempotencyKey,
+    to: [...params.to],
+    subject: params.subject,
+    html: brandedEmail({
+      title: params.title,
+      intro: params.intro,
+      bodyHtml: `${body}${paragraph(params.closing)}`,
+      reason: params.reason,
+      tone: params.tone,
+    }),
+    text,
   });
 }
 

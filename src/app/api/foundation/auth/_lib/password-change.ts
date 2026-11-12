@@ -16,6 +16,7 @@ import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { sendPasswordChangeNotification } from "@/lib/services/email";
 import { createLogger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 import { openedByResetLink, RECOVERY_SESSION_REFUSAL } from "./recovery-session";
 
@@ -126,7 +127,16 @@ export async function handleFoundationPasswordChange(request: NextRequest) {
         )
       );
     }
-    log.error("Foundation password change unavailable");
-    return context.respond(reply(503, "Password change could not be confirmed"));
+    const reference = logRequestFailure(log, "Foundation password change unavailable", {
+      request,
+      error,
+      action: "account:password-change",
+    });
+    return context.respond(
+      NextResponse.json(
+        { error: "Password change could not be confirmed", reference },
+        { status: 503, headers: foundationNoStore }
+      )
+    );
   }
 }

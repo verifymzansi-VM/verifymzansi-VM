@@ -168,6 +168,14 @@ describe("proxy security headers", () => {
     expect(setCookie).toContain("vm_csrf=");
   });
 
+  it("passes Cloudflare's request reference to the page as Server-Timing", async () => {
+    const res = await middleware(
+      new NextRequest("http://localhost:3000/", { headers: { "cf-ray": "8f1a2b3c4d5e6f70-JNB" } })
+    );
+    expect(res.headers.get("Server-Timing")).toBe('cfray;desc="8f1a2b3c4d5e6f70-JNB"');
+    expect((await middleware(createMockRequest("/"))).headers.has("Server-Timing")).toBe(false);
+  });
+
   it("uses a development-friendly CSP without x-nonce in development", async () => {
     const res = await middleware(createMockRequest("/"));
     const csp = res.headers.get("Content-Security-Policy");

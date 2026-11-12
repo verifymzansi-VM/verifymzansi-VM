@@ -22,10 +22,22 @@ type Screen = {
   readySelector: string;
   /** Extra condition that must hold before the picture is taken. */
   settled?: string;
+  /** Decorative elements left out of the picture (see SHOWROOM_CARD_BACKDROP). */
+  hideInPicture?: string;
 };
 
+/**
+ * The enlarged backdrop copy of the home showroom card's artwork
+ * (SmartFitBackdrop in src/components/ui/video-card-player.tsx). Chromium draws
+ * the large text inside that scaled SVG in one of two ways from one page load
+ * to the next, so the same build gave home-800 46 and home-1280 23 differing
+ * pixels in about one CI run in ten. The card, its front artwork and the rest of
+ * the page are still compared; only this duplicate is hidden in the picture.
+ */
+const SHOWROOM_CARD_BACKDROP = '[data-media-fit="smart"] > img[aria-hidden="true"]';
+
 const screens: readonly Screen[] = [
-  { name: "home", path: "/", readySelector: "main:visible" },
+  { name: "home", path: "/", readySelector: "main:visible", hideInPicture: SHOWROOM_CARD_BACKDROP },
   {
     name: "mzansi-market",
     path: "/mzansi-market",
@@ -146,7 +158,25 @@ async function openSettledScreen(
       video.currentTime = 0;
     }
   });
+  if (screen.hideInPicture) await hideInPicture(page, screen.hideInPicture);
   return { ...PICTURE_OPTIONS, fullPage: !fits };
+}
+
+/**
+ * Hides decorative elements before the picture is taken. The site's
+ * Content-Security-Policy blocks style tags without its nonce, which includes
+ * the one Playwright's `style` screenshot option adds, so the rule goes in a
+ * constructed style sheet instead (not subject to that policy).
+ */
+async function hideInPicture(page: Page, selector: string) {
+  // If the page no longer has the element, say so instead of failing on pixels.
+  await expect(page.locator(selector)).not.toHaveCount(0);
+  await page.evaluate((target) => {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`${target} { visibility: hidden !important; }`);
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  }, selector);
+  await nextFrames(page);
 }
 
 /** How much a page may grow when the window is made as tall as the page. */

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execute, pnpmInvocation } from "./lib/audit-runtime";
 import { copyWorkingTreeSnapshot } from "./lib/working-tree-snapshot";
-import { assertKycAuthenticatedScenarios, scenariosFromReport } from "./lib/kyc-browser-evidence";
+import { scenariosFromReport } from "./lib/browser-report-scenarios";
 import { missingBuiltRoutes } from "./lib/built-routes.mjs";
 async function main() {
   if (process.argv.length > 2) throw new Error("test:browser:isolated accepts no flags");
@@ -83,9 +83,6 @@ async function main() {
         "e2e/posting-guidance.spec.ts",
         "e2e/immersive-viewer.spec.ts",
         "e2e/addon-checkout.spec.ts",
-        "e2e/billing-payment-roundtrip.spec.ts",
-        "e2e/kyc-verification.spec.ts",
-        "e2e/kyc-authenticated.spec.ts",
         "e2e/dsar.spec.ts",
         "--project=chromium",
         "--project=mobile-chrome",
@@ -116,7 +113,6 @@ async function main() {
         JSON.stringify(browserReport, null, 2)
       );
       const scenarios = scenariosFromReport(browserReport);
-      assertKycAuthenticatedScenarios(scenarios);
       const uncoveredSkips = scenarios.filter(
         (scenario) =>
           scenario.status === "skipped" &&

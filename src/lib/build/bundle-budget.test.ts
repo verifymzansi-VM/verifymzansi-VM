@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectAppRouteBundles, routeFromAppChunk } from "./bundle-budget";
+import { collectAppRouteBundles, routeClientChunkFiles, routeFromAppChunk } from "./bundle-budget";
 
 describe("bundle budget app route chunks", () => {
   const appChunksDir = "C:/repo/.next/static/chunks/app";
@@ -45,5 +45,32 @@ describe("bundle budget app route chunks", () => {
         files: ["C:/repo/.next/static/chunks/app/(marketplace)/mzansi-market/page-def456.js"],
       },
     ]);
+  });
+});
+
+describe("route client chunk files", () => {
+  it("lists each script path once, relative to .next, and skips chunk ids", () => {
+    expect(
+      routeClientChunkFiles({
+        clientModules: {
+          a: { chunks: ["12", "static/chunks/12-abc.js", "34", "/_next/static/chunks/34-def.js"] },
+          b: { chunks: ["12", "static/chunks/12-abc.js"] },
+          c: { chunks: [] },
+          d: {},
+        },
+      })
+    ).toEqual(["static/chunks/12-abc.js", "static/chunks/34-def.js"]);
+  });
+
+  it("decodes URL-encoded route folders to their names on disk", () => {
+    expect(
+      routeClientChunkFiles({
+        clientModules: { a: { chunks: ["9", "static/chunks/app/listing/%5Bid%5D/page-1.js"] } },
+      })
+    ).toEqual(["static/chunks/app/listing/[id]/page-1.js"]);
+  });
+
+  it("returns nothing for a manifest without client modules", () => {
+    expect(routeClientChunkFiles({})).toEqual([]);
   });
 });

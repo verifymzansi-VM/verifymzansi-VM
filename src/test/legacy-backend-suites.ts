@@ -41,8 +41,6 @@ export const LEGACY_BACKEND_SUITES: readonly string[] = [
   "src/__tests__/listing-addon-routes.test.ts",
   "src/__tests__/listing-create-route.test.ts",
   "src/__tests__/manual-location-route.test.ts",
-  "src/__tests__/media-upload-complete-route.test.ts",
-  "src/__tests__/media-upload-url-route.test.ts",
   "src/__tests__/plan-gate.test.tsx",
   "src/__tests__/promotion-crud.test.ts",
   "src/__tests__/promotions-urgent-route.test.ts",

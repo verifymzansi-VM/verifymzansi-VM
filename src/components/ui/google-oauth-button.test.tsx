@@ -88,4 +88,18 @@ describe("GoogleOAuthButton", () => {
 
     expect(global.fetch).not.toHaveBeenCalled();
   });
+
+  it.each(["login", "register"] as const)(
+    "states the Terms and Privacy agreement under the %s button",
+    (mode) => {
+      render(<GoogleOAuthButton mode={mode} />);
+      expect(screen.getByText(/By continuing with Google, you agree to the/)).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Terms of Service" }).getAttribute("href")).toBe(
+        "/terms"
+      );
+      expect(screen.getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe(
+        "/privacy"
+      );
+    }
+  );
 });

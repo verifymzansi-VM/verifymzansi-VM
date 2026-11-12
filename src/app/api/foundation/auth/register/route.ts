@@ -6,6 +6,7 @@ import {
 import { buildAuthCallbackUrl } from "@/lib/utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "@/lib/foundation/auth-navigation";
 import { handleFoundationAuthAttempt } from "../_lib/attempt-route";
+import { foundationRegistrationReply } from "@/lib/foundation/registration-message";
 
 export function POST(request: NextRequest) {
   return handleFoundationAuthAttempt({
@@ -19,10 +20,7 @@ export function POST(request: NextRequest) {
       const callback = new URL(buildAuthCallbackUrl(request, FOUNDATION_POST_SIGNUP_PATH));
       callback.searchParams.set("backend", "foundation");
       await registerFoundationAccount(connection, input, callback.toString(), cookies);
-      return {
-        ok: true,
-        message: "If registration is available for this email, check your inbox to continue.",
-      };
+      return foundationRegistrationReply();
     },
     refusal: (error) =>
       error instanceof FoundationRegistrationError

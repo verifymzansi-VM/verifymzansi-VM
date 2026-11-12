@@ -92,8 +92,8 @@ describe("confirmMediaUploads", () => {
   });
 
   it("rejects uploads that never passed server-side validation", async () => {
-    // Direct-R2 uploads that skipped /api/media/upload-complete have a
-    // tracking row but validated_at is NULL — they must not be attachable.
+    // Uploads that never passed server-side validation have a tracking
+    // row but validated_at is NULL — they must not be attachable.
     const selectInMock = vi.fn().mockResolvedValue({
       data: [{ url: "https://media.verifymzansi.com/unvalidated.mp4", validated_at: null }],
       error: null,

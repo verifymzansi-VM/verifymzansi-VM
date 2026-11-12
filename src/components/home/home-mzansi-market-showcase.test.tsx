@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { HomeMzansiMarketShowcase } from "./home-mzansi-market-showcase";
 import { createClient } from "@/lib/supabase/server";
 
@@ -170,18 +170,23 @@ describe("HomeMzansiMarketShowcase", () => {
     expect(screen.getByTestId("auto-scroll-rail")).toBeInTheDocument();
   });
 
-  it("renders a branded empty state when no listings are available", async () => {
+  it("collapses to one 'be the first' card when no listings are available", async () => {
     const { client } = createSupabaseMock({ data: [] });
     vi.mocked(createClient).mockResolvedValue(client as never);
 
     const ui = await HomeMzansiMarketShowcase();
     render(ui);
 
-    expect(screen.getByText("No listings yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /post a listing/i })).toHaveAttribute(
-      "href",
-      "/post/create-listing"
-    );
+    const card = screen.getByRole("region", { name: "Be the first to sell on Mzansi Market" });
+    expect(within(card).getAllByRole("link")).toHaveLength(1);
+    expect(
+      within(card).getByRole("link", { name: "Be the first to sell on Mzansi Market" })
+    ).toHaveAttribute("href", "/post/create-listing");
+    // No empty rail: no area heading, "View all" link or "No ... yet" box.
+    expect(screen.queryByRole("heading", { name: "Mzansi Market" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /view all/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("auto-scroll-rail")).not.toBeInTheDocument();
   });
 
   it("filters placeholder listings before rendering the rail", async () => {
