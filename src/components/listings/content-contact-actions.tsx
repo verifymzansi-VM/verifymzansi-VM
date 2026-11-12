@@ -39,6 +39,11 @@ type ContentContactActionsProps = {
    * "Show number" to fetch it (rate-limited, recorded). Says which methods exist.
    */
   revealable?: { phone: boolean; whatsapp: boolean } | null;
+  /**
+   * The page already shows another way to reach the owner (email, website or
+   * social links), so this card never says there are no contact details.
+   */
+  hasOtherContact?: boolean;
 };
 
 export function ContentContactActions(props: ContentContactActionsProps) {
@@ -59,6 +64,7 @@ function ContactActionsForTarget({
   messageIcon: MessageIcon,
   showShare = true,
   revealable = null,
+  hasOtherContact = false,
 }: ContentContactActionsProps) {
   const [revealed, setRevealed] = useState<{
     phone: string | null;
@@ -73,6 +79,8 @@ function ContactActionsForTarget({
   }
   const canReveal =
     !revealed && !phone && !whatsapp && Boolean(revealable?.phone || revealable?.whatsapp);
+  // The reveal answered without a number (the owner removed it meanwhile).
+  const revealedNoNumber = revealed !== null && !revealed.phone && !revealed.whatsapp;
 
   async function reveal(turnstileToken?: string) {
     setRevealing(true);
@@ -213,7 +221,7 @@ function ContactActionsForTarget({
             }}
             disabled={revealing || revealChallenge}
           >
-            {revealing ? (
+            {revealing || revealChallenge ? (
               <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
             ) : (
               <Phone aria-hidden="true" className="h-4 w-4" />
@@ -222,7 +230,12 @@ function ContactActionsForTarget({
           </Button>
         )}
         {canReveal && revealChallenge && (
+          // Out of sight unless Cloudflare asks for a click; then the 150px
+          // compact box, which fits the card on a 320px phone.
           <TurnstileWidget
+            size="compact"
+            appearance="interaction-only"
+            className="flex justify-center"
             onSuccess={(token) => {
               setRevealChallenge(false);
               void reveal(token);
@@ -263,9 +276,17 @@ function ContactActionsForTarget({
           </Button>
         )}
 
-        {!canReveal && !whatsappUrl && !(showPhoneButton && phoneNumber) && !showMessageButton && (
+        {!canReveal &&
+        !whatsappUrl &&
+        !(showPhoneButton && phoneNumber) &&
+        !showMessageButton &&
+        !hasOtherContact ? (
           <p className="text-sm text-muted-foreground">No contact details added.</p>
-        )}
+        ) : revealedNoNumber ? (
+          <p className="text-sm text-muted-foreground">
+            {showMessageButton ? "No number shared. Send an enquiry instead." : "No number shared."}
+          </p>
+        ) : null}
 
         {showMessageButton ? (
           <ContentEnquiryAction config={config}>

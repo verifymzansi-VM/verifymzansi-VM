@@ -71,8 +71,8 @@ Failure triage map:
 - `pnpm cloudflare:secrets:check` failure: add missing Worker secrets (for
   example `KYC_WEBHOOK_SECRET`) and remove forbidden production bypass secrets
   before any deploy promotion.
-- `pnpm test:launch:flows` failure: prioritize billing roundtrip and DSAR flow
-  regressions before non-critical e2e suites.
+- `pnpm test:launch:flows` failure: prioritize the billing route tests and DSAR
+  flow regressions before non-critical e2e suites.
 
 ## 2. Production Env Contract
 

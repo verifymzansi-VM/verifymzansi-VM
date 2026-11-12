@@ -171,7 +171,7 @@ export const CHECKS: Check[] = [
   check(
     "browser",
     ["test:browser:isolated"],
-    "critical smoke, billing, KYC, DSAR flows; isolated build and bundle budget",
+    "critical smoke, add-on checkout and DSAR flows on the stub suite; isolated build and bundle budget (billing and KYC journeys run in e2e-foundation, part of the main release gate)",
     ["release", "payments", "kyc"],
     {
       dependencies: ["Playwright Chromium"],
@@ -196,27 +196,6 @@ export const CHECKS: Check[] = [
       tests: ["src/__tests__/cloudflare-preflight.test.ts"],
       exclusions:
         "No build, environment rewrite, deployment or remote mutation; final Worker build still required",
-    }
-  ),
-  check(
-    "kyc-auth-browser",
-    ["test:browser:isolated"],
-    "authenticated synthetic ID/selfie, evidence, final approval and independent high-risk governance UI",
-    ["release", "payments", "kyc"],
-    {
-      coveredBy: "browser",
-      dependencies: [
-        "isolated production Next build",
-        "Chromium",
-        "synthetic auth/database/storage fixtures",
-      ],
-      timeoutMs: 1_800_000,
-      exclusions: "Real PostgreSQL/RLS and genuine provider delivery are separate requirements",
-      tests: [
-        "e2e/kyc-authenticated.spec.ts",
-        "src/lib/supabase/playwright-governance.test.ts",
-        "scripts/lib/kyc-browser-evidence.ts",
-      ],
     }
   ),
   check(
@@ -440,13 +419,7 @@ for (const item of CHECKS) {
     ],
     preflight: ["src/__tests__/preflight-check.test.ts"],
     "preflight-production": ["src/__tests__/preflight-check.test.ts"],
-    browser: [
-      "e2e/smoke.spec.ts",
-      "e2e/addon-checkout.spec.ts",
-      "e2e/billing-payment-roundtrip.spec.ts",
-      "e2e/kyc-verification.spec.ts",
-      "e2e/dsar.spec.ts",
-    ],
+    browser: ["e2e/smoke.spec.ts", "e2e/addon-checkout.spec.ts", "e2e/dsar.spec.ts"],
     lighthouse: ["scripts/run-lighthouse.test.mjs", "lighthouse.config.json"],
     "http-smoke": ["src/__tests__/test-smoke-script.test.ts"],
     "video-worker": ["scripts/test-video-worker.mjs"],
