@@ -334,9 +334,7 @@ export function PosterCardShell({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/34 to-transparent px-4 pb-4 pt-12 text-white">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-            Public preview
-          </p>
+          <p className="text-[11px] font-semibold text-white/70">Public preview</p>
           <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{title}</p>
         </div>
       </div>
@@ -416,7 +414,7 @@ export function PosterCardShell({
           <div className="absolute left-2 top-2 z-[6]">
             <span
               className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-md ring-1 ring-black/10",
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 ring-black/10",
                 statusClassName
               )}
             >

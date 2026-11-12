@@ -293,7 +293,7 @@ export default async function OrganisationPage({
                   className="rounded-2xl shadow-lg ring-white/10"
                 />
                 <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-gold-300">
+                  <p className="text-xs font-bold text-brand-gold-300">
                     {isProgramme ? "Business Sponsor" : "Business network"} ·{" "}
                     {organisationTypeLabel(org.organisation_type)}
                   </p>

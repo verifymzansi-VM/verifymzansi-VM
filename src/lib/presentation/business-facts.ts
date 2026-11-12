@@ -19,7 +19,7 @@ import {
   PRIMARY_ORDER_CHANNEL_LABELS,
   WALK_IN_POLICY_LABELS,
 } from "@/lib/forms/business-type-details";
-import { formatRandAmount } from "@/lib/utils/format";
+import { formatZARShort } from "@/lib/utils/format";
 import type { BusinessDetails } from "@/types/business-details";
 
 export interface SpotlightFact extends FactItem {
@@ -371,7 +371,7 @@ export function getBusinessTypeDetails(business: BusinessDetailRecord): {
       add(
         "Callout fee from",
         typeof details.callout_fee_from === "number"
-          ? `R ${formatRandAmount(details.callout_fee_from)}`
+          ? formatZARShort(Math.round(details.callout_fee_from * 100))
           : null
       );
       add("Emergency callouts", details.emergency_callouts ? "Yes" : "No");

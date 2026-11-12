@@ -364,7 +364,11 @@ function HeaderInner({
 
         {/* Mobile actions stay visible when the menu is closed. */}
         <div className="flex shrink-0 items-center gap-1 justify-self-end lg:hidden">
-          {renderThemeToggle("relative h-11 w-11 shrink-0")}
+          {/* Signed out on a phone narrower than 375 px the logo needs this room;
+              the theme switch is then the menu's last item instead. */}
+          {renderThemeToggle(
+            cn("relative h-11 w-11 shrink-0", !isAuthenticated && "max-[374px]:hidden")
+          )}
           {/* Phones: Video mode holds the tab bar's second slot, so Search sits here. */}
           {renderSearchLink("flex shrink-0")}
           {isAuthenticated && <NotificationBell userId={auth.user?.id} />}
@@ -541,6 +545,18 @@ function HeaderInner({
               <Smartphone className="h-4 w-4" />
               Get the app
             </Link>
+            {!isAuthenticated ? (
+              <button
+                type="button"
+                className="flex min-h-11 items-center gap-2 text-sm font-medium min-[375px]:hidden"
+                onClick={handleThemeToggle}
+              >
+                <Moon className="h-4 w-4 dark:hidden" aria-hidden="true" />
+                <Sun className="hidden h-4 w-4 dark:block" aria-hidden="true" />
+                <span className="dark:hidden">Dark theme</span>
+                <span className="hidden dark:inline">Light theme</span>
+              </button>
+            ) : null}
           </div>
         </div>
       </nav>

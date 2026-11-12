@@ -98,6 +98,7 @@ export async function HomeMzansiMarketShowcase() {
                 isVideo={Boolean(l.videos?.[0])}
                 title={l.title}
                 price={l.price_cents ? l.price_cents / 100 : null}
+                priceMode={"price_mode" in l ? (l.price_mode as string | null) : null}
                 city={l.location_city ?? "South Africa"}
                 provinceCode={provinceCode(l.location_province ?? "ZA")}
                 boosted={isBoosted}

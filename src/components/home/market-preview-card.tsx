@@ -1,7 +1,7 @@
 "use client";
 
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
-import { formatRandAmount } from "@/lib/utils/format";
+import { formatZARShort } from "@/lib/utils/format";
 import { useAutoScrollRailItemState } from "@/components/home/auto-scroll-rail";
 
 interface MarketPreviewCardProps {
@@ -12,6 +12,8 @@ interface MarketPreviewCardProps {
   isVideo?: boolean;
   title: string;
   price: number | null;
+  /** "free" shows "Free" when there is no amount. */
+  priceMode?: string | null;
   city: string;
   provinceCode: string;
   boosted?: boolean;
@@ -23,7 +25,8 @@ interface MarketPreviewCardProps {
   mediaHeight?: number | null;
 }
 
-const formatPrice = (price: number) => `R ${formatRandAmount(price, price % 1 ? 2 : 0)}`;
+/** Rand in, the one card price format out ("R1 450"), as on grid cards and the post page. */
+const formatPrice = (price: number) => formatZARShort(Math.round(price * 100));
 
 export function MarketPreviewCard({
   href,
@@ -32,6 +35,7 @@ export function MarketPreviewCard({
   isVideo,
   title,
   price,
+  priceMode,
   city,
   provinceCode: _provinceCode,
   boosted: _boosted,
@@ -53,7 +57,9 @@ export function MarketPreviewCard({
       posterUrl={posterUrl}
       isVideo={isVideo}
       mediaAlt={title}
-      eyebrow={price != null && price > 0 ? formatPrice(price) : null}
+      eyebrow={
+        price != null && price > 0 ? formatPrice(price) : priceMode === "free" ? "Free" : null
+      }
       location={city || null}
       statusLabel={null}
       statusClassName="bg-brand-blue/95 text-white border border-white/10"

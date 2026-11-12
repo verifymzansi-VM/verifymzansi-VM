@@ -313,7 +313,7 @@ function MediaColumn({
                     )}
                   </div>
                   <div className="min-w-0 flex-1 text-left text-white">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/70">
+                    <p className="text-xs font-semibold text-white/70">
                       {family === "tourism"
                         ? "Tourism & Hospitality"
                         : family === "professional"
@@ -564,9 +564,7 @@ export function UnifiedLayout({
             key={`${fact.label}-${fact.value}`}
             className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {fact.label}
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">{fact.label}</p>
             <p className="mt-1 text-sm font-medium">{fact.value}</p>
           </div>
         ))}
@@ -626,9 +624,7 @@ export function UnifiedLayout({
                   : "rounded-2xl bg-muted/40 p-3"
               }
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {fact.label}
-              </p>
+              <p className="text-xs font-semibold text-muted-foreground">{fact.label}</p>
               <p className="mt-1 text-sm font-medium">{fact.value}</p>
             </div>
           ))}
@@ -637,15 +633,11 @@ export function UnifiedLayout({
     ) : family === "professional" ? (
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Service model
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Service model</p>
           <p className="mt-1 text-sm font-medium">{typeLabel ?? "Not listed"}</p>
         </div>
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Delivery
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Delivery</p>
           <p className="mt-1 text-sm font-medium">
             {deliveryAvailable ? "Available for customers" : "Not listed"}
           </p>
@@ -654,9 +646,7 @@ export function UnifiedLayout({
     ) : (
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Photos and videos
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Photos and videos</p>
           <p className="mt-1 text-sm font-medium">
             {galleryPhotos.length > 0
               ? `${galleryPhotos.length} supporting photos`
@@ -664,9 +654,7 @@ export function UnifiedLayout({
           </p>
         </div>
         <div className="rounded-2xl bg-muted/40 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Live offers
-          </p>
+          <p className="text-xs font-semibold text-muted-foreground">Live offers</p>
           <p className="mt-1 text-sm font-medium">
             {promotions.length > 0
               ? `${promotions.length} Tourism & Events posts visible`
@@ -796,9 +784,7 @@ export function UnifiedLayout({
       {showPromotions && promotions.length > 0 ? (
         <div className="space-y-3">
           <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Active posts
-            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Active posts</p>
             <h2 className="font-display text-xl font-semibold">Tourism &amp; Events posts</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
