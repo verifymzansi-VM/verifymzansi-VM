@@ -72,9 +72,11 @@ retired with it. The live foundation schema is rebuilt and compared with its
 recorded fingerprint (including grants and row level security) by
 `foundation-replay`, which also checks access-policy invariants (row level
 security on every table, no PUBLIC execute, no SECURITY DEFINER in `api`, a
-fixed `search_path` on every function), and its access rules are exercised by
-the native suite (`foundation-native`). A check of the hosted project's own
-security settings is not part of the release gate any more.
+fixed `search_path` on every function, browser-role execute on `internal`
+functions only behind an `api` function, no functions in `private`), and its
+access rules are exercised by the native suite (`foundation-native`). A check of
+the hosted project's own security settings is not part of the release gate any
+more.
 
 License reports fail closed on JSON/shape errors, unknown expressions and
 restricted license terms. The existing FFmpeg 0.12.9 exception requires the
