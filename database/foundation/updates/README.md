@@ -656,7 +656,7 @@ same fingerprints.
 `20261112122001_publish_posting_terms_v4.sql` is not applied yet. It needs no
 earlier pending update. It publishes posting terms version `posting-v4`
 (`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
-`exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI`) **without making it current**: it
+`VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc`) **without making it current**: it
 inserts one row into `private.posting_terms_versions` and changes no function,
 table, grant, acceptance or current version. It refuses (55000) when the current
 version is not `posting-v3` (or already `posting-v4`), or when `posting-v4` is

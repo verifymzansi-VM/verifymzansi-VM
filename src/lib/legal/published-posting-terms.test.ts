@@ -57,7 +57,7 @@ it("makes posting-v3 current with the post lifecycle rules decided on 9 November
 it("publishes posting-v4 ahead of time without making it the active version", () => {
   expect(manifest.active_version).toBe("posting-v3");
   const v4 = getPublishedPostingTerms("posting-v4")!;
-  expect(v4.document_hash).toBe("exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI");
+  expect(v4.document_hash).toBe("VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc");
 });
 
 it("decides from the database's current version whether a version is in force yet", () => {
@@ -119,7 +119,8 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     "An Individual slot can hold a post in any of the three posting areas",
     "You may hold 1 to 4 Individual slots at a time",
     "The limit counts every Individual slot held by the same ID-reviewed person, and each slot has its own end date",
-    "each paid slot can take at most 4 new posts in each 30-day period",
+    "each paid slot can take at most 4 posts going live in each 30-day period. A new post and an ended post brought back each count; editing a live post does not",
+    "Slots are on sale only when the pricing page offers them. While they are not on sale, the pricing page says so and nothing can be bought",
     "Each post may include one video. A video may be at most 2 minutes long, and a video for an event at most 1 minute",
     "All slots are prepaid; nothing renews automatically",
     "Paid time starts when your payment is confirmed, not when your post is approved",
@@ -137,6 +138,7 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     "A change of mind is not a reason for a refund",
     "A rejected post is not a reason for a refund",
     "we first put it right by adding the days you lost",
+    "you may cancel a slot by writing to billing@verifymzansi.com from the email address of your account",
     "The slot continues for 20 business days after we receive your request",
     "minus a cancellation fee of R50",
     "Closing your account counts as a request to cancel all your slots",

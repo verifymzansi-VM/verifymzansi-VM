@@ -33,19 +33,19 @@ begin
       coalesce(current_version,'missing') using errcode='55000';
   end if;
   select v.document_hash into published_hash from private.posting_terms_versions v where v.version='posting-v4';
-  if published_hash is not null and published_hash<>'exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI' then
+  if published_hash is not null and published_hash<>'VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc' then
     raise exception 'posting-v4 is already published with a different document' using errcode='55000';
   end if;
   -- Read by the final check: this file never changes the current version.
   perform pg_catalog.set_config('vm.posting_terms_before_v4',current_version,true);
 end$$;
 
-insert into private.posting_terms_versions(version,document_hash) values('posting-v4','exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI')
+insert into private.posting_terms_versions(version,document_hash) values('posting-v4','VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc')
   on conflict(version) do nothing;
 
 do $$begin
   if not exists(select 1 from private.posting_terms_versions v
-      where v.version='posting-v4' and v.document_hash='exBEhOdoAMyb9mANZYuHtoLBKqcSyex22eciypux6BI') then
+      where v.version='posting-v4' and v.document_hash='VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc') then
     raise exception 'posting-v4 was not published';
   end if;
   if (select c.version from private.posting_terms_current c where c.singleton)
