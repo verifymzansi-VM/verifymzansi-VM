@@ -96,11 +96,11 @@ test.describe("Commercial model", () => {
     await page.getByRole("link", { name: /choose 180 days — mzansi market/i }).click();
     await page.waitForURL("**/billing/checkout?plan=*");
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
-    await expect(page.getByText("R250").first()).toBeVisible();
+    await expect(page.getByText("R414").first()).toBeVisible();
     await expect(page.getByText("180 days", { exact: true })).toBeVisible();
     await expect(page.getByText("Does not renew automatically")).toBeVisible();
     await expect(page.getByText(/stay saved in your dashboard/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /pay r250 securely/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /pay r414 securely/i })).toBeEnabled();
   });
 
   test("an unknown plan cannot be checked out", async ({ page }, info) => {

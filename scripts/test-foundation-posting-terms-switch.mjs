@@ -154,6 +154,45 @@ try {
     );
     fails(`delete from private.plan_versions where id='${sellingBefore[0].id}';`, "23514");
   });
+  await check("a draft without a slot still adds up to 10 photos (the free first post)", () => {
+    const poster = user("free-poster");
+    // The post and its listing details go in together (a deferred detail check).
+    const draft =
+      q(`with post as (insert into private.posts(owner_id,kind,area,category_key,activity_key,title,
+        description,province_id,city_id)
+      values('${poster.id}','listing','market','other_items',(select a.key from private.category_activities a
+        join private.categories c on c.key=a.category_key where a.category_key='other_items' and c.activity_required
+        order by a.key limit 1),'Fixture free post','A synthetic description long enough for every rule.','gp',
+        'gp_johannesburg') returning id),
+      details as (insert into private.listing_details(post_id,price_mode,price_cents)
+        select id,'amount',12000 from post)
+      select id from post;`).split("\n")[0];
+    const media = (kind, mime) =>
+      q(`insert into private.media_objects(owner_id,kind,object_key,declared_bytes,size_bytes,sha256,mime,width,height,state)
+        values('${poster.id}','${kind}','media/'||gen_random_uuid(),1024,1024,
+          encode(sha256(convert_to(gen_random_uuid()::text,'UTF8')),'hex'),'${mime}',800,600,'ready') returning id;`).split(
+        "\n"
+      )[0];
+    const photos = Array.from({ length: 10 }, () => media("image", "image/jpeg"));
+    const items = (list) => JSON.stringify(list);
+    const set = (list) =>
+      member(poster, `select api.set_post_media('${draft}',1,'${items(list)}'::jsonb);`);
+    const allowed = [
+      { object_id: photos[0], purpose: "cover", position: 0 },
+      ...photos.slice(1).map((id, i) => ({ object_id: id, purpose: "gallery", position: i + 1 })),
+    ];
+    assert.equal(json(set(allowed)).revision, 2);
+    // The free first post's allowance: 10 photos.
+    const extra = media("image", "image/jpeg");
+    fails(
+      member(
+        poster,
+        `select api.set_post_media('${draft}',2,'${items([...allowed, { object_id: extra, purpose: "gallery", position: 10 }])}'::jsonb);`
+      ),
+      "22023",
+      /exceed the current post allowance/
+    );
+  });
   await check("members accept posting-v4 once; posting-v3 acceptance no longer counts", () => {
     const asked = json(member(buyer, "select api.get_owner_posting_terms();"));
     assert.equal(asked.version, "posting-v4");
