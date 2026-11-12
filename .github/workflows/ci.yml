@@ -57,6 +57,10 @@ jobs:
           fi
       - name: Check the API manifests and runtime types against the replay
         run: pnpm db:foundation:api-check
+      # Renaming a database error reason without updating the shared list
+      # (src/lib/foundation/error-reasons.ts) fails here (roadmap M6.6).
+      - name: Check the shared error-reason list against the current schema
+        run: node scripts/check-foundation-error-reasons.mjs
       # Safe order: every update file has an applied-register line, and an API
       # command or argument removed or renamed against the base commit needs a
       # recorded second step (database/foundation/contract-steps.json).

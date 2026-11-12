@@ -3,6 +3,7 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { MarketplaceArea } from "@/types/enums";
 import { PLANS, type PlanDefinition } from "../constants/pricing";
 import type { FoundationBillingCatalogue } from "./billing-catalogue";
+import { foundationArea } from "./areas";
 const count = z.number().int().nonnegative();
 export const postingAllowanceSchema = z
   .strictObject({
@@ -28,15 +29,10 @@ export const postingAllowanceSchema = z
   })
   .refine((value) => value.creation_remaining <= Math.max(0, value.capacity - value.used));
 export type PostingAllowance = z.infer<typeof postingAllowanceSchema>;
-const foundationPostingAreas = {
-  MZANSI_MARKET: "market",
-  MZANSI_BUSINESS: "business",
-  PROMOTIONS_EVENTS: "tourism_events",
-} as const;
 export async function readPostingAllowance(api: FoundationAuthenticatedApi, area: MarketplaceArea) {
   const result = await api.rpc(
     "get_my_frontend_posting_allowance_v2",
-    { p_area: foundationPostingAreas[area] },
+    { p_area: foundationArea(area) },
     { get: false }
   );
   if (result.error) throw new Error("Posting allowance is unavailable");
@@ -71,7 +67,7 @@ export function restoredPostingPlans(
   return PLANS.filter((p) => p.area === area).flatMap((base) => {
     const matches = catalogue.plans.filter(
       (p) =>
-        p.area === foundationPostingAreas[area] &&
+        p.area === foundationArea(area) &&
         p.slot_capacity === 1 &&
         p.duration_days === base.durationDays
     );

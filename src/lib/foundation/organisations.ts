@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationPublicApi } from "./public-api";
 import { isPlainText } from "./owner-inbox";
+import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 
 export const instant = z
   .string()
@@ -71,56 +72,62 @@ export class FoundationOrganisationError extends Error {
     super(`Foundation organisation request failed: ${reason}`);
   }
 }
-const reasons = new Map<string, FoundationOrganisationError["reason"]>([
-  ...[
-    "organisation_invalid",
-    "application_invalid",
-    "affiliation_invalid",
-    "consent_required",
-    "reason_required",
-    "logo_unavailable",
-    "showcase_invalid",
-    "acquisition_invalid",
-    "partner_invalid",
-    "commission_invalid",
-  ].map((detail) => [detail, "invalid"] as const),
-  ...[
-    "organisation_unavailable",
-    "business_unavailable",
-    "programme_unavailable",
-    "application_unavailable",
-    "affiliation_unavailable",
-    "invite_unavailable",
-    "admin_unavailable",
-    "sponsorship_unavailable",
-    "showcase_unavailable",
-    "partner_unavailable",
-    "commission_unavailable",
-  ].map((detail) => [detail, "not_found"] as const),
-  ...[
-    "organisation_changed",
-    "organisation_slug_taken",
-    "organisation_inactive",
-    "applications_closed",
-    "application_open",
-    "application_state",
-    "already_affiliated",
-    "affiliation_state",
-    "admin_exists",
-    "admin_limit",
-    "programme_inactive",
-    "sponsorship_exists",
-    "sponsorship_state",
-    "sponsorship_owner_unavailable",
-    "sponsorship_waitlist_full",
-    "sponsorship_busy",
-    "showcase_changed",
-    "showcase_limit",
-    "partner_exists",
-    "partner_code_taken",
-    "partner_account_unavailable",
-    "commission_state",
-  ].map((detail) => [detail, "conflict"] as const),
+const reasons = new Map<FoundationErrorReason, FoundationOrganisationError["reason"]>([
+  ...(
+    [
+      "organisation_invalid",
+      "application_invalid",
+      "affiliation_invalid",
+      "consent_required",
+      "reason_required",
+      "logo_unavailable",
+      "showcase_invalid",
+      "acquisition_invalid",
+      "partner_invalid",
+      "commission_invalid",
+    ] satisfies FoundationErrorReason[]
+  ).map((detail) => [detail, "invalid"] as const),
+  ...(
+    [
+      "organisation_unavailable",
+      "business_unavailable",
+      "programme_unavailable",
+      "application_unavailable",
+      "affiliation_unavailable",
+      "invite_unavailable",
+      "admin_unavailable",
+      "sponsorship_unavailable",
+      "showcase_unavailable",
+      "partner_unavailable",
+      "commission_unavailable",
+    ] satisfies FoundationErrorReason[]
+  ).map((detail) => [detail, "not_found"] as const),
+  ...(
+    [
+      "organisation_changed",
+      "organisation_slug_taken",
+      "organisation_inactive",
+      "applications_closed",
+      "application_open",
+      "application_state",
+      "already_affiliated",
+      "affiliation_state",
+      "admin_exists",
+      "admin_limit",
+      "programme_inactive",
+      "sponsorship_exists",
+      "sponsorship_state",
+      "sponsorship_owner_unavailable",
+      "sponsorship_waitlist_full",
+      "sponsorship_busy",
+      "showcase_changed",
+      "showcase_limit",
+      "partner_exists",
+      "partner_code_taken",
+      "partner_account_unavailable",
+      "commission_state",
+    ] satisfies FoundationErrorReason[]
+  ).map((detail) => [detail, "conflict"] as const),
   ["invite_invalid", "invite_invalid"],
   ["invite_email_mismatch", "forbidden"],
   ["self_sponsorship", "forbidden"],
@@ -142,8 +149,7 @@ export async function settle<T>(request: OrganisationRpc, schema: z.ZodType<T>) 
   );
   if (error)
     throw new FoundationOrganisationError(
-      (error.details && reasons.get(error.details)) ||
-        (error.code === "42501" ? "forbidden" : "unavailable")
+      lookupDatabaseReason(reasons, error) || (error.code === "42501" ? "forbidden" : "unavailable")
     );
   const parsed = schema.safeParse(data);
   if (!parsed.success) throw new FoundationOrganisationError("unavailable");

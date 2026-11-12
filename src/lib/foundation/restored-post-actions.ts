@@ -3,12 +3,14 @@ import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
+import { hasDatabaseReason } from "./error-reasons";
+import { foundationArea, foundationKind, restoredAreaSchema } from "./areas";
 const log = createLogger("OwnerPostActions");
 const common = {
   operationId: z.uuid(),
   expectedRevision: z.number().int().min(1).max(2147483644),
   contentType: z.enum(["listing", "business", "promotion"]),
-  area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]),
+  area: restoredAreaSchema,
 };
 const standard = z.strictObject({ ...common, itemId: z.uuid() });
 const lifecycle = z.strictObject({
@@ -50,12 +52,7 @@ export function handleRestoredPostAction(
       const value = mode === "lifecycle" ? lifecycle.parse(input) : standard.parse(input);
       const id = "id" in value ? value.id : value.itemId,
         action = "action" in value ? value.action : mode;
-      const area =
-        value.area === "MZANSI_MARKET"
-          ? "market"
-          : value.area === "MZANSI_BUSINESS"
-            ? "business"
-            : "tourism_events";
+      const area = foundationArea(value.area);
       const result = await api.rpc(
         "execute_my_frontend_post_action",
         {
@@ -63,7 +60,7 @@ export function handleRestoredPostAction(
           p_post: id.toLowerCase(),
           p_expected_revision: value.expectedRevision,
           p_action: action,
-          p_kind: value.contentType === "promotion" ? "event" : value.contentType,
+          p_kind: foundationKind(value.contentType),
           p_area: area,
         },
         { get: false }
@@ -92,10 +89,9 @@ export function handleRestoredPostAction(
         if (code === "PT409")
           throw new ActionRefusal({
             status: 409,
-            error:
-              result.error.details === "posting_terms_required"
-                ? "Review and accept the current posting terms before continuing"
-                : "Your post or posting allowance changed. Reload your posts before continuing.",
+            error: hasDatabaseReason(result.error, "posting_terms_required")
+              ? "Review and accept the current posting terms before continuing"
+              : "Your post or posting allowance changed. Reload your posts before continuing.",
             reason: "post_changed",
           });
         if (code === "PT429")

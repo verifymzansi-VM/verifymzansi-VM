@@ -2,6 +2,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { hasDatabaseMessage, hasDatabaseReason } from "./error-reasons";
+import { collectionArea } from "./areas";
 import { handleFoundationOwnerRoute, type FoundationRefusal } from "@/lib/foundation/owner-route";
 import { readFoundationAccountContext, FoundationAccountContextError } from "./account-context";
 import { readFoundationOwnerDashboard } from "./owner-dashboard";
@@ -24,7 +26,7 @@ function fail(
   error: { code?: string; details?: string | null; message?: string },
   collection: PublicCollection
 ): never {
-  if (error.details === "posting_verification_required")
+  if (hasDatabaseReason(error, "posting_verification_required"))
     throw new PostRefusal({
       status: 403,
       error: "Verification required",
@@ -37,14 +39,14 @@ function fail(
       error: "Post access is unavailable",
       reason: "post_access_unavailable",
     });
-  if (error.details === "slug_conflict")
+  if (hasDatabaseReason(error, "slug_conflict"))
     throw new PostRefusal({
       status: 409,
       error: "Business slug already in use",
       reason: "Choose a different URL slug for this business.",
       details: { slug: "This URL slug is already taken." },
     });
-  if (error.details === "posting_terms_required" || error.details === "posting_terms_changed")
+  if (hasDatabaseReason(error, "posting_terms_required", "posting_terms_changed"))
     throw new PostRefusal({
       status: 409,
       error: "Review and accept the current posting terms before submitting",
@@ -55,16 +57,15 @@ function fail(
       status: 403,
       error: "An active posting plan is required",
       reason: "Choose a posting plan to continue.",
-      redirectUrl: `/pricing?area=${collection === "listings" ? "MZANSI_MARKET" : collection === "businesses" ? "MZANSI_BUSINESS" : "PROMOTIONS_EVENTS"}`,
+      redirectUrl: `/pricing?area=${collectionArea(collection)}`,
     });
   if (error.code === "PT409")
     throw new PostRefusal({
       status: 409,
-      error:
-        error.message === "all posting capacity is in use"
-          ? "Your available slots or allowance for new posts are used. Check your posting plan."
-          : "Your post or posting allowance changed. Reload your posts before retrying.",
-      reason: error.message === "all posting capacity is in use" ? "posting_limit" : "post_changed",
+      error: hasDatabaseMessage(error, "postingCapacityInUse")
+        ? "Your available slots or allowance for new posts are used. Check your posting plan."
+        : "Your post or posting allowance changed. Reload your posts before retrying.",
+      reason: hasDatabaseMessage(error, "postingCapacityInUse") ? "posting_limit" : "post_changed",
     });
   if (error.code === "PT429")
     throw new PostRefusal({
