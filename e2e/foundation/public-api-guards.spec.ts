@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { readTestCopy, type TestCopy } from "./support/test-copy";
 
 // What the website's own routes answer a visitor who is not signed in, and
 // the media cache headers, in foundation mode. Moved from the stub suite
 // (PORTING.md): kyc-verification, critical-flows (guardrails), auth-qa-audit
 // (TC08), addon-checkout and media-cache-policy. Every request is anonymous
-// and changes nothing in the test copy.
+// and changes nothing in the test copy. Also the post link-preview image and
+// the retired routes (roadmap M6.4).
 
 type GuardedRoute = { name: string; method: "get" | "post"; path: string; data?: object };
 
@@ -125,4 +127,53 @@ test.describe("media cache policy", () => {
     expect(notifications.status()).toBe(401);
     expect(notifications.headers()["cache-control"]).toContain("no-store");
   });
+});
+
+test.describe("post link preview", () => {
+  // Seeded live posts (fixture/posts.json) and the link type their pages share.
+  const LINKS = [
+    { title: "Fixture Mzansi Motor Workshop", type: "business" },
+    { title: "Fixture Soweto Craft Market", type: "promotion" },
+  ];
+  let posts: TestCopy["posts"];
+  const idOf = (title: string) => {
+    const id = posts.find((post) => post.title === title)?.id;
+    expect(id, title).toBeTruthy();
+    return id!;
+  };
+
+  test.beforeAll(() => {
+    posts = readTestCopy().posts;
+  });
+
+  for (const link of LINKS) {
+    test(`a shared ${link.type} link shows a PNG card`, async ({ request }) => {
+      const response = await request.get(`/api/share-preview/${link.type}/${idOf(link.title)}`);
+      expect(response.status()).toBe(200);
+      expect(response.headers()["content-type"]).toBe("image/png");
+      expect(response.headers()["cache-control"]).toBe("public, max-age=300, s-maxage=300");
+      expect((await response.body()).subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    });
+  }
+
+  test("an unknown post, or a post under another link type, has no card", async ({ request }) => {
+    const business = idOf("Fixture Mzansi Motor Workshop");
+    for (const path of [
+      `/api/share-preview/listing/${randomUUID()}`,
+      `/api/share-preview/listing/${business}`,
+      `/api/share-preview/promotion/${business}`,
+    ]) {
+      const response = await request.get(path);
+      expect(response.status(), path).toBe(404);
+      expect(response.headers()["cache-control"], path).toBe("no-store");
+    }
+  });
+});
+
+test.describe("retired routes are gone", () => {
+  for (const path of ["/api/otp/health", "/api/media/upload-url", "/api/media/upload-complete"]) {
+    test(`${path} answers 404`, async ({ request }) => {
+      expect((await request.get(path)).status()).toBe(404);
+    });
+  }
 });

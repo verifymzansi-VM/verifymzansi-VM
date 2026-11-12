@@ -8,6 +8,7 @@ import {
   type PublicCollection,
 } from "./marketplace-read";
 import { readFoundationPublicPost, readFoundationPublicContactChannels } from "./public-post";
+import type { FoundationPublicPostCore } from "./public-post-contract";
 import { readPublicBusinessStickers } from "./business-seen";
 import { searchFoundationPresentedCards } from "./public-cards";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
@@ -68,12 +69,16 @@ export async function restoredHomeCollection(collection: PublicCollection, touri
   }
 }
 
-export const restoredPublicDetail = cache(async (id: string) => {
+/** A publicly live post with its presentation, as its detail page reads it.
+ * The link preview skips the contact-channel read it does not show. */
+async function readRestoredPublicPost(id: string, withContactChannels: boolean) {
   if (!z.uuid().safeParse(id).success) return null;
   const api = foundationServerPublicApi();
   const post = await readFoundationPublicPost(api, { id });
   if (!post) return null;
-  const contact_channels = await readFoundationPublicContactChannels(api, { id });
+  const contact_channels = withContactChannels
+    ? await readFoundationPublicContactChannels(api, { id })
+    : [];
   const presentation = (
     await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
   ).items[0]?.presentation;
@@ -84,7 +89,30 @@ export const restoredPublicDetail = cache(async (id: string) => {
     business_type: presentation.business_type,
     frontend: presentation.frontend,
   };
-});
+}
+
+export const restoredPublicDetail = cache((id: string) => readRestoredPublicPost(id, true));
+
+/**
+ * The link-preview card (`/api/share-preview`): title, place, price and cover
+ * of a publicly live post of the requested kind, null otherwise (unknown,
+ * unpublished, expired or another kind). No seller, contact, description or
+ * evidence field leaves here.
+ */
+export async function restoredSharePreview(kind: FoundationPublicPostCore["kind"], id: string) {
+  const post = await readRestoredPublicPost(id, false);
+  if (post?.kind !== kind) return null;
+  const row = restoredPublicRow(post, post);
+  return {
+    title: row.title,
+    tourism: post.area === "tourism_events",
+    location_city: row.location_city,
+    location_province: row.location_province,
+    price_cents: row.price_cents,
+    video_thumbnail: row.video_thumbnail,
+    has_video: row.videos.length > 0,
+  };
+}
 
 export const restoredListingDetail = cache(async (id: string) => {
   const post = await restoredPublicDetail(id);
