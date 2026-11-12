@@ -89,50 +89,38 @@ beforeAll(async () => {
 });
 
 describe("Active-area pricing parity", () => {
-  it("pricing page shows the R50 / R140 / R250 fixed-day ladder, free events and the organisation route", async () => {
+  // No plan is on sale (the database catalogue cannot be read here, as when paid
+  // plans are paused): the R69 prices show, nothing links to checkout.
+  it("pricing page shows the R69 / R207 / R414 slot prices as opening soon, and free events", async () => {
     render(await PricingPage());
     const radios = screen
       .getAllByRole("radio")
       .map((radio) => radio.textContent?.replace(/\s+/g, " ").trim());
     expect(radios).toHaveLength(3);
-    expect(screen.getByTestId("retail-offer-month")).toHaveTextContent("R50");
-    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("R140");
-    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("Popular");
-    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("Save R10");
-    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R250");
-    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Best value");
-    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("Save R50");
-    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R41.67 per 30 days");
+    expect(screen.getByTestId("retail-offer-month")).toHaveTextContent("R69");
+    expect(screen.getByTestId("retail-offer-quarter")).toHaveTextContent("R207");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R414");
+    expect(screen.getByTestId("retail-offer-half_year")).toHaveTextContent("R69 per 30 days");
+    expect(screen.queryByText(/Popular|Best value|Save R/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("retail-offer-year")).not.toBeInTheDocument();
     expect(screen.queryByText(/12 months|R450/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Free").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /request a sponsor proposal/i })).toHaveAttribute(
-      "href",
-      "/contact?topic=organisation_proposal"
-    );
-    expect(screen.getByRole("link", { name: "Choose a multi-listing plan" })).toHaveAttribute(
-      "href",
-      "#multi-listing-prices"
-    );
-    // Retired legacy prices; "R30 per post per 30 days" on a multi-listing plan is current.
-    expect(screen.queryByText(/R650|R30 (?!per post)/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Opens soon" })).toHaveLength(3);
+    expect(screen.getByText(/Paid slots open soon/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Choose /i })).not.toBeInTheDocument();
+    // Multi-listing and sponsor prices are hidden while they are not on sale.
+    expect(screen.queryByRole("link", { name: /multi-listing|sponsor/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Multi-listing price|Sponsor fee/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/R650|R50\b|R140|R250|R1,200|R15,000/)).not.toBeInTheDocument();
     expect(screen.queryByText("Mall Shops")).not.toBeInTheDocument();
-    const planLinks = screen.getAllByRole("link", {
-      name: /Choose .*(30 Days|90 Days|180 Days)/i,
-    });
-    expect(planLinks).toHaveLength(3);
-    expect(
-      planLinks.every((link) => link.getAttribute("href")?.startsWith("/billing/checkout?plan="))
-    ).toBe(true);
   });
 
   it("billing page keeps the introductory trial copy", async () => {
     render(await BillingPage());
     // The trial rules now live once, in the "How billing works" FAQ.
     expect(screen.getByText("How does the free introductory post work?")).toBeInTheDocument();
-    expect(
-      screen.getByText(/choose one post for\s+7\s+days, or a 30-day launch trial/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/post once for free for\s+7\s+days from approval/)).toBeInTheDocument();
+    expect(screen.queryByText(/30-day launch trial|while spaces/)).not.toBeInTheDocument();
     expect(
       screen.getByText(/Strategic, founding partner and organisation-sponsored/)
     ).toBeInTheDocument();

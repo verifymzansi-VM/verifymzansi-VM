@@ -147,6 +147,22 @@ describe("plan checkouts are not add-ons", () => {
   });
 });
 
+describe("plan checkouts while no plan is on sale (paid plans paused)", () => {
+  it("refuse with the paused code before any payment is started", async () => {
+    vi.mocked(readFoundationBillingCatalogue).mockResolvedValueOnce({
+      ...catalogue,
+      plans: [],
+    } as never);
+    const response = await handleFoundationBillingRoute(request({ planId }), "checkout");
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: "Paid slots open soon. You have not been charged.",
+      code: "plan_sales_paused",
+    });
+    expect(startFoundationCheckout).not.toHaveBeenCalled();
+  });
+});
+
 describe("once paid add-on sales are switched on", () => {
   beforeEach(() => vi.stubEnv("ADDON_SALES_ENABLED", "true"));
   it("starts the add-on checkout for the catalogue product and the post", async () => {

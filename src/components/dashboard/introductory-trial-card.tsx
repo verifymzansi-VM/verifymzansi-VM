@@ -107,7 +107,7 @@ export function IntroductoryTrialCard({ foundationClaim }: { foundationClaim?: C
               <p className="text-sm leading-6 text-muted-foreground">
                 {freePostsRemaining > 0
                   ? `${freePostsRemaining} extra free posts left. Each runs 30 days from approval. No automatic charge.`
-                  : `One free ${lengths.short}-day post or a ${lengths.long}-day launch trial. Events are always free. No automatic charge.`}
+                  : `One free ${lengths.short}-day post. Events are always free. No automatic charge.`}
               </p>
             </>
           ) : (

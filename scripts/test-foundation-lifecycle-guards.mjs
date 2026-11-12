@@ -703,7 +703,7 @@ try {
         "select jsonb_build_object('version',v.version,'document_hash',v.document_hash) from private.posting_terms_current c join private.posting_terms_versions v using(version) where c.singleton;"
       );
     const v3 = { version: "posting-v3", document_hash: CATALOGUE.versions["posting-v3"] };
-    assert.equal(CATALOGUE.active_version, "posting-v3");
+    assert.ok(Object.hasOwn(CATALOGUE.versions, "posting-v3"));
     assert.deepEqual(currentTerms(), v3);
     const after = fingerprint();
     const summary = preflight(TERMS_V3_PREFLIGHT);
@@ -2019,6 +2019,17 @@ try {
 
   applySteps(database, steps.slice(returnedIndex + 1));
   console.log(`Applied ${TRIAL}, ${RETURNED} and any later updates.`);
+  // A later update may make a newer posting terms version current (posting-v4,
+  // 20261112173841_switch_posting_terms_v4.sql): every member accepts it once.
+  Object.assign(
+    TERMS,
+    json(
+      "select jsonb_build_object('version',v.version,'document_hash',v.document_hash) from private.posting_terms_current c join private.posting_terms_versions v using(version) where c.singleton;"
+    )
+  );
+  q(
+    `insert into private.posting_terms_acceptances(owner_id,version,document_hash) select u.id,'${TERMS.version}','${TERMS.document_hash}' from auth.users u on conflict do nothing;`
+  );
 
   // ----------------------------------------------------- cutover safety
   const endedRows = () =>

@@ -2,6 +2,8 @@ import { expect, it } from "vitest";
 import { getPublishedPostingTerms, assertPublishedPostingTerms } from "./published-posting-terms";
 import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
+import { ENTERPRISE_PLANS, PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { buildCommercialCatalog } from "@/lib/commercial/plans";
 
 const text = (version: string) =>
   getPublishedPostingTerms(version)!
@@ -17,7 +19,6 @@ it("keeps the never-current posting-v2 draft published but inactive", () => {
 });
 
 it("makes posting-v3 current with the post lifecycle rules decided on 9 November 2026", () => {
-  expect(manifest.active_version).toBe("posting-v3");
   const v3 = getPublishedPostingTerms("posting-v3")!;
   expect(v3.document_hash).toBe("p2X2YRoaYDOwYDtYhTiFcznVghgyGzRmTJ6BexfhkQE");
   const content = text("posting-v3");
@@ -49,17 +50,170 @@ it("makes posting-v3 current with the post lifecycle rules decided on 9 November
   expect(content).toContain("at least 14 days' notice");
 });
 
-it("shows the posting-v3 rules on the Terms page when no published version is read", () => {
-  const fallback = buildTermsTextSections({});
+it("makes posting-v4 the site's one set of Terms", () => {
+  expect(manifest.active_version).toBe("posting-v4");
+  const v4 = getPublishedPostingTerms("posting-v4")!;
+  expect(v4.document_hash).toBe("HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg");
+  // Visitors never see version names: the text does not mention versions.
+  expect(text("posting-v4")).not.toMatch(/version/i);
+});
+
+// The site must never show one price while the Terms in force state another.
+// These price constants feed the pricing page's prices while nothing is on
+// sale (and its fallback) and the static price wording (FAQ, Advertise, plan
+// step). In foundation mode what can be bought comes from the database
+// catalogue, which this test cannot see: the switch update takes the old plans
+// off sale (database/foundation/updates/README.md, Posting Terms v4).
+it("keeps the site's price constants in step with the active Terms", () => {
+  const content = text(manifest.active_version);
+  const rand = (cents: number) => `R${(cents / 100).toLocaleString("en-US")}`;
+  expect(RETAIL_OFFERS.length).toBeGreaterThan(0);
+  for (const offer of RETAIL_OFFERS)
+    expect(content).toContain(`${rand(offer.priceCents)} for ${offer.durationDays} days`);
+  // A "was" price is shown only while the active Terms allow discounts.
+  const noDiscounts = content.includes("There are no discounts");
+  const wasPrices = RETAIL_OFFERS.filter((offer) => offer.compareAtCents !== undefined);
+  for (const offer of wasPrices)
+    expect(noDiscounts, `${rand(offer.compareAtCents!)} was-price`).toBe(false);
+  // Multi-listing and sponsor prices are shown only while they are on sale and
+  // the active Terms cover multi-listing plans or state each price.
+  const multiListingCovered = content.includes(
+    "Multi-listing plans bought online follow these Terms"
+  );
+  for (const plan of ENTERPRISE_PLANS)
+    expect(
+      !PACKAGES_ON_SALE || multiListingCovered || content.includes(rand(plan.priceCents)),
+      `${plan.planCode} ${rand(plan.priceCents)}`
+    ).toBe(true);
+  // With no plan on sale in the database, nothing links to checkout.
+  expect(buildCommercialCatalog([]).onSale).toBe(false);
+});
+
+it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
+  const content = text("posting-v4");
+  for (const rule of [
+    // The slot rule and the Individual prices; no other package price.
+    "The price is the slot price for each slot and each 30-day period: slot price × number of slots × number of 30-day periods. There are no discounts",
+    "Individual slots cost R69 per slot for each 30 days: R69 for 30 days, R207 for 90 days or R414 for 180 days",
+    "An Individual slot can hold a post in any of the three posting areas",
+    "You may hold 1 to 4 Individual slots at a time",
+    "The limit counts every Individual slot held by the same ID-reviewed person, and each slot has its own end date",
+    "each paid slot can take at most 4 posts going live in each 30-day period. A new post and an ended post brought back each count; editing a live post does not",
+    "Slots are on sale only when the pricing page offers them. While they are not on sale, the pricing page says so and nothing can be bought",
+    "Each post may include one video. A video may be at most 2 minutes long, and a video for an event at most 1 minute",
+    "All slots are prepaid; nothing renews automatically",
+    "Paid time starts when your payment is confirmed, not when your post is approved",
+    "if you renew a slot before it ends, the new days start when its current days end",
+    "Price changes apply only to new purchases",
+    "Orders of R10,000 or less are paid online",
+    "For an order of more than R10,000, ask us for an invoice. We issue the invoice first and you pay it by EFT; the slots start when the money has cleared in our bank account",
+    "After a payment is confirmed (for an invoice, once the money has cleared), we issue a payment record",
+    "We do not add payment fees",
+    "agree that the 7-day cooling-off period therefore does not apply, because the service starts immediately",
+    "for an invoice order you confirm it when you ask for the invoice, and we record your confirmation before the invoice is paid",
+    "under section 42(2)",
+    "VerifyMzansi is not registered for VAT",
+    // The refund and cancellation policy.
+    "A change of mind is not a reason for a refund",
+    "A rejected post is not a reason for a refund",
+    "we first put it right by adding the days you lost",
+    "you may cancel a slot by writing to billing@verifymzansi.com from the email address of your account",
+    "The slot continues for 20 business days after we receive your request",
+    "minus a cancellation fee of R50",
+    "Closing your account counts as a request to cancel all your slots",
+    "Buyers that are not individuals, such as companies, close corporations, trusts, partnerships and associations, are not refunded for unused days",
+    "Billing errors and duplicate payments are refunded in full",
+    "Refunds are paid only to the bank account that paid",
+    "Before submitting a post, you must explicitly accept these Terms",
+    // A breach: content may be removed at once; a paid slot ends only after notice.
+    "Removing content or suspending an account under Prohibited content does not end your paid slots",
+    "the slot ends only if you have not remedied the breach within 20 business days after that notice (Consumer Protection Act, section 14(2)(b)(ii))",
+    "Paid slots end only as set out under Refunds & cancelling below",
+    // Unchanged lifecycle rules and the 3-day grace.
+    "You may buy a slot and reactivate such a post within 3 days; after that the post and its media are deleted",
+    "deletion waits up to 24 hours more",
+    "A post you mark as sold leaves public view and is deleted with its media 3 days later",
+    "A deactivated (paused) post keeps its posting slot",
+    // The free first post, from its approval.
+    "your first post is free for 7 days",
+    "The 7 days start when we approve that post, not when you submit it",
+    // The free post rule as the database applies it (internal.start_intro_trial,
+    // internal.start_sponsorship and internal.grant_intro_trial record the free
+    // post; a paid slot does not).
+    "you already have an unused paid slot with at least 7 days left that allows the post's photos and video, the post uses that slot instead and your free post stays unused",
+    "A sponsored place, or a free post we grant you, counts as your free post",
+    // Partners and referral links.
+    // Partners as built (internal.record_my_acquisition, internal.my_partner_dashboard).
+    "A partner's link or code counts only if it is recorded within 7 days after you sign up",
+    "that record cannot be changed afterwards, so you can be linked to one partner at most",
+    "You may ask us at any time which partner, if any, referred you",
+    "A partner sees how many people they referred and how many of them have paid, and for each payment its amount and the commission it earned",
+    "A partner never sees your name, contact details, ID details, bank or card details",
+  ])
+    expect(content).toContain(rule);
+  for (const retired of [
+    "R140",
+    "R250",
+    "R100",
+    "R150",
+    "30 days while",
+    "launch spaces",
+    "tax invoice",
+    "or ask for a refund",
+    "unused time on an active plan is not refunded",
+    "Multi-listing plans bought online",
+  ])
+    expect(content).not.toContain(retired);
+  // "R50" appears once, as the cancellation fee of the refund policy, never as a price.
+  expect(content.match(/R50\b/g)).toEqual(["R50"]);
+});
+
+it("keeps posting-v3's unchanged sections in posting-v4 word for word", () => {
   const v3 = getPublishedPostingTerms("posting-v3")!;
-  for (const [id, index] of [
-    ["payments", 2],
-    ["payments", 3],
-    ["trials", 2],
-  ] as const)
-    expect(fallback.find((section) => section.id === id)!.content[index]).toBe(
-      v3.sections.find((section) => section.id === id)!.content[index]
-    );
+  const v4 = getPublishedPostingTerms("posting-v4")!;
+  const v3Section = (id: string) => v3.sections.find((section) => section.id === id)!;
+  expect(v4.sections.map((section) => section.id)).toEqual([
+    "acceptance",
+    "registration",
+    "posting-obligations",
+    "prohibited-content",
+    "our-role",
+    "verification-signals",
+    "payments",
+    "paying",
+    "refunds",
+    "trials",
+    "partners",
+    "promotion-rights",
+    "liability",
+  ]);
+  for (const id of [
+    "acceptance",
+    "registration",
+    "our-role",
+    "verification-signals",
+    "promotion-rights",
+    "liability",
+  ])
+    expect(v4.sections.find((section) => section.id === id)).toEqual(v3Section(id));
+  const obligations = v4.sections.find((section) => section.id === "posting-obligations")!;
+  expect(obligations.content.slice(0, 5)).toEqual(
+    v3Section("posting-obligations").content.slice(0, 5)
+  );
+  const prohibited = v4.sections.find((section) => section.id === "prohibited-content")!;
+  expect(prohibited.content.slice(0, 5)).toEqual(
+    v3Section("prohibited-content").content.slice(0, 5)
+  );
+  expect(v4.privacy_path).toBe(v3.privacy_path);
+  expect(v4.company_details_path).toBe(v3.company_details_path);
+});
+
+it("shows the current Terms word for word when the published Terms cannot be read", () => {
+  const fallback = buildTermsTextSections({});
+  const current = getPublishedPostingTerms(manifest.active_version)!;
+  expect(fallback).toEqual(
+    current.sections.map(({ id, navLabel, title, content }) => ({ id, navLabel, title, content }))
+  );
 });
 
 it("pins the archived document hash and rejects unknown versions", () => {

@@ -122,3 +122,22 @@ export function updateCheckViews(database, current, { preflight }) {
     },
   };
 }
+
+/** A plan version that is on sale: `planId` itself, or, once the switch to
+ * posting-v4 (20261112173841_switch_posting_terms_v4.sql) has taken it off
+ * sale, a copy published as the next version of the same plan code, as a later
+ * catalogue update would. For checks that still buy a plan after later updates. */
+export function planOnSale(q, planId) {
+  if (
+    q(
+      `select count(*) from private.plan_versions where id='${planId}' and is_public and retired_at is null;`
+    ) === "1"
+  )
+    return planId;
+  return q(`insert into private.plan_versions (plan_code, version, area, label, price_cents, currency, duration_days,
+      slot_capacity, activations_per_period, activation_period_days, max_photos, max_videos, addon_capabilities)
+    select p.plan_code, (select max(x.version)+1 from private.plan_versions x where x.plan_code=p.plan_code), p.area,
+      p.label, p.price_cents, p.currency, p.duration_days, p.slot_capacity, p.activations_per_period,
+      p.activation_period_days, p.max_photos, p.max_videos, p.addon_capabilities
+    from private.plan_versions p where p.id='${planId}' returning id;`).split("\n")[0];
+}

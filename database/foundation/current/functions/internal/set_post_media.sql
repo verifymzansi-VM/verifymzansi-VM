@@ -43,6 +43,11 @@ begin
       -- Submission still checks the exact entitlement selected atomically.
       select max(v.max_photos),max(v.max_videos) into photo_limit,video_limit
       from private.plan_versions v where v.is_public and v.retired_at is null and (v.area is null or v.area=post.area);
+      -- With no plan on sale (paid plans paused), drafts prepare the free first
+      -- post's allowance (internal.grant_intro_trial: 10 photos, 1 video).
+      if photo_limit is null or video_limit is null then
+        photo_limit:=10; video_limit:=1;
+      end if;
     end if;
   end if;
   if photo_limit is null or video_limit is null then
