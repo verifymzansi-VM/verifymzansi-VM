@@ -26,6 +26,7 @@ import {
   readFoundationPayment,
   reconcileFoundationPayment,
   startFoundationCheckout,
+  startFoundationSlotCheckout,
 } from "./billing-runtime";
 
 type Operation =
@@ -165,36 +166,53 @@ export async function handleFoundationBillingRoute(
         NextResponse.json(await manageFoundationPlanMember(caller.api, input))
       );
     const catalogue = await readFoundationBillingCatalogue(createFoundationPublicApi(connection));
-    let productId: string;
-    let postId: string | null = null;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com";
     if (addon) {
-      postId = z.uuid().parse(addon.postId);
       const product = catalogue.addons.find(
         (entry) => entry.kind === addon.kind && entry.days === addon.days
       );
       if (!product) throw new FoundationBillingError(400, "This add-on is not available");
-      productId = product.id;
-    } else {
-      const value = z
-        .strictObject({
-          planId: z.uuid(),
-          area: restoredAreaSchema.optional(),
-        })
-        .parse(input);
-      const product = selectFoundationBillingPlan(catalogue, value.planId);
-      if (
-        !product ||
-        (value.area && product.area !== null && product.area !== foundationArea(value.area))
-      )
-        throw new FoundationBillingError(400, "This plan is not available in the selected section");
-      productId = product.id;
+      const result = await startFoundationCheckout(
+        caller.api,
+        caller.accountId,
+        product.id,
+        z.uuid().parse(addon.postId),
+        appUrl
+      );
+      return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
     }
-    const result = await startFoundationCheckout(
+    const value = z
+      .strictObject({
+        planId: z.uuid(),
+        area: restoredAreaSchema.optional(),
+        slots: z.number().int().min(1).max(25),
+        expectedTotalCents: z.number().int().positive().max(100_000_000),
+        coolingOffConsent: z.boolean().optional(),
+      })
+      .parse(input);
+    const product = selectFoundationBillingPlan(catalogue, value.planId);
+    if (
+      !product ||
+      (value.area && product.area !== null && product.area !== foundationArea(value.area))
+    )
+      throw new FoundationBillingError(400, "This plan is not available in the selected section");
+    // posting-v4: no payment without the consent; the database records it.
+    if (value.coolingOffConsent !== true)
+      throw new FoundationBillingError(
+        400,
+        "Tick the box to confirm that your slot starts now.",
+        "CONSENT_REQUIRED"
+      );
+    const result = await startFoundationSlotCheckout(
       caller.api,
       caller.accountId,
-      productId,
-      postId,
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://verifymzansi.com"
+      {
+        planId: product.id,
+        slots: value.slots,
+        expectedTotalCents: value.expectedTotalCents,
+        coolingOffConsent: true,
+      },
+      appUrl
     );
     return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
   } catch (error) {

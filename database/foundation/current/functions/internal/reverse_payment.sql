@@ -18,6 +18,9 @@ begin
   if not found or pay.status <> 'complete' then
     raise exception 'only completed payments can be reversed' using errcode = '22023';
   end if;
+  if exists(select 1 from private.payment_lines l where l.payment_id=pay.id and l.status='reversed') then
+    raise exception 'a slot of this payment was already reversed; reverse its other slots one by one' using errcode='PT409';
+  end if;
   begin
     perform e.id from private.entitlements e where e.payment_id=pay.id order by e.id for update nowait;
     perform p.id from private.posts p where p.id=pay.target_post_id or p.id in
@@ -28,6 +31,8 @@ begin
     raise exception 'funded posts are busy; retry reversal' using errcode='PT409';
   end;
   update private.payments set status = p_kind, fulfillment_status='reversed', status_changed_at = statement_timestamp() where id = pay.id;
+  update private.payment_lines set status='reversed', reversal_kind=p_kind, reversal_reason=btrim(p_reason),
+    reversed_at=statement_timestamp() where payment_id=pay.id and status='open';
   update private.entitlements set status = 'revoked', revoked_reason = 'payment_' || p_kind where payment_id = pay.id;
   with released_rows as (
     update private.post_activations a set released_at = statement_timestamp(), release_reason = 'payment_reversed'

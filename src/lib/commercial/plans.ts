@@ -2,6 +2,7 @@ import "server-only";
 import { getDataBackend } from "@/lib/data-backend";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
 import {
+  isIndividualSlotPlan,
   readFoundationBillingCatalogue,
   type FoundationBillingCatalogue,
 } from "@/lib/foundation/billing-catalogue";
@@ -118,6 +119,27 @@ export function buildFoundationCommercialCatalog(
   } as const;
   return buildCommercialCatalog(
     catalogue.plans.flatMap((plan): PlanRow[] => {
+      // An Individual slot (posting-v4) works in any section: the same plan
+      // serves the offer in each of them.
+      if (isIndividualSlotPlan(plan)) {
+        const offer = RETAIL_OFFERS.find((entry) => entry.durationDays === plan.duration_days);
+        if (!offer) return [];
+        return Object.values(areas).map((area) => ({
+          id: plan.id,
+          area,
+          tier: offer.tier,
+          name: plan.label,
+          price_cents: Number(plan.price_cents),
+          plan_code: offer.planCode,
+          duration_days: plan.duration_days,
+          slot_capacity: plan.slot_capacity,
+          monthly_activation_limit: plan.activations_per_period ?? null,
+          promo_label: offer.promoLabel,
+          compare_at_cents: null,
+          public: true,
+          active: true,
+        }));
+      }
       const retail =
         plan.slot_capacity === 1 &&
         plan.area &&

@@ -218,7 +218,10 @@ export function RetailPricing({
               <OfferBadge tier={offer.tier} label={offer.promoLabel} />
               <h3 className="font-body text-base font-semibold text-foreground">{offer.label}</h3>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="font-display text-[2.6rem] font-extrabold leading-none tracking-tight text-foreground">
+                <span
+                  data-testid="retail-offer-price"
+                  className="font-display text-[2.6rem] font-extrabold leading-none tracking-tight text-foreground"
+                >
                   {formatPlanPrice(offer.priceCents)}
                 </span>
               </div>

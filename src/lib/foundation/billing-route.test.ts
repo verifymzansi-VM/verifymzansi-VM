@@ -8,6 +8,7 @@ import {
   FoundationBillingError,
   FoundationPendingPaymentError,
   startFoundationCheckout,
+  startFoundationSlotCheckout,
 } from "./billing-runtime";
 import type * as BillingRuntime from "./billing-runtime";
 import { createFoundationRouteContext } from "./request-route";
@@ -24,6 +25,7 @@ vi.mock("../utils/rate-limit", () => ({
 vi.mock("./billing-runtime", async (importOriginal) => ({
   ...(await importOriginal<typeof BillingRuntime>()),
   startFoundationCheckout: vi.fn(),
+  startFoundationSlotCheckout: vi.fn(),
 }));
 
 const uuid = (value: number) => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
@@ -40,10 +42,10 @@ const catalogue = {
   plans: [
     {
       id: planId,
-      code: "business_30d",
-      label: "Business 30 days",
-      area: "business",
-      price_cents: "5000",
+      code: "individual_30d",
+      label: "Individual slot — 30 days",
+      area: null,
+      price_cents: "6900",
       currency: "ZAR",
       duration_days: 30,
       slot_capacity: 1,
@@ -66,6 +68,8 @@ const request = (value?: unknown) =>
     body: value === undefined ? undefined : JSON.stringify(value),
   });
 const addon = { postId, kind: "urgent" as const, days: 7 };
+/** One 30-day Individual slot, as the checkout page sends it. */
+const order = { planId, slots: 1, expectedTotalCents: 6900, coolingOffConsent: true };
 const json = async (response: NextResponse) => ({
   status: response.status,
   body: await response.json(),
@@ -82,6 +86,10 @@ beforeEach(() => {
   vi.mocked(checkRateLimit).mockResolvedValue({ limited: false } as never);
   vi.mocked(readFoundationBillingCatalogue).mockResolvedValue(catalogue as never);
   vi.mocked(startFoundationCheckout).mockResolvedValue({
+    paymentId: uuid(5),
+    checkoutUrl: "https://one.ozow.com/checkout/synthetic",
+  });
+  vi.mocked(startFoundationSlotCheckout).mockResolvedValue({
     paymentId: uuid(5),
     checkoutUrl: "https://one.ozow.com/checkout/synthetic",
   });
@@ -113,16 +121,16 @@ describe("add-on checkouts while paid add-on sales are paused (the default)", ()
 });
 
 describe("plan checkouts are not add-ons", () => {
-  it("still start exactly as before while add-on sales are paused", async () => {
-    const response = await handleFoundationBillingRoute(request({ planId }), "checkout");
+  it("start the slot checkout while add-on sales are paused", async () => {
+    const response = await handleFoundationBillingRoute(request(order), "checkout");
     expect(response.status).toBe(200);
-    expect(startFoundationCheckout).toHaveBeenCalledExactlyOnceWith(
+    expect(startFoundationSlotCheckout).toHaveBeenCalledExactlyOnceWith(
       {},
       account,
-      planId,
-      null,
+      { planId, slots: 1, expectedTotalCents: 6900, coolingOffConsent: true },
       "https://verifymzansi.com"
     );
+    expect(startFoundationCheckout).not.toHaveBeenCalled();
   });
   it.each([
     ["an add-on product as the plan", { planId: addonId }],
@@ -140,10 +148,42 @@ describe("plan checkouts are not add-ons", () => {
     ["an upper-case plan field", { PLANID: planId }],
     ["the plan field twice with another case", { planId, planID: addonId }],
     ["a body list", [{ planId }]],
+    ["no number of slots", { planId, expectedTotalCents: 6900, coolingOffConsent: true }],
+    ["no total", { planId, slots: 1, coolingOffConsent: true }],
+    ["no slots at all", { ...order, slots: 0 }],
+    ["more slots than one order holds", { ...order, slots: 26, expectedTotalCents: 6900 * 26 }],
+    ["a fractional slot", { ...order, slots: 1.5 }],
   ])("refuse %s before any checkout", async (_label, value) => {
     const response = await handleFoundationBillingRoute(request(value), "checkout");
     expect(response.status).toBe(400);
     expect(startFoundationCheckout).not.toHaveBeenCalled();
+    expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["without the cooling-off consent", { ...order, coolingOffConsent: false }],
+    ["with no answer to the consent", { planId, slots: 1, expectedTotalCents: 6900 }],
+  ])("refuse a slot %s, saying why", async (_label, value) => {
+    expect(await json(await handleFoundationBillingRoute(request(value), "checkout"))).toEqual({
+      status: 400,
+      body: {
+        error: "Tick the box to confirm that your slot starts now.",
+        code: "CONSENT_REQUIRED",
+      },
+    });
+    expect(startFoundationSlotCheckout).not.toHaveBeenCalled();
+  });
+  it("passes the database's refusal through with its code", async () => {
+    vi.mocked(startFoundationSlotCheckout).mockRejectedValueOnce(
+      new FoundationBillingError(
+        403,
+        "Your ID review must be accepted first.",
+        "ID_REVIEW_REQUIRED"
+      )
+    );
+    expect(await json(await handleFoundationBillingRoute(request(order), "checkout"))).toEqual({
+      status: 403,
+      body: { error: "Your ID review must be accepted first.", code: "ID_REVIEW_REQUIRED" },
+    });
   });
 });
 
@@ -171,10 +211,10 @@ it("passes the paused code through when a deeper check refuses", async () => {
   expect(await json(response)).toEqual({ status: 403, body: paused });
 });
 it("keeps other billing errors without a code", async () => {
-  vi.mocked(startFoundationCheckout).mockRejectedValueOnce(
+  vi.mocked(startFoundationSlotCheckout).mockRejectedValueOnce(
     new FoundationBillingError(409, "Check this payment's status before starting another checkout")
   );
-  const response = await handleFoundationBillingRoute(request({ planId }), "checkout");
+  const response = await handleFoundationBillingRoute(request(order), "checkout");
   expect(await json(response)).toEqual({
     status: 409,
     body: { error: "Check this payment's status before starting another checkout" },
@@ -190,10 +230,10 @@ it("answers an open plan payment with the restored page's pending payment reply"
     statusUrl: `https://verifymzansi.com/billing/success?payment=${uuid(5)}`,
     canCancel: true,
   };
-  vi.mocked(startFoundationCheckout).mockRejectedValueOnce(
+  vi.mocked(startFoundationSlotCheckout).mockRejectedValueOnce(
     new FoundationPendingPaymentError(pendingPayment)
   );
-  const response = await handleFoundationBillingRoute(request({ planId }), "checkout");
+  const response = await handleFoundationBillingRoute(request(order), "checkout");
   expect(await json(response)).toEqual({
     status: 409,
     body: {
@@ -253,10 +293,10 @@ describe("failed billing requests are logged by reason code", () => {
   });
 
   it("logs an outage with the operation and the kind of failure only", async () => {
-    vi.mocked(startFoundationCheckout).mockRejectedValue(
+    vi.mocked(startFoundationSlotCheckout).mockRejectedValue(
       Object.assign(new Error("PRIVATE_PROVIDER_DETAIL"), { name: "OzowProviderError" })
     );
-    const result = await json(await handleFoundationBillingRoute(request({ planId }), "checkout"));
+    const result = await json(await handleFoundationBillingRoute(request(order), "checkout"));
     expect(result).toEqual({
       status: 503,
       body: { error: "Billing is temporarily unavailable" },
@@ -270,7 +310,7 @@ describe("failed billing requests are logged by reason code", () => {
   });
 
   it("logs a refused request with its code, and leaves the member's reply as it was", async () => {
-    vi.mocked(startFoundationCheckout).mockRejectedValue(
+    vi.mocked(startFoundationSlotCheckout).mockRejectedValue(
       new FoundationPendingPaymentError({
         id: uuid(6),
         checkoutUrl: null,
@@ -278,7 +318,7 @@ describe("failed billing requests are logged by reason code", () => {
         canCancel: true,
       })
     );
-    const result = await json(await handleFoundationBillingRoute(request({ planId }), "checkout"));
+    const result = await json(await handleFoundationBillingRoute(request(order), "checkout"));
     expect(result.status).toBe(409);
     expect(result.body.code).toBe("PENDING_PAYMENT_EXISTS");
     const [line] = logged("warn");
@@ -287,8 +327,8 @@ describe("failed billing requests are logged by reason code", () => {
   });
 
   it("logs nothing for a request the member can fix", async () => {
-    vi.mocked(startFoundationCheckout).mockRejectedValue(new FoundationBillingError(400));
-    expect((await handleFoundationBillingRoute(request({ planId }), "checkout")).status).toBe(400);
+    vi.mocked(startFoundationSlotCheckout).mockRejectedValue(new FoundationBillingError(400));
+    expect((await handleFoundationBillingRoute(request(order), "checkout")).status).toBe(400);
     expect([...logged("error"), ...logged("warn")]).toEqual([]);
   });
 });

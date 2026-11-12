@@ -278,6 +278,116 @@
       "authority": "Current payment refund capability and recent authenticator proof; only another account's settled payment, local effects and exact audit receipt in one transaction."
     },
     {
+      "name": "start_slot_checkout",
+      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "arguments": [
+        {
+          "name": "p_plan_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slots",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_expected_total_cents",
+          "sqlType": "bigint",
+          "optional": false
+        },
+        {
+          "name": "p_cooling_off_consent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound slot quote: only an Individual slot plan on sale, 1-25 slots, the cooling-off consent recorded in the payment, an accepted ID review, the server total equal to the total shown and at most R10,000, and the person's Individual slot limit (every account of the same identity, slots in open payments included); one payment with one line per slot."
+    },
+    {
+      "name": "get_my_slots",
+      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "arguments": [],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Caller-bound read of the member's own slots (active, or ended in the last 3 days) with the posts in them and the sponsor's name for a sponsored place, and the person's Individual slot count, open-payment slots and limit; no other account's data."
+    },
+    {
+      "name": "record_staff_slot_reversal",
+      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "arguments": [
+        {
+          "name": "p_line_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_kind",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current payment refund capability and recent authenticator proof; only one slot line of another account's completed payment: revokes that slot, ends its posts and reverses only its commission, with the staff member, kind and reason on the line; the payment is reversed when its last slot is."
+    },
+    {
+      "name": "staff_set_individual_slot_limit",
+      "updates": ["updates/20261112174600_individual_slots_r69.sql"],
+      "arguments": [
+        {
+          "name": "p_account_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_slot_limit",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_ends_at",
+          "sqlType": "timestamp with time zone",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": true,
+        "service_role": false
+      },
+      "authority": "Current slot limit capability (administrators) and recent authenticator proof; only another account with an accepted ID review; more than 4 (at most 25, until an end date within 366 days) only with a checked business; every raise and end kept with the staff member and reason."
+    },
+    {
       "name": "get_frontend_staff_organisation_detail",
       "updates": ["updates/20261105200401_restored_staff_organisation_workspace.sql"],
       "arguments": [

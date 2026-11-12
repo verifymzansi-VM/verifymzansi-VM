@@ -40,7 +40,9 @@ type BillingRpcName =
   | "expire_stale_checkouts"
   | "manage_plan_member"
   | "apply_provider_event"
-  | "start_checkout";
+  | "start_checkout"
+  | "start_slot_checkout"
+  | "get_my_slots";
 type BillingRpc = {
   rpc: (
     name: BillingRpcName,
@@ -156,6 +158,28 @@ export class FoundationPendingPaymentError extends FoundationBillingError {
 class FoundationBillingCommandError extends FoundationBillingError {
   override name = "FoundationBillingCommandError";
 }
+/** The slot checkout's refusals (api.start_slot_checkout) in the member's
+ * words, with a code the checkout page can act on. Nothing was charged. */
+const SLOT_CHECKOUT_REFUSALS: Readonly<
+  Record<string, readonly [status: 400 | 403 | 409, message: string, code: string]>
+> = {
+  PT412: [
+    403,
+    "Your ID review must be accepted before you buy a slot, so you never pay for days you cannot use.",
+    "ID_REVIEW_REQUIRED",
+  ],
+  PT413: [
+    400,
+    "Orders above R10,000 are paid by invoice. Email billing@verifymzansi.com to ask for one.",
+    "INVOICE_REQUIRED",
+  ],
+  PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
+  PT429: [
+    409,
+    "You already hold the most Individual slots you can have at once. A slot frees up when it ends.",
+    "SLOT_LIMIT_REACHED",
+  ],
+};
 /** A status check that found something staff must look at. `reason` is a
  * reason code for the logs and the status-check job's report; members only
  * ever see the message. */
@@ -176,6 +200,9 @@ async function command(
   args: Record<string, unknown> = {}
 ) {
   const { data, error } = await billingRpc(api).rpc(name, args);
+  const refusal =
+    error && name === "start_slot_checkout" ? SLOT_CHECKOUT_REFUSALS[error.code ?? ""] : null;
+  if (refusal) throw new FoundationBillingCommandError(...refusal);
   if (error)
     throw new FoundationBillingCommandError(
       error.code === "42501" || error.code === "PT403"
@@ -192,6 +219,57 @@ export async function readFoundationBilling(
   api: FoundationAuthenticatedApi
 ): Promise<FoundationBilling> {
   return billingSchema.parse(await command(api, "get_my_billing"));
+}
+const slotPostSchema = z.strictObject({
+  id: z.uuid(),
+  kind: z.enum(["listing", "business", "event"]),
+  area: z.enum(["market", "business", "tourism_events"]),
+  title: z.string().max(200).nullable(),
+  status: z.enum([
+    "draft",
+    "pending_moderation",
+    "live",
+    "paused",
+    "rejected",
+    "expired",
+    "sold",
+    "archived",
+  ]),
+  deletes_at: instant.nullable(),
+});
+const mySlotsSchema = z.strictObject({
+  slots: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        source: z.enum(["retail_paid", "intro_trial", "sponsorship", "contract", "staff_grant"]),
+        individual: z.boolean(),
+        label: z.string().max(200).nullable(),
+        area: z.enum(["market", "business", "tourism_events"]).nullable(),
+        starts_at: instant,
+        ends_at: instant,
+        state: z.enum(["active", "ended"]),
+        places: z.number().int().positive(),
+        sponsor: z.string().max(200).nullable(),
+        posts: z.array(slotPostSchema).max(1000),
+      })
+    )
+    .max(200),
+  individual: z.strictObject({
+    verified: z.boolean(),
+    held: z.number().int().nonnegative(),
+    pending: z.number().int().nonnegative(),
+    limit: z.number().int().min(4).max(25),
+    limit_ends_at: instant.nullable(),
+  }),
+});
+export type FoundationMySlots = z.infer<typeof mySlotsSchema>;
+/** Every slot the member holds (and ended ones for 3 days), with the posts in
+ * them, and their Individual slot count and limit. */
+export async function readFoundationMySlots(
+  api: FoundationAuthenticatedApi
+): Promise<FoundationMySlots> {
+  return mySlotsSchema.parse(await command(api, "get_my_slots"));
 }
 export async function readFoundationPayment(
   api: FoundationAuthenticatedApi,
@@ -261,16 +339,12 @@ export async function startFoundationCheckout(
   appUrl: string,
   service = createFoundationServiceApi()
 ) {
-  const app = new URL(appUrl);
-  if (
-    (app.origin !== PRODUCTION_CHECKOUT_ORIGIN && app.origin !== testCheckout()?.appOrigin) ||
-    app.username ||
-    app.password
-  )
-    throw new FoundationBillingError(503);
+  const app = checkoutApp(appUrl);
   // Only add-ons take a target post (internal.start_checkout refuses a plan
   // with one and an add-on without one), so this refuses every add-on before
   // its payment row exists while sales are paused (../billing/addon-sales.ts).
+  // Plans are bought with startFoundationSlotCheckout; the database refuses
+  // them here.
   if (targetPostId !== null && !areAddonSalesOpen()) throw addonSalesPaused();
   const quote = quoteSchema.parse(
     await command(api, "start_checkout", {
@@ -278,6 +352,65 @@ export async function startFoundationCheckout(
       p_target_post: targetPostId === null ? null : z.uuid().parse(targetPostId),
     })
   );
+  return openFoundationCheckout(quote, ownerId, app, service);
+}
+
+/** One order of Individual slots: the plan (30, 90 or 180 days), how many
+ * slots, the total the member was shown and their cooling-off consent. */
+export interface FoundationSlotOrder {
+  planId: string;
+  slots: number;
+  expectedTotalCents: number;
+  coolingOffConsent: boolean;
+}
+const slotOrderSchema = z.strictObject({
+  planId: z.uuid(),
+  slots: z.number().int().min(1).max(25),
+  expectedTotalCents: z.number().int().positive().max(100_000_000),
+  coolingOffConsent: z.literal(true),
+});
+
+/** SQL owns the price (slot price x slots), the consent record, the ID review,
+ * the R10,000 online limit and the person's slot limit; a total other than the
+ * one shown is refused, so the price shown is the price charged. */
+export async function startFoundationSlotCheckout(
+  api: FoundationAuthenticatedApi,
+  ownerId: string,
+  order: FoundationSlotOrder,
+  appUrl: string,
+  service = createFoundationServiceApi()
+) {
+  const app = checkoutApp(appUrl);
+  const value = slotOrderSchema.parse(order);
+  const quote = quoteSchema.parse(
+    await command(api, "start_slot_checkout", {
+      p_plan_id: value.planId,
+      p_slots: value.slots,
+      p_expected_total_cents: value.expectedTotalCents,
+      p_cooling_off_consent: value.coolingOffConsent,
+    })
+  );
+  return openFoundationCheckout(quote, ownerId, app, service);
+}
+
+function checkoutApp(appUrl: string) {
+  const app = new URL(appUrl);
+  if (
+    (app.origin !== PRODUCTION_CHECKOUT_ORIGIN && app.origin !== testCheckout()?.appOrigin) ||
+    app.username ||
+    app.password
+  )
+    throw new FoundationBillingError(503);
+  return app;
+}
+
+/** Leases the quoted payment, then reuses its Ozow request or creates one. */
+async function openFoundationCheckout(
+  quote: z.infer<typeof quoteSchema>,
+  ownerId: string,
+  app: URL,
+  service: FoundationServiceApi
+) {
   const pay = claimSchema.parse(
     await command(service, "claim_checkout_request", {
       p_payment_id: quote.payment_id,

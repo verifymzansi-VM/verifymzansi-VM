@@ -790,6 +790,126 @@ switch, that every member is then asked to accept `posting-v4` once, a
 checks that the catalogue's active version is still the one the updates make
 current.
 
+## Individual slots at R69, 12 November 2026
+
+`20261112174600_individual_slots_r69.sql` is not applied yet. Apply it after
+`20261112173841_switch_posting_terms_v4.sql` (it refuses with 55000 unless
+`posting-v4` is current and nothing else is on sale) and before the website
+release that uses it is deployed. It ends the pause on paid slots that the
+switch started: the slots `posting-v4` describes go on sale (roadmap Milestone
+11, P2, with M3.8).
+
+What it changes:
+
+- **Catalogue.** Three new plan versions, the only plans on sale: one Individual
+  slot for any posting area (`area` null) for 30, 90 or 180 days at 6,900,
+  20,700 and 41,400 cents (R69 per slot per 30 days, no discounts), one slot
+  each, at most 4 posts going live per slot per 30 days, 10 photos and 1 video
+  per post. Their ids are fixed in the file (`d6ca48e5-…` 30 days, `6a449457-…`
+  90 days, `ce4ef578-…` 180 days), so the browser test copy and production use
+  the same ones. Earlier plans stay retired, as history.
+- **One payment, one line per slot.** New table `private.payment_lines`. An
+  order is one payment (one Ozow payment for the total); each slot is a line
+  with its own price, its own entitlement once the payment is confirmed
+  (`private.entitlements.payment_line_id`) and its own partner commission
+  (`private.partner_commissions.payment_line_id`). The one-entitlement and
+  one-commission-per-payment unique constraints become partial unique indexes
+  for payments without lines; lines are immutable except for being reversed once
+  (trigger `payment_lines_immutable`).
+- **The slot checkout.** New member command
+  `api.start_slot_checkout(p_plan_id, p_slots, p_expected_total_cents, p_cooling_off_consent)`.
+  The server computes slot price × slots (the plan's price already covers its
+  30-day periods) and refuses: without the cooling-off consent (22023; the
+  consent, its time, the wording and the posting terms version are kept in the
+  payment's snapshot); before the member's ID review is accepted (PT412, M3.8);
+  an order above R10,000, which is paid by invoice (PT413; R10,000 exactly stays
+  online); a total other than the one the member was shown (PT428); and more
+  Individual slots than the person's limit (PT429). The limit is 4 at once per
+  ID-reviewed person: it counts every account that has had an accepted ID review
+  with the same identity fingerprint (ended reviews too) and slots in payments
+  still open at Ozow. The free first post, staff grants and sponsored places are
+  not Individual slots and never count. `api.start_checkout` now refuses plans
+  (it still sells add-ons).
+- **Confirmation.** `api.apply_provider_event` gives each open line of a
+  confirmed payment its own entitlement, unless the person would then hold more
+  Individual slots than their limit (for example a late success of an expired
+  checkout): the money is recorded and the payment goes to staff
+  (`complete_unfulfillable_target`, alerted by the payment problem job).
+- **One slot refunded alone.** New staff command
+  `api.record_staff_slot_reversal(p_line_id, p_kind, p_reason)` (capability
+  `payments:refund`, another staff member than the buyer): revokes that slot,
+  ends the posts it paid for as a whole-payment reversal does, and reverses only
+  that slot's commission. When the last open slot of a payment is reversed, the
+  payment becomes refunded or charged back. `api.reverse_payment` marks every
+  open line reversed, and refuses once one slot was reversed. No Ozow partial
+  refund call is made: staff refund the money themselves (Ozow partial refunds
+  are unconfirmed) and record it here.
+- **Staff-raised limit.** New table `private.individual_slot_limits` and staff
+  command
+  `api.staff_set_individual_slot_limit(p_account_id, p_slot_limit, p_ends_at, p_reason)`
+  (new capability `slots:raise_limit`, administrators, recent second factor): 5
+  to 25 Individual slots for one ID-reviewed person until an end date at most
+  366 days away, only when that account has a checked business (a live business
+  profile or an approved business check); 4 ends the raise. Rows are an audit
+  trail: a raise is only ever ended. No staff screen calls it yet.
+- **My slots.** New member read `api.get_my_slots()`: every slot the member
+  holds and every slot that ended in the last 3 days, with the posts in it, the
+  sponsor's name for a sponsored place, and the member's Individual slot count,
+  open-payment slots and limit.
+- **Fair use.** `api.activate_post` no longer counts a submission that review
+  rejected: each paid slot takes at most 4 posts going live per 30 days (a new
+  post and an ended post brought back each count; editing a live post never
+  does).
+
+No existing API command changes its arguments or reply shape, so the release
+before it (paid slots paused) keeps working.
+
+**Applying** (after the merge and after `20261112173841`, before the deploy):
+
+1. Run `../preflight/20261112174600_individual_slots_r69.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "individual slots: update not applied (apply before the
+   website release that uses it is deployed); current posting terms: posting-v4;
+   on sale: nothing; plan payments pending: 0; slot payment lines: none (table
+   absent)".
+2. Run the update. It waits at most 5 seconds for any lock. Run the preflight
+   again: it must read "individual slots: already applied; current posting
+   terms: posting-v4; on sale: individual_30d@1 6900 cents, individual_90d@1
+   20700 cents, individual_180d@1 41400 cents; plan payments pending: 0; slot
+   payment lines: 0".
+3. Deploy the release. `/pricing` shows R69, R207 and R414 with their checkout
+   links.
+
+The reviewed rollback is
+`../rollback/20261112174600_individual_slots_r69.down.sql`. It works only before
+anyone ordered a slot (it refuses once a payment line or a raised limit exists):
+it takes the three plans off sale, restores the six earlier function bodies and
+removes everything the update added, back to the paused state of
+`20261112173841`. Applying the update again after it is refused while the
+retired plan rows exist: a new update must publish new plan versions. Once slots
+were ordered, stop sales with a new reviewed update that retires the three
+plans, and fix forward.
+
+`node --import tsx scripts/test-foundation-individual-slots.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: the
+preflight before and after; the refusals without `posting-v4` and with another
+plan on sale; apply, rollback and re-apply return the same fingerprints; the
+catalogue; price = 6,900 cents × 30-day periods × slots with one line per slot
+and the consent in the snapshot; a total other than the one shown is refused;
+retired plans and `api.start_checkout` cannot sell a plan; no checkout before an
+accepted ID review or without the consent; a fifth Individual slot is refused,
+also from a second account of the same person and while slots wait in an open
+payment; a pending payment for another number of slots is replaced or returned;
+only administrators raise a limit, only for a checked business, up to 25, with
+an end date, and the audit rows cannot be changed; 25 × 180 days (R10,350) is
+refused online, 24 × 180 days and R10,000 exactly stay online; one slot
+activates a Market, a Business and a Tourism post and its fifth post going live
+in 30 days is refused, a rejected submission not counting; refunding one slot of
+a three-slot order revokes only that slot, ends only its post and reverses only
+its commission, the last slot reversing the payment; a late payment above the
+limit is recorded and sent to staff; `api.get_my_slots`; the grants; and that
+the rollback refuses once a slot was ordered.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -2241,5 +2361,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   five updates matched the replay (section No default rights in schema public)
 - `20261112080000_payment_problem_alerts.sql`: pending
 - `20261112122001_publish_posting_terms_v4.sql`: pending
+- `20261112174600_individual_slots_r69.sql`: pending
 
 <!-- applied-register:end -->
