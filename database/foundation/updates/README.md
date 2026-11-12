@@ -290,6 +290,112 @@ sweep (stale, young, leased, attached and settled payments, the limit, repeat
 runs, the member's next checkout); who may run it; and that apply, rollback and
 re-apply return the same fingerprints.
 
+## Indexes for foreign keys used by deletion, 11 November 2026
+
+`20261111223723_foreign_key_indexes.sql` is not applied yet. It needs no earlier
+pending update and changes no function, grant or API command.
+
+Postgres does not index the referencing side of a foreign key. When a referenced
+row is deleted, it looks up the referencing rows of every key that points at it,
+and without a usable index each lookup reads the whole referencing table. This
+update adds 50 indexes on 31 tables, one per key on a deletion path:
+
+- **37 columns that reference `auth.users`** (owner and staff columns such as
+  `payments.owner_id`, `moderation_log.staff_id`, `decisions.proposed_by`).
+  Deleting an Auth user (account deletion, or a failed sign-up being undone)
+  checks every one of them, even for a member who never had a row there.
+- **9 columns whose parent rows the retention sweep deletes**
+  (`api.run_retention`): decisions, evidence cases, identity submissions and
+  evidence files (`internal.retention_staff_records`,
+  `internal.retention_verification`), and activations, entitlements and payments
+  (`internal.retention_commerce`).
+- **4 keys to posts**, which edits (`internal.apply_post_edit`,
+  `internal.discard_post_edit`), deletion (`internal.delete_post`) and the
+  lifecycle job (`internal.run_post_lifecycle`) delete, and to the affiliations
+  that cascade from them: `organisation_affiliations(post_id, post_kind)`,
+  `organisation_sponsorships.affiliation_id`, `post_activations.post_id`,
+  `reports.post_id`.
+
+The Supabase performance advisor's "unindexed foreign keys" check (no index
+starts with the key's columns) listed 74 keys on the replayed schema; 40 of them
+are indexed here. The other 10 indexed keys are ones the advisor counts as
+indexed although their lookup reads the table: the only index that starts with
+the column is a partial one for some rows (for example `legal_holds_active_idx`,
+`where released_at is null`).
+
+A column that may be null gets a partial index (`where <column> is not null`):
+the key lookup and every query by value look for a value, and rows without one
+stay out of the index.
+
+The other 34 keys the advisor lists stay unindexed on purpose, and it keeps
+listing them:
+
+- 12 composite keys that an existing index already serves through a unique or
+  selective leading column, for example `(post_id, post_kind)` where the primary
+  key is `post_id`, or `(case_id, owner_id)` next to an index on
+  `(case_id, id)`; a second index would only add write cost;
+- 19 keys to reference tables that no command deletes or re-keys (provinces,
+  cities, categories, catalogue and plan versions, event time zones, posting
+  terms versions);
+- 3 keys to organisation programmes, which no command deletes.
+
+The lists are in `scripts/test-foundation-fk-indexes.mjs` (`SERVED_BY_EXISTING`,
+`LEFT_UNINDEXED`, and `SCANNED_ON_PURPOSE` for the 22 keys whose lookup still
+reads the table, all with parents no command deletes). Re-run the hosted
+advisors after the first month of real traffic; "unused index" notices on an
+almost empty database are expected and are not a reason to drop an index.
+
+**Locks.** The update uses plain `create index`, not `concurrently`, because an
+update runs in one transaction. Each build takes a share lock on its table until
+the commit: reads continue, writes to those 31 tables wait. The tables are tiny
+today (the preflight prints their total size), so this takes well under a
+second; each lock wait gives up after 5 seconds (`lock_timeout`) rather than
+queue behind a long transaction. Apply it at a quiet time: a write that already
+holds one of these tables and then needs another could deadlock with it, and
+Postgres would then cancel one of the two (possibly the member's request). Index
+commands do not fire the event trigger `internal.require_table_rls` (it reacts
+to table commands only).
+
+**Order: any time.** No code depends on these indexes, so the update can be
+applied before or after any website release. Until it is applied and recorded,
+the release preflight lists it as "behind" (a warning; it has no command to
+probe). Apply and record updates in filename order: if an update with an earlier
+name is still pending, apply that one first.
+
+**Applying.**
+
+1. Run `../preflight/20261111223723_foreign_key_indexes.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "not applied ... present 0 of 50". A problem row names
+   a missing column or key, an index that already has one of the update's names
+   with another definition or is invalid, or another index that already serves
+   the key for every row; the update refuses (55000) in each of these cases.
+2. Run the update, then the preflight again: it must now read "already applied;
+   present 50 of 50".
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
+   compare with `../fingerprint.json`, which lists this update under
+   `productionCheck.pendingApplication` (only the `indexes` category changes).
+   Once production's fingerprint matches, record it (its register line and
+   `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261111223723_foreign_key_indexes.down.sql` (only with the owner's
+decision). It drops exactly these 50 indexes, each with a short access exclusive
+lock held until the commit, and refuses when an index with one of their names
+has another definition. Running it again, or before the update, changes nothing.
+
+`node --import tsx scripts/test-foundation-fk-indexes.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database: the 74
+keys the advisor lists before and exactly the 34 listed ones after; that the
+delete lookup of every foreign key (as a generic plan) uses an index condition
+on an index starting with one of the key's columns, except the 22 documented
+reference keys, and uses the new index for each of the 50 keys; that the
+preflight is read only; that an index already serving a key, a conflicting or
+invalid index under one of the names is refused by the update, the preflight and
+the rollback; that deleting an Auth user still enforces the keys; that a partly
+applied update is reported and completed by running it again; and that apply,
+rollback and re-apply return the same fingerprints.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -1708,5 +1814,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
 - `20261110173012_verification_returned_notice.sql`: pending
 - `20261111184619_selfie_capture_method.sql`: pending
 - `20261111212320_payment_start_retry.sql`: pending
+- `20261111223723_foreign_key_indexes.sql`: pending
 
 <!-- applied-register:end -->

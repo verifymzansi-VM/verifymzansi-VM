@@ -40,10 +40,13 @@ create table private.decisions (
 );
 alter table private.decisions owner to postgres;
 alter table private.decisions enable row level security;
+CREATE INDEX decisions_approved_by_idx ON private.decisions USING btree (approved_by) WHERE (approved_by IS NOT NULL);
 CREATE INDEX decisions_approved_restriction_idx ON private.decisions USING btree (case_id) WHERE ((status = 'approved'::text) AND (action = 'restrict_account'::text));
 CREATE INDEX decisions_case_lookup_idx ON private.decisions USING btree (case_id, id);
 CREATE UNIQUE INDEX decisions_one_open_idx ON private.decisions USING btree (case_id) WHERE (status = 'proposed'::text);
+CREATE INDEX decisions_proposed_by_idx ON private.decisions USING btree (proposed_by);
 CREATE INDEX decisions_staff_page_idx ON private.decisions USING btree (status, proposed_at DESC, id DESC);
+CREATE INDEX decisions_withdrawn_by_idx ON private.decisions USING btree (withdrawn_by) WHERE (withdrawn_by IS NOT NULL);
 CREATE TRIGGER bind_native_restriction_for_review AFTER UPDATE OF status ON private.decisions FOR EACH ROW WHEN (old.status = 'proposed'::text AND new.status = 'approved'::text AND new.scope_kind = 'native'::text AND new.action = 'restrict_account'::text) EXECUTE FUNCTION internal.bind_native_restriction_for_review();
 CREATE TRIGGER decision_binding BEFORE DELETE OR UPDATE ON private.decisions FOR EACH ROW EXECUTE FUNCTION internal.decision_binding_guard();
 CREATE TRIGGER frontend_report_restriction_effect AFTER UPDATE OF status ON private.decisions FOR EACH ROW WHEN (old.status = 'proposed'::text AND (new.status = ANY (ARRAY['approved'::text, 'withdrawn'::text]))) EXECUTE FUNCTION internal.frontend_report_restriction_effect();

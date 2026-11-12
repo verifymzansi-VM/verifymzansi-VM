@@ -21,7 +21,9 @@ create table private.evidence_fraud_holds (
 alter table private.evidence_fraud_holds owner to postgres;
 alter table private.evidence_fraud_holds enable row level security;
 CREATE INDEX evidence_fraud_holds_case_idx ON private.evidence_fraud_holds USING btree (case_id, id);
+CREATE INDEX evidence_fraud_holds_closed_by_idx ON private.evidence_fraud_holds USING btree (closed_by) WHERE (closed_by IS NOT NULL);
 CREATE UNIQUE INDEX evidence_fraud_holds_open_idx ON private.evidence_fraud_holds USING btree (case_id) WHERE (closed_at IS NULL);
+CREATE INDEX evidence_fraud_holds_placed_by_idx ON private.evidence_fraud_holds USING btree (placed_by);
 CREATE TRIGGER evidence_deletion_fraud_hold BEFORE INSERT ON private.evidence_fraud_holds FOR EACH ROW EXECUTE FUNCTION internal.evidence_deletion_hold_guard();
 CREATE TRIGGER evidence_fraud_hold_guard BEFORE UPDATE ON private.evidence_fraud_holds FOR EACH ROW EXECUTE FUNCTION internal.evidence_fraud_hold_guard();
 revoke all on private.evidence_fraud_holds from public;
