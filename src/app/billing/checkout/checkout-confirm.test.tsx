@@ -195,6 +195,17 @@ describe("CheckoutConfirm for Individual slots", () => {
     expect(payButton()).toBeDisabled();
   });
 
+  it("lets a member with a payment still open come back to it", () => {
+    render(
+      <CheckoutConfirm
+        summary={slotSummary({ slotStatus: { verified: true, held: 3, pending: 1, limit: 4 } })}
+      />
+    );
+    expect(screen.queryByTestId("slot-block-limit")).toBeNull();
+    expect(screen.getByRole("checkbox", { name: /^My slot starts now/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "One slot more" })).toBeDisabled();
+  });
+
   it("explains the limit when every slot is taken", () => {
     render(
       <CheckoutConfirm

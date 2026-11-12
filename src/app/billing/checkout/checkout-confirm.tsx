@@ -158,8 +158,13 @@ export function CheckoutConfirm({
   const term = slotTerms
     ? (slotTerms.find((entry) => entry.planId === termId) ?? slotTerms[0])
     : null;
-  const available = slotsAvailable(summary?.slotStatus);
+  // Slots in a payment still open at Ozow count too, but the member must be
+  // able to come back to that payment (continue, check or cancel it), so only
+  // slots already held stop the page.
+  const status = summary?.slotStatus ?? null;
+  const available = slotsAvailable(status);
   const maxSlots = Math.max(1, Math.min(MAX_SLOTS_PER_ORDER, available ?? STANDARD_SLOT_LIMIT));
+  const allHeld = status !== null && status.held >= status.limit;
   const [slots, setSlots] = useState(1);
   const [consent, setConsent] = useState(false);
   const totalCents = term ? slotOrderTotalCents(term, slots) : (summary?.priceCents ?? 0);
@@ -168,7 +173,7 @@ export function CheckoutConfirm({
     ? null
     : summary?.slotStatus?.verified === false
       ? "id_review"
-      : available === 0
+      : allHeld
         ? "limit"
         : totalCents > ONLINE_ORDER_LIMIT_CENTS
           ? "invoice"

@@ -176,7 +176,7 @@ const SLOT_CHECKOUT_REFUSALS: Readonly<
   PT428: [409, "The price changed. Check the total and try again.", "PRICE_CHANGED"],
   PT429: [
     409,
-    "You already hold the most Individual slots you can have at once. A slot frees up when it ends.",
+    "You have reached the most Individual slots you can hold at once, counting payments still open. Finish or cancel an open payment, or wait until a slot ends.",
     "SLOT_LIMIT_REACHED",
   ],
 };

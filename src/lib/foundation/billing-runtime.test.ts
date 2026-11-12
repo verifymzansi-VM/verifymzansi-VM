@@ -1105,7 +1105,7 @@ describe("the Individual slot checkout", () => {
     ["PT412", 403, "ID_REVIEW_REQUIRED", /ID review must be accepted/],
     ["PT413", 400, "INVOICE_REQUIRED", /above R10,000 are paid by invoice/],
     ["PT428", 409, "PRICE_CHANGED", /price changed/],
-    ["PT429", 409, "SLOT_LIMIT_REACHED", /most Individual slots/],
+    ["PT429", 409, "SLOT_LIMIT_REACHED", /most Individual slots you can hold at once/],
   ])("tells the member why the database refused (%s)", async (sqlstate, status, code, message) => {
     rpc.mockResolvedValueOnce({ data: null, error: { code: sqlstate } });
     const refused = slotCheckout();
