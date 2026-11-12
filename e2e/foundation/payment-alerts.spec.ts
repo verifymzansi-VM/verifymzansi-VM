@@ -8,6 +8,7 @@ import {
   LOCAL_PAYMENT_ALERT_EMAIL,
 } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
+import { closeTestPlanSales, openTestPlanSales } from "./support/plan-sales";
 import {
   latestMailTo,
   queryTestCopy,
@@ -162,6 +163,8 @@ test.describe("payment problems reach staff", () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
     copy = readTestCopy();
+    // Paid plans are paused; this spec buys copies put on sale for it.
+    openTestPlanSales();
     const catalogue = await rpc(copy, "billing_catalogue", {});
     expect(catalogue.status).toBe(200);
     const byCode = (code: string) => {
@@ -188,6 +191,7 @@ test.describe("payment problems reach staff", () => {
           `update private.payments set created_at = now() - interval '15 days' where id = '${id}' and status = 'pending';`
         );
     } finally {
+      closeTestPlanSales();
       await ozow.stop();
     }
   });

@@ -9,6 +9,7 @@ import { formatSaLongDate } from "@/lib/utils/format";
 import { withCsrfHeaders } from "@/lib/utils/csrf";
 import { getFriendlyCheckoutError } from "@/lib/billing/checkout-copy";
 import { formatPlanPrice } from "@/lib/constants/pricing";
+import { PLAN_SALES_PAUSED_NOTE } from "@/lib/billing/plan-sales";
 
 export interface CheckoutSummary {
   planId: string;
@@ -41,10 +42,21 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 }
 
 /** Explicit confirmation before Ozow: price, dates, slots, renewal and expiry. */
-export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }) {
+export function CheckoutConfirm({
+  summary,
+  paused = false,
+}: {
+  summary: CheckoutSummary | null;
+  /** No plan is on sale (paid slots paused): say so instead of "not available". */
+  paused?: boolean;
+}) {
   const [state, setState] = useState<"idle" | "submitting" | "redirecting">("idle");
   const [error, setError] = useState<string | null>(
-    summary ? null : "This plan is not available. Please choose a plan from the pricing page."
+    summary
+      ? null
+      : paused
+        ? PLAN_SALES_PAUSED_NOTE
+        : "This plan is not available. Please choose a plan from the pricing page."
   );
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [cancelling, setCancelling] = useState(false);

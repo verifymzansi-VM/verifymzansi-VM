@@ -10,24 +10,20 @@ async function signIn(page: Page, persona: string) {
 }
 
 test.describe("Commercial model", () => {
-  test("pricing shows the retail ladder, free events and the organisation route", async ({
+  test("pricing shows the Individual slot prices and free events, and no package prices", async ({
     page,
   }) => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
     const main = page.locator("main");
-    await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
-    await expect(main.getByTestId("retail-offer-quarter")).toContainText("R140");
-    await expect(main.getByTestId("retail-offer-quarter")).toContainText(/popular/i);
-    await expect(main.getByTestId("retail-offer-quarter")).toContainText("Save R10");
-    await expect(main.getByTestId("retail-offer-half_year")).toContainText("R250");
-    await expect(main.getByTestId("retail-offer-half_year")).toContainText(/best value/i);
-    await expect(main.getByTestId("retail-offer-half_year")).toContainText("Save R50");
+    await expect(main.getByTestId("retail-offer-month")).toContainText("R69");
+    await expect(main.getByTestId("retail-offer-quarter")).toContainText("R207");
+    await expect(main.getByTestId("retail-offer-half_year")).toContainText("R414");
     await expect(main.getByTestId("retail-offer-year")).toHaveCount(0);
     await expect(main.getByText("Until the event ends")).toBeVisible();
-    await expect(
-      main.getByRole("link", { name: "Request a sponsor proposal", exact: true })
-    ).toHaveAttribute("href", "/contact?topic=organisation_proposal");
-    await expect(main).not.toContainText(/R650|R450|12 months|Growth|Starter/);
+    // No discounts and no multi-listing or sponsor prices under the Terms.
+    await expect(main).not.toContainText(
+      /Save R|Best value|R50\b|R140|R250|R1,200|R15,000|R650|R450|12 months|Growth|Starter/
+    );
 
     // The section picker changes where the slot is used, not the price.
     const before = await main.getByRole("link", { name: /choose 30 days/i }).getAttribute("href");
@@ -40,7 +36,7 @@ test.describe("Commercial model", () => {
         .getAttribute("href", { timeout: 2_000 });
       expect(after).not.toBe(before);
     }).toPass({ timeout: 20_000 });
-    await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
+    await expect(main.getByTestId("retail-offer-month")).toContainText("R69");
   });
 
   test("tourism leads with the free trial above the paid plans", async ({ page }, info) => {
@@ -100,11 +96,11 @@ test.describe("Commercial model", () => {
     await page.getByRole("link", { name: /choose 180 days — mzansi market/i }).click();
     await page.waitForURL("**/billing/checkout?plan=*");
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
-    await expect(page.getByText("R250").first()).toBeVisible();
+    await expect(page.getByText("R414").first()).toBeVisible();
     await expect(page.getByText("180 days", { exact: true })).toBeVisible();
     await expect(page.getByText("Does not renew automatically")).toBeVisible();
     await expect(page.getByText(/stay saved in your dashboard/i)).toBeVisible();
-    await expect(page.getByRole("button", { name: /pay r250 securely/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /pay r414 securely/i })).toBeEnabled();
   });
 
   test("an unknown plan cannot be checked out", async ({ page }, info) => {
