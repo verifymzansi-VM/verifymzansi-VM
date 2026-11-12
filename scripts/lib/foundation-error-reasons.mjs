@@ -11,7 +11,6 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export const REASON_PATTERN = /^[a-z][a-z0-9_]{1,62}$/;
-const START_PATTERN = /raise\s+exception\b/iy;
 
 /** Reads a SQL string literal ('...' with '' escapes, or E'...') at `index`. */
 function readLiteral(sql, index) {
@@ -35,35 +34,76 @@ function readLiteral(sql, index) {
   throw new Error("Unterminated SQL string literal");
 }
 
-/** Index just after the `;` that ends the statement starting at `index`. */
-function statementEnd(sql, index) {
+const startsLiteral = (sql, i) =>
+  sql[i] === "'" ||
+  ((sql[i] === "E" || sql[i] === "e") && sql[i + 1] === "'" && !/[\w$]/.test(sql[i - 1] ?? ""));
+
+/**
+ * The SQL text with comments blanked and string contents replaced by "x", at
+ * the same length, so searches for keywords, `;` and parentheses see code only.
+ */
+export function maskSql(sql) {
+  let out = "";
+  for (let i = 0; i < sql.length;) {
+    if (sql[i] === "-" && sql[i + 1] === "-") {
+      const next = sql.indexOf("\n", i);
+      const end = next < 0 ? sql.length : next;
+      out += " ".repeat(end - i);
+      i = end;
+    } else if (sql[i] === "/" && sql[i + 1] === "*") {
+      let depth = 1;
+      let j = i + 2;
+      while (j < sql.length && depth > 0) {
+        if (sql[j] === "/" && sql[j + 1] === "*") (depth++, (j += 2));
+        else if (sql[j] === "*" && sql[j + 1] === "/") (depth--, (j += 2));
+        else j++;
+      }
+      out += sql.slice(i, j).replace(/[^\n]/g, " ");
+      i = j;
+    } else if (sql[i] === "$" && /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.test(sql.slice(i, i + 64))) {
+      // Dollar-quoted strings are text, except the function body itself
+      // ($function$, as the snapshot writes it), which is code.
+      const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i, i + 64))[0];
+      if (tag === "$function$") {
+        out += tag;
+        i += tag.length;
+        continue;
+      }
+      const close = sql.indexOf(tag, i + tag.length);
+      if (close < 0) throw new Error("Unterminated dollar-quoted string");
+      const end = close + tag.length;
+      out += tag + sql.slice(i + tag.length, close).replace(/[^\n]/g, "x") + tag;
+      i = end;
+    } else if (startsLiteral(sql, i)) {
+      const prefix = sql[i] === "'" ? 1 : 2;
+      const { end } = readLiteral(sql, i);
+      out += sql.slice(i, i + prefix) + "x".repeat(end - i - prefix - 1) + "'";
+      i = end;
+    } else out += sql[i++];
+  }
+  return out;
+}
+
+/** Index of the `;` that ends the statement starting at `index` (masked text). */
+function statementEnd(masked, index) {
   let depth = 0;
-  for (let i = index; i < sql.length; i++) {
-    const char = sql[i];
-    if (char === "'" || ((char === "E" || char === "e") && sql[i + 1] === "'")) {
-      i = readLiteral(sql, i).end - 1;
-    } else if (char === "-" && sql[i + 1] === "-") {
-      i = sql.indexOf("\n", i);
-      if (i < 0) break;
-    } else if (char === "(") depth++;
-    else if (char === ")") depth--;
-    else if (char === ";" && depth === 0) return i + 1;
+  for (let i = index; i < masked.length; i++) {
+    if (masked[i] === "(") depth++;
+    else if (masked[i] === ")") depth--;
+    else if (masked[i] === ";" && depth === 0) return i;
   }
   throw new Error("Unterminated raise statement");
 }
 
-/** Splits a comma list at depth 0, outside literals. */
-function splitTopLevel(text) {
+/** Splits a comma list at depth 0 (positions from the masked text). */
+function splitTopLevel(text, masked) {
   const parts = [];
   let depth = 0;
   let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (char === "'" || ((char === "E" || char === "e") && text[i + 1] === "'"))
-      i = readLiteral(text, i).end - 1;
-    else if (char === "(") depth++;
-    else if (char === ")") depth--;
-    else if (char === "," && depth === 0) {
+  for (let i = 0; i < masked.length; i++) {
+    if (masked[i] === "(") depth++;
+    else if (masked[i] === ")") depth--;
+    else if (masked[i] === "," && depth === 0) {
       parts.push(text.slice(start, i));
       start = i + 1;
     }
@@ -75,67 +115,55 @@ function splitTopLevel(text) {
 /** The whole expression is one string literal: its value; otherwise undefined. */
 function literalValue(expression) {
   const trimmed = expression.trim();
-  if (!/^[Ee]?'/.test(trimmed)) return undefined;
+  if (!startsLiteral(trimmed, 0)) return undefined;
   const literal = readLiteral(trimmed, 0);
   return trimmed.slice(literal.end).trim() === "" ? literal.value : undefined;
 }
 
-/** Skips whitespace and `--` comments. */
-function skipSpace(sql, index) {
-  let i = index;
-  for (;;) {
-    while (i < sql.length && /\s/.test(sql[i])) i++;
-    if (sql[i] === "-" && sql[i + 1] === "-") {
-      const next = sql.indexOf("\n", i);
-      i = next < 0 ? sql.length : next;
-    } else return i;
-  }
-}
-
 /**
- * Every `raise exception` statement in a SQL text: its message literal (when
- * the message is a plain literal) and its USING options. Options whose value
- * is not a single literal are reported as `dynamic`.
+ * Every `raise exception` statement in a SQL text (outside comments and
+ * strings): its message literal (when the message is a plain literal) and its
+ * USING options. Options whose value is not a single literal are reported as
+ * `dynamic`. A raise this reader cannot follow (no level, a condition name, an
+ * unexpected shape) is returned with `unreadable`, so the check fails rather
+ * than miss a reason.
  */
 export function parseRaiseStatements(sql) {
+  const masked = maskSql(sql);
   const statements = [];
-  let index = 0;
-  for (;;) {
-    const found = sql.slice(index).search(/raise\s+exception\b/i);
-    if (found < 0) break;
-    const start = index + found;
-    // Skip text inside comments and string literals before the match.
-    const lineStart = sql.lastIndexOf("\n", start) + 1;
-    if (sql.slice(lineStart, start).includes("--")) {
-      index = start + 1;
-      continue;
-    }
-    START_PATTERN.lastIndex = start;
-    START_PATTERN.exec(sql);
-    const end = statementEnd(sql, START_PATTERN.lastIndex);
-    const body = sql.slice(START_PATTERN.lastIndex, end - 1);
-    const statement = { message: undefined, options: {}, dynamic: [] };
-    let rest = body;
-    const messageAt = skipSpace(rest, 0);
-    if (/^[Ee]?'/.test(rest.slice(messageAt))) {
-      const literal = readLiteral(rest, messageAt);
-      const afterMessage = rest.slice(literal.end);
-      const usingMatch = /\busing\b/i.exec(afterMessage);
-      const formatArgs = (usingMatch ? afterMessage.slice(0, usingMatch.index) : afterMessage)
-        .trim()
-        .replace(/^,/, "")
-        .trim();
+  for (const match of masked.matchAll(/\braise\b/gi)) {
+    const afterRaise = match.index + match[0].length;
+    const tail = masked.slice(afterRaise);
+    if (/^\s*;/.test(tail)) continue; // re-raise inside an exception handler
+    const level = /^\s*(exception|notice|warning|info|log|debug)\b/i.exec(tail);
+    if (level && level[1].toLowerCase() !== "exception") continue;
+    const start = afterRaise + (level ? level[0].length : 0);
+    const end = statementEnd(masked, start);
+    const text = sql.slice(start, end);
+    const shape = masked.slice(start, end);
+    const statement = { options: {}, dynamic: [] };
+    if (!level) statement.unreadable = "raise without a level";
+    let at = shape.search(/\S/);
+    if (at < 0) at = shape.length;
+    const usingAt = shape.slice(at).search(/\busing\b/i);
+    const usingIndex = usingAt < 0 ? shape.length : at + usingAt;
+    if (startsLiteral(shape, at)) {
+      const literal = readLiteral(text, at);
       statement.message = literal.value;
-      statement.formatted = formatArgs.length > 0;
-      rest = usingMatch ? afterMessage.slice(usingMatch.index) : "";
-    }
-    const using = /^\s*using\b/i.exec(rest);
-    if (using) {
-      for (const option of splitTopLevel(rest.slice(using[0].length))) {
-        const match = /^([a-z_]+)\s*=\s*([\s\S]+)$/i.exec(option);
-        if (!match) throw new Error(`Unreadable raise option: ${option.slice(0, 80)}`);
-        const name = match[1].toLowerCase();
-        const value = literalValue(match[2]);
+      statement.formatted =
+        text.slice(literal.end, usingIndex).trim().replace(/^,/, "").trim().length > 0;
+    } else if (shape.slice(at, usingIndex).trim() !== "")
+      statement.unreadable ??= `raise with a condition: ${text.slice(at, usingIndex).trim()}`;
+    if (usingAt >= 0) {
+      const optionsText = text.slice(usingIndex + 5);
+      for (const option of splitTopLevel(optionsText, shape.slice(usingIndex + 5))) {
+        const parsed = /^([a-z_]+)\s*=\s*([\s\S]+)$/i.exec(option);
+        if (!parsed) {
+          statement.unreadable ??= `unreadable option: ${option.slice(0, 80)}`;
+          continue;
+        }
+        const name = parsed[1].toLowerCase();
+        const value = literalValue(parsed[2]);
         if (value === undefined) statement.dynamic.push(name);
         else statement.options[name] = value;
       }
@@ -143,7 +171,6 @@ export function parseRaiseStatements(sql) {
     if (statement.message === undefined && statement.options.message !== undefined)
       statement.message = statement.options.message;
     statements.push(statement);
-    index = end;
   }
   return statements;
 }
@@ -169,10 +196,13 @@ export function currentFunctionFiles(root) {
 export function readDatabaseReasons(files) {
   const reasons = new Map();
   const messages = new Set();
+  const allMessages = new Set();
   const problems = [];
   for (const file of files) {
     const name = path.basename(path.dirname(file)) + "." + path.basename(file, ".sql");
     for (const statement of parseRaiseStatements(readFileSync(file, "utf8"))) {
+      if (statement.unreadable) problems.push(`${name}: ${statement.unreadable}`);
+      if (statement.message !== undefined) allMessages.add(statement.message);
       if (statement.message !== undefined && !statement.formatted) messages.add(statement.message);
       if (statement.dynamic.includes("detail"))
         problems.push(`${name}: detail is not a literal reason token`);
@@ -191,7 +221,7 @@ export function readDatabaseReasons(files) {
       reasons.get(detail).functions.add(name);
     }
   }
-  return { reasons, messages, problems };
+  return { reasons, messages, allMessages, problems };
 }
 
 const BLOCK = /(\/\/ <database-reasons>[^\n]*\n)([\s\S]*?)(\n\/\/ <\/database-reasons>)/;
@@ -226,7 +256,19 @@ export function parseSharedList(source) {
       ([, key, text]) => [key, JSON.parse(`"${text}"`)]
     )
   );
-  return { reasons, messages };
+  const pattern = /const STAFF_SECOND_FACTOR_PATTERN = \/(.+)\/([a-z]*);/.exec(source);
+  const staffBlock = /export const STAFF_SECOND_FACTOR_MESSAGES = \[([\s\S]*?)\] as const;/.exec(
+    source
+  );
+  if (!pattern || !staffBlock)
+    throw new Error("The shared list has no STAFF_SECOND_FACTOR_PATTERN or _MESSAGES");
+  const staffSecondFactor = {
+    pattern: new RegExp(pattern[1], pattern[2]),
+    messages: [...staffBlock[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(([, text]) =>
+      JSON.parse(`"${text}"`)
+    ),
+  };
+  return { reasons, messages, staffSecondFactor };
 }
 
 /**
@@ -259,6 +301,16 @@ export function compareReasons(database, shared) {
       failures.push(
         `The shared list names '${reason}' but no current database function raises it (renamed or removed?)`
       );
+  if (shared.staffSecondFactor) {
+    const matched = [...database.allMessages]
+      .filter((message) => shared.staffSecondFactor.pattern.test(message))
+      .sort();
+    const listed = [...shared.staffSecondFactor.messages].sort();
+    if (matched.join("\n") !== listed.join("\n"))
+      failures.push(
+        `STAFF_SECOND_FACTOR_MESSAGES lists ${JSON.stringify(listed)} but the pattern matches these database messages: ${JSON.stringify(matched)}`
+      );
+  }
   for (const [key, message] of Object.entries(shared.messages))
     if (!database.messages.has(message))
       failures.push(
@@ -308,6 +360,61 @@ export function findRawReasonComparisons(files) {
   return found;
 }
 
+// `error.message === "<a message the database raises>"` and the reverse.
+const MESSAGE_COMPARISON =
+  /\.message\s*[!=]==?\s*"((?:[^"\x5c]|\x5c.)*)"|"((?:[^"\x5c]|\x5c.)*)"\s*[!=]==?\s*[\w$.?]*\.message\b/g;
+/**
+ * Raw comparisons left on purpose, by file, until the change that rewrites the
+ * file lands; their messages are in FOUNDATION_ERROR_MESSAGES, so a reworded
+ * message still fails the check.
+ */
+const MESSAGE_COMPARISONS_PENDING = new Map([
+  // Rewritten by the open retired-backend removal; switch to hasDatabaseMessage then.
+  [
+    "src/app/api/admin/governance/roles/route.ts",
+    ["owner-approved administrator invitation required"],
+  ],
+]);
+
+/**
+ * Lines in website code that compare an error's `message` with a string the
+ * database raises, instead of using the shared list.
+ */
+export function findRawMessageComparisons(files, databaseMessages) {
+  const found = [];
+  for (const [file, text] of files)
+    text.split("\n").forEach((line, index) => {
+      for (const match of line.matchAll(MESSAGE_COMPARISON)) {
+        const message = JSON.parse(`"${match[1] ?? match[2]}"`);
+        if (!databaseMessages.has(message)) continue;
+        if (MESSAGE_COMPARISONS_PENDING.get(file)?.includes(message)) continue;
+        found.push(`${file}:${index + 1}: ${line.trim()}`);
+      }
+    });
+  return found;
+}
+
+// `error.code === "PT409" && hasDatabaseReason(error, "x")`: a code paired by
+// hand with a reason must be one the database raises that reason with.
+const CODE_REASON_PAIR =
+  /\.code\s*===\s*"([A-Z0-9]{5})"\s*&&\s*hasDatabaseReason\([^,()]+,\s*"([a-z0-9_]+)"\)/g;
+
+/**
+ * Lines in website code that pair a reason with a SQLSTATE the database does
+ * not raise it with (after a code change in the database, for example).
+ * `reasonCodes` maps each listed reason to its codes.
+ */
+export function findStaleCodePairs(files, reasonCodes) {
+  const found = [];
+  for (const [file, text] of files)
+    text.split("\n").forEach((line, index) => {
+      for (const [, code, reason] of line.matchAll(CODE_REASON_PAIR))
+        if (!(reasonCodes.get(reason) ?? []).includes(code))
+          found.push(`${file}:${index + 1}: '${reason}' is not raised with ${code}`);
+    });
+  return found;
+}
+
 const SHARED_LIST = "src/lib/foundation/error-reasons.ts";
 const CODE_ROOTS = ["src", "workers"];
 
@@ -349,6 +456,13 @@ export function runReasonCheck({ root = process.cwd(), write = false } = {}) {
     path.relative(root, file).replaceAll("\\", "/"),
     readFileSync(file, "utf8"),
   ]);
+  const reasonCodes = new Map(
+    [...database.reasons].map(([reason, { codes }]) => [reason, [...codes]])
+  );
+  for (const line of findStaleCodePairs(code, reasonCodes))
+    failures.push(`Code paired with a reason the database raises differently: ${line}`);
+  for (const line of findRawMessageComparisons(code, database.allMessages))
+    failures.push(`Match database messages with hasDatabaseMessage: ${line}`);
   for (const line of findRawReasonComparisons(code))
     failures.push(
       `Match database reasons with hasDatabaseReason or lookupDatabaseReason (src/lib/foundation/error-reasons.ts): ${line}`

@@ -76,7 +76,17 @@ test.describe("restored screen data shapes on the live backend", () => {
       const detail = await readRestoredPublicDetail(api, post.id);
       expect(detail, post.title).not.toBeNull();
       const row = restoredPublicRow(detail!, detail!);
+      // Optional facts every seeded post has: an optional field the adapter
+      // started blanking would pass the contract, so check them here.
       expect(row.cover_photo, post.title).toContain(post.mediaKey);
+      expect(row.photos.join(" "), post.title).toContain(post.mediaKey);
+      expect(row.media_width, post.title).toBeGreaterThan(0);
+      expect(row.media_height, post.title).toBeGreaterThan(0);
+      expect(row.contact_methods.length, post.title).toBeGreaterThan(0);
+      if (detail!.kind === "event") {
+        expect(row.start_date, post.title).toBeTruthy();
+        expect(row.end_date, post.title).toBeTruthy();
+      }
       rows.push(row);
     }
     expectContract(PUBLIC_DETAIL_CONTRACT, rows);

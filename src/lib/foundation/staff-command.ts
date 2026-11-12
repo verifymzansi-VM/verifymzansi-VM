@@ -9,6 +9,7 @@ export class FoundationStaffCommandError extends Error {
     super(message);
   }
 }
+import { isStaffSecondFactorRefusal } from "./error-reasons";
 export async function settleStaffCommand<T>(
   result: PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>,
   schema: z.ZodType<T>
@@ -16,7 +17,7 @@ export async function settleStaffCommand<T>(
   const { data, error } = await result;
   if (error) {
     if (error.code === "42501") {
-      const mfa = /second.factor|authenticator app/.test(error.message ?? "");
+      const mfa = isStaffSecondFactorRefusal(error);
       throw new FoundationStaffCommandError(
         403,
         mfa

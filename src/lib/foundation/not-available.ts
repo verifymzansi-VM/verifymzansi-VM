@@ -24,7 +24,9 @@ export function notAvailable<const V extends Placeholder>(
   return Object.freeze({ placeholder, reason });
 }
 
-type Fresh<V> = V extends readonly never[] ? never[] : V;
+// Lists are fresh per row; a false placeholder types as boolean, as the
+// literal it replaces did in the adapter's object.
+type Fresh<V> = V extends readonly never[] ? never[] : V extends boolean ? boolean : V;
 export type NotAvailableFields = Readonly<Record<string, NotAvailableField>>;
 export type NotAvailableSet<T extends NotAvailableFields = NotAvailableFields> = {
   /** The declarations, for tests. */

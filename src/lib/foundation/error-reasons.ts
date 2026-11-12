@@ -103,13 +103,34 @@ export const FOUNDATION_ERROR_MESSAGES = {
   postingCapacityInUse: "all posting capacity is in use",
   supportedMailKindsRequired: "supported mail kinds required",
   unsupportedMailKind: "unsupported mail kind",
+  ownerApprovedAdministratorInvitationRequired: "owner-approved administrator invitation required",
 } as const;
+
+/**
+ * Staff refusals that send the person to verify their authenticator again,
+ * recognised by this pattern. The check fails unless the database messages the
+ * pattern matches are exactly STAFF_SECOND_FACTOR_MESSAGES, so rewording one
+ * of them (or adding a new one) cannot silently change the redirect.
+ */
+const STAFF_SECOND_FACTOR_PATTERN = /second.factor|authenticator app/;
+export const STAFF_SECOND_FACTOR_MESSAGES = [
+  "recent second-factor verification required",
+  "second-factor verification required after role assignment",
+  "staff second-factor verification expired",
+  "staff session with second factor required",
+  "verified authenticator app required",
+] as const;
 
 export type FoundationErrorReason = keyof typeof FOUNDATION_ERROR_REASONS;
 type DatabaseError =
   { code?: string | null; details?: string | null; message?: string | null } | null | undefined;
 
-/** The listed reason a database error carries, or null. */
+/**
+ * The listed reason a database error carries, or null. Where a caller also
+ * names the SQLSTATE (`error.code === "PT409" && hasDatabaseReason(...)`), the
+ * check refuses a code the list does not record for that reason, so a code
+ * changed in the database cannot silently stop the match.
+ */
 function databaseReason(error: DatabaseError): FoundationErrorReason | null {
   const details = error?.details;
   return typeof details === "string" && Object.hasOwn(FOUNDATION_ERROR_REASONS, details)
@@ -141,4 +162,9 @@ export function hasDatabaseMessage(
   key: keyof typeof FOUNDATION_ERROR_MESSAGES
 ): boolean {
   return error?.message === FOUNDATION_ERROR_MESSAGES[key];
+}
+
+/** True for a refusal that asks staff to verify their authenticator again. */
+export function isStaffSecondFactorRefusal(error: DatabaseError): boolean {
+  return STAFF_SECOND_FACTOR_PATTERN.test(error?.message ?? "");
 }

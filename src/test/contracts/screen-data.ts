@@ -108,8 +108,8 @@ const PUBLIC_OPTIONAL = [
   "end_date",
 ] as const;
 
-/** Showroom cards: home strips, the market, business and tourism pages,
- * organisation pages and /api/marketplace (readRestoredCollection). */
+/** Showroom cards: the rows readRestoredCollection gives the home strips, the
+ * market, business and tourism pages, organisation pages and /api/marketplace. */
 export const PUBLIC_CARD_CONTRACT: ScreenContract = {
   name: "public post card",
   required: PUBLIC_REQUIRED,
@@ -117,8 +117,10 @@ export const PUBLIC_CARD_CONTRACT: ScreenContract = {
   notAvailable: [PUBLIC_POST_NOT_AVAILABLE, PUBLIC_CARD_NOT_AVAILABLE],
 };
 
-/** Post pages (listing, business, event), the feed and the event host card
- * (restoredPublicRow over readRestoredPublicDetail). */
+/** Post pages: the row restoredPublicRow builds from readRestoredPublicDetail
+ * for the listing, business and event pages, the feed and the event host card.
+ * What a page adds on top (an empty owner id, the feed's engagement counts) is
+ * not part of this contract. */
 export const PUBLIC_DETAIL_CONTRACT: ScreenContract = {
   name: "public post page",
   required: [...PUBLIC_REQUIRED, "seller"],
@@ -126,8 +128,9 @@ export const PUBLIC_DETAIL_CONTRACT: ScreenContract = {
   notAvailable: [PUBLIC_POST_NOT_AVAILABLE],
 };
 
-/** The owner's posts on the dashboard, the edit pages and staff review
- * (restoredOwnerPostRow). */
+/** The owner's posts as restoredOwnerPostRow shapes them for the post
+ * manager, the edit pages and staff review. (The dashboard's own short post
+ * list, dashboardPosts, is not covered.) */
 export const OWNER_POST_CONTRACT: ScreenContract = {
   name: "owner post",
   required: [
@@ -137,16 +140,11 @@ export const OWNER_POST_CONTRACT: ScreenContract = {
     "seller_id",
     "kind",
     "area",
-    "title",
-    "business_name",
-    "description",
     "category",
     "status",
     "revision",
     "created_at",
     "updated_at",
-    "location_province",
-    "location_city",
     "promotion_type",
     "price_negotiable",
     "focal_x",
@@ -154,6 +152,12 @@ export const OWNER_POST_CONTRACT: ScreenContract = {
   ],
   optional: [
     ...FORM_FIELDS,
+    // A draft may not have these yet (the adapter sends "" until it does).
+    "title",
+    "business_name",
+    "description",
+    "location_province",
+    "location_city",
     "subcategory",
     "business_type",
     "status_reason",

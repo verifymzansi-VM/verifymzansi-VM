@@ -6,7 +6,9 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  findRawMessageComparisons,
   findRawReasonComparisons,
+  findStaleCodePairs,
   parseRaiseStatements,
   runReasonCheck,
 } from "./lib/foundation-error-reasons.mjs";
@@ -131,4 +133,79 @@ test("raise statements are read across lines, with semicolons and quotes in mess
   assert.equal(second.formatted, true);
   assert.deepEqual(second.dynamic, ["hint"]);
   assert.equal(third.message, "by option");
+});
+
+test("raises in block comments and dollar-quoted text are ignored; unreadable forms are reported", () => {
+  const statements = parseRaiseStatements(`
+    /* raise exception 'old' using errcode = 'PT409', detail = 'old_reason'; */
+    perform $q$ raise exception 'quoted' using detail = 'quoted_reason'; $q$;
+    raise notice 'progress %', v_count;
+    raise exception unique_violation using detail = 'hidden_reason';
+    raise 'no level' using errcode = 'PT409', detail = 'level_reason';
+    raise;
+  `);
+  assert.deepEqual(
+    statements.map((statement) => [statement.options.detail, statement.unreadable ?? null]),
+    [
+      ["hidden_reason", "raise with a condition: unique_violation"],
+      ["level_reason", "raise without a level"],
+    ]
+  );
+});
+
+test("rewording a staff second-factor refusal fails the check", (t) => {
+  const root = copyOfRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const name of ["staff_actor", "bootstrap_first_administrator"])
+    editFile(
+      root,
+      `${FUNCTIONS}/internal/${name}.sql`,
+      "'verified authenticator app required'",
+      "'verified authenticator required'"
+    );
+  assert.ok(
+    runReasonCheck({ root }).failures.some((line) =>
+      line.startsWith("STAFF_SECOND_FACTOR_MESSAGES lists")
+    )
+  );
+});
+
+test("website code may not compare an error message with a database message", () => {
+  const databaseMessages = new Set([
+    "all posting capacity is in use",
+    "owner-approved administrator invitation required",
+  ]);
+  const found = findRawMessageComparisons(
+    [
+      ["a.ts", 'if (error.message === "all posting capacity is in use") fail();'],
+      ["b.ts", 'if (error.message === "Something the website says") fail();'],
+      [
+        "src/app/api/admin/governance/roles/route.ts",
+        'if (rpc.error?.message === "owner-approved administrator invitation required") x();',
+      ],
+    ],
+    databaseMessages
+  );
+  assert.deepEqual(
+    found.map((line) => line.split(":")[0]),
+    ["a.ts"]
+  );
+});
+
+test("a SQLSTATE paired by hand with a reason must be one the database raises it with", () => {
+  const codes = new Map([["posting_terms_required", ["PT409"]]]);
+  const found = findStaleCodePairs(
+    [
+      [
+        "a.ts",
+        'if (error.code === "PT409" && hasDatabaseReason(error, "posting_terms_required")) x();',
+      ],
+      [
+        "b.ts",
+        'if (error.code === "22023" && hasDatabaseReason(error, "posting_terms_required")) x();',
+      ],
+    ],
+    codes
+  );
+  assert.deepEqual(found, ["b.ts:1: 'posting_terms_required' is not raised with 22023"]);
 });
