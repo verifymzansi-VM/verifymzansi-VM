@@ -49,7 +49,12 @@ import type { EventDetails, TicketTier } from "@/types/tourism-details";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { humanizeKey } from "@/lib/presentation/listing-facts";
+import { describeListingPrice, humanizeKey } from "@/lib/presentation/listing-facts";
+import {
+  POST_MEDIA_FIRST_SCREEN_HEIGHT,
+  PostMediaCaption,
+  useMediaPlaying,
+} from "@/components/listings/poster-caption";
 import {
   buildEventCalendarUrl,
   EVENT_RAIN_POLICY_LABELS,
@@ -310,6 +315,7 @@ export function PromotionDetailContent({
   const wasPlayingRef = useRef(false);
   const canPrevious = activeMediaIndex > 0;
   const canNext = activeMediaIndex < mediaItems.length - 1;
+  const media = useMediaPlaying(`${activeMediaIndex}:${activeMedia?.url ?? ""}`);
 
   function goTo(index: number) {
     if (index >= 0 && index < mediaItems.length) {
@@ -447,6 +453,14 @@ export function PromotionDetailContent({
         : promotion.event_details?.tickets_url
           ? "Tickets available"
           : null;
+  // The showroom card's price line: the cheapest ticket or "Free entry", else the advert's price.
+  const captionPrice =
+    tierPrices.length > 0
+      ? ticketSummary
+      : promotion.price_cents != null && promotion.price_cents > 0
+        ? describeListingPrice({ category: null, price_cents: promotion.price_cents }).label
+        : null;
+  const captionLogoUrl = promotion.logo_url ?? linkedBusiness?.logo_url ?? null;
 
   const calendarUrl = buildEventCalendarUrl({
     title: promotion.title,
@@ -480,8 +494,15 @@ export function PromotionDetailContent({
               isReviewLayout ? "2xl:max-w-none" : "lg:max-w-none"
             }`}
             {...swipeHandlers}
+            {...media.handlers}
           >
-            <div className={cn("relative aspect-[9/16] overflow-hidden bg-black touch-pan-y")}>
+            <div
+              className={cn(
+                "relative aspect-[9/16] overflow-hidden bg-black touch-pan-y",
+                // The sticky contact bar is public-only; previews keep the full frame.
+                !isReviewLayout && POST_MEDIA_FIRST_SCREEN_HEIGHT
+              )}
+            >
               {activeMedia.kind === "video" ? (
                 <VideoViewTracker
                   targetId={promotion.id}
@@ -534,8 +555,19 @@ export function PromotionDetailContent({
                 )}
               </div>
 
+              <PostMediaCaption
+                eyebrow={captionPrice}
+                title={promotion.title}
+                // The card's place: the town, else the province.
+                location={promotion.location_city || promotion.location_province}
+                logoUrl={captionLogoUrl}
+                overVideo={activeMedia.kind === "video"}
+                playing={media.playing}
+              />
+
+              {/* On phones the logo sits in the caption, as on the showroom card. */}
               {(promotion.logo_url || linkedBusiness?.logo_url) && (
-                <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md">
+                <div className="absolute bottom-4 left-4 h-12 w-12 overflow-hidden rounded-xl border border-white/20 bg-white shadow-md max-md:hidden">
                   <Image
                     src={normalizeMediaUrl((promotion.logo_url ?? linkedBusiness?.logo_url)!)}
                     alt={`${promotion.title} logo`}
