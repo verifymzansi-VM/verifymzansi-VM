@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLOUDFLARE_RUNTIME_ONLY_SECRETS,
   resolveLaunchValidationMode,
   validateLaunchConfiguration,
   type EnvSource,
@@ -301,5 +302,57 @@ describe("launch validation", () => {
         detail: "Native Cloudflare R2 bucket binding configuration is present",
       })
     );
+  });
+
+  describe("runtime-only secrets held in Cloudflare (release validation)", () => {
+    const withoutRuntimeOnly = Object.fromEntries(
+      Object.entries(BASE_ENV).filter(
+        ([key]) => !(CLOUDFLARE_RUNTIME_ONLY_SECRETS as readonly string[]).includes(key)
+      )
+    );
+
+    it("still fails by default when the runtime-only secrets are absent", () => {
+      const summary = validateLaunchConfiguration(withoutRuntimeOnly, { mode: "production" });
+      expect(summary.isValid).toBe(false);
+      const names = summary.errors.map((error) => error.name);
+      expect(names).toEqual(
+        expect.arrayContaining(["Launch env", "Encryption keys", "IP hash secret"])
+      );
+    });
+
+    it("accepts their absence only when release validation opts in", () => {
+      const summary = validateLaunchConfiguration(withoutRuntimeOnly, {
+        mode: "production",
+        runtimeSecretsInCloudflare: true,
+      });
+      expect(summary.errors).toEqual([]);
+      expect(summary.isValid).toBe(true);
+      const held = summary.checks.find((check) => check.name === "Runtime-only secrets");
+      expect(held?.status).toBe("pass");
+      for (const key of CLOUDFLARE_RUNTIME_ONLY_SECRETS) expect(held?.detail).toContain(key);
+    });
+
+    it("still validates a runtime-only secret that is present", () => {
+      const summary = validateLaunchConfiguration(
+        { ...withoutRuntimeOnly, KYC_ENCRYPTION_KEY: "not-hex", IP_HASH_SECRET: "short" },
+        { mode: "production", runtimeSecretsInCloudflare: true }
+      );
+      const names = summary.errors.map((error) => error.name);
+      expect(names).toContain("Encryption keys");
+      expect(names).toContain("IP hash secret");
+    });
+
+    it("never excuses other production secrets", () => {
+      const { SUPABASE_SERVICE_ROLE_KEY: _omitted, ...rest } = withoutRuntimeOnly;
+      void _omitted;
+      const summary = validateLaunchConfiguration(rest, {
+        mode: "production",
+        runtimeSecretsInCloudflare: true,
+      });
+      expect(summary.isValid).toBe(false);
+      expect(summary.errors.find((error) => error.name === "Launch env")?.detail).toContain(
+        "SUPABASE_SERVICE_ROLE_KEY"
+      );
+    });
   });
 });

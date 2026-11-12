@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import type { Env } from "./env";
+import type { Env, ValidateEnvOptions } from "./env";
 
 // We need to reset module cache between tests since validateEnv caches
-let validateEnv: () => Env;
+let validateEnv: (options?: ValidateEnvOptions) => Env;
 let env: <K extends keyof Env>(key: K) => Env[K];
 let checkCriticalEnvVars: () => string[];
 
@@ -91,6 +91,42 @@ describe("env config", () => {
       const mod = await import("./env");
 
       expect(() => mod.validateEnv()).toThrow();
+    });
+
+    it("lets only release validation leave the runtime-only keys in Cloudflare", async () => {
+      vi.resetModules();
+      stubNoBypassFlags();
+      for (const [key, value] of Object.entries(VALID_ENV)) vi.stubEnv(key, value);
+      vi.stubEnv("NODE_ENV", "production");
+      for (const key of [
+        "KYC_ENCRYPTION_KEY",
+        "ID_ENCRYPTION_KEY",
+        "HMAC_SECRET",
+        "IP_HASH_SECRET",
+      ])
+        delete process.env[key];
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const mod = await import("./env");
+
+      // Runtime (no option): the full schema still refuses missing keys.
+      expect(() => mod.validateEnv({ mode: "development", strict: true })).toThrow(
+        /KYC_ENCRYPTION_KEY/
+      );
+      // Release validation: absence is accepted, and the result is not cached.
+      const release = mod.validateEnv({
+        mode: "development",
+        strict: true,
+        runtimeSecretsInCloudflare: true,
+      });
+      expect(release.KYC_ENCRYPTION_KEY).toBeUndefined();
+      expect(() => mod.validateEnv()).toThrow(/KYC_ENCRYPTION_KEY/);
+      // A present but malformed key is still refused in release validation.
+      vi.stubEnv("HMAC_SECRET", "tooshort");
+      expect(() =>
+        mod.validateEnv({ mode: "development", strict: true, runtimeSecretsInCloudflare: true })
+      ).toThrow(/HMAC_SECRET/);
+      vi.restoreAllMocks();
     });
 
     it("warns about AFRICASTALKING_SENDER_ID in production without throwing", async () => {

@@ -193,13 +193,43 @@ Prefer this pattern instead:
 
 ## Secret Rotation
 
+### Where secrets live
+
+- **Cloudflare (Worker secrets)** hold every value the running site needs. The
+  runtime-only keys `KYC_ENCRYPTION_KEY`, `ID_ENCRYPTION_KEY`, `HMAC_SECRET` and
+  `IP_HASH_SECRET` live **only** here, never in GitHub. Release validation
+  (`validate-launch-env.ts --runtime-secrets-in-cloudflare`) and
+  `pnpm cloudflare:secrets:check` confirm they exist on the Worker by name.
+- **GitHub environment `production`** (deployment branch: `main` only) holds the
+  values the Deploy and Cloudflare Candidate workflows use. Only those jobs can
+  read them, and each step receives only the values it uses: dependency
+  installation, the build (`scripts/build-cloudflare-release.mjs`, which uses
+  synthetic private values and refuses real ones), browser installation and
+  upload steps receive none, and the deploy deletes its temporary secret files
+  right after the last deploy step. Code installed earlier in the same job still
+  runs later beside secrets, so dependency review remains a control.
+- **GitHub environment `backup`** (deployment branch: `main` only) holds the
+  nightly backup's database password (`SUPABASE_BACKUP_DB_PASSWORD`), its
+  storage token limited to the backup bucket (`BACKUP_R2_ACCESS_KEY_ID`,
+  `BACKUP_R2_SECRET_ACCESS_KEY`) and `R2_ACCOUNT_ID`. A dedicated read-only
+  database login replaces the password with the restore drill (the pinned
+  Supabase CLI always dumps as `postgres`).
+- **Repository-level secrets** hold only what pull-request CI and scheduled
+  monitoring need (for example `DOCKERHUB_TOKEN`, `SITE_MONITOR_API_KEY`,
+  `PRODUCTION_APP_URL`). Any workflow on any branch can read them, so never put
+  a production credential there.
+
+Keep the canonical copy of each value in the owner's password manager. GitHub
+secrets cannot be read back; moving one means entering it again.
+
 ### Supabase Keys
 
 1. Go to Supabase Dashboard → Settings → API
 2. Rotate the `service_role` key
-3. Update in Cloudflare Pages environment variables:
-   - `SUPABASE_SERVICE_ROLE_KEY`
-4. Redeploy the application
+3. Set the new secret key as `FOUNDATION_SUPABASE_SECRET_KEY` in the GitHub
+   `production` environment. The next deploy installs it on the Worker under
+   both `FOUNDATION_SUPABASE_SECRET_KEY` and `SUPABASE_SERVICE_ROLE_KEY`.
+4. Redeploy the application (Actions → Deploy → Run workflow)
 5. Verify `/api/health` returns 200
 
 > **Note:** The `anon` key is public and does not need rotation unless
@@ -704,9 +734,18 @@ the Supabase CLI, checks the dump, encrypts it to
 bucket `verifymzansi-backups` under `database/YYYY/MM/DD/`. R2 deletes copies
 after 35 days.
 
-- **Secret:** `SUPABASE_BACKUP_DB_PASSWORD` (the database password from
-  Supabase > Project Settings > Database). Reset it there if a run reports an
-  authentication failure, then update the secret.
+- **Credentials** (GitHub environment `backup`, deployment branch `main`):
+  - `SUPABASE_BACKUP_DB_PASSWORD`: the database password (Supabase > Project
+    Settings > Database). Reset it there if a run reports an authentication
+    failure, then update the secret. The connection string is built inside the
+    dump step and never shared with other steps.
+  - `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY`: an R2 API token
+    with Object Read & Write limited to the `verifymzansi-backups` bucket, so a
+    leaked backup token cannot touch member media or ID evidence.
+  - `R2_ACCOUNT_ID`.
+  - Transitional only: until the bucket token exists, the upload uses the app's
+    storage key and warns on every run. Keep the app's storage key only in the
+    `production` environment, which the backup job cannot read.
 - **Decryption key:** only the owner holds the private key, offline (key
   fingerprint `CBADD845A4EEE95E8ADD376D8DD25F76A198D659`). Without it no backup
   can be restored. Never commit it or store it in GitHub, Cloudflare or
