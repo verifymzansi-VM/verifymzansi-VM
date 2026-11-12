@@ -7,7 +7,8 @@ CREATE OR REPLACE FUNCTION internal.scrub_frontend_verification_receipt()
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$begin
-  if new.state='deleted' then update private.frontend_verification_uploads set fingerprint=null,encrypted_number=null where artifact_id=new.id; end if;
+  if new.state='deleted' then update private.frontend_verification_uploads set fingerprint=null,encrypted_number=null,
+    capture_method=null,browser_liveness_passed=null where artifact_id=new.id; end if;
   return new;
 end$function$;
 alter function internal.scrub_frontend_verification_receipt() owner to postgres;

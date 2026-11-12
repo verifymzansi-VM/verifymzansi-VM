@@ -17,8 +17,12 @@ create table private.frontend_verification_uploads (
   expires_at timestamp with time zone default (clock_timestamp() + '24:00:00'::interval) not null,
   completed_at timestamp with time zone,
   submission_id uuid,
+  capture_method text,
+  browser_liveness_passed boolean,
   constraint frontend_verification_uploads_artifact_id_fkey FOREIGN KEY (artifact_id) REFERENCES private.evidence_artifacts(id) ON DELETE CASCADE,
   constraint frontend_verification_uploads_artifact_id_key UNIQUE (artifact_id),
+  constraint frontend_verification_uploads_capture_method_check CHECK (capture_method = ANY (ARRAY['camera'::text, 'file_upload'::text])),
+  constraint frontend_verification_uploads_capture_report_check CHECK ((capture_method IS NULL) = (browser_liveness_passed IS NULL) AND (purpose = 'selfie'::text OR capture_method IS NULL) AND (browser_liveness_passed IS NOT TRUE OR capture_method = 'camera'::text)),
   constraint frontend_verification_uploads_case_id_owner_id_fkey FOREIGN KEY (case_id, owner_id) REFERENCES private.evidence_cases(id, subject_id) ON DELETE CASCADE,
   constraint frontend_verification_uploads_case_version_check CHECK (case_version > 0),
   constraint frontend_verification_uploads_check CHECK (expires_at > created_at),
@@ -37,3 +41,5 @@ alter table private.frontend_verification_uploads enable row level security;
 CREATE INDEX frontend_verification_case_idx ON private.frontend_verification_uploads USING btree (owner_id, case_id, purpose, created_at DESC);
 CREATE INDEX frontend_verification_upload_parent_idx ON private.frontend_verification_uploads USING btree (owner_id, id_request) WHERE (id_request IS NOT NULL);
 revoke all on private.frontend_verification_uploads from public;
+comment on column private.frontend_verification_uploads.capture_method is 'Selfie only: how the member''s browser says the photo was taken (camera or file_upload). Browser-reported review context, not a proof; null when not recorded.';
+comment on column private.frontend_verification_uploads.browser_liveness_passed is 'Selfie only: whether the member''s browser says its liveness challenge was completed. Browser-reported review context, not a proof; null when not recorded.';
