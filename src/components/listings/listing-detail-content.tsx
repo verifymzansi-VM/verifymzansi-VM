@@ -35,6 +35,7 @@ import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
 import { placeLine } from "@/lib/utils/place-line";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
+import { POST_MEDIA_FIRST_SCREEN_HEIGHT } from "@/components/listings/poster-caption";
 
 export interface ListingDetailRecord {
   id: string;
@@ -151,6 +152,7 @@ export function ListingDetailContent({
   );
   const detailsHeading = getListingDetailsHeading(listing.category);
   const price = describeListingPrice(listing);
+  const priceNegotiable = isListingPriceNegotiable(listing, price);
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
   const sellerPhone = contactPhone(seller?.phone);
   const sellerWhatsappUrl = whatsappLink(seller?.phone, listing.title, `/listing/${listing.id}`);
@@ -218,10 +220,20 @@ export function ListingDetailContent({
                 listingId={listing.id}
                 videoThumbnail={listing.video_thumbnail}
                 photoCount={photoCount}
-                heroAspectClassName="aspect-[9/16]"
+                heroAspectClassName={cn(
+                  "aspect-[9/16]",
+                  // The sticky contact bar is public-only; previews keep the full frame.
+                  !isReviewLayout && POST_MEDIA_FIRST_SCREEN_HEIGHT
+                )}
                 heroMediaClassName="bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))] object-contain transition-transform duration-500"
                 trackView={trackView}
                 onViewRecorded={handleViewRecorded}
+                caption={{
+                  eyebrow: priceNegotiable ? `${price.label} · Negotiable` : price.label,
+                  // The card's place: the town, else the province.
+                  location: listing.location_city || listing.location_province,
+                  logoUrl: listing.logo_url,
+                }}
               />
             </ErrorBoundary>
           </div>
@@ -260,7 +272,7 @@ export function ListingDetailContent({
                 >
                   {price.label}
                 </p>
-                {isListingPriceNegotiable(listing, price) ? (
+                {priceNegotiable ? (
                   <Badge className="bg-brand-green/10 text-brand-green">Negotiable</Badge>
                 ) : null}
               </div>

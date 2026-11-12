@@ -2,7 +2,7 @@ name: Failure alert
 
 # Opens one GitHub issue (or comments on it while it is open) when a run on
 # main or a scheduled run of a watched workflow fails, so a red nightly, a red
-# main run outside the deploy gate or a failed deploy is not missed. It checks
+# main CI run or a failed deploy is not missed. It checks
 # out no code and only reads the finished run's name, link and commit.
 # Close the issue once the cause is fixed; the next failure opens a new one.
 on:
@@ -19,6 +19,11 @@ on:
       - CodeQL Security Analysis
       - OpenSSF Scorecard
     types: [completed]
+    # Every completed run of a watched workflow starts this one, and GitHub
+    # lists it as a skipped run when the job's condition is false. Pull request
+    # and feature-branch runs can never raise an alert, so they do not start it.
+    # Scheduled runs use the default branch (main), so they still do.
+    branches: [main]
 
 permissions: {}
 
