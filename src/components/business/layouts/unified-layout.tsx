@@ -487,13 +487,25 @@ export function UnifiedLayout({
         ? "Service Scope"
         : ctaConfig?.servicesHeading;
   const showStickyContactBar = layoutMode === "public" && showPublicActions;
+  const acceptsEnquiries = acceptsInboxEnquiries(business.category_details);
+  const contactConfig = businessContactConfig(
+    business.id,
+    business.business_name,
+    `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`
+  );
+  const hasOtherContact = Boolean(
+    business.email ||
+    business.website ||
+    Object.values(business.social_links ?? {}).some((url) => Boolean(url))
+  );
   const shellClassName = isReviewLayout
     ? "grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] 2xl:items-start"
     : showStickyContactBar &&
         (contactPhone(business.phone) ||
           contactPhone(business.whatsapp) ||
           business.contact_available?.phone ||
-          business.contact_available?.whatsapp)
+          business.contact_available?.whatsapp ||
+          acceptsEnquiries)
       ? "grid grid-cols-1 gap-6 pb-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start lg:pb-0"
       : "grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(18rem,20rem)] lg:items-start";
   const viewCountLabel = `${viewCount} ${viewCount === 1 ? "view" : "views"}`;
@@ -915,13 +927,10 @@ export function UnifiedLayout({
                       : null
                   }
                   showPhoneButton={true}
-                  showMessageButton={acceptsInboxEnquiries(business.category_details)}
+                  showMessageButton={acceptsEnquiries}
                   messageIcon={MessageSquare}
-                  config={businessContactConfig(
-                    business.id,
-                    business.business_name,
-                    `${family === "tourism" ? "/tourism-events" : "/mzansi-business"}/${business.id}`
-                  )}
+                  config={contactConfig}
+                  hasOtherContact={hasOtherContact}
                 />
               </CardContent>
             </Card>
@@ -930,7 +939,11 @@ export function UnifiedLayout({
       </div>
 
       {showStickyContactBar ? (
-        <StickyContactBar business={business} ctaLabel={ctaConfig?.primaryCta ?? "Call Now"} />
+        <StickyContactBar
+          business={business}
+          ctaLabel={ctaConfig?.primaryCta ?? "Call Now"}
+          enquiry={acceptsEnquiries ? contactConfig : null}
+        />
       ) : null}
     </>
   );
