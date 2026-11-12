@@ -103,6 +103,26 @@ describe("HomePage", () => {
     );
   });
 
+  it("puts one slim identity line straight under the showroom, before the rails", async () => {
+    const ui = await HomePage();
+    render(ui);
+
+    const main = screen.getByRole("main");
+    const showroom = screen.getByRole("region", { name: "Showroom" });
+    const line = within(main).getByText("Every poster ID-reviewed").closest("p");
+    expect(line).not.toBeNull();
+    expect(showroom.nextElementSibling).toContainElement(line);
+    expect(within(line!).getByRole("link", { name: "What we check" })).toHaveAttribute(
+      "href",
+      "/help/business-verification"
+    );
+    expect(line!.compareDocumentPosition(screen.getByTestId("promotions-showcase"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    // Said once: nothing else on the page repeats the line.
+    expect(within(main).getAllByText("Every poster ID-reviewed")).toHaveLength(1);
+  });
+
   it("links the post-for-free band to posting and pricing", async () => {
     const ui = await HomePage();
     render(ui);

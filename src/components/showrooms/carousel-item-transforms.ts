@@ -1,11 +1,10 @@
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
-import { formatRandAmount } from "@/lib/utils/format";
+import { formatZARShort } from "@/lib/utils/format";
+import { describeListingPrice } from "@/lib/presentation/listing-facts";
 import type { CarouselItem } from "./showroom-card-carousel";
 
-/** "R 1 250" for whole amounts, "R 99.50" when there are cents. */
-function formatCardPrice(cents: number): string {
-  return `R ${formatRandAmount(cents / 100, cents % 100 ? 2 : 0)}`;
-}
+/** The one card price format, as on grid cards and the post page: "R1 250", "R99.50". */
+const formatCardPrice = formatZARShort;
 
 export type { CarouselItem };
 
@@ -21,6 +20,8 @@ export function listingToCarouselItem(
     video_thumbnail?: string | null;
     logo_url?: string | null;
     price_cents?: number | null;
+    price_mode?: string | null;
+    category?: string | null;
     location_city?: string | null;
     location_province?: string | null;
     focal_x?: number | null;
@@ -30,6 +31,11 @@ export function listingToCarouselItem(
   },
   hrefOverride?: string
 ): CarouselItem {
+  const described = describeListingPrice({
+    category: l.category ?? null,
+    price_cents: l.price_cents ?? null,
+    price_mode: l.price_mode,
+  });
   return {
     id: l.id,
     type: "listing",
@@ -47,7 +53,7 @@ export function listingToCarouselItem(
         : undefined,
     logoUrl: l.logo_url ? normalizeMediaUrl(l.logo_url) : undefined,
     price: l.price_cents ? l.price_cents / 100 : null,
-    eyebrow: l.price_cents ? formatCardPrice(l.price_cents) : null,
+    eyebrow: described.kind === "none" ? null : described.label,
     focalX: l.focal_x ?? null,
     focalY: l.focal_y ?? null,
     mediaWidth: l.media_width ?? null,

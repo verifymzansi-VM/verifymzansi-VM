@@ -23,6 +23,15 @@ folder's config ignores it). It backs the required check `Visual regression
 (chosen frontend)`. Its new pictures and how they differ from the stub suite's
 are recorded in `VISUAL-BASELINES.md`.
 
+**Retired (test plan step 10, after `e2e-foundation` joined the release gate):**
+`billing-payment-roundtrip`, `contact-form`, `kyc-verification` and
+`kyc-authenticated` were deleted from the stub suite. Their rows below say where
+the coverage lives. The high-risk governance escalation of `kyc-authenticated`
+has no foundation browser counterpart yet. `verification-flow` stays: its
+camera checks (live ID and selfie camera, framing, focus, landscape fit, the
+manual-review fallback when face detection is blocked) are backend-independent
+and not yet ported; the foundation specs use the upload fallback.
+
 | Stub spec                         | Class   | Where its coverage lives / why not ported                                                                                                                                                                                                                                                                               |
 | --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `a11y.spec.ts`                    | a       | `a11y.spec.ts` (all 17 checks).                                                                                                                                                                                                                                                                                         |

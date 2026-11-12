@@ -15,8 +15,11 @@ and not a security company.
    heading at most; prefer icons, images, badges and labels over paragraphs. Cut
    anything a visitor wouldn't miss.
 
-1. **Explain first, then browse.** Every entry page answers: what is this, what
-   can I find, why trust it, how do I start.
+1. **Show first, explain below.** Clients' content is the attraction. Entry
+   pages open on the showroom; at most one slim line above or on it says what
+   the site is ("Every poster ID-reviewed · What we check"). What VerifyMzansi
+   is, why to trust it and how to start sit further down the page, so returning
+   visitors reach content without interruption.
 2. **Trust is visible but light.** Every poster is ID-reviewed, so feed cards
    carry **no** verification marks. The labelled `TrustBadge` appears only
    beside the poster's name on detail pages. Never imply a guarantee: badges
@@ -76,6 +79,9 @@ Area identity helpers: `.area-market-tile`, `.area-business-tile`,
   never above every heading.
 - Avoid filler headings ("The main details shoppers look for"); say what the
   section is.
+- Small labels (eyebrows above a heading, fact labels, chips) are sentence case
+  with normal letter spacing: `text-xs font-semibold text-muted-foreground`. The
+  logo's "Trusted marketplace" line is part of the logo and stays as it is.
 - **Avoid template tells:** no tracked ALL-CAPS labels, no single-word colour
   accents in headlines, no `→` arrows appended to every button (reserve arrow
   icons for "See all"-style navigation links), no `A · B · C` meta strings where
@@ -110,8 +116,20 @@ Area identity helpers: `.area-market-tile`, `.area-business-tile`,
 
 Global chrome: sticky single-row `Header` (logo · area tabs · actions), dark
 `Footer` with a post-for-free call-to-action band, and `MobileNav` tab bar (Home
-· Search · Post · Verify · Account) on discovery pages only
-(`shouldShowMobileNav`).
+· Video · Post · Get verified · Account) on discovery pages only
+(`shouldShowMobileNav`). On phones Search sits in the header, because Video mode
+holds the tab bar's second slot. Signed out on screens narrower than 375 px the
+header's theme button moves into the menu, so nothing ever covers the logo.
+
+## Prices
+
+One format wherever a post's price shows — cards, the showroom, home rails, the
+post page and the immersive viewer — from `describeListingPrice`
+(`@/lib/presentation/listing-facts`) and `formatZARShort`: "R1 450", "R99.50".
+Market rules: an amount, an explicit "Free" or "Price on request" ("Salary not
+provided" for jobs); "Negotiable" only with an amount or on request, never with
+Free or for jobs. Cards stay quiet when there is no amount and the item is not
+free.
 
 ## States
 

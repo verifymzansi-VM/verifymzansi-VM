@@ -16,9 +16,15 @@ begin
   if pay.checkout_url is null and pay.checkout_claim_until>clock_timestamp() then
     raise exception 'checkout is being created' using errcode='PT409'; end if;
   if pay.checkout_url is null then
+    -- No request is attached, so every earlier attempt ended before Ozow's
+    -- page reached the member. Each attempt gets a fresh 30-minute window;
+    -- after an earlier lease, also a new idempotency key (Ozow must not see a
+    -- key it already answered with another expiry).
     update private.payments set checkout_claim_token=pg_catalog.gen_random_uuid(),
       checkout_claim_until=clock_timestamp()+interval '2 minutes',
-      checkout_expires_at=coalesce(checkout_expires_at,clock_timestamp()+interval '30 minutes')
+      checkout_expires_at=clock_timestamp()+interval '30 minutes',
+      provider_idempotency_key=case when checkout_claim_token is null then provider_idempotency_key
+        else pg_catalog.gen_random_uuid() end
       where id=pay.id returning * into pay;
   end if;
   return internal.billing_payment_dto(pay)||jsonb_build_object('claim_token',pay.checkout_claim_token,

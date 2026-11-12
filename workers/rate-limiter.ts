@@ -299,8 +299,6 @@ const ACTION_LIMITS: Record<string, { limit: number; ttl: number }[]> = {
 
   // ── Media ────────────────────────────────────────────
   "media:upload": [{ limit: 20, ttl: 60 }],
-  "media:upload-url": [{ limit: 20, ttl: 60 }],
-  "media:upload-complete": [{ limit: 20, ttl: 60 }],
 
   // ── Contact ──────────────────────────────────────────
   // Tap-to-reveal of a poster's number: enough for real buyers, too slow to harvest.

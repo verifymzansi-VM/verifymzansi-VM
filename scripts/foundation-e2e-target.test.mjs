@@ -9,6 +9,7 @@ import {
   LOCAL_OPS_JOBS_SECRET,
   LOCAL_OZOW_SITE_CODE,
   LOCAL_OZOW_WEBHOOK_SECRET,
+  LOCAL_PAYMENT_ALERT_EMAIL,
   LOCAL_PHONE_OTP_KEY,
   OUTBOUND_LOG_FILE,
   assertLocalFoundationTarget,
@@ -532,6 +533,33 @@ test("the copy's website emails go to the local relay, never the provider", () =
     assert.ok(LOCAL_OPS_JOBS_SECRET.length >= 32);
     // The website's env schema: the provider key must look like one.
     assert.match(LOCAL_MAIL_RELAY_KEY, /^re_/);
+  } finally {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  }
+});
+
+test("the copy's staff payment alerts go to its own .test address", () => {
+  const saved = { ...process.env };
+  try {
+    // A caller's own staff addresses are replaced, not forwarded.
+    process.env.PAYMENT_ALERT_EMAILS = "owner@example.com";
+    const env = foundationWebsiteEnv(LOCAL_STATUS, {
+      root: mkdtempSync(path.join(tmpdir(), "vm-noenv-")),
+    });
+    assert.equal(env.PAYMENT_ALERT_EMAILS, LOCAL_PAYMENT_ALERT_EMAIL);
+    // The relay delivers only to the reserved .test domain.
+    assert.match(LOCAL_PAYMENT_ALERT_EMAIL, /^[a-z-]+@[a-z]+\.test$/);
+    assert.equal(
+      toMailCatcherMessage({
+        from: "VerifyMzansi <noreply@verifymzansi.com>",
+        to: [LOCAL_PAYMENT_ALERT_EMAIL],
+        reply_to: [],
+        subject: "VerifyMzansi payment alert",
+        text: "synthetic",
+      }).ok,
+      true
+    );
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);

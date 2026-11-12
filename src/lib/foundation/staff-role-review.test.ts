@@ -58,7 +58,11 @@ describe("readRestoredStaffRoles", () => {
     ["a review for another account", { actor_id: uuid(9) }],
     [
       "an unknown role",
-      { staff: [{ user_id: uuid(2), role: "owner", granted_at: at, mfa_required_after: null }] },
+      // staff_total matches the one row, so only the role check can refuse it.
+      {
+        staff_total: 1,
+        staff: [{ user_id: uuid(2), role: "owner", granted_at: at, mfa_required_after: null }],
+      },
     ],
     ["an extra field", { raw_evidence: "secret" }],
     [

@@ -69,3 +69,27 @@ export function collectAppRouteBundles(
 
   return [...byRoute.values()];
 }
+
+/** The part of a route's client reference manifest the budget reads. */
+export type ClientReferenceManifest = {
+  clientModules?: Record<string, { chunks?: unknown[] }>;
+};
+
+/**
+ * Every JavaScript file a route's client components can load at start: the
+ * chunk paths named by its client reference manifest (`chunks` alternates
+ * chunk ids and URL-encoded paths), as file paths relative to `.next/`. Code loaded later with
+ * `import()` is not listed there, which is the point: it is not part of the
+ * page's first download.
+ */
+export function routeClientChunkFiles(manifest: ClientReferenceManifest): string[] {
+  const files = new Set<string>();
+  for (const entry of Object.values(manifest.clientModules ?? {})) {
+    for (const chunk of entry?.chunks ?? []) {
+      if (typeof chunk !== "string" || !chunk.endsWith(".js")) continue;
+      // Paths are URL-encoded (`app/listing/%5Bid%5D/...`); the files on disk are not.
+      files.add(decodeURIComponent(chunk.replace(/^\/?_next\//, "").replace(/^\//, "")));
+    }
+  }
+  return [...files].sort();
+}

@@ -27,8 +27,6 @@ export const metadata = {
     "Simple VerifyMzansi pricing: R50 for 30 days, R140 for 90 days, R250 for 180 days. Events are free. Multi-listing from R1,200 for 90 days; sponsor programmes from R15,000.",
 };
 
-export const revalidate = 300;
-
 async function loadSettings() {
   try {
     return await getCommercialSettings(createAdminClient() as never);

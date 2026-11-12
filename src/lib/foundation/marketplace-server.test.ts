@@ -11,6 +11,7 @@ import {
   restoredListingDetail,
   restoredPublicDetail,
   restoredEventHostBusiness,
+  restoredSharePreview,
 } from "./marketplace-server";
 afterEach(() => vi.clearAllMocks());
 
@@ -292,6 +293,72 @@ describe("event host business", () => {
     expect(await restoredEventHostBusiness(id)).toBeNull();
     reads({ get_public_frontend_business_seen: () => ({ data: [{ bad: true }], error: null }) });
     expect(await restoredEventHostBusiness(id)).toBeNull();
+  });
+
+  it("link preview: gives only the card's fields of a public post, without a contact read", async () => {
+    const tourism = {
+      ...business,
+      area: "tourism_events",
+      category: "tourism_hospitality",
+      description: "Private-looking description that the card never shows",
+      media: [
+        {
+          purpose: "cover",
+          position: 0,
+          object_key: "media/dddddddd-dddd-4ddd-8ddd-000000000001",
+          kind: "image",
+          width: 1200,
+          height: 800,
+          focal_x: null,
+          focal_y: null,
+        },
+        {
+          purpose: "video",
+          position: 0,
+          object_key: "media/dddddddd-dddd-4ddd-8ddd-000000000002",
+          kind: "video",
+          width: null,
+          height: null,
+          focal_x: null,
+          focal_y: null,
+        },
+      ],
+    };
+    reads({ get_public_post: () => ({ data: tourism, error: null }) });
+    const card = await restoredSharePreview("business", id);
+    expect(card).toEqual({
+      title: "Fixture Kitchen",
+      tourism: true,
+      location_city: "Soweto",
+      location_province: "Gauteng",
+      price_cents: null,
+      video_thumbnail: expect.stringMatching(/\/media\/dddddddd-dddd-4ddd-8ddd-000000000001$/),
+      has_video: true,
+    });
+    expect(JSON.stringify(card)).not.toMatch(/Tester|Private-looking|cccccccc/);
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["get_public_post", "search_post_cards"]);
+  });
+
+  it("link preview: no card for another kind, or a post that is not publicly live", async () => {
+    reads();
+    expect(await restoredSharePreview("listing", id)).toBeNull();
+    expect(await restoredSharePreview("event", id)).toBeNull();
+    // Another kind stops after the post read.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["get_public_post", "get_public_post"]);
+    reads({ get_public_post: () => ({ data: null, error: null }) });
+    expect(await restoredSharePreview("business", id)).toBeNull();
+    reads({
+      search_post_cards: () => ({ data: { ...cards(business), items: [], total: 0 }, error: null }),
+    });
+    expect(await restoredSharePreview("business", id)).toBeNull();
+    vi.clearAllMocks();
+    expect(await restoredSharePreview("business", "not-a-post")).toBeNull();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("link preview: a failed read is an error, not a missing post", async () => {
+    reads({ get_public_post: () => ({ data: null, error: { message: "outage" } }) });
+    await expect(restoredSharePreview("business", id)).rejects.toThrow();
   });
 
   it("asks nothing for a missing or malformed business id", async () => {

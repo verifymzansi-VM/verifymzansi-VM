@@ -39,6 +39,7 @@ create table private.media_objects (
 );
 alter table private.media_objects owner to postgres;
 alter table private.media_objects enable row level security;
+CREATE INDEX media_objects_owner_id_idx ON private.media_objects USING btree (owner_id);
 CREATE INDEX media_objects_owner_idx ON private.media_objects USING btree (owner_id) WHERE (state = ANY (ARRAY['intent'::text, 'ready'::text]));
 CREATE UNIQUE INDEX media_objects_upload_digest_idx ON private.media_objects USING btree (owner_id, upload_digest) WHERE ((upload_digest IS NOT NULL) AND (state = ANY (ARRAY['intent'::text, 'ready'::text])));
 CREATE TRIGGER media_object_transition BEFORE UPDATE ON private.media_objects FOR EACH ROW EXECUTE FUNCTION internal.media_object_transition_guard();

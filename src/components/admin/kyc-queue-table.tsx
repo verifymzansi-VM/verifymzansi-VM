@@ -210,6 +210,11 @@ export function KycQueueTable({
       return;
     }
 
+    if (decision !== "approved" && !reasonNote.trim()) {
+      setError("Please write a note telling the member what to fix.");
+      return;
+    }
+
     const isHighRisk = selectedStep.risk_level === "high" || selectedStep.risk_level === "critical";
     if (decision === "approved" && isHighRisk && !overrideReasonCode) {
       setError("Override reason code is required when approving high-risk steps.");
@@ -650,13 +655,13 @@ export function KycQueueTable({
               </div>
               <div>
                 <Label htmlFor="reason-note" className="text-sm font-medium">
-                  Additional notes
+                  Note to the member <span className="text-destructive">*</span>
                 </Label>
                 <Textarea
                   id="reason-note"
                   value={reasonNote}
                   onChange={(e) => setReasonNote(e.target.value)}
-                  placeholder="Optional: provide additional context..."
+                  placeholder="Required: explain what the member needs to fix..."
                   rows={3}
                   className="mt-1.5"
                 />

@@ -8,19 +8,19 @@ name: E2E foundation
 # e2e mock, email the local mail catcher. Nothing here reaches a hosted
 # project or a real provider, and the job needs no secrets.
 #
-# The required browser check: the owner made `e2e-foundation` required on
-# 2026-11-11 (.github/rulesets/protect-main.json), in place of the retired
-# stub suite's `e2e-full-matrix`, so a red run blocks merging. The required
-# check is the aggregate job `e2e-foundation`, which fails unless every
-# browser project passed; the per-project jobs need not be listed.
+# A required check since it passed on 11 consecutive main runs (11 November
+# 2026): `e2e-foundation` is listed in .github/rulesets/protect-main.json, and
+# it replaces the retired stub suite's `e2e-full-matrix` (owner decision,
+# 2026-11-11). The check to require is the aggregate job `e2e-foundation`,
+# which fails unless every browser project passed; the per-project jobs need
+# not be listed.
 #
-# Runs on main are a separate workflow run, outside the deploy gate (deploy
-# waits only for workflow "CI"): a red run on main alerts (workflow "Failure
-# alert") but does not hold back that release. The pull request run before
-# the merge is what gates the change.
+# On main this workflow runs inside the CI run (ci.yml calls it through
+# `workflow_call`), so the deploy, which needs the whole main CI run to
+# succeed, waits for it: a red run here holds back the release. Pull requests,
+# the nightly and manual runs start it on its own.
 on:
-  push:
-    branches: [main]
+  workflow_call:
   pull_request:
     branches: [main]
   schedule:
@@ -30,8 +30,9 @@ on:
 permissions:
   contents: read
 
-# A newer push to a pull request cancels its older run. Runs on main and
-# scheduled runs are never cancelled: each commit gets its own group.
+# A newer push to a pull request cancels its older run. Runs on main (called
+# from CI) and scheduled runs are never cancelled: each commit gets its own
+# group, so a later merge never cancels an earlier commit's release gate.
 concurrency:
   group: e2e-foundation-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

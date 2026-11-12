@@ -4,14 +4,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export const GITHUB_ACTIONS_APP_ID = 15368;
-export const RULESET_FILE = ".github/rulesets/protect-main.json";
+const GITHUB_ACTIONS_APP_ID = 15368;
+const RULESET_FILE = ".github/rulesets/protect-main.json";
 /** Workflows whose jobs may be required on pull requests to `main`. */
-export const PULL_REQUEST_WORKFLOWS = [
+const PULL_REQUEST_WORKFLOWS = [
   ".github/workflows/ci.yml",
   ".github/workflows/codeql.yml",
-  ".github/workflows/e2e-foundation.yml",
   ".github/workflows/foundation-native.yml",
+  ".github/workflows/e2e-foundation.yml",
 ];
 
 function indentOf(line) {
@@ -126,7 +126,8 @@ export function pullRequestCheckNames(text) {
   for (const job of jobs) {
     if (
       job.condition &&
-      /github\.event_name\s*==\s*'(push|schedule|workflow_dispatch)'/.test(job.condition)
+      (/github\.event_name\s*==\s*'(push|schedule|workflow_dispatch)'/.test(job.condition) ||
+        /github\.event_name\s*!=\s*'pull_request'/.test(job.condition))
     ) {
       continue;
     }
@@ -134,11 +135,14 @@ export function pullRequestCheckNames(text) {
     if (job.matrix.length === 0) {
       names.push(base);
     } else if (job.matrix.length === 1) {
-      // A name that uses the matrix value is shown as written, with the value
-      // filled in; otherwise GitHub appends the value in brackets.
-      const expression = /\$\{\{\s*matrix\.[A-Za-z0-9_-]+\s*\}\}/;
+      // GitHub names a matrix job by its `name:` with `${{ matrix.<dim> }}`
+      // filled in, or by the job name followed by the value in brackets.
       for (const value of job.matrix[0])
-        names.push(expression.test(base) ? base.replace(expression, value) : `${base} (${value})`);
+        names.push(
+          /\$\{\{\s*matrix\.[\w-]+\s*\}\}/.test(base)
+            ? base.replace(/\$\{\{\s*matrix\.[\w-]+\s*\}\}/g, value)
+            : `${base} (${value})`
+        );
     } else {
       throw new Error(
         `Job ${job.id} has a multi-dimension matrix; extend branch-ruleset.mjs first.`

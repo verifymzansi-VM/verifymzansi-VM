@@ -8,7 +8,6 @@ import { resolveAccountVerification } from "@/lib/account/resolved-verification"
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { PostCreateClient } from "./post-create-client";
-import { FoundationPostingTermsGate } from "@/components/posting/foundation-posting-terms-gate";
 
 // How a post goes live, shown beside the headline on wide screens.
 const STEPS = ["Choose a section", "Fill in the form", "We review it, then it goes live"] as const;
@@ -90,12 +89,7 @@ export default async function PostCreatePage() {
         </BrandSurface>
 
         <div className="container-page flex flex-1 flex-col py-5">
-          <FoundationPostingTermsGate enabled={Boolean(process.env.FOUNDATION_SUPABASE_URL)}>
-            <PostCreateClient
-              initialVerificationStatus={initialVerificationStatus}
-              isAuthenticated
-            />
-          </FoundationPostingTermsGate>
+          <PostCreateClient initialVerificationStatus={initialVerificationStatus} isAuthenticated />
         </div>
       </main>
 
