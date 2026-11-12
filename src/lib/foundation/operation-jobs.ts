@@ -8,6 +8,7 @@ import {
   type PostLifecycleDetails,
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
+import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
 import { createLogger } from "../utils/logger";
 import { hasDatabaseMessage } from "./error-reasons";
 
@@ -150,6 +151,8 @@ type Lost = { id: string; kind: string; maybeDelivered?: boolean };
 type StaffAlert = (lost: Lost[]) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
 export interface OperationJobOptions {
   alertStaff?: StaffAlert;
+  /** The payment alert and daily payment summary step (./payment-alerts.ts). */
+  paymentAlerts?: PaymentAlertStep;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -181,6 +184,7 @@ export async function runFoundationOperationJobs(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const alertStaff = options.alertStaff ?? sendOutboxFinalFailureAlert;
+  const paymentAlerts = options.paymentAlerts ?? ((context) => runFoundationPaymentAlerts(context));
   const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
@@ -388,8 +392,20 @@ export async function runFoundationOperationJobs(
   };
 
   const emails = (async () => {
-    // Payment messages first, then privacy-request notices (legally timed,
-    // rare), then every other kind.
+    // Staff payment alerts first (at most two sends: new problems, and the
+    // daily summary when due), then payment messages, then privacy-request
+    // notices (legally timed, rare), then every other kind.
+    try {
+      for (const step of await paymentAlerts({
+        call,
+        claimSignal,
+        canClaim: () => timeToClaim() && timeToSend(),
+        pace: paced,
+      }))
+        fail(step);
+    } catch {
+      fail("payment_alert");
+    }
     const payments = await outbox("claim:payment", () => paymentKinds, OUTBOX_RUN_LIMIT);
     // A loss on the last payment slot is reported before the privacy notices.
     if (alertDue()) await alertLost();

@@ -169,6 +169,8 @@ binding = "IMAGES"
 #   pnpm wrangler secret put R2_SECRET_ACCESS_KEY
 #   pnpm wrangler secret put IP_HASH_SECRET
 #   pnpm wrangler secret put RATE_LIMITER_API_KEY
+# Optional (the app keeps working and logs instead when unset):
+#   pnpm wrangler secret put PAYMENT_ALERT_EMAILS   # staff payment alert addresses
 #   # NEVER set in production:
 #   # PLAYWRIGHT_E2E_AUTH, PLAYWRIGHT_TEST_MODE, PLAYWRIGHT_SUPABASE_MODE,
 #   # NEXT_PUBLIC_PLAYWRIGHT_TEST_MODE,

@@ -837,6 +837,63 @@ until the owner does those steps.
   email provider. Privacy-request notices that use up their attempts raise no
   alert yet. Payment checks with failures do fail the run.
 
+### Payment alerts
+
+Payment problems are logged, kept in the database and emailed to staff (database
+update `20261112080000_payment_problem_alerts.sql`; see
+`database/foundation/updates/README.md`).
+
+- **What counts as a problem.** A correctly signed Ozow notice that can never be
+  applied (wrong amount, currency, site, test flag, payment request or
+  transaction; no payment for its reference; unreadable), a transaction the
+  10-minute status check refuses for the same reasons, two successful
+  transactions on one payment request, and settlement outcomes that need a
+  person (a second successful payment, one bank transaction used for two
+  payments, money received for a plan or add-on that could not be activated,
+  money returned at the bank after activation). Nothing about the payment
+  changes: no plan is removed, no refund is made.
+- **Log lines** (app Worker logs, no member details): every problem is logged as
+  `Payment problem` with `paymentId` (null when no payment matched), `reason` (a
+  code such as `amount_mismatch`, `multiple_settlements` or
+  `complete_unfulfillable_target`) and `source` (`notice` or `status_check`),
+  plus `anomaly` (`wrong_amount`, `paid_twice`, `not_activated` or `refunded`)
+  when staff are emailed at once. Every failed status check is logged as
+  `Payment status check failed` with `paymentId` and `reason` (a problem code,
+  or `provider_unavailable`, `database_unavailable`, `network_error` and similar
+  for outages), and the status-check job's reply lists them in `errors`.
+  `Payment problem could not be recorded` means the database refused or was
+  unavailable; the log line is then the only record.
+- **Email at once.** The email job (every minute) sends one email listing every
+  problem with an `anomaly` not emailed yet: payment number, Ozow reference,
+  amount, payment state, how it was found and when. A failed send is tried again
+  five minutes later and fails that run (`payment_alert`), so the operations
+  heartbeat notices a lasting email outage. Problems first seen more than 7 days
+  ago are not emailed any more; they stay in the daily summary.
+- **Daily summary.** The first email job run after 07:00 South African time
+  sends a summary of the problems seen since the previous summary, the payments
+  still waiting for staff (paid but not activated; pending with an Ozow request
+  for over 2 hours), problems not emailed yet and the count of each kind of
+  payment notice and status check. It is sent every day, also when there is
+  nothing to report, which shows the alert path still works.
+- **Recipients.** `PAYMENT_ALERT_EMAILS`, one to three addresses separated by
+  commas (the owner first; one or two trusted people later). Everyone listed
+  sees the other addresses. If it is not set, or not one to three valid
+  addresses, nothing is emailed and the app Worker logs
+  `Payment alert not emailed: no recipients configured` (with the payment
+  numbers and reasons) every five minutes while a problem waits, and
+  `Daily payment summary not emailed: no recipients configured` (with the day's
+  counts) once a day; payments and every other email keep working.
+- **Reading the record.** In the Supabase SQL editor for the London project
+  (read only):
+
+  ```sql
+  select payment_id, reason, source, needs_alert, alerted_at is not null as emailed,
+    occurrences, first_seen_at, last_seen_at
+  from private.payment_problems
+  order by last_seen_at desc
+  limit 50;
+  ```
+
 ### Owner steps (not done in code)
 
 1. **External uptime monitor on the authenticated site monitor.** In a
@@ -873,6 +930,14 @@ until the owner does those steps.
    response. GitHub's failed-run email reaches only one account.
 4. **Error reporting.** Sentry event delivery needs `NEXT_PUBLIC_SENTRY_DSN`
    (see [Sentry Bug Finding](#sentry-bug-finding)); it is a separate owner step.
+5. **Payment alert addresses.** Set the app Worker secret `PAYMENT_ALERT_EMAILS`
+   to the addresses that should receive payment alerts and the daily payment
+   summary (one to three, separated by commas):
+   `pnpm exec wrangler secret put PAYMENT_ALERT_EMAILS --env production`.
+   Deploys keep it (it is not in the deploy's secrets file). Apply the database
+   update `20261112080000_payment_problem_alerts.sql` before the release that
+   uses it is deployed. To check the address works, look for the next morning's
+   daily summary.
 
 ### When an alert arrives
 
@@ -890,6 +955,15 @@ until the owner does those steps.
   read-only query under "Where lost emails stay". Those emails are not retried
   automatically; tell the affected account owners if the message mattered
   (payment messages first).
+- **Payment alert:** look the payment up in Ozow's merchant portal by the Ozow
+  reference in the email, and in the staff payments list by its payment number.
+  Wrong amount: the payment was not settled; confirm with Ozow what was paid.
+  Paid twice: one payment was settled (or, from the status check, none); return
+  the extra payment at Ozow and record the refund. Paid but not activated: the
+  money was received and the plan or add-on was not given; contact the member,
+  then activate it or refund. Money returned after activation: the plan is still
+  active; decide whether to end it. The app Worker logs hold the same payment
+  number under `Payment problem`.
 
 ---
 

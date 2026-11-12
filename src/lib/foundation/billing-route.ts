@@ -22,6 +22,7 @@ import {
   FoundationPendingPaymentError,
   manageFoundationPlanMember,
   readFoundationBilling,
+  paymentCheckFailureReason,
   readFoundationPayment,
   reconcileFoundationPayment,
   startFoundationCheckout,
@@ -139,8 +140,12 @@ export async function handleFoundationBillingRoute(
         try {
           await reconcileFoundationPayment(pay.id);
           pay = (await readFoundationPayment(caller.api, id)) ?? pay;
-        } catch {
-          /* Preserve the stored state during a provider outage. */
+        } catch (error) {
+          // Preserve the stored state during a provider outage.
+          log.warn("Payment status check failed", {
+            paymentId: pay.id,
+            reason: paymentCheckFailureReason(error),
+          });
         }
       }
       const status = toFoundationPaymentStatusView(pay);
@@ -208,6 +213,13 @@ export async function handleFoundationBillingRoute(
             ? "Check the billing details"
             : "Billing is temporarily unavailable";
     const code = error instanceof FoundationBillingError ? error.code : undefined;
+    // Outages and refusals are logged by operation and reason code only.
+    if (status >= 500 || status === 409)
+      (status >= 500 ? log.error : log.warn)("Billing request failed", {
+        operation,
+        status,
+        reason: code ?? paymentCheckFailureReason(error),
+      });
     // The restored checkout page shows Continue, Check status and Cancel from this.
     const pendingPayment =
       error instanceof FoundationPendingPaymentError ? error.pendingPayment : undefined;

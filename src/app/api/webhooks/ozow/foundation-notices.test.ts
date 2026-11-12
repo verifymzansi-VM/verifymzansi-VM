@@ -111,11 +111,11 @@ const apiTransaction = (change: Record<string, unknown> = {}) => ({
   completedDate: "2026-11-01T08:02:00Z",
   ...change,
 });
-/** Logged with this reason at warning or error level. */
+/** Logged with this payment number and reason at warning or error level. */
 const logged = (message: string, paymentId: string | null, reason: string) =>
   [...warn.mock.calls, ...error.mock.calls].some(
     ([text, fields]) =>
-      text === message && JSON.stringify(fields) === JSON.stringify({ paymentId, reason })
+      text === message && fields?.paymentId === paymentId && fields?.reason === reason
   );
 
 type HeaderStyle = "svix" | "webhook";
@@ -191,7 +191,9 @@ function database(name: string) {
           ? { outcome: "completed", payment_id: PAYMENT, fulfillment_status: "fulfilled" }
           : name === "expire_stale_checkouts"
             ? 0
-            : null,
+            : name === "record_payment_problem"
+              ? { id: uuid(30), new: true, alert: false }
+              : null,
     error: null,
   });
 }
@@ -294,7 +296,7 @@ describe("test-mode payments in production", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, rejected: "test_mode_mismatch" });
     expect(settled()).toEqual([]);
-    expect(logged("Ozow notice refused", PAYMENT, "test_mode_mismatch")).toBe(true);
+    expect(logged("Payment problem", PAYMENT, "test_mode_mismatch")).toBe(true);
   });
 
   // A looked-up transaction that is sent with a flag saying test (or one that
@@ -324,9 +326,8 @@ describe("test-mode payments in production", () => {
       expect(response.status).toBe(503);
       expect(await response.json()).toMatchObject({ failures: 1 });
       expect(settled()).toEqual([]);
-      expect(
-        logged("Ozow transaction refused by the status check", PAYMENT, "test_mode_mismatch")
-      ).toBe(true);
+      expect(logged("Payment problem", PAYMENT, "test_mode_mismatch")).toBe(true);
+      expect(logged("Payment status check failed", PAYMENT, "test_mode_mismatch")).toBe(true);
     }
   );
 
@@ -413,7 +414,8 @@ describe("a correctly signed notice that can never apply", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, rejected: reason });
     expect(settled()).toEqual([]);
-    expect(logged("Ozow notice refused", id, reason)).toBe(true);
+    expect(logged("Payment problem", id, reason)).toBe(true);
+    expect(commands()).toContain("record_payment_problem");
   });
 
   it.each(["amount_mismatch", "currency_mismatch", "transaction_id_mismatch"])(
@@ -428,7 +430,12 @@ describe("a correctly signed notice that can never apply", () => {
       if (reason === "transaction_id_mismatch")
         stored = storedPayment({ status: "complete", provider_transaction_id: uuid(8) });
       await notice(signedNotice(body));
-      expect(error).toHaveBeenCalledWith("Ozow notice refused", { paymentId: PAYMENT, reason });
+      expect(error).toHaveBeenCalledWith("Payment problem", {
+        paymentId: PAYMENT,
+        reason,
+        source: "notice",
+        anomaly: reason === "transaction_id_mismatch" ? "paid_twice" : "wrong_amount",
+      });
     }
   );
 
@@ -443,8 +450,18 @@ describe("a correctly signed notice that can never apply", () => {
     const response = await notice(signedNotice(body));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, rejected: reason });
-    expect(machine).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith("Ozow notice refused", { paymentId: null, reason });
+    // Kept as a problem with no payment, for the daily summary; nothing else.
+    expect(machine.mock.calls).toEqual([
+      [
+        "record_payment_problem",
+        { p_payment_id: null, p_reason: reason, p_source: "notice", p_alert: false },
+      ],
+    ]);
+    expect(warn).toHaveBeenCalledWith("Payment problem", {
+      paymentId: null,
+      reason,
+      source: "notice",
+    });
   });
 
   it("never gets unreadable JSON past the signing library, which reads the body", async () => {
@@ -524,9 +541,11 @@ describe("a repeated thin notice", () => {
     const response = await notice(signedNotice(thinNotice()));
     expect(response.status).toBe(200);
     expect(settled()).toHaveLength(1);
-    expect(error).toHaveBeenCalledWith("Ozow notice needs staff attention", {
+    expect(error).toHaveBeenCalledWith("Payment problem", {
       paymentId: PAYMENT,
-      reason: "late_status_ignored",
+      reason: "refunded_after_completion",
+      source: "notice",
+      anomaly: "refunded",
     });
   });
 
@@ -539,5 +558,94 @@ describe("a repeated thin notice", () => {
     );
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBe(keys[1]);
+  });
+});
+
+// M3.3: every refusal and status-check failure is logged with the payment
+// number and a reason code and kept for staff; the anomalies are marked for
+// an email at once. Nothing about the payment changes.
+describe("payment problems for staff", () => {
+  const recorded = () =>
+    machine.mock.calls
+      .filter(([name]) => name === "record_payment_problem")
+      .map(([, args]) => args);
+
+  it("a wrong amount in a signed notice is kept and marked for an email at once", async () => {
+    const response = await notice(signedNotice(fullNotice({ Amount: "500.00" })));
+    expect(await response.json()).toEqual({ success: true, rejected: "amount_mismatch" });
+    expect(recorded()).toEqual([
+      { p_payment_id: PAYMENT, p_reason: "amount_mismatch", p_source: "notice", p_alert: true },
+    ]);
+    expect(settled()).toEqual([]);
+  });
+
+  it("a second successful payment on a completed payment is kept and marked", async () => {
+    stored = storedPayment({ status: "complete", provider_transaction_id: uuid(8) });
+    const response = await notice(signedNotice(fullNotice()));
+    expect(await response.json()).toEqual({ success: true, rejected: "transaction_id_mismatch" });
+    expect(recorded()).toEqual([
+      {
+        p_payment_id: PAYMENT,
+        p_reason: "transaction_id_mismatch",
+        p_source: "notice",
+        p_alert: true,
+      },
+    ]);
+  });
+
+  it("the status-check job reports each failed payment with its reason", async () => {
+    lookup.transactions = [apiTransaction({ amount: { currency: "ZAR", value: 5 } })];
+    const response = await runReconcile();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      checked: 0,
+      failures: 1,
+      expired: 0,
+      errors: [{ paymentId: PAYMENT, reason: "amount_mismatch" }],
+    });
+    expect(recorded()).toEqual([
+      {
+        p_payment_id: PAYMENT,
+        p_reason: "amount_mismatch",
+        p_source: "status_check",
+        p_alert: true,
+      },
+    ]);
+    expect(logged("Payment status check failed", PAYMENT, "amount_mismatch")).toBe(true);
+  });
+
+  it("two successful transactions on one request are reported as paid twice", async () => {
+    lookup.transactions = [apiTransaction(), apiTransaction({ id: uuid(15) })];
+    const response = await runReconcile();
+    expect(await response.json()).toMatchObject({
+      failures: 1,
+      errors: [{ paymentId: PAYMENT, reason: "multiple_settlements" }],
+    });
+    expect(recorded()).toEqual([
+      {
+        p_payment_id: PAYMENT,
+        p_reason: "multiple_settlements",
+        p_source: "status_check",
+        p_alert: true,
+      },
+    ]);
+    expect(settled()).toEqual([]);
+  });
+
+  it("an outage is reported by its kind, without keeping a problem", async () => {
+    ozow.mockImplementationOnce(async () => new Response("unavailable", { status: 503 }));
+    const response = await runReconcile();
+    expect(await response.json()).toMatchObject({
+      failures: 1,
+      errors: [{ paymentId: PAYMENT, reason: "provider_unavailable" }],
+    });
+    expect(recorded()).toEqual([]);
+  });
+
+  it("the member's status page logs a failed check and still shows the stored state", async () => {
+    lookup.transactions = [apiTransaction({ amount: { currency: "ZAR", value: 5 } })];
+    const response = await readStatus();
+    expect(await response.json()).toEqual({ status: "pending", terminal: false, expired: false });
+    expect(logged("Payment status check failed", PAYMENT, "amount_mismatch")).toBe(true);
   });
 });
