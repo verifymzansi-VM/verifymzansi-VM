@@ -49,7 +49,7 @@ const MESSAGE =
   "rethrow it, or add a comment saying why ignoring it is safe.";
 
 /** @type {import("eslint").Rule.RuleModule} */
-export const noSilentErrorHandler = {
+const noSilentErrorHandler = {
   meta: {
     type: "problem",
     docs: { description: "Refuse silent error handlers in server code" },

@@ -9,9 +9,9 @@ import path from "node:path";
 import ts from "typescript";
 import { FOUNDATION_DIR } from "./foundation-replay.mjs";
 
-export const BASELINE_MANIFEST = `${FOUNDATION_DIR}/api-manifest.json`;
-export const RUNTIME_MANIFEST = `${FOUNDATION_DIR}/runtime-api-manifest.json`;
-export const RUNTIME_TYPES = `${FOUNDATION_DIR}/runtime-api-types.ts`;
+const BASELINE_MANIFEST = `${FOUNDATION_DIR}/api-manifest.json`;
+const RUNTIME_MANIFEST = `${FOUNDATION_DIR}/runtime-api-manifest.json`;
+const RUNTIME_TYPES = `${FOUNDATION_DIR}/runtime-api-types.ts`;
 
 /** Same derivation as the clean-baseline contract generator. */
 export const API_CATALOGUE_QUERY = `select coalesce(json_agg(json_build_object(
@@ -95,7 +95,7 @@ export function compareApiManifests({ baseline, runtime, catalogue }) {
 }
 
 /** TypeScript spelling of each reviewed SQL type in the runtime types file. */
-export const TS_TYPES = new Map([
+const TS_TYPES = new Map([
   ["uuid", "string"],
   ["text", "string"],
   ["integer", "number"],
@@ -135,7 +135,7 @@ function member(members, name, label) {
  * Parses the additive Functions of each runtime audience type:
  * Map<audience, Map<name, { args: Map<arg, { optional, type }>, returns }>>.
  */
-export function parseRuntimeTypes(source) {
+function parseRuntimeTypes(source) {
   const file = ts.createSourceFile(RUNTIME_TYPES, source, ts.ScriptTarget.Latest, true);
   const aliases = new Map();
   for (const statement of file.statements) {

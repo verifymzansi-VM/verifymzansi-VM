@@ -10,7 +10,7 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-export const REASON_PATTERN = /^[a-z][a-z0-9_]{1,62}$/;
+const REASON_PATTERN = /^[a-z][a-z0-9_]{1,62}$/;
 
 /** Reads a SQL string literal ('...' with '' escapes, or E'...') at `index`. */
 function readLiteral(sql, index) {
@@ -42,7 +42,7 @@ const startsLiteral = (sql, i) =>
  * The SQL text with comments blanked and string contents replaced by "x", at
  * the same length, so searches for keywords, `;` and parentheses see code only.
  */
-export function maskSql(sql) {
+function maskSql(sql) {
   let out = "";
   for (let i = 0; i < sql.length;) {
     if (sql[i] === "-" && sql[i + 1] === "-") {
@@ -232,7 +232,7 @@ const ENTRY = /^\s*([a-z][a-z0-9_]*): \[((?:"[A-Z0-9]{5}"(?:, )?)*)\],$/;
  * generated reason block (reason -> codes, in file order) and the listed
  * messages.
  */
-export function parseSharedList(source) {
+function parseSharedList(source) {
   const block = BLOCK.exec(source);
   if (!block) throw new Error("The shared list has no <database-reasons> block");
   const lines = block[2].split("\n");
@@ -272,7 +272,7 @@ export function parseSharedList(source) {
  * Compares the database with the shared list. Returns human-readable failures
  * (empty when they agree).
  */
-export function compareReasons(database, shared) {
+function compareReasons(database, shared) {
   const failures = [...database.problems];
   const listed = new Map(shared.reasons);
   if (listed.size !== shared.reasons.length) failures.push("The shared list repeats a reason");
@@ -312,7 +312,7 @@ export function compareReasons(database, shared) {
 }
 
 /** The shared list's generated block for these database reasons. */
-export function renderReasonBlock(database) {
+function renderReasonBlock(database) {
   const entries = [...database.reasons.keys()].sort().map((reason) => {
     const codes = [...database.reasons.get(reason).codes].sort();
     return `  ${reason}: [${codes.map((code) => `"${code}"`).join(", ")}],`;
@@ -325,7 +325,7 @@ export function renderReasonBlock(database) {
 }
 
 /** The shared list's source with its generated block replaced. */
-export function writeReasonBlock(source, database) {
+function writeReasonBlock(source, database) {
   if (!BLOCK.test(source)) throw new Error("The shared list has no <database-reasons> block");
   return source.replace(
     BLOCK,

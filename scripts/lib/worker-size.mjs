@@ -2,10 +2,10 @@
 // over 10 MB (paid plan); past that point no release, not even an urgent
 // security fix, can be published. Units are decimal megabytes (1 MB =
 // 1,000,000 bytes), the stricter reading of the limit.
-export const WORKER_LIMIT_BYTES = 10_000_000;
+const WORKER_LIMIT_BYTES = 10_000_000;
 export const WORKER_BUDGET_BYTES = 9_500_000;
 /** Below this headroom, slimming the Worker becomes the next priority. */
-export const WORKER_HEADROOM_WARNING_BYTES = 500_000;
+const WORKER_HEADROOM_WARNING_BYTES = 500_000;
 
 /** Reads "Total Upload: 42198.71 KiB / gzip: 9020.41 KiB" from Wrangler output. */
 export function parseWranglerUpload(output) {
