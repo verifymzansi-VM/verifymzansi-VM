@@ -39,6 +39,19 @@ describe("CheckoutConfirm", () => {
     vi.unstubAllGlobals();
   });
 
+  it("says paid slots open soon, with nothing to pay, while no plan is on sale", () => {
+    render(<CheckoutConfirm summary={null} paused />);
+    expect(
+      screen.getByText("Paid slots open soon. Until then, your first post and events are free.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Pay .* securely/ })).toBeNull();
+  });
+
+  it("calls an unknown plan not available while plans are on sale", () => {
+    render(<CheckoutConfirm summary={null} />);
+    expect(screen.getByText(/This plan is not available/)).toBeInTheDocument();
+  });
+
   it("offers a sign-in link back to this plan when the session expired", async () => {
     vi.stubGlobal(
       "fetch",

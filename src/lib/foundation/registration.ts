@@ -76,7 +76,14 @@ export async function registerFoundationAccount(
     });
     if (attempt.cookieAccessFailed()) throw new FoundationRegistrationError(503);
     if (error) {
-      if (error.code === "user_already_exists" || error.code === "email_exists") {
+      // An existing address, or one the sign-up guard turns away while
+      // registration is by invitation only (403), gets the same reply as a
+      // new account, so the answer never reveals who is invited or registered.
+      if (
+        error.code === "user_already_exists" ||
+        error.code === "email_exists" ||
+        (error.status === 403 && error.code !== "signup_disabled")
+      ) {
         // The SDK removes this attempt's verifier on an explicit refusal.
         // Restore only its random PKCE state so cookie deletion cannot reveal
         // that the address exists while the response body promises anonymity.
