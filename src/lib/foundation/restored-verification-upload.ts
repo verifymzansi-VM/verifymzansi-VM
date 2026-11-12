@@ -25,6 +25,7 @@ import { enforceMutationRequest } from "../utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "../utils/request-body";
 import { createLogger } from "../utils/logger";
+import { logRequestFailure } from "../utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 const log = createLogger("RestoredIdentityUpload");
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -62,14 +63,20 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
   let context: ReturnType<typeof createFoundationRouteContext>;
   try {
     context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
-  } catch {
+  } catch (error) {
+    const reference = logRequestFailure(log, "Foundation binding unavailable", {
+      request,
+      error,
+      action: "verification:upload",
+    });
     return NextResponse.json(
-      { error: "Verification uploads are temporarily unavailable" },
+      { error: "Verification uploads are temporarily unavailable", reference },
       { status: 503, headers: foundationNoStore }
     );
   }
-  const reply = (status: number, error: string) =>
-    context.respond(NextResponse.json({ error }, { status }));
+  const reply = (status: number, error: string, reference?: string) =>
+    context.respond(NextResponse.json({ error, ...(reference ? { reference } : {}) }, { status }));
+  const apis: unknown[] = [];
   try {
     const ip = await checkRateLimit({
       key: getClientRateLimitIdentity(request).key,
@@ -82,6 +89,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
         "Upload protection is unavailable or too many attempts were made"
       );
     const caller = await context.authenticateCaller();
+    apis.push(caller.api);
     const limit = await checkRateLimit({
       key: caller.accountId,
       action: "verification:upload",
@@ -171,6 +179,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       .object({ artifact_id: z.uuid(), completed: z.boolean() })
       .parse(reserved.data);
     const service = createFoundationServiceApi();
+    apis.push(service);
     const lookedUp = await service.rpc("frontend_verification_upload_context", {
       p_owner: caller.accountId,
       p_request: requestId.data,
@@ -272,10 +281,15 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
     if (error instanceof RequestBodyTooLargeError)
       return reply(413, "Choose a file smaller than 5 MB");
     if (error instanceof FoundationVerificationError) return reply(error.status, error.message);
-    log.error("Identity upload could not be confirmed");
     return reply(
       503,
-      "The upload could not be confirmed. Refresh your verification status before trying again."
+      "The upload could not be confirmed. Refresh your verification status before trying again.",
+      logRequestFailure(log, "Identity upload could not be confirmed", {
+        request,
+        error,
+        api: apis,
+        action: "verification:upload",
+      })
     );
   }
 }

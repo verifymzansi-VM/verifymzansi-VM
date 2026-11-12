@@ -4,12 +4,11 @@ import { z } from "zod";
 import { foundationServerPublicApi } from "./server-public";
 import {
   readRestoredCollection,
+  readRestoredPublicDetail,
   restoredPublicRow,
   type PublicCollection,
 } from "./marketplace-read";
-import { readFoundationPublicPost, readFoundationPublicContactChannels } from "./public-post";
 import { readPublicBusinessStickers } from "./business-seen";
-import { searchFoundationPresentedCards } from "./public-cards";
 import type { BusinessDetailRecord } from "@/components/business/business-detail-content";
 import type {
   LinkedBusinessRecord,
@@ -70,20 +69,7 @@ export async function restoredHomeCollection(collection: PublicCollection, touri
 
 export const restoredPublicDetail = cache(async (id: string) => {
   if (!z.uuid().safeParse(id).success) return null;
-  const api = foundationServerPublicApi();
-  const post = await readFoundationPublicPost(api, { id });
-  if (!post) return null;
-  const contact_channels = await readFoundationPublicContactChannels(api, { id });
-  const presentation = (
-    await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
-  ).items[0]?.presentation;
-  if (!presentation) return null;
-  return {
-    ...post,
-    contact_channels,
-    business_type: presentation.business_type,
-    frontend: presentation.frontend,
-  };
+  return readRestoredPublicDetail(foundationServerPublicApi(), id);
 });
 
 export const restoredListingDetail = cache(async (id: string) => {
