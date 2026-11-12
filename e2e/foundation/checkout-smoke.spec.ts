@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { closeTestPlanSales, openTestPlanSales } from "./support/plan-sales";
 import { E2E_FIXTURE } from "../../scripts/lib/foundation-e2e-target.mjs";
 import {
   browserSessionCookies,
@@ -57,6 +58,8 @@ let plan: Plan;
 test.describe("checkout in the foundation test copy", () => {
   test.beforeAll(async () => {
     state = readTestCopy();
+    // Paid plans are paused; this spec buys a copy put on sale for it.
+    openTestPlanSales();
     // The public catalogue command the checkout page reads.
     const catalogue = await rpc(state, "billing_catalogue", {});
     expect(catalogue.status).toBe(200);
@@ -70,6 +73,8 @@ test.describe("checkout in the foundation test copy", () => {
     expect(plans.length).toBeGreaterThan(0);
     plan = plans[0];
   });
+
+  test.afterAll(() => closeTestPlanSales());
 
   test("a member's checkout reaches the mock payment page; browser requests stay on loopback", async ({
     context,

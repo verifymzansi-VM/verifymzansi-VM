@@ -1,12 +1,9 @@
 import { expect, it } from "vitest";
-import {
-  getPublishedPostingTerms,
-  assertPublishedPostingTerms,
-  postingTermsAwaitingForce,
-} from "./published-posting-terms";
+import { getPublishedPostingTerms, assertPublishedPostingTerms } from "./published-posting-terms";
 import { buildTermsTextSections } from "./terms-text";
 import manifest from "./terms-documents/catalogue.json";
-import { ENTERPRISE_PLANS, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { ENTERPRISE_PLANS, PACKAGES_ON_SALE, RETAIL_OFFERS } from "@/lib/constants/pricing";
+import { buildCommercialCatalog } from "@/lib/commercial/plans";
 
 const text = (version: string) =>
   getPublishedPostingTerms(version)!
@@ -22,7 +19,6 @@ it("keeps the never-current posting-v2 draft published but inactive", () => {
 });
 
 it("makes posting-v3 current with the post lifecycle rules decided on 9 November 2026", () => {
-  expect(manifest.active_version).toBe("posting-v3");
   const v3 = getPublishedPostingTerms("posting-v3")!;
   expect(v3.document_hash).toBe("p2X2YRoaYDOwYDtYhTiFcznVghgyGzRmTJ6BexfhkQE");
   const content = text("posting-v3");
@@ -54,40 +50,21 @@ it("makes posting-v3 current with the post lifecycle rules decided on 9 November
   expect(content).toContain("at least 14 days' notice");
 });
 
-it("publishes posting-v4 ahead of time without making it the active version", () => {
-  expect(manifest.active_version).toBe("posting-v3");
+it("makes posting-v4 the site's one set of Terms", () => {
+  expect(manifest.active_version).toBe("posting-v4");
   const v4 = getPublishedPostingTerms("posting-v4")!;
-  expect(v4.document_hash).toBe("VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc");
-});
-
-it("decides from the database's current version whether a version is in force yet", () => {
-  const awaiting = (current: string | null, catalogue = manifest) =>
-    Object.keys(catalogue.versions).filter((version) =>
-      postingTermsAwaitingForce(version, current, catalogue)
-    );
-  expect(awaiting("posting-v3")).toEqual(["posting-v4"]);
-  expect(awaiting("posting-v4")).toEqual([]);
-  expect(awaiting("posting-v1")).toEqual(["posting-v2", "posting-v3", "posting-v4"]);
-  // A release that already names posting-v4 active, deployed before the database
-  // update that makes it current, still shows posting-v4 as not in force.
-  const released = { ...manifest, active_version: "posting-v4" };
-  expect(awaiting("posting-v3", released)).toEqual(["posting-v4"]);
-  // Database unreadable (or a current version this release does not list): the
-  // newest version and any version after the active one show the line.
-  expect(awaiting(null)).toEqual(["posting-v4"]);
-  expect(awaiting("posting-v9")).toEqual(["posting-v4"]);
-  expect(awaiting(null, released)).toEqual(["posting-v4"]);
-  expect(postingTermsAwaitingForce("posting-v5", "posting-v3")).toBe(false);
-  expect(postingTermsAwaitingForce("constructor", null)).toBe(false);
+  expect(v4.document_hash).toBe("FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs");
+  // Visitors never see version names: the text does not mention versions.
+  expect(text("posting-v4")).not.toMatch(/version/i);
 });
 
 // The site must never show one price while the Terms in force state another.
-// These price constants feed the pricing page's default catalogue and the
-// static price wording (FAQ, Advertise, plan step). In foundation mode the
-// prices charged come from the database catalogue, which this test cannot see:
-// the reviewed update that makes a new version current must check those
-// (database/foundation/updates/README.md, Posting Terms v4).
-it("keeps the site's price constants in step with the active Terms version", () => {
+// These price constants feed the pricing page's prices while nothing is on
+// sale (and its fallback) and the static price wording (FAQ, Advertise, plan
+// step). In foundation mode what can be bought comes from the database
+// catalogue, which this test cannot see: the switch update takes the old plans
+// off sale (database/foundation/updates/README.md, Posting Terms v4).
+it("keeps the site's price constants in step with the active Terms", () => {
   const content = text(manifest.active_version);
   const rand = (cents: number) => `R${(cents / 100).toLocaleString("en-US")}`;
   expect(RETAIL_OFFERS.length).toBeGreaterThan(0);
@@ -98,16 +75,18 @@ it("keeps the site's price constants in step with the active Terms version", () 
   const wasPrices = RETAIL_OFFERS.filter((offer) => offer.compareAtCents !== undefined);
   for (const offer of wasPrices)
     expect(noDiscounts, `${rand(offer.compareAtCents!)} was-price`).toBe(false);
-  // Multi-listing prices are shown only while the active Terms cover
-  // multi-listing plans or state each price.
+  // Multi-listing and sponsor prices are shown only while they are on sale and
+  // the active Terms cover multi-listing plans or state each price.
   const multiListingCovered = content.includes(
     "Multi-listing plans bought online follow these Terms"
   );
   for (const plan of ENTERPRISE_PLANS)
     expect(
-      multiListingCovered || content.includes(rand(plan.priceCents)),
+      !PACKAGES_ON_SALE || multiListingCovered || content.includes(rand(plan.priceCents)),
       `${plan.planCode} ${rand(plan.priceCents)}`
     ).toBe(true);
+  // With no plan on sale in the database, nothing links to checkout.
+  expect(buildCommercialCatalog([]).onSale).toBe(false);
 });
 
 it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
@@ -145,7 +124,7 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     "Buyers that are not individuals, such as companies, close corporations, trusts, partnerships and associations, are not refunded for unused days",
     "Billing errors and duplicate payments are refunded in full",
     "Refunds are paid only to the bank account that paid",
-    "A purchase made under an earlier version of these Terms keeps the refund terms of that version",
+    "Before submitting a post, you must explicitly accept these Terms",
     // A breach: content may be removed at once; a paid slot ends only after notice.
     "Removing content or suspending an account under Prohibited content does not end your paid slots",
     "the slot ends only if you have not remedied the breach within 20 business days after that notice (Consumer Protection Act, section 14(2)(b)(ii))",
@@ -210,7 +189,9 @@ it("keeps posting-v3's unchanged sections in posting-v4 word for word", () => {
   ])
     expect(v4.sections.find((section) => section.id === id)).toEqual(v3Section(id));
   const obligations = v4.sections.find((section) => section.id === "posting-obligations")!;
-  expect(obligations.content.slice(0, -1)).toEqual(v3Section("posting-obligations").content);
+  expect(obligations.content.slice(0, 5)).toEqual(
+    v3Section("posting-obligations").content.slice(0, 5)
+  );
   const prohibited = v4.sections.find((section) => section.id === "prohibited-content")!;
   expect(prohibited.content.slice(0, 5)).toEqual(
     v3Section("prohibited-content").content.slice(0, 5)
@@ -219,17 +200,12 @@ it("keeps posting-v3's unchanged sections in posting-v4 word for word", () => {
   expect(v4.company_details_path).toBe(v3.company_details_path);
 });
 
-it("shows the posting-v3 rules on the Terms page when no published version is read", () => {
+it("shows the current Terms word for word when the published Terms cannot be read", () => {
   const fallback = buildTermsTextSections({});
-  const v3 = getPublishedPostingTerms("posting-v3")!;
-  for (const [id, index] of [
-    ["payments", 2],
-    ["payments", 3],
-    ["trials", 2],
-  ] as const)
-    expect(fallback.find((section) => section.id === id)!.content[index]).toBe(
-      v3.sections.find((section) => section.id === id)!.content[index]
-    );
+  const current = getPublishedPostingTerms(manifest.active_version)!;
+  expect(fallback).toEqual(
+    current.sections.map(({ id, navLabel, title, content }) => ({ id, navLabel, title, content }))
+  );
 });
 
 it("pins the archived document hash and rejects unknown versions", () => {

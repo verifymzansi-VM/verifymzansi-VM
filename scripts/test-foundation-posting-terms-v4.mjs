@@ -94,7 +94,7 @@ try {
   // ------------------------------------------------------------ before
   const early = user("early");
   await check("the shipped posting-v4 document is the one the update publishes", () => {
-    assert.equal(CATALOGUE.active_version, "posting-v3");
+    assert.ok(["posting-v3", "posting-v4"].includes(CATALOGUE.active_version));
     assert.equal(DOCUMENT.version, "posting-v4");
     assert.equal(
       createHash("sha256").update(JSON.stringify(DOCUMENT)).digest("base64url"),
@@ -211,15 +211,16 @@ try {
   const later = steps.slice(index + 1);
   if (later.length) {
     applySteps(database, later);
-    await check("later updates keep posting-v3 current and posting-v4 published", () => {
-      assert.deepEqual(currentTerms(), V3);
+    await check("later updates keep posting-v4 published unchanged", () => {
+      // The switch (20261112173841) makes posting-v4 current; nothing else may.
+      assert.ok([V3.version, V4.version].includes(currentTerms().version));
       assert.deepEqual(v4Rows(), [V4.document_hash]);
     });
   }
 
-  // --------------------------------- the later switch (simulated here only)
+  // --------------------- the switch (applied above when present, else simulated)
   await check("once a later update makes posting-v4 current, every member accepts it once", () => {
-    setCurrent("posting-v4");
+    if (currentTerms().version !== V4.version) setCurrent("posting-v4");
     assert.deepEqual(publicTerms(), { ...V4, document_path: "/terms/versions/posting-v4" });
     const asked = ownerTerms(early);
     assert.equal(asked.version, "posting-v4");

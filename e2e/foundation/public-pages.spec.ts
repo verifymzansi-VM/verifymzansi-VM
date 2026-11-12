@@ -371,34 +371,40 @@ test.describe("public pages", () => {
 // adapter sets no compare-at price (src/lib/commercial/plans.ts), so they
 // do not show. Recorded in PORTING.md for the owner.
 test.describe("pricing and organisations", () => {
-  test("pricing shows the retail ladder, free events and the organisation route", async ({
+  // Paid plans are paused (the switch takes every plan off sale): the page
+  // shows the Individual slot prices with no way to buy, and no old price.
+  test("pricing shows the R69 slot prices as opening soon, with nothing to buy", async ({
     page,
   }) => {
     await page.goto("/pricing", { waitUntil: "domcontentloaded" });
     const main = page.locator("main");
-    await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
-    await expect(main.getByTestId("retail-offer-quarter")).toContainText("R140");
-    await expect(main.getByTestId("retail-offer-quarter")).toContainText(/popular/i);
-    await expect(main.getByTestId("retail-offer-half_year")).toContainText("R250");
-    await expect(main.getByTestId("retail-offer-half_year")).toContainText(/best value/i);
+    await expect(main.getByTestId("retail-offer-month")).toContainText("R69");
+    await expect(main.getByTestId("retail-offer-quarter")).toContainText("R207");
+    await expect(main.getByTestId("retail-offer-half_year")).toContainText("R414");
     await expect(main.getByTestId("retail-offer-year")).toHaveCount(0);
+    await expect(main.getByRole("button", { name: "Opens soon" })).toHaveCount(3);
+    for (const button of await main.getByRole("button", { name: "Opens soon" }).all())
+      await expect(button).toBeDisabled();
+    await expect(main.getByRole("link", { name: /^choose /i })).toHaveCount(0);
+    await expect(main.locator('a[href*="/billing/checkout"]')).toHaveCount(0);
+    await expect(main).toContainText("Paid slots open soon");
     await expect(main.getByText("Until the event ends")).toBeVisible();
-    await expect(
-      main.getByRole("link", { name: "Request a sponsor proposal", exact: true })
-    ).toHaveAttribute("href", "/contact?topic=organisation_proposal");
-    await expect(main).not.toContainText(/R650|R450|12 months|Growth|Starter/);
+    await expect(main).not.toContainText(
+      /Save R|Best value|R50\b|R140|R250|R1,200|R15,000|R650|R450|12 months|Growth|Starter/
+    );
+  });
 
-    // The section picker changes where the slot is used, not the price. A
-    // click before hydration does nothing, so retry until the link changes.
-    const before = await main.getByRole("link", { name: /choose 30 days/i }).getAttribute("href");
-    await expect(async () => {
-      await main.getByRole("radio", { name: /tourism/i }).click({ timeout: 2_000 });
-      const after = await main
-        .getByRole("link", { name: /choose 30 days/i })
-        .getAttribute("href", { timeout: 2_000 });
-      expect(after).not.toBe(before);
-    }).toPass({ timeout: 20_000 });
-    await expect(main.getByTestId("retail-offer-month")).toContainText("R50");
+  test("the checkout page and route sell nothing while paid plans are paused", async ({
+    page,
+    request,
+  }) => {
+    // The first old plan's id from the seeded catalogue (catalogue-identities.json).
+    await page.goto("/billing/checkout?plan=00420f8c-0ac1-4828-83c5-d547d862fc8f");
+    await expect(page.getByText("Paid slots open soon. Until then, your first post")).toBeVisible();
+    const refused = await request.post("/api/billing/create-checkout", {
+      data: { planId: "00420f8c-0ac1-4828-83c5-d547d862fc8f" },
+    });
+    expect([401, 403]).toContain(refused.status());
   });
 
   test("tourism leads with the free trial above the paid plans", async ({ page }) => {
