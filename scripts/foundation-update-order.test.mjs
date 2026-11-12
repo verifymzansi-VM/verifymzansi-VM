@@ -391,15 +391,17 @@ test("the live comparison sends only the publishable key and reports a missing c
     assert.equal(init.headers.Authorization, undefined);
     assert.equal(init.credentials, "omit");
   }
-  // Besides the missing command's update, only updates the register lists as
-  // pending that add no API command (such as an index-only update) count as
-  // behind: the probe cannot see them.
-  assert.ok(drift.behind.includes(introducing), JSON.stringify(drift.behind));
-  for (const file of drift.behind.filter((item) => item !== introducing))
-    assert.ok(drift.unobservable.includes(file), `${file} is behind but has a command`);
+  // Pending updates that add no command cannot be seen live, so they count as
+  // behind too (the register says production lacks them).
+  const introduced = introducingUpdates(runtime);
+  const unseenPending = parseUpdateRegister(readFileSync(path.join(repo, UPDATES_README), "utf8"))
+    .rows.filter((row) => row.kind === "pending" && !(introduced.get(row.file)?.length > 0))
+    .map((row) => row.file);
+  const behind = [introducing, ...unseenPending].sort();
+  assert.deepEqual([...drift.behind].sort(), behind);
   assert.match(
     lines[0].text,
-    new RegExp(`production database behind by ${drift.behind.length}: .*${introducing}`)
+    new RegExp(`production database behind by ${behind.length}: .*${introducing}`)
   );
 });
 

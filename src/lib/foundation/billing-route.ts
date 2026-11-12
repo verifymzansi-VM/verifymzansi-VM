@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { foundationArea, restoredAreaSchema } from "./areas";
 import { addonSalesPausedResponse, areAddonSalesOpen } from "../billing/addon-sales";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
@@ -18,6 +19,7 @@ import { readPostingAllowance } from "./posting-allowance";
 import {
   cancelFoundationPendingPayment,
   FoundationBillingError,
+  FoundationPendingPaymentError,
   manageFoundationPlanMember,
   readFoundationBilling,
   readFoundationPayment,
@@ -35,11 +37,6 @@ type Operation =
   | "allowance";
 const noStore = { "Cache-Control": "private, no-store", "CDN-Cache-Control": "no-store" };
 const log = createLogger("FoundationBilling");
-const areaMap = {
-  MZANSI_MARKET: "market",
-  MZANSI_BUSINESS: "business",
-  PROMOTIONS_EVENTS: "tourism_events",
-} as const;
 
 /** This bridge preserves the current website URLs while selecting the new
  * session and SQL command model before any legacy table factory is created. */
@@ -94,9 +91,7 @@ export async function handleFoundationBillingRoute(
         })
       );
     if (operation === "allowance") {
-      const area = z
-        .enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"])
-        .parse(request.nextUrl.searchParams.get("area"));
+      const area = restoredAreaSchema.parse(request.nextUrl.searchParams.get("area"));
       const [billing, posting, publicCatalogue] = await Promise.all([
         readFoundationBilling(caller.api),
         readPostingAllowance(caller.api, area),
@@ -104,7 +99,7 @@ export async function handleFoundationBillingRoute(
       ]);
       if (posting.account_id !== caller.accountId) throw new FoundationBillingError(503);
       const entries = billing.entitlements.filter(
-        (entry) => entry.area === null || entry.area === areaMap[area]
+        (entry) => entry.area === null || entry.area === foundationArea(area)
       );
       const capacity = entries.reduce((sum, entry) => sum + entry.slot_capacity, 0);
       const used = entries.reduce((sum, entry) => sum + entry.used, 0);
@@ -178,11 +173,14 @@ export async function handleFoundationBillingRoute(
       const value = z
         .strictObject({
           planId: z.uuid(),
-          area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).optional(),
+          area: restoredAreaSchema.optional(),
         })
         .parse(input);
       const product = selectFoundationBillingPlan(catalogue, value.planId);
-      if (!product || (value.area && product.area !== null && product.area !== areaMap[value.area]))
+      if (
+        !product ||
+        (value.area && product.area !== null && product.area !== foundationArea(value.area))
+      )
         throw new FoundationBillingError(400, "This plan is not available in the selected section");
       productId = product.id;
     }
@@ -210,10 +208,15 @@ export async function handleFoundationBillingRoute(
             ? "Check the billing details"
             : "Billing is temporarily unavailable";
     const code = error instanceof FoundationBillingError ? error.code : undefined;
-    const response = NextResponse.json(code ? { error: message, code } : { error: message }, {
-      status,
-      headers: noStore,
-    });
+    // The restored checkout page shows Continue, Check status and Cancel from this.
+    const pendingPayment =
+      error instanceof FoundationPendingPaymentError ? error.pendingPayment : undefined;
+    const response = NextResponse.json(
+      code
+        ? { error: message, code, ...(pendingPayment && { pendingPayment }) }
+        : { error: message },
+      { status, headers: noStore }
+    );
     return context ? context.respond(response) : response;
   }
 }

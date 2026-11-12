@@ -20,6 +20,7 @@ const proof = z.strictObject({
 });
 
 export class FoundationPhoneError extends Error {
+  override name = "FoundationPhoneError";
   constructor(readonly status: 400 | 403 | 409 | 429 | 503) {
     super("Phone verification could not be completed");
   }

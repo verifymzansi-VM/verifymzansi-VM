@@ -19,7 +19,9 @@ const envelope = z.looseObject({
   }),
   expectedRevision: z.number().int().min(1).max(2147483646).optional(),
 });
-export class RestoredPostInputError extends Error {}
+export class RestoredPostInputError extends Error {
+  override name = "RestoredPostInputError";
+}
 export function restoredMediaKey(value: string) {
   if (!isTrustedPlatformMediaUrl(value))
     throw new RestoredPostInputError("Upload the media through this form before submitting");

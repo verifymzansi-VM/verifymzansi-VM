@@ -9,6 +9,7 @@ import {
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { createLogger } from "../utils/logger";
+import { hasDatabaseMessage } from "./error-reasons";
 
 const log = createLogger("FoundationOperationJobs");
 const kind = z.enum([
@@ -31,6 +32,7 @@ const kind = z.enum([
   "business_check_update",
   "post_sold",
   "post_kept",
+  "verification_returned",
 ]);
 type Kind = z.infer<typeof kind>;
 // Payment messages are claimed before every other kind.
@@ -40,16 +42,23 @@ const paymentKinds: Kind[] = [
   "payment_reconciliation_required",
 ];
 const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
-// Kinds a database without update 20261109104020_post_expiry_rules.sql does
-// not accept: against such a database the job claims the earlier list.
-const laterKinds = new Set<Kind>(["post_sold", "post_kept"]);
+// Kinds an earlier database does not accept, newest update first: against
+// such a database the job drops them one update at a time until the claim is
+// accepted, and keeps that list.
+const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261110173012_verification_returned_notice.sql
+  new Set<Kind>(["verification_returned"]),
+  // 20261109104020_post_expiry_rules.sql
+  new Set<Kind>(["post_sold", "post_kept"]),
+];
 const lifecycleKinds = new Set<Kind>(["post_expired", "post_sold", "post_kept"]);
 // That database refuses the longer list for its length or for an unknown
 // kind; any other refusal is reported, not retried.
 function refusedNewerKinds(error: { code?: string; message?: string } | null) {
   return (
     error?.code === "22023" &&
-    (error.message === "supported mail kinds required" || error.message === "unsupported mail kind")
+    (hasDatabaseMessage(error, "supportedMailKindsRequired") ||
+      hasDatabaseMessage(error, "unsupportedMailKind"))
   );
 }
 
@@ -232,11 +241,15 @@ export async function runFoundationOperationJobs(
     typeof attempts === "number" && attempts >= OUTBOX_FINAL_ATTEMPT;
 
   let otherList: Kind[] = otherKinds;
+  // How many of the newest groups of `laterKinds` this run has dropped.
+  let dropped = 0;
   const claim = async (step: string, kinds: Kind[]) => {
     const args = (list: Kind[]) => ({ p_limit: 1, p_supported_kinds: list });
     let result = await call("claim_supported_notification_outbox", args(kinds), claimSignal);
-    if (kinds === otherList && refusedNewerKinds(result.error)) {
-      otherList = otherKinds.filter((k) => !laterKinds.has(k));
+    while (kinds === otherList && dropped < laterKinds.length && refusedNewerKinds(result.error)) {
+      const newest = laterKinds[dropped++];
+      otherList = otherList.filter((k) => !newest.has(k));
+      kinds = otherList;
       result = await call("claim_supported_notification_outbox", args(otherList), claimSignal);
     }
     const rows = z.array(z.unknown()).max(1).safeParse(result.data);

@@ -4,7 +4,11 @@ import { NextRequest, type NextResponse } from "next/server";
 import { checkRateLimit } from "../utils/rate-limit";
 import { readFoundationBillingCatalogue } from "./billing-catalogue";
 import { handleFoundationBillingRoute } from "./billing-route";
-import { FoundationBillingError, startFoundationCheckout } from "./billing-runtime";
+import {
+  FoundationBillingError,
+  FoundationPendingPaymentError,
+  startFoundationCheckout,
+} from "./billing-runtime";
 import type * as BillingRuntime from "./billing-runtime";
 import { createFoundationRouteContext } from "./request-route";
 
@@ -175,6 +179,31 @@ it("keeps other billing errors without a code", async () => {
     status: 409,
     body: { error: "Check this payment's status before starting another checkout" },
   });
+});
+
+// The restored checkout page (src/app/billing/checkout/checkout-confirm.tsx)
+// shows Continue, Check status and Cancel from this reply (PAY-12, M3.1).
+it("answers an open plan payment with the restored page's pending payment reply", async () => {
+  const pendingPayment = {
+    id: uuid(5),
+    checkoutUrl: "https://one.ozow.com/checkout/synthetic",
+    statusUrl: `https://verifymzansi.com/billing/success?payment=${uuid(5)}`,
+    canCancel: true,
+  };
+  vi.mocked(startFoundationCheckout).mockRejectedValueOnce(
+    new FoundationPendingPaymentError(pendingPayment)
+  );
+  const response = await handleFoundationBillingRoute(request({ planId }), "checkout");
+  expect(await json(response)).toEqual({
+    status: 409,
+    body: {
+      error:
+        "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.",
+      code: "PENDING_PAYMENT_EXISTS",
+      pendingPayment,
+    },
+  });
+  expect(response.headers.get("Cache-Control")).toBe("private, no-store");
 });
 
 // /api/billing/change-plan and /api/billing/cancel send production here
