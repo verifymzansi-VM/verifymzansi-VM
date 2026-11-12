@@ -68,7 +68,7 @@ const AREA_UNIT: Record<MarketplaceArea, string> = {
 };
 
 function OfferBadge({ tier, label }: { tier: RetailPlanTier; label: string }) {
-  if (tier === "month") return null;
+  if (tier === "month" || !label) return null;
   const best = tier === "half_year";
   const Icon = best ? Crown : Sparkles;
   return (
@@ -104,13 +104,8 @@ function FeatureItem({ children, strong }: { children: ReactNode; strong?: boole
   );
 }
 
-/**
- * The public retail ladder: R50 / 30 days, R140 / 90 days, R250 / 180 days and free Events. The same price
- * applies in every section; the section picker only chooses where the slot is used.
- * Billing rules (renewal, expiry, refunds) live once in `BillingFaq`, not in each card.
- */
 /** Tourism leads with the free introductory trial before the paid ladder. */
-function TourismTrialCard({ shortDays, longDays }: { shortDays: number; longDays: number }) {
+function TourismTrialCard({ shortDays }: { shortDays: number }) {
   return (
     <div
       data-testid="tourism-free-trial"
@@ -122,7 +117,7 @@ function TourismTrialCard({ shortDays, longDays }: { shortDays: number; longDays
         </span>
         <div>
           <p className="font-display text-xl font-bold tracking-tight">
-            Start free: {shortDays} days, or {longDays} days while places last
+            Start free: {shortDays} days
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             One free trial per verified person. No payment, nothing renews.
@@ -136,12 +131,20 @@ function TourismTrialCard({ shortDays, longDays }: { shortDays: number; longDays
   );
 }
 
+/**
+ * The public retail ladder: one Individual slot for 30, 90 or 180 days and free Events. The same
+ * price applies in every section; the section picker only chooses where the slot is used.
+ * While no plan is on sale (`onSale` false) the prices show without a checkout link.
+ * Billing rules (renewal, expiry, refunds) live once in `BillingFaq`, not in each card.
+ */
 export function RetailPricing({
   offers,
+  onSale,
   defaultArea = "MZANSI_MARKET",
   trialDays = { shortDays: 7, longDays: 30 },
 }: {
   offers: RetailPricingOffer[];
+  onSale: boolean;
   defaultArea?: MarketplaceArea;
   trialDays?: { shortDays: number; longDays: number };
 }) {
@@ -188,9 +191,7 @@ export function RetailPricing({
         </div>
       </div>
 
-      {area === "PROMOTIONS_EVENTS" ? (
-        <TourismTrialCard shortDays={trialDays.shortDays} longDays={trialDays.longDays} />
-      ) : null}
+      {area === "PROMOTIONS_EVENTS" ? <TourismTrialCard shortDays={trialDays.shortDays} /> : null}
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         {offers.map((offer) => {
@@ -239,15 +240,21 @@ export function RetailPricing({
               </ul>
 
               {/* Checkout always confirms dates, slots and renewal before payment. */}
-              <Button
-                asChild
-                variant={highlighted ? "trust-verified" : "outline"}
-                className="mt-6 h-11 w-full rounded-full"
-              >
-                <Link href={`/billing/checkout?plan=${planId}`} aria-label={`Choose ${planName}`}>
-                  Choose {offer.label}
-                </Link>
-              </Button>
+              {onSale ? (
+                <Button
+                  asChild
+                  variant={highlighted ? "trust-verified" : "outline"}
+                  className="mt-6 h-11 w-full rounded-full"
+                >
+                  <Link href={`/billing/checkout?plan=${planId}`} aria-label={`Choose ${planName}`}>
+                    Choose {offer.label}
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" className="mt-6 h-11 w-full rounded-full" disabled>
+                  Opens soon
+                </Button>
+              )}
             </article>
           );
         })}
@@ -285,6 +292,7 @@ export function RetailPricing({
       </div>
 
       <p className="mt-6 text-center text-xs leading-5 text-muted-foreground">
+        {onSale ? null : "Paid slots open soon; your first post and events are free. "}
         Prices in ZAR. Nothing renews automatically.{" "}
         <a
           href="#billing-faq"

@@ -49,7 +49,7 @@ begin
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_limit(text)')) is distinct from '90ecd5c02572cc9831468458f3ae0e2d'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slots_counted(text,uuid,uuid)')) is distinct from '55a1c8d0c62efce386f1b9a9751ffd5c'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.individual_slot_business_checked(uuid)')) is distinct from 'e4f858e82e99bf3d1a62ea0b0c2d2820'
-    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'cb717efa522b6fe372c22e8310fdb75b'
+    or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'dcbb5be85829b017a483c21b91c95602'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.start_slot_checkout(uuid,integer,bigint,boolean)')) is distinct from 'b9089234d615e837ba75d31f42b8f7bf'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('internal.record_staff_slot_reversal(uuid,text,text)')) is distinct from 'ee3d342565f07d3b18ba26ac237eeab3'
     or (select md5(replace(prosrc,E'\r\n',E'\n')) from pg_proc where oid=to_regprocedure('api.record_staff_slot_reversal(uuid,text,text)')) is distinct from '2a52fbde1bcd5076472a92751af0bedb'

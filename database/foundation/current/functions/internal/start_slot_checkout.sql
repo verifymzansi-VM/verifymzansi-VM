@@ -65,9 +65,7 @@ begin
   counted := internal.individual_slots_counted(fingerprint, actor, pay.id);
   slot_limit := internal.individual_slot_limit(fingerprint);
   if (counted->>'held')::integer + (counted->>'pending')::integer + p_slots > slot_limit then
-    raise exception 'you can hold at most % Individual slots at a time', slot_limit
-      using errcode='PT429', detail=format('held %s, in open payments %s, limit %s',
-        counted->>'held', counted->>'pending', slot_limit);
+    raise exception 'you can hold at most % Individual slots at a time', slot_limit using errcode='PT429';
   end if;
   if pay.id is null then
     insert into private.payments (owner_id, product_kind, plan_version_id, amount_cents, currency, snapshot)

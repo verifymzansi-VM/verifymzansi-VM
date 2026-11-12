@@ -407,7 +407,7 @@ try {
       const zola = verified("zola");
       const waiting = quote(zola, P30, 3);
       open(zola, waiting.payment_id);
-      fails(quoteSql(zola, P90, 2), "PT429", /held 0, in open payments 3, limit 4/);
+      fails(quoteSql(zola, P90, 2), "PT429", /at most 4 Individual slots/);
       const one = quote(zola, P90, 1);
       assert.equal(one.amount_cents, "20700");
       // Same plan, same count: the open payment is reused.

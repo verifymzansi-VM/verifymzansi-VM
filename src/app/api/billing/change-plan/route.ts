@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Plans no longer change tier. Each plan is a prepaid posting slot: buy another slot from R50 / 30 days to post more.",
+            "Plans no longer change tier. Each plan is a prepaid posting slot; buy another slot to post more.",
           code: "LEGACY_PLAN_ROUTE_RETIRED",
         },
         { status: 410 }

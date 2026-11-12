@@ -651,144 +651,115 @@ previous summary capped at 7 days, the 400-day clean-up); that only
 payment's problems go with it; and that apply, rollback and re-apply return the
 same fingerprints.
 
-## Posting Terms v4 published ahead of its prices, 12 November 2026
+## The current Terms (posting-v4) and paid plans paused, 12 November 2026
 
-`20261112122001_publish_posting_terms_v4.sql` is not applied yet. It needs no
-earlier pending update. It publishes posting terms version `posting-v4`
+Two updates, applied in this order. Both are pending.
+
+### 1. Publish the Terms text: `20261112122001_publish_posting_terms_v4.sql`
+
+It publishes posting terms version `posting-v4`
 (`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
-`VDC4RXOBf9H5_BKyo-SWC_Q3wwvoMZviXXgGzWjSwhc`) **without making it current**: it
-inserts one row into `private.posting_terms_versions` and changes no function,
-table, grant, acceptance or current version. It refuses (55000) when the current
-version is not `posting-v3` (or already `posting-v4`), or when `posting-v4` is
-already published with another document, and it checks before committing that
-the current version did not change.
+`FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs`): it inserts one row into
+`private.posting_terms_versions` and changes no function, table, grant,
+acceptance or current version. It refuses (55000) when the current version is
+not `posting-v3` (or already `posting-v4`), or when `posting-v4` is already
+published with another document, and it checks before committing that the
+current version did not change. `posting-v1` to `posting-v3` are unchanged.
 
-`posting-v4` states Pricing v2 (roadmap Milestone 11, P1): posting slots priced
-per slot and per 30-day period with no discounts; Individual slots at R69 for 30
-days, R207 for 90 days or R414 for 180 days in any posting area; 1 to 4
-Individual slots per ID-reviewed person, each with its own end date; at most 4
-new posts per paid slot in each 30-day period; one video per post, at most 2
+The site has one set of Terms, shown at `/terms` with no version name (owner
+decision of 12 November 2026: there are no members yet). `posting-v4` is only
+the database's and catalogue's id for that text. It states Pricing v2 (roadmap
+Milestone 11, P1): posting slots priced per slot and per 30-day period with no
+discounts; Individual slots at R69 for 30 days, R207 for 90 days or R414 for 180
+days in any posting area; 1 to 4 Individual slots per ID-reviewed person, each
+with its own end date; slots on sale only while the pricing page offers them; at
+most 4 posts going live per paid slot in each 30-day period (a new post or an
+ended post brought back; edits do not count); one video per post, at most 2
 minutes (events 1 minute); prepaid, no automatic renewal, paid time from the
 confirmed payment, renewing early adds the new days after the current end; a
 price change applies only to new purchases; orders of R10,000 or less online,
 more by an invoice issued first and paid by EFT; no payment fees added; the
 cooling-off consent before payment (ECT Act section 42(2)), recorded before an
-invoice is paid; not registered for VAT; the refund and cancellation policy (no
-change-of-mind refunds, a rejected post is not a refund reason, our failures are
-fixed first with extra days, individuals may cancel with 20 business days'
-notice and get the unused days less a cancellation fee, other buyers get no
-refund of unused days, billing errors refunded in full, refunds only to the
-paying account, a purchase keeps the refund terms of the version it was made
-under, a paid slot ends for a breach only after written notice and, for an
-individual, 20 business days to remedy it); the unchanged expiry, sold and
-paused rules with the 3-day grace; the free 7-day first post from its approval;
-and partner referral links (the customer is told who referred them and what the
-partner sees). `posting-v1` to `posting-v3` are unchanged. Other packages (the
-Multi-listing and Business Sponsor prices) are not described: they are added in
-a later version when they go on sale.
+invoice is paid; not registered for VAT; the refund and cancellation policy
+(cancelling by writing to billing@verifymzansi.com); a paid slot ends for a
+breach only after written notice and, for an individual, 20 business days to
+remedy it; the unchanged expiry, sold and paused rules with the 3-day grace; the
+free 7-day first post from its approval; and partner referral links.
 
-**Why it is not current yet.** The website sells the plans `posting-v3`
-describes, and checkout charges those prices. Making `posting-v4` current now
-would ask every member to accept prices and rules that the site does not offer
-yet, and the Terms would no longer match what checkout charges. So publishing
-and switching are separate steps:
+### 2. Make it current and pause paid plans: `20261112173841_switch_posting_terms_v4.sql`
 
-1. **Now (this update and its release):** the document, its pinned hash in
-   `catalogue.json` (whose `active_version` stays `posting-v3`) and this row.
-   `/terms` keeps showing `posting-v3` and members keep accepting it; nobody can
-   accept `posting-v4` (`internal.accept_posting_terms` accepts only the current
-   version). `/terms/versions/posting-v4` shows the document with the line "Not
-   in force yet. This version applies only from the date we announce; until then
-   the current Terms of Service apply." The page decides from the database's
-   current version, not from the release's `active_version`: a version listed
-   after the database's current one shows the line, so even a release deployed
-   before its database update cannot present `posting-v4` as in force. When the
-   database cannot be read, the newest version (and any version after the
-   release's active one) shows the line.
-2. **The switch (its own reviewed step, called P1b here, after every slice
-   below).** `posting-v4` becomes current only when every behaviour it promises
-   is live:
-   - the R69 Individual catalogue for any posting area with the old retail and
-     multi-listing plans off sale, at most 4 Individual slots per ID-reviewed
-     person (checkout only after ID acceptance, M3.8) with the free post, staff
-     grants and sponsored places not counted, the staff-raised limit for a
-     checked business, 4 new posts per paid slot per 30 days, the R10,000 online
-     limit and the consent tick at checkout with 30 days preselected (P2);
-   - invoices issued first, the consent recorded before the invoice is paid,
-     paid time from cleared money, the payment then recorded like an online
-     payment with its payment record (P2b; payment records M3.7);
-   - renewing early adds the new days after the current end (P3);
-   - one video per post, at most 2 minutes and 1 minute for events, checked
-     before publication (M4.4);
-   - the refund and cancellation tools: refunds only to the paying account, the
-     cancellation credit after 20 business days less the fee, extra days for our
-     failures, billing errors refunded in full (M3.4), and closing an account
-     handled as a cancellation request (M1.6b);
-   - the partner promises: a link or code added only at registration or within 7
-     days after it and before the first payment, then locked; one partner per
-     customer; the customer told who referred them, with "Referred by" and what
-     the partner sees shown on their account; commission only on slot payments,
-     for 12 months from the customer's first payment (PT1, PT2); the partner's
-     page showing only the fields `posting-v4` lists (PT4). Until then no
-     partner is approved.
+Owner decision of 12 November 2026: switch at once, sell nothing at the old
+prices, and keep paid plans paused until the R69 checkout (roadmap P2) is built
+and tested. In one transaction the update:
 
-   The P1b update must refuse unless all of these hold where the database can
-   check them: `posting-v4` is published with the hash above; the current
-   version is `posting-v3`; and the plans on sale (`private.plan_versions` rows
-   that are public and not retired) are exactly the Individual slot for 30, 90
-   and 180 days at 6,900, 20,700 and 41,400 cents (R69, R207, R414), with one
-   slot each, 4 activations per 30 days and one video, and nothing else on sale.
-   The catalogue change that puts those plans on sale and retires the old ones
-   is applied in the same window, immediately before the P1b update (preferably
-   in the same file), and the release that shows the new prices
-   (`catalogue.json` naming `posting-v4` active, the Terms page's fallback text
-   in `src/lib/legal/terms-text.ts`, the pricing page, FAQ, Advertise page, plan
-   step and checkout) is deployed straight after it. The unit test that ties the
-   site's price constants to the active Terms version fails until those change
-   together. Before the switch, the owner gives members the at least 14 days'
-   notice of a material change that `posting-v3` promises, by email or on the
-   Platform. Every member then accepts `posting-v4` once before their next
-   submission or edit.
+- takes every plan version on sale off sale (sets `retired_at`, the only
+  catalogue column that may change; rows stay as history, prices are never
+  edited) and records each one in the new private table
+  `private.plan_sale_pauses` (row level security on, no API role access), so the
+  rollback can put exactly those plans back;
+- makes `posting-v4` current. Every member accepts it once before their next
+  submission or edit.
 
-**Applying.** Either order is safe: the row is unused until a later update makes
-it current, and the release reads the database only to know which version is
-current. Follow the usual order (apply after the merge, before the deploy):
+It refuses (55000) unless `posting-v4` is published with the hash above and the
+current version is `posting-v3` (or already `posting-v4`). Run again, it changes
+nothing and never takes off sale a plan published after the switch (the R69
+plans of P2). Entitlements, payments, add-on versions (add-on sales stay paused
+by the website) and the free posting paths (free first post, free events,
+sponsored places, staff grants) are untouched. A plan payment already pending is
+left alone: if it is paid it settles as before.
 
-1. Run `../preflight/20261112122001_publish_posting_terms_v4.check.sql`
-   unchanged in the SQL editor. It is read only. Continue only if its result is
-   the single "summary" row reading "current posting-v3; accounts that accepted
-   it: N; posting-v4 not published (update not applied); accounts that accepted
-   posting-v4: 0".
-2. Run the update. It waits at most 5 seconds for the posting terms rows and
-   stops without changing anything if they are busy; run it again. Run the
-   preflight again: it must read "posting-v4 published (update already applied)"
-   with the same current version.
-3. After the deploy, `/terms` still shows "Posting terms · posting-v3" and
-   `/terms/versions/posting-v4` shows the "Not in force yet" line.
+The website release that goes with it (catalogue `active_version` posting-v4)
+reads what is on sale from the database: with no plan on sale the pricing,
+billing, Advertise and checkout pages show the R69 prices with "Opens soon" and
+"Paid slots open soon", nothing links to checkout, and the checkout route
+refuses with `plan_sales_paused` (403) before it creates a payment.
+Multi-listing and sponsor prices are hidden (`PACKAGES_ON_SALE`). Former
+`/terms/versions/*` addresses redirect to `/terms` (308).
 
-The reviewed rollback is
-`../rollback/20261112122001_publish_posting_terms_v4.down.sql`. Published terms
-are immutable, so it changes nothing: it only checks that `posting-v4` is not
-current and has no acceptances (the row then stays unused, like the
-never-current `posting-v2`), and it refuses once a later update has made
-`posting-v4` current. To withdraw the wording, revert the release (its archive
-page then answers 404) and publish a corrected version under a new name.
+**Order.** The release reads the catalogue on every request, so it is correct on
+either side of the switch: before it, it sells the old plans under the
+posting-v3 Terms as today; after it, it sells nothing. The website deployed
+before this release, however, would show its built-in old prices (R50, R140,
+R250) once the database lists no plan. So:
 
-`node --import tsx scripts/test-foundation-posting-terms-v4.mjs` (part of
-`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: that the
-shipped document's hash is the one the update inserts and that the update never
-names a current version; that the preflight is read only and reports the state
-before and after; that the update refuses an unexpected current version and a
-`posting-v4` published with another document, changing nothing; that afterwards
-`posting-v3` stays current for the public and member reads, a member's
-`posting-v3` acceptance stands and nobody can accept `posting-v4`; that the row
-cannot be changed or deleted; that the schema fingerprint is unchanged and
-apply, rollback and re-apply leave the same state; and, simulating the later
-switch, that every member is then asked to accept `posting-v4` once, a
-`posting-v3` acceptance no longer counts, re-running the update keeps
-`posting-v4` current and the rollback refuses. `pnpm check:foundation-api`
-checks that the catalogue's active version is still the one the updates make
-current.
+1. merge, then apply `20261112122001_publish_posting_terms_v4.sql` (any time);
+2. deploy the release;
+3. then apply `20261112173841_switch_posting_terms_v4.sql`.
+
+**Applying.** For each update, run its preflight
+(`../preflight/<update>.check.sql`) unchanged in the SQL editor; it is read
+only. Continue only if the result is the single "summary" row: for the first,
+"current posting-v3; ...; posting-v4 not published (update not applied)"; for
+the switch, "current posting-v3 (update not applied); plans on sale: 17; plans
+taken off sale by the update: 0; pending plan payments: 0". Run the update (it
+waits at most 5 seconds for its rows and stops without changing anything if they
+are busy; run it again), then the preflight again: "posting-v4 published (update
+already applied)", then "current posting-v4 (update already applied); plans on
+sale: 0; plans taken off sale by the update: 17". After the switch, `/terms`
+shows the new text and `/pricing` shows "Opens soon".
+
+**Rollback.** `../rollback/20261112173841_switch_posting_terms_v4.down.sql`
+makes `posting-v3` current again, puts exactly the recorded plans back on sale
+(switching the catalogue guard trigger off for that one statement) and drops the
+record table; it refuses once a plan published after the switch is on sale.
+Deploy a release that sells the old plans with it. The first update's rollback
+changes nothing (published terms are immutable; the row then stays unused, like
+`posting-v2`) and refuses while `posting-v4` is current.
+
+**Tests.** `scripts/test-foundation-posting-terms-v4.mjs` and
+`scripts/test-foundation-posting-terms-switch.mjs` (both in
+`pnpm db:foundation:lifecycle-test`) prove on the throwaway database: the
+shipped document's hash is the one inserted; the preflights are read only and
+report each state; refusals change nothing; after the first update `posting-v3`
+stays current and nobody can accept `posting-v4`; after the switch `posting-v4`
+is current, no plan is on sale, the public catalogue lists none, buying an old
+plan is refused, a held slot is untouched, the record table is closed to the API
+roles, members accept `posting-v4` once, a re-run never retires a later plan,
+and apply, rollback and re-apply put exactly the same plans back and return the
+same schema fingerprint. The other lifecycle checks that still buy a plan after
+later updates publish a copy of it first (`planOnSale` in
+`scripts/lib/foundation-sql-checks.mjs`), as the browser test copy's checkout
+specs do (`e2e/foundation/support/plan-sales.ts`).
 
 ## Individual slots at R69, 12 November 2026
 
@@ -2361,6 +2332,7 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   five updates matched the replay (section No default rights in schema public)
 - `20261112080000_payment_problem_alerts.sql`: pending
 - `20261112122001_publish_posting_terms_v4.sql`: pending
+- `20261112173841_switch_posting_terms_v4.sql`: pending
 - `20261112174600_individual_slots_r69.sql`: pending
 
 <!-- applied-register:end -->

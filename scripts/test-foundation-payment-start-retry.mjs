@@ -27,6 +27,8 @@ import {
   applyStepsBefore,
   assertReadOnlyPreflight,
   createChecks,
+  planOnSale,
+  planQuoteSql,
   sqlHelpers,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
@@ -83,8 +85,7 @@ try {
     }
   );
   /** The member's quote (the website's first command). */
-  const quote = (owner, product) =>
-    json(member(owner, `select api.start_checkout('${product}',null);`));
+  const quote = (owner, product) => json(planQuoteSql(q, member, owner, product));
   /** The website's server lease before it calls Ozow. */
   const leaseSql = (owner, paymentId) =>
     service(`select api.claim_checkout_request('${paymentId}','${owner.id}');`);
@@ -378,11 +379,13 @@ try {
   if (later.length) {
     applySteps(database, later);
     await check("later updates keep the retry and the sweep", () => {
-      const first = failedStart("later", plans[2]);
+      // The switch to posting-v4 takes the plans off sale: buy copies instead.
+      const [laterPlan, retryPlan] = [plans[2], plans[3]].map((id) => planOnSale(q, id));
+      const first = failedStart("later", laterPlan);
       age(first.id, "2 hours");
       assert.ok(sweep() >= 1);
       assert.equal(row(first.id).status, "expired");
-      retryLater(`later-${randomUUID().slice(0, 8)}`, plans[3]);
+      retryLater(`later-${randomUUID().slice(0, 8)}`, retryPlan);
     });
   }
 } catch (error) {

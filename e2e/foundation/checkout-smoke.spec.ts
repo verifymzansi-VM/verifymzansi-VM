@@ -106,6 +106,8 @@ test.describe("checkout in the foundation test copy", () => {
     await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
     await expect(page.getByText(plan.label, { exact: true })).toBeVisible();
 
+    // posting-v4: the cooling-off box, then one slot at the plan's price.
+    await page.getByRole("checkbox", { name: /^My slot starts now/ }).check();
     await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
     await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
     await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();

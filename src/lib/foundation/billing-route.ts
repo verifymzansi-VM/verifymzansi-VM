@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { foundationArea, restoredAreaSchema } from "./areas";
 import { addonSalesPausedResponse, areAddonSalesOpen } from "../billing/addon-sales";
+import { PLAN_SALES_PAUSED_CODE, PLAN_SALES_PAUSED_MESSAGE } from "../billing/plan-sales";
 import { createFoundationRouteContext } from "./request-route";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { FoundationSessionError } from "./request-api";
@@ -181,6 +182,9 @@ export async function handleFoundationBillingRoute(
       );
       return context.respond(NextResponse.json({ ...result, account_id: caller.accountId }));
     }
+    // Paid slots are paused while the catalogue lists none (posting-v4).
+    if (catalogue.plans.length === 0)
+      throw new FoundationBillingError(403, PLAN_SALES_PAUSED_MESSAGE, PLAN_SALES_PAUSED_CODE);
     const value = z
       .strictObject({
         planId: z.uuid(),
