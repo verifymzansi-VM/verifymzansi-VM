@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  expectFoundationPostFields,
+  installFoundationPostFetch,
+} from "@/test/foundation-post-transport";
 import EditBusinessPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -118,6 +122,8 @@ vi.mock("@/lib/constants/sa-provinces", () => ({
 describe("EditBusinessPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
+  let fetchMock: Mock;
+  let termsLoaded: () => Promise<void>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -127,52 +133,55 @@ describe("EditBusinessPage", () => {
     global.URL.createObjectURL = vi.fn(() => "blob:business-media-preview");
     global.URL.revokeObjectURL = vi.fn();
 
-    global.fetch = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          business: {
-            id: "business-1",
-            status: "live",
-            business_type: "home_business",
-            business_name: "Nomsa Home Studio",
-            slug: "nomsa-home-studio",
-            description: "A home-based studio.",
-            category: "health_beauty",
-            location_province: "Gauteng",
-            location_city: "Johannesburg",
-            store_number: null,
-            map_directions: "https://maps.example.com/home-studio",
-            phone: "0821234567",
-            whatsapp: "",
-            email: "hello@example.com",
-            website: "",
-            logo_url: "",
-            cover_photo: "",
-            cover_video: "",
-            video_thumbnail: "",
-            gallery_photos: [],
-            services_offered: ["Braids"],
-            payment_methods_accepted: [],
-            delivery_options: [],
-            social_links: {},
-            operating_hours: {},
-            service_areas: null,
-            business_details: {
-              type: "home_business",
-              service_suburb: "Noordwyk",
-              appointment_required: true,
-              customer_pickup_allowed: false,
-              visitor_notes: "Visits by appointment only.",
+    ({ api: fetchMock, termsLoaded } = installFoundationPostFetch(
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            business: {
+              id: "business-1",
+              status: "live",
+              revision: 3,
+              business_type: "home_business",
+              business_name: "Nomsa Home Studio",
+              slug: "nomsa-home-studio",
+              description: "A home-based studio.",
+              category: "health_beauty",
+              location_province: "Gauteng",
+              location_city: "Johannesburg",
+              store_number: null,
+              map_directions: "https://maps.example.com/home-studio",
+              phone: "0821234567",
+              whatsapp: "",
+              email: "hello@example.com",
+              website: "",
+              logo_url: "",
+              cover_photo: "",
+              cover_video: "",
+              video_thumbnail: "",
+              gallery_photos: [],
+              services_offered: ["Braids"],
+              payment_methods_accepted: [],
+              delivery_options: [],
+              social_links: {},
+              operating_hours: {},
+              service_areas: null,
+              business_details: {
+                type: "home_business",
+                service_suburb: "Noordwyk",
+                appointment_required: true,
+                customer_pickup_allowed: false,
+                visitor_notes: "Visits by appointment only.",
+              },
             },
-          },
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true, pendingReview: true }),
-      }) as unknown as typeof fetch;
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, pendingReview: true }),
+        })
+    ));
   });
 
   function jsonResponse(body: unknown, init?: { ok?: boolean; status?: number }) {
@@ -185,10 +194,11 @@ describe("EditBusinessPage", () => {
 
   it("does not claim a saved update was submitted without server confirmation", async () => {
     render(<EditBusinessPage />);
+    await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument());
-    vi.mocked(global.fetch)
+    fetchMock
       .mockReset()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) } as Response);
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(
@@ -200,8 +210,24 @@ describe("EditBusinessPage", () => {
     );
   });
 
+  it("reports a business loaded without its revision as a failed load", async () => {
+    fetchMock.mockReset().mockResolvedValueOnce(
+      jsonResponse({
+        business: { id: "business-1", status: "live", business_name: "Nomsa Home Studio" },
+      })
+    );
+
+    render(<EditBusinessPage />);
+
+    // The page keeps its restored layout and shows the load error above the form.
+    expect(await screen.findByText("Failed to load business")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Nomsa Home Studio")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("hydrates the saved type-specific details and sends business_details on save", async () => {
     render(<EditBusinessPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
@@ -217,10 +243,10 @@ describe("EditBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    const secondCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
+    const secondCall = fetchMock.mock.calls[1];
     const payload = JSON.parse(secondCall[1].body as string);
 
     expect(mockToast).toHaveBeenCalledWith(
@@ -240,17 +266,19 @@ describe("EditBusinessPage", () => {
       appointment_required: true,
       customer_pickup_allowed: false,
     });
+    expectFoundationPostFields(payload, { expectedRevision: 3 });
   });
 
   it("keeps unsaved changes on the form when an earlier business edit is pending", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+    fetchMock.mockReset();
+    fetchMock
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           business: {
             id: "business-1",
             status: "live",
+            revision: 3,
             business_type: "home_business",
             business_name: "Nomsa Home Studio",
             slug: "nomsa-home-studio",
@@ -286,6 +314,7 @@ describe("EditBusinessPage", () => {
       });
 
     render(<EditBusinessPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
@@ -301,14 +330,15 @@ describe("EditBusinessPage", () => {
   });
 
   it("collapses legacy online delivery details into simple delivery availability on save", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+    fetchMock.mockReset();
+    fetchMock
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           business: {
             id: "business-2",
             status: "live",
+            revision: 9,
             business_type: "online_only",
             business_name: "Mzansi Online",
             slug: "mzansi-online",
@@ -349,6 +379,7 @@ describe("EditBusinessPage", () => {
       });
 
     render(<EditBusinessPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Mzansi Online")).toBeInTheDocument();
@@ -359,10 +390,10 @@ describe("EditBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    const secondCall = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
+    const secondCall = fetchMock.mock.calls[1];
     const payload = JSON.parse(secondCall[1].body as string);
 
     expect(payload.delivery_options).toEqual(["delivery"]);
@@ -375,16 +406,18 @@ describe("EditBusinessPage", () => {
       order_url: "https://orders.example.com",
       support_response_time: "Within 2 hours",
     });
+    expectFoundationPostFields(payload, { expectedRevision: 9 });
   });
 
   it("blocks saving when replacement gallery photos upload only partially succeeds", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>)
+    fetchMock.mockReset();
+    fetchMock
       .mockResolvedValueOnce(
         jsonResponse({
           business: {
             id: "business-1",
             status: "live",
+            revision: 3,
             business_type: "home_business",
             business_name: "Nomsa Home Studio",
             slug: "nomsa-home-studio",
@@ -430,6 +463,7 @@ describe("EditBusinessPage", () => {
       );
 
     render(<EditBusinessPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
@@ -448,67 +482,67 @@ describe("EditBusinessPage", () => {
         "Selected business media could not be uploaded. Retry the highlighted files and try again."
       )
     ).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("falls back to the server upload path when a replacement promo video upload fails", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockReset();
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/businesses/business-1?owner=1") {
-          const existingBusiness = {
-            business: {
-              id: "business-1",
-              status: "live",
-              business_type: "home_business",
-              business_name: "Nomsa Home Studio",
-              slug: "nomsa-home-studio",
-              description: "A home-based studio.",
-              category: "health_beauty",
-              location_province: "Gauteng",
-              location_city: "Johannesburg",
-              store_number: null,
-              map_directions: "",
-              phone: "0821234567",
-              whatsapp: "",
-              email: "",
-              website: "",
-              logo_url: "",
-              cover_photo: "",
-              cover_video: "",
-              video_thumbnail: "",
-              gallery_photos: [],
-              services_offered: [],
-              payment_methods_accepted: [],
-              delivery_options: [],
-              social_links: {},
-              operating_hours: {},
-              service_areas: null,
-              business_details: {
-                type: "home_business",
-                service_suburb: "Noordwyk",
-                appointment_required: true,
-                customer_pickup_allowed: false,
-                visitor_notes: "",
-              },
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/businesses/business-1?owner=1") {
+        const existingBusiness = {
+          business: {
+            id: "business-1",
+            status: "live",
+            revision: 3,
+            business_type: "home_business",
+            business_name: "Nomsa Home Studio",
+            slug: "nomsa-home-studio",
+            description: "A home-based studio.",
+            category: "health_beauty",
+            location_province: "Gauteng",
+            location_city: "Johannesburg",
+            store_number: null,
+            map_directions: "",
+            phone: "0821234567",
+            whatsapp: "",
+            email: "",
+            website: "",
+            logo_url: "",
+            cover_photo: "",
+            cover_video: "",
+            video_thumbnail: "",
+            gallery_photos: [],
+            services_offered: [],
+            payment_methods_accepted: [],
+            delivery_options: [],
+            social_links: {},
+            operating_hours: {},
+            service_areas: null,
+            business_details: {
+              type: "home_business",
+              service_suburb: "Noordwyk",
+              appointment_required: true,
+              customer_pickup_allowed: false,
+              visitor_notes: "",
             },
-          };
+          },
+        };
 
-          return jsonResponse(existingBusiness, { status: 200 });
-        }
-
-        if (input === "/api/media/upload") {
-          return jsonResponse({
-            urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],
-          });
-        }
-
-        return jsonResponse({ success: true }, { status: 200 });
+        return jsonResponse(existingBusiness, { status: 200 });
       }
-    );
+
+      if (input === "/api/media/upload") {
+        return jsonResponse({
+          urls: ["https://media.verifymzansi.com/media/business_cover/user/video-fallback.mp4"],
+        });
+      }
+
+      return jsonResponse({ success: true }, { status: 200 });
+    });
 
     render(<EditBusinessPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Nomsa Home Studio")).toBeInTheDocument();
@@ -518,7 +552,7 @@ describe("EditBusinessPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/businesses/business-1",
         expect.objectContaining({
           method: "PATCH",

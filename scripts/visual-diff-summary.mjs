@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Turns the Playwright JSON report of e2e/visual-regression.spec.ts into a
+// Turns the Playwright JSON report of the picture checks (e2e/foundation/
+// visual-regression.spec.ts, run by scripts/foundation-visual.mjs) into a
 // short Markdown summary for the CI job page: which screens differ from the
 // approved pictures of the chosen frontend, and by how much (roadmap M0.12).
 //

@@ -18,5 +18,6 @@ create table private.verification_phone_proofs (
 alter table private.verification_phone_proofs owner to postgres;
 alter table private.verification_phone_proofs enable row level security;
 CREATE UNIQUE INDEX verification_phone_owner_active_idx ON private.verification_phone_proofs USING btree (owner_id) WHERE (revoked_at IS NULL);
+CREATE INDEX verification_phone_proofs_owner_id_idx ON private.verification_phone_proofs USING btree (owner_id);
 CREATE UNIQUE INDEX verification_phone_unique_active_idx ON private.verification_phone_proofs USING btree (phone) WHERE (revoked_at IS NULL);
 revoke all on private.verification_phone_proofs from public;

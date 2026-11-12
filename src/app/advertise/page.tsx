@@ -55,9 +55,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://verifymzansi.com/advertise" },
 };
 
-/** Prices come from the live catalogue; refresh every five minutes. */
-export const revalidate = 300;
-
 const PROPOSAL_HREF = "/contact?topic=organisation_proposal";
 
 const AREAS = [
@@ -345,7 +342,7 @@ function PackageSection({
           <span className="icon-tile h-11 w-11 rounded-2xl area-business-tile">
             <Icon aria-hidden="true" className="h-5 w-5" />
           </span>
-          <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
+          <p className="mt-4 text-xs font-bold text-brand-green-700 dark:text-brand-gold-300">
             {eyebrow}
           </p>
           <h2 id={`${id}-title`} className="section-title mt-2">
@@ -549,7 +546,7 @@ export default async function AdvertisePage() {
         >
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)] lg:gap-16">
             <Reveal>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
+              <p className="text-xs font-bold text-brand-green-700 dark:text-brand-gold-300">
                 Video
               </p>
               <h2 id="advertise-video-title" className="section-title mt-2">
@@ -594,7 +591,7 @@ export default async function AdvertisePage() {
         {/* 2 ── Why post here ───────────────────────────────── */}
         <section aria-labelledby="advertise-why-title" className="container-page py-12 sm:py-16">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-green-700 dark:text-brand-gold-300">
+            <p className="text-xs font-bold text-brand-green-700 dark:text-brand-gold-300">
               Why post here
             </p>
             <h2 id="advertise-why-title" className="section-title mt-2">

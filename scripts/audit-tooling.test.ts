@@ -632,22 +632,33 @@ test("duplication structure, finite totals, root coverage, stale and new finding
     firstFile: { name: path.join(root, "src/a.ts") },
     secondFile: { name: path.join(root, "src/b.ts") },
   };
-  assert(
-    validateDuplication(
-      {
-        ...report,
-        duplicates: [duplicate],
-        statistics: {
-          ...report.statistics,
-          total: { ...report.statistics.total, clones: 1, duplicatedLines: 8, percentage: 1 },
-        },
-      },
-      baseline,
-      now,
-      now,
-      root
-    ).length >= 2
+  const withDuplicate = {
+    ...report,
+    duplicates: [duplicate],
+    statistics: {
+      ...report.statistics,
+      total: { ...report.statistics.total, clones: 1, duplicatedLines: 8, percentage: 1 },
+    },
+  };
+  const newFindings = validateDuplication(withDuplicate, baseline, now, now, root);
+  assert(newFindings.length >= 2);
+  assert(newFindings.some((error) => error.includes("new/changed duplicate fragments")));
+  // Ratchet: when recorded duplication is removed, the stale fingerprint and the
+  // unused budget both fail until the baseline is lowered.
+  const stale = validateDuplication(
+    report,
+    {
+      ...baseline,
+      total: { clones: 1, duplicatedLines: 8, percentage: 1 },
+      fingerprints: ["recorded-but-resolved"],
+    },
+    now,
+    now,
+    root
   );
+  assert(stale.some((error) => error.includes("no longer exist")));
+  assert(stale.some((error) => error.includes("clones is below the reviewed baseline")));
+  assert(stale.some((error) => error.includes("duplicatedLines is below the reviewed baseline")));
 });
 test("large one-line text and unusual filenames scanned; read failure explicit", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "vm-secret-fixture-"));

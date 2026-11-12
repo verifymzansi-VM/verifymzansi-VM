@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import { CloudOff } from "lucide-react";
 import { SUPPORT_CONTACT_EMAIL } from "@/lib/contact-email";
 // The root layout (and its stylesheet) is not rendered when this boundary is.
@@ -32,6 +33,7 @@ export default function GlobalError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     reportError(error);
     // Log error with structured data so monitoring tools (Cloudflare, Sentry, etc.) can ingest it.
@@ -77,8 +79,8 @@ export default function GlobalError({
                 Email support
               </a>
             </p>
-            {error.digest && (
-              <p className="mt-2 text-xs text-muted-foreground">Error reference: {error.digest}</p>
+            {reference && (
+              <p className="mt-2 text-xs text-muted-foreground">Error reference: {reference}</p>
             )}
           </div>
         </main>

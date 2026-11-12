@@ -23,4 +23,5 @@ create table private.provider_events (
 );
 alter table private.provider_events owner to postgres;
 alter table private.provider_events enable row level security;
+CREATE INDEX provider_events_payment_id_idx ON private.provider_events USING btree (payment_id) WHERE (payment_id IS NOT NULL);
 revoke all on private.provider_events from public;

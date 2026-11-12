@@ -57,7 +57,7 @@ export const CHECKS: Check[] = [
   ),
   check("openapi", ["quality:openapi-drift"], "docs/openapi.json versus generated declarations"),
   check("dead-code", ["knip"], "Next file conventions, workers, scripts, remotion and CI", local, {
-    exclusions: "knip.jsonc: generated declarations, output and reviewed ignoreIssues",
+    exclusions: "knip.jsonc: listed path-run scripts and reviewed ignoreIssues; stale config fails",
   }),
   check("imports", ["depcruise"], "src, scripts, workers import boundaries"),
   check(

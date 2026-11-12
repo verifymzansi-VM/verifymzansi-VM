@@ -4,6 +4,7 @@ import { parseFoundationConnection } from "./connection";
 import { authErrorCode } from "./auth-error-code";
 
 export class FoundationEmailChangeError extends Error {
+  override name = "FoundationEmailChangeError";
   constructor(
     readonly status: 400 | 401 | 403 | 503,
     readonly reason: "invalid_email" | "mfa_required" | "session" | "unavailable"

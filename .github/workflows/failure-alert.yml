@@ -19,6 +19,11 @@ on:
       - CodeQL Security Analysis
       - OpenSSF Scorecard
     types: [completed]
+    # Every completed run of a watched workflow starts this one, and GitHub
+    # lists it as a skipped run when the job's condition is false. Pull request
+    # and feature-branch runs can never raise an alert, so they do not start it.
+    # Scheduled runs use the default branch (main), so they still do.
+    branches: [main]
 
 permissions: {}
 

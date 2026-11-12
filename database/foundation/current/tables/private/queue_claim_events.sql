@@ -24,7 +24,10 @@ create table private.queue_claim_events (
 );
 alter table private.queue_claim_events owner to postgres;
 alter table private.queue_claim_events enable row level security;
+CREATE INDEX queue_claim_events_actor_id_idx ON private.queue_claim_events USING btree (actor_id);
 CREATE INDEX queue_claim_events_audit_time_idx ON private.queue_claim_events USING btree (created_at DESC, id DESC);
+CREATE INDEX queue_claim_events_from_staff_idx ON private.queue_claim_events USING btree (from_staff);
+CREATE INDEX queue_claim_events_to_staff_idx ON private.queue_claim_events USING btree (to_staff) WHERE (to_staff IS NOT NULL);
 CREATE TRIGGER queue_claim_events_append_only BEFORE DELETE OR UPDATE ON private.queue_claim_events FOR EACH ROW EXECUTE FUNCTION internal.append_only_guard();
 CREATE TRIGGER queue_claim_events_no_truncate BEFORE TRUNCATE ON private.queue_claim_events FOR EACH STATEMENT EXECUTE FUNCTION internal.append_only_guard();
 revoke all on private.queue_claim_events from public;

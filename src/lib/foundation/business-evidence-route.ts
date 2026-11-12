@@ -14,6 +14,7 @@ import { enforceMutationRequest } from "../utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
 import { RequestBodyTooLargeError } from "../utils/request-body";
 import { createLogger } from "../utils/logger";
+import { logRequestFailure } from "../utils/request-failure";
 
 const log = createLogger("NativeBusinessEvidence");
 export const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -86,6 +87,7 @@ export async function protectBusinessEvidenceRoute(
     if (refusal) return refusal;
   }
   let context: ReturnType<typeof createFoundationRouteContext> | undefined;
+  let caller: Caller | undefined;
   try {
     context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
     const limit = await checkRateLimit({
@@ -103,12 +105,13 @@ export async function protectBusinessEvidenceRoute(
           }
         )
       );
-    const caller = await context.authenticateCaller();
+    caller = await context.authenticateCaller();
     return context.respond(await command(caller, request));
   } catch (error) {
     let status = 503;
     let message = "The business evidence action could not be confirmed. Reload and try again.";
     let code: string | undefined;
+    let reference: string | undefined;
     if (error instanceof RequestBodyTooLargeError) {
       status = 413;
       message = "Files can be up to 5 MB.";
@@ -124,10 +127,18 @@ export async function protectBusinessEvidenceRoute(
         status = refusal.status;
         message = refusal.error;
         code = refusal.code;
-      } else log.error("Native business evidence request failed");
+      }
+      // Unknown failures and refusals meaning "unavailable" (5xx) are logged.
+      if (!refusal || refusal.status >= 500)
+        reference = logRequestFailure(log, "Native business evidence request failed", {
+          request,
+          error,
+          api: caller?.api,
+          action,
+        });
     }
     const response = NextResponse.json(
-      { error: message, ...(code ? { code } : {}) },
+      { error: message, ...(code ? { code } : {}), ...(reference ? { reference } : {}) },
       { status, headers: foundationNoStore }
     );
     return context ? context.respond(response) : response;

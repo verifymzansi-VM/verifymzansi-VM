@@ -6,6 +6,7 @@ import {
   type Browser,
   type BrowserContext,
   type Page,
+  type Request,
 } from "@playwright/test";
 import sharp from "sharp";
 import { E2E_FIXTURE, LOCAL_OPS_JOBS_SECRET } from "../../scripts/lib/foundation-e2e-target.mjs";
@@ -13,6 +14,8 @@ import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known
 import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
+  caughtMailFor,
+  outboxState,
   queryTestCopy,
   readOutboundAttempts,
   readTestCopy,
@@ -40,25 +43,30 @@ import {
 //     yet, a code older than 12 hours, and a code older than 15 minutes for a
 //     sensitive action), in the database and on the staff pages;
 //   - an admin sends one member's ID back with a reason and accepts the other
-//     member's ID and selfie in the identity review;
+//     member's ID and selfie in the identity review; the identity viewer warns
+//     "Uploaded file" for the selfie sent as a file and not for the one sent
+//     as a camera capture (see asCameraSelfie);
 //   - a moderator approves a post in the moderation queue;
 //   - a report filed by the moderator can never be worked by the moderator
 //     (staff cannot review themselves), and an admin decides it;
 //   - an admin cannot review their own identity case;
-//   - an admin verifies, approves and completes a member's privacy request.
+//   - an admin verifies, approves and completes a member's privacy request;
+//   - the member whose ID was sent back reads the reviewer's reason on the
+//     verification page, has a notice, and receives an email that says only
+//     that the ID was sent back (BL-12, fixed by M2.7).
 //
-// Three steps are broken today and are marked test.fail(), each pinned to its
+// Two steps are broken today and are marked test.fail(), each pinned to its
 // exact known symptom (characterise, support/known-break.ts); any other
 // outcome turns the run red:
-// - "the member whose ID was sent back is told why and notified": BL-12,
-//   fixed by M2.7. The verification page shows generic text instead of the
-//   reviewer's reason, and no email or notice is queued.
 // - "the per-section review queue lists the waiting post": D3B-02, fixed by
 //   M6.3. The section page reads the retired backend for its content queue.
 // - "the operations page shows job health": D5-02, fixed by M5.5. The page
 //   reads retired tables and functions.
 // The tests share the members and run in order; a failure skips the rest, so
 // the marked steps come last.
+//
+// The email job (runOpsJob) delivers the website's own emails to the copy's
+// mail catcher through its loopback relay, which never reaches a provider.
 //
 // Network: browser requests may only reach the copy's website and its local
 // database gateway (anything else is aborted and fails the test), and the
@@ -75,7 +83,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const BL12 = "BL-12, fixed by M2.7";
 const D3B02 = "D3B-02, fixed by M6.3";
 const D502 = "D5-02, fixed by M5.5";
 const TWO_STEP_PATH = "/staff/two-step";
@@ -88,7 +95,7 @@ const REVIEW_CHECKS = [
 /** The "Glare or blur" retake request the identity review offers. */
 const RETAKE_NOTE =
   "Please retake your photo in even light without glare. Keep the camera steady and make sure the details are sharp.";
-/** Today's generic text on the verification page for an ID that was sent back. */
+/** The verification page's generic text for an ID sent back without a reason. */
 const GENERIC_ID_RETURN =
   "Your ID document was not accepted. Upload a clear photo showing the full document and all details.";
 
@@ -99,8 +106,9 @@ test.describe.configure({ mode: "serial" });
 type Reply = { method: string; path: string; status: number; body: unknown };
 
 /** Lets only the copy's website and its gateway through and records the
- * website's API replies (POST, PATCH, DELETE). */
-async function guard(context: BrowserContext) {
+ * website's API replies (POST, PATCH, DELETE). `rewrite` may replace the body
+ * of such a request before it is sent (see asCameraSelfie). */
+async function guard(context: BrowserContext, rewrite?: (request: Request) => Buffer | undefined) {
   const outside: string[] = [];
   const failures: string[] = [];
   const replies: Reply[] = [];
@@ -122,7 +130,8 @@ async function guard(context: BrowserContext) {
     let response;
     let bytes: Buffer;
     try {
-      response = await route.fetch({ maxRedirects: 0 });
+      const postData = rewrite?.(request);
+      response = await route.fetch({ maxRedirects: 0, ...(postData ? { postData } : {}) });
       bytes = await response.body();
     } catch (error) {
       // The test already ended (its page closed mid-request); nothing to record.
@@ -178,6 +187,35 @@ async function withoutCamera(context: BrowserContext) {
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true });
   });
+}
+
+/** The selfie upload as the live camera step sends it. The test browser has no
+ * camera (and a face check would need a face), so for one member the selfie
+ * request's two capture fields are changed from what the upload fallback sends
+ * (captureMethod "file_upload") to what a camera capture with a completed
+ * liveness challenge sends (captureMethod "camera", livenessPassed "true").
+ * Nothing else in the request changes; other requests pass unchanged. */
+function asCameraSelfie(request: Request): Buffer | undefined {
+  if (new URL(request.url()).pathname !== "/api/verification/upload") return undefined;
+  const boundary = /boundary=([^;]+)/.exec(request.headers()["content-type"] ?? "")?.[1];
+  const body = request.postDataBuffer();
+  if (!boundary || !body) throw new Error("the upload is not a multipart form");
+  // latin1 keeps the photo's bytes as they are.
+  const form = body.toString("latin1");
+  if (!form.includes('name="docType"\r\n\r\nselfie\r\n')) return undefined;
+  const fallback = 'name="captureMethod"\r\n\r\nfile_upload\r\n';
+  const end = `--${boundary}--`;
+  if (!form.includes(fallback) || form.includes('name="livenessPassed"') || !form.includes(end))
+    throw new Error("the selfie form is not the upload fallback's");
+  return Buffer.from(
+    form
+      .replace(fallback, 'name="captureMethod"\r\n\r\ncamera\r\n')
+      .replace(
+        end,
+        `--${boundary}\r\nContent-Disposition: form-data; name="livenessPassed"\r\n\r\ntrue\r\n${end}`
+      ),
+    "latin1"
+  );
 }
 
 /** A synthetic photo: random noise over a flat colour, never a face or a
@@ -442,7 +480,12 @@ test.describe("staff review with an authenticator", () => {
       const context = await browser.newContext({ serviceWorkers: "block" });
       try {
         await withoutCamera(context);
-        const { outside, failures, reply } = await guard(context);
+        // One member's selfie arrives as a camera capture, the other's as an
+        // uploaded file (the staff viewer tells them apart later).
+        const { outside, failures, reply } = await guard(
+          context,
+          member === returned ? asCameraSelfie : undefined
+        );
         await signInBrowser(context, member);
         const page = await context.newPage();
         await page.goto("/verification");
@@ -489,6 +532,15 @@ test.describe("staff review with an authenticator", () => {
               `where owner_id = '${member.id}';`
           )
         ).toBe("1");
+        // How the browser said the selfie was taken is stored with the case.
+        expect(
+          queryTestCopy(
+            "select u.capture_method || ':' || u.browser_liveness_passed::text " +
+              "from private.frontend_verification_uploads u " +
+              "join private.verification_current_submissions v on v.submission_id = u.submission_id " +
+              `where u.owner_id = '${member.id}' and u.purpose = 'selfie' and v.case_id = u.case_id;`
+          )
+        ).toBe(member === returned ? "camera:true" : "file_upload:false");
         expect(failures).toEqual([]);
         expect(outside).toEqual([]);
       } finally {
@@ -511,11 +563,22 @@ test.describe("staff review with an authenticator", () => {
     );
     const card = identityCard(page, returned);
     await expect(card).toHaveCount(1);
+    // This member's selfie came from the camera step with a completed liveness
+    // challenge: the viewer says so (as browser-reported context) and shows no
+    // "Uploaded file" warning.
+    await card.getByRole("button", { name: "Review", exact: true }).first().click();
+    const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
+    await expect(viewer.getByText("Selfie: Browser liveness check completed")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(viewer.getByText("Selfie: Uploaded file")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(viewer).toBeHidden();
     // The first step is the ID photo.
     await card.getByRole("button", { name: "Resubmit" }).first().click();
     const dialog = page.getByRole("dialog", { name: "Request Resubmission" });
     await dialog.getByRole("button", { name: "Glare or blur" }).click();
-    await expect(dialog.getByLabel("Additional notes")).toHaveValue(RETAKE_NOTE);
+    await expect(dialog.getByLabel(/Note to the member/)).toHaveValue(RETAKE_NOTE);
     await dialog.getByRole("button", { name: "Request Resubmission" }).click();
     await expect.poll(() => reply("/api/admin/verification/decide").length).toBe(1);
     expect(reply("/api/admin/verification/decide")[0]).toMatchObject({
@@ -561,6 +624,8 @@ test.describe("staff review with an authenticator", () => {
       await card.getByRole("button", { name: "Review", exact: true }).first().click();
       const viewer = page.getByRole("dialog", { name: /^Identity Comparison/ });
       await expect(viewer).toBeVisible();
+      // This member's selfie was an uploaded file: the viewer warns about it.
+      await expect(viewer.getByText("Selfie: Uploaded file")).toBeVisible({ timeout: 20_000 });
       for (const check of REVIEW_CHECKS) await viewer.getByLabel(check).check();
       const approve = viewer.getByRole("button", { name: `Approve ${step}` });
       await expect(approve).toBeEnabled({ timeout: 20_000 });
@@ -920,45 +985,68 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
-  test("the member whose ID was sent back is told why and notified", async ({ context, page }) => {
-    test.fail(true, BL12);
-    await characterise(BL12, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures } = await guard(context);
-      const returnedAt = queryTestCopy(
-        "select min(r.created_at) from private.verification_return_requests r " +
-          `join private.evidence_cases c on c.id = r.case_id where c.subject_id = '${returned.id}';`
-      );
-      expect(returnedAt).not.toBe("");
-      // Anything queued to tell the member since the ID was sent back.
-      const notices = Number(
-        queryTestCopy(
-          `select (select count(*) from private.outbox_events where owner_id = '${returned.id}' and created_at >= '${returnedAt}') + ` +
-            `(select count(*) from private.notifications where account_id = '${returned.id}' and created_at >= '${returnedAt}');`
-        )
-      );
-      await signInBrowser(context, returned);
-      await page.goto("/verification");
-      const reason = page.getByText(RETAKE_NOTE).first();
-      const generic = page.getByText(GENERIC_ID_RETURN).first();
-      await expect(reason.or(generic).first()).toBeVisible({ timeout: 20_000 });
-      if ((await generic.isVisible()) && !(await reason.isVisible()) && notices === 0) {
-        // BL-12 as recorded: the reviewer's reason is stored, but the page
-        // shows generic text, and no email or notice was queued.
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(
-          `${BL12}: the verification page shows generic text instead of the reviewer's reason, and nothing was queued to tell the member`
-        );
-      }
-      // Promised (M2.7): the member reads the reviewer's reason and is told.
-      await expect(reason).toBeVisible();
-      expect(notices).toBeGreaterThan(0);
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
+  test("the member whose ID was sent back is told why and notified", async ({
+    context,
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    const returnRequest = queryTestCopy(
+      "select r.id from private.verification_return_requests r " +
+        `join private.evidence_cases c on c.id = r.case_id where c.subject_id = '${returned.id}';`
+    );
+    expect(returnRequest).toMatch(UUID);
+    // A notice in the member's account, pointing at the return request only.
+    expect(
+      queryTestCopy(
+        "select count(*) from private.notifications where kind = 'verification_returned' " +
+          `and account_id = '${returned.id}' and subject_id = '${returnRequest}';`
+      )
+    ).toBe("1");
+    // One email, queued for the email job.
+    const outboxId = queryTestCopy(
+      "select id from private.outbox_events where kind = 'verification_returned' " +
+        `and owner_id = '${returned.id}' and subject_id = '${returnRequest}';`
+    );
+    expect(outboxId).toMatch(UUID);
+
+    // The verification page shows the reviewer's reason, not the generic text.
+    await signInBrowser(context, returned);
+    await page.goto("/verification");
+    await expect(page.getByText(RETAKE_NOTE).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(GENERIC_ID_RETURN)).toHaveCount(0);
+    // The notifications list carries the notice, which leads to that page.
+    const listed = await page.evaluate(async () => {
+      const response = await fetch("/api/notifications", { cache: "no-store" });
+      return { status: response.status, body: await response.json() };
     });
+    expect(listed.status).toBe(200);
+    expect(listed.body.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Your ID check needs another look",
+          href: "/verification",
+          read: false,
+        }),
+      ])
+    );
+
+    // The email job sends it (at most one email per run, oldest first; an
+    // earlier step's run may already have sent it).
+    for (let run = 0; run < 20 && !outboxState(outboxId).processed; run++)
+      expect((await runOpsJob(request)).retrying).toBe(0);
+    expect(outboxState(outboxId)).toMatchObject({ processed: true, error: null });
+    const mail = await caughtMailFor(returned.email, `foundation-outbox/${outboxId}`);
+    expect(mail.subject).toBe("Your ID check needs another look");
+    expect(mail.text).toContain("/verification");
+    // It says only that the ID was sent back: no reason, name or ID number.
+    for (const kept of [RETAKE_NOTE, "blurry_image", returned.idNumber, returned.lastName])
+      expect(mail.text).not.toContain(kept);
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
   });
 
   test("the per-section review queue lists the waiting post", async ({ context, page }) => {

@@ -10,7 +10,7 @@ const jsonOutput = args.has("--json");
 const strictMode = args.has("--strict");
 
 const domain = process.env.EMAIL_DOMAIN || process.env.CF_DOMAIN || "verifymzansi.com";
-const gmailInbox = process.env.EMAIL_GMAIL_INBOX || "verifymzansi2s@gmail.com";
+const gmailInbox = process.env.EMAIL_GMAIL_INBOX || "(set EMAIL_GMAIL_INBOX)";
 const dkimSelectors = (process.env.EMAIL_DKIM_SELECTORS || "resend")
   .split(",")
   .map((value) => value.trim())

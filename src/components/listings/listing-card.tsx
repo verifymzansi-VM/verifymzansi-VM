@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { formatZARShort } from "@/lib/utils/format";
+import { describeListingPrice, isListingPriceNegotiable } from "@/lib/presentation/listing-facts";
 import { PosterCardShell } from "@/components/listings/poster-card-shell";
 import type { MediaFitStrategy } from "@/components/ui/video-card-player";
 import type { TrustLevel } from "@/types/enums";
@@ -10,6 +10,8 @@ interface ListingCardProps {
   id: string;
   title: string;
   price: number;
+  /** "amount" | "free" | "on_request" when the backend sends it; "free" shows "Free". */
+  priceMode?: string | null;
   negotiable?: boolean;
   imageUrl?: string;
   posterUrl?: string;
@@ -44,6 +46,7 @@ export const ListingCard = memo(function ListingCard({
   id,
   title,
   price,
+  priceMode,
   negotiable,
   category,
   attributes,
@@ -62,15 +65,24 @@ export const ListingCard = memo(function ListingCard({
   mediaWidth,
   mediaHeight,
 }: ListingCardProps) {
+  // Same words and format as the post page (describeListingPrice). Cards stay
+  // quiet when an item has no amount, unless it is free or a job.
+  const described = describeListingPrice({ category, price_cents: price, price_mode: priceMode });
+  const isJob = category === "jobs_services";
+  const salaryPeriod =
+    isJob && attributes?.salary_period
+      ? ` / ${String(attributes.salary_period).replace(/^per_/, "")}`
+      : "";
   const priceLabel =
-    category === "jobs_services"
-      ? price > 0
-        ? `${formatZARShort(price)}${attributes?.salary_period ? ` / ${String(attributes.salary_period).replace(/^per_/, "")}` : ""}`
-        : "Salary not provided"
-      : price > 0
-        ? formatZARShort(price)
+    described.kind === "amount"
+      ? `${described.label}${salaryPeriod}`
+      : described.kind === "free" || isJob
+        ? described.label
         : null;
-  const eyebrow = priceLabel && negotiable ? `${priceLabel} · Neg` : priceLabel;
+  const eyebrow =
+    priceLabel && isListingPriceNegotiable({ category, price_negotiable: negotiable }, described)
+      ? `${priceLabel} · Neg`
+      : priceLabel;
 
   return (
     <PosterCardShell
