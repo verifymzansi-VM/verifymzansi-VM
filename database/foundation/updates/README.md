@@ -659,7 +659,7 @@ Two updates, applied in this order. Both are pending.
 
 It publishes posting terms version `posting-v4`
 (`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
-`FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs`): it inserts one row into
+`HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg`): it inserts one row into
 `private.posting_terms_versions` and changes no function, table, grant,
 acceptance or current version. It refuses (55000) when the current version is
 not `posting-v3` (or already `posting-v4`), or when `posting-v4` is already
@@ -746,11 +746,27 @@ shows the new text and `/pricing` shows "Opens soon".
 **Rollback.** `../rollback/20261112173841_switch_posting_terms_v4.down.sql`
 restores the previous `internal.set_post_media`, makes `posting-v3` current
 again, puts exactly the recorded plans back on sale (switching the catalogue
-guard trigger off for that one statement) and drops the record table; it refuses
-once a plan published after the switch is on sale. Deploy a release that sells
-the old plans with it. The first update's rollback changes nothing (published
-terms are immutable; the row then stays unused, like `posting-v2`) and refuses
-while `posting-v4` is current.
+guard trigger off for that one statement) and drops the record table. It refuses
+(55000) once a plan published after the switch is on sale, and when
+`internal.set_post_media` is neither the body the switch installed nor the one
+before it (md5 of the body): a later update (such as P2's) changed it, so undo
+that update first; the rollback never silently reverts it. The switch itself
+refuses the same way when the body it replaces is not the reviewed one.
+
+Rollback order: once the switch has run, **never roll back the website alone.**
+The earlier website's terms catalogue has no `posting-v4`, so with `posting-v4`
+current it refuses the current terms (`assertPublishedPostingTerms` throws),
+`/api/foundation/posting-terms` answers 503 and nobody can submit or edit a
+post. Roll back in this order:
+
+1. run the switch rollback above (`posting-v3` current, the old plans on sale);
+2. then revert this pull request and deploy the earlier website, which sells the
+   old plans under `posting-v3`.
+
+The first update's rollback changes nothing (published terms are immutable; the
+row then stays unused, like `posting-v2`) and refuses while `posting-v4` is
+current. Before the switch has run, the website alone can be reverted at any
+time.
 
 **Tests.** `scripts/test-foundation-posting-terms-v4.mjs` and
 `scripts/test-foundation-posting-terms-switch.mjs` (both in
@@ -761,9 +777,10 @@ stays current and nobody can accept `posting-v4`; after the switch `posting-v4`
 is current, no plan is on sale, the public catalogue lists none, buying an old
 plan is refused, a held slot is untouched, the record table is closed to the API
 roles, members accept `posting-v4` once, a re-run never retires a later plan,
-and apply, rollback and re-apply put exactly the same plans back and return the
-same schema fingerprint. The other lifecycle checks that still buy a plan after
-later updates publish a copy of it first (`planOnSale` in
+neither the switch nor its rollback overwrites a later `set_post_media`, and
+apply, rollback and re-apply put exactly the same plans back and return the same
+schema fingerprint. The other lifecycle checks that still buy a plan after later
+updates publish a copy of it first (`planOnSale` in
 `scripts/lib/foundation-sql-checks.mjs`), as the browser test copy's checkout
 specs do (`e2e/foundation/support/plan-sales.ts`).
 

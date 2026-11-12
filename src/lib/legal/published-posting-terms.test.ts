@@ -53,7 +53,7 @@ it("makes posting-v3 current with the post lifecycle rules decided on 9 November
 it("makes posting-v4 the site's one set of Terms", () => {
   expect(manifest.active_version).toBe("posting-v4");
   const v4 = getPublishedPostingTerms("posting-v4")!;
-  expect(v4.document_hash).toBe("FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs");
+  expect(v4.document_hash).toBe("HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg");
   // Visitors never see version names: the text does not mention versions.
   expect(text("posting-v4")).not.toMatch(/version/i);
 });
@@ -137,10 +137,18 @@ it("states the Pricing v2 rules in posting-v4 (roadmap P1 checklist)", () => {
     // The free first post, from its approval.
     "your first post is free for 7 days",
     "The 7 days start when we approve that post, not when you submit it",
-    "(a paid slot, a sponsored place or a trial we granted you), the post uses that slot instead",
+    // The free post rule as the database applies it (internal.start_intro_trial,
+    // internal.start_sponsorship and internal.grant_intro_trial record the free
+    // post; a paid slot does not).
+    "you already have an unused paid slot with at least 7 days left that allows the post's photos and video, the post uses that slot instead and your free post stays unused",
+    "A sponsored place, or a free post we grant you, counts as your free post",
     // Partners and referral links.
-    "we tell you which partner referred you and what that partner can see",
-    "A partner never sees your contact details, ID details, payment details",
+    // Partners as built (internal.record_my_acquisition, internal.my_partner_dashboard).
+    "A partner's link or code counts only if it is recorded within 7 days after you sign up",
+    "that record cannot be changed afterwards, so you can be linked to one partner at most",
+    "You may ask us at any time which partner, if any, referred you",
+    "A partner sees how many people they referred and how many of them have paid, and for each payment its amount and the commission it earned",
+    "A partner never sees your name, contact details, ID details, bank or card details",
   ])
     expect(content).toContain(rule);
   for (const retired of [

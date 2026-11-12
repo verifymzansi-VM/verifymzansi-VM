@@ -55,6 +55,39 @@ test.use({ serviceWorkers: "block" });
 let state: ReturnType<typeof readTestCopy>;
 let plan: Plan;
 
+// The first old plan's id from the seeded catalogue (catalogue-identities.json).
+const OLD_PLAN_ID = "00420f8c-0ac1-4828-83c5-d547d862fc8f";
+
+// Paid plans are paused (the switch to the current Terms takes every plan off
+// sale). A signed-in member passes sign-in, origin and CSRF, so the refusal
+// here is the pause itself. Runs before the describe below puts copies on sale.
+test.describe("checkout while paid plans are paused", () => {
+  test("a signed-in member sees paid slots opening soon and the route refuses the old plan", async ({
+    context,
+    page,
+  }) => {
+    const session = await browserSessionCookies(readTestCopy(), "verifiedMember");
+    await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto(`/billing/checkout?plan=${OLD_PLAN_ID}`, { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByText("Paid slots open soon. Until then, your first post and events are free.")
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Pay / })).toHaveCount(0);
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    expect(csrf?.value).toMatch(/^[a-f0-9]{64}$/i);
+    const refused = await page.request.post(`${APP_ORIGIN}/api/billing/create-checkout`, {
+      headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+      data: { planId: OLD_PLAN_ID },
+      maxRedirects: 0,
+    });
+    expect(refused.status()).toBe(403);
+    expect(await refused.json()).toEqual({
+      error: "Paid slots open soon. You have not been charged.",
+      code: "plan_sales_paused",
+    });
+  });
+});
+
 test.describe("checkout in the foundation test copy", () => {
   test.beforeAll(async () => {
     state = readTestCopy();

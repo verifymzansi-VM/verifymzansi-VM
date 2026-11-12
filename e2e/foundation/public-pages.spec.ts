@@ -394,8 +394,8 @@ test.describe("pricing and organisations", () => {
     );
   });
 
-  // The checkout page needs a signed-in member (its paused note is unit tested in
-  // checkout-confirm.test.tsx); the route refuses a visitor before anything else.
+  // The checkout page needs a signed-in member (checkout-smoke.spec.ts checks it
+  // and the route's refusal while paused); the route refuses a visitor first.
   test("the checkout route sells nothing to a visitor while paid plans are paused", async ({
     request,
   }) => {
