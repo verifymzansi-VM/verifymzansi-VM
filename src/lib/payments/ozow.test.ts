@@ -916,3 +916,74 @@ describe("provider lookups in the foundation test copy (M0.9c)", () => {
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer token");
   });
 });
+
+describe("notice signing headers and the test-mode flag (M3.2)", () => {
+  const headers = (values: Record<string, string>) => new Headers(values);
+  const svix = { "svix-id": "msg_1", "svix-timestamp": "1700000000", "svix-signature": "v1,abc" };
+  const standard = {
+    "webhook-id": "msg_1",
+    "webhook-timestamp": "1700000000",
+    "webhook-signature": "v1,abc",
+  };
+  const read = { id: "msg_1", timestamp: "1700000000", signature: "v1,abc" };
+
+  it.each([
+    ["svix-*", svix],
+    ["webhook-*", standard],
+    ["both, agreeing", { ...svix, ...standard }],
+  ])("reads one complete set: %s", async (_label, values) => {
+    const { readOzowSignatureHeaders } = await import("./ozow");
+    expect(readOzowSignatureHeaders(headers(values))).toEqual(read);
+  });
+
+  it.each([
+    ["no headers", {}],
+    ["an incomplete set", { "svix-id": "msg_1", "svix-timestamp": "1700000000" }],
+    [
+      "parts of each style",
+      { "svix-id": "msg_1", "webhook-timestamp": "1700000000", "webhook-signature": "v1,abc" },
+    ],
+    ["styles that disagree", { ...svix, "webhook-signature": "v1,other" }],
+    ["a stray header that disagrees", { ...standard, "svix-id": "msg_2" }],
+  ])("refuses %s", async (_label, values) => {
+    const { readOzowSignatureHeaders } = await import("./ozow");
+    expect(readOzowSignatureHeaders(headers(values))).toBeNull();
+  });
+
+  it.each([
+    [{ IsTest: "True" }, true],
+    [{ IsTest: "false" }, false],
+    [{ isTest: true }, true],
+    [{ isTest: false }, false],
+    [{ isTest: "FALSE" }, false],
+    [{ IsTest: "False", isTest: false }, false],
+    // Absent: Ozow's published One API transaction has no flag.
+    [{}, null],
+    // Present but unreadable or contradictory: treated as a test outside full
+    // notices (which must carry a clear flag; see the next test).
+    [{ isTest: "no" }, true],
+    [{ isTest: 0 }, true],
+    [{ isTest: null }, true],
+    [{ IsTest: "True", isTest: false }, true],
+    [{ IsTest: "False", isTest: "maybe" }, true],
+  ])("reads the test-mode flag %j as %s", async (flag, expected) => {
+    const { normalizeOzowWebhook } = await import("./ozow");
+    const payload = normalizeOzowWebhook({
+      type: "transaction.complete",
+      data: { id: "transaction-1", merchantReference: "merchant-1", ...flag },
+    });
+    expect(payload?.isTest).toBe(expected);
+  });
+
+  it.each([{ IsTest: "invalid" }, { IsTest: "True", isTest: false }])(
+    "reads an unclear flag on a full notice %j as missing",
+    async (flag) => {
+      const { normalizeOzowWebhook } = await import("./ozow");
+      const payload = normalizeOzowWebhook({
+        type: "transaction.complete",
+        data: { TransactionId: "transaction-1", TransactionReference: "merchant-1", ...flag },
+      });
+      expect(payload).toMatchObject({ format: "full", isTest: null });
+    }
+  );
+});

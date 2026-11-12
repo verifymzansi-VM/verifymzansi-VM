@@ -25,6 +25,7 @@ const context = z
 
 export type FoundationAccountContext = z.infer<typeof context>;
 export class FoundationAccountContextError extends Error {
+  override name = "FoundationAccountContextError";
   constructor(readonly reason: "forbidden" | "unavailable") {
     super("Current account details are unavailable");
   }

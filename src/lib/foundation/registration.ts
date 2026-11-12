@@ -12,6 +12,7 @@ import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { parseFoundationConnection } from "./connection";
 
 export class FoundationRegistrationError extends Error {
+  override name = "FoundationRegistrationError";
   constructor(
     readonly status: 400 | 429 | 503,
     breached = false

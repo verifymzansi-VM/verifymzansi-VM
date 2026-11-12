@@ -7,6 +7,7 @@ import { readFoundationAccountContext, FoundationAccountContextError } from "./a
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 
 export class FoundationServerSessionError extends Error {
+  override name = "FoundationServerSessionError";
   constructor(readonly status: 401 | 403 | 503) {
     super("A verified account page session is required");
   }
