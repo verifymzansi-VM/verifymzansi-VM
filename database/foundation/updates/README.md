@@ -180,6 +180,82 @@ preflight with the update applied, so they can still be deployed or redeployed.
 1. Run `../preflight/20261111184619_selfie_capture_method.check.sql` unchanged
    in the SQL editor. It is read only. Continue only if its result is the single
    "summary" row reading "reviewed bodies, update not applied".
+
+## A failed payment start never blocks a member, 11 November 2026
+
+`20261111212320_payment_start_retry.sql` is not applied yet. It needs no earlier
+pending update.
+
+A checkout is one pending payment per member and product. The website leases it
+(`internal.claim_checkout_request`), asks Ozow for a payment request with the
+payment's stored expiry time and idempotency key, and attaches the request Ozow
+returns. The expiry was set once, at the first lease, and the key never changed.
+When the first call to Ozow failed, nothing was attached, the payment stayed
+pending, and every later attempt reused it with the same key and, after 30
+minutes, an expiry time in the past. Nothing ever closed such a payment. From
+this update:
+
+- **A fresh window for every attempt.** A new lease on a pending payment with no
+  Ozow request always gets a new 30-minute expiry. After an earlier lease (an
+  earlier attempt may have reached Ozow), it also gets a new idempotency key, so
+  Ozow never sees a key it already answered with a different expiry. The first
+  lease keeps the key the payment was created with. The member never received an
+  earlier request's page (the website returns a page only after attaching its
+  request), so nobody can pay an abandoned request, and a late answer to an
+  earlier lease cannot attach (its claim token is superseded). A payment that
+  already has a request is returned unchanged, as before.
+- **A sweep.** New service command `api.expire_stale_checkouts(limit)` marks
+  expired the pending payments that have no Ozow request, were created more than
+  an hour ago and are not leased now, oldest first, at most `limit` (1 to 500)
+  per call, and returns how many. It skips rows another transaction holds and
+  never touches a payment with a request (the status check handles those).
+  Repeating it changes nothing more. The website's payment status job
+  (`/api/internal/payments/reconcile`, run every 10 minutes by the
+  payment-cleanup Worker) calls it first, with a limit of 100, so such a payment
+  closes within about 70 minutes and the member's next checkout starts a new
+  one. No new schedule is needed.
+- No existing API command changes signature, grant or owner.
+
+The website release in the same pull request also answers a plan whose pending
+payment already has an Ozow request with the restored checkout page's 409
+`PENDING_PAYMENT_EXISTS` reply (Continue payment, Check status, Cancel pending
+payment). Its status check, once Ozow reports the request closed (`Expired` or
+`Cancelled`), records a declined or cancelled bank attempt as not paid, as the
+notice would; while the request is open it changes nothing, because the member
+can still pay on it. A request cancelled other than by the member's Cancel
+button is recorded as expired, so a verified late success still delivers the
+plan. Neither needs a database change.
+
+Known limits, recorded for later:
+
+- If the sweep expires a payment between the member's quote and the server's
+  lease (the member clicked Pay on a payment created over an hour ago, at the
+  moment the job ran), that click gets a "Billing could not be completed" 409;
+  the next click starts a new payment.
+- The Continue link is left out once the stored request's window has passed;
+  Cancel then asks Ozow to cancel an expired request. If Ozow refuses that, the
+  page says the pending payment could not be cancelled until the next status job
+  (at most 10 minutes) records the request as expired.
+- Not yet confirmed with Ozow (M3.5, Ozow's test system): that a second payment
+  request with the same merchant reference and a new idempotency key is
+  accepted, how a cancelled attempt is reported (the code assumes an `Error`
+  transaction and a `Cancelled` request), and the request status after a
+  cancellation.
+
+**Order: apply first, then merge.** The website release from the same pull
+request calls `api.expire_stale_checkouts`, and the deploy preflight probes
+every command in `../runtime-api-manifest.json`, so a deploy without the update
+stops there. Earlier website releases do not use the new command and pass the
+deploy preflight with the update applied, so they can still be deployed or
+redeployed.
+
+**Applying.**
+
+1. Run `../preflight/20261111212320_payment_start_retry.check.sql` unchanged in
+   the SQL editor. It is read only. Continue only if its result is the single
+   "summary" row reading "reviewed bodies, update not applied". It also counts
+   the pending payments without an Ozow request and those the first sweep will
+   expire (0 today: production has taken no payment).
 2. Run the update, then the preflight again: it must now read "already applied".
 3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`, and
    compare with `../fingerprint.json`, which lists this update under
@@ -197,6 +273,22 @@ owner's decision; prefer a forward fix). Revert and deploy the website release
 first: the rollback removes the two commands that release calls. It restores the
 receipt scrub byte for byte and drops the two columns with the answers recorded
 so far.
+
+`../rollback/20261111212320_payment_start_retry.down.sql` (only with the owner's
+decision; prefer a forward fix). Revert and deploy the website release first:
+the rollback removes the command that release's payment status job calls. It
+restores the checkout lease byte for byte. Payments the sweep already expired
+stay expired (none had an Ozow request, so no money was taken).
+
+`node --import tsx scripts/test-foundation-payment-start-retry.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves, on the throwaway database, the
+defect before the update; that the preflight is read only and refuses drift, and
+a premature rollback is refused; a failed first call retried 31 minutes later on
+the same payment with a fresh window and a new key, while the failed lease's
+late answer cannot attach; that an attached request is never re-leased; the
+sweep (stale, young, leased, attached and settled payments, the limit, repeat
+runs, the member's next checkout); who may run it; and that apply, rollback and
+re-apply return the same fingerprints.
 
 ## The free week starts at the first approved post, 10 November 2026
 
@@ -1615,5 +1707,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   approved post)
 - `20261110173012_verification_returned_notice.sql`: pending
 - `20261111184619_selfie_capture_method.sql`: pending
+- `20261111212320_payment_start_retry.sql`: pending
 
 <!-- applied-register:end -->

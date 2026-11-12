@@ -81,6 +81,25 @@
       "authority": "Service-only scheduled purge; bounded deletion of expired autosaves."
     },
     {
+      "name": "expire_stale_checkouts",
+      "updates": ["updates/20261111212320_payment_start_retry.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "integer",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only scheduled sweep run by the payment status job; bounded, repeatable expiry of pending payments with no Ozow request, created over an hour ago and not leased."
+    },
+    {
       "name": "get_frontend_staff_payments",
       "updates": ["updates/20261105201822_restored_staff_payments.sql"],
       "arguments": [

@@ -36,6 +36,7 @@ type BillingRpcName =
   | "claim_payment_reconciliation"
   | "list_reconcilable_payments"
   | "finish_unpaid_checkout"
+  | "expire_stale_checkouts"
   | "manage_plan_member"
   | "apply_provider_event"
   | "start_checkout";
@@ -128,6 +129,26 @@ export class FoundationBillingError extends Error {
     readonly code?: string
   ) {
     super(message);
+  }
+}
+/** The restored checkout page's reply for a plan that already has an open
+ * Ozow request (src/app/billing/checkout/checkout-confirm.tsx): continue it,
+ * check its status, or cancel it. The same shape as the retired route's. */
+export interface FoundationPendingPayment {
+  id: string;
+  checkoutUrl: string | null;
+  statusUrl: string;
+  canCancel: boolean;
+}
+export class FoundationPendingPaymentError extends FoundationBillingError {
+  override name = "FoundationPendingPaymentError";
+
+  constructor(readonly pendingPayment: FoundationPendingPayment) {
+    super(
+      409,
+      "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.",
+      "PENDING_PAYMENT_EXISTS"
+    );
   }
 }
 const addonSalesPaused = () =>
@@ -255,8 +276,23 @@ export async function startFoundationCheckout(
   // Whatever the quote was for, an add-on payment never reaches the provider
   // (nor gets a stored checkout address back) while sales are paused.
   if (pay.product_kind === "addon" && !areAddonSalesOpen()) throw addonSalesPaused();
-  if (pay.checkout_url)
-    return { paymentId: pay.id, checkoutUrl: checkoutRedirect(pay.checkout_url) };
+  if (pay.checkout_url) {
+    const checkoutUrl = checkoutRedirect(pay.checkout_url);
+    // A plan's open request goes back to the member as the restored page's
+    // choice (continue, check or cancel), never as a silent redirect.
+    if (pay.product_kind === "plan" && pay.provider_request_id)
+      throw new FoundationPendingPaymentError({
+        id: pay.id,
+        // Ozow's page for it is gone once its window has passed.
+        checkoutUrl:
+          pay.checkout_expires_at && Date.parse(pay.checkout_expires_at) > Date.now()
+            ? checkoutUrl
+            : null,
+        statusUrl: `${app.origin}/billing/success?payment=${pay.id}`,
+        canCancel: canAskProvider(pay.provider_request_id),
+      });
+    return { paymentId: pay.id, checkoutUrl };
+  }
   if (!pay.claim_token || !pay.checkout_expires_at) throw new FoundationBillingError(503);
   const provider = await createOzowHostedPayment({
     paymentId: pay.id,
@@ -410,9 +446,14 @@ const canAskProvider = (requestId: string) =>
     ? requestId.startsWith(MOCK_OZOW_REQUEST_PREFIX)
     : !isMockCheckout(requestId);
 
+/** `cancelling`: the member's own Cancel (cancelFoundationPendingPayment) just
+ * closed the request at Ozow, so a request that reads Cancelled is recorded as
+ * the member's cancellation. Otherwise it is recorded as expired, which still
+ * lets a verified late success deliver what was paid for. */
 export async function reconcileFoundationPayment(
   paymentId: string,
-  service = createFoundationServiceApi()
+  service = createFoundationServiceApi(),
+  { cancelling = false }: { cancelling?: boolean } = {}
 ) {
   // No provider to ask in mock mode (except the test copy's stand-in): leave
   // the stored state as it is.
@@ -451,16 +492,41 @@ export async function reconcileFoundationPayment(
     );
     return { checked: true, pendingTransaction: false, settled: true };
   }
-  const pending = transactions.some((transaction) =>
-    ["pending", "incomplete"].includes(transaction.status?.toLowerCase() ?? "")
+  // Only Successful and Error are final; any other status (Pending,
+  // Incomplete, or one this code does not know) is still being decided.
+  const pending = transactions.some(
+    (transaction) => !["successful", "error"].includes(transaction.status?.toLowerCase() ?? "")
   );
-  if (
-    !pending &&
-    pay.status === "pending" &&
-    (await getOzowPaymentRequestStatus(pay.provider_request_id)) === "Expired"
-  )
-    await command(service, "finish_unpaid_checkout", { p_payment_id: pay.id, p_status: "expired" });
-  return { checked: true, pendingTransaction: pending };
+  if (pending || pay.status !== "pending") return { checked: true, pendingTransaction: pending };
+  // While the request is open the member can still pay on it, so a declined
+  // attempt alone closes nothing here (its notice records it, as before).
+  const request = await getOzowPaymentRequestStatus(pay.provider_request_id);
+  if (request === "Created") return { checked: true, pendingTransaction: false };
+  // The request is closed (expired, or cancelled at Ozow or by the member): no
+  // attempt can succeed any more. A declined or cancelled bank attempt (Ozow
+  // status Error) records the payment as not paid, exactly as its notice
+  // would, so the member no longer waits on "Payment pending".
+  const declined = transactions.find(
+    (transaction) => transaction.status?.toLowerCase() === "error"
+  );
+  if (declined) {
+    const recorded = await applyTransaction(
+      service,
+      pay,
+      declined,
+      `reconciliation:${JSON.stringify(declined)}`
+    );
+    return {
+      checked: true,
+      pendingTransaction: false,
+      closed: (recorded as { outcome?: unknown } | null)?.outcome === "not_paid",
+    };
+  }
+  const finished = await command(service, "finish_unpaid_checkout", {
+    p_payment_id: pay.id,
+    p_status: request === "Cancelled" && cancelling ? "cancelled" : "expired",
+  });
+  return { checked: true, pendingTransaction: false, closed: finished === true };
 }
 
 export async function cancelFoundationPendingPayment(
@@ -475,14 +541,17 @@ export async function cancelFoundationPendingPayment(
       409,
       "Check this payment's status before starting another checkout"
     );
-  // A mock checkout has no provider evidence to close it with: refuse.
-  if (isMockCheckout(pay.provider_request_id)) throw new FoundationBillingError(409);
+  // A mock checkout has no provider evidence to close it with: refuse, except
+  // in the private test copy, whose stand-in answers for its own mock requests.
+  if (!canAskProvider(pay.provider_request_id)) throw new FoundationBillingError(409);
   await cancelOzowPaymentRequest(pay.provider_request_id);
   // A simultaneous settlement must win. The private row CAS and the provider
   // evidence both have to agree before the pending checkout is closed.
-  const result = await reconcileFoundationPayment(pay.id, service);
+  const result = await reconcileFoundationPayment(pay.id, service, { cancelling: true });
   if (!result.checked || result.pendingTransaction || result.settled)
     throw new FoundationBillingError(409, "The bank transaction is still being checked");
+  // The status check itself closed it from the provider's answer.
+  if (result.closed) return { success: true };
   if (
     (await command(service, "finish_unpaid_checkout", {
       p_payment_id: pay.id,
@@ -493,13 +562,31 @@ export async function cancelFoundationPendingPayment(
   return { success: true };
 }
 
+/** Closes pending payments that never got an Ozow request (a failed first
+ * call) after an hour, so the member's next checkout starts a new payment.
+ * Safe to repeat; payments with a request are left to the status check. */
+async function expireStaleCheckouts(service: FoundationServiceApi) {
+  return z
+    .number()
+    .int()
+    .nonnegative()
+    .parse(await command(service, "expire_stale_checkouts", { p_limit: 100 }));
+}
+
 export async function runFoundationPaymentReconciliation(service = createFoundationServiceApi()) {
+  let expired = 0;
+  let failures = 0;
+  try {
+    expired = await expireStaleCheckouts(service);
+  } catch {
+    // Counted as a failure; the status checks below still run.
+    failures++;
+  }
   const payments = z
     .array(foundationPaymentSchema)
     .max(50)
     .parse(await command(service, "list_reconcilable_payments", { p_limit: 20 }));
   let checked = 0;
-  let failures = 0;
   for (const pay of payments) {
     try {
       if ((await reconcileFoundationPayment(pay.id, service)).checked) checked++;
@@ -507,7 +594,7 @@ export async function runFoundationPaymentReconciliation(service = createFoundat
       failures++;
     }
   }
-  return { checked, failures };
+  return { checked, failures, expired };
 }
 
 export async function manageFoundationPlanMember(api: FoundationAuthenticatedApi, input: unknown) {
