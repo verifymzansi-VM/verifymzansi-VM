@@ -15,6 +15,7 @@ const credentialsSchema = z.strictObject({
 });
 
 export class FoundationPasswordAuthError extends Error {
+  override name = "FoundationPasswordAuthError";
   constructor(
     readonly status: 400 | 401 | 429 | 503,
     readonly code?: "email_not_confirmed"

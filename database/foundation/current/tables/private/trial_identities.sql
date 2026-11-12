@@ -21,4 +21,5 @@ create table private.trial_identities (
 alter table private.trial_identities owner to postgres;
 alter table private.trial_identities enable row level security;
 CREATE INDEX trial_identities_expiry_idx ON private.trial_identities USING btree (retain_until) WHERE (retain_until IS NOT NULL);
+CREATE INDEX trial_identities_owner_id_idx ON private.trial_identities USING btree (owner_id) WHERE (owner_id IS NOT NULL);
 revoke all on private.trial_identities from public;

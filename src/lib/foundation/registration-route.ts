@@ -4,6 +4,7 @@ import { normalizeSaPhone } from "../utils/phone";
 import { buildAuthCallbackUrl } from "../utils/auth-redirect";
 import { FOUNDATION_POST_SIGNUP_PATH } from "./auth-navigation";
 import { FoundationRegistrationError, registerFoundationAccount } from "./registration";
+import { foundationRegistrationReply } from "./registration-message";
 import { handleFoundationAuthAttempt } from "./auth-attempt-route";
 import { registrationDisplayName } from "./registration-display-name";
 
@@ -47,10 +48,7 @@ export function handleFoundationRegistration(request: NextRequest, legacyForm = 
         undefined,
         hints
       );
-      return {
-        ok: true,
-        message: "If registration is available for this email, check your inbox to continue.",
-      };
+      return foundationRegistrationReply();
     },
     refusal: (error) =>
       error instanceof FoundationRegistrationError

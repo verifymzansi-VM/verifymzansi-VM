@@ -17,12 +17,13 @@ import { foundationNoStore, type FoundationRefusal } from "@/lib/foundation/owne
 import { verifyPublicTurnstile } from "@/lib/utils/public-mutation-route";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import type { Logger } from "@/lib/utils/logger";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 
 type EnquiryCommand = ReturnType<typeof buildFoundationEnquiry>;
 
-const unavailable = () =>
+const unavailable = (reference: string) =>
   NextResponse.json(
-    { error: "Messages are temporarily unavailable" },
+    { error: "Messages are temporarily unavailable", reference },
     { status: 503, headers: foundationNoStore }
   );
 
@@ -123,9 +124,16 @@ export async function submitPublicEnquiry({
   let context: ReturnType<typeof createFoundationRouteContext>;
   try {
     context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
-  } catch {
-    return unavailable();
+  } catch (error) {
+    return unavailable(
+      logRequestFailure(log, "Foundation binding unavailable", {
+        request,
+        error,
+        action: "contact:send",
+      })
+    );
   }
+  let service: ReturnType<typeof createFoundationServiceApi> | undefined;
   try {
     let sender: string | null = null;
     try {
@@ -133,7 +141,15 @@ export async function submitPublicEnquiry({
     } catch (error) {
       // No or expired session: a signed-out visitor. Never guess an identity.
       if (!(error instanceof FoundationSessionError) || error.status === 503)
-        return context.respond(unavailable());
+        return context.respond(
+          unavailable(
+            logRequestFailure(log, "Foundation session check unavailable", {
+              request,
+              error,
+              action: "contact:send",
+            })
+          )
+        );
     }
     const limit = await checkRateLimit({
       key: sender ?? getClientRateLimitIdentity(request).key,
@@ -171,7 +187,7 @@ export async function submitPublicEnquiry({
           { status: 403 }
         )
       );
-    const service = createFoundationServiceApi();
+    service = createFoundationServiceApi();
     try {
       await submitFoundationEnquiry(service, command);
     } catch (error) {
@@ -186,11 +202,21 @@ export async function submitPublicEnquiry({
     return context.respond(NextResponse.json({ success: true }));
   } catch (error) {
     const known = refusal(error);
-    if (known)
-      return context.respond(
-        NextResponse.json({ error: known.error, reason: known.reason }, { status: known.status })
-      );
-    log.error("Foundation enquiry failed");
-    return context.respond(unavailable());
+    const logFailure = () =>
+      logRequestFailure(log, "Foundation enquiry failed", {
+        request,
+        error,
+        api: service,
+        action: "contact:send",
+      });
+    if (!known) return context.respond(unavailable(logFailure()));
+    // A refusal that means "unavailable" (5xx) is still a failure to explain.
+    const reference = known.status >= 500 ? logFailure() : undefined;
+    return context.respond(
+      NextResponse.json(
+        { error: known.error, reason: known.reason, ...(reference ? { reference } : {}) },
+        { status: known.status }
+      )
+    );
   }
 }

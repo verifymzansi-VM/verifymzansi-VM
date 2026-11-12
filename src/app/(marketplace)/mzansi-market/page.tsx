@@ -36,9 +36,6 @@ export const metadata: Metadata = {
   },
 };
 
-/** Revalidate marketplace data every 60 seconds (ISR) */
-export const revalidate = 60;
-
 export default async function MzansiMarketPage() {
   const jsonLd = {
     "@context": "https://schema.org",

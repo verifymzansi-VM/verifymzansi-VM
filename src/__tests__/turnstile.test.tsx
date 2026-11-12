@@ -220,6 +220,49 @@ describe("TurnstileWidget", () => {
     expect(mockTurnstileRemove).toHaveBeenCalledTimes(1);
   });
 
+  it("renders the requested size and keeps Cloudflare's default appearance unless asked", async () => {
+    render(<TurnstileWidget onSuccess={vi.fn()} size="compact" />);
+    await waitFor(() => expect(mockTurnstileRender).toHaveBeenCalledTimes(1));
+    const [, options] = mockTurnstileRender.mock.calls[0] as unknown as [
+      HTMLElement,
+      Record<string, unknown>,
+    ];
+    expect(options.size).toBe("compact");
+    expect(options).not.toHaveProperty("appearance");
+  });
+
+  it("passes interaction-only so the check stays out of sight unless a click is needed", async () => {
+    render(<TurnstileWidget onSuccess={vi.fn()} size="compact" appearance="interaction-only" />);
+    await waitFor(() => expect(mockTurnstileRender).toHaveBeenCalledTimes(1));
+    const [, options] = mockTurnstileRender.mock.calls[0] as unknown as [
+      HTMLElement,
+      Record<string, unknown>,
+    ];
+    expect(options).toMatchObject({ size: "compact", appearance: "interaction-only" });
+  });
+
+  it.each([
+    [256, "compact"],
+    [299, "compact"],
+    [300, "flexible"],
+    [400, "flexible"],
+  ])("a flexible widget in a %i px box renders %s", async (width, expected) => {
+    const clientWidth = vi
+      .spyOn(HTMLElement.prototype, "clientWidth", "get")
+      .mockReturnValue(width);
+    try {
+      render(<TurnstileWidget onSuccess={vi.fn()} size="flexible" />);
+      await waitFor(() => expect(mockTurnstileRender).toHaveBeenCalledTimes(1));
+      const [, options] = mockTurnstileRender.mock.calls[0] as unknown as [
+        HTMLElement,
+        Record<string, unknown>,
+      ];
+      expect(options.size).toBe(expected);
+    } finally {
+      clientWidth.mockRestore();
+    }
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });

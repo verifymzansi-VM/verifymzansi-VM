@@ -78,11 +78,9 @@ Postgres data, RLS, and migrations.
 
 ## Media Flow
 
-- `src/app/api/media/upload/route.ts`: server-mediated media upload path
-  (`src/app/api/media/upload/foundation.ts`).
-- `src/app/api/media/upload-url/route.ts` and
-  `src/app/api/media/upload-complete/route.ts`: retired direct-to-R2 upload
-  routes; both answer 410.
+- `src/app/api/media/upload/route.ts`: server-mediated media upload path, used
+  for photos and videos (`src/app/api/media/upload/foundation.ts`; the
+  direct-to-R2 upload routes are retired).
 - `src/app/api/media/serve/[...key]/route.ts`: media proxy/serving path.
 - `src/lib/services/storage.ts`: native R2 binding support, S3-compatible R2
   fallback, encrypted KYC upload/download, and safe storage key checks.
