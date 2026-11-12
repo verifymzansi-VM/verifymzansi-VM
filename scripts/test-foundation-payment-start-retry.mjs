@@ -23,8 +23,12 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { replaySteps } from "./lib/foundation-replay.mjs";
-import { createChecks, sqlHelpers } from "./lib/foundation-sql-checks.mjs";
+import {
+  applyStepsBefore,
+  assertReadOnlyPreflight,
+  createChecks,
+  sqlHelpers,
+} from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
 const UPDATE = "20261111212320_payment_start_retry.sql";
@@ -41,11 +45,7 @@ const { check, current, passed: checks } = createChecks();
 const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
-  const { steps } = replaySteps();
-  const index = steps.findIndex((step) => step.label === UPDATE);
-  assert.ok(index > 0, `${UPDATE} is missing`);
-  const step = steps[index];
-  applySteps(database, steps.slice(0, index));
+  const { steps, index, step } = applyStepsBefore(database, UPDATE);
 
   // ---------------------------------------------------------------- helpers
   const { q, json, fails, member, service } = sqlHelpers(database, current);
@@ -150,15 +150,7 @@ try {
       rows[0][1],
       /^payment start retry: reviewed bodies, update not applied \(apply before the website release that uses it is deployed\); pending without an Ozow request: 1; of which the sweep will expire: 0$/
     );
-    const write = database.psql(`${PREFLIGHT}\ncreate table vmtest.marker(id uuid);`, [
-      "-A",
-      "-t",
-      "-1",
-      "-v",
-      "VERBOSITY=verbose",
-    ]);
-    assert.notEqual(write.status, 0);
-    assert.match(write.stderr, /ERROR:\s+25006:/);
+    assertReadOnlyPreflight(database, PREFLIGHT);
   });
   await check("drift and a premature rollback are refused", () => {
     const before = fingerprint();

@@ -1,8 +1,10 @@
 // Shared helpers for the behaviour checks that run against the throwaway SQL
-// lint container (scripts/test-foundation-staff-rules.mjs,
-// scripts/test-foundation-selfie-capture.mjs): named checks, psql calls that
-// fail with the current check's name, and synthetic API-role sessions.
+// lint container (scripts/test-foundation-*.mjs): named checks, psql calls that
+// fail with the current check's name, synthetic API-role sessions, replaying
+// the updates before the one under test and the read-only preflight check.
 import assert from "node:assert/strict";
+import { replaySteps } from "./foundation-replay.mjs";
+import { applySteps } from "./foundation-sql-lint.mjs";
 
 /** Named checks; `current()` is the check that is running (for messages). */
 export function createChecks() {
@@ -56,4 +58,28 @@ export function sqlHelpers(database, current) {
     as({ ...claims(user), aal: "aal2", amr: [{ method: "totp", timestamp: totpAt }] }, sql);
   const service = (sql) => `set role service_role;\n${sql}`;
   return { run, q, json, fails, claims, as, member, staff, service };
+}
+
+/** Replays prelude, candidate.sql and every update before `update` into
+ * `database`; returns the replay steps, the update's index and its step. */
+export function applyStepsBefore(database, update) {
+  const { steps } = replaySteps();
+  const index = steps.findIndex((step) => step.label === update);
+  assert.ok(index > 0, `${update} is missing`);
+  applySteps(database, steps.slice(0, index));
+  return { steps, index, step: steps[index] };
+}
+
+/** A preflight must not write: in one read-only transaction, a write after it
+ * fails with 25006. */
+export function assertReadOnlyPreflight(database, preflight) {
+  const write = database.psql(`${preflight}\ncreate table vmtest.marker(id uuid);`, [
+    "-A",
+    "-t",
+    "-1",
+    "-v",
+    "VERBOSITY=verbose",
+  ]);
+  assert.notEqual(write.status, 0);
+  assert.match(write.stderr, /ERROR:\s+25006:/);
 }
