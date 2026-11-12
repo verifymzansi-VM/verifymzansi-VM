@@ -76,8 +76,9 @@ their deadline from the rule, one extension at most, identity verification
 before completion or export, and never processing by the requester; report
 warnings, content hides and appeals keep reviewers independent; a stale mail
 outbox lease cannot acknowledge a delivery; and the activation limit per period
-holds with free slots. These checks replace ones that earlier ran only on the
-older prototype fixture (`scripts/test-restored-post-commands.mjs`).
+holds with free slots. These checks complement the ones in
+`scripts/test-restored-post-commands.mjs`, which still runs on the older
+prototype fixture with only some of the updates.
 
 An update that backfills existing rows or is hard to undo can come with two
 reviewed companions named after it, which the replay never applies:
@@ -198,11 +199,15 @@ What each part of `pnpm test:foundation:native` proves:
   `candidate.sql` was assembled from, plus fixture-only drivers, with **none**
   of the files in `updates/` applied. The suite checks that every installed
   function body matches those prototypes, so its results describe the baseline
-  behaviour, not the bodies production runs after the updates. Behaviour that an
-  update changed is tested on the replayed schema by
+  behaviour, not the bodies production runs after the updates. On the replayed
+  schema (`candidate.sql` plus every update), the CI job `foundation-sql-lint`
+  tests the behaviour of four updates with
   `scripts/test-foundation-lifecycle-guards.mjs`
-  (`pnpm db:foundation:lifecycle-test`, CI job `foundation-sql-lint`), which
-  builds `candidate.sql` plus every update.
+  (`pnpm db:foundation:lifecycle-test`): `20261109073519_post_lifecycle_guards`,
+  `20261109104020_post_expiry_rules`, `20261109224337_fix_post_command_target`
+  and `20261110045944_intro_trial_at_first_approval`. It tests the staff rules
+  listed above with `scripts/test-foundation-staff-rules.mjs`. Other updates are
+  not behaviour-tested on the replayed schema by these two scripts.
 - `scripts/test-restored-post-commands.mjs` applies a fixed list of 44 of the
   update files on top of that prototype fixture inside one transaction, tests
   the restored-frontend commands (posting forms, staff moderation, identity

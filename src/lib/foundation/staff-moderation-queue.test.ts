@@ -284,6 +284,10 @@ describe("readStaffModerationQueue", () => {
     );
   });
 
+  // Deliberately pins today's behaviour: this reader treats EVERY 42501 as a
+  // second-factor refusal (mfaRequired), whatever the message says, so a lost
+  // role also sends staff to re-verify first. Change this test only together
+  // with the reader if it ever tells the two refusals apart.
   it.each([
     ["42501", 403, true],
     ["XX000", 503, false],
