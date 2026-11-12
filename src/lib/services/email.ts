@@ -111,6 +111,12 @@ const platformNotices = {
     "New enquiry",
     "A member sent you an enquiry. Sign in to read it and manage the conversation.",
   ],
+  // Says only that the ID was sent back: the reviewer's reason and any identity
+  // details stay on the verification page, behind sign-in.
+  verification_returned: [
+    "Your ID check needs another look",
+    "We could not complete your ID check, so we have sent it back to you. Sign in and open the verification page to see why and what to do next.",
+  ],
 } as const;
 export type PlatformNoticeKind = keyof typeof platformNotices;
 /** What the notification job knows about the post a lifecycle notice is about,
@@ -184,7 +190,9 @@ export async function sendPlatformNotice(
           ? "/billing"
           : kind === "enquiry_received"
             ? "/dashboard/leads"
-            : kind === "identity_accepted" || kind === "verification_phone_confirmed"
+            : kind === "identity_accepted" ||
+                kind === "verification_phone_confirmed" ||
+                kind === "verification_returned"
               ? "/verification"
               : "/dashboard";
   return sendEmail({
