@@ -74,8 +74,7 @@ export function SlotUsageCard({ entries }: { entries: SlotUsageEntry[] }) {
 
         {current.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No active plan. Ended posts are deleted after 3 days — reactivate them from R50 / 30
-            days.
+            No active plan. Ended posts are deleted after 3 days. Paid slots open soon.
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">

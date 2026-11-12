@@ -18,22 +18,21 @@ import {
 } from "./pricing";
 
 describe("retail pricing ladder", () => {
-  it("sells R50 / 30 days, R140 / 90 days and R250 / 180 days (Document 03)", () => {
+  it("prices an Individual slot at R69 for each 30 days: R69, R207 or R414 (Terms)", () => {
     expect(RETAIL_OFFERS.map((o) => [o.tier, o.priceCents, o.durationDays])).toEqual([
-      ["month", 5000, 30],
-      ["quarter", 14000, 90],
-      ["half_year", 25000, 180],
+      ["month", 6900, 30],
+      ["quarter", 20700, 90],
+      ["half_year", 41400, 180],
     ]);
   });
 
-  it("labels the longer terms and states the saving against 30-day plans", () => {
-    const [month, quarter, half] = RETAIL_OFFERS;
-    expect(month?.promoLabel).toBe("Flexible");
-    expect(quarter?.promoLabel).toBe("Popular");
-    expect(half?.promoLabel).toBe("Best value");
-    expect(getRetailSavingsCents(quarter!)).toBe(1000);
-    expect(getRetailSavingsCents(half!)).toBe(5000);
-    expect(getRetailSavingsCents(month!)).toBe(0);
+  it("gives longer terms no discount, saving or promotional label", () => {
+    for (const offer of RETAIL_OFFERS) {
+      expect(offer.promoLabel).toBe("");
+      expect(offer.compareAtCents).toBeUndefined();
+      expect(getRetailSavingsCents(offer)).toBe(0);
+      expect((offer.priceCents * 30) / offer.durationDays).toBe(6900);
+    }
   });
 
   it("defines one retail plan per area and duration, each with one reusable slot", () => {
@@ -105,7 +104,7 @@ describe("pricing constants", () => {
 
 describe("getPlan", () => {
   it("finds retail and legacy plans", () => {
-    expect(getPlan("MZANSI_BUSINESS", "half_year")?.priceCents).toBe(25000);
+    expect(getPlan("MZANSI_BUSINESS", "half_year")?.priceCents).toBe(41400);
     const legacy = getPlan("MZANSI_BUSINESS", "growth");
     expect(legacy?.legacy).toBe(true);
     expect(legacy?.priceCents).toBe(40000);

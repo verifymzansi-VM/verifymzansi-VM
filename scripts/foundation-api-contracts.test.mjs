@@ -138,15 +138,35 @@ test("posting terms published after the baseline must come from a database updat
   const recorded = JSON.parse(
     readFileSync("database/foundation/assembly.json", "utf8")
   ).postingTermsCatalogue;
-  const update = readFileSync(
+  const v3 = readFileSync(
     "database/foundation/updates/20261109173012_posting_terms_v3.sql",
     "utf8"
   );
+  const v4 = readFileSync(
+    "database/foundation/updates/20261112122001_publish_posting_terms_v4.sql",
+    "utf8"
+  );
+  const switchToV4 = readFileSync(
+    "database/foundation/updates/20261112173841_switch_posting_terms_v4.sql",
+    "utf8"
+  );
+  const update = [v3, v4, switchToV4].join("\n");
   assert.equal(check(recorded, update), recorded);
   assert.throws(() => check(recorded, ""), /posting-v3 is not published by a database update/);
   assert.throws(
     () => check(recorded, update.replaceAll("p2X2YRoa", "q2X2YRoa")),
     /posting-v3 is not published by a database update/
+  );
+  // posting-v4 is published by its own update, which never makes it current;
+  // the switch makes it current, as the catalogue's active version says.
+  assert.throws(
+    () => check(recorded, [v3, switchToV4].join("\n")),
+    /posting-v4 is not published by a database update/
+  );
+  assert.equal(v4.includes("update private.posting_terms_current"), false);
+  assert.throws(
+    () => check(recorded, [v3, v4].join("\n")),
+    /differ from the version the database updates make current/
   );
   assert.throws(
     () =>

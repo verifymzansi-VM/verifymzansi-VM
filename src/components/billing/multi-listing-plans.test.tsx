@@ -33,12 +33,8 @@ describe("MultiListingPlans", () => {
 });
 
 describe("MultiListingNudge", () => {
-  it("links the posting flow to the multi-listing page", () => {
-    render(<MultiListingNudge emphasis="strong" />);
-    expect(screen.getByText("Need more posts live at once?")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /See multi-listing plans/ })).toHaveAttribute(
-      "href",
-      "/pricing/multi-listing"
-    );
+  it("shows nothing while multi-listing is not on sale", () => {
+    const { container } = render(<MultiListingNudge emphasis="strong" />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

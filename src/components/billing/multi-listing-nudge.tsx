@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Building2 } from "lucide-react";
-import { ENTERPRISE_QUOTE_ABOVE_SLOTS } from "@/lib/constants/pricing";
+import { ENTERPRISE_QUOTE_ABOVE_SLOTS, PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import { cn } from "@/lib/utils";
 
 const MULTI_LISTING_HREF = "/pricing/multi-listing";
@@ -19,6 +19,8 @@ export function MultiListingNudge({
   className?: string;
 }) {
   const strong = emphasis === "strong";
+  // Hidden while multi-listing is not on sale (posting-v4 does not describe it).
+  if (!PACKAGES_ON_SALE) return null;
   return (
     <aside
       aria-label="Multi-listing plans"
