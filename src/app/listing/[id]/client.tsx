@@ -11,6 +11,7 @@ import { normalizeMediaUrls } from "@/lib/utils/media-url";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { useHorizontalSwipeNavigation } from "@/hooks/use-horizontal-swipe-navigation";
 import { useTrackContentView } from "@/hooks/use-track-content-view";
+import { PostMediaCaption, useMediaPlaying } from "@/components/listings/poster-caption";
 
 interface ListingDetailClientProps {
   photos: string[];
@@ -24,6 +25,8 @@ interface ListingDetailClientProps {
   heroMediaClassName?: string;
   trackView?: boolean;
   onViewRecorded?: () => void;
+  /** The showroom card's price, title and place, shown over the main photo on phones. */
+  caption?: { eyebrow: string | null; location: string | null; logoUrl?: string | null };
 }
 
 type MediaKind = "photo" | "video";
@@ -77,6 +80,7 @@ export function ListingDetailClient({
   heroMediaClassName,
   trackView = true,
   onViewRecorded,
+  caption,
 }: ListingDetailClientProps) {
   useTrackContentView(listingId, "listing", trackView, onViewRecorded);
   const normalizedPhotos = normalizeMediaUrls(photos).filter(Boolean);
@@ -142,6 +146,7 @@ export function ListingDetailClient({
   const shouldUseUnoptimizedImage = isBlobOrDataUrl(activeUrl);
   const canPrevious = activeIndex > 0;
   const canNext = activeIndex < orderedMedia.length - 1;
+  const media = useMediaPlaying(`${activeIndex}:${activeUrl}:${videoRetries}`);
 
   const goTo = useCallback(
     (index: number) => {
@@ -174,6 +179,7 @@ export function ListingDetailClient({
       <div
         className="relative group overflow-hidden rounded-xl bg-warm-100 dark:bg-warm-800 touch-pan-y"
         {...swipeHandlers}
+        {...media.handlers}
       >
         <div className={`${heroAspectClassName} relative`}>
           {!hasActiveUrl ? (
@@ -280,6 +286,17 @@ export function ListingDetailClient({
               </button>
             </>
           )}
+
+          {caption && hasActiveUrl ? (
+            <PostMediaCaption
+              eyebrow={caption.eyebrow}
+              title={title}
+              location={caption.location}
+              logoUrl={caption.logoUrl}
+              overVideo={isVideo && !videoError}
+              playing={media.playing}
+            />
+          ) : null}
 
           {/* Image counter */}
           {orderedMedia.length > 1 && (
