@@ -19,6 +19,10 @@ import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
 import postingTermsCatalogue from "@/lib/legal/terms-documents/catalogue.json";
 import { getDataBackend } from "@/lib/data-backend";
 import {
+  dropIncomingFoundationPageSession,
+  forwardFoundationPageSession,
+} from "@/lib/foundation/page-session-handoff";
+import {
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
   ENGAGEMENT_VIEWER_COOKIE_MAX_AGE_SECONDS,
@@ -416,11 +420,13 @@ function ensureViewerCookie(request: NextRequest, response: NextResponse): void 
 }
 
 export async function handleMiddlewareRequest(request: NextRequest): Promise<NextResponse> {
+  // Only the page gate may hand a verified account to the page render.
+  dropIncomingFoundationPageSession(request);
   try {
     const routeResponse = await routeRequest(request);
     ensureViewerCookie(request, routeResponse);
     addReferenceTiming(request, routeResponse);
-    return withSecurityHeaders(request, routeResponse);
+    return forwardFoundationPageSession(request, withSecurityHeaders(request, routeResponse));
   } catch (error) {
     const reference = logRequestFailure(logger, "Middleware request handler failed", {
       request,
@@ -448,7 +454,7 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       // A public pass-through still needs the normal forwarded nonce policy.
       // If header construction is what failed, degrade to the basic headers.
       try {
-        return withSecurityHeaders(request, fallback);
+        return forwardFoundationPageSession(request, withSecurityHeaders(request, fallback));
       } catch {
         fallback.headers.set("X-Content-Type-Options", "nosniff");
         fallback.headers.set("X-Frame-Options", "DENY");
@@ -456,6 +462,6 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       }
     }
 
-    return fallback;
+    return forwardFoundationPageSession(request, fallback);
   }
 }
