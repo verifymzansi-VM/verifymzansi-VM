@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parseFoundationConnection } from "./connection";
 import type { FoundationRuntimePublicDatabase as FoundationPublicDatabase } from "../../../database/foundation/runtime-api-types";
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
+import { createFoundationCallRecorder } from "./call-failures";
 
 export type FoundationPublicApi = Pick<SupabaseClient<FoundationPublicDatabase, "api">, "rpc">;
 
@@ -28,10 +29,11 @@ export function createFoundationPublicApi(
   fetcher: typeof fetch = createTimeoutFetch()
 ): FoundationPublicApi {
   const config = parseFoundationConnection(input);
+  const recorder = createFoundationCallRecorder(fetcher);
   const client = createClient<FoundationPublicDatabase, "api">(
     config.url,
     config.publishableKey,
-    foundationRpcClientOptions(fetcher)
+    foundationRpcClientOptions(recorder.fetch)
   );
-  return Object.freeze({ rpc: client.rpc.bind(client) });
+  return recorder.attach(Object.freeze({ rpc: client.rpc.bind(client) }));
 }

@@ -391,8 +391,18 @@ test("the live comparison sends only the publishable key and reports a missing c
     assert.equal(init.headers.Authorization, undefined);
     assert.equal(init.credentials, "omit");
   }
-  assert.deepEqual(drift.behind, [introducing]);
-  assert.match(lines[0].text, new RegExp(`production database behind by 1: ${introducing}`));
+  // Pending updates that add no command cannot be seen live, so they count as
+  // behind too (the register says production lacks them).
+  const introduced = introducingUpdates(runtime);
+  const unseenPending = parseUpdateRegister(readFileSync(path.join(repo, UPDATES_README), "utf8"))
+    .rows.filter((row) => row.kind === "pending" && !(introduced.get(row.file)?.length > 0))
+    .map((row) => row.file);
+  const behind = [introducing, ...unseenPending].sort();
+  assert.deepEqual([...drift.behind].sort(), behind);
+  assert.match(
+    lines[0].text,
+    new RegExp(`production database behind by ${behind.length}: .*${introducing}`)
+  );
 });
 
 // Throwaway local probe: a temporary git repository with the real manifests,

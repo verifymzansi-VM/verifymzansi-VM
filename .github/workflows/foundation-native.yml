@@ -59,7 +59,7 @@ jobs:
             echo "::warning::Could not list the changed files; running the full suite."
             exit 0
           fi
-          inputs='^(database/foundation/|docs/backend-foundation/prototypes/|src/lib/|src/types/|src/app/api/|scripts/lib/foundation-|scripts/(test|prepare|start|stop|reset)-foundation-native\.mjs$|scripts/probe-foundation-|scripts/foundation-native-|package\.json$|pnpm-lock\.yaml$|\.github/workflows/foundation-native\.yml$)'
+          inputs='^(database/foundation/|docs/backend-foundation/prototypes/|src/lib/|src/types/|src/app/api/|scripts/lib/foundation-|scripts/(test|prepare|start|stop|reset)-foundation-native\.mjs$|scripts/test-restored-post-commands\.mjs$|scripts/probe-foundation-|scripts/foundation-native-|package\.json$|pnpm-lock\.yaml$|\.github/workflows/foundation-native\.yml$)'
           matched="$(printf '%s\n' "$changed" | grep -E "$inputs" || true)"
           if [ -n "$matched" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -107,6 +107,7 @@ jobs:
             docs/backend-foundation/evidence/native-*/results.json
             docs/backend-foundation/evidence/staff-read-*.json
             docs/backend-foundation/prototypes/native-api-types.ts
+            tmp/backend-reconciliation/native-post-commands.json
       - name: Stop the local fixture stack
         if: always() && steps.scope.outputs.run == 'true'
         run: pnpm foundation:native:stop

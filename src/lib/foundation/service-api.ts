@@ -6,6 +6,7 @@ import type { FoundationRuntimeServiceDatabase as FoundationServiceDatabase } fr
 import { createTimeoutFetch } from "../supabase/fetch-with-timeout";
 import { readFoundationRuntimeConnection } from "./runtime-connection";
 import { foundationRpcClientOptions } from "./public-api";
+import { createFoundationCallRecorder } from "./call-failures";
 
 export type FoundationServiceApi = Pick<SupabaseClient<FoundationServiceDatabase, "api">, "rpc">;
 const secretKey = z.string().regex(/^sb_secret_[A-Za-z0-9_-]+$/);
@@ -21,10 +22,11 @@ export function createFoundationServiceApi(
   const connection = readFoundationRuntimeConnection(environment);
   const key = secretKey.safeParse(environment.FOUNDATION_SUPABASE_SECRET_KEY);
   if (!key.success) throw new Error("Foundation service binding is unavailable");
+  const recorder = createFoundationCallRecorder(fetcher);
   const client = createClient<FoundationServiceDatabase, "api">(
     connection.url,
     key.data,
-    foundationRpcClientOptions(fetcher)
+    foundationRpcClientOptions(recorder.fetch)
   );
-  return Object.freeze({ rpc: client.rpc.bind(client) });
+  return recorder.attach(Object.freeze({ rpc: client.rpc.bind(client) }));
 }

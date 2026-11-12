@@ -226,6 +226,62 @@ describe("PromotionsExplorer", () => {
     expect(eventsTab).toHaveClass("text-amber-800");
   });
 
+  it("gives the selected Events tab dark text on its amber fill (contrast at least 4.5:1)", async () => {
+    useSearchParamsMock.mockReturnValue(
+      new URLSearchParams("tab=events&type=event") as ReturnType<typeof useSearchParamsMock>
+    );
+
+    render(<PromotionsExplorer />);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    const eventsTab = screen.getByRole("tab", { name: /Events/i });
+    expect(eventsTab).toHaveAttribute("aria-selected", "true");
+    expect(eventsTab).toHaveClass("bg-amber-500");
+    expect(eventsTab).toHaveClass("text-amber-950");
+    expect(eventsTab).not.toHaveClass("text-white");
+  });
+
+  it.each([
+    ["", "No stays or events yet"],
+    ["tab=tourism", "No stays or places yet"],
+    ["tab=events&type=event", "No events yet"],
+  ])("says the area is empty, not filtered, when nothing is posted (%s)", async (query, title) => {
+    useSearchParamsMock.mockReturnValue(
+      new URLSearchParams(query) as ReturnType<typeof useSearchParamsMock>
+    );
+
+    render(<PromotionsExplorer />);
+
+    const empty = await screen.findByTestId("promotions-grid-empty");
+    expect(empty).toHaveAttribute("data-grid-state", "empty");
+    expect(within(empty).getByText(title)).toBeInTheDocument();
+    expect(
+      within(empty).getByText("Be the first ID-reviewed host to list on Tourism & Events.")
+    ).toBeInTheDocument();
+    expect(within(empty).queryByRole("button", { name: /clear all filters/i })).toBeNull();
+    expect(within(empty).queryByText(/match your filters/i)).toBeNull();
+  });
+
+  it.each(["province=Gauteng", "page=9"])(
+    "keeps the filter message and Clear all filters when nothing matches (%s)",
+    async (query) => {
+      useSearchParamsMock.mockReturnValue(
+        new URLSearchParams(query) as ReturnType<typeof useSearchParamsMock>
+      );
+
+      render(<PromotionsExplorer />);
+
+      const empty = await screen.findByTestId("promotions-grid-empty");
+      expect(empty).toHaveAttribute("data-grid-state", "filtered-empty");
+      expect(within(empty).getByText("Nothing matches your filters")).toBeInTheDocument();
+      fireEvent.click(within(empty).getByRole("button", { name: /clear all filters/i }));
+      expect(replaceMock).toHaveBeenCalledWith("/tourism-events", expect.anything());
+    }
+  );
+
   it("switches to Events tab and updates the query string", async () => {
     render(<PromotionsExplorer />);
 

@@ -8,7 +8,9 @@ import {
   type PostLifecycleDetails,
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
+import { runFoundationPaymentAlerts, type PaymentAlertStep } from "./payment-alerts";
 import { createLogger } from "../utils/logger";
+import { hasDatabaseMessage } from "./error-reasons";
 
 const log = createLogger("FoundationOperationJobs");
 const kind = z.enum([
@@ -31,6 +33,7 @@ const kind = z.enum([
   "business_check_update",
   "post_sold",
   "post_kept",
+  "verification_returned",
 ]);
 type Kind = z.infer<typeof kind>;
 // Payment messages are claimed before every other kind.
@@ -40,16 +43,23 @@ const paymentKinds: Kind[] = [
   "payment_reconciliation_required",
 ];
 const otherKinds = kind.options.filter((k) => !paymentKinds.includes(k));
-// Kinds a database without update 20261109104020_post_expiry_rules.sql does
-// not accept: against such a database the job claims the earlier list.
-const laterKinds = new Set<Kind>(["post_sold", "post_kept"]);
+// Kinds an earlier database does not accept, newest update first: against
+// such a database the job drops them one update at a time until the claim is
+// accepted, and keeps that list.
+const laterKinds: ReadonlyArray<ReadonlySet<Kind>> = [
+  // 20261110173012_verification_returned_notice.sql
+  new Set<Kind>(["verification_returned"]),
+  // 20261109104020_post_expiry_rules.sql
+  new Set<Kind>(["post_sold", "post_kept"]),
+];
 const lifecycleKinds = new Set<Kind>(["post_expired", "post_sold", "post_kept"]);
 // That database refuses the longer list for its length or for an unknown
 // kind; any other refusal is reported, not retried.
 function refusedNewerKinds(error: { code?: string; message?: string } | null) {
   return (
     error?.code === "22023" &&
-    (error.message === "supported mail kinds required" || error.message === "unsupported mail kind")
+    (hasDatabaseMessage(error, "supportedMailKindsRequired") ||
+      hasDatabaseMessage(error, "unsupportedMailKind"))
   );
 }
 
@@ -141,6 +151,8 @@ type Lost = { id: string; kind: string; maybeDelivered?: boolean };
 type StaffAlert = (lost: Lost[]) => Promise<{ success: boolean; outcomeUnknown?: boolean }>;
 export interface OperationJobOptions {
   alertStaff?: StaffAlert;
+  /** The payment alert and daily payment summary step (./payment-alerts.ts). */
+  paymentAlerts?: PaymentAlertStep;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -172,6 +184,7 @@ export async function runFoundationOperationJobs(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const alertStaff = options.alertStaff ?? sendOutboxFinalFailureAlert;
+  const paymentAlerts = options.paymentAlerts ?? ((context) => runFoundationPaymentAlerts(context));
   const deadline = now() + RUN_DEADLINE_MS;
   const failed: string[] = [];
   const summary: OperationJobSummary = { claimed: 0, succeeded: 0, retrying: 0, lost: 0, failed };
@@ -232,11 +245,15 @@ export async function runFoundationOperationJobs(
     typeof attempts === "number" && attempts >= OUTBOX_FINAL_ATTEMPT;
 
   let otherList: Kind[] = otherKinds;
+  // How many of the newest groups of `laterKinds` this run has dropped.
+  let dropped = 0;
   const claim = async (step: string, kinds: Kind[]) => {
     const args = (list: Kind[]) => ({ p_limit: 1, p_supported_kinds: list });
     let result = await call("claim_supported_notification_outbox", args(kinds), claimSignal);
-    if (kinds === otherList && refusedNewerKinds(result.error)) {
-      otherList = otherKinds.filter((k) => !laterKinds.has(k));
+    while (kinds === otherList && dropped < laterKinds.length && refusedNewerKinds(result.error)) {
+      const newest = laterKinds[dropped++];
+      otherList = otherList.filter((k) => !newest.has(k));
+      kinds = otherList;
       result = await call("claim_supported_notification_outbox", args(otherList), claimSignal);
     }
     const rows = z.array(z.unknown()).max(1).safeParse(result.data);
@@ -375,11 +392,23 @@ export async function runFoundationOperationJobs(
   };
 
   const emails = (async () => {
-    // Payment messages first, then privacy-request notices (legally timed,
-    // rare), then every other kind.
+    // Payment messages to members first, then staff payment alerts (at most
+    // two sends: new problems, and the daily summary when due), then
+    // privacy-request notices (legally timed, rare), then every other kind.
     const payments = await outbox("claim:payment", () => paymentKinds, OUTBOX_RUN_LIMIT);
-    // A loss on the last payment slot is reported before the privacy notices.
+    // A loss on the last payment slot is reported before anything else.
     if (alertDue()) await alertLost();
+    try {
+      for (const step of await paymentAlerts({
+        call,
+        claimSignal,
+        canClaim: () => timeToClaim() && timeToSend(),
+        pace: paced,
+      }))
+        fail(step);
+    } catch {
+      fail("payment_alert");
+    }
     for (let i = 0; i < PRIVACY_RUN_LIMIT && timeToClaim(); i++) {
       let privacy;
       try {

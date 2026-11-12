@@ -82,12 +82,20 @@ describe("detectMimeFromMagicBytes", () => {
     expect(detectMimeFromMagicBytes(buf)).toBe("application/zip");
   });
 
+  it("does not mistake a near-ZIP signature for a ZIP", () => {
+    expect(detectMimeFromMagicBytes(makeBuffer([0x50, 0x4b, 0x03, 0x05]))).toBeNull();
+  });
+
   it("returns null for empty buffer", () => {
     expect(detectMimeFromMagicBytes(new Uint8Array(0))).toBeNull();
   });
 
   it("returns null for too-small buffer", () => {
     expect(detectMimeFromMagicBytes(new Uint8Array(4))).toBeNull();
+  });
+
+  it("returns null for a buffer that starts like a JPEG but is too short", () => {
+    expect(detectMimeFromMagicBytes(new Uint8Array([0xff, 0xd8, 0xff]))).toBeNull();
   });
 
   it("returns null for unrecognized bytes", () => {
@@ -142,13 +150,15 @@ describe("isAllowedImageType", () => {
 describe("isAllowedDocType", () => {
   it("allows all image types", () => {
     expect(isAllowedDocType("image/jpeg")).toBe(true);
+    expect(isAllowedDocType("image/png")).toBe(true);
   });
 
   it("allows PDF", () => {
     expect(isAllowedDocType("application/pdf")).toBe(true);
   });
 
-  it("rejects video", () => {
+  it("rejects video and archives", () => {
     expect(isAllowedDocType("video/mp4")).toBe(false);
+    expect(isAllowedDocType("application/zip")).toBe(false);
   });
 });

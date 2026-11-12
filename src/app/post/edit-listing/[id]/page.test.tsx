@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  expectFoundationPostFields,
+  installFoundationPostFetch,
+} from "@/test/foundation-post-transport";
 import EditListingPage from "./page";
 import { useParams, useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -137,6 +141,8 @@ vi.mock("@/lib/supabase/client", () => ({
 describe("EditListingPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
+  let fetchMock: Mock;
+  let termsLoaded: () => Promise<void>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,6 +152,7 @@ describe("EditListingPage", () => {
         id: "listing-1",
         seller_id: "user-1",
         status: "live",
+        revision: 4,
         title: "Used iPhone 15",
         description: "Clean phone in excellent condition.",
         price_cents: 150000,
@@ -171,20 +178,23 @@ describe("EditListingPage", () => {
     (useParams as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ id: "listing-1" });
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
 
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, pendingReview: true }),
-    }) as unknown as typeof fetch;
+    ({ api: fetchMock, termsLoaded } = installFoundationPostFetch(
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, pendingReview: true }),
+      })
+    ));
     global.URL.createObjectURL = vi.fn(() => "blob:new-logo-preview");
     global.URL.revokeObjectURL = vi.fn();
   });
 
   it("does not claim a saved update was submitted without server confirmation", async () => {
     render(<EditListingPage />);
+    await termsLoaded();
     await waitFor(() => expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument());
-    vi.mocked(global.fetch)
+    fetchMock
       .mockReset()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) } as Response);
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Listing updated!" }))
@@ -196,6 +206,7 @@ describe("EditListingPage", () => {
 
   it("hydrates saved listing details and sends normalized payload on save", async () => {
     render(<EditListingPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument();
@@ -219,7 +230,7 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
     expect(mockToast).toHaveBeenCalledWith(
@@ -227,7 +238,7 @@ describe("EditListingPage", () => {
     );
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const request = fetchMock.mock.calls[0];
     const payload = JSON.parse(request[1].body as string);
 
     expect(request[0]).toBe("/api/listings/listing-1");
@@ -238,10 +249,12 @@ describe("EditListingPage", () => {
     expect(payload.contactMethods).toEqual(["call", "whatsapp", "in_app"]);
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/existing-logo.jpg");
     expect(payload.attributes).toMatchObject({ brand: "Apple", storage_gb: 256 });
+    expectFoundationPostFields(payload, { expectedRevision: 4 });
   });
 
   it("allows removing the existing listing logo before save", async () => {
     render(<EditListingPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Remove Current logo" })).toBeInTheDocument();
@@ -251,10 +264,10 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const request = fetchMock.mock.calls[0];
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.logo_url).toBeNull();
@@ -262,13 +275,14 @@ describe("EditListingPage", () => {
   });
 
   it("keeps unsaved changes on the form when an earlier edit is pending", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 409,
       json: async () => ({ code: "pending_edit_exists" }),
     });
 
     render(<EditListingPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Used iPhone 15")).toBeInTheDocument();
@@ -284,29 +298,28 @@ describe("EditListingPage", () => {
   });
 
   it("uploads and uses a replacement listing logo", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({
-              urls: ["https://media.verifymzansi.com/listings/replaced-logo.jpg"],
-            }),
-          };
-        }
-
-        if (input === "/api/listings/listing-1") {
-          return {
-            ok: true,
-            json: async () => ({ success: true, pendingReview: true }),
-          };
-        }
-
-        throw new Error(`Unexpected fetch call: ${String(input)}`);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          json: async () => ({
+            urls: ["https://media.verifymzansi.com/listings/replaced-logo.jpg"],
+          }),
+        };
       }
-    );
+
+      if (input === "/api/listings/listing-1") {
+        return {
+          ok: true,
+          json: async () => ({ success: true, pendingReview: true }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch call: ${String(input)}`);
+    });
 
     render(<EditListingPage />);
+    await termsLoaded();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Listing logo (optional)" })).toBeInTheDocument();
@@ -323,13 +336,30 @@ describe("EditListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save Changes/i }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1];
+    const request = fetchMock.mock.calls[1];
     const payload = JSON.parse(request[1].body as string);
 
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/replaced-logo.jpg");
+    expectFoundationPostFields(payload, { expectedRevision: 4 });
+  });
+
+  it("does not open the form for a listing loaded without its revision", async () => {
+    const loaded = await mockMaybeSingle();
+    mockMaybeSingle.mockResolvedValue({ ...loaded, data: { ...loaded.data, revision: null } });
+
+    render(<EditListingPage />);
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Unable to load listing" })
+      );
+    });
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
+    expect(screen.queryByRole("button", { name: /Save Changes/i })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("shows a safe fallback when the listing fails to load", async () => {

@@ -51,6 +51,7 @@ create table private.payments (
 alter table private.payments owner to postgres;
 alter table private.payments enable row level security;
 CREATE UNIQUE INDEX payments_one_pending_idx ON private.payments USING btree (owner_id, COALESCE(plan_version_id, addon_version_id), COALESCE(target_post_id, '00000000-0000-0000-0000-000000000000'::uuid)) WHERE (status = 'pending'::text);
+CREATE INDEX payments_owner_id_idx ON private.payments USING btree (owner_id);
 CREATE INDEX payments_owner_plan_created_idx ON private.payments USING btree (owner_id, created_at) WHERE (product_kind = 'plan'::text);
 CREATE INDEX payments_staff_recent_idx ON private.payments USING btree (created_at DESC, id DESC);
 CREATE INDEX payments_staff_status_recent_idx ON private.payments USING btree (status, created_at DESC, id DESC);

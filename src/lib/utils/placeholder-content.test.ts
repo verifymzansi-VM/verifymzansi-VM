@@ -18,6 +18,7 @@ describe("isPlaceholderMarketplaceContent", () => {
     "Seed potatoes for sale",
     "Free samples every Saturday",
     "Book a demo of our point-of-sale system",
+    "Demo Plumbing Service",
   ])("keeps real selling language visible: %s", (text) => {
     expect(isPlaceholderMarketplaceContent(text)).toBe(false);
   });
