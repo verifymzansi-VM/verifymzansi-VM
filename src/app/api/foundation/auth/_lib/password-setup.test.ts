@@ -8,6 +8,11 @@ import { FoundationSessionError } from "@/lib/foundation/request-api";
 import { FoundationAccountContextError } from "@/lib/foundation/account-context";
 import { isFoundationPasswordSetupInput } from "@/lib/foundation/password-setup-input";
 
+// Every "unavailable" answer is logged and carries the log line's reference.
+const UNAVAILABLE = {
+  error: "Password setup is temporarily unavailable",
+  reference: expect.stringMatching(/^[0-9a-f]{16}$/),
+};
 const { authenticate, context, readAccount, limit, legacy } = vi.hoisted(() => ({
   authenticate: vi.fn(),
   context: vi.fn(),
@@ -275,7 +280,7 @@ describe("password setup for a member without a password", () => {
     vi.stubEnv(name, value);
     const response = await POST(request());
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "Password setup is temporarily unavailable" });
+    expect(await response.json()).toEqual({ error: UNAVAILABLE.error });
     expect(context).not.toHaveBeenCalled();
     expectNothingSent();
   });
@@ -306,7 +311,7 @@ describe("password setup for a member without a password", () => {
 
   it.each([
     [401, 401, { error: "Sign in again to set a password" }],
-    [503, 503, { error: "Password setup is temporarily unavailable" }],
+    [503, 503, UNAVAILABLE],
   ] as const)("needs a verified session (%s)", async (failure, status, body) => {
     authenticate.mockRejectedValue(new FoundationSessionError(failure));
     const response = await POST(request());
@@ -488,7 +493,7 @@ describe("password setup for a member without a password", () => {
     vi.stubEnv("FOUNDATION_SUPABASE_SECRET_KEY", value);
     const response = await POST(request());
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "Password setup is temporarily unavailable" });
+    expect(await response.json()).toEqual({ error: UNAVAILABLE.error });
     expect(context).not.toHaveBeenCalled();
     expect(limit).not.toHaveBeenCalled();
     expectNothingSent();

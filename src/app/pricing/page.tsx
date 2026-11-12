@@ -12,6 +12,7 @@ import { RetailPricing } from "@/components/billing/retail-pricing";
 import { EnterprisePricing } from "@/components/billing/enterprise-pricing";
 import { getCommercialCatalog } from "@/lib/commercial/plans";
 import { getCommercialSettings } from "@/lib/commercial/settings";
+import { PACKAGES_ON_SALE } from "@/lib/constants/pricing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getTrustPublicConfig } from "@/lib/trust-public-config";
 
@@ -24,10 +25,8 @@ const HERO_POINTS = [
 export const metadata = {
   title: "Pricing",
   description:
-    "Simple VerifyMzansi pricing: R50 for 30 days, R140 for 90 days, R250 for 180 days. Events are free. Multi-listing from R1,200 for 90 days; sponsor programmes from R15,000.",
+    "VerifyMzansi pricing: your first post is free and events are free. Individual slots cost R69 for 30 days, R207 for 90 days or R414 for 180 days, in any section.",
 };
-
-export const revalidate = 300;
 
 async function loadSettings() {
   try {
@@ -40,7 +39,8 @@ async function loadSettings() {
 export default async function PricingPage() {
   const [catalog, settings] = await Promise.all([getCommercialCatalog(), loadSettings()]);
   const trustConfig = getTrustPublicConfig();
-  const jsonLd = {
+  // Offers are described for search engines only while they can be bought.
+  const jsonLd = catalog.onSale && {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: "VerifyMzansi Pricing",
@@ -65,10 +65,12 @@ export default async function PricingPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
-      />
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/<\//g, "<\\/") }}
+        />
+      ) : null}
 
       <main id="main-content" className="flex-1 scroll-mt-24">
         <BrandSurface as="section" aria-labelledby="pricing-title">
@@ -112,7 +114,11 @@ export default async function PricingPage() {
             <p className="section-lede mx-auto">One posting slot, paid once.</p>
           </div>
           <Reveal>
-            <RetailPricing offers={catalog.retail} trialDays={settings?.trials} />
+            <RetailPricing
+              offers={catalog.retail}
+              onSale={catalog.onSale}
+              trialDays={settings?.trials}
+            />
           </Reveal>
         </section>
 
@@ -161,19 +167,22 @@ export default async function PricingPage() {
           </Reveal>
         </section>
 
-        <div className="container-page pb-12 sm:pb-16">
-          <Reveal>
-            <EnterprisePricing
-              plans={catalog.enterprise}
-              checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
-              retailFromCents={
-                catalog.retail.length > 0
-                  ? Math.min(...catalog.retail.map((offer) => offer.priceCents))
-                  : null
-              }
-            />
-          </Reveal>
-        </div>
+        {/* Multi-listing and sponsor packages are hidden until they are on sale. */}
+        {PACKAGES_ON_SALE ? (
+          <div className="container-page pb-12 sm:pb-16">
+            <Reveal>
+              <EnterprisePricing
+                plans={catalog.enterprise}
+                checkoutEnabled={settings?.features.enterpriseCheckout ?? true}
+                retailFromCents={
+                  catalog.retail.length > 0
+                    ? Math.min(...catalog.retail.map((offer) => offer.priceCents))
+                    : null
+                }
+              />
+            </Reveal>
+          </div>
+        ) : null}
 
         <div className="border-t border-border/60 bg-card/50">
           <div className="container-page py-12 sm:py-16">

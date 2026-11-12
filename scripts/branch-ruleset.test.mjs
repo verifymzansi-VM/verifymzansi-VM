@@ -89,9 +89,11 @@ test("the committed ruleset only requires checks that run on pull requests to ma
   // The retired stub browser suite and its shared build are gone.
   for (const name of requiredContexts(ruleset))
     assert.doesNotMatch(name, /^e2e-full-matrix|^Browser test build$/, name);
-  // The aggregate job is the required one; the per-project jobs need not be.
-  assert.ok(available.has("e2e-foundation (chromium)"));
-  assert.ok(available.has("e2e-foundation (mobile-chrome)"));
+  // Matrix jobs are named as GitHub reports them; the release-gate callers in
+  // CI never run on pull requests, so they can never be required.
+  for (const name of ["e2e-foundation (chromium)", "e2e-foundation (mobile-chrome)"])
+    assert.ok(available.has(name), name);
+  for (const name of available) assert.doesNotMatch(name, /\$\{\{|Release gate/, name);
 });
 
 test("validation rejects renamed checks, bypass actors and missing rules", () => {

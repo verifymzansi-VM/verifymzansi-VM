@@ -7,15 +7,10 @@ CREATE OR REPLACE FUNCTION internal.create_account_profile()
  SECURITY DEFINER
  SET search_path TO 'pg_catalog'
 AS $function$
-declare requested text;
 begin
   if new.is_anonymous then return new; end if;
-  if jsonb_typeof(new.raw_user_meta_data->'display_name')='string' then
-    requested:=normalize(btrim(new.raw_user_meta_data->>'display_name'),NFC);
-    if not internal.person_name_valid(requested) or internal.person_name_reserved(requested) then
-      requested:=null; end if;
-  end if;
-  insert into private.profiles(account_id,display_name) values(new.id,requested)
+  insert into private.profiles(account_id,display_name)
+    values(new.id,internal.signup_display_name(new.raw_user_meta_data))
     on conflict(account_id) do nothing;
   return new;
 end;

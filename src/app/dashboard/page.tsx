@@ -1,6 +1,5 @@
 import { getVerificationLevel, VERIFICATION_LEVEL_LABELS } from "@/lib/account/verification-level";
 import { IntroductoryTrialCard } from "@/components/dashboard/introductory-trial-card";
-import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -27,6 +26,7 @@ import { RecentLeads, type RecentLead } from "@/components/dashboard/recent-lead
 import { VerificationStatusCard } from "@/components/dashboard/verification-status-card";
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { readSelfReviewSession } from "@/lib/foundation/self-review-session";
+import { readFoundationServerUser } from "@/lib/foundation/server-session";
 import {
   readRestoredOwnerDashboard,
   restoredDashboardResults,
@@ -66,11 +66,8 @@ export default async function DashboardPage({
     if (restriction.status === "suspended" && restriction.ends_at)
       return <SuspensionNotice confirmedUntil={restriction.ends_at} />;
   }
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The account the sign-in gate already verified for this request.
+  const user = await readFoundationServerUser();
 
   if (!user) redirect("/login");
 

@@ -2,9 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { applySecurityHeaders, withSecurityHeaders } from "@/lib/middleware/security-headers";
 import { isPlaywrightTestMode } from "@/lib/supabase/playwright-mode";
 import { createLogger } from "@/lib/utils/logger";
+import { addReferenceTiming } from "@/lib/utils/request-reference";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
-import postingTermsCatalogue from "@/lib/legal/terms-documents/catalogue.json";
+import {
+  dropIncomingFoundationPageSession,
+  forwardFoundationPageSession,
+} from "@/lib/foundation/page-session-handoff";
 import {
   createAnonymousViewerId,
   ENGAGEMENT_VIEWER_COOKIE,
@@ -39,8 +44,6 @@ const PROTECTED_PREFIXES = [
   "/api/otp",
   "/api/leads",
   "/api/media/upload",
-  "/api/media/upload-complete",
-  "/api/media/upload-url",
   "/api/notifications",
   "/api/profile",
 ];
@@ -89,13 +92,10 @@ export async function routeRequest(request: NextRequest): Promise<NextResponse> 
     return NextResponse.redirect(callbackUrl);
   }
 
-  // Reject unknown immutable document paths before the request-dependent root
-  // layout begins streaming, when notFound() can no longer set a 404 status.
-  const termsPrefix = "/terms/versions";
-  if (matchesPrefix(pathname, termsPrefix)) {
-    const version = pathname.slice(termsPrefix.length + 1).replace(/\/$/, "");
-    if (!Object.hasOwn(postingTermsCatalogue.versions, version))
-      return new NextResponse("Not found", { status: 404 });
+  // The site has one set of Terms (/terms). Former per-version addresses,
+  // including the links earlier posting forms showed, lead there for good.
+  if (matchesPrefix(pathname, "/terms/versions")) {
+    return NextResponse.redirect(new URL("/terms", request.url), 308);
   }
 
   // Local design previews. The pages call notFound() themselves, but streaming
@@ -185,20 +185,23 @@ function ensureViewerCookie(request: NextRequest, response: NextResponse): void 
 }
 
 export async function handleMiddlewareRequest(request: NextRequest): Promise<NextResponse> {
+  // Only the page gate may hand a verified account to the page render.
+  dropIncomingFoundationPageSession(request);
   try {
     const routeResponse = await routeRequest(request);
     ensureViewerCookie(request, routeResponse);
-    return withSecurityHeaders(request, routeResponse);
+    addReferenceTiming(request, routeResponse);
+    return forwardFoundationPageSession(request, withSecurityHeaders(request, routeResponse));
   } catch (error) {
-    logger.error("Middleware request handler failed", {
-      path: request.nextUrl.pathname,
-      error: error instanceof Error ? error.message : String(error),
+    const reference = logRequestFailure(logger, "Middleware request handler failed", {
+      request,
+      error,
     });
 
     const pathname = request.nextUrl.pathname;
     const protectedPage = PROTECTED_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix));
     const fallback = pathname.startsWith("/api/")
-      ? NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 })
+      ? NextResponse.json({ error: "Service temporarily unavailable", reference }, { status: 503 })
       : protectedPage
         ? new NextResponse("Service temporarily unavailable. Please try again shortly.", {
             status: 503,
@@ -216,7 +219,7 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       // A public pass-through still needs the normal forwarded nonce policy.
       // If header construction is what failed, degrade to the basic headers.
       try {
-        return withSecurityHeaders(request, fallback);
+        return forwardFoundationPageSession(request, withSecurityHeaders(request, fallback));
       } catch {
         fallback.headers.set("X-Content-Type-Options", "nosniff");
         fallback.headers.set("X-Frame-Options", "DENY");
@@ -224,6 +227,6 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
       }
     }
 
-    return fallback;
+    return forwardFoundationPageSession(request, fallback);
   }
 }

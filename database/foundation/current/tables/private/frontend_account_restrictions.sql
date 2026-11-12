@@ -32,6 +32,7 @@ create table private.frontend_account_restrictions (
 );
 alter table private.frontend_account_restrictions owner to postgres;
 alter table private.frontend_account_restrictions enable row level security;
+CREATE INDEX frontend_account_restrictions_account_id_idx ON private.frontend_account_restrictions USING btree (account_id);
 CREATE INDEX frontend_account_restrictions_releaser_idx ON private.frontend_account_restrictions USING btree (lifted_by);
 CREATE INDEX frontend_account_restrictions_reporter_idx ON private.frontend_account_restrictions USING btree (reporter_id);
 CREATE INDEX frontend_account_restrictions_subject_idx ON private.frontend_account_restrictions USING btree (account_id, ends_at) WHERE (lifted_at IS NULL);

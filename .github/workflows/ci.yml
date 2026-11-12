@@ -57,6 +57,10 @@ jobs:
           fi
       - name: Check the API manifests and runtime types against the replay
         run: pnpm db:foundation:api-check
+      # Renaming a database error reason without updating the shared list
+      # (src/lib/foundation/error-reasons.ts) fails here (roadmap M6.6).
+      - name: Check the shared error-reason list against the current schema
+        run: node scripts/check-foundation-error-reasons.mjs
       # Safe order: every update file has an applied-register line, and an API
       # command or argument removed or renamed against the base commit needs a
       # recorded second step (database/foundation/contract-steps.json).
@@ -651,3 +655,33 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:tooling
       - run: pnpm safety:ci-review -- --dry-run --skip-optional
+
+  # Release gate (test plan step 10). On main, the two suites that run the
+  # production (foundation) schema are part of this CI run, so the deploy,
+  # which needs the whole main CI run to succeed, waits for them. On pull
+  # requests they run as their own workflows and report their own checks
+  # (`foundation-native`, `e2e-foundation`), so they are not called here. A
+  # manual CI run calls them too, which lets a branch prove the gate before it
+  # merges; it cannot deploy (deploy accepts only main push runs).
+  # Each caller has a concurrency group per commit and never cancels: a later
+  # merge cannot cancel an earlier commit's gate (a cancelled call would fail
+  # this run).
+  foundation-native-gate:
+    name: Release gate (foundation native)
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: release-gate-foundation-native-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    uses: ./.github/workflows/foundation-native.yml
+
+  e2e-foundation-gate:
+    name: Release gate (e2e foundation)
+    if: github.event_name != 'pull_request'
+    concurrency:
+      group: release-gate-e2e-foundation-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e-foundation.yml

@@ -349,7 +349,7 @@ Keep the public addresses branded on `@verifymzansi.com` and use Gmail only as
 the mailbox behind them.
 
 - Inbound receive path: Cloudflare Email Routing catch-all or explicit aliases
-  forward to `verifymzansi2s@gmail.com`
+  forward to the private Gmail inbox named in `CF_EMAIL_ROUTING_DESTINATION`
 - Public aliases to keep in the app: `hello@verifymzansi.com`,
   `support@verifymzansi.com`, `privacy@verifymzansi.com`,
   `security@verifymzansi.com`
@@ -517,9 +517,8 @@ deployed Cloudflare posture, and local production env readiness, run:
 pnpm payments:audit
 ```
 
-That command writes JSON and Markdown artifacts to `tmp/payment-security-audit`
-and is documented in
-[docs/playbooks/payment-security-audit.md](docs/playbooks/payment-security-audit.md).
+That command writes JSON and Markdown artifacts to `tmp/payment-security-audit`.
+Its operator playbook is kept outside the public repository.
 
 Before a production release, also run the production-only validation checks:
 
@@ -613,7 +612,7 @@ GitHub Copilot.
 Use the guide in [docs/cloudflare-mcp.md](docs/cloudflare-mcp.md) to validate
 Cloudflare MCP against this repo's R2, KV, Durable Object, and Workers/Pages
 resources. The workspace MCP command uses the validated local startup form
-`npx -y @cloudflare/mcp-server-cloudflare run`.
+`npx -y @cloudflare/mcp-server-cloudflare@0.2.0 run`.
 
 ## Project Structure
 

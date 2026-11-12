@@ -14,7 +14,7 @@ const TERMS = [
   { days: 180, label: "180 days" },
 ] as const;
 
-/** Price of one live post for 30 days, so plans compare with the R50 single post. */
+/** Price of one live post for 30 days, so plans compare with the single-slot price. */
 export function perPostPer30DaysCents(
   plan: Pick<EnterpriseCatalogPlan, "priceCents" | "slots" | "durationDays">
 ) {

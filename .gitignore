@@ -87,17 +87,12 @@ docs/*
 !docs/mobile-app-agent-build-brief.md
 !docs/mobile-app-build-spec.md
 !docs/business-verification-spec.md
-!docs/mobile-build-progress.md
-!docs/mobile/
-!docs/mobile/store-review-log.md
-!docs/runbooks/mobile-release.md
-!docs/runbooks/apple-signin-secret-rotation.md
 !docs/playbooks/
 !docs/playbooks/sentry-bug-finding.md
 !docs/admin-access-inventory.md
 !docs/runbooks/
 !docs/runbooks/admin-provisioning.md
-# Publish implementation and inert source inventories; keep detailed audits private.
+# Publish implementation tools and prototypes; keep detailed audits private.
 !docs/backend-foundation/
 docs/backend-foundation/*
 !docs/backend-foundation/README.md
@@ -106,13 +101,7 @@ docs/backend-foundation/*
 !docs/backend-foundation/prototypes/**
 !docs/backend-foundation/tools/
 !docs/backend-foundation/tools/**
-!docs/backend-foundation/schema-map.json
 !docs/backend-foundation/post-field-proposals.json
-!docs/backend-foundation/evidence/
-docs/backend-foundation/evidence/*
-!docs/backend-foundation/evidence/page-inventory.json
-!docs/backend-foundation/evidence/route-inventory.json
-!docs/backend-foundation/evidence/source-inventory.json
 
 # ── QA evidence & temporary files ─────────────────────────────
 /evidence/

@@ -71,7 +71,11 @@ afterEach(() => {
 it("uses native CAPTCHA and PKCE in one signup call, without a legacy profile write or auto-login", async () => {
   const response = await POST(registerRequest({ ...submission, email: " NEW@Example.invalid " }));
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ ok: true, message: expect.any(String) });
+  expect(await response.json()).toEqual({
+    ok: true,
+    inviteOnly: false,
+    message: expect.any(String),
+  });
   expect(checkRateLimit).toHaveBeenCalledExactlyOnceWith({
     key: "registration-client",
     action: "auth:register",
@@ -171,7 +175,11 @@ it.each(["user_already_exists", "email_exists"])(
     );
     const response = await POST(registerRequest());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, message: expect.any(String) });
+    expect(await response.json()).toEqual({
+      ok: true,
+      inviteOnly: false,
+      message: expect.any(String),
+    });
     expect(response.cookies.getAll().length).toBeGreaterThan(0);
     expect(
       response.cookies.getAll().every((cookie) => cookie.value && (cookie.maxAge ?? 0) > 0)
@@ -210,4 +218,35 @@ it("discards cookies if provider confirmation settings unexpectedly issue a sess
   const response = await POST(registerRequest());
   expect(response.status).toBe(503);
   expect(response.cookies.getAll()).toEqual([]);
+});
+it("answers a sign-up the invitation guard refuses exactly like any other address", async () => {
+  vi.stubEnv("FOUNDATION_REGISTRATION_INVITE_ONLY", "true");
+  fetcher.mockImplementation(async () =>
+    Response.json(
+      { code: "unexpected_failure", msg: "Registration is not open yet" },
+      { status: 403, headers: { "x-supabase-api-version": "2024-01-01" } }
+    )
+  );
+  const refused = await POST(registerRequest());
+  expect(refused.status).toBe(200);
+  const refusedBody = await refused.json();
+  expect(JSON.stringify(refusedBody)).not.toContain("not open yet");
+
+  fetcher.mockImplementation(async () =>
+    Response.json({
+      id: "00000000-0000-4000-8000-000000000008",
+      email: submission.email,
+      aud: "authenticated",
+      email_confirmed_at: null,
+      identities: [],
+    })
+  );
+  const accepted = await POST(registerRequest());
+  expect(accepted.status).toBe(200);
+  expect(await accepted.json()).toEqual(refusedBody);
+  expect(refusedBody).toEqual({
+    ok: true,
+    inviteOnly: true,
+    message: expect.stringContaining("by invitation only"),
+  });
 });

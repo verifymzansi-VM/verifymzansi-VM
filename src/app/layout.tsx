@@ -34,8 +34,6 @@ import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { EARLY_INSTALL_PROMPT_CAPTURE } from "@/lib/pwa/install-prompt-store";
 import { DesktopPageShell } from "@/components/layout/desktop-page-shell";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { PrelaunchBanner } from "@/components/layout/prelaunch-banner";
-import { PRELAUNCH_BANNER_ENABLED } from "@/lib/prelaunch-banner";
 import { FeedSourceCapture } from "@/components/immersive/feed-source-capture";
 import { SiteVisitTracker } from "@/components/analytics/site-visit-tracker";
 import { HELLO_CONTACT_EMAIL } from "@/lib/contact-email";
@@ -255,7 +253,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const hasSessionCookie = hasAuthSessionCookie(
     (await cookies()).getAll().map((cookie) => cookie.name)
   );
-  const showPrelaunchBanner = PRELAUNCH_BANNER_ENABLED && !isPlaywrightTestMode;
 
   return (
     <html
@@ -308,7 +305,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           <SessionHintProvider hasSession={hasSessionCookie}>
             <DesktopPageShell>
-              {showPrelaunchBanner ? <PrelaunchBanner /> : null}
               <VideoPlaybackProvider>{children}</VideoPlaybackProvider>
               <MobileNav />
               <Toaster />

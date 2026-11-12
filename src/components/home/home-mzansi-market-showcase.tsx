@@ -7,7 +7,6 @@ import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import { createLogger } from "@/lib/utils/logger";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
-import { PackageOpen } from "lucide-react";
 
 const log = createLogger("HomeMzansiMarketShowcase");
 
@@ -28,16 +27,11 @@ export async function HomeMzansiMarketShowcase() {
     .slice(0, 8);
   if (items.length === 0) {
     return (
-      <HomeShowcaseShell title="Mzansi Market" href="/mzansi-market" tone="green">
-        <HomeShowcaseEmptyState
-          title="No listings yet"
-          description="Post something to sell or rent out and it will show here. Your first post is free once your ID is reviewed."
-          ctaHref="/post/create-listing"
-          ctaLabel="Post a listing"
-          tone="green"
-          icon={<PackageOpen className="h-7 w-7" />}
-        />
-      </HomeShowcaseShell>
+      <HomeShowcaseEmptyState
+        title="Be the first to sell on Mzansi Market"
+        href="/post/create-listing"
+        tone="green"
+      />
     );
   }
 
@@ -64,8 +58,10 @@ export async function HomeMzansiMarketShowcase() {
                 href={`/listing/${l.id}`}
                 imageUrl={displayUrl}
                 posterUrl={poster}
+                isVideo={Boolean(l.videos?.[0])}
                 title={l.title}
                 price={l.price_cents ? l.price_cents / 100 : null}
+                priceMode={"price_mode" in l ? (l.price_mode as string | null) : null}
                 city={l.location_city ?? "South Africa"}
                 provinceCode={provinceCode(l.location_province ?? "ZA")}
                 boosted={isBoosted}

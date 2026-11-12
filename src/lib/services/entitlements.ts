@@ -123,7 +123,7 @@ export function canCreateListing(
 function slotLimitReason(capacity: number): string {
   const slots =
     capacity === 1 ? "Your active posting slot is" : `All ${capacity} active posting slots are`;
-  return `${slots} in use. Mark a post as sold, deactivate one, or add a slot from R50 / 30 days.`;
+  return `${slots} in use. Mark a post as sold or deactivate one. Paid slots open soon.`;
 }
 
 /**
@@ -139,7 +139,7 @@ export function canBoost(
   if (!ent.boostAllowed) {
     return {
       allowed: false,
-      reason: "Boost is available on paid plans. Choose a plan from R50 / 30 days to use boosts.",
+      reason: "Boost is available on paid plans.",
     };
   }
 
@@ -159,7 +159,7 @@ export function canFeatured(
   if (!ent.featuredAllowed) {
     return {
       allowed: false,
-      reason: "Featured placement is available on paid plans. Choose a plan from R50 / 30 days.",
+      reason: "Featured placement is available on paid plans.",
     };
   }
 
@@ -179,7 +179,7 @@ export function canUrgent(
   if (!ent.urgentAllowed) {
     return {
       allowed: false,
-      reason: "The urgent badge is available on paid plans. Choose a plan from R50 / 30 days.",
+      reason: "The urgent badge is available on paid plans.",
     };
   }
 

@@ -3,7 +3,13 @@ import { render, screen } from "@testing-library/react";
 import DashboardPage from "./page";
 import { createClient } from "@/lib/supabase/server";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
-vi.mock("@/lib/foundation/server-session", () => ({ readFoundationServerSession: vi.fn() }));
+vi.mock("@/lib/foundation/server-session", () => {
+  const readFoundationServerSession = vi.fn();
+  return {
+    readFoundationServerSession,
+    readFoundationServerUser: vi.fn(async () => (await readFoundationServerSession()).user),
+  };
+});
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
@@ -219,6 +225,8 @@ describe("DashboardPage", () => {
     expect(screen.getByText("Native 1:0")).toBeInTheDocument();
     expect(screen.queryByText(/dashboard-onboarding:/)).not.toBeInTheDocument();
     expect(mockSupabase.from).not.toHaveBeenCalled();
+    // The account comes from the one verified session, not another Auth call.
+    expect(mockSupabase.auth.getUser).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith("get_my_dashboard", {}, { get: false });
   });
 });

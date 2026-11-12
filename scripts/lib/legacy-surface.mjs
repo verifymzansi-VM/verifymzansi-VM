@@ -5,12 +5,12 @@
 import path from "node:path";
 
 /** Application code that is scanned: production sources, never tests. */
-export const SCAN_ROOTS = ["src", "workers"];
+const SCAN_ROOTS = ["src", "workers"];
 const SOURCE_FILE = /\.(?:[cm]?[jt]sx?)$/;
 const NOT_PRODUCTION = /(?:\.(?:test|spec)\.[cm]?[jt]sx?$|\/__tests__\/|^src\/test\/|\.d\.ts$)/;
 
 /** The three retired client factories (`@/lib/supabase/{admin,server,client}`). */
-export const LEGACY_CLIENT_MODULES = [
+const LEGACY_CLIENT_MODULES = [
   "src/lib/supabase/admin",
   "src/lib/supabase/server",
   "src/lib/supabase/client",
@@ -154,7 +154,7 @@ export function measureLegacySurface(files, { apiNames, retiredFunctionNames }) 
 }
 
 /** Lists in the baseline whose members may only disappear. */
-export const RATCHETED_LISTS = /** @type {const} */ ([
+const RATCHETED_LISTS = /** @type {const} */ ([
   ["legacyClientImporters", "file importing a retired client"],
   ["retiredCommandNames", "retired command name"],
   ["retiredTableNames", "retired table name"],

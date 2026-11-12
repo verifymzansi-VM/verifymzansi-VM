@@ -13,6 +13,7 @@ import {
 } from "../../scripts/lib/foundation-e2e-target.mjs";
 import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known-break";
 import { MOCK_PAYMENT_ORIGIN, MockOzow } from "./support/mock-ozow";
+import { closeTestPlanSales, openTestPlanSales } from "./support/plan-sales";
 import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
@@ -35,16 +36,19 @@ import { registerVerifiedMember, type VerifiedMember } from "./support/verified-
 // run (no plan, no trial) chooses a plan, pays through mock Ozow, and the
 // signed notification settles it; the plan becomes active and a post uses its
 // slot; a lost notification is settled by the 10-minute status check; a
-// payment declined at the bank can be paid again; the Urgent add-on step says
-// add-ons open soon and takes no payment (paid add-on sales are paused, M1.9);
-// the receipt email arrives; a paid Urgent add-on shows its label; a failed
-// first attempt is retried.
+// payment declined at the bank can be paid again; a plan with a pending
+// payment shows the restored Continue and Cancel controls, and Cancel works; a
+// bank attempt cancelled at the provider, whose notice has not arrived, shows
+// as not paid instead of "Payment pending"; a failed first attempt to open the
+// payment page can be retried later (M3.1); the Urgent add-on step says add-ons
+// open soon and takes no payment (paid add-on sales are paused, M1.9); the
+// receipt email arrives; a paid Urgent add-on shows its label.
 //
 // The copy's website runs with paid add-on sales paused, as production does
 // (ADDON_SALES_ENABLED, src/lib/billing/addon-sales.ts); the plan steps above
 // run on that same server, so pausing add-ons leaves plans working.
 //
-// Three steps are broken today and are marked test.fail(), each pinned to its
+// Two steps are broken today and are marked test.fail(), each pinned to its
 // exact known symptom (characterise, support/known-break.ts); any other
 // outcome turns the run red:
 // - "the receipt email ... payment details": PAY-06, fixed by M3.7. The
@@ -55,8 +59,6 @@ import { registerVerifiedMember, type VerifiedMember } from "./support/verified-
 //   as one made before the pause (trusted local steps) and paid at the mock;
 //   it settles and the owner sees "Already urgent", but visitors see no Urgent
 //   label. M1.10 buys it through the button again and removes the mark.
-// - "a failed first attempt ... retried later": PAY-03, fixed by M3.1. The
-//   retry reuses the expired payment window and the same idempotency key.
 // The tests share one member and run in order; a failure skips the rest, so
 // the marked steps come after the working flows.
 //
@@ -79,7 +81,9 @@ const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PAY06 = "PAY-06, fixed by M3.7";
 const BL05 = "BL-05, fixed by M1.10";
-const PAY03 = "PAY-03, fixed by M3.1";
+/** The restored checkout page's notice for a plan with a pending payment. */
+const PENDING_NOTICE =
+  "You already have a pending payment for this area. Continue the payment or cancel it before choosing another plan.";
 const URGENT_BUTTON = "Mark this business profile as urgent (R10 for 7 days)";
 /** The server's reply to any add-on checkout while sales are paused. */
 const ADDONS_PAUSED = {
@@ -269,7 +273,7 @@ async function deleteByCommand(id: string) {
 // Made in beforeAll, never at import time: listing specs must not touch the copy.
 let copy: TestCopy;
 let member: VerifiedMember;
-let plans: Record<"business" | "market" | "tourism" | "retry", Plan>;
+let plans: Record<"business" | "market" | "tourism" | "retry" | "pending" | "cancelled", Plan>;
 let urgent: Addon;
 let planPayment: Payment;
 let business: { name: string; id: string };
@@ -278,6 +282,8 @@ test.describe("checkout to fulfilment", () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
     copy = readTestCopy();
+    // Paid plans are paused; this spec buys copies put on sale for it.
+    openTestPlanSales();
     const catalogue = await rpc(copy, "billing_catalogue", {});
     expect(catalogue.status).toBe(200);
     const byCode = (code: string) => {
@@ -290,6 +296,8 @@ test.describe("checkout to fulfilment", () => {
       market: byCode("market_30d"),
       tourism: byCode("tourism_30d"),
       retry: byCode("business_90d"),
+      pending: byCode("market_90d"),
+      cancelled: byCode("tourism_90d"),
     };
     const addon = (catalogue.data.addons as Addon[]).find(
       (entry) => entry.kind === "urgent" && entry.days === 7
@@ -310,6 +318,7 @@ test.describe("checkout to fulfilment", () => {
       // deleted it: the copy's showroom is shared with the other specs.
       if (business?.id && postExists(business.id)) await deleteByCommand(business.id);
     } finally {
+      closeTestPlanSales();
       await ozow.stop();
     }
   });
@@ -588,6 +597,234 @@ test.describe("checkout to fulfilment", () => {
     expect(paymentRow(paid.id)).toMatchObject({ status: "complete", fulfilment: "fulfilled" });
     expect(entitlementsOf(paid.id)).toEqual(["retail_paid|tourism_events|active|1|30"]);
     expect(paymentRow(declined.id).status).toBe("failed");
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a plan with a pending payment offers the restored Continue and Cancel, and Cancel works", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    await signInBrowser(context, member);
+    const open = await checkoutToMockPage(page, reply, plans.pending);
+    const checkoutUrl = queryTestCopy(
+      `select checkout_url from private.payments where id = '${open.id}';`
+    );
+    expect(new URL(checkoutUrl).origin).toBe(MOCK_PAYMENT_ORIGIN);
+
+    // The member comes back to the confirmation page and pays again.
+    const tryAgain = async () => {
+      await page.goto(`/billing/checkout?plan=${plans.pending.id}`);
+      await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+      const before = reply("/api/billing/create-checkout").length;
+      await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
+      await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(before + 1);
+      return reply("/api/billing/create-checkout").at(-1) as Reply;
+    };
+    const answered = await tryAgain();
+    expect(answered).toEqual({
+      method: "POST",
+      path: "/api/billing/create-checkout",
+      status: 409,
+      body: {
+        error: PENDING_NOTICE,
+        code: "PENDING_PAYMENT_EXISTS",
+        pendingPayment: {
+          id: open.id,
+          checkoutUrl,
+          statusUrl: `${APP_ORIGIN}/billing/success?payment=${open.id}`,
+          canCancel: true,
+        },
+      },
+    });
+    // The restored controls (src/app/billing/checkout/checkout-confirm.tsx),
+    // unchanged from the selected frontend.
+    await expect(page.getByRole("alert").filter({ hasText: PENDING_NOTICE })).toBeVisible();
+    const resume = page.getByRole("link", { name: "Continue payment" });
+    await expect(resume).toHaveAttribute("href", checkoutUrl);
+    await expect(page.getByRole("link", { name: "Check status" })).toHaveAttribute(
+      "href",
+      `${APP_ORIGIN}/billing/success?payment=${open.id}`
+    );
+    const cancel = page.getByRole("button", { name: "Cancel pending payment" });
+    await expect(cancel).toBeEnabled();
+    await expect(page.getByRole("button", { name: /^Pay .+ securely$/ })).toBeEnabled();
+    expect(paymentRow(open.id).status).toBe("pending");
+    // No second payment and no second request at the provider.
+    expect(
+      queryTestCopy(
+        `select count(*) from private.payments where owner_id = '${member.id}' and plan_version_id = '${plans.pending.id}';`
+      )
+    ).toBe("1");
+
+    // Continue goes back to the same payment page.
+    await resume.click();
+    await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+    expect(new URL(page.url()).searchParams.get("paymentId")).toBe(open.id);
+    await expect(page.getByRole("heading", { name: "Mock Ozow test payment" })).toBeVisible();
+
+    // Cancel closes it at the provider and here.
+    await tryAgain();
+    const lookups = ozow.lookups.length;
+    await page.getByRole("button", { name: "Cancel pending payment" }).click();
+    await expect(page.getByRole("button", { name: "Cancel pending payment" })).toBeHidden();
+    await expect(page.getByRole("link", { name: "Continue payment" })).toBeHidden();
+    await expect(page.getByText(PENDING_NOTICE)).toBeHidden();
+    expect(reply("/api/billing/cancel-pending")).toEqual([
+      {
+        method: "POST",
+        path: "/api/billing/cancel-pending",
+        status: 200,
+        body: { success: true },
+      },
+    ]);
+    expect(paymentRow(open.id)).toMatchObject({ status: "cancelled", request: open.requestId });
+    expect(entitlementsOf(open.id)).toEqual([]);
+    expect(ozow.cancelled.has(open.requestId)).toBe(true);
+    expect(
+      ozow.lookups
+        .slice(lookups)
+        .filter((entry) => entry.path === `/v1/payments/${open.requestId}/cancel`)
+    ).toEqual([
+      {
+        method: "POST",
+        path: `/v1/payments/${open.requestId}/cancel`,
+        query: "",
+        credentials: false,
+      },
+    ]);
+    expect(ozow.lookups.filter((entry) => entry.credentials)).toEqual([]);
+
+    // Paying again starts a new payment.
+    await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
+    await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+    const next = (reply("/api/billing/create-checkout").at(-1)?.body as { paymentId: string })
+      .paymentId;
+    expect(next).toMatch(UUID);
+    expect(next).not.toBe(open.id);
+    // Close it so it holds nothing for the later steps.
+    await page.getByRole("button", { name: "Decline at the test bank" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${next}`);
+    expect(paymentRow(next).status).toBe("failed");
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a bank attempt cancelled at the provider shows as not paid, not as pending", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    await signInBrowser(context, member);
+    const cancelled = await checkoutToMockPage(page, reply, plans.cancelled);
+    // The member cancels at the provider and is sent back; the provider's
+    // notice has not arrived.
+    ozow.sendNotifications = false;
+    try {
+      await page.getByRole("button", { name: "Cancel at the test bank" }).click();
+      await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${cancelled.id}`);
+    } finally {
+      ozow.sendNotifications = true;
+    }
+    expect(ozow.notifications.filter((entry) => entry.paymentId === cancelled.id)).toEqual([]);
+    // The page's status check asks the provider and records the attempt.
+    await expect(page.getByRole("heading", { name: "Payment didn't go through" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("heading", { name: "Payment pending" })).toBeHidden();
+    const made = ozow.made.filter((entry) => entry.paymentId === cancelled.id);
+    expect(made).toEqual([
+      { paymentId: cancelled.id, transactionId: expect.stringMatching(UUID), status: "Error" },
+    ]);
+    expect(paymentRow(cancelled.id)).toMatchObject({
+      status: "failed",
+      fulfilment: "unfulfilled",
+      request: cancelled.requestId,
+      transaction: "",
+    });
+    expect(entitlementsOf(cancelled.id)).toEqual([]);
+    expect(
+      queryTestCopy(
+        "select outcome || '|' || reported_status from private.provider_events " +
+          `where payment_id = '${cancelled.id}';`
+      )
+    ).toBe("not_paid|error");
+    // The member can pay for the plan again.
+    const again = await checkoutToMockPage(page, reply, plans.cancelled);
+    expect(again.id).not.toBe(cancelled.id);
+    await page.getByRole("button", { name: "Decline at the test bank" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${again.id}`);
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
+  });
+
+  test("a failed first attempt to open the payment page can be retried later", async ({
+    context,
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures, reply } = await guard(context);
+    // Arranged (trusted local step): the state a failed first attempt leaves.
+    // The website's own two commands ran (the member's quote, the server's
+    // claim) and then the provider call failed, so no request was stored.
+    const session = await signIn(copy, member);
+    const quote = await call(
+      copy,
+      "start_checkout",
+      { p_product_id: plans.retry.id, p_target_post: null },
+      session.token
+    );
+    const failedId = String(quote.payment_id);
+    const claimed = await serviceRpc("claim_checkout_request", {
+      p_payment_id: failedId,
+      p_owner_id: member.id,
+    });
+    expect(claimed).toMatchObject({
+      status: 200,
+      data: { status: "pending", provider_request_id: null, checkout_url: null },
+    });
+    const failedKey = String(claimed.data.idempotency_key);
+    expect(failedKey).toMatch(UUID);
+    // 31 minutes later (the stored times move back; nothing else changes).
+    queryTestCopy(
+      "update private.payments set checkout_claim_until = checkout_claim_until - interval '31 minutes', " +
+        "checkout_expires_at = checkout_expires_at - interval '31 minutes' " +
+        `where id = '${failedId}' and status = 'pending' and provider_request_id is null;`
+    );
+
+    // The member tries again: the same payment, a fresh window and a new key.
+    await signInBrowser(context, member);
+    await page.goto(`/billing/checkout?plan=${plans.retry.id}`);
+    await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
+    await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
+    await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(1);
+    const [created] = reply("/api/billing/create-checkout");
+    expect(created.status).toBe(200);
+    await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
+    const retriedId = (created.body as { paymentId: string }).paymentId;
+    expect(retriedId).toBe(failedId);
+    const [secondsLeft, key] = queryTestCopy(
+      "select floor(extract(epoch from checkout_expires_at - now())), provider_idempotency_key " +
+        `from private.payments where id = '${retriedId}';`
+    ).split("|");
+    expect(Number(secondsLeft)).toBeGreaterThan(25 * 60);
+    expect(key).not.toBe(failedKey);
+    expect(paymentRow(retriedId)).toMatchObject({
+      status: "pending",
+      request: `mock-${retriedId}`,
+    });
+    // Close it so it holds nothing for the later steps.
+    await page.getByRole("button", { name: "Decline at the test bank" }).click();
+    await page.waitForURL(`${APP_ORIGIN}/billing/success?payment=${retriedId}`);
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);
@@ -879,77 +1116,5 @@ test.describe("checkout to fulfilment", () => {
     expect(failures).toEqual([]);
     expect(outside).toEqual([]);
     expectNoOutboundSince(mark);
-  });
-
-  test("a failed first attempt to open the payment page can be retried later", async ({
-    context,
-    page,
-  }) => {
-    test.fail(true, PAY03);
-    test.setTimeout(180_000);
-    await characterise(PAY03, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures, reply } = await guard(context);
-      // Arranged (trusted local step): the state a failed first attempt leaves.
-      // The website's own two commands ran (the member's quote, the server's
-      // claim) and then the provider call failed, so no request was stored.
-      const session = await signIn(copy, member);
-      const quote = await call(
-        copy,
-        "start_checkout",
-        { p_product_id: plans.retry.id, p_target_post: null },
-        session.token
-      );
-      const failedId = String(quote.payment_id);
-      const claimed = await serviceRpc("claim_checkout_request", {
-        p_payment_id: failedId,
-        p_owner_id: member.id,
-      });
-      expect(claimed).toMatchObject({
-        status: 200,
-        data: { status: "pending", provider_request_id: null, checkout_url: null },
-      });
-      const failedKey = String(claimed.data.idempotency_key);
-      expect(failedKey).toMatch(UUID);
-      // 31 minutes later (the stored times move back; nothing else changes).
-      queryTestCopy(
-        "update private.payments set checkout_claim_until = checkout_claim_until - interval '31 minutes', " +
-          "checkout_expires_at = checkout_expires_at - interval '31 minutes' " +
-          `where id = '${failedId}' and status = 'pending' and provider_request_id is null;`
-      );
-
-      // The member tries again.
-      await signInBrowser(context, member);
-      await page.goto(`/billing/checkout?plan=${plans.retry.id}`);
-      await expect(page.getByRole("heading", { name: "Confirm your plan" })).toBeVisible();
-      await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
-      await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(1);
-      const [created] = reply("/api/billing/create-checkout");
-      expect(created.status).toBe(200);
-      await page.waitForURL((url) => url.origin === MOCK_PAYMENT_ORIGIN);
-      const retriedId = (created.body as { paymentId: string }).paymentId;
-      const [secondsLeft, key] = queryTestCopy(
-        "select floor(extract(epoch from checkout_expires_at - now())), provider_idempotency_key " +
-          `from private.payments where id = '${retriedId}';`
-      ).split("|");
-      if (retriedId === failedId && Number(secondsLeft) < 0 && key === failedKey) {
-        // PAY-03 as recorded: the provider would be asked for a payment that
-        // expired before it was created, under the failed attempt's key.
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(
-          `${PAY03}: the retry reused the payment window that ended ${-Number(secondsLeft)} s ago and the same idempotency key`
-        );
-      }
-      // Promised (M3.1): a fresh window and a new key (or a new payment, the
-      // stale one closed).
-      expect(Number(secondsLeft)).toBeGreaterThan(25 * 60);
-      expect(key).not.toBe(failedKey);
-      if (retriedId !== failedId) expect(paymentRow(failedId).status).not.toBe("pending");
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
-    });
   });
 });

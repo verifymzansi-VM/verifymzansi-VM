@@ -7,15 +7,16 @@ pull request whose required checks pass.
 
 ## What is enforced
 
-| Date       | State                                                                                                                                                                                                                                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-10-02 | Ruleset "Protect main" (id 24360296) blocks deleting `main` and force pushes. Pull requests and status checks are **not** required.                                                                                                                                                                                                         |
-| 2026-11-07 | Reviewed ruleset file `.github/rulesets/protect-main.json` prepared. It adds "require a pull request" and the required checks below. Not enforced until the owner applies it.                                                                                                                                                               |
-| 2026-11-10 | Ruleset file adds `Visual regression (chosen frontend)` and `foundation-native` to the required checks. Not enforced until the owner applies it.                                                                                                                                                                                            |
-| 2026-11-11 | The owner has applied the reviewed file: `pnpm check:branch-ruleset -- --live` reports that the live ruleset matches it, so pull requests and the required checks below are enforced.                                                                                                                                                       |
-| 2026-11-11 | CI clean-up: removed the checks of deleted jobs (`Foundation Worker runtime`, `db-rls`, `payment-kyc-regressions`, `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`), each just before the pull request that deleted its job merged.                                                                              |
-| 2026-11-11 | Added `Workflow lint (actionlint)` and `Browser test build` after both jobs had run on `main`.                                                                                                                                                                                                                                              |
-| 2026-11-11 | Stub browser suite retired (owner decision): the ruleset file removes `e2e-full-matrix (chromium)`, `e2e-full-matrix (firefox)`, `e2e-full-matrix (mobile-chrome)` and `Browser test build`, and adds `e2e-foundation`. The owner edits the live ruleset just before that pull request merges (see "Switching the required browser check"). |
+| Date       | State                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-02 | Ruleset "Protect main" (id 24360296) blocks deleting `main` and force pushes. Pull requests and status checks are **not** required.                                                                                                                                                                                                               |
+| 2026-11-07 | Reviewed ruleset file `.github/rulesets/protect-main.json` prepared. It adds "require a pull request" and the required checks below. Not enforced until the owner applies it.                                                                                                                                                                     |
+| 2026-11-10 | Ruleset file adds `Visual regression (chosen frontend)` and `foundation-native` to the required checks. Not enforced until the owner applies it.                                                                                                                                                                                                  |
+| 2026-11-11 | The owner has applied the reviewed file: `pnpm check:branch-ruleset -- --live` reports that the live ruleset matches it, so pull requests and the required checks below are enforced.                                                                                                                                                             |
+| 2026-11-11 | CI clean-up: removed the checks of deleted jobs (`Foundation Worker runtime`, `db-rls`, `payment-kyc-regressions`, `e2e-smoke (chromium)`, `e2e-smoke (mobile-chrome)`, `launch-flows-bundle`), each just before the pull request that deleted its job merged.                                                                                    |
+| 2026-11-11 | Added `Workflow lint (actionlint)` and `Browser test build` after both jobs had run on `main`.                                                                                                                                                                                                                                                    |
+| 2026-11-11 | Ruleset file adds `e2e-foundation` (it had passed on 11 consecutive `main` runs). Not enforced until the owner applies it, after the release-gate change is on `main`.                                                                                                                                                                            |
+| 2026-11-11 | Stub browser suite retired (owner decision): the ruleset file removes `e2e-full-matrix (chromium)`, `e2e-full-matrix (firefox)`, `e2e-full-matrix (mobile-chrome)` and `Browser test build`; `e2e-foundation` stays required. The owner edits the live ruleset just before that pull request merges (see "Switching the required browser check"). |
 
 Update this table when GitHub's enforced ruleset changes. Verify at any time,
 read-only:
@@ -46,8 +47,10 @@ such a check would block every pull request.
     `database/foundation/current/` snapshot and the API manifests and types
     (`database/foundation/README.md`). It also checks access-policy invariants
     on the rebuilt schema: row level security on every table, no PUBLIC execute,
-    no SECURITY DEFINER in `api`, a fixed `search_path` on every function
-    (`scripts/lib/foundation-replay.mjs`).
+    no SECURITY DEFINER in `api`, a fixed `search_path` on every function,
+    `anon`/`authenticated` execute on an `internal` function only when an `api`
+    function reaches it (reviewed exceptions listed), and no functions in
+    `private` (`scripts/lib/foundation-replay.mjs`).
   - `foundation-sql-lint`: runs plpgsql_check over every PL/pgSQL function of
     that rebuilt schema in a throwaway local Postgres 17 and compares the result
     with `database/foundation/lint-baseline.json`.
@@ -102,28 +105,32 @@ The Lighthouse audit is an advisory step inside `bundle-analysis`. This keeps
 required on pull requests; when no staging address (`STAGING_APP_URL`) is
 configured they show as skipped, not as a success (`Staging address configured`
 decides this in a job-level condition). Later slices add their jobs here and to
-the ruleset file (frontend ledger). `e2e-foundation` (workflow "E2E foundation")
-runs on every pull request and every push to `main`; the owner made it required
-on 2026-11-11. Its `main` runs, like those of `foundation-native`, are separate
-workflow runs outside the deploy gate (the deploy waits only for workflow "CI"):
-the required pull request run gates the change, and a failed `main` or scheduled
-run of any workflow opens or updates one GitHub issue (workflow "Failure
-alert").
+the ruleset file (foundation browser tests, frontend ledger).
+
+**Release gate.** On `main`, CI calls the workflows "Foundation native" and "E2E
+foundation" (jobs `Release gate (foundation native)` and
+`Release gate (e2e foundation)`), so the deploy, which needs the whole `main` CI
+run to succeed, waits for both suites. They are not called on pull requests,
+where the two workflows run on their own and report `foundation-native` and
+`e2e-foundation`. Each caller job has a concurrency group per commit and is
+never cancelled, so a later merge cannot cancel an earlier commit's gate. A
+failed `main` or scheduled run of any workflow opens or updates one GitHub issue
+(workflow "Failure alert").
 
 ## Switching the required browser check
 
 The pull request that retires the stub browser suite deletes the CI jobs
 `e2e-full-matrix` and `build-e2e`. A required check whose job no longer exists
-never reports, so it would block every pull request, and `e2e-foundation` is not
-enforced until the live ruleset lists it. Just before merging that pull request,
-the owner edits the live ruleset in GitHub: Settings → Rules → Rulesets →
-"Protect main" → Require status checks to pass:
+never reports, so it would block every pull request. Just before merging that
+pull request, the owner edits the live ruleset in GitHub: Settings → Rules →
+Rulesets → "Protect main" → Require status checks to pass:
 
 - remove `e2e-full-matrix (chromium)`
 - remove `e2e-full-matrix (firefox)`
 - remove `e2e-full-matrix (mobile-chrome)`
 - remove `Browser test build`
-- add `e2e-foundation` (source GitHub Actions)
+- keep `e2e-foundation` (source GitHub Actions), which the ruleset file already
+  requires; add it if the live ruleset does not list it yet
 
 Save, merge, then confirm with `pnpm check:branch-ruleset -- --live`, which
 passes only when the live ruleset matches `.github/rulesets/protect-main.json`.

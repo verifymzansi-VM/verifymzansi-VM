@@ -35,9 +35,6 @@ export const metadata: Metadata = {
   },
 };
 
-/** Revalidate every 60 seconds (ISR) */
-export const revalidate = 60;
-
 export default async function MzansiBusinessPage() {
   const jsonLd = {
     "@context": "https://schema.org",

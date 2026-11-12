@@ -12,6 +12,7 @@ import { readFoundationAccountContext, FoundationAccountContextError } from "./a
 import { handleFoundationOwnerRoute } from "@/lib/foundation/owner-route";
 import { createLogger } from "../utils/logger";
 import { resolveRestoredLocality, LocalityInputError } from "./restored-locality";
+import { hasDatabaseReason } from "./error-reasons";
 
 const log = createLogger("RestoredProfile");
 const inputSchema = profileUpdateSchema
@@ -22,6 +23,7 @@ const inputSchema = profileUpdateSchema
   })
   .strict();
 class ProfileRefusal extends Error {
+  override name = "ProfileRefusal";
   constructor(
     readonly status: number,
     message: string,
@@ -75,9 +77,9 @@ export function handleRestoredProfileUpdate(request: NextRequest) {
       );
       if (error) {
         if (error.code === "42501") throw new FoundationAccountContextError("forbidden");
-        if (error.details === "profile_changed")
+        if (hasDatabaseReason(error, "profile_changed"))
           throw new ProfileRefusal(412, "Your profile changed. Reload it before saving");
-        if (error.details === "legal_name_locked")
+        if (hasDatabaseReason(error, "legal_name_locked"))
           throw new ProfileRefusal(403, "Your verified name cannot be changed");
         if (error.code === "PT409")
           throw new ProfileRefusal(

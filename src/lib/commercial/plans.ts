@@ -31,6 +31,10 @@ export interface CommercialCatalog {
   retail: RetailCatalogOffer[];
   enterprise: EnterpriseCatalogPlan[];
   source: "database" | "defaults";
+  /** Whether a retail plan can be bought: only plans the database lists as on
+   * sale. Without one (paid slots paused, or the catalogue unreadable) the
+   * prices are shown but nothing links to checkout. */
+  onSale: boolean;
 }
 
 type PlanRow = {
@@ -59,6 +63,7 @@ function defaultCatalog(): CommercialCatalog {
       ) as Record<MarketplaceArea, string>,
     })),
     enterprise: ENTERPRISE_PLANS.map((plan) => ({ ...plan, planId: null })),
+    onSale: false,
   };
 }
 
@@ -66,6 +71,9 @@ function defaultCatalog(): CommercialCatalog {
 export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCatalog {
   const fallback = defaultCatalog();
   const sellable = rows.filter((row) => row.active && row.public);
+  const retailOnSale = fallback.retail.some((offer) =>
+    sellable.some((row) => row.tier === offer.tier && row.area)
+  );
 
   const retail = fallback.retail.map((offer) => {
     const matches = sellable.filter((row) => row.tier === offer.tier && row.area);
@@ -103,6 +111,7 @@ export function buildCommercialCatalog(rows: readonly PlanRow[]): CommercialCata
     source: "database",
     retail,
     enterprise: enterprise.length > 0 ? enterprise : fallback.enterprise,
+    onSale: retailOnSale,
   };
 }
 
