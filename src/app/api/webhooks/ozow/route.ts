@@ -114,11 +114,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
 
+    const foundation = getDataBackend() === "foundation";
     let parsedBody: unknown;
     try {
       parsedBody = JSON.parse(rawBody) as unknown;
     } catch {
-      return await refuseSignedNotice("invalid_json");
+      return await refuseSignedNotice("invalid_json", foundation);
     }
     let payload = normalizeOzowWebhook(parsedBody);
     if (payload?.eventType?.toLowerCase() !== SUPPORTED_OZOW_EVENT_TYPE) {
@@ -132,13 +133,13 @@ export async function POST(request: NextRequest) {
       payload.rawPayload = { ...thinPayload, resolvedTransaction: payload.rawPayload };
     }
     if (!payload?.merchantReference) {
-      return await refuseSignedNotice("missing_merchant_reference");
+      return await refuseSignedNotice("missing_merchant_reference", foundation);
     }
     if (payload.eventType?.toLowerCase() === SUPPORTED_OZOW_EVENT_TYPE && !payload.status) {
-      return await refuseSignedNotice("missing_transaction_status");
+      return await refuseSignedNotice("missing_transaction_status", foundation);
     }
 
-    if (getDataBackend() === "foundation") {
+    if (foundation) {
       return NextResponse.json(await applyFoundationOzowNotification(payload, rawBody));
     }
     const supabase = createAdminClient() as unknown as PaymentStoreClient;
@@ -341,8 +342,8 @@ export async function POST(request: NextRequest) {
  * Ozow's own records. Outages (database, Ozow lookups) still answer 5xx so the
  * notice is sent again.
  */
-async function refuseSignedNotice(reason: string) {
-  if (getDataBackend() === "foundation")
+async function refuseSignedNotice(reason: string, foundation: boolean) {
+  if (foundation)
     await recordPaymentProblem(createFoundationServiceApi, {
       paymentId: null,
       reason,

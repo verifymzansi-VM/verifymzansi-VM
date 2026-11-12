@@ -28,6 +28,7 @@ import {
   assertReadOnlyPreflight,
   createChecks,
   sqlHelpers,
+  updateCheckViews,
 } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
@@ -36,7 +37,6 @@ const companion = (folder, suffix) =>
   readFileSync(`database/foundation/${folder}/${UPDATE.replace(/\.sql$/, suffix)}`, "utf8");
 const PREFLIGHT = companion("preflight", ".check.sql");
 const ROLLBACK = companion("rollback", ".down.sql");
-const FINGERPRINT = readFileSync("database/foundation/fingerprint.sql", "utf8");
 const COMMANDS = [
   "record_payment_problem(uuid,text,text,boolean)",
   "claim_payment_alerts(integer)",
@@ -45,37 +45,19 @@ const COMMANDS = [
   "complete_payment_digest(uuid)",
 ];
 
-const { check, current, passed: checks } = createChecks();
-
-const started = Date.now();
+const begun = Date.now();
+const { check, current, passed } = createChecks();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
+  // Everything before this update, then the helpers.
   const { steps, index, step } = applyStepsBefore(database, UPDATE);
-
-  // ---------------------------------------------------------------- helpers
+  const views = updateCheckViews(database, current, { preflight: PREFLIGHT });
   const { q, json, fails, member, service } = sqlHelpers(database, current);
+  const { fingerprint, bodyMd5: bodyOf, syntheticMember: user } = views;
+  const preflight = views.preflightRows;
   const as = (role, sql) => `set role ${role};\n${sql}`;
-  const fingerprint = () => q(`set search_path to pg_catalog;\n${FINGERPRINT}`);
-  const preflight = () =>
-    q(PREFLIGHT)
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("|"));
-  const bodyOf = (sig) =>
-    q(
-      `select coalesce((select md5(replace(prosrc,E'\\r\\n',E'\\n')) from pg_proc where oid=to_regprocedure('${sig}')),'missing');`
-    );
 
   // ------------------------------------------------------- synthetic world
-  q(`create schema vmtest;
-    create function vmtest.member(p_label text) returns jsonb language plpgsql as $$
-    declare uid uuid:=gen_random_uuid(); sid uuid:=gen_random_uuid(); begin
-      insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
-        values(uid,p_label||'-'||uid||'@example.invalid',now(),jsonb_build_object('display_name','Fixture '||p_label));
-      insert into auth.sessions(id,user_id,aal) values(sid,uid,'aal1');
-      return jsonb_build_object('id',uid,'session',sid);
-    end$$;`);
-  const user = (label) => json(`select vmtest.member('${label}');`);
   const plan = q(
     "select id from private.plan_versions where plan_code='market_30d' and retired_at is null and is_public order by version desc limit 1;"
   );
@@ -532,5 +514,5 @@ try {
   database.stop();
 }
 console.log(
-  `Payment problem alert checks passed: ${checks.length} in ${Math.round((Date.now() - started) / 1000)} s.`
+  `Payment problem alert checks passed: ${passed.length} in ${Math.round((Date.now() - begun) / 1000)} s.`
 );
