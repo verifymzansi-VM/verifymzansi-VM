@@ -27,7 +27,7 @@
 // Needs a local Docker daemon; it takes no connection settings at all.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { replaySteps } from "./lib/foundation-replay.mjs";
+import { applyStepsBefore } from "./lib/foundation-sql-checks.mjs";
 import { applySteps, startLintDatabase } from "./lib/foundation-sql-lint.mjs";
 
 const UPDATE = "20261111223723_foreign_key_indexes.sql";
@@ -137,11 +137,7 @@ async function check(id, fn) {
 const started = Date.now();
 const database = await startLintDatabase({ log: (line) => console.log(line) });
 try {
-  const { steps } = replaySteps();
-  const index = steps.findIndex((step) => step.label === UPDATE);
-  assert.ok(index > 0, `${UPDATE} is missing`);
-  const step = steps[index];
-  applySteps(database, steps.slice(0, index));
+  const { steps, index, step } = applyStepsBefore(database, UPDATE);
 
   const run = (sql) => database.psql(`\\set VERBOSITY verbose\n${sql}`, ["-A", "-t"]);
   const q = (sql) => {
