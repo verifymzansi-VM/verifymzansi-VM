@@ -265,4 +265,66 @@ describe("ListingDetailContent", () => {
     ).toHaveAttribute("alt", "");
     expect(screen.queryByText("Shown on the marketplace card and detail page")).toBeNull();
   });
+
+  // Roadmap M10.6: the showroom card's caption on the main photo (phones).
+  it.each([
+    {
+      name: "an amount, negotiable",
+      listing: { price_cents: 145_000, price_negotiable: true, category: "home_lifestyle" },
+      eyebrow: "R1 450 · Negotiable",
+    },
+    {
+      name: "a free item, never negotiable",
+      listing: { price_cents: null, price_mode: "free", price_negotiable: true, category: null },
+      eyebrow: "Free",
+    },
+    {
+      name: "on request",
+      listing: {
+        price_cents: null,
+        price_mode: "on_request",
+        price_negotiable: false,
+        category: null,
+      },
+      eyebrow: "Price on request",
+    },
+    {
+      name: "a job without a salary, never negotiable",
+      listing: { price_cents: null, price_negotiable: true, category: "jobs_services" },
+      eyebrow: "Salary not provided",
+    },
+  ])("gives the main photo the card's caption: $name", ({ listing, eyebrow }) => {
+    listingDetailClientState.shouldThrow = false;
+    render(
+      <ListingDetailContent
+        listing={{
+          id: "listing-caption",
+          owner_id: "owner-1",
+          title: "Caption listing",
+          description: null,
+          condition: null,
+          attributes: null,
+          photos: ["https://media.verifymzansi.com/media/listing/photo.jpg"],
+          videos: [],
+          video_thumbnail: null,
+          logo_url: null,
+          location_province: "KwaZulu-Natal",
+          location_city: "Richards Bay",
+          location_suburb: "Meerensee",
+          contact_methods: ["call"],
+          created_at: new Date().toISOString(),
+          ...listing,
+        }}
+        seller={null}
+        showContactActions={false}
+        showSimilarListings={false}
+      />
+    );
+
+    expect(listingDetailClientState.lastProps?.caption).toEqual({
+      eyebrow,
+      location: "Richards Bay",
+      logoUrl: null,
+    });
+  });
 });

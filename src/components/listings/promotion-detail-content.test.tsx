@@ -251,4 +251,66 @@ describe("PromotionDetailContent", () => {
     expect(screen.getAllByText(/confirmed on CIPC records/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/CIPC registered · checked/).length).toBeGreaterThan(0);
   });
+
+  // Roadmap M10.6: the showroom card's caption on the main photo (phones only).
+  it.each([
+    {
+      tiers: [
+        { name: "Adult", price_cents: 5000 },
+        { name: "Child", price_cents: 2000 },
+      ],
+      price: 0,
+      line: "From R20",
+    },
+    { tiers: [{ name: "Entry", price_cents: null }], price: 0, line: "Free entry" },
+    { tiers: [], price: 15000, line: "R150" },
+  ])(
+    "puts the card's price line '$line', title and town on the photo",
+    ({ tiers, price, line }) => {
+      const { container } = render(
+        <PromotionDetailContent
+          promotion={{
+            id: "promotion-caption",
+            owner_id: "owner-1",
+            business_id: null,
+            title: "Zululand Craft Market",
+            description: "Crafts and food.",
+            promotion_type: "event",
+            category: null,
+            category_key: null,
+            photos: ["https://example.com/photo.jpg"],
+            videos: [],
+            video_thumbnail: null,
+            price_cents: price,
+            price_negotiable: false,
+            location_province: "KwaZulu-Natal",
+            location_city: "Richards Bay",
+            location_town: null,
+            location_address: null,
+            contact_methods: ["form"],
+            start_date: "2099-03-10T08:00:00.000Z",
+            end_date: "2099-03-10T15:00:00.000Z",
+            boost_until: null,
+            featured_until: null,
+            view_count: 0,
+            created_at: "2099-03-01T08:00:00.000Z",
+            event_details: { ticket_tiers: tiers },
+          }}
+          advertiserProfile={null}
+          linkedBusiness={null}
+          showContactActions={false}
+          trackView={false}
+        />
+      );
+
+      const caption = container.querySelector("[data-post-caption]");
+      expect(caption).toHaveAttribute("aria-hidden", "true");
+      expect(caption).toHaveClass("md:hidden");
+      expect(caption?.textContent?.replace(/ /g, " ")).toBe(
+        `${line}Zululand Craft MarketRichards Bay`
+      );
+      // Screen readers hear the title once, in the page heading.
+      expect(screen.getAllByRole("heading", { name: "Zululand Craft Market" })).toHaveLength(1);
+    }
+  );
 });

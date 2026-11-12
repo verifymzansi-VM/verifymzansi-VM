@@ -67,6 +67,13 @@ import {
 import { placeLine } from "@/lib/utils/place-line";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
 import { BusinessStickers } from "@/components/trust/business-stickers";
+import {
+  CaptionPlace,
+  POST_CAPTION_ABOVE_CONTROLS,
+  POST_MEDIA_FIRST_SCREEN_HEIGHT,
+  useMediaPlaying,
+} from "@/components/listings/poster-caption";
+import { cn } from "@/lib/utils";
 import { ID_REVIEWED_TRUST_LEVEL } from "@/lib/business-verification/public";
 
 interface UnifiedLayoutProps {
@@ -181,6 +188,10 @@ function MediaColumn({
   const activeMedia = heroMediaItems[activeMediaIndex] ?? null;
   const canPrevious = activeMediaIndex > 0;
   const canNext = activeMediaIndex < heroMediaItems.length - 1;
+  const media = useMediaPlaying(activeMedia?.key ?? "");
+  const isVideo = activeMedia?.kind === "video";
+  // The showroom card's place: the town, else the province.
+  const captionPlace = business.location_city || business.location_province;
   const goToPreviousMedia = useCallback(() => {
     setActiveMediaIndex((current) => Math.max(current - 1, 0));
   }, []);
@@ -235,7 +246,15 @@ function MediaColumn({
     <div className="space-y-3">
       <div className={columnWidthClass}>
         <div className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-slate-950 shadow-[0_35px_80px_-48px_rgba(15,23,42,0.55)] dark:border-white/10">
-          <div className="relative aspect-[9/16] overflow-hidden touch-pan-y" {...swipeHandlers}>
+          <div
+            className={cn(
+              "relative aspect-[9/16] overflow-hidden touch-pan-y",
+              // The sticky contact bar is public-only; previews keep the full frame.
+              layoutMode === "public" && POST_MEDIA_FIRST_SCREEN_HEIGHT
+            )}
+            {...swipeHandlers}
+            {...media.handlers}
+          >
             {activeMedia?.kind === "video" ? (
               <VideoViewTracker
                 targetId={business.id}
@@ -294,40 +313,56 @@ function MediaColumn({
               </div>
             )}
 
-            {activeMedia?.kind !== "video" && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
-                <div className="flex items-end gap-3">
-                  <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-white p-1 shadow-lg dark:bg-warm-900">
-                    {business.logo_url ? (
-                      <Image
-                        src={normalizeMediaUrl(business.logo_url)}
-                        alt={`${business.business_name} logo`}
-                        width={56}
-                        height={56}
-                        className="h-full w-full rounded-xl object-contain"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                        <Store className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 text-left text-white">
-                    <p className="text-xs font-semibold text-white/70">
-                      {family === "tourism"
-                        ? "Tourism & Hospitality"
-                        : family === "professional"
-                          ? "Business Profile"
-                          : "Featured Profile"}
-                    </p>
-                    {/* Decorative repeat of the name; the page heading lives in the details column. */}
-                    <p className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
-                      {business.business_name}
-                    </p>
-                  </div>
+            {/* A repeat of the page heading, so screen readers skip it. Over a
+                video it shows on phones only, above the controls, and fades
+                while the video plays. */}
+            <div
+              aria-hidden="true"
+              data-post-caption
+              className={cn(
+                "pointer-events-none absolute inset-x-0 p-4 transition-opacity duration-300 motion-reduce:transition-none",
+                // Phones: shading strong enough for the place line (at least 65% black under the text).
+                "max-md:bg-[linear-gradient(to_top,rgb(0_0_0/0.8),rgb(0_0_0/0.65)_calc(100%_-_2.5rem),transparent)] max-md:pt-10",
+                isVideo ? cn("md:hidden", POST_CAPTION_ABOVE_CONTROLS) : "bottom-0 z-[15]",
+                media.playing ? "opacity-0" : "opacity-100"
+              )}
+            >
+              <div className="flex items-end gap-3">
+                <div className="h-14 w-14 overflow-hidden rounded-2xl border border-white/20 bg-white p-1 shadow-lg dark:bg-warm-900">
+                  {business.logo_url ? (
+                    <Image
+                      src={normalizeMediaUrl(business.logo_url)}
+                      alt={`${business.business_name} logo`}
+                      width={56}
+                      height={56}
+                      className="h-full w-full rounded-xl object-contain"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <Store className="h-5 w-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 text-left text-white">
+                  <p className="text-xs font-semibold text-white/70">
+                    {family === "tourism"
+                      ? "Tourism & Hospitality"
+                      : family === "professional"
+                        ? "Business Profile"
+                        : "Featured Profile"}
+                  </p>
+                  <p className="line-clamp-2 font-display text-2xl font-semibold leading-tight">
+                    {business.business_name}
+                  </p>
+                  {captionPlace ? (
+                    <CaptionPlace
+                      location={captionPlace}
+                      className="mt-1 text-xs sm:text-sm md:hidden"
+                    />
+                  ) : null}
                 </div>
               </div>
-            )}
+            </div>
 
             {heroMediaItems.length > 1 ? (
               <>
