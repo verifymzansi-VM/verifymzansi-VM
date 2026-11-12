@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { isPersonName, isReservedPersonName, normalizePersonName } from "./person-name";
+import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 
 // Same character rule as internal.profile_bio_valid.
 const unsafeBio =
@@ -60,7 +61,7 @@ function parseProfile(value: unknown) {
   return parsed.data;
 }
 
-const commandReasons = new Map<string, FoundationProfileError["reason"]>([
+const commandReasons = new Map<FoundationErrorReason, FoundationProfileError["reason"]>([
   ["display_name_invalid", "invalid"],
   ["bio_invalid", "invalid"],
   ["legal_name_invalid", "invalid"],
@@ -86,7 +87,7 @@ async function settle(request: ProfileRpc) {
   if (error) {
     const known = error.code === "PT409" || error.code === "22023";
     throw new FoundationProfileError(
-      (known && error.details && commandReasons.get(error.details)) || "unavailable"
+      (known && lookupDatabaseReason(commandReasons, error)) || "unavailable"
     );
   }
   return parseProfile(data);
