@@ -72,11 +72,9 @@ such a check would block every pull request.
   - `Browser test build` (job `build-e2e`): builds the site once with the fixed
     browser-test settings; `e2e-full-matrix` serves that build.
   - `e2e-full-matrix` (chromium, firefox, mobile-chrome): every browser test
-    except the pictures, including the `@smoke` subset. On chromium and
-    mobile-chrome it also proves the signed-in KYC scenarios passed. (The
-    separate `e2e-smoke` and `launch-flows-bundle` jobs repeated subsets of it
-    and were removed; `pnpm test:browser:isolated` stays as a local release
-    check.)
+    except the pictures, including the `@smoke` subset. (The separate
+    `e2e-smoke` and `launch-flows-bundle` jobs repeated subsets of it and were
+    removed; `pnpm test:browser:isolated` stays as a local release check.)
   - `Visual regression (chosen frontend)`: compares the main public screens with
     the approved pictures of the chosen frontend, served from the private local
     foundation test copy, with the browser in the pinned Playwright image

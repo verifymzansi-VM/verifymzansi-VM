@@ -248,12 +248,10 @@ describe("CI job graph", () => {
     );
     const steps = matrix.steps;
     const tests = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
-    const proof = steps.findIndex((step) =>
-      (step.run ?? "").includes("scripts/check-kyc-browser-report.ts")
-    );
-    expect(proof).toBeGreaterThan(tests);
-    expect(steps[proof].if).toBe("matrix.project != 'firefox'");
-    expect(steps[proof].run).toContain('"test-results/e2e-full-$BROWSER_PROJECT.json"');
+    expect(tests).toBeGreaterThan(-1);
+    // The stub KYC specs are retired (identity review runs in e2e-foundation),
+    // so nothing may still look for their scenarios.
+    expect(JSON.stringify(steps)).not.toContain("check-kyc-browser-report");
     expect(steps[tests].env?.PLAYWRIGHT_JSON_REPORT).toBe(
       "test-results/e2e-full-${{ matrix.project }}.json"
     );
