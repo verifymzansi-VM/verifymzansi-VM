@@ -25,7 +25,7 @@ database/foundation/*.json
 database/foundation/openapi/
 database/foundation/current/
 docs/backend-foundation/evidence/
-docs/backend-foundation/schema-map.json
+database/source-inventory/
 docs/backend-foundation/post-field-proposals.json
 src/lib/domains/taxonomy/reference.json
 

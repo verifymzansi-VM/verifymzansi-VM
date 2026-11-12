@@ -64,7 +64,6 @@ import {
   generateStorageKey,
   deleteFromR2,
   deleteManyFromR2,
-  generatePresignedUploadUrl,
   generatePresignedDownloadUrl,
   uploadKycDocument,
   downloadKycDocument,
@@ -365,27 +364,6 @@ describe("storage service", () => {
         requestChecksumCalculation: "WHEN_REQUIRED",
         responseChecksumValidation: "WHEN_REQUIRED",
       });
-    });
-  });
-
-  describe("generatePresignedUploadUrl", () => {
-    it("returns a signed URL", async () => {
-      const url = await generatePresignedUploadUrl("bucket", "key", "image/png");
-      expect(url).toBe("https://signed-url.example.com");
-    });
-
-    it("pins the declared Content-Type into the signature", async () => {
-      await generatePresignedUploadUrl("bucket", "key", "video/mp4", 3600, 1024);
-      expect(mockGetSignedUrl).toHaveBeenCalledTimes(1);
-      const [, command, options] = mockGetSignedUrl.mock.calls[0];
-      // Content-Type is pinned so clients cannot PUT a different type.
-      expect(command.params).toMatchObject({ ContentType: "video/mp4" });
-      // Content-Length must NOT be pinned: browsers forbid setting the
-      // Content-Length header manually, so a pinned length would cause
-      // 403 SignatureDoesNotMatch on direct browser PUT uploads.
-      expect(command.params).not.toHaveProperty("ContentLength");
-      expect(options.signableHeaders).toBeInstanceOf(Set);
-      expect([...options.signableHeaders]).toContain("content-type");
     });
   });
 

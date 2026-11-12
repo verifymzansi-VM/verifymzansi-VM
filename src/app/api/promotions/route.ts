@@ -669,7 +669,9 @@ export async function GET(request: NextRequest) {
         data: { user },
       } = await supabase.auth.getUser();
       userId = user?.id ?? null;
-    } catch {}
+    } catch {
+      // Counting the view does not need a signed-in viewer; continue anonymously.
+    }
 
     const viewerKey = buildViewerKey(
       request.cookies?.get?.(ENGAGEMENT_VIEWER_COOKIE)?.value ?? null,

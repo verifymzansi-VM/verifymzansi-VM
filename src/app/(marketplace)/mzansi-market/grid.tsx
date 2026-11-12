@@ -26,6 +26,7 @@ interface ListingRow {
   title: string;
   description: string | null;
   price_cents: number | null;
+  price_mode?: string | null;
   price_negotiable: boolean;
   location_province: string;
   location_city: string;
@@ -97,9 +98,11 @@ function getListingCardProps(listing: ListingRow) {
     id: listing.id,
     title: listing.title,
     price: listing.price_cents ?? 0,
+    priceMode: listing.price_mode,
     negotiable: listing.price_negotiable,
     imageUrl: videoUrl || listing.photos?.[0],
     posterUrl: listing.video_thumbnail || listing.photos?.[0] || undefined,
+    isVideo: Boolean(videoUrl),
     logoUrl: listing.logo_url,
     province: listing.location_province,
     city: listing.location_city,

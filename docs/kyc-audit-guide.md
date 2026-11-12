@@ -53,17 +53,14 @@ exist. Unsupported provider names fail instead of falling back silently.
 retired source schema's database lanes (`test:kyc:db`, `test:db:isolated`) were
 removed; the live schema is checked by `foundation-replay` and
 `foundation-native`. `test:browser:isolated` records local deterministic KYC
-flows and any skips. `e2e/kyc-authenticated.spec.ts` exercises synthetic ID
-submission, private evidence authorization/decryption, claim enforcement,
-reviewer resubmission, synthetic selfie/final approval, legal-name locking,
-retention scheduling and independent high-risk governance UI. The browser runner
-requires all three authenticated scenarios to pass in both Chrome projects; a
-smoke-only run cannot attest this gate. It uses the real HTTP routes with
-isolated auth/database/storage fixtures; PostgreSQL RLS/transactions and genuine
-provider behavior remain separate coverage requirements. Fixture storage uses
-the shared E2E mode guard, and cannot be enabled by test flags in a production
-environment. Reports live under `tmp/kyc-audit`; INCOMPLETE is required when
-tools or credentials are unavailable. Preserve only synthetic fixtures and
-redacted metadata in tracked evidence. See
-[encryption and recovery](encryption-recovery.md) and
+flows and any skips. The signed-in KYC journey (ID and selfie through the
+website, staff claim and review, acceptance) runs on the production schema in
+the foundation browser suite (`e2e/foundation/member-post-publish.spec.ts`,
+`e2e/foundation/staff-review.spec.ts`), part of the main release gate. The
+high-risk governance screens have no browser test there yet; their database
+rules and routes have their own tests. Fixture storage uses the shared E2E mode
+guard, and cannot be enabled by test flags in a production environment. Reports
+live under `tmp/kyc-audit`; INCOMPLETE is required when tools or credentials are
+unavailable. Preserve only synthetic fixtures and redacted metadata in tracked
+evidence. See [encryption and recovery](encryption-recovery.md) and
 [audit policy](audit-tools.md).

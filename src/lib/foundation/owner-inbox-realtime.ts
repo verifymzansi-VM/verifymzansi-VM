@@ -46,7 +46,9 @@ export async function subscribeFoundationOwnerInbox(
             if (status === "SUBSCRIBED") for (const listener of entry.listeners) listener();
           });
       } catch (error) {
-        await Promise.resolve(client.removeChannel(entry.channel)).catch(() => {});
+        await Promise.resolve(client.removeChannel(entry.channel)).catch(() => {
+          // Best-effort cleanup; the join error below is the one that matters.
+        });
         throw error;
       }
     })();
@@ -71,7 +73,10 @@ export async function subscribeFoundationOwnerInbox(
     entry.listeners.delete(listener);
     if (entry.listeners.size === 0) {
       if (topics.get(topic) === entry) topics.delete(topic);
-      if (entry.channel) void Promise.resolve(client.removeChannel(entry.channel)).catch(() => {});
+      if (entry.channel)
+        void Promise.resolve(client.removeChannel(entry.channel)).catch(() => {
+          // Best-effort unsubscribe; nothing listens to this channel any more.
+        });
     }
   };
 }

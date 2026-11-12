@@ -41,6 +41,8 @@ create table private.verification_identity_submissions (
 );
 alter table private.verification_identity_submissions owner to postgres;
 alter table private.verification_identity_submissions enable row level security;
+CREATE INDEX verification_identity_submissions_id_artifact_id_idx ON private.verification_identity_submissions USING btree (id_artifact_id);
+CREATE INDEX verification_identity_submissions_selfie_artifact_id_idx ON private.verification_identity_submissions USING btree (selfie_artifact_id);
 CREATE INDEX verification_submissions_case_idx ON private.verification_identity_submissions USING btree (case_id, id);
 CREATE INDEX verification_submissions_owner_idx ON private.verification_identity_submissions USING btree (owner_id, id);
 CREATE TRIGGER snapshot_identity_submission_names AFTER INSERT ON private.verification_identity_submissions FOR EACH ROW EXECUTE FUNCTION internal.snapshot_identity_submission_names();

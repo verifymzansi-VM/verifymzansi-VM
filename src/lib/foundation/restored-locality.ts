@@ -1,5 +1,7 @@
 import reference from "../domains/taxonomy/reference.json";
-export class LocalityInputError extends Error {}
+export class LocalityInputError extends Error {
+  override name = "LocalityInputError";
+}
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 /** Map preserved form labels/aliases to canonical IDs; SQL rechecks the pair. */
 export function resolveRestoredLocality(province: string, city: string) {

@@ -9,6 +9,8 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationCheckoutSummary } from "@/lib/foundation/checkout-summary";
+import { createLogger } from "@/lib/utils/logger";
+import { logDegradedRead } from "@/lib/utils/request-failure";
 
 export const metadata = { title: "Checkout", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -19,6 +21,8 @@ const AREA_LABELS: Record<string, string> = {
   MZANSI_BUSINESS: "Mzansi Business",
   PROMOTIONS_EVENTS: "Tourism & Events",
 };
+
+const log = createLogger("CheckoutPage");
 
 async function loadSummary(planId: string): Promise<CheckoutSummary | null> {
   if (getDataBackend() === "foundation") return readFoundationCheckoutSummary(planId);
@@ -52,6 +56,11 @@ export default async function CheckoutPage({
 }) {
   const { plan: planId } = await searchParams;
   if (!planId) redirect("/pricing");
-  const summary = UUID.test(planId) ? await loadSummary(planId).catch(() => null) : null;
+  const summary = UUID.test(planId)
+    ? await loadSummary(planId).catch((error: unknown) => {
+        logDegradedRead(log, "Checkout summary unavailable", error);
+        return null;
+      })
+    : null;
   return <CheckoutConfirm summary={summary} />;
 }

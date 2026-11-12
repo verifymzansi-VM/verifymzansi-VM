@@ -1,6 +1,6 @@
 import { CATEGORIES } from "@/lib/constants/categories";
 import { resolveMarketProfileVariant } from "@/lib/presentation/profile-variants";
-import { formatRandAmount } from "@/lib/utils/format";
+import { formatRandAmount, formatZARShort } from "@/lib/utils/format";
 
 export interface FactItem {
   label: string;
@@ -111,18 +111,39 @@ export function getListingCategoryLabel(category: string | null | undefined) {
 }
 
 /**
- * Price line for a listing. A job with no disclosed salary is never shown as R0,
- * and a missing price is "on request" — only a positive amount is a price.
+ * Price line for a listing, written the same way on cards, in the showroom,
+ * on home rails, on the post page and in the immersive viewer. An amount is
+ * "R1 450" (`formatZARShort`); a free item says "Free"; a job with no
+ * disclosed salary is never shown as R0, and a missing price is "on request".
  */
 export function describeListingPrice(listing: {
   category: string | null;
   price_cents: number | null;
-}): { kind: "amount"; cents: number } | { kind: "none"; label: string } {
+  price_mode?: string | null;
+}):
+  | { kind: "amount"; cents: number; label: string }
+  | { kind: "free"; label: string }
+  | { kind: "none"; label: string } {
+  const isJob = listing.category === "jobs_services";
   if (listing.price_cents != null && listing.price_cents > 0) {
-    return { kind: "amount", cents: listing.price_cents };
+    return {
+      kind: "amount",
+      cents: listing.price_cents,
+      label: formatZARShort(listing.price_cents),
+    };
   }
-  return {
-    kind: "none",
-    label: listing.category === "jobs_services" ? "Salary not provided" : "Price on request",
-  };
+  if (listing.price_mode === "free" && !isJob) return { kind: "free", label: "Free" };
+  return { kind: "none", label: isJob ? "Salary not provided" : "Price on request" };
+}
+
+/** "Negotiable" goes with an amount or "Price on request", never with Free or a job. */
+export function isListingPriceNegotiable(
+  listing: { category: string | null; price_negotiable?: boolean | null },
+  price: ReturnType<typeof describeListingPrice>
+): boolean {
+  return (
+    Boolean(listing.price_negotiable) &&
+    price.kind !== "free" &&
+    listing.category !== "jobs_services"
+  );
 }

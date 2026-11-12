@@ -25,6 +25,7 @@ const encryptedNumber = z.strictObject({
   key_id: z.literal("identity-number-v1"),
 });
 export class FoundationVerificationError extends Error {
+  override name = "FoundationVerificationError";
   constructor(
     readonly status: 400 | 403 | 409 | 413 | 503,
     message = "Verification could not be completed"

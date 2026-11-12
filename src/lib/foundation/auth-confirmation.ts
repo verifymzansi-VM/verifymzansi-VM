@@ -18,6 +18,7 @@ const exchange = z.strictObject({
 });
 
 class FoundationConfirmationError extends Error {
+  override name = "FoundationConfirmationError";
   constructor(readonly status: 401 | 503) {
     super("The confirmation could not be completed");
   }
@@ -29,7 +30,8 @@ class FoundationConfirmationError extends Error {
  * session bridge sees the newly exchanged session, never the incoming one.
  * Recovery requires a signed provider AMR and a live owner profile; a mutable
  * redirect type, query marker or cookie user object cannot authorize it.
- * Returns the verified caller's API, account id and (recovery only) the
+ * Returns the verified caller's API, account id, when Auth created the account
+ * (so a first Google sign-in can be told apart) and (recovery only) the
  * GoTrue-verified recovery session.
  */
 export async function confirmFoundationAccount(
@@ -41,6 +43,7 @@ export async function confirmFoundationAccount(
 ): Promise<{
   api: FoundationAuthenticatedApi;
   accountId: string;
+  createdAt: string | null;
   recovery: { sessionId: string; issuedAt: number } | null;
 }> {
   const parsed = exchange.safeParse(input);
@@ -78,6 +81,7 @@ export async function confirmFoundationAccount(
     return {
       api: caller.api,
       accountId: caller.accountId,
+      createdAt: typeof data.user.created_at === "string" ? data.user.created_at : null,
       recovery: purpose === "recovery" ? caller.recovery : null,
     };
   } catch (error) {

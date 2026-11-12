@@ -13,6 +13,7 @@ import {
   type MediaFitStrategy,
 } from "@/components/ui/video-card-player";
 import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
+import { PosterCaption } from "@/components/listings/poster-caption";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
 import { useState, type ReactNode } from "react";
@@ -334,9 +335,7 @@ export function PosterCardShell({
           onDragStart={disableNativeDrag ? handleNativeDragStart : undefined}
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 via-slate-950/34 to-transparent px-4 pb-4 pt-12 text-white">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-            Public preview
-          </p>
+          <p className="text-[11px] font-semibold text-white/70">Public preview</p>
           <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{title}</p>
         </div>
       </div>
@@ -416,7 +415,7 @@ export function PosterCardShell({
           <div className="absolute left-2 top-2 z-[6]">
             <span
               className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-md ring-1 ring-black/10",
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold shadow-md ring-1 ring-black/10",
                 statusClassName
               )}
             >
@@ -436,38 +435,13 @@ export function PosterCardShell({
               !hasVideo && "group-hover/poster:opacity-0 group-active/poster:opacity-0"
             )}
           >
-            <div className="min-w-0 flex-1 drop-shadow-md">
-              {eyebrow ? (
-                <p
-                  className={cn(
-                    "mb-1 font-bold",
-                    isHeroVariant ? "text-sm sm:text-base" : "text-xs sm:text-sm"
-                  )}
-                >
-                  {eyebrow}
-                </p>
-              ) : null}
-              <h3
-                className={cn(
-                  "line-clamp-2 font-semibold leading-tight",
-                  isHeroVariant ? "text-sm sm:text-lg" : "text-[11px] sm:text-sm"
-                )}
-              >
-                {title}
-              </h3>
-              {location ? (
-                <p
-                  className={cn(
-                    "mt-1 flex min-w-0 items-center gap-1 leading-tight",
-                    isHeroVariant ? "text-xs sm:text-sm" : "text-[10px] sm:text-xs"
-                  )}
-                >
-                  <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{location}</span>
-                </p>
-              ) : null}
-              {badges ? <div className="mt-1.5">{badges}</div> : null}
-            </div>
+            <PosterCaption
+              eyebrow={eyebrow}
+              title={title}
+              location={location}
+              badges={badges}
+              size={isHeroVariant ? "hero" : "card"}
+            />
             {normalizedLogoUrl ? (
               <Image
                 src={normalizedLogoUrl}

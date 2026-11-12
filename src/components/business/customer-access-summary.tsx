@@ -1,4 +1,7 @@
-import { CUSTOMER_ACCESS_OPTIONS, customerAccessSchema } from "@/lib/forms/customer-access";
+import {
+  CUSTOMER_ACCESS_OPTIONS,
+  readPublishedCustomerAccess,
+} from "@/lib/forms/customer-access-read";
 
 export function CustomerAccessSummary({
   value,
@@ -7,9 +10,8 @@ export function CustomerAccessSummary({
   value: unknown;
   meetingPoint?: unknown;
 }) {
-  const result = customerAccessSchema.safeParse(value);
-  if (!result.success) return null;
-  const access = result.data;
+  const access = readPublishedCustomerAccess(value);
+  if (!access) return null;
   return (
     <section className="space-y-2 rounded-xl border p-4" aria-label="Customer access">
       <h3 className="font-semibold">How we serve customers</h3>
