@@ -1,7 +1,5 @@
-import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { MySlots } from "@/components/billing/my-slots";
-import { getDataBackend } from "@/lib/data-backend";
 import { readFoundationServerSession } from "@/lib/foundation/server-session";
 import { readFoundationMySlots } from "@/lib/foundation/billing-runtime";
 import { foundationServerPublicApi } from "@/lib/foundation/server-public";
@@ -31,7 +29,6 @@ async function buySlotHref() {
 }
 
 export default async function MySlotsPage() {
-  if (getDataBackend() !== "foundation") notFound();
   const { api } = await readFoundationServerSession();
   const [mine, buyHref] = await Promise.all([readFoundationMySlots(api), buySlotHref()]);
   return (
