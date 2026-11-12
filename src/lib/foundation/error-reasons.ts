@@ -108,11 +108,12 @@ export const FOUNDATION_ERROR_MESSAGES = {
 
 /**
  * Staff refusals that send the person to verify their authenticator again,
- * recognised by this pattern. The check fails unless the database messages the
- * pattern matches are exactly STAFF_SECOND_FACTOR_MESSAGES, so rewording one
- * of them (or adding a new one) cannot silently change the redirect.
+ * recognised by this pattern. error-reasons.test.ts fails unless the database
+ * messages the pattern matches are exactly STAFF_SECOND_FACTOR_MESSAGES, and
+ * the check fails when a listed one is no longer raised, so rewording one of
+ * them (or adding a new one) cannot silently change the redirect.
  */
-const STAFF_SECOND_FACTOR_PATTERN = /second.factor|authenticator app/;
+export const STAFF_SECOND_FACTOR_PATTERN = /second.factor|authenticator app/;
 export const STAFF_SECOND_FACTOR_MESSAGES = [
   "recent second-factor verification required",
   "second-factor verification required after role assignment",

@@ -256,18 +256,15 @@ export function parseSharedList(source) {
       ([, key, text]) => [key, JSON.parse(`"${text}"`)]
     )
   );
-  const pattern = /const STAFF_SECOND_FACTOR_PATTERN = \/(.+)\/([a-z]*);/.exec(source);
   const staffBlock = /export const STAFF_SECOND_FACTOR_MESSAGES = \[([\s\S]*?)\] as const;/.exec(
     source
   );
-  if (!pattern || !staffBlock)
-    throw new Error("The shared list has no STAFF_SECOND_FACTOR_PATTERN or _MESSAGES");
-  const staffSecondFactor = {
-    pattern: new RegExp(pattern[1], pattern[2]),
-    messages: [...staffBlock[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(([, text]) =>
-      JSON.parse(`"${text}"`)
-    ),
-  };
+  if (!staffBlock) throw new Error("The shared list has no STAFF_SECOND_FACTOR_MESSAGES");
+  // The pattern itself is compared with these messages by
+  // src/lib/foundation/error-reasons.test.ts (it imports the real pattern).
+  const staffSecondFactor = [...staffBlock[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(([, text]) =>
+    JSON.parse(`"${text}"`)
+  );
   return { reasons, messages, staffSecondFactor };
 }
 
@@ -301,16 +298,11 @@ export function compareReasons(database, shared) {
       failures.push(
         `The shared list names '${reason}' but no current database function raises it (renamed or removed?)`
       );
-  if (shared.staffSecondFactor) {
-    const matched = [...database.allMessages]
-      .filter((message) => shared.staffSecondFactor.pattern.test(message))
-      .sort();
-    const listed = [...shared.staffSecondFactor.messages].sort();
-    if (matched.join("\n") !== listed.join("\n"))
+  for (const message of shared.staffSecondFactor ?? [])
+    if (!database.allMessages.has(message))
       failures.push(
-        `STAFF_SECOND_FACTOR_MESSAGES lists ${JSON.stringify(listed)} but the pattern matches these database messages: ${JSON.stringify(matched)}`
+        `STAFF_SECOND_FACTOR_MESSAGES lists "${message}", which no current database function raises`
       );
-  }
   for (const [key, message] of Object.entries(shared.messages))
     if (!database.messages.has(message))
       failures.push(

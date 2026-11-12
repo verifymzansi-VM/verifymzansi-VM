@@ -165,7 +165,7 @@ test("rewording a staff second-factor refusal fails the check", (t) => {
     );
   assert.ok(
     runReasonCheck({ root }).failures.some((line) =>
-      line.startsWith("STAFF_SECOND_FACTOR_MESSAGES lists")
+      line.startsWith('STAFF_SECOND_FACTOR_MESSAGES lists "verified authenticator app required"')
     )
   );
 });

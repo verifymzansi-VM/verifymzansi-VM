@@ -1,13 +1,26 @@
 /** @vitest-environment node */
 import { expect, it } from "vitest";
 import {
+  currentFunctionFiles,
+  readDatabaseReasons,
+} from "../../../scripts/lib/foundation-error-reasons.mjs";
+import {
   STAFF_SECOND_FACTOR_MESSAGES,
+  STAFF_SECOND_FACTOR_PATTERN,
   hasDatabaseMessage,
   hasDatabaseReason,
   isStaffSecondFactorRefusal,
   lookupDatabaseReason,
   type FoundationErrorReason,
 } from "./error-reasons";
+
+it("the staff second-factor pattern matches exactly the listed database messages", () => {
+  const { allMessages } = readDatabaseReasons(currentFunctionFiles(process.cwd()));
+  const matched = [...allMessages]
+    .filter((message: string) => STAFF_SECOND_FACTOR_PATTERN.test(message))
+    .sort();
+  expect(matched).toEqual([...STAFF_SECOND_FACTOR_MESSAGES].sort());
+});
 
 it("matches listed reasons only, by the details the database sent", () => {
   const error = { code: "PT409", details: "posting_terms_required", message: "x" };
