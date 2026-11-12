@@ -25,6 +25,7 @@ const readResult = z.strictObject({
 });
 const writeResult = z.strictObject({ ok: z.literal(true) });
 class DraftRefusal extends Error {
+  override name = "DraftRefusal";
   constructor(readonly response: FoundationRefusal) {
     super(response.error);
   }

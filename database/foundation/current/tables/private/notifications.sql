@@ -12,7 +12,7 @@ create table private.notifications (
   organisation_id uuid,
   constraint notifications_account_id_fkey FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE CASCADE,
   constraint notifications_check CHECK (read_at IS NULL OR read_at >= created_at),
-  constraint notifications_kind_check CHECK (kind = ANY (ARRAY['enquiry_received'::text, 'organisation_application_received'::text, 'organisation_application_decided'::text, 'organisation_affiliation_ended'::text, 'organisation_sponsorship_activated'::text, 'organisation_sponsorship_ended'::text, 'partner_commission_approved'::text, 'partner_commission_reversed'::text, 'account_warning'::text, 'content_hidden'::text, 'account_suspended'::text, 'account_banned'::text, 'appeal_decided'::text, 'business_check_update'::text])),
+  constraint notifications_kind_check CHECK (kind = ANY (ARRAY['enquiry_received'::text, 'organisation_application_received'::text, 'organisation_application_decided'::text, 'organisation_affiliation_ended'::text, 'organisation_sponsorship_activated'::text, 'organisation_sponsorship_ended'::text, 'partner_commission_approved'::text, 'partner_commission_reversed'::text, 'account_warning'::text, 'content_hidden'::text, 'account_suspended'::text, 'account_banned'::text, 'appeal_decided'::text, 'business_check_update'::text, 'verification_returned'::text])),
   constraint notifications_organisation_id_fkey FOREIGN KEY (organisation_id) REFERENCES private.organisations(id) ON DELETE CASCADE,
   constraint notifications_pkey PRIMARY KEY (id),
   constraint notifications_post_id_fkey FOREIGN KEY (post_id) REFERENCES private.posts(id) ON DELETE CASCADE

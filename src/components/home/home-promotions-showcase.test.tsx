@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createClient } from "@/lib/supabase/server";
 import { HomePromotionsShowcase } from "./home-promotions-showcase";
@@ -234,17 +234,17 @@ describe("HomePromotionsShowcase", () => {
     );
   });
 
-  it("renders an empty-state CTA when no promotions exist", async () => {
+  it("collapses to one 'be the first' card when no stays or events exist", async () => {
     vi.mocked(createClient).mockResolvedValue(createSupabaseMock([]) as never);
 
     const ui = await HomePromotionsShowcase();
     render(ui as React.ReactElement);
-    expect(screen.getByRole("heading", { name: /Tourism & Events/i })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "No stays or events yet" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /List a stay or event/i })).toHaveAttribute(
-      "href",
-      "/post/create-tourism"
-    );
+    const card = screen.getByRole("region", { name: "Be the first to list a stay or event" });
+    expect(within(card).getAllByRole("link")).toHaveLength(1);
+    expect(within(card).getByRole("link")).toHaveAttribute("href", "/post/create-tourism");
+    expect(screen.queryByRole("heading", { name: /Tourism & Events/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /view all/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/yet/i)).not.toBeInTheDocument();
   });
 
   it("renders promotions inside the shared auto-scroll rail", async () => {
@@ -363,7 +363,7 @@ describe("HomePromotionsShowcase", () => {
     const ui = await HomePromotionsShowcase();
     render(ui);
 
-    expect(screen.queryByText("No stays or events yet")).not.toBeInTheDocument();
+    expect(screen.queryByText(/be the first/i)).not.toBeInTheDocument();
     expect(screen.getByTestId("business-preview-card")).toBeInTheDocument();
   });
 

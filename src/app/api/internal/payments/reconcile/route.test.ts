@@ -5,6 +5,7 @@ import { runFoundationPaymentReconciliation } from "@/lib/foundation/billing-run
 
 vi.mock("@/lib/foundation/billing-runtime", () => ({
   runFoundationPaymentReconciliation: vi.fn(),
+  paymentCheckFailureReason: () => "unavailable",
 }));
 
 const SECRET = "internal-jobs-test-secret";

@@ -15,4 +15,5 @@ create table private.identity_ban_proposal_requests (
 );
 alter table private.identity_ban_proposal_requests owner to postgres;
 alter table private.identity_ban_proposal_requests enable row level security;
+CREATE INDEX identity_ban_proposal_requests_owner_id_idx ON private.identity_ban_proposal_requests USING btree (owner_id);
 revoke all on private.identity_ban_proposal_requests from public;

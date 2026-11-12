@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
+import { hasDatabaseReason } from "./error-reasons";
 
 const request = z.strictObject({
   id: z.uuid().transform((value) => value.toLowerCase()),
@@ -27,17 +28,17 @@ export async function submitFoundationPost(api: FoundationAuthenticatedApi, inpu
     }
   );
   if (error) {
-    if (error.code === "PT409" && error.details === "posting_terms_required")
+    if (error.code === "PT409" && hasDatabaseReason(error, "posting_terms_required"))
       throw new Error("Review and accept the current posting terms before submitting");
-    if (error.code === "PT503" && error.details === "posting_terms_unavailable")
+    if (error.code === "PT503" && hasDatabaseReason(error, "posting_terms_unavailable"))
       throw new Error("Posting terms are temporarily unavailable; try again later");
-    if (error.code === "42501" && error.details === "posting_verification_required")
+    if (error.code === "42501" && hasDatabaseReason(error, "posting_verification_required"))
       throw new Error("Complete identity, phone and locality verification before submitting");
-    if (error.code === "22023" && error.details === "contact_channels_required")
+    if (error.code === "22023" && hasDatabaseReason(error, "contact_channels_required"))
       throw new Error("Choose at least one contact method before submitting");
-    if (error.code === "PT409" && error.details === "contact_phone_required")
+    if (error.code === "PT409" && hasDatabaseReason(error, "contact_phone_required"))
       throw new Error("Verify your account phone before using Call or WhatsApp");
-    if (error.code === "PT409" && error.details === "duplicate_event")
+    if (error.code === "PT409" && hasDatabaseReason(error, "duplicate_event"))
       throw new Error(
         "A matching event is already pending or live on your account; edit that event instead"
       );

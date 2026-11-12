@@ -11,11 +11,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { TrustBadge } from "@/components/trust/trust-badge";
 import { ListingCard } from "@/components/listings/listing-card";
 import { computeTrustLevel } from "@/lib/constants/trust-scale";
 import { readOwnerId } from "@/lib/account/compat";
-import { formatSaLongDate, formatZAR } from "@/lib/utils/format";
+import { formatSaLongDate } from "@/lib/utils/format";
 import { ListingDetailClient } from "@/app/listing/[id]/client";
 import { ListingContactActions } from "@/app/listing/[id]/listing-contact-actions";
 import { getListingConditionLabel } from "@/lib/constants/listing-condition";
@@ -23,15 +24,18 @@ import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { StickyMobileBar } from "@/components/ui/sticky-mobile-bar";
 import {
   buildListingFacts,
+  describeListingPrice,
   getListingCategoryLabel,
   getListingDetailsHeading,
   humanizeKey,
+  isListingPriceNegotiable,
   LISTING_CONTACT_METHOD_LABELS,
 } from "@/lib/presentation/listing-facts";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import type { AccountVerificationStatus } from "@/types/enums";
 import { placeLine } from "@/lib/utils/place-line";
 import { SHOW_ENGAGEMENT_TOTALS } from "@/lib/hidden-features";
+import { POST_MEDIA_FIRST_SCREEN_HEIGHT } from "@/components/listings/poster-caption";
 
 export interface ListingDetailRecord {
   id: string;
@@ -39,6 +43,8 @@ export interface ListingDetailRecord {
   title: string;
   description: string | null;
   price_cents: number | null;
+  /** "amount" | "free" | "on_request" (live backend); absent on older records. */
+  price_mode?: string | null;
   price_negotiable: boolean;
   category: string | null;
   condition: string | null;
@@ -76,6 +82,7 @@ export interface SimilarListingRow {
   id: string;
   title: string;
   price_cents: number | null;
+  price_mode?: string | null;
   price_negotiable: boolean;
   condition: string | null;
   photos: string[];
@@ -144,6 +151,8 @@ export function ListingDetailContent({
     )
   );
   const detailsHeading = getListingDetailsHeading(listing.category);
+  const price = describeListingPrice(listing);
+  const priceNegotiable = isListingPriceNegotiable(listing, price);
   const sellerInitial = seller?.display_name?.charAt(0)?.toUpperCase() || "S";
   const sellerPhone = contactPhone(seller?.phone);
   const sellerWhatsappUrl = whatsappLink(seller?.phone, listing.title, `/listing/${listing.id}`);
@@ -211,10 +220,20 @@ export function ListingDetailContent({
                 listingId={listing.id}
                 videoThumbnail={listing.video_thumbnail}
                 photoCount={photoCount}
-                heroAspectClassName="aspect-[9/16]"
+                heroAspectClassName={cn(
+                  "aspect-[9/16]",
+                  // The sticky contact bar is public-only; previews keep the full frame.
+                  !isReviewLayout && POST_MEDIA_FIRST_SCREEN_HEIGHT
+                )}
                 heroMediaClassName="bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_rgba(15,23,42,0.96))] object-contain transition-transform duration-500"
                 trackView={trackView}
                 onViewRecorded={handleViewRecorded}
+                caption={{
+                  eyebrow: priceNegotiable ? `${price.label} · Negotiable` : price.label,
+                  // The card's place: the town, else the province.
+                  location: listing.location_city || listing.location_province,
+                  logoUrl: listing.logo_url,
+                }}
               />
             </ErrorBoundary>
           </div>
@@ -245,18 +264,15 @@ export function ListingDetailContent({
               </TitleTag>
 
               <div className="flex flex-wrap items-end justify-center gap-3 lg:justify-start">
-                {listing.price_cents != null && listing.price_cents > 0 ? (
-                  <p className="font-display text-[2rem] font-bold leading-none tracking-tight text-brand-green">
-                    {formatZAR(listing.price_cents)}
-                  </p>
-                ) : (
-                  <p className="font-display text-2xl font-bold leading-none tracking-tight text-brand-green">
-                    {listing.category === "jobs_services"
-                      ? "Salary not provided"
-                      : "Price on request"}
-                  </p>
-                )}
-                {listing.price_negotiable ? (
+                <p
+                  className={cn(
+                    "font-display font-bold leading-none tracking-tight text-brand-green",
+                    price.kind === "amount" ? "text-[2rem]" : "text-2xl"
+                  )}
+                >
+                  {price.label}
+                </p>
+                {priceNegotiable ? (
                   <Badge className="bg-brand-green/10 text-brand-green">Negotiable</Badge>
                 ) : null}
               </div>
@@ -279,9 +295,7 @@ export function ListingDetailContent({
               <Card className="surface-card elev-sm">
                 <CardContent className="space-y-4 p-5">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      Quick facts
-                    </p>
+                    <p className="text-xs font-semibold text-muted-foreground">Quick facts</p>
                     <h2 className="font-display text-xl font-semibold">{detailsHeading}</h2>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -290,9 +304,7 @@ export function ListingDetailContent({
                         key={`${fact.label}-${fact.value}`}
                         className="rounded-2xl border border-slate-200/70 bg-slate-50/90 px-3 py-2 dark:border-white/10 dark:bg-white/[0.03]"
                       >
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          {fact.label}
-                        </p>
+                        <p className="text-xs font-semibold text-muted-foreground">{fact.label}</p>
                         <p className="mt-1 text-sm font-medium">{fact.value}</p>
                       </div>
                     ))}
@@ -343,9 +355,7 @@ export function ListingDetailContent({
             <Card className="surface-card elev-sm lg:col-span-2">
               <CardContent className="space-y-4 p-5">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    More details
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground">More details</p>
                   <h2 className="font-display text-xl font-semibold">Full listing breakdown</h2>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -367,9 +377,7 @@ export function ListingDetailContent({
             <div className="space-y-3 lg:col-span-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                    Keep browsing
-                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground">Keep browsing</p>
                   <h2 className="font-display text-xl font-semibold">Similar listings</h2>
                 </div>
                 <Link
@@ -392,6 +400,7 @@ export function ListingDetailContent({
                       id={item.id}
                       title={item.title}
                       price={item.price_cents ?? 0}
+                      priceMode={item.price_mode}
                       negotiable={item.price_negotiable}
                       imageUrl={videoUrl || item.photos?.[0]}
                       posterUrl={item.video_thumbnail || item.photos?.[0] || undefined}

@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { Webhook } from "svix";
 
 const mockApplyNotification = vi.fn();
+const mockRecordProblem = vi.fn();
 const mockCheckRateLimit = vi.fn();
 
 vi.mock("@/lib/utils/rate-limit", () => ({
@@ -13,6 +14,10 @@ vi.mock("@/lib/utils/rate-limit", () => ({
 
 vi.mock("@/lib/foundation/billing-runtime", () => ({
   applyFoundationOzowNotification: (...args: unknown[]) => mockApplyNotification(...args),
+}));
+
+vi.mock("@/lib/foundation/payment-problems", () => ({
+  recordPaymentProblem: (...args: unknown[]) => mockRecordProblem(...args),
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -155,15 +160,22 @@ describe("POST /api/webhooks/ozow", () => {
     expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 
+  // A signed notice that can never be applied is acknowledged (so the sender
+  // stops retrying) and kept as a payment problem with its reason.
   it.each([
-    [["merchantReference", "id"], "Missing merchantReference"],
-    [["status"], "Missing transaction status"],
-  ])("rejects a completion without %j", async (fields, error) => {
+    [["merchantReference", "id"], "missing_merchant_reference"],
+    [["status"], "missing_transaction_status"],
+  ])("acknowledges and records a completion without %j", async (fields, reason) => {
     const data: Record<string, unknown> = { ...completion.data };
     for (const field of fields) delete data[field];
     const response = await POST(createSignedRequest({ ...completion, data }));
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, rejected: reason });
+    expect(mockRecordProblem).toHaveBeenCalledExactlyOnceWith(expect.any(Function), {
+      paymentId: null,
+      reason,
+      source: "notice",
+    });
     expect(mockApplyNotification).not.toHaveBeenCalled();
   });
 

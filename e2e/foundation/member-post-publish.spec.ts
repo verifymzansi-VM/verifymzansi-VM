@@ -27,9 +27,9 @@ import {
 //   sign-up refused without an invitation (the launch setting), invited
 //   sign-up through /register, email confirmation from the mail catcher, the
 //   phone code read from the copy's SMS sink, ID and selfie photos, the area,
-//   an admin's acceptance in the staff review, posting terms, opening a create
-//   form, submitting, a moderator's approval, the post in the showroom and in
-//   search, and the free week.
+//   an admin's acceptance in the staff review, the section chooser, opening a
+//   create form, submitting with the terms tick box, a moderator's approval,
+//   the post in the showroom and in search, and the free week.
 //
 // The free week (BL-03, fixed by M2.3) starts when the first post is approved:
 // the test checks its start and length, its email with the end date (mail
@@ -76,6 +76,11 @@ const REVIEW_CHECKS = [
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
+/** The one registration reply while sign-up is by invitation only
+ * (FOUNDATION_REGISTRATION_INVITE_ONLY, as in production). */
+const INVITE_ONLY_REPLY =
+  "Registration is by invitation only for now. If this email was invited, check your inbox to continue.";
+
 test.describe.configure({ mode: "serial" });
 
 type Reply = { method: string; path: string; status: number; body: unknown };
@@ -268,13 +273,17 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     await page.locator("#acceptTerms").check();
     await page.getByRole("button", { name: "Create account" }).click();
     await expect.poll(() => reply("/api/auth/register").length).toBe(1);
-    // The hook's refusal reaches the visitor as the generic registration error.
+    // The hook's refusal gets exactly the reply an invited address gets (next
+    // test), so the form never reveals who is invited; the reply says sign-up
+    // is by invitation only.
     expect(reply("/api/auth/register")[0]).toMatchObject({
-      status: 400,
-      body: { error: "Check the registration details and complete the CAPTCHA" },
+      status: 200,
+      body: { ok: true, inviteOnly: true, message: INVITE_ONLY_REPLY },
     });
-    await expect(page.getByText("Registration failed").first()).toBeVisible();
-    await expect(page).toHaveURL(/\/register$/);
+    await page.waitForURL(`${APP_ORIGIN}/login?registered=invite`);
+    await expect(
+      page.getByText(/Registration is by invitation only for now/).first()
+    ).toBeVisible();
     expect(captchaTokens).toEqual(["dev-turnstile-bypass"]);
     expect(queryTestCopy(`select count(*) from auth.users where email = ${sql(email)};`)).toBe("0");
     expect(await mailCountTo(email)).toBe(0);
@@ -301,17 +310,14 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     await page.getByLabel("Confirm password").fill(member.password);
     await page.locator("#acceptTerms").check();
     await page.getByRole("button", { name: "Create account" }).click();
-    await page.waitForURL(`${APP_ORIGIN}/login?registered=true`);
+    await page.waitForURL(`${APP_ORIGIN}/login?registered=invite`);
     expect(captchaTokens).toEqual(["dev-turnstile-bypass"]);
     await expect
       .poll(() => reply("/api/auth/register"))
       .toEqual([
         expect.objectContaining({
           status: 200,
-          body: {
-            ok: true,
-            message: "If registration is available for this email, check your inbox to continue.",
-          },
+          body: { ok: true, inviteOnly: true, message: INVITE_ONLY_REPLY },
         }),
       ]);
     // The password breach check ran, answered by the copy's fence (proving the
@@ -520,27 +526,24 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     expect(outside).toEqual([]);
   });
 
-  test("the member is shown as verified and accepts the posting terms", async ({
+  test("the member is shown as verified and goes straight to the section chooser", async ({
     context,
     page,
   }) => {
-    const { outside, reply } = await guard(context);
+    const { outside } = await guard(context);
     await signInBrowser(context, member);
     await page.goto("/verification");
     await expect(page.getByRole("heading", { name: "Verification approved" })).toBeVisible();
     await page.goto("/post/create");
-    await page.getByRole("checkbox", { name: "I agree to the current posting terms." }).check();
-    await page.getByRole("button", { name: "Accept posting terms" }).click();
-    // Once accepted, the gate gives way to the section chooser.
+    // No separate terms step: the chooser shows at once. The terms are
+    // accepted with the tick box on the form, when the post is submitted.
     await expect(page.getByRole("heading", { name: "What would you like to post?" })).toBeVisible();
-    await expect
-      .poll(() => reply("/api/foundation/posting-terms"))
-      .toEqual([expect.objectContaining({ status: 200 })]);
+    await expect(page.getByRole("button", { name: "Accept posting terms" })).toHaveCount(0);
     expect(
       queryTestCopy(
         `select count(*) from private.posting_terms_acceptances where owner_id = '${member.id}';`
       )
-    ).toBe("1");
+    ).toBe("0");
     expect(outside).toEqual([]);
   });
 
@@ -621,6 +624,12 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     });
     business.id = (submitted.body as { id: string }).id;
     expect(business.id).toMatch(UUID);
+    // The form's tick box recorded the terms acceptance with the post.
+    expect(
+      queryTestCopy(
+        `select count(*) from private.posting_terms_acceptances where owner_id = '${member.id}';`
+      )
+    ).toBe("1");
 
     // A moderator approves it in the staff moderation queue.
     const staff = await browser.newContext({ serviceWorkers: "block" });

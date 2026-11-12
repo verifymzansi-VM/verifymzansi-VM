@@ -746,40 +746,6 @@ export async function getR2ObjectBytes(
 }
 
 /**
- * Generate a presigned URL for direct client-side upload to R2.
- * This allows users to upload files directly without proxying through the server.
- */
-export async function generatePresignedUploadUrl(
-  bucket: string,
-  key: string,
-  contentType: string,
-  expiresIn: number = 3600,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  maxContentLength?: number
-): Promise<string> {
-  // Clamp expiresIn to safe range: 60s–86400s (1 min–24 hours)
-  const safeExpiry = Math.max(60, Math.min(86400, expiresIn));
-  const client = getR2Client();
-
-  // NOTE: Do NOT set ContentLength on the command. Browsers forbid setting the
-  // Content-Length header manually in fetch/XHR, so a presigned URL that pins
-  // content-length cannot be satisfied by a browser PUT and fails with
-  // 403 SignatureDoesNotMatch. Size is validated server-side at upload-complete.
-  const command = new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    ContentType: contentType,
-  });
-
-  return await getSignedUrl(client, command, {
-    expiresIn: safeExpiry,
-    // Cryptographically pin the declared Content-Type so clients cannot PUT a
-    // different type (e.g. text/html) than the one the server authorised.
-    signableHeaders: new Set(["content-type"]),
-  });
-}
-
-/**
  * Generate a presigned URL for secure download from private R2 bucket.
  */
 export async function generatePresignedDownloadUrl(

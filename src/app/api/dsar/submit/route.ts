@@ -12,6 +12,7 @@ const dsarSubmitSchema = dsarRequestSchema.extend({
   turnstileToken: z.string().min(1, "CAPTCHA verification required").max(2048),
 });
 class PrivacySubmissionRefusal extends Error {
+  override name = "PrivacySubmissionRefusal";
   constructor(
     readonly status: 400 | 403 | 429 | 503,
     message: string

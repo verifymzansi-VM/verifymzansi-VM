@@ -10,6 +10,7 @@ import { HomeBusinessShowcase } from "@/components/home/home-business-showcase";
 import { HomeProgrammeShowcase } from "@/components/home/home-programme-showcase";
 import { HomePromotionsShowcase } from "@/components/home/home-promotions-showcase";
 import { HomeAboutSection } from "@/components/home/home-about-section";
+import { HomeIdentityLine } from "@/components/home/home-identity-line";
 import { generatedMzansiShowroomBackground } from "@/components/showrooms/showroom-backgrounds";
 import { preloadShowroomBackground } from "@/components/showrooms/showroom-section-shell";
 import { HomeSponsorsSection } from "@/components/home/home-sponsors-section";
@@ -31,9 +32,6 @@ export const metadata: Metadata = {
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "VerifyMzansi" }],
   },
 };
-
-/** Revalidate homepage data every 60 seconds (ISR) */
-export const revalidate = 60;
 
 export default async function HomePage() {
   // The showroom artwork is the LCP element; request it with the response headers.
@@ -132,6 +130,9 @@ export default async function HomePage() {
               <HeroBannerWithData />
             </Suspense>
           </section>
+
+          {/* One slim line on what we check; the full story sits further down. */}
+          <HomeIdentityLine />
 
           {/* ═══ Latest posts from each area ═══ */}
           <Suspense fallback={<MarketplacePreviewsSkeleton />}>

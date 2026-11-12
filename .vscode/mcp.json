@@ -3,7 +3,7 @@
     "cloudflare": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@cloudflare/mcp-server-cloudflare", "run"]
+      "args": ["-y", "@cloudflare/mcp-server-cloudflare@0.2.0", "run"]
     },
     "cloudflare-remote": {
       "type": "http",

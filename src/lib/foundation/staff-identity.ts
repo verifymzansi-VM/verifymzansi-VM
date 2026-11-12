@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { FoundationStaffCommandError } from "./staff-command";
+import { isStaffSecondFactorRefusal } from "./error-reasons";
 
 // Keep the exact Postgres timestamp string: converting through Date discards
 // microseconds and can skip/repeat history rows at a keyset boundary.
@@ -112,7 +113,7 @@ export async function readStaffIdentityContext(api: FoundationAuthenticatedApi, 
     throw new FoundationStaffCommandError(
       error.code === "42501" ? 403 : error.code === "PT409" ? 409 : 503,
       "Foundation identity review unavailable",
-      error.code === "42501" && /second.factor|authenticator app/.test(error.message ?? "")
+      error.code === "42501" && isStaffSecondFactorRefusal(error)
     );
   const result = parseStaffIdentityContext(data);
   if (result.case_id !== command.p_case)

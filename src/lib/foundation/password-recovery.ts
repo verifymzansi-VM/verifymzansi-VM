@@ -14,6 +14,7 @@ const inputSchema = z.strictObject({
 });
 const secretKey = z.string().regex(/^sb_secret_[A-Za-z0-9_-]+$/);
 export class FoundationRecoveryRequestError extends Error {
+  override name = "FoundationRecoveryRequestError";
   constructor(readonly status: 400 | 429 | 503) {
     super("Password recovery could not be requested");
   }
@@ -78,6 +79,7 @@ export function hasFoundationPasswordSetupKey(environment: NodeJS.ProcessEnv = p
 }
 
 export class FoundationPasswordSetupEmailError extends Error {
+  override name = "FoundationPasswordSetupEmailError";
   constructor(readonly status: 429 | 503) {
     super("The password setup email could not be requested");
   }

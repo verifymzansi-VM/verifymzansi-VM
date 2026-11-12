@@ -24,7 +24,7 @@ export const FROZEN_PATHSPEC = [
   ":(glob)src/app/**/*.scss",
 ];
 
-export const KINDS = ["rewiring", "wording-behaviour", "visual", "test", "helper"];
+const KINDS = ["rewiring", "wording-behaviour", "visual", "test", "helper"];
 export const COLUMNS = [
   "File",
   "Kind",
