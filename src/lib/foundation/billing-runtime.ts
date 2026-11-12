@@ -115,6 +115,7 @@ const billingSchema = z.strictObject({
 export type FoundationBilling = z.infer<typeof billingSchema>;
 
 export class FoundationBillingError extends Error {
+  override name = "FoundationBillingError";
   constructor(
     readonly status: 400 | 403 | 404 | 409 | 503,
     message = "Billing could not be completed",

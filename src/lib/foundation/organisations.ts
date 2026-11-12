@@ -57,6 +57,7 @@ export const text = (min: number, max: number, multiline: boolean) =>
     .refine((value) => isPlainText(value, min, max, multiline));
 
 export class FoundationOrganisationError extends Error {
+  override name = "FoundationOrganisationError";
   constructor(
     readonly reason:
       | "invalid"

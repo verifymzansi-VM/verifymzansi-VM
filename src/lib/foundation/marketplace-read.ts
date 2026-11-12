@@ -18,7 +18,9 @@ import {
 } from "./post-presentation";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
-export class MarketplaceQueryError extends Error {}
+export class MarketplaceQueryError extends Error {
+  override name = "MarketplaceQueryError";
+}
 
 const normalized = (value: string) =>
   value

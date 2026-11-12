@@ -223,7 +223,7 @@ export async function testTrustedIdentity({
         claim_generation: lease.claim_generation,
         claim_nonce: lease.claim_nonce,
       }),
-    /^Error: Foundation identity review unavailable$/
+    /^FoundationStaffCommandError: Foundation identity review unavailable$/
   );
   const context = {
     status: 200,

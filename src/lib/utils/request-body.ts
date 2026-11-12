@@ -16,7 +16,9 @@ async function checkDeclaredBodySize(
   }
   const contentLength = request.headers?.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
-    await request.body?.cancel().catch(() => {});
+    await request.body?.cancel().catch(() => {
+      // The request is refused below either way; cancelling only frees the stream.
+    });
     throw new RequestBodyTooLargeError();
   }
 }
@@ -44,7 +46,9 @@ export async function readBoundedRequestFormData(
     !/^multipart\/form-data\s*;/i.test(contentType) ||
     !/(?:^|;)\s*boundary=(?:"[^"]+"|[^;\s]+)(?:\s*;|\s*$)/i.test(contentType)
   ) {
-    await request.body?.cancel().catch(() => {});
+    await request.body?.cancel().catch(() => {
+      // The request is refused below either way; cancelling only frees the stream.
+    });
     throw new TypeError("Invalid multipart content type");
   }
   let bytes = 0;
@@ -67,7 +71,9 @@ export async function readBoundedRequestFormData(
     }).formData();
   } catch (error) {
     // A parser can reject the content type before consuming the stream.
-    await body?.cancel().catch(() => {});
+    await body?.cancel().catch(() => {
+      // The request is refused below either way; cancelling only frees the stream.
+    });
     // Multipart parsers may wrap stream errors in a TypeError.
     if (tooLarge) throw new RequestBodyTooLargeError();
     throw error;
@@ -99,7 +105,9 @@ export async function readBoundedRequestText(
       if (done) break;
       bytes += value.byteLength;
       if (bytes > maxBytes) {
-        await reader.cancel().catch(() => {});
+        await reader.cancel().catch(() => {
+          // The request is refused below either way; cancelling only frees the stream.
+        });
         throw new RequestBodyTooLargeError();
       }
       parts.push(decoder.decode(value, { stream: true }));

@@ -22,6 +22,7 @@ const inputSchema = profileUpdateSchema
   })
   .strict();
 class ProfileRefusal extends Error {
+  override name = "ProfileRefusal";
   constructor(
     readonly status: number,
     message: string,

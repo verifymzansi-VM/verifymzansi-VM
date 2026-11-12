@@ -51,6 +51,7 @@ export type RecoveryBinding = z.infer<typeof binding>;
 
 /** The signing secret is missing or malformed; recovery fails closed. */
 export class RecoveryBindingUnavailable extends Error {
+  override name = "RecoveryBindingUnavailable";
   constructor() {
     super("Recovery binding is unavailable");
   }

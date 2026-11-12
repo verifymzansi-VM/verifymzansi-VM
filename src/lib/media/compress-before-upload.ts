@@ -59,7 +59,9 @@ export function compressVideoForUpload(
   const prepared = preparationQueue.then(() => prepareVideo(file, options));
   preparationQueue = prepared.then(
     () => undefined,
-    () => undefined
+    () => {
+      // The caller receives this failure through `prepared`; the queue only waits.
+    }
   );
   return prepared;
 }

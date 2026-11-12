@@ -65,6 +65,7 @@ const instant = z
   .pipe(z.iso.datetime({ offset: true }));
 
 export class FoundationInboxError extends Error {
+  override name = "FoundationInboxError";
   constructor(
     readonly reason:
       | "invalid"
