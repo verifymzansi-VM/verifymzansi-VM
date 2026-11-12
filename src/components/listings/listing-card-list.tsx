@@ -13,7 +13,7 @@ import { VideoDurationBadge } from "@/components/ui/video-duration-badge";
 import { ContentLikeButton } from "@/components/listings/content-like-button";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { cn } from "@/lib/utils";
-import { formatZARShort } from "@/lib/utils/format";
+import { describeListingPrice } from "@/lib/presentation/listing-facts";
 import { getFocalPositionClassName } from "@/lib/utils/media-position-classes";
 import type { TrustLevel } from "@/types/enums";
 
@@ -23,6 +23,8 @@ interface ListingCardListProps {
   id: string;
   title: string;
   price: number;
+  /** "amount" | "free" | "on_request" when the backend sends it; "free" shows "Free". */
+  priceMode?: string | null;
   negotiable?: boolean;
   imageUrl?: string;
   posterUrl?: string;
@@ -54,6 +56,7 @@ export const ListingCardList = memo(function ListingCardList({
   id,
   title,
   price,
+  priceMode,
   category,
   imageUrl,
   posterUrl,
@@ -79,6 +82,13 @@ export const ListingCardList = memo(function ListingCardList({
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const status = getListingCardStatus({ featured, boosted, urgent, createdAt });
+  // Same words and format as the post page; quiet when there is no amount and it is not free.
+  const describedPrice = describeListingPrice({
+    category,
+    price_cents: price,
+    price_mode: priceMode,
+  });
+  const priceText = describedPrice.kind === "none" ? null : describedPrice.label;
   const frameAspectRatio = CARD_ASPECT_RATIO;
 
   return (
@@ -144,7 +154,7 @@ export const ListingCardList = memo(function ListingCardList({
                 <div>
                   <span
                     className={cn(
-                      "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] shadow-sm",
+                      "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-sm",
                       status.className
                     )}
                   >
@@ -153,11 +163,9 @@ export const ListingCardList = memo(function ListingCardList({
                 </div>
               ) : null}
 
-              {price > 0 ? (
+              {priceText ? (
                 <p className="font-display text-sm font-bold tracking-[0.01em] text-foreground">
-                  {category === "jobs_services" && !price
-                    ? "Salary not provided"
-                    : formatZARShort(price)}
+                  {priceText}
                 </p>
               ) : null}
 

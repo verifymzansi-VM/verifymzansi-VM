@@ -110,7 +110,7 @@ export async function HomeProgrammeShowcase({
           <div className="container-page space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <Landmark aria-hidden="true" className="h-3.5 w-3.5" />
                   Sponsor spotlight
                 </p>
