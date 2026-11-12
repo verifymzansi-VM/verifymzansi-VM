@@ -54,6 +54,35 @@ test.use({ serviceWorkers: "block" });
 let state: ReturnType<typeof readTestCopy>;
 let plan: Plan;
 
+// The first old plan's id from the seeded catalogue (catalogue-identities.json).
+const OLD_PLAN_ID = "00420f8c-0ac1-4828-83c5-d547d862fc8f";
+
+// The old plans stay as history once the Individual slots are on sale. A
+// signed-in member passes sign-in, origin and CSRF, so the refusal here is the
+// plan itself: the page offers no payment and the route sells nothing.
+test.describe("an old plan while the Individual slots are on sale", () => {
+  test("a signed-in member can neither open nor buy an old plan", async ({ context, page }) => {
+    const session = await browserSessionCookies(readTestCopy(), "verifiedMember");
+    await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
+    await page.goto(`/billing/checkout?plan=${OLD_PLAN_ID}`, { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByText("This plan is not available. Please choose a plan from the pricing page.")
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Pay / })).toHaveCount(0);
+    const csrf = (await context.cookies(APP_ORIGIN)).find((cookie) => cookie.name === "vm_csrf");
+    expect(csrf?.value).toMatch(/^[a-f0-9]{64}$/i);
+    const refused = await page.request.post(`${APP_ORIGIN}/api/billing/create-checkout`, {
+      headers: { origin: APP_ORIGIN, "x-csrf-token": csrf!.value },
+      data: { planId: OLD_PLAN_ID, slots: 1, expectedTotalCents: 5000, coolingOffConsent: true },
+      maxRedirects: 0,
+    });
+    expect(refused.status()).toBe(400);
+    expect(await refused.json()).toEqual({
+      error: "This plan is not available in the selected section",
+    });
+  });
+});
+
 test.describe("checkout in the foundation test copy", () => {
   test.beforeAll(async () => {
     state = readTestCopy();

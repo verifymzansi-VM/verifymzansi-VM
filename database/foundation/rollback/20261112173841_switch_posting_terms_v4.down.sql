@@ -11,15 +11,31 @@
 -- trigger is switched off for that one statement inside this transaction.
 -- Acceptances of posting-v4 stay as records; members accept posting-v3 again.
 --
--- It refuses (55000) when posting-v4 is not current, or when a plan published
--- after the switch is on sale (undo that later update first). Run before the
--- update, or a second time, it changes nothing.
+-- It refuses (55000) when internal.set_post_media is neither the body the
+-- switch installed nor the one before it (a later update changed it: undo that
+-- update first, so this rollback never silently reverts it), when posting-v4 is
+-- not current, or when a plan published after the switch is on sale (undo that
+-- later update first). Run before the update, or a second time, it changes
+-- nothing.
+--
+-- Order: run this rollback BEFORE reverting the website. Once the switch has
+-- run, never revert the code alone: the earlier website's terms catalogue has
+-- no posting-v4, so it refuses the current terms and posting stops.
 begin;
 set local lock_timeout='5s';
 
 do $$
-declare current_version text;
+declare current_version text; body text;
 begin
+  -- Restore set_post_media only over the body the switch installed (or the
+  -- earlier one, which makes the restore a no-op): never over a later update's.
+  select md5(replace(p.prosrc,E'\r\n',E'\n')) into body from pg_catalog.pg_proc p
+    where p.oid=to_regprocedure('internal.set_post_media(uuid,integer,jsonb)');
+  if body is distinct from '3ff7aba47039b8f074318e796718f85d'
+      and body is distinct from '57100d9ec7d5b8ac75c24aadc573512b' then
+    raise exception 'rollback precondition: internal.set_post_media was changed after the switch (%); undo that update first',
+      coalesce(body,'missing') using errcode='55000';
+  end if;
   if to_regclass('private.plan_sale_pauses') is null then
     return; -- the switch is not applied (or already rolled back)
   end if;

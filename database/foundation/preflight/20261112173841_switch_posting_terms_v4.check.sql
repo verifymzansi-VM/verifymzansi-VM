@@ -31,7 +31,7 @@ problems as (
   union all
   select 'problem', 'posting-v4 is '||case when v4_hash is null then 'not published: apply 20261112122001_publish_posting_terms_v4.sql first'
       else 'published with a different document' end
-    from state where v4_hash is distinct from 'FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs'
+    from state where v4_hash is distinct from 'HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg'
 )
 select 'summary' as kind,
   'current '||coalesce(s.current_version,'missing')

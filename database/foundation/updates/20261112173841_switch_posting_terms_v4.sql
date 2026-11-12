@@ -43,6 +43,20 @@ begin
   end if;
 end$$;
 
+-- Precondition: internal.set_post_media is the reviewed body this update
+-- replaces (or already this update's, on a repeated run).
+do $$
+declare body text;
+begin
+  select md5(replace(p.prosrc,E'\r\n',E'\n')) into body from pg_catalog.pg_proc p
+    where p.oid=to_regprocedure('internal.set_post_media(uuid,integer,jsonb)');
+  if body is distinct from '57100d9ec7d5b8ac75c24aadc573512b'
+      and body is distinct from '3ff7aba47039b8f074318e796718f85d' then
+    raise exception 'internal.set_post_media is not the reviewed body (%)', coalesce(body,'missing')
+      using errcode='55000';
+  end if;
+end$$;
+
 create table if not exists private.plan_sale_pauses (
   plan_version_id uuid primary key references private.plan_versions (id) on delete restrict,
   retired_at timestamptz not null,
@@ -60,7 +74,7 @@ begin
       coalesce(current_version,'missing') using errcode='55000';
   end if;
   select v.document_hash into v4_hash from private.posting_terms_versions v where v.version='posting-v4';
-  if v4_hash is distinct from 'FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs' then
+  if v4_hash is distinct from 'HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg' then
     raise exception 'switch precondition: apply 20261112122001_publish_posting_terms_v4.sql first (posting-v4 is %)',
       case when v4_hash is null then 'not published' else 'published with a different document' end
       using errcode='55000';

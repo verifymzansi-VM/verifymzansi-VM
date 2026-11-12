@@ -130,9 +130,9 @@ describe("post lifecycle wording", () => {
     expect(text).toContain("A sold post keeps its slot until it is deleted 3 days later");
     expect(text).toContain("A deactivated post keeps its slot");
     expect(text).toContain("A new post in a freed slot runs for the plan's remaining days.");
-    // Prices come from RETAIL_OFFERS, the same ladder the database catalogue seeds.
+    // No price is quoted: paid slots may not be on sale.
     expect(text).toContain(
-      "When the trial ends your post is hidden; reactivate it within 3 days for R69 / 30 days, R207 / 90 days or R414 / 180 days, or it is deleted."
+      "When the trial ends your post is hidden; buy a slot within 3 days to reactivate it, or it is deleted."
     );
     expect(text).toContain("stay live until the event is over; then they are deleted");
     expect(text).not.toMatch(/30 days before deletion|stays? saved|slot frees up/);

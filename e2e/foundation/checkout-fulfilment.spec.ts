@@ -636,7 +636,11 @@ test.describe("checkout to fulfilment", () => {
       const before = reply("/api/billing/create-checkout").length;
       await tickCoolingOff(page);
       await page.getByRole("button", { name: /^Pay .+ securely$/ }).click();
-      await expect.poll(() => reply("/api/billing/create-checkout").length).toBe(before + 1);
+      // The reply for an open payment asks the database and the provider; on a
+      // busy test machine it took just over the 5-second default once.
+      await expect
+        .poll(() => reply("/api/billing/create-checkout").length, { timeout: 20_000 })
+        .toBe(before + 1);
       return reply("/api/billing/create-checkout").at(-1) as Reply;
     };
     const answered = await tryAgain();

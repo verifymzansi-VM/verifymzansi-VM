@@ -9,7 +9,9 @@
 // the lifecycle suites do; the switch never reads entitlements). The script
 // runs the read-only preflight, checks the refusals, applies the update and checks that posting-v4
 // is current, nothing can be bought, the public catalogue lists no plan, the
-// paid slot and the free posting paths are untouched, and that apply ->
+// paid slot and the free posting paths are untouched, that neither the update
+// nor its rollback overwrites a later change to internal.set_post_media, and
+// that apply ->
 // rollback -> apply puts exactly the same plans back on sale and returns the
 // schema fingerprint to the same values each time.
 //
@@ -228,6 +230,26 @@ try {
     assert.match(refused.stderr, /plans published after the switch are on sale/);
     q(`update private.plan_versions set retired_at=now() where id='${later}';`);
     assert.deepEqual(onSale(), []);
+  });
+  await check("neither the update nor the rollback overwrites a later set_post_media", () => {
+    // A later update (P2, say) changes internal.set_post_media.
+    const edit = (from, to) =>
+      q(`do $$begin execute replace(pg_get_functiondef('internal.set_post_media(uuid,integer,jsonb)'::regprocedure),
+        '${from}','${to}'); end$$;`);
+    edit("rev integer;", "rev integer; later_update integer;");
+    const changed = fingerprint();
+    assert.notEqual(changed, after, "the fixture changed the function");
+    fails(step.sql, "55000", /set_post_media is not the reviewed body/);
+    fails(
+      ROLLBACK,
+      "55000",
+      /set_post_media was changed after the switch \([0-9a-f]{32}\); undo that update first/
+    );
+    assert.equal(fingerprint(), changed, "both refused without a change");
+    assert.deepEqual(currentTerms(), V4);
+    assert.deepEqual(onSale(), []);
+    edit("rev integer; later_update integer;", "rev integer;");
+    assert.equal(fingerprint(), after);
   });
   await check("apply -> rollback -> apply puts exactly the same plans back each time", () => {
     applySteps(database, [{ label: "switch rollback", sql: ROLLBACK }]);

@@ -1,9 +1,12 @@
 -- Reviewed rollback for updates/20261112174600_individual_slots_r69.sql.
 -- Not part of the replay. Run it only if that update must be undone, after the
--- owner has decided so; prefer a forward fix. Revert (and deploy) the website
--- release that uses the update first: this rollback removes the commands that
--- release's checkout and "My slots" page call. The release before it (paid
--- slots paused) does not use them.
+-- owner has decided so; prefer a forward fix. Run it BEFORE reverting the
+-- website release that uses the update: with the slots off sale that release
+-- shows paid slots as paused (its checkout page and route refuse with the
+-- paused message, and "My slots" says the slots cannot be shown right now),
+-- whereas the release before it would link to slots its checkout cannot sell
+-- (internal.start_checkout refuses them). Then revert that release. Roll back
+-- 20261112173841_switch_posting_terms_v4.sql only after this rollback.
 --
 -- It works only before anyone ordered a slot: it refuses (55000) once a
 -- payment line or a staff-raised limit exists, because those are payment and

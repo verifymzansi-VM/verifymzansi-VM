@@ -23,13 +23,13 @@ problems as (
     from state where current_version is null or current_version not in('posting-v3','posting-v4')
   union all
   select 'problem', 'posting-v4 is already published with a different document'
-    from state where v4_hash is not null and v4_hash<>'FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs'
+    from state where v4_hash is not null and v4_hash<>'HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg'
 )
 select 'summary' as kind,
   'current '||coalesce(s.current_version,'missing')
     ||'; accounts that accepted it: '||(select count(*) from private.posting_terms_acceptances a where a.version=s.current_version)
     ||'; posting-v4 '||case when s.v4_hash is null then 'not published (update not applied)'
-      when s.v4_hash='FY2SZ6MjR1JpSry2hR4DRbhsGhzoDpkeHvAVdbfQmGs' then 'published (update already applied)'
+      when s.v4_hash='HnObmeyoZjiuPQSF0z0aUgs_t_st87EUjVQGjDahozg' then 'published (update already applied)'
       else 'published with a different document' end
     ||'; accounts that accepted posting-v4: '||(select count(*) from private.posting_terms_acceptances a where a.version='posting-v4') as detail
 from state s
