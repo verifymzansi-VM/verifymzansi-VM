@@ -27,9 +27,9 @@ import {
 //   sign-up refused without an invitation (the launch setting), invited
 //   sign-up through /register, email confirmation from the mail catcher, the
 //   phone code read from the copy's SMS sink, ID and selfie photos, the area,
-//   an admin's acceptance in the staff review, posting terms, opening a create
-//   form, submitting, a moderator's approval, the post in the showroom and in
-//   search, and the free week.
+//   an admin's acceptance in the staff review, the section chooser, opening a
+//   create form, submitting with the terms tick box, a moderator's approval,
+//   the post in the showroom and in search, and the free week.
 //
 // The free week (BL-03, fixed by M2.3) starts when the first post is approved:
 // the test checks its start and length, its email with the end date (mail
@@ -526,27 +526,24 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     expect(outside).toEqual([]);
   });
 
-  test("the member is shown as verified and accepts the posting terms", async ({
+  test("the member is shown as verified and goes straight to the section chooser", async ({
     context,
     page,
   }) => {
-    const { outside, reply } = await guard(context);
+    const { outside } = await guard(context);
     await signInBrowser(context, member);
     await page.goto("/verification");
     await expect(page.getByRole("heading", { name: "Verification approved" })).toBeVisible();
     await page.goto("/post/create");
-    await page.getByRole("checkbox", { name: "I agree to the current posting terms." }).check();
-    await page.getByRole("button", { name: "Accept posting terms" }).click();
-    // Once accepted, the gate gives way to the section chooser.
+    // No separate terms step: the chooser shows at once. The terms are
+    // accepted with the tick box on the form, when the post is submitted.
     await expect(page.getByRole("heading", { name: "What would you like to post?" })).toBeVisible();
-    await expect
-      .poll(() => reply("/api/foundation/posting-terms"))
-      .toEqual([expect.objectContaining({ status: 200 })]);
+    await expect(page.getByRole("button", { name: "Accept posting terms" })).toHaveCount(0);
     expect(
       queryTestCopy(
         `select count(*) from private.posting_terms_acceptances where owner_id = '${member.id}';`
       )
-    ).toBe("1");
+    ).toBe("0");
     expect(outside).toEqual([]);
   });
 
@@ -627,6 +624,12 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     });
     business.id = (submitted.body as { id: string }).id;
     expect(business.id).toMatch(UUID);
+    // The form's tick box recorded the terms acceptance with the post.
+    expect(
+      queryTestCopy(
+        `select count(*) from private.posting_terms_acceptances where owner_id = '${member.id}';`
+      )
+    ).toBe("1");
 
     // A moderator approves it in the staff moderation queue.
     const staff = await browser.newContext({ serviceWorkers: "block" });
