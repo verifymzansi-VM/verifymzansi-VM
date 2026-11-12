@@ -39,6 +39,8 @@ export interface CarouselItem {
   description?: string;
   location?: string;
   mediaUrl?: string;
+  /** Photo or video, from the stored media; without it the file name decides. */
+  mediaKind?: "image" | "video";
   posterUrl?: string;
   logoUrl?: string;
   price?: number | null;
@@ -108,6 +110,11 @@ const CARD_W = "showroom-card-frame";
 const SECTION_SPACING = "showroom-viewport";
 function getFallbackMediaUrl(item: CarouselItem): string {
   return item.fallbackMediaUrl ?? TYPE_FALLBACK_MEDIA[item.type];
+}
+
+function isVideoItem(item: CarouselItem | undefined): boolean {
+  if (!item) return false;
+  return item.mediaKind ? item.mediaKind === "video" : isVideoUrl(item.mediaUrl);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -824,7 +831,7 @@ export function ShowroomCardCarousel({
   }, [disableAutoplay]);
 
   const displayIndex = normalizedActiveIndex;
-  const activeIsVideo = isVideoUrl(carouselItems[displayIndex]?.mediaUrl);
+  const activeIsVideo = isVideoItem(carouselItems[displayIndex]);
 
   useEffect(() => {
     videoEndedRef.current = false;
@@ -1072,11 +1079,10 @@ export function ShowroomCardCarousel({
           {/* Absolutely positioned coverflow cards */}
           {carouselItems.map((item, i) => {
             const offset = signedOffset(i);
+            const itemIsVideo = isVideoItem(item);
             const sideMediaFallback =
-              item.posterUrl ??
-              (isVideoUrl(item.mediaUrl) ? getFallbackMediaUrl(item) : item.mediaUrl);
-            const activeVideoNeedsArtwork =
-              offset === 0 && isVideoUrl(item.mediaUrl) && !item.posterUrl;
+              item.posterUrl ?? (itemIsVideo ? getFallbackMediaUrl(item) : item.mediaUrl);
+            const activeVideoNeedsArtwork = offset === 0 && itemIsVideo && !item.posterUrl;
             const cardMediaUrl =
               offset === 0 && !activeVideoNeedsArtwork ? item.mediaUrl : sideMediaFallback;
 
@@ -1118,6 +1124,7 @@ export function ShowroomCardCarousel({
                   title={item.title}
                   location={item.location}
                   mediaUrl={cardMediaUrl}
+                  isVideo={itemIsVideo && cardMediaUrl === item.mediaUrl}
                   posterUrl={item.posterUrl}
                   mediaFallbackUrl={getFallbackMediaUrl(item)}
                   logoUrl={item.logoUrl}

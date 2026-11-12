@@ -67,7 +67,9 @@ FOUNDATION_PHONE_VERIFICATION_ENABLED = "true"
 # see what they deliver. Only "true" opens them (src/lib/billing/addon-sales.ts).
 ADDON_SALES_ENABLED = "false"
 NEXT_PUBLIC_TURNSTILE_SITE_KEY = "0x4AAAAAACmVXwJ4jmJSu6fX"
-# Cloudflare Image Resizing toggle — enabled for CDN image optimization
+# Not image resizing: the zone has no Cloudflare Image Resizing and nothing
+# resizes images on the fly (src/lib/image-loader.ts). "true" only makes the
+# image loader leave same-origin paths without an image extension unchanged.
 NEXT_PUBLIC_CF_IMAGE_RESIZING = "true"
 # OTP Rate Limiter Worker URL
 OTP_RATE_LIMITER_URL = "https://verifymzansi-rate-limiter.verifymzansi.workers.dev"
@@ -84,11 +86,12 @@ KYC_PROVIDER = "manual"
 # local .env for development/testing.
 
 # ────────────────────────────────────────────────────────────────────────────
-# Durable Objects (required by @opennextjs/cloudflare for ISR/caching)
-# Wrangler/workerd may warn during local startup or deploy validation that
-# these classes are not exported yet. OpenNext documents this as expected for
-# cache setup; do not remove or rename these bindings unless the adapter docs
-# change.
+# Durable Objects for the @opennextjs/cloudflare caches (ISR, tags, queue)
+# Nothing uses the three NEXT_CACHE_* objects today: open-next.config.ts sets
+# no incremental cache, tag cache or queue, and every page renders per request.
+# They stay bound because removing a Durable Object class needs its own
+# reviewed migration (deleted_classes). Wrangler/workerd may warn during local
+# startup or deploy validation that these classes are not exported yet.
 #
 # NOTE: RATE_LIMITER_DO (and the OTP_RATE_LIMITS KV binding further below)
 # exist on the MAIN app worker only to satisfy the RateLimiterDO re-export

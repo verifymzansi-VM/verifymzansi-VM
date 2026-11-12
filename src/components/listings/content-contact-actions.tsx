@@ -19,7 +19,7 @@ import {
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { ContentEnquiryAction } from "./content-enquiry-action";
 import { shareContent } from "@/lib/sharing/share-content";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf-client";
 import { getDataBackend } from "@/lib/data-backend";
 import { useDialogReturnFocus } from "@/hooks/use-dialog-return-focus";
 

@@ -731,6 +731,7 @@ export function PromotionsExplorer() {
                         negotiable={promotion.price_negotiable}
                         imageUrl={promotion.videos?.[0] || promotion.photos?.[0]}
                         posterUrl={promotion.video_thumbnail || promotion.photos?.[0] || undefined}
+                        isVideo={Boolean(promotion.videos?.[0])}
                         categoryLabel={getPromotionCategoryDisplayLabel(
                           promotion.category_key,
                           promotion.category

@@ -4,12 +4,13 @@ import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { listRestoredOwnerPosts, restoredOwnerPostRow } from "./restored-owner-posts";
 import { readFoundationOwnerDashboard } from "./owner-dashboard";
 import type { MarketplaceArea, PlanTier } from "@/types/enums";
+import { restoredAreaSchema } from "./areas";
 const count = z.number().int().nonnegative(),
   instant = z.iso.datetime({ offset: true });
 const slot = z.strictObject({
   id: z.uuid(),
   source: z.string(),
-  area: z.enum(["MZANSI_MARKET", "MZANSI_BUSINESS", "PROMOTIONS_EVENTS"]).nullable(),
+  area: restoredAreaSchema.nullable(),
   planName: z.string().nullable(),
   status: z.literal("active"),
   slotCapacity: count,

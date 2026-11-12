@@ -43,7 +43,7 @@ import {
 import { StickyContactBar } from "@/components/business/shared/sticky-contact-bar";
 import { ManagedByCard } from "@/components/business/shared/business-sidebar-cards";
 import { BusinessDetailsAccordion } from "@/components/business/shared/business-details-accordion";
-import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { MediaLightbox } from "@/components/ui/media-lightbox-lazy";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";
 import { PromotionCard } from "@/components/listings/promotion-card";
 import { safeExternalHref } from "@/lib/utils/sanitize-html";
@@ -811,6 +811,7 @@ export function UnifiedLayout({
                 negotiable={promo.price_negotiable}
                 imageUrl={promo.videos?.[0] || promo.photos?.[0]}
                 posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
+                isVideo={Boolean(promo.videos?.[0])}
                 categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
                 province={promo.location_province}
                 city={promo.location_city}
