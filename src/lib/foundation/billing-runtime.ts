@@ -13,7 +13,12 @@ import {
   MOCK_OZOW_REQUEST_PREFIX,
   type NormalizedOzowWebhook,
 } from "../payments/ozow";
-import { validateOzowConfirmation } from "../payments/confirmation";
+import {
+  confirmationRefusalCode,
+  isRetryableConfirmationRefusal,
+  validateOzowConfirmation,
+} from "../payments/confirmation";
+import { createLogger } from "../utils/logger";
 import {
   ADDON_SALES_PAUSED_CODE,
   ADDON_SALES_PAUSED_MESSAGE,
@@ -40,6 +45,7 @@ type BillingRpc = {
     args?: Record<string, unknown>
   ) => PromiseLike<{ data: unknown; error: { code?: string } | null }>;
 };
+const log = createLogger("FoundationPayments");
 // The transport is deliberately limited to this closed command set. Callers
 // still construct an authenticated or service-role client, never an admin table client.
 const billingRpc = (api: FoundationAuthenticatedApi | FoundationServiceApi) =>
@@ -290,6 +296,30 @@ function confirmationShape(pay: FoundationPayment): PaymentRecordShape {
       : null,
   };
 }
+/**
+ * The repeat-notice key (private.provider_events, unique per provider): the
+ * transaction, its status as Ozow reported it, and the signed evidence. A thin
+ * notice repeats the same bytes while the looked-up status moves on (Pending,
+ * then Successful, Refunded or Error), so the bytes alone would drop the later
+ * status as a repeat. An identical repeat still has the same key. A later
+ * status reaches the database and is recorded there; it does not reverse a
+ * completed payment (a Refunded status is recorded as late_status_ignored and
+ * logged for staff below; refunds are handled by staff).
+ */
+export function providerEventKey(payload: NormalizedOzowWebhook, evidence: string): string {
+  const evidenceHash = createHash("sha256").update(evidence).digest("hex");
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        "ozow-provider-event:v2",
+        payload.transactionId ?? "",
+        payload.status?.toLowerCase() ?? "",
+        evidenceHash,
+      ])
+    )
+    .digest("hex");
+}
+
 async function applyTransaction(
   service: FoundationServiceApi,
   pay: FoundationPayment,
@@ -302,7 +332,7 @@ async function applyTransaction(
   const reported = status === "successful" ? "complete" : status === "error" ? "error" : "pending";
   return command(service, "apply_provider_event", {
     p_event: {
-      payload_sha256: createHash("sha256").update(evidence).digest("hex"),
+      payload_sha256: providerEventKey(payload, evidence),
       merchant_reference: pay.merchant_reference,
       provider_request_id: pay.provider_request_id,
       provider_transaction_id: payload.transactionId,
@@ -313,7 +343,29 @@ async function applyTransaction(
   });
 }
 
-/** Only call after verifying the raw Svix signature (including thin-event lookup). */
+/** Refusals that may mean money moved without a matching delivery (a second
+ * transaction on a payment, a wrong amount): logged as errors for staff. */
+const NEEDS_STAFF: ReadonlySet<string> = new Set([
+  "transaction_id_mismatch",
+  "amount_mismatch",
+  "currency_mismatch",
+]);
+/**
+ * A correctly signed notice that can never be applied: logged with the payment
+ * number and a reason code (no personal data) and acknowledged, so the sender
+ * does not retry it for a day and switch the notice address off. The 10-minute
+ * status check still settles a real payment from Ozow's own records.
+ * Follow-up (M3.3): keep these in private.provider_events too (needs a reviewed
+ * database update; apply_provider_event records only its own outcomes).
+ */
+function refuseOzowNotice(reason: string, paymentId: string | null) {
+  (NEEDS_STAFF.has(reason) ? log.error : log.warn)("Ozow notice refused", { paymentId, reason });
+  return { success: true, rejected: reason };
+}
+
+/** Only call after verifying the raw Svix signature (including thin-event lookup).
+ * Throws only for failures worth retrying (database or settings); a notice that
+ * can never apply is refused with a reason (refuseOzowNotice). */
 export async function applyFoundationOzowNotification(
   payload: NormalizedOzowWebhook,
   rawBody: string,
@@ -322,8 +374,25 @@ export async function applyFoundationOzowNotification(
   const pay = payload.merchantReference
     ? await readFoundationServicePayment(service, { reference: payload.merchantReference })
     : null;
-  if (!pay) return { success: true, ignored: true };
+  if (!pay) return refuseOzowNotice("unknown_payment", null);
+  const refusal = validateOzowConfirmation(confirmationShape(pay), payload);
+  if (refusal) {
+    if (isRetryableConfirmationRefusal(refusal)) {
+      log.warn("Ozow notice deferred", {
+        paymentId: pay.id,
+        reason: confirmationRefusalCode(refusal),
+      });
+      throw new FoundationBillingError(503, "Payment confirmation cannot be checked yet");
+    }
+    return refuseOzowNotice(confirmationRefusalCode(refusal), pay.id);
+  }
   const outcome = await applyTransaction(service, pay, payload, rawBody);
+  const recorded = (outcome as { outcome?: unknown } | null)?.outcome;
+  if (
+    recorded === "conflicting_transaction" ||
+    (recorded === "late_status_ignored" && payload.status?.toLowerCase() === "refunded")
+  )
+    log.error("Ozow notice needs staff attention", { paymentId: pay.id, reason: recorded });
   return { success: true, result: outcome };
 }
 
@@ -355,12 +424,19 @@ export async function reconcileFoundationPayment(
   if (!pay.provider_request_id || !canAskProvider(pay.provider_request_id))
     return { checked: false, pendingTransaction: false };
   const transactions = await listOzowPaymentTransactions(pay.provider_request_id, pay.created_at);
-  for (const transaction of transactions)
-    if (validateOzowConfirmation(confirmationShape(pay), transaction))
+  for (const transaction of transactions) {
+    const refusal = validateOzowConfirmation(confirmationShape(pay), transaction);
+    if (refusal) {
+      log.warn("Ozow transaction refused by the status check", {
+        paymentId: pay.id,
+        reason: confirmationRefusalCode(refusal),
+      });
       throw new FoundationBillingError(
         503,
         "Payment reconciliation did not match its stored quote"
       );
+    }
+  }
   const successful = transactions.filter(
     (transaction) => transaction.status?.toLowerCase() === "successful"
   );
