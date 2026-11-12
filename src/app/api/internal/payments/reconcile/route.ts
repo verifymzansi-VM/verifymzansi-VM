@@ -2,7 +2,10 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDataBackend } from "@/lib/data-backend";
-import { runFoundationPaymentReconciliation } from "@/lib/foundation/billing-runtime";
+import {
+  paymentCheckFailureReason,
+  runFoundationPaymentReconciliation,
+} from "@/lib/foundation/billing-runtime";
 import { reconcileOzowPayment } from "@/lib/payments/reconciliation";
 import type { PaymentRecordShape } from "@/lib/payments/types";
 import { createLogger } from "@/lib/utils/logger";
@@ -22,12 +25,15 @@ export async function POST(request: Request) {
   }
   if (getDataBackend() === "foundation") {
     try {
+      // Per-payment failures are logged with their payment number and reason
+      // and listed in `errors` (payment numbers and reason codes only).
       const result = await runFoundationPaymentReconciliation();
       return NextResponse.json(result, {
         status: result.failures ? 503 : 200,
         headers: { "Cache-Control": "no-store" },
       });
-    } catch {
+    } catch (error) {
+      log.error("Payment status job failed", { reason: paymentCheckFailureReason(error) });
       return NextResponse.json({ error: "Payment reconciliation unavailable" }, { status: 503 });
     }
   }

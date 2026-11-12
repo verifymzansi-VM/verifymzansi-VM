@@ -203,7 +203,7 @@ export function CheckoutConfirm({ summary }: { summary: CheckoutSummary | null }
             >
               <h2
                 id="checkout-details-title"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                className="text-xs font-semibold text-muted-foreground"
               >
                 Plan details
               </h2>

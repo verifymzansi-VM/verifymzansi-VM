@@ -92,7 +92,7 @@ for (const command of commands) {
   });
 }
 const sourceInventory = JSON.parse(
-  fs.readFileSync(path.join(root, "evidence/source-inventory.json"), "utf8")
+  fs.readFileSync("database/source-inventory/source-inventory.json", "utf8")
 );
 const digest = (file) => createHash("sha256").update(fs.readFileSync(file)).digest("base64url");
 const sourceDrift = sourceInventory

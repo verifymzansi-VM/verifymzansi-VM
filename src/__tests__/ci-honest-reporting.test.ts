@@ -9,7 +9,8 @@ type Step = {
   env?: Record<string, string>;
   "continue-on-error"?: boolean;
 };
-type Job = { name?: string; if?: string; needs?: string | string[]; steps: Step[] };
+// Jobs that call another workflow (`uses:`) have no steps of their own.
+type Job = { name?: string; if?: string; needs?: string | string[]; uses?: string; steps: Step[] };
 
 const ci = parse(readFileSync(".github/workflows/ci.yml", "utf8")) as {
   jobs: Record<string, Job>;
@@ -36,7 +37,7 @@ describe("CI reports what it ran", () => {
     // A job that only lists the safety gate's checks turns green without
     // checking anything. audit-tooling-platforms also runs the tooling tests.
     for (const [id, job] of Object.entries(ci.jobs)) {
-      const runs = job.steps.map((step) => step.run ?? "").filter(Boolean);
+      const runs = (job.steps ?? []).map((step) => step.run ?? "").filter(Boolean);
       if (runs.some((run) => run.includes("--dry-run")))
         expect(
           runs.some((run) => run.includes("pnpm test:tooling")),
@@ -47,7 +48,7 @@ describe("CI reports what it ran", () => {
 
   it("builds the Worker once and keeps its runtime proof", () => {
     const builds = Object.entries(ci.jobs).filter(([, job]) =>
-      job.steps.some((step) => (step.run ?? "").includes("build:cloudflare"))
+      (job.steps ?? []).some((step) => (step.run ?? "").includes("build:cloudflare"))
     );
     expect(builds.map(([id]) => id)).toEqual(["build-route-verify"]);
     const steps = ci.jobs["build-route-verify"].steps as (Step & {
@@ -66,7 +67,9 @@ describe("CI reports what it ran", () => {
 
   it("runs the tooling tests once per operating system", () => {
     const tooling = Object.entries(ci.jobs).filter(([, job]) =>
-      job.steps.some((step) => /pnpm test:tooling|--checks=[^\s]*\btooling\b/.test(step.run ?? ""))
+      (job.steps ?? []).some((step) =>
+        /pnpm test:tooling|--checks=[^\s]*\btooling\b/.test(step.run ?? "")
+      )
     );
     expect(tooling.map(([id]) => id)).toEqual(["audit-tooling-platforms"]);
     const platforms = (
@@ -127,8 +130,65 @@ describe("CI job graph", () => {
     expect(tests).toBeGreaterThan(download);
     expect(steps[download].with?.name).toBe(upload?.with?.name);
     expect(steps[tests].env?.PLAYWRIGHT_SKIP_BUILD).toBe("1");
-    // The picture check keeps its own build in its pinned container.
+    // The picture check builds its own site, for the foundation test copy.
     expect(JSON.stringify(workflow.jobs["visual-regression"])).not.toContain("download-artifact");
+  });
+
+  it("compares the pictures on the foundation test copy in the pinned browser image", () => {
+    const job = workflow.jobs["visual-regression"] as Job & {
+      "runs-on"?: string;
+      container?: unknown;
+    };
+    // The required check's name must not change.
+    expect(job.name).toBe("Visual regression (chosen frontend)");
+    // The test copy needs the runner's Docker: no job container.
+    expect(job.container).toBeUndefined();
+    expect(job["runs-on"]).toBe("ubuntu-latest");
+    const runs = job.steps.map((step) => step.run ?? "");
+    const at = (command: string) => runs.findIndex((run) => run.includes(command));
+    expect(at("scripts/foundation-e2e.mjs up")).toBeGreaterThan(-1);
+    expect(at("scripts/foundation-e2e.mjs build")).toBeGreaterThan(
+      at("scripts/foundation-e2e.mjs up")
+    );
+    expect(at("scripts/foundation-visual.mjs --retries=1")).toBeGreaterThan(
+      at("scripts/foundation-e2e.mjs build")
+    );
+    const down = job.steps.find((step) => (step.run ?? "").includes("foundation-e2e.mjs down"));
+    expect(down?.if).toBe("always()");
+    // Nothing of the retired backend or its in-memory stub.
+    const text = JSON.stringify(job);
+    for (const retired of [
+      "start-playwright-server",
+      "placeholder.supabase.co",
+      "PLAYWRIGHT_TEST_MODE",
+      "e2e/visual-regression.spec.ts",
+    ])
+      expect(text).not.toContain(retired);
+
+    // The browser image is pinned by digest in one place, and its Playwright
+    // is the installed one (a mismatch would draw with another browser build).
+    const script = readFileSync("scripts/foundation-visual.mjs", "utf8");
+    const image = /"mcr\.microsoft\.com\/playwright:v([\d.]+)-noble@sha256:[0-9a-f]{64}"/.exec(
+      script
+    );
+    const installed = JSON.parse(
+      readFileSync("node_modules/@playwright/test/package.json", "utf8")
+    ) as { version: string };
+    expect(image?.[1]).toBe(installed.version);
+    expect(script).toContain('"--network",\n    "host"');
+
+    // New pictures are made the same way, into the foundation spec's folder.
+    const update = parse(readFileSync(".github/workflows/update-visual-baselines.yml", "utf8")) as {
+      jobs: Record<string, Job & { container?: unknown }>;
+    };
+    const generate = update.jobs["generate-baselines"];
+    expect(generate.container).toBeUndefined();
+    const updateRuns = generate.steps.map((step) => step.run ?? "").join("\n");
+    expect(updateRuns).toContain("scripts/foundation-e2e.mjs up");
+    expect(updateRuns).toContain("scripts/foundation-visual.mjs --update-snapshots=changed");
+    expect(updateRuns).toContain(
+      'git add "e2e/foundation/visual-regression.spec.ts-snapshots/*-chromium-linux.png"'
+    );
   });
 
   it("runs Lighthouse on the bundle-analysis build, as an advisory step", () => {
@@ -153,6 +213,18 @@ describe("CI job graph", () => {
 
   it("gives every job a time limit instead of the six-hour default", () => {
     for (const [id, job] of Object.entries(workflow.jobs)) {
+      // A job calling another workflow cannot set its own limit; every job of
+      // the called workflow must (the native suite may take up to an hour).
+      if (job.uses) {
+        const called = parse(readFileSync(job.uses.replace(/^\.\//, ""), "utf8")) as {
+          jobs: Record<string, { "timeout-minutes"?: number }>;
+        };
+        for (const [calledId, calledJob] of Object.entries(called.jobs)) {
+          expect(typeof calledJob["timeout-minutes"], `${id} / ${calledId}`).toBe("number");
+          expect(calledJob["timeout-minutes"], `${id} / ${calledId}`).toBeLessThanOrEqual(60);
+        }
+        continue;
+      }
       const limit = job["timeout-minutes"];
       expect(typeof limit, id).toBe("number");
       expect(limit, id).toBeGreaterThan(0);
@@ -176,12 +248,10 @@ describe("CI job graph", () => {
     );
     const steps = matrix.steps;
     const tests = steps.findIndex((step) => (step.run ?? "").includes("playwright test"));
-    const proof = steps.findIndex((step) =>
-      (step.run ?? "").includes("scripts/check-kyc-browser-report.ts")
-    );
-    expect(proof).toBeGreaterThan(tests);
-    expect(steps[proof].if).toBe("matrix.project != 'firefox'");
-    expect(steps[proof].run).toContain('"test-results/e2e-full-$BROWSER_PROJECT.json"');
+    expect(tests).toBeGreaterThan(-1);
+    // The stub KYC specs are retired (identity review runs in e2e-foundation),
+    // so nothing may still look for their scenarios.
+    expect(JSON.stringify(steps)).not.toContain("check-kyc-browser-report");
     expect(steps[tests].env?.PLAYWRIGHT_JSON_REPORT).toBe(
       "test-results/e2e-full-${{ matrix.project }}.json"
     );
@@ -277,20 +347,97 @@ describe("production-matching suites on main and the failure alert", () => {
     parse(readFileSync(`.github/workflows/${file}`, "utf8")) as Workflow;
   const files = readdirSync(".github/workflows").filter((file) => file.endsWith(".yml"));
 
-  it("runs foundation-native and e2e-foundation on every push to main, never cancelling a main run", () => {
-    for (const file of ["foundation-native.yml", "e2e-foundation.yml"]) {
+  // Evaluates the few expressions the concurrency groups use, for one event.
+  const evaluate = (template: string, event: "push" | "pull_request") => {
+    const values: Record<string, string | undefined> = {
+      "github.sha": "a".repeat(40),
+      "github.event_name": event,
+      "github.event.pull_request.number": event === "pull_request" ? "7" : undefined,
+      "github.ref": event === "pull_request" ? "refs/pull/7/merge" : "refs/heads/main",
+    };
+    const term = (text: string): string | undefined => {
+      const call = /^format\('([^']*)',\s*(.+)\)$/.exec(text.trim());
+      if (call) {
+        const args = call[2].split(",").map((arg) => term(arg) ?? "");
+        return call[1].replace(/\{(\d+)\}/g, (_, i) => args[Number(i)]);
+      }
+      if (!(text.trim() in values)) throw new Error(`Unknown expression ${text}`);
+      return values[text.trim()];
+    };
+    return template.replace(
+      /\$\{\{\s*(.+?)\s*\}\}/g,
+      (_, expression: string) =>
+        expression
+          .split("||")
+          .map(term)
+          .reduce((left, right) => left || right, undefined as string | undefined) ?? ""
+    );
+  };
+
+  it("makes foundation-native and e2e-foundation part of the main release gate, never cancelling a main run", () => {
+    const ci = load("ci.yml");
+    for (const [file, caller] of [
+      ["foundation-native.yml", "foundation-native-gate"],
+      ["e2e-foundation.yml", "e2e-foundation-gate"],
+    ] as const) {
       const workflow = load(file);
-      expect(workflow.on.push, file).toEqual({ branches: ["main"] });
+      // On main they run only inside CI (no separate push run to double up).
+      expect(workflow.on.push, file).toBeUndefined();
+      expect(workflow.on).toHaveProperty("workflow_call");
       expect(workflow.on.pull_request, file).toEqual({ branches: ["main"] });
-      expect(workflow.concurrency?.group, file).toContain("github.event.pull_request.number ||");
-      expect(workflow.concurrency?.group, file).toContain("github.sha");
-      expect(workflow.concurrency?.group, file).not.toContain("github.ref");
       expect(workflow.concurrency?.["cancel-in-progress"], file).toBe(
         "${{ github.event_name == 'pull_request' }}"
       );
-      // Separate runs: CI does not call them, so they stay outside the deploy gate.
-      expect(readFileSync(".github/workflows/ci.yml", "utf8")).not.toContain(file);
+      // CI calls each one for every event except pull requests (manual runs
+      // included, so a branch can prove the gate), in a per-commit group that
+      // never cancels.
+      const job = ci.jobs[caller] as unknown as {
+        uses: string;
+        if: string;
+        concurrency: { group: string; "cancel-in-progress": boolean };
+        permissions: Record<string, string>;
+      };
+      expect(job.uses, caller).toBe(`./.github/workflows/${file}`);
+      expect(job.if, caller).toBe("github.event_name != 'pull_request'");
+      expect(job.concurrency["cancel-in-progress"], caller).toBe(false);
+      expect(job.permissions, caller).toEqual({ contents: "read" });
+      // Evaluated, the three groups of a main run differ (a called group equal
+      // to its caller's deadlocks and is cancelled), and a pull request's group
+      // differs from a main run's.
+      const groups = [
+        ci.concurrency?.group,
+        job.concurrency.group,
+        workflow.concurrency?.group,
+      ].map((group) => evaluate(String(group), "push"));
+      expect(new Set(groups).size, caller).toBe(3);
+      for (const group of groups) expect(group, caller).toContain("a".repeat(40));
+      expect(evaluate(String(workflow.concurrency?.group), "pull_request")).not.toBe(groups[2]);
+      // Nothing inside the called workflow can turn a failure into a pass or
+      // skip the suite: no job condition except the aggregate's, no
+      // continue-on-error anywhere.
+      for (const [id, called] of Object.entries(workflow.jobs)) {
+        expect(JSON.stringify(called), `${file} ${id}`).not.toContain("continue-on-error");
+        if (id === "e2e-foundation") expect(called.if).toBe("${{ !cancelled() }}");
+        else expect(called.if, `${file} ${id}`).toBeUndefined();
+      }
     }
+    // The native suite runs in full for every event except a pull request.
+    const native = load("foundation-native.yml").jobs["foundation-native"].steps;
+    const scope = native.find(
+      (step) => step.name === "Decide whether the native suite inputs changed"
+    );
+    expect(scope?.env?.EVENT_NAME).toBe("${{ github.event_name }}");
+    expect(scope?.run?.trimStart()).toMatch(
+      /^if \[ "\$EVENT_NAME" != "pull_request" \]; then\n\s+echo "run=true" >> "\$GITHUB_OUTPUT"\n[^\n]*\n\s+exit 0\n\s*fi/
+    );
+    // The aggregate check fails unless every browser project passed.
+    const aggregate = load("e2e-foundation.yml").jobs["e2e-foundation"];
+    expect(aggregate.needs).toBe("browser");
+    expect(aggregate.steps[0].env?.RESULT).toBe("${{ needs.browser.result }}");
+    expect(aggregate.steps[0].run).toContain('if [ "$RESULT" != "success" ]; then');
+    expect(aggregate.steps[0].run).toMatch(/exit 1\n\s*fi/);
+    expect(ci.on.push).toEqual({ branches: ["main"] });
+    // Deploy still waits for the whole main CI run, which now holds both suites.
     const deploy = load("deploy.yml").on.workflow_run as { workflows: string[] };
     expect(deploy.workflows).toEqual(["CI"]);
   });
@@ -311,6 +458,8 @@ describe("production-matching suites on main and the failure alert", () => {
     const alert = load("failure-alert.yml");
     const watched = (alert.on.workflow_run as { workflows: string[]; types: string[] }).workflows;
     expect((alert.on.workflow_run as { types: string[] }).types).toEqual(["completed"]);
+    // Branch runs cannot alert, so they must not start a skipped run.
+    expect((alert.on.workflow_run as { branches: string[] }).branches).toEqual(["main"]);
     for (const file of files.filter((name) => name !== "failure-alert.yml")) {
       const workflow = load(file);
       const push = workflow.on.push as { branches?: string[] } | undefined;

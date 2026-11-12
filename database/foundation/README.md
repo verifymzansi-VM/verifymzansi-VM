@@ -187,16 +187,18 @@ The native suite also runs in CI: the `foundation-native` job
 local stack with the pinned Supabase CLI and runs `pnpm test:foundation:native`
 on an ubuntu-latest runner, then uploads the redacted `results.json` (and the
 staff-read probe record) as the `foundation-native-results` run artifact. It
-runs nightly, on manual dispatch and on every pull request; when a pull request
-does not touch `database/foundation/`, `docs/backend-foundation/prototypes/`,
-`src/lib/`, `src/types/`, `src/app/api/`, the native scripts or the
-dependencies, the job passes without starting Docker. The fixture's Docker guard
-(`localDockerContext` in `scripts/lib/foundation-native-isolation.mjs`, also
-used by the browser test copy through `localDockerEnvironment`) accepts only
-Docker Desktop's local Linux engine pipe on Windows, or the default context on
-the local socket `/var/run/docker.sock` of a GitHub-hosted runner; it refuses
-TCP, SSH and other remote endpoints, other contexts, a `DOCKER_HOST` or
-`DOCKER_CONTEXT` pointing elsewhere, and Linux outside GitHub-hosted CI.
+runs nightly, on manual dispatch, on every pull request and, on `main`, inside
+the CI run as part of the release gate (the deploy waits for it); when a pull
+request does not touch `database/foundation/`,
+`docs/backend-foundation/prototypes/`, `src/lib/`, `src/types/`, `src/app/api/`,
+the native scripts or the dependencies, the job passes without starting Docker.
+The fixture's Docker guard (`localDockerContext` in
+`scripts/lib/foundation-native-isolation.mjs`, also used by the browser test
+copy through `localDockerEnvironment`) accepts only Docker Desktop's local Linux
+engine pipe on Windows, or the default context on the local socket
+`/var/run/docker.sock` of a GitHub-hosted runner; it refuses TCP, SSH and other
+remote endpoints, other contexts, a `DOCKER_HOST` or `DOCKER_CONTEXT` pointing
+elsewhere, and Linux outside GitHub-hosted CI.
 
 What each part of `pnpm test:foundation:native` proves:
 

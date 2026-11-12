@@ -19,6 +19,7 @@ import {
 } from "./password-update";
 import { createFoundationEmailChanger } from "./email-change";
 import { foundationRecoveryClaim, foundationRecoveryOpened } from "./recovery-claims";
+import { digestFoundationToken } from "./page-session-digest";
 import {
   foundationLatestAuthenticatorStep,
   foundationLatestSignIn,
@@ -27,6 +28,7 @@ import {
 
 type RequestCookies = Required<Pick<CookieMethodsServer, "getAll" | "setAll">>;
 export class FoundationSessionError extends Error {
+  override name = "FoundationSessionError";
   constructor(readonly status: 401 | 503) {
     super("A verified foundation account session is required");
   }
@@ -125,6 +127,8 @@ export async function createFoundationRequestCaller(
     if (cookieAccessFailed) throw new FoundationSessionError(503);
     return {
       ...verified,
+      /** Digest of the exact token GoTrue verified here (page-session-handoff.ts). */
+      tokenDigest: () => digestFoundationToken(token),
       updatePassword: createFoundationPasswordUpdater(config, token, verified.accountId, fetcher, {
         email: verified.user.email,
         authenticatorStepMissing: verified.authenticatorStepMissing,
@@ -149,17 +153,24 @@ export async function createFoundationRequestCaller(
   }
 }
 
+/** The unexpired claims of a token issued by this project's Auth. A local
+ * shape check only: it never verifies the signature or the live session. */
+export function readUnverifiedFoundationTokenClaims(input: unknown, token: string) {
+  const config = parseFoundationConnection(input);
+  const claims = caller.parse(
+    JSON.parse(atob(token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/")))
+  );
+  if (claims.iss !== `${config.url}/auth/v1` || claims.exp * 1000 <= Date.now()) throw new Error();
+  return claims;
+}
+
 /** Verify an explicit candidate without reading, persisting or refreshing a session. */
 async function verifyFoundationCallerToken(input: unknown, token: string, fetcher: typeof fetch) {
   const config = parseFoundationConnection(input);
   let failureStatus: 401 | 503 = 401;
   try {
     const api = createFoundationAuthenticatedApi(config, token, fetcher);
-    const claims = caller.parse(
-      JSON.parse(atob(token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/")))
-    );
-    if (claims.iss !== `${config.url}/auth/v1` || claims.exp * 1000 <= Date.now())
-      throw new Error();
+    const claims = readUnverifiedFoundationTokenClaims(config, token);
     const auth = createClient(
       config.url,
       config.publishableKey,
@@ -210,6 +221,20 @@ export async function readFoundationRequestCaller(
   fetcher: typeof fetch = createTimeoutFetch()
 ) {
   const config = parseFoundationConnection(input);
+  return verifyFoundationCallerToken(
+    config,
+    await readFoundationCookieToken(config, cookies),
+    fetcher
+  );
+}
+
+/** The access token this project's session cookies carry, unverified. Callers
+ * must verify it (GoTrue) or bind it to a verification made for this request. */
+export async function readFoundationCookieToken(
+  input: unknown,
+  cookies: Required<Pick<CookieMethodsServer, "getAll">>
+) {
+  const config = parseFoundationConnection(input);
   let values: Map<string, string>;
   try {
     values = new Map(((await cookies.getAll()) ?? []).map(({ name, value }) => [name, value]));
@@ -230,5 +255,5 @@ export async function readFoundationRequestCaller(
   } catch {
     throw new FoundationSessionError(401);
   }
-  return verifyFoundationCallerToken(config, token, fetcher);
+  return token;
 }

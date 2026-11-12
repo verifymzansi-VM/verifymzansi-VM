@@ -90,10 +90,7 @@ export async function checkSiteMonitorHomepage(
 }
 
 /** Without a monitor credential, read the public homepage directly. */
-export async function checkPublicHomepage(
-  expectedHostname: string,
-  fetchImpl: typeof fetch = fetch
-) {
+async function checkPublicHomepage(expectedHostname: string, fetchImpl: typeof fetch = fetch) {
   const response = await fetchImpl(PUBLIC_HOMEPAGE_URL, {
     redirect: "error",
     cache: "no-store",

@@ -108,16 +108,16 @@ const nextConfig = {
   // at build time; the `env` field forces inlining without masking missing config.
   env: clientEnv,
   images: {
-    // Cloudflare Workers/Pages does not support the default Next.js image
-    // optimisation endpoint (/_next/image). Instead of disabling optimisation
-    // entirely, we use a custom loader that routes through Cloudflare Image
-    // Resizing (/cdn-cgi/image/) when available, producing responsive srcSets
-    // with proper width/quality/format negotiation on mobile.
+    // Cloudflare Workers does not support the default Next.js image
+    // optimisation endpoint (/_next/image), and the zone has no Cloudflare
+    // Image Resizing. The custom loader maps media to 400/800/1600px variant
+    // keys (the media route serves the original when a variant is missing;
+    // uploads through the new backend create none yet) and leaves other
+    // images at their own URL. Nothing is resized on the fly.
     loader: "custom",
     loaderFile: "./src/lib/image-loader.ts",
-    // Media is served as pre-generated 400/800/1600px variants and local
-    // assets are not resized, so extra widths only repeat the same file in
-    // every srcset. Keep candidates aligned with the variants that exist.
+    // Only the 400/800/1600px media variants can differ and local assets are
+    // not resized, so extra widths only repeat the same file in every srcset.
     deviceSizes: [400, 800, 1600],
     imageSizes: [128, 256],
     remotePatterns: [

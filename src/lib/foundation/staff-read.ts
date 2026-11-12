@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import { auditSubjectFilters } from "./audit-filters";
+import { isStaffSecondFactorRefusal } from "./error-reasons";
 
 // Preserve Postgres microseconds in cursors; Date is for display only.
 const instant = z
@@ -32,7 +33,7 @@ const auditEvent = z.strictObject({
   action: z.string().min(1).max(150),
   reason: z.string().max(5000).nullable(),
 });
-export const foundationAuditPage = z
+const foundationAuditPage = z
   .strictObject({
     version: z.literal(1),
     items: z.array(auditEvent).max(100),
@@ -48,7 +49,6 @@ export const foundationAuditPage = z
         value.items.at(-1)?.occurred_at === value.next_cursor.before_at
       )
   );
-export type FoundationAuditPage = z.infer<typeof foundationAuditPage>;
 
 const foundationDecisionRequest = z
   .strictObject({
@@ -122,6 +122,7 @@ export const foundationDecisionPage = z
   );
 
 export class FoundationStaffReadError extends Error {
+  override name = "FoundationStaffReadError";
   constructor(
     readonly status: 400 | 403 | 503,
     readonly mfaRequired = false
@@ -142,7 +143,7 @@ function refusal(error: { code?: string; message?: string }) {
       : ["22023", "22P02", "22007", "22008"].includes(error.code ?? "")
         ? 400
         : 503,
-    error.code === "42501" && /second.factor|authenticator app/.test(error.message ?? "")
+    error.code === "42501" && isStaffSecondFactorRefusal(error)
   );
 }
 

@@ -16,10 +16,7 @@ export async function SponsorStrip() {
       className="relative overflow-hidden border-y border-white/10 bg-brand-green-950 text-white"
     >
       <div className="container-page flex min-h-[60px] items-center gap-3 py-2">
-        <h2
-          id="sponsor-strip-label"
-          className="shrink-0 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-gold-300"
-        >
+        <h2 id="sponsor-strip-label" className="shrink-0 text-[11px] font-bold text-brand-gold-300">
           <span className="sm:hidden">Partners</span>
           <span className="hidden sm:inline">Business Sponsors</span>
         </h2>
