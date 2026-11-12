@@ -38,7 +38,9 @@ export async function sendHeartbeat(
       redirect: "manual",
       signal: AbortSignal.timeout(HEARTBEAT_TIMEOUT_MS),
     });
-    await response.body?.cancel().catch(() => {});
+    await response.body?.cancel().catch(() => {
+      // Only drains the unread body; the status below decides the result.
+    });
     if (response.ok) return "sent";
     console.warn(`${job} heartbeat was not accepted (HTTP ${response.status})`);
     return "failed";

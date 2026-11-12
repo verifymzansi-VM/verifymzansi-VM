@@ -10,6 +10,7 @@ import type { Logger } from "@/lib/utils/logger";
 import { parseJsonRequest } from "@/lib/utils/api";
 import { checkRateLimit, getClientRateLimitIdentity } from "@/lib/utils/rate-limit";
 import { recordSecurityEvent, securityContext } from "@/lib/security/security-events";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 
 export const foundationNoStore = {
   "Cache-Control": "private, no-store",
@@ -32,7 +33,9 @@ export type FoundationRefusal = {
 /** Owner route on the foundation project: same-origin and CSRF for writes,
  * per-client rate limit (blocking when the limiter is degraded), a
  * GoTrue-verified session, bounded JSON and exactly one command with no
- * automatic retry. Unknown failures become a generic 503. */
+ * automatic retry. Unknown failures become a generic 503 carrying a request
+ * reference; the matching log line names the error type, failed command and
+ * database error code. */
 export async function handleFoundationOwnerRoute<T>({
   request,
   log,
@@ -66,8 +69,11 @@ export async function handleFoundationOwnerRoute<T>({
   successStatus?: 200 | 201;
   responseHeaders?: (data: T) => Record<string, string>;
 }) {
-  const unavailable = () =>
-    NextResponse.json({ error: unavailableMessage }, { status: 503, headers: foundationNoStore });
+  const unavailable = (reference: string) =>
+    NextResponse.json(
+      { error: unavailableMessage, reference },
+      { status: 503, headers: foundationNoStore }
+    );
   if (mutate) {
     const blocked = enforceMutationRequest(request, log);
     if (blocked) return blocked;
@@ -75,9 +81,12 @@ export async function handleFoundationOwnerRoute<T>({
   let context: ReturnType<typeof createFoundationRouteContext>;
   try {
     context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
-  } catch {
-    return unavailable();
+  } catch (error) {
+    return unavailable(
+      logRequestFailure(log, "Foundation binding unavailable", { request, error, action })
+    );
   }
+  let api: FoundationAuthenticatedApi | undefined;
   try {
     const limit = await checkRateLimit({
       key: getClientRateLimitIdentity(request).key,
@@ -98,7 +107,6 @@ export async function handleFoundationOwnerRoute<T>({
           }
         )
       );
-    let api: FoundationAuthenticatedApi;
     let caller: { accountId: string; sessionId: string } | undefined;
     try {
       if (includeAccountId || requireCaller) {
@@ -108,7 +116,15 @@ export async function handleFoundationOwnerRoute<T>({
       } else api = await context.authenticate();
     } catch (error) {
       if (!(error instanceof FoundationSessionError) || error.status === 503)
-        return context.respond(unavailable());
+        return context.respond(
+          unavailable(
+            logRequestFailure(log, "Foundation session check unavailable", {
+              request,
+              error,
+              action,
+            })
+          )
+        );
       return context.respond(NextResponse.json({ error: signInMessage }, { status: 401 }));
     }
     let input: unknown = null;
@@ -134,22 +150,25 @@ export async function handleFoundationOwnerRoute<T>({
         ...securityContext(request),
         reason: known.reason,
       });
-    if (known)
-      return context.respond(
-        NextResponse.json(
-          {
-            error: known.error,
-            reason: known.reason,
-            ...(known.code ? { code: known.code } : {}),
-            ...(known.issues ? { issues: known.issues } : {}),
-            ...(known.details ? { details: known.details } : {}),
-            ...(known.redirectUrl ? { redirectUrl: known.redirectUrl } : {}),
-            ...(known.upgradeUrl ? { upgradeUrl: known.upgradeUrl } : {}),
-          },
-          { status: known.status }
-        )
-      );
-    log.error("Foundation owner request failed");
-    return context.respond(unavailable());
+    const logFailure = () =>
+      logRequestFailure(log, "Foundation owner request failed", { request, error, api, action });
+    if (!known) return context.respond(unavailable(logFailure()));
+    // A refusal that means "unavailable" (5xx) is still a failure to explain.
+    const reference = known.status >= 500 ? logFailure() : undefined;
+    return context.respond(
+      NextResponse.json(
+        {
+          error: known.error,
+          reason: known.reason,
+          ...(reference ? { reference } : {}),
+          ...(known.code ? { code: known.code } : {}),
+          ...(known.issues ? { issues: known.issues } : {}),
+          ...(known.details ? { details: known.details } : {}),
+          ...(known.redirectUrl ? { redirectUrl: known.redirectUrl } : {}),
+          ...(known.upgradeUrl ? { upgradeUrl: known.upgradeUrl } : {}),
+        },
+        { status: known.status }
+      )
+    );
   }
 }

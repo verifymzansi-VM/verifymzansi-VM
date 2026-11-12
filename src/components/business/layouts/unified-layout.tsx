@@ -811,6 +811,7 @@ export function UnifiedLayout({
                 negotiable={promo.price_negotiable}
                 imageUrl={promo.videos?.[0] || promo.photos?.[0]}
                 posterUrl={promo.video_thumbnail || promo.photos?.[0] || undefined}
+                isVideo={Boolean(promo.videos?.[0])}
                 categoryLabel={getPromotionCategoryDisplayLabel(promo.category_key, promo.category)}
                 province={promo.location_province}
                 city={promo.location_city}

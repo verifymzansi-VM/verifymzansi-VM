@@ -26,6 +26,8 @@ interface ListingCardListProps {
   negotiable?: boolean;
   imageUrl?: string;
   posterUrl?: string;
+  /** Photo or video, from the post's own media; without it the file name decides. */
+  isVideo?: boolean;
   province: string;
   city: string;
   category: string;
@@ -55,6 +57,7 @@ export const ListingCardList = memo(function ListingCardList({
   category,
   imageUrl,
   posterUrl,
+  isVideo: isVideoMedia,
   province,
   city,
   createdAt,
@@ -72,7 +75,7 @@ export const ListingCardList = memo(function ListingCardList({
   mediaHeight: _mediaHeight,
   viewerHasLiked = false,
 }: ListingCardListProps) {
-  const isVideo = isVideoUrl(imageUrl);
+  const isVideo = isVideoMedia ?? isVideoUrl(imageUrl);
   const normalizedImageUrl = imageUrl ? normalizeMediaUrl(imageUrl) : undefined;
   const normalizedLogoUrl = logoUrl ? normalizeMediaUrl(logoUrl) : undefined;
   const status = getListingCardStatus({ featured, boosted, urgent, createdAt });
@@ -102,6 +105,7 @@ export const ListingCardList = memo(function ListingCardList({
                   <VideoViewTracker targetId={id} targetType="listing">
                     <VideoCardPlayer
                       src={normalizedImageUrl}
+                      isVideo
                       posterUrl={posterUrl}
                       alt={title}
                       sizes="160px"

@@ -7,3 +7,8 @@
 # Test input, not a credential: a made-up storage path that the evidence route
 # test sends to prove a forged object key is refused. Exact fingerprint only.
 381f404a9a1ed6629497c93e59128c8249ce523c:src/lib/foundation/evidence-route.test.ts:generic-api-key:88
+
+# Synthetic test input, not a credential: a made-up token-shaped string the
+# failure log test used to prove tokens never reach a log line. Replaced in the
+# next commit by a value built at run time. Exact fingerprint only.
+9af6cab22bb64389d36a9d27fd144a1a2b87e4af:src/lib/utils/request-failure.test.ts:generic-api-key:23
