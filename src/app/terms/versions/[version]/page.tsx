@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { LegalDocument, LegalBlocks } from "@/components/safety/legal-document";
 import { getPublishedPostingTerms } from "@/lib/legal/published-posting-terms";
+import { isPostingTermsVersionAwaitingForce } from "@/lib/legal/current-posting-terms";
 
 export const metadata = { title: "Versioned posting terms" };
 
@@ -15,6 +16,9 @@ export default async function PostingTermsVersionPage({
   const { version } = await params;
   const document = getPublishedPostingTerms(version);
   if (!document) notFound();
+  // A version published ahead of time says so until the database makes it
+  // current; the Terms page keeps showing the version in force.
+  const awaitingForce = await isPostingTermsVersionAwaitingForce(document.version);
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -22,6 +26,11 @@ export default async function PostingTermsVersionPage({
         <LegalDocument
           title={document.title}
           meta={`Posting terms · ${document.version}`}
+          description={
+            awaitingForce
+              ? "Not in force yet. This version applies only from the date we announce; until then the current Terms of Service apply."
+              : undefined
+          }
           breadcrumbs={[{ label: "Terms of Service", href: "/terms" }, { label: document.version }]}
           sections={document.sections.map((section) => ({
             id: section.id,

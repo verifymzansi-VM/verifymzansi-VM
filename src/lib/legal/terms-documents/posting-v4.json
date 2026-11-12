@@ -1,0 +1,164 @@
+{
+  "version": "posting-v4",
+  "title": "Terms of Service",
+  "sections": [
+    {
+      "id": "acceptance",
+      "navLabel": "Acceptance",
+      "title": "Acceptance of terms",
+      "content": [
+        "By accessing or using VerifyMzansi (\"the Platform\"), you agree to these Terms.",
+        "We may update these Terms. For a material change we give at least 14 days' notice by email or on the Platform before it takes effect. If you keep using the Platform after that date, the updated Terms apply; if you do not agree, you may stop using it and close your account."
+      ]
+    },
+    {
+      "id": "registration",
+      "navLabel": "Account registration",
+      "title": "Account registration",
+      "content": [
+        "To post on VerifyMzansi, you must:",
+        "• Be at least 18 years old",
+        "• Provide accurate and truthful information",
+        "• Complete identity verification",
+        "• Maintain the security of your account credentials",
+        "You are responsible for all activity under your account."
+      ]
+    },
+    {
+      "id": "posting-obligations",
+      "navLabel": "Posting obligations",
+      "title": "Account posting obligations",
+      "content": [
+        "As an account holder, you agree to:",
+        "• Post only items, businesses, offers, or events you legally own or are authorised to advertise",
+        "• Provide accurate descriptions, images, pricing, and business details",
+        "• Not list prohibited items (weapons, illegal substances, counterfeit goods)",
+        "• Comply with the Consumer Protection Act (CPA) of South Africa and all applicable SA laws",
+        "Before submitting a post, you must explicitly accept the current posting terms. Acceptance is recorded once per account for each terms version, together with the version, document reference and acceptance time. You do not need to accept again for every post under that version. When the terms version changes, you must review and accept the new version before submitting further posts.",
+        "Each post may include one video. A video may be at most 2 minutes long, and a video for an event at most 1 minute."
+      ]
+    },
+    {
+      "id": "prohibited-content",
+      "navLabel": "Prohibited content",
+      "title": "Prohibited content",
+      "content": [
+        "Strictly prohibited on VerifyMzansi:",
+        "• Fraudulent, misleading, or deceptive listings",
+        "• Hate speech, harassment, or discriminatory content",
+        "• Illegal goods, spam, phishing, or malware",
+        "• Impersonation or IP infringement",
+        "Violation may result in immediate suspension or a permanent ban. Any refund is handled under Refunds & cancelling below and your statutory rights."
+      ]
+    },
+    {
+      "id": "our-role",
+      "navLabel": "Our role",
+      "title": "Our role",
+      "content": [
+        "VerifyMzansi is a South African platform that connects people with businesses, products, services, tourism and events. We publish posts and pass on enquiries; we are not a party to any deal between users.",
+        "We do not sell, deliver, hold, inspect or insure the goods, services, stays or events posted, and we do not handle payments between users. Any agreement, payment or delivery is between the buyer and the poster.",
+        "We cannot recover money or goods lost in a deal between users, but we will act on reports, remove content and restrict accounts where our rules are broken, and we cooperate with law enforcement."
+      ]
+    },
+    {
+      "id": "verification-signals",
+      "navLabel": "What our checks mean",
+      "title": "What our checks mean",
+      "content": [
+        "Stickers and badges show which checks were completed and when. They are signals, not guarantees.",
+        "• ID reviewed — before anyone can post, our team reviews their phone number (by one-time code), their SA ID or SA passport and a selfie. This is a staff review of the documents submitted; it is not a Home Affairs, criminal or credit check. Location is the province and city the poster gives us.",
+        "• CIPC registered (optional, for registered companies) — our team checked CIPC's records that the company is registered and In Business, and that the person who runs the profile is a director or member, or a confirmed company representative. It is not a tax, B-BBEE, credit or quality check.",
+        "• Seen by VerifyMzansi (optional, any business) — our team saw the business operating, in person or on a live video call, and the sticker shows where and when. It is not a quality rating or an endorsement.",
+        "The CIPC registered and Seen stickers last 12 months and are removed if they expire, if ownership changes or if we revoke them. A business without these stickers has simply not asked for, or not yet passed, those checks.",
+        "Verification does not guarantee that a user, business profile, product, rental, job, event, price, payment or transaction is safe, lawful, available or free from risk.",
+        "Users must still follow safe trading practices, inspect goods, verify ownership, keep records and report suspicious behaviour."
+      ]
+    },
+    {
+      "id": "payments",
+      "navLabel": "Slots & prices",
+      "title": "Slots & prices",
+      "content": [
+        "A paid plan buys posting slots. A slot holds one live post at a time for a fixed number of days. The price is the slot price for each slot and each 30-day period: slot price × number of slots × number of 30-day periods. There are no discounts for more slots or longer periods. For example, 2 Individual slots for 90 days cost 2 × 3 × R69 = R414.",
+        "Individual slots cost R69 per slot for each 30 days: R69 for 30 days, R207 for 90 days or R414 for 180 days. An Individual slot can hold a post in any of the three posting areas. You may hold 1 to 4 Individual slots at a time. The limit applies per ID-reviewed person, across all of your accounts, and each slot has its own end date. Your free first post, a slot we grant you and a sponsored place do not count towards the 4. We may agree in writing to let a business whose details we have checked hold more Individual slots for a limited time; that written offer states how many and how much notice we give before it ends.",
+        "Fair use: each paid slot can take at most 4 new posts in each 30-day period. Events are free until the event ends, subject to fair-use limits.",
+        "Paid time starts when your payment is confirmed, not when your post is approved: a slot's days are counted from that moment (never calendar months) and keep running while a post in it waits for review. Paid visibility starts only after the payment is confirmed. All slots are prepaid; nothing renews automatically and we never charge you automatically.",
+        "Renewing early: if you renew a slot before it ends, the new days start when its current days end, so you lose no days.",
+        "The slot can be reused once the post in it is deleted, and a new post in the slot runs only for the slot's remaining days.",
+        "When a slot ends, or a refund or chargeback withdraws it, the post it paid for is hidden and we notify you by email. You may buy a slot and reactivate such a post within 3 days; after that the post and its media are deleted. If a slot payment is still being confirmed when the 3 days end, deletion waits up to 24 hours more; once a payment is confirmed, the post is kept for 3 days after that payment.",
+        "Price changes apply only to new purchases. Slots you have already paid for keep their price and their days, including slots and plans bought under an earlier version of these Terms.",
+        "Other packages, such as plans for businesses that need more slots, go on sale only after their prices and terms are added to these Terms. Organisation and sponsor programmes are governed by their written agreement and do not renew automatically."
+      ]
+    },
+    {
+      "id": "paying",
+      "navLabel": "Paying & invoices",
+      "title": "Paying, VAT & invoices",
+      "content": [
+        "Orders of R10,000 or less are paid online in South African rand through our payment provider's secure hosted checkout. The checkout or bank record should identify VerifyMzansi or its payment provider. For an order of more than R10,000, ask us for an invoice and pay it by EFT; the slots start when the money has cleared in our bank account.",
+        "The price shown at checkout is the price you pay. We do not add payment fees.",
+        "Before you pay, you must confirm that your slot starts immediately and agree that the 7-day cooling-off period does not apply because the service starts immediately; at the online checkout you do this by ticking a box, and we do not take payment without it. Where section 44 of the Electronic Communications and Transactions Act applies, it gives a 7-day cooling-off right; under section 42(2) that right does not apply to a service that started, with your consent, before the 7 days ended. Nothing in these Terms limits your rights under the Consumer Protection Act.",
+        "VerifyMzansi is not registered for VAT. Our prices include no VAT, and the invoices and payment records we issue show none. If we register for VAT, VAT will be added to our prices from the date of registration and included in the prices shown on the pricing page and at checkout; this applies only to purchases from that date.",
+        "Invoices or payment records are issued from the billing flow or support channel after successful payment confirmation."
+      ]
+    },
+    {
+      "id": "refunds",
+      "navLabel": "Refunds & cancelling",
+      "title": "Refunds & cancelling",
+      "content": [
+        "We refund only where these Terms or the law require it. A change of mind is not a reason for a refund: before paying you agree that your slot starts immediately (see Paying, VAT & invoices).",
+        "A rejected post is not a reason for a refund. The slot stays yours: correct the post and submit it again, or use the slot for another post.",
+        "If we fail to provide what you paid for (for example, we wrongly reject a post, a paid slot does not work, or the Platform is unavailable for more than 24 hours in a row), we first put it right by adding the days you lost. If you still ask for your money back after we have offered that, we refund a reasonable part of the price for the days actually lost.",
+        "If you are an individual (including a sole trader), you may cancel a slot by writing to us from the email address of your account. The slot continues for 20 business days after we receive your request (the notice period). We then credit the unused whole days at the slot's daily price (its price divided by its number of days), minus a cancellation fee of R50; if the result is R0 or less, nothing is paid. Because 20 business days is about 28 calendar days, cancelling a 30-day slot usually returns nothing. Closing your account counts as a request to cancel all your slots.",
+        "Companies, close corporations and trusts are not refunded for unused days.",
+        "Billing errors and duplicate payments are refunded in full once we have checked them.",
+        "If you break these Terms, we may end your slots after giving you notice of a material breach, or at once for fraud or illegal content. An individual then receives the credit described above, less any loss the breach caused us. Where we suspect fraud or chargeback abuse, nothing is credited until the matter is resolved.",
+        "Refunds are paid only to the bank account that paid, through our payment provider's refund service (or by EFT for an invoice payment), within 30 days after we approve them. We consider one refund request per purchase.",
+        "A refund or chargeback withdraws the paid days it funded, and the post they paid for is handled as set out under Slots & prices. Nothing in this section limits your rights under the Consumer Protection Act."
+      ]
+    },
+    {
+      "id": "trials",
+      "navLabel": "Free first post",
+      "title": "Free first post & visibility",
+      "content": [
+        "Once your ID has been reviewed, your first post is free for 7 days, in any of the three posting areas (events are always free). The 7 days start when we approve that post, not when you submit it, so review time does not shorten them. The free post is available once per ID-reviewed person: once its 7 days have started it is used for good, and deleting the post or your account does not reset it. Previous free-post usage counts.",
+        "If, when that post is approved, you already have an unused paid slot with at least 7 days left that allows the post's photos and video, the post uses that slot instead and your free post stays unused. A rejected post does not use the free post; you may correct it and submit it again. Only one post at a time can wait for the free post.",
+        "A free post has standard placement only, with no boost, featured placement, urgent badge, automatic charge or free renewal. After its 7 days, VerifyMzansi may automatically mark the post as expired and remove it from public browsing, search, detail pages, and promotional surfaces.",
+        "An expired post, including a free post, is deleted with its media 3 days after it expires unless you reactivate it with a slot, as set out under Slots & prices. A post you mark as sold leaves public view and is deleted with its media 3 days later; it keeps its posting slot until then, you may delete it sooner to free the slot, and you may undo the sale within the 3 days to show it again for the slot's remaining days. A deactivated (paused) post keeps its posting slot, and the days of the slot that pays for it keep running. An event is deleted when it ends. When a post is deleted, the enquiries and other records linked to it are deleted with it, and it cannot be reactivated. A post may be kept longer while a report about it is reviewed or a legal hold applies."
+      ]
+    },
+    {
+      "id": "partners",
+      "navLabel": "Partners",
+      "title": "Partners & referral links",
+      "content": [
+        "VerifyMzansi works with partners: people and businesses we have approved who recommend the Platform. A partner earns a commission from us, a share of what a customer they referred pays us for slots, for 12 months from that customer's first payment. The commission is paid by us and never changes your price.",
+        "If you register through a partner's link or code, we tell you which partner referred you and what that partner can see, and your account shows it. You can be linked to one partner only. A partner link can be added only within 7 days after you register and before your first payment; after that it cannot be changed.",
+        "A partner can see only your first name and the first letter of your surname, the month you joined, whether you have registered, had your ID reviewed or paid, how many of the 12 months are left, and the commission earned from your payments. A partner never sees your contact details, ID details, payment details or the private details of your posts.",
+        "A partner may not take money from you, open an account or do the ID check for you, or promise that a post will be approved. All payments go through VerifyMzansi. Please report a partner who breaks these rules."
+      ]
+    },
+    {
+      "id": "promotion-rights",
+      "navLabel": "Promotion rights",
+      "title": "Promotion & distribution rights",
+      "content": [
+        "When you create a promotion, advertisement, event, or campaign on VerifyMzansi, you confirm that you own it or are authorised to market it."
+      ]
+    },
+    {
+      "id": "liability",
+      "navLabel": "Limitation of liability",
+      "title": "Limitation of liability",
+      "content": [
+        "We do not guarantee the quality, safety or legality of posted items, services or promotions, or the conduct of users. To the extent the law allows, VerifyMzansi is not liable for loss arising from deals between users or from relying on a post.",
+        "This limitation does not apply to loss caused by our gross negligence or wilful misconduct, and does not exclude any right you have under the Consumer Protection Act that cannot lawfully be excluded."
+      ]
+    }
+  ],
+  "privacy_path": "/privacy",
+  "company_details_path": "/terms#about-us"
+}

@@ -48,7 +48,8 @@ describe("proxy — immutable posting terms versions", () => {
     "/terms/versions/constructor",
     "/terms/versions/posting-v1/extra",
     "/terms/versions/posting-v3/extra",
-    "/terms/versions/posting-v4",
+    "/terms/versions/posting-v4/extra",
+    "/terms/versions/posting-v5",
     "/terms/versions",
   ])("rejects unpublished paths before streaming or Auth: %s", async (path) => {
     const response = await routeRequest(createMockRequest(path));
@@ -61,6 +62,8 @@ describe("proxy — immutable posting terms versions", () => {
     for (const path of [
       "/terms/versions/posting-v1?from=terms",
       "/terms/versions/posting-v3",
+      // Published ahead of time; the page says it is not in force yet.
+      "/terms/versions/posting-v4",
       "/terms/versions-extra/example",
     ])
       expect((await routeRequest(createMockRequest(path))).headers.get("x-middleware-next")).toBe(

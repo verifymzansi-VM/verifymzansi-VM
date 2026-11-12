@@ -56,7 +56,8 @@ the owner has not decided yet; the proposal is the engineers' suggestion.
 | 10. Keyboard and small fixes (M10.1)      |              8 | keep (owner, 2026-11-12)                                                                   | Contact dialogs give focus back; darker text on the selected Events tab; 'No stays or events yet'; a pause button on the desktop showroom; signed-out visitors get 'Go to homepage' on the error page     |
 | 11. Consistent details (M10.2)            |             19 | keep (owner, 2026-11-12, with the M10.2 part of 11 rows elsewhere)                         | One price format ('R1 450') on cards, the showroom and post pages; 'Free' for free items; no letter-spaced capitals; the theme button no longer covers the logo on narrow phones                          |
 | 12. Content-first home (M10.3)            |              8 | keep (owner, 2026-11-12, with the M10.3 part of 6 rows elsewhere)                          | The home page opens on the showroom with no pop-up; one slim line under it, 'Every poster ID-reviewed · What we check'; an area with no posts shows one 'be the first' card instead of a 'No ... yet' box |
-| **Total**                                 |        **215** |                                                                                            |                                                                                                                                                                                                           |
+| 15. Terms v4 (Pricing v2 P1)              |              2 | awaiting owner                                                                             | Nothing on the Terms page or in the posting forms yet; the Terms v4 archive page says it is not in force                                                                                                  |
+| **Total**                                 |        **217** |                                                                                            |                                                                                                                                                                                                           |
 
 Questions for the owner:
 
@@ -190,6 +191,17 @@ Questions for the owner:
     The sub-questions keep the current behaviour: the identity line is on the
     home page only, and the 'be the first' cards open the posting forms (sign-in
     first while sign-up is by invitation only).
+
+12. **Terms v4 (group 15, Pricing v2 P1).** Posting Terms v4 is written and
+    published at `/terms/versions/posting-v4` with the line 'Not in force yet.
+    This version applies only from the date we announce; until then the current
+    Terms of Service apply.' under its title. Nothing else changes now:
+    `/terms`, the pricing page and checkout keep the current prices, and members
+    keep accepting posting-v3. When the new slots go on sale (roadmap P2), one
+    reviewed database update makes posting-v4 current, the line disappears and
+    every member accepts the new version once. Do you approve the v4 wording and
+    the 'Not in force yet' line? The wording questions are listed in the pull
+    request.
 
 <!-- frontend-ledger:start -->
 
@@ -513,6 +525,22 @@ decision includes 'M10.3 part approved by owner 2026-11-12'.
 | `src/components/home/home-business-showcase.test.tsx`      | test   | Expects the 'be the first' card (one link, no rail heading, no 'View all', no 'yet') when there are no businesses.                                                                                                                 | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-12 (M10.3) | 2026-11-12 | cd5019d8a451 |
 | `src/components/home/home-mzansi-market-showcase.test.tsx` | test   | Expects the 'be the first' card when there are no listings.                                                                                                                                                                        | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-12 (M10.3) | 2026-11-12 | 4430e27c710e |
 | `src/components/home/home-promotions-showcase.test.tsx`    | test   | Expects the 'be the first' card when there are no stays or events, and no card when there are.                                                                                                                                     | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                                                                                                              | keep     | approved by owner 2026-11-12 (M10.3) | 2026-11-12 | 7c69ffffa34e |
+
+### 15. Terms v4 (Pricing v2 P1)
+
+Posting Terms v4 (`src/lib/legal/terms-documents/posting-v4.json`, outside the
+checked scope) states the new slot prices (R69 per Individual slot for each 30
+days), the limits, invoice payment above R10,000, the cooling-off consent, the
+refund and cancellation policy, the free 7-day first post from its approval and
+partner referral links. It is published now but not in force: `/terms` and the
+posting forms keep `posting-v3` until a later reviewed database update makes
+`posting-v4` current together with the release that sells the new slots (roadmap
+P2). Until then its archive page says so.
+
+| File                                             | Kind              | Reason                                                                                                                                                                                    | What changes on screen                                                                                                                                                                                                                                                                                                                                                                                                                 | Proposed | Owner decision | Date       | Version      |
+| ------------------------------------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ---------- | ------------ |
+| `src/app/terms/versions/[version]/page.tsx`      | wording-behaviour | Terms v4 is published before its prices go on sale; its archive page must not read as the Terms in force.                                                                                 | Only on a terms version published ahead of time (now `/terms/versions/posting-v4`) while the database keeps an earlier version current: under 'Posting terms · posting-v4' the header reads 'Not in force yet. This version applies only from the date we announce; until then the current Terms of Service apply.' The line goes when `posting-v4` becomes current. `/terms` and the pages of posting-v1 to posting-v3 are unchanged. | keep     | awaiting owner | 2026-11-12 | 5386e449f255 |
+| `src/app/terms/versions/[version]/page.test.tsx` | test              | New unit test: the 'Not in force yet' line on a version published ahead of time, none on the current or an earlier version, and not found for an unknown version without a database read. | Nothing (not part of a page)                                                                                                                                                                                                                                                                                                                                                                                                           | keep     | awaiting owner | 2026-11-12 | e74361db6cb9 |
 
 <!-- frontend-ledger:end -->
 

@@ -67,6 +67,22 @@ test.describe("posting terms", () => {
     ).toHaveAttribute("href", "/privacy");
   });
 
+  test("posting-v4 is published ahead of time and says it is not in force", async ({ page }) => {
+    const response = await page.goto("/terms/versions/posting-v4");
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText("Posting terms · posting-v4", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(/^Not in force yet\. This version applies only from/)
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: /Slots & prices/ })).toBeVisible();
+    // The Terms page and the version in force are unchanged.
+    await page.goto("/terms");
+    await expect(page.getByText("Posting terms · posting-v3", { exact: true })).toBeVisible();
+    await page.goto("/terms/versions/posting-v3");
+    await expect(page.getByText("Posting terms · posting-v3", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Not in force yet/)).toHaveCount(0);
+  });
+
   test("an unpublished terms version is unavailable", async ({ request }) => {
     const response = await request.get("/terms/versions/not-a-published-version");
     expect(response.status()).toBe(404);

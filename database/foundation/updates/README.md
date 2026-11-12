@@ -651,6 +651,110 @@ previous summary capped at 7 days, the 400-day clean-up); that only
 payment's problems go with it; and that apply, rollback and re-apply return the
 same fingerprints.
 
+## Posting Terms v4 published ahead of its prices, 12 November 2026
+
+`20261112122001_publish_posting_terms_v4.sql` is not applied yet. It needs no
+earlier pending update. It publishes posting terms version `posting-v4`
+(`src/lib/legal/terms-documents/posting-v4.json`, canonical hash
+`ztKvrCyqPz9iQdII2hKLPMklhZey7FCilmj73EfFruc`) **without making it current**: it
+inserts one row into `private.posting_terms_versions` and changes no function,
+table, grant, acceptance or current version. It refuses (55000) when the current
+version is not `posting-v3` (or already `posting-v4`), or when `posting-v4` is
+already published with another document, and it checks before committing that
+the current version did not change.
+
+`posting-v4` states Pricing v2 (roadmap Milestone 11, P1): posting slots priced
+per slot and per 30-day period with no discounts; Individual slots at R69 for 30
+days, R207 for 90 days or R414 for 180 days in any posting area; 1 to 4
+Individual slots per ID-reviewed person, each with its own end date; at most 4
+new posts per paid slot in each 30-day period; one video per post, at most 2
+minutes (events 1 minute); prepaid, no automatic renewal, paid time from the
+confirmed payment, renewing early adds the new days after the current end; a
+price change applies only to new purchases; orders of R10,000 or less online,
+more by invoice and EFT; no payment fees added; the cooling-off consent before
+payment (ECT Act section 42(2)); not registered for VAT; the refund and
+cancellation policy (no change-of-mind refunds, a rejected post is not a refund
+reason, our failures are fixed first with extra days, individuals may cancel
+with 20 business days' notice and get the unused days less a cancellation fee,
+companies get no refund of unused days, billing errors refunded in full, refunds
+only to the paying account); the unchanged expiry, sold and paused rules with
+the 3-day grace; the free 7-day first post from its approval; and partner
+referral links (the customer is told who referred them and what the partner
+sees). `posting-v1` to `posting-v3` are unchanged. Other packages (the
+Multi-listing and Business Sponsor prices) are not described: they are added in
+a later version when they go on sale.
+
+**Why it is not current yet.** The website still sells the plans `posting-v3`
+describes, and checkout charges those prices. Making `posting-v4` current now
+would ask every member to accept prices and rules (slots, limits, invoices, the
+checkout consent, early renewal, refunds) that the site does not offer yet, and
+the Terms would no longer match what checkout charges. So the change has two
+steps:
+
+1. **Now (this update and its release):** the document, its pinned hash in
+   `catalogue.json` (whose `active_version` stays `posting-v3`) and this row.
+   `/terms` keeps showing `posting-v3` and members keep accepting it; nobody can
+   accept `posting-v4` (`internal.accept_posting_terms` accepts only the current
+   version). `/terms/versions/posting-v4` shows the document with the line "Not
+   in force yet. This version applies only from the date we announce; until then
+   the current Terms of Service apply." The archive page asks the database which
+   version is current, so the line disappears the moment `posting-v4` becomes
+   current, even before the release that names it active.
+2. **The switch (a separate reviewed update, in the pull request that sells the
+   new slots, roadmap P2):** one statement makes `posting-v4` current, after a
+   precondition that `posting-v4` is published with the hash above; in the same
+   pull request `catalogue.json` names `posting-v4` active, the Terms page's
+   fallback text (`src/lib/legal/terms-text.ts`) follows it, and the pricing
+   page, FAQ, Advertise page, plan step and checkout show the new prices. The
+   update is applied immediately before that release is deployed. Every member
+   then accepts `posting-v4` once before their next submission or edit. Before
+   the switch, every rule `posting-v4` states must be true on the site (the R69
+   catalogue, the 4-slot limit per person, 4 new posts per slot, the R10,000
+   online limit and the consent tick in P2; invoice payments in P2b; early
+   renewal in P3; the video limits in M4.4), and the owner gives the 14 days'
+   notice of a material change that `posting-v3` promises (by email or on the
+   Platform), unless the owner decides otherwise as for `posting-v3`.
+
+**Applying.** Either order is safe: the row is unused until a later update makes
+it current, and the release reads the database only to know whether `posting-v4`
+is current. Follow the usual order (apply after the merge, before the deploy):
+
+1. Run `../preflight/20261112122001_publish_posting_terms_v4.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if its result is
+   the single "summary" row reading "current posting-v3; accounts that accepted
+   it: N; posting-v4 not published (update not applied); accounts that accepted
+   posting-v4: 0".
+2. Run the update. It waits at most 5 seconds for the posting terms rows and
+   stops without changing anything if they are busy; run it again. Run the
+   preflight again: it must read "posting-v4 published (update already applied)"
+   with the same current version.
+3. After the deploy, `/terms` still shows "Posting terms · posting-v3" and
+   `/terms/versions/posting-v4` shows the "Not in force yet" line.
+
+The reviewed rollback is
+`../rollback/20261112122001_publish_posting_terms_v4.down.sql`. Published terms
+are immutable, so it changes nothing: it only checks that `posting-v4` is not
+current and has no acceptances (the row then stays unused, like the
+never-current `posting-v2`), and it refuses once a later update has made
+`posting-v4` current. To withdraw the wording, revert the release (its archive
+page then answers 404) and publish a corrected version under a new name.
+
+`node --import tsx scripts/test-foundation-posting-terms-v4.mjs` (part of
+`pnpm db:foundation:lifecycle-test`) proves on the throwaway database: that the
+shipped document's hash is the one the update inserts and that the update never
+names a current version; that the preflight is read only and reports the state
+before and after; that the update refuses an unexpected current version and a
+`posting-v4` published with another document, changing nothing; that afterwards
+`posting-v3` stays current for the public and member reads, a member's
+`posting-v3` acceptance stands and nobody can accept `posting-v4`; that the row
+cannot be changed or deleted; that the schema fingerprint is unchanged and
+apply, rollback and re-apply leave the same state; and, simulating the later
+switch, that every member is then asked to accept `posting-v4` once, a
+`posting-v3` acceptance no longer counts, re-running the update keeps
+`posting-v4` current and the rollback refuses. `pnpm check:foundation-api`
+checks that the catalogue's active version is still the one the updates make
+current.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -2101,5 +2205,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   supabase_admin rows, after "already applied"; production fingerprint after all
   five updates matched the replay (section No default rights in schema public)
 - `20261112080000_payment_problem_alerts.sql`: pending
+- `20261112122001_publish_posting_terms_v4.sql`: pending
 
 <!-- applied-register:end -->
