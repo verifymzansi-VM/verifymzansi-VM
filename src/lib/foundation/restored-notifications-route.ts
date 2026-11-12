@@ -22,6 +22,7 @@ const row = foundationNotificationPageSchema.shape.items.element
       "account_banned",
       "appeal_decided",
       "business_check_update",
+      "verification_returned",
     ]),
     warning_reason: z.string().min(10).max(500).nullable().optional(),
     organisation_slug: z
@@ -52,6 +53,12 @@ function presentedNotification(n: z.infer<typeof row>) {
       "info",
     ],
     account_warning: ["Account warning", n.warning_reason ?? "", "/dashboard", "warning"],
+    verification_returned: [
+      "Your ID check needs another look",
+      "Your ID was sent back. Open verification to see why and what to do next.",
+      "/verification",
+      "warning",
+    ],
     content_hidden: ["Content hidden", "A post was hidden after review.", "/appeals", "warning"],
     account_suspended: [
       "Account suspension",

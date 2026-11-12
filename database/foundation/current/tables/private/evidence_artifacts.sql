@@ -34,6 +34,7 @@ alter table private.evidence_artifacts enable row level security;
 CREATE INDEX evidence_artifacts_case_idx ON private.evidence_artifacts USING btree (case_id, id);
 CREATE INDEX evidence_artifacts_due_idx ON private.evidence_artifacts USING btree (retain_until) WHERE (state = 'clean'::text);
 CREATE INDEX evidence_artifacts_intent_idx ON private.evidence_artifacts USING btree (created_at) WHERE (state = 'intent'::text);
+CREATE INDEX evidence_artifacts_owner_id_idx ON private.evidence_artifacts USING btree (owner_id);
 CREATE TRIGGER evidence_artifact_submission BEFORE INSERT OR DELETE OR UPDATE ON private.evidence_artifacts FOR EACH ROW EXECUTE FUNCTION internal.evidence_artifact_submission_guard();
 CREATE TRIGGER evidence_artifact_transition BEFORE UPDATE ON private.evidence_artifacts FOR EACH ROW EXECUTE FUNCTION internal.evidence_artifact_transition_guard();
 CREATE TRIGGER scrub_frontend_verification_receipt AFTER UPDATE OF state ON private.evidence_artifacts FOR EACH ROW EXECUTE FUNCTION internal.scrub_frontend_verification_receipt();

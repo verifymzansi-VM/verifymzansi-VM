@@ -120,7 +120,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </p>
             <VerificationChips className="mt-[clamp(0.75rem,2vh,1.25rem)]" />
             <div className="mt-[clamp(0.5rem,2vh,1.5rem)] flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-bold uppercase tracking-[0.14em] text-brand-gold-300">
+              <p className="text-sm font-bold text-brand-gold-300">
                 Discover <span aria-hidden="true">·</span> Connect
               </p>
               <Link

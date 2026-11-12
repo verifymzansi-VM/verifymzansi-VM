@@ -164,14 +164,18 @@ Reviewers should verify:
 - **Component tests** (Testing Library) for interactive UI components
 - **E2E tests** (Playwright) for critical user flows
 
-### Coverage targets:
+### Coverage gate:
 
-| Metric     | Target |
-| ---------- | ------ |
-| Statements | ≥ 80%  |
-| Branches   | ≥ 75%  |
-| Functions  | ≥ 80%  |
-| Lines      | ≥ 80%  |
+`vitest.config.ts` enforces these minimums (the stricter figure applies on
+`main`). Raise them when coverage improves; never lower them to make a change
+pass.
+
+| Metric     | Minimum | On `main` |
+| ---------- | ------- | --------- |
+| Statements | 74%     | 75%       |
+| Branches   | 63%     | 64%       |
+| Functions  | 81%     | 82%       |
+| Lines      | 75%     | 76%       |
 
 ### Running tests:
 
@@ -198,14 +202,8 @@ pnpm test:all          # Everything
 
 ## Architecture Decisions
 
-Key decisions are documented in `docs/adr/`. When making significant
-architectural choices, create a new ADR:
-
-```
-docs/adr/NNN-short-title.md
-```
-
-See existing ADRs for the template format.
+The repository has no ADR folder. Explain a significant architectural choice in
+its pull request, and update `AGENTS.md` when it changes how the system works.
 
 ---
 

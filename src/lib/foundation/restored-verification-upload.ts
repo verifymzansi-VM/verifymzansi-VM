@@ -18,12 +18,14 @@ import {
   calculateAgeFromDob,
 } from "../utils/sa-id-validation";
 import { normalizePersonName, isPersonName } from "./person-name";
+import { readSelfieCaptureReport } from "./selfie-capture";
 import { encryptData, decryptData } from "../utils/encryption";
 import { putImmutableR2Bytes } from "../services/storage";
 import { enforceMutationRequest } from "../utils/mutation-guard";
 import { checkRateLimit, getClientRateLimitIdentity } from "../utils/rate-limit";
 import { readBoundedRequestFormData, RequestBodyTooLargeError } from "../utils/request-body";
 import { createLogger } from "../utils/logger";
+import { logRequestFailure } from "../utils/request-failure";
 import { foundationNoStore } from "@/lib/foundation/owner-route";
 const log = createLogger("RestoredIdentityUpload");
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -61,14 +63,20 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
   let context: ReturnType<typeof createFoundationRouteContext>;
   try {
     context = createFoundationRouteContext(readFoundationRuntimeConnection(), request);
-  } catch {
+  } catch (error) {
+    const reference = logRequestFailure(log, "Foundation binding unavailable", {
+      request,
+      error,
+      action: "verification:upload",
+    });
     return NextResponse.json(
-      { error: "Verification uploads are temporarily unavailable" },
+      { error: "Verification uploads are temporarily unavailable", reference },
       { status: 503, headers: foundationNoStore }
     );
   }
-  const reply = (status: number, error: string) =>
-    context.respond(NextResponse.json({ error }, { status }));
+  const reply = (status: number, error: string, reference?: string) =>
+    context.respond(NextResponse.json({ error, ...(reference ? { reference } : {}) }, { status }));
+  const apis: unknown[] = [];
   try {
     const ip = await checkRateLimit({
       key: getClientRateLimitIdentity(request).key,
@@ -81,6 +89,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
         "Upload protection is unavailable or too many attempts were made"
       );
     const caller = await context.authenticateCaller();
+    apis.push(caller.api);
     const limit = await checkRateLimit({
       key: caller.accountId,
       action: "verification:upload",
@@ -144,6 +153,12 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       });
     } else if (["idNumber", "firstName", "lastName", "idDocumentType"].some((key) => form.has(key)))
       return reply(400, "Choose a selfie without identity fields");
+    // How the browser says the selfie was taken: stored for staff as review
+    // context only (never authority), so it is checked against a closed set.
+    const capture = selfie
+      ? readSelfieCaptureReport(form.get("captureMethod"), form.get("livenessPassed"))
+      : null;
+    if (capture === "invalid") return reply(400, "Retake your selfie and try again");
     const bytes = await cleanEvidence(file, selfie);
     // The digest binds every authoritative field and the original file, including
     // metadata stripped during normalization. It is not an identity fingerprint.
@@ -164,6 +179,7 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
       .object({ artifact_id: z.uuid(), completed: z.boolean() })
       .parse(reserved.data);
     const service = createFoundationServiceApi();
+    apis.push(service);
     const lookedUp = await service.rpc("frontend_verification_upload_context", {
       p_owner: caller.accountId,
       p_request: requestId.data,
@@ -183,6 +199,16 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
         throw new Error("Upload target changed");
       let score: number | undefined;
       if (selfie) {
+        if (capture) {
+          // Recorded with the member's own session, on their own selfie
+          // receipt, before completion: review context for staff only.
+          const recorded = await caller.api.rpc("record_my_selfie_capture", {
+            p_request: requestId.data,
+            p_capture_method: capture.captureMethod,
+            p_browser_liveness_passed: capture.browserLivenessPassed,
+          });
+          if (recorded.error) rpcFailure(recorded.error);
+        }
         const fp = z
           .string()
           .regex(/^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/)
@@ -255,10 +281,15 @@ export async function handleRestoredVerificationUpload(request: NextRequest) {
     if (error instanceof RequestBodyTooLargeError)
       return reply(413, "Choose a file smaller than 5 MB");
     if (error instanceof FoundationVerificationError) return reply(error.status, error.message);
-    log.error("Identity upload could not be confirmed");
     return reply(
       503,
-      "The upload could not be confirmed. Refresh your verification status before trying again."
+      "The upload could not be confirmed. Refresh your verification status before trying again.",
+      logRequestFailure(log, "Identity upload could not be confirmed", {
+        request,
+        error,
+        api: apis,
+        action: "verification:upload",
+      })
     );
   }
 }

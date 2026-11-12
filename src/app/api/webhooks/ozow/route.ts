@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDataBackend } from "@/lib/data-backend";
 import { applyFoundationOzowNotification } from "@/lib/foundation/billing-runtime";
+import { recordPaymentProblem } from "@/lib/foundation/payment-problems";
+import { createFoundationServiceApi } from "@/lib/foundation/service-api";
 import { createLogger } from "@/lib/utils/logger";
 import { scheduleBackgroundTask } from "@/lib/utils/background-task";
 import { fulfillPayment, type FulfillmentResult } from "@/lib/payments/fulfillment";
@@ -112,14 +114,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
     }
 
+    const foundation = getDataBackend() === "foundation";
     let parsedBody: unknown;
     try {
       parsedBody = JSON.parse(rawBody) as unknown;
-    } catch (error) {
-      log.warn("Ozow webhook JSON parse failed", {
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
-      return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    } catch {
+      return await refuseSignedNotice("invalid_json", foundation);
     }
     let payload = normalizeOzowWebhook(parsedBody);
     if (payload?.eventType?.toLowerCase() !== SUPPORTED_OZOW_EVENT_TYPE) {
@@ -133,13 +133,13 @@ export async function POST(request: NextRequest) {
       payload.rawPayload = { ...thinPayload, resolvedTransaction: payload.rawPayload };
     }
     if (!payload?.merchantReference) {
-      return NextResponse.json({ error: "Missing merchantReference" }, { status: 400 });
+      return await refuseSignedNotice("missing_merchant_reference", foundation);
     }
     if (payload.eventType?.toLowerCase() === SUPPORTED_OZOW_EVENT_TYPE && !payload.status) {
-      return NextResponse.json({ error: "Missing transaction status" }, { status: 400 });
+      return await refuseSignedNotice("missing_transaction_status", foundation);
     }
 
-    if (getDataBackend() === "foundation") {
+    if (foundation) {
       return NextResponse.json(await applyFoundationOzowNotification(payload, rawBody));
     }
     const supabase = createAdminClient() as unknown as PaymentStoreClient;
@@ -331,4 +331,24 @@ export async function POST(request: NextRequest) {
       { status: 500, headers: { "Retry-After": "30" } }
     );
   }
+}
+
+/**
+ * A correctly signed notice that can never be applied: logged with a reason
+ * code (and, on the foundation backend, kept as a payment problem for the
+ * staff summary) and acknowledged with 200. Any other answer makes the sender
+ * retry it for about a day, and a run of failed deliveries switches the notice
+ * address off. The 10-minute status check still settles a real payment from
+ * Ozow's own records. Outages (database, Ozow lookups) still answer 5xx so the
+ * notice is sent again.
+ */
+async function refuseSignedNotice(reason: string, foundation: boolean) {
+  if (foundation)
+    await recordPaymentProblem(createFoundationServiceApi, {
+      paymentId: null,
+      reason,
+      source: "notice",
+    });
+  else log.warn("Ozow notice refused", { paymentId: null, reason });
+  return NextResponse.json({ success: true, rejected: reason });
 }

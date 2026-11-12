@@ -23,4 +23,5 @@ create table private.cost_alarms (
 );
 alter table private.cost_alarms owner to postgres;
 alter table private.cost_alarms enable row level security;
+CREATE INDEX cost_alarms_acknowledged_by_idx ON private.cost_alarms USING btree (acknowledged_by) WHERE (acknowledged_by IS NOT NULL);
 revoke all on private.cost_alarms from public;

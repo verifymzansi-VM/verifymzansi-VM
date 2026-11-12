@@ -4,10 +4,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export const GITHUB_ACTIONS_APP_ID = 15368;
-export const RULESET_FILE = ".github/rulesets/protect-main.json";
+const GITHUB_ACTIONS_APP_ID = 15368;
+const RULESET_FILE = ".github/rulesets/protect-main.json";
 /** Workflows whose jobs may be required on pull requests to `main`. */
-export const PULL_REQUEST_WORKFLOWS = [
+const PULL_REQUEST_WORKFLOWS = [
   ".github/workflows/ci.yml",
   ".github/workflows/codeql.yml",
   ".github/workflows/foundation-native.yml",

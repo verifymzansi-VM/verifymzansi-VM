@@ -22,5 +22,8 @@ create table private.frontend_evidence_claim_events (
 );
 alter table private.frontend_evidence_claim_events owner to postgres;
 alter table private.frontend_evidence_claim_events enable row level security;
+CREATE INDEX frontend_evidence_claim_events_actor_id_idx ON private.frontend_evidence_claim_events USING btree (actor_id) WHERE (actor_id IS NOT NULL);
 CREATE INDEX frontend_evidence_claim_events_case_idx ON private.frontend_evidence_claim_events USING btree (case_id, created_at DESC);
+CREATE INDEX frontend_evidence_claim_events_from_staff_idx ON private.frontend_evidence_claim_events USING btree (from_staff) WHERE (from_staff IS NOT NULL);
+CREATE INDEX frontend_evidence_claim_events_to_staff_idx ON private.frontend_evidence_claim_events USING btree (to_staff) WHERE (to_staff IS NOT NULL);
 revoke all on private.frontend_evidence_claim_events from public;
