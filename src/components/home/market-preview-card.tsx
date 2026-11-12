@@ -8,6 +8,8 @@ interface MarketPreviewCardProps {
   href: string;
   imageUrl?: string;
   posterUrl?: string;
+  /** Photo or video, from the post's own media; without it the file name decides. */
+  isVideo?: boolean;
   title: string;
   price: number | null;
   city: string;
@@ -27,6 +29,7 @@ export function MarketPreviewCard({
   href,
   imageUrl,
   posterUrl,
+  isVideo,
   title,
   price,
   city,
@@ -48,6 +51,7 @@ export function MarketPreviewCard({
       title={title}
       mediaUrl={imageUrl}
       posterUrl={posterUrl}
+      isVideo={isVideo}
       mediaAlt={title}
       eyebrow={price != null && price > 0 ? formatPrice(price) : null}
       location={city || null}
