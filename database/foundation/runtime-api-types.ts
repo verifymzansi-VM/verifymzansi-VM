@@ -367,6 +367,14 @@ export type FoundationRuntimeAuthenticatedDatabase = {
         Args: { p_owner?: string; p_artifact?: string };
         Returns: Json;
       };
+      get_frontend_staff_selfie_capture: {
+        Args: { p_case_id: string; p_claim_generation: string; p_claim_nonce: string };
+        Returns: Json;
+      };
+      record_my_selfie_capture: {
+        Args: { p_request: string; p_capture_method: string; p_browser_liveness_passed: boolean };
+        Returns: Json;
+      };
       approve_frontend_identity_step: {
         Args: {
           p_case: string;
@@ -465,6 +473,21 @@ export type FoundationRuntimeServiceDatabase = {
   api: Omit<FoundationServiceDatabase["api"], "Functions"> & {
     Functions: FoundationServiceDatabase["api"]["Functions"] & {
       purge_frontend_form_drafts: { Args: { p_limit: number }; Returns: number };
+      expire_stale_checkouts: { Args: { p_limit: number }; Returns: number };
+      record_payment_problem: {
+        Args: {
+          p_payment_id: string | null;
+          p_reason: string;
+          p_source: string;
+          p_alert: boolean;
+          p_transaction: string | null;
+        };
+        Returns: Json;
+      };
+      claim_payment_alerts: { Args: { p_limit: number }; Returns: Json };
+      complete_payment_alerts: { Args: { p_claim: string; p_sent: boolean }; Returns: number };
+      claim_payment_digest: { Args: { p_from_hour: number; p_limit: number }; Returns: Json };
+      complete_payment_digest: { Args: { p_claim: string }; Returns: boolean };
       start_frontend_cipc_email: {
         Args: {
           p_owner: string;

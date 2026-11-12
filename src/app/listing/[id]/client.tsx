@@ -5,7 +5,7 @@ import { VideoViewTracker } from "@/components/ui/video-view-tracker";
 import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, Maximize2, Play, RotateCcw, AlertTriangle } from "lucide-react";
-import { MediaLightbox } from "@/components/ui/media-lightbox";
+import { MediaLightbox } from "@/components/ui/media-lightbox-lazy";
 import { cn } from "@/lib/utils";
 import { normalizeMediaUrls } from "@/lib/utils/media-url";
 import { ProfileVideoPlayer } from "@/components/ui/profile-video-player";

@@ -1,3 +1,7 @@
+> Historical: describes the retired source backend. This log stopped on 4 April
+> 2026; merged pull requests are the change record since then. Read
+> [AGENTS.md](AGENTS.md) for the live backend and the release process.
+
 # VerifyMzansi — Recent Development Log
 
 ## Launch Hardening Continuation (2026-04-04)

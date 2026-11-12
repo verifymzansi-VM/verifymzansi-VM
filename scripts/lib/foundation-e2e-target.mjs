@@ -56,6 +56,9 @@ export const LOCAL_OZOW_WEBHOOK_SECRET = `whsec_${createHash("sha256")
   .digest("base64")}`;
 /** Synthetic payment-provider site code; exists only in the copy. */
 export const LOCAL_OZOW_SITE_CODE = "local-fixture-ozow-site";
+/** Where the copy's website sends staff payment alerts: the local mail
+ * catcher's reserved .test domain, never a real inbox. */
+export const LOCAL_PAYMENT_ALERT_EMAIL = "payment-alerts@verifymzansi.test";
 /** The one password the copy's breach-check stand-in reports as breached
  * (scripts/lib/foundation-e2e-outbound-guard.mjs), so browser tests can prove
  * the refusal. The real breach service lists it too. Never a member's password. */

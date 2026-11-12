@@ -19,8 +19,6 @@ export const metadata = {
   description: `Keep 10 to ${ENTERPRISE_QUOTE_ABOVE_SLOTS} posts live at once on VerifyMzansi for 90 or 180 days. For dealers, agencies, shops and landlords. Pay once online; nothing renews.`,
 };
 
-export const revalidate = 300;
-
 const STEPS = [
   {
     title: "Choose a size and a term",

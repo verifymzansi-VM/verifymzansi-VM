@@ -15,7 +15,12 @@ Classes:
 - **b**: needs foundation data or flows that a spec here already covers.
 - **c**: depends on stub-only behaviour, or waits for product work.
 
-`visual-regression.spec.ts` stays in the stub suite and is not listed.
+`visual-regression.spec.ts` is not listed: its foundation copy is
+`visual-regression.spec.ts` here, run only inside the pinned Playwright image by
+`scripts/foundation-visual.mjs` (config `playwright.visual.config.ts`; this
+folder's config ignores it). It backs the required check `Visual regression
+(chosen frontend)`. Its new pictures and how they differ from the stub suite's
+are recorded in `VISUAL-BASELINES.md`.
 
 | Stub spec                         | Class   | Where its coverage lives / why not ported                                                                                                                                                                                                                                                                               |
 | --------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -9,7 +9,6 @@ import { HomeShowcaseShell } from "./home-showcase-shell";
 import { HomeShowcaseEmptyState } from "./home-showcase-empty-state";
 import { SA_PROVINCES } from "@/lib/constants/sa-provinces";
 import type { BusinessType } from "@/types/enums";
-import { Building2 } from "lucide-react";
 import { isPlaceholderMarketplaceContent } from "./placeholder-content-filter";
 import { shouldHidePlaywrightFixtureRowWhenEnabled } from "./playwright-fixture-filter";
 import {
@@ -57,16 +56,11 @@ export async function HomeBusinessShowcase() {
     .slice(0, 8);
   if (items.length === 0) {
     return (
-      <HomeShowcaseShell title="Mzansi Business" href="/mzansi-business" tone="blue">
-        <HomeShowcaseEmptyState
-          title="No businesses yet"
-          description="Add your business and it will show here. Your first post is free once your ID is reviewed."
-          ctaHref="/post/create-business"
-          ctaLabel="Add a business"
-          tone="blue"
-          icon={<Building2 className="h-7 w-7" />}
-        />
-      </HomeShowcaseShell>
+      <HomeShowcaseEmptyState
+        title="Be the first to add a business"
+        href="/post/create-business"
+        tone="blue"
+      />
     );
   }
   const businessIds = items.map((business) => business.id as string);
@@ -111,6 +105,7 @@ export async function HomeBusinessShowcase() {
               focalY={b.focal_y as number | null | undefined}
               mediaWidth={b.media_width as number | null | undefined}
               mediaHeight={b.media_height as number | null | undefined}
+              isVideo={Boolean(b.cover_video)}
             />
           </div>
         ))}

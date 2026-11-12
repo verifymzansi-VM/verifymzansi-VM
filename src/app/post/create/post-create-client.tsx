@@ -340,9 +340,7 @@ export function PostCreateClient({
                   <OptionIcon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                    {option.area}
-                  </p>
+                  <p className="text-[11px] font-semibold text-muted-foreground">{option.area}</p>
                   <div className="flex items-center gap-2">
                     <h2
                       id={headingId}
