@@ -19,6 +19,7 @@ import {
   validateOzowConfirmation,
 } from "../payments/confirmation";
 import { createLogger } from "../utils/logger";
+import { recordPaymentProblem, type PaymentProblemSource } from "./payment-problems";
 import {
   ADDON_SALES_PAUSED_CODE,
   ADDON_SALES_PAUSED_MESSAGE,
@@ -151,6 +152,22 @@ export class FoundationPendingPaymentError extends FoundationBillingError {
     );
   }
 }
+/** A database command's refusal or outage (`command` below). */
+class FoundationBillingCommandError extends FoundationBillingError {
+  override name = "FoundationBillingCommandError";
+}
+/** A status check that found something staff must look at. `reason` is a
+ * reason code for the logs and the status-check job's report; members only
+ * ever see the message. */
+export class FoundationPaymentCheckError extends FoundationBillingError {
+  override name = "FoundationPaymentCheckError";
+  constructor(
+    readonly reason: string,
+    message: string
+  ) {
+    super(503, message);
+  }
+}
 const addonSalesPaused = () =>
   new FoundationBillingError(403, ADDON_SALES_PAUSED_MESSAGE, ADDON_SALES_PAUSED_CODE);
 async function command(
@@ -160,7 +177,7 @@ async function command(
 ) {
   const { data, error } = await billingRpc(api).rpc(name, args);
   if (error)
-    throw new FoundationBillingError(
+    throw new FoundationBillingCommandError(
       error.code === "42501" || error.code === "PT403"
         ? 403
         : error.code === "22023"
@@ -379,23 +396,66 @@ async function applyTransaction(
   });
 }
 
-/** Refusals that may mean money moved without a matching delivery (a second
- * transaction on a payment, a wrong amount): logged as errors for staff. */
-const NEEDS_STAFF: ReadonlySet<string> = new Set([
-  "transaction_id_mismatch",
+/** Settlement outcomes that need a person, as payment problem reasons.
+ * A later Refunded status on a completed payment is recorded by the database
+ * as late_status_ignored: the money went back, the plan is still active. */
+const SETTLEMENT_PROBLEMS: ReadonlySet<string> = new Set([
+  "unknown_reference",
+  "request_mismatch",
   "amount_mismatch",
-  "currency_mismatch",
+  "missing_transaction",
+  "conflicting_transaction",
+  "transaction_reused",
+  "complete_unfulfillable_target",
 ]);
+function settlementProblem(outcome: unknown, reportedStatus: string | null) {
+  if (typeof outcome !== "string") return null;
+  if (outcome === "late_status_ignored" && reportedStatus?.toLowerCase() === "refunded")
+    return "refunded_after_completion";
+  return SETTLEMENT_PROBLEMS.has(outcome) ? outcome : null;
+}
+/** Records what the database reported, when it needs a person; the
+ * settlement itself is already committed. */
+async function recordSettlement(
+  service: FoundationServiceApi,
+  pay: FoundationPayment,
+  outcome: unknown,
+  reportedStatus: string | null,
+  source: PaymentProblemSource,
+  transaction: string | null
+) {
+  const recorded = (outcome as { outcome?: unknown } | null)?.outcome;
+  const reason = settlementProblem(recorded, reportedStatus);
+  if (reason)
+    await recordPaymentProblem(service, {
+      paymentId: pay.id,
+      reason,
+      source,
+      reportedStatus,
+      transaction,
+    });
+}
+
 /**
- * A correctly signed notice that can never be applied: logged with the payment
- * number and a reason code (no personal data) and acknowledged, so the sender
- * does not retry it for a day and switch the notice address off. The 10-minute
- * status check still settles a real payment from Ozow's own records.
- * Follow-up (M3.3): keep these in private.provider_events too (needs a reviewed
- * database update; apply_provider_event records only its own outcomes).
+ * A correctly signed notice that can never be applied: logged and kept as a
+ * payment problem with the payment number and a reason code (no personal
+ * data), and acknowledged, so the sender does not retry it for a day and
+ * switch the notice address off. The 10-minute status check still settles a
+ * real payment from Ozow's own records.
  */
-function refuseOzowNotice(reason: string, paymentId: string | null) {
-  (NEEDS_STAFF.has(reason) ? log.error : log.warn)("Ozow notice refused", { paymentId, reason });
+async function refuseOzowNotice(
+  service: FoundationServiceApi,
+  reason: string,
+  paymentId: string | null,
+  payload: NormalizedOzowWebhook
+) {
+  await recordPaymentProblem(service, {
+    paymentId,
+    reason,
+    source: "notice",
+    reportedStatus: payload.status,
+    transaction: payload.transactionId,
+  });
   return { success: true, rejected: reason };
 }
 
@@ -410,7 +470,7 @@ export async function applyFoundationOzowNotification(
   const pay = payload.merchantReference
     ? await readFoundationServicePayment(service, { reference: payload.merchantReference })
     : null;
-  if (!pay) return refuseOzowNotice("unknown_payment", null);
+  if (!pay) return refuseOzowNotice(service, "unknown_payment", null, payload);
   const refusal = validateOzowConfirmation(confirmationShape(pay), payload);
   if (refusal) {
     if (isRetryableConfirmationRefusal(refusal)) {
@@ -420,15 +480,10 @@ export async function applyFoundationOzowNotification(
       });
       throw new FoundationBillingError(503, "Payment confirmation cannot be checked yet");
     }
-    return refuseOzowNotice(confirmationRefusalCode(refusal), pay.id);
+    return refuseOzowNotice(service, confirmationRefusalCode(refusal), pay.id, payload);
   }
   const outcome = await applyTransaction(service, pay, payload, rawBody);
-  const recorded = (outcome as { outcome?: unknown } | null)?.outcome;
-  if (
-    recorded === "conflicting_transaction" ||
-    (recorded === "late_status_ignored" && payload.status?.toLowerCase() === "refunded")
-  )
-    log.error("Ozow notice needs staff attention", { paymentId: pay.id, reason: recorded });
+  await recordSettlement(service, pay, outcome, payload.status, "notice", payload.transactionId);
   return { success: true, result: outcome };
 }
 
@@ -468,12 +523,16 @@ export async function reconcileFoundationPayment(
   for (const transaction of transactions) {
     const refusal = validateOzowConfirmation(confirmationShape(pay), transaction);
     if (refusal) {
-      log.warn("Ozow transaction refused by the status check", {
+      const reason = confirmationRefusalCode(refusal);
+      await recordPaymentProblem(service, {
         paymentId: pay.id,
-        reason: confirmationRefusalCode(refusal),
+        reason,
+        source: "status_check",
+        reportedStatus: transaction.status,
+        transaction: transaction.transactionId,
       });
-      throw new FoundationBillingError(
-        503,
+      throw new FoundationPaymentCheckError(
+        reason,
         "Payment reconciliation did not match its stored quote"
       );
     }
@@ -481,14 +540,38 @@ export async function reconcileFoundationPayment(
   const successful = transactions.filter(
     (transaction) => transaction.status?.toLowerCase() === "successful"
   );
-  if (successful.length > 1)
-    throw new FoundationBillingError(503, "Multiple payment settlements require reconciliation");
+  if (successful.length > 1) {
+    // Paid twice on one request: nothing is settled automatically.
+    await recordPaymentProblem(service, {
+      paymentId: pay.id,
+      reason: "multiple_settlements",
+      source: "status_check",
+      reportedStatus: "successful",
+      // The set of successful transactions: a further one alerts again.
+      transaction: successful
+        .map((entry) => entry.transactionId ?? "")
+        .sort()
+        .join(","),
+    });
+    throw new FoundationPaymentCheckError(
+      "multiple_settlements",
+      "Multiple payment settlements require reconciliation"
+    );
+  }
   if (successful.length === 1) {
-    await applyTransaction(
+    const outcome = await applyTransaction(
       service,
       pay,
       successful[0],
       `reconciliation:${JSON.stringify(successful[0])}`
+    );
+    await recordSettlement(
+      service,
+      pay,
+      outcome,
+      successful[0].status,
+      "status_check",
+      successful[0].transactionId
     );
     return { checked: true, pendingTransaction: false, settled: true };
   }
@@ -573,14 +656,47 @@ async function expireStaleCheckouts(service: FoundationServiceApi) {
     .parse(await command(service, "expire_stale_checkouts", { p_limit: 100 }));
 }
 
+/** A log-safe reason code for a failed status check or sweep: a payment
+ * problem's own reason, or the kind of outage. Never the error text. */
+export function paymentCheckFailureReason(error: unknown): string {
+  if (error instanceof FoundationPaymentCheckError) return error.reason;
+  if (error instanceof FoundationBillingCommandError)
+    return error.status === 503 ? "database_unavailable" : "database_refused";
+  if (error instanceof FoundationBillingError)
+    return error.status >= 500 ? "billing_unavailable" : "billing_refused";
+  if (error instanceof z.ZodError) return "invalid_record";
+  const name = error instanceof Error ? error.name : "";
+  if (name === "OzowProviderError") return "provider_unavailable";
+  if (name === "OzowAuthenticationError") return "provider_sign_in_failed";
+  if (name === "OzowConfigurationError") return "provider_settings";
+  if (error instanceof TypeError) return "network_error";
+  return "unexpected_error";
+}
+
+export interface PaymentCheckFailure {
+  /** Null for the sweep of payments that never got a request. */
+  paymentId: string | null;
+  reason: string;
+}
+
+/** The status-check job: the sweep, then up to 20 payments. Every failure is
+ * logged with its payment number and reason and listed in `errors`; one
+ * payment's failure never stops the others. */
 export async function runFoundationPaymentReconciliation(service = createFoundationServiceApi()) {
   let expired = 0;
   let failures = 0;
+  const errors: PaymentCheckFailure[] = [];
+  const failed = (paymentId: string | null, error: unknown) => {
+    failures++;
+    const reason = paymentCheckFailureReason(error);
+    errors.push({ paymentId, reason });
+    log.error("Payment status check failed", { paymentId, reason });
+  };
   try {
     expired = await expireStaleCheckouts(service);
-  } catch {
+  } catch (error) {
     // Counted as a failure; the status checks below still run.
-    failures++;
+    failed(null, error);
   }
   const payments = z
     .array(foundationPaymentSchema)
@@ -590,11 +706,11 @@ export async function runFoundationPaymentReconciliation(service = createFoundat
   for (const pay of payments) {
     try {
       if ((await reconcileFoundationPayment(pay.id, service)).checked) checked++;
-    } catch {
-      failures++;
+    } catch (error) {
+      failed(pay.id, error);
     }
   }
-  return { checked, failures, expired };
+  return { checked, failures, expired, errors };
 }
 
 export async function manageFoundationPlanMember(api: FoundationAuthenticatedApi, input: unknown) {

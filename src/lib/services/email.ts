@@ -215,13 +215,14 @@ export async function sendPlatformNotice(
 interface SendEmailParams {
   idempotencyKey?: string;
   replyTo?: string;
-  to: string;
+  /** One address, or a few staff addresses that all see each other. */
+  to: string | string[];
   subject: string;
   html: string;
   text?: string;
 }
 
-interface SendEmailResult {
+export interface SendEmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
@@ -1079,6 +1080,58 @@ export async function sendOutboxFinalFailureAlert(
       tone: "warning",
     }),
     text: [intro, rows.map(([kind, id]) => `${kind}: ${id}`).join(EOL), next].join(EOL + EOL),
+  });
+}
+
+export interface StaffEmailSection {
+  heading?: string;
+  rows: Array<[string, string]>;
+}
+
+/**
+ * A staff operations email (the payment alert and the daily payment summary,
+ * src/lib/foundation/payment-alerts.ts). The caller builds the content from
+ * payment numbers, reason codes and counts only, never member details, and
+ * picks a key that is the same for the same content, so a retry is never
+ * delivered twice.
+ */
+export async function sendStaffOperationsEmail(params: {
+  to: readonly string[];
+  idempotencyKey: string;
+  subject: string;
+  title: string;
+  intro: string;
+  sections: readonly StaffEmailSection[];
+  closing: string;
+  reason: string;
+  tone: "warning" | "info";
+}): Promise<SendEmailResult> {
+  const body = params.sections
+    .map(
+      (section) => `${section.heading ? paragraph(section.heading) : ""}${detailList(section.rows)}`
+    )
+    .join("");
+  const text = [
+    params.intro,
+    ...params.sections.map((section) =>
+      [section.heading, ...section.rows.map(([label, value]) => `${label}: ${value}`)]
+        .filter(Boolean)
+        .join(EOL)
+    ),
+    params.closing,
+  ].join(EOL + EOL);
+  return sendEmail({
+    idempotencyKey: params.idempotencyKey,
+    to: [...params.to],
+    subject: params.subject,
+    html: brandedEmail({
+      title: params.title,
+      intro: params.intro,
+      bodyHtml: `${body}${paragraph(params.closing)}`,
+      reason: params.reason,
+      tone: params.tone,
+    }),
+    text,
   });
 }
 

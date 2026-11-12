@@ -28,6 +28,7 @@ import {
   sendDsarExtensionEmail,
   sendPlatformNotice,
   sendOutboxFinalFailureAlert,
+  sendStaffOperationsEmail,
 } from "./email";
 
 describe("email service", () => {
@@ -500,6 +501,36 @@ describe("email service", () => {
       expect(options.idempotencyKey).toMatch(/^outbox-final-failure\/[0-9a-f]{64}$/);
       expect(mockSend.mock.calls[1][1].idempotencyKey).toBe(options.idempotencyKey);
       expect(mockSend.mock.calls[1][0].text).toBe(payload.text);
+    });
+
+    it("sends a staff operations email to every staff address with escaped content", async () => {
+      await sendStaffOperationsEmail({
+        to: ["owner@example.test", "deputy@example.test"],
+        idempotencyKey: "payment-alert/synthetic",
+        subject: "VerifyMzansi payment alert: 1 payment needs attention (wrong amount)",
+        title: "A payment needs attention",
+        intro: "The payment checks flagged the payment below.",
+        sections: [
+          { heading: "Wrong amount", rows: [["Payment number", "<b>id</b>"]] },
+          { rows: [["Amount", "R 50.00"]] },
+        ],
+        closing: "Look it up.",
+        reason: "Sent to the payment alert addresses.",
+        tone: "warning",
+      });
+      const [payload, options] = mockSend.mock.calls[0];
+      expect(payload.to).toEqual(["owner@example.test", "deputy@example.test"]);
+      expect(options).toEqual({ idempotencyKey: "payment-alert/synthetic" });
+      expect(payload.text).toBe(
+        [
+          "The payment checks flagged the payment below.",
+          "Wrong amount\nPayment number: <b>id</b>",
+          "Amount: R 50.00",
+          "Look it up.",
+        ].join("\n\n")
+      );
+      expect(payload.html).toContain("&lt;b&gt;id&lt;/b&gt;");
+      expect(payload.html).not.toContain("<b>id</b>");
     });
 
     it("routes payment support to billing with an authenticated queue link", async () => {
