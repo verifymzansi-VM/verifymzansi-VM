@@ -160,7 +160,7 @@ export const BUILD_STAMP = ".next/foundation-e2e-stamp.json";
 
 /** Hash of the values that `next build` inlines or binds for the copy
  * (NEXT_PUBLIC_* and FOUNDATION_*). Only the hash is stored. */
-export function buildFingerprint(env) {
+function buildFingerprint(env) {
   const entries = Object.entries(env)
     .filter(([key]) => /^(NEXT_PUBLIC_|FOUNDATION_)/.test(key))
     .sort(([a], [b]) => a.localeCompare(b));
