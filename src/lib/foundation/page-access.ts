@@ -105,7 +105,10 @@ export async function checkFoundationPageAccess(request: NextRequest, authPage: 
           account,
           user: caller.user,
         });
-      } catch {}
+      } catch {
+        // Safe to ignore: without the remembered result the page runs the full
+        // sign-in check itself, so nothing is skipped or trusted.
+      }
     }
     return reply(next());
   } catch (error) {
