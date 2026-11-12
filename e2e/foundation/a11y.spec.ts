@@ -107,7 +107,7 @@ test.describe("posting form keeps the focused field in view (WCAG 2.4.11)", () =
     page,
   }) => {
     test.setTimeout(120_000);
-    const member = await registerVerifiedMember("focus-in-view");
+    const member = await registerVerifiedMember("focusview");
     const session = await browserSessionCookies(readTestCopy(), member);
     await context.addCookies(session.cookies.map((cookie) => ({ ...cookie, url: APP_ORIGIN })));
 
