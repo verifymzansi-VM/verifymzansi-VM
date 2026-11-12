@@ -112,7 +112,7 @@ function HeaderInner({
     : auth.isLoading
       ? "" // The session hint can show the avatar before the name has loaded.
       : "U";
-  const hasAdminAccess = auth.isModerator; // isModerator already includes admin role
+  const hasAdminAccess = auth.isStaff; // moderators, governors and admins
   const activeTheme = theme === "system" ? resolvedTheme : theme;
   const isDarkMode = activeTheme === "dark";
   const nextTheme = isDarkMode ? "light" : "dark";
