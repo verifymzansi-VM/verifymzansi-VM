@@ -77,6 +77,98 @@ preflight then reports the database ahead, and a forward fix is preferred.
   fails) and `pnpm db:foundation:lint` (plpgsql_check; no new errors, no more
   warnings than `../lint-baseline.json`). CI runs all four.
 
+## No default rights in schema public, 11 November 2026
+
+`20261111234521_public_default_privileges.sql` is not applied yet. It needs no
+earlier pending update and changes no function, table, grant on an existing
+object or API command.
+
+The foundation keeps nothing in schema `public`, yet Postgres keeps default
+privileges there: rights that every new object created by a role in `public`
+receives automatically. The read-only catalogue capture of production on 6
+November 2026 showed that a table postgres creates in `public` would give
+`anon`, `authenticated` and `service_role` TRUNCATE, REFERENCES, TRIGGER and
+MAINTAIN, and a new sequence UPDATE. The update withdraws every default
+privilege postgres gives these three roles (and PUBLIC) in `public`, on tables,
+sequences and functions, whatever the starting state; postgres keeps its own.
+`service_role` is included because the server code calls only `api` commands; a
+reviewed update that ever puts an object in `public` grants what it needs
+explicitly.
+
+What stays, and why:
+
+- **supabase_admin's defaults in `public`** (every privilege on new tables,
+  sequences and functions for the three roles). Only supabase_admin or a member
+  of it may change them, and the SQL editor runs as postgres, which is neither:
+  Postgres answers "permission denied to change default privileges". The
+  preflight lists them as `unchanged` rows. No foundation step creates objects
+  as supabase_admin; install extensions into schema `extensions` (the dashboard
+  default), never into `public`. Changing them would need Supabase support.
+- **USAGE on schema `public`.** The three roles have USAGE and no CREATE, and
+  PUBLIC has USAGE too, so revoking it from them would change nothing, while
+  revoking it from PUBLIC would also reach Supabase's own service roles. USAGE
+  gives nothing while `public` holds no objects.
+- **Later dashboard or platform changes.** A Data API setting that exposes new
+  tables automatically, or a platform upgrade, may write default privileges in
+  `public` again. After either, run the preflight: it reads "not applied" if
+  rights came back, and the update can simply be run again.
+
+**Order: any time.** Default privileges only affect objects created later, so no
+running code notices the change, and the update takes no lock on application
+tables. It can be applied before or after any website release. Until it is
+applied and recorded, the release preflight lists it as "behind" (a warning; it
+has no command to probe). Apply and record updates in filename order: if an
+update with an earlier name is still pending, apply that one first.
+
+**Applying.**
+
+1. Run `../preflight/20261111234521_public_default_privileges.check.sql`
+   unchanged in the SQL editor. It is read only. Continue only if the summary
+   reads "not applied; matches the production capture of 6 November 2026" and
+   there is no `problem` row (the nine `unchanged` rows are expected). A
+   different starting state is reported as a problem row: the update would still
+   apply, but the rollback would not restore that state, so stop and ask.
+2. Run the update, then the preflight again: its summary must now read "already
+   applied". The roadmap's check, which should now list only supabase_admin:
+
+   ```sql
+   select pg_get_userbyid(d.defaclrole) as creating_role, d.defaclobjtype,
+     pg_get_userbyid(a.grantee) as grantee, a.privilege_type
+   from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a
+   where d.defaclnamespace = 'public'::regnamespace
+     and a.grantee in ('anon'::regrole, 'authenticated'::regrole);
+   ```
+
+3. Run `set search_path to "$user", public;` and then `../fingerprint.sql`. No
+   category changes (default privileges are not part of the fingerprint); once
+   it matches `../fingerprint.json`, record the update (its register line and
+   `productionCheck`) as described above.
+
+The reviewed rollback is
+`../rollback/20261111234521_public_default_privileges.down.sql` (only with the
+owner's decision). It gives the three roles back exactly the captured rights
+(TRUNCATE, REFERENCES, TRIGGER and MAINTAIN on new tables, UPDATE on new
+sequences) and refuses when postgres's defaults for them and PUBLIC are neither
+the update's nor exactly that capture (grant options included). Running it
+again, or before the update, changes nothing.
+
+`node --import tsx scripts/test-foundation-public-default-privileges.mjs` (part
+of `pnpm db:foundation:lifecycle-test`) proves, on the throwaway database with
+production's captured rows: that the preflight is read only and recognises that
+state; that a table postgres created in `public` before the update gave the
+three roles the captured table rights; that the update refuses while global
+default privileges would still reach `public`; that afterwards postgres's rows
+hold only its own rights, supabase_admin's and every other row are unchanged,
+and a table, sequence and function postgres creates in `public` give the three
+roles nothing; that rights given to PUBLIC are withdrawn too; that the rollback
+restores the captured rows byte for byte and refuses any other state (including
+a grant option or a PUBLIC entry); and that apply, rollback and re-apply give
+the same rows and fingerprint. A second container started from the same image
+with Supabase's own start-up scripts and supautils, where postgres is not a
+superuser, runs the preflight, update and rollback as postgres: the update
+clears that fresh database's full defaults, the rollback then gives exactly the
+captured rows, and postgres may not change supabase_admin's defaults.
+
 ## The free week starts at the first approved post, 10 November 2026
 
 `20261110045944_intro_trial_at_first_approval.sql` is applied: the coordinator
@@ -1492,5 +1584,6 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   every count 0, after "already applied, trials to restart: 0", production
   fingerprint then matched the replay (section The free week starts at the first
   approved post)
+- `20261111234521_public_default_privileges.sql`: pending
 
 <!-- applied-register:end -->

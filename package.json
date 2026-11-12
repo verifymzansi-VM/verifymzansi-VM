@@ -91,7 +91,7 @@
     "db:foundation:snapshot": "node scripts/generate-foundation-snapshot.mjs",
     "db:foundation:api-check": "node scripts/check-foundation-api-drift.mjs",
     "db:foundation:lint": "node scripts/lint-foundation-sql.mjs",
-    "db:foundation:lifecycle-test": "node --import tsx scripts/test-foundation-lifecycle-guards.mjs && node --import tsx scripts/test-foundation-staff-rules.mjs",
+    "db:foundation:lifecycle-test": "node --import tsx scripts/test-foundation-lifecycle-guards.mjs && node --import tsx scripts/test-foundation-staff-rules.mjs && node --import tsx scripts/test-foundation-public-default-privileges.mjs",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",
     "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",
     "preflight:prod": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts --mode=production",
