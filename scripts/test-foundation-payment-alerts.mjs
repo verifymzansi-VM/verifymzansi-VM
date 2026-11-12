@@ -38,9 +38,9 @@ const companion = (folder, suffix) =>
 const PREFLIGHT = companion("preflight", ".check.sql");
 const ROLLBACK = companion("rollback", ".down.sql");
 const COMMANDS = [
-  "record_payment_problem(uuid,text,text,boolean)",
+  "record_payment_problem(uuid,text,text,boolean,text)",
   "claim_payment_alerts(integer)",
-  "complete_payment_alerts(uuid)",
+  "complete_payment_alerts(uuid,boolean)",
   "claim_payment_digest(integer,integer)",
   "complete_payment_digest(uuid)",
 ];
@@ -78,21 +78,22 @@ try {
     );
     return id;
   };
-  const record = (paymentId, reason, source = "notice", alert = false) =>
+  const record = (paymentId, reason, source = "notice", alert = false, transaction = null) =>
     json(
       service(
-        `select api.record_payment_problem(${paymentId ? `'${paymentId}'` : "null"},'${reason}','${source}',${alert});`
+        `select api.record_payment_problem(${paymentId ? `'${paymentId}'` : "null"},'${reason}','${source}',${alert},${transaction ? `'${transaction}'` : "null"});`
       )
     );
   const row = (paymentId, reason) =>
     json(
       `select coalesce((select jsonb_build_object('source',source,'needs_alert',needs_alert,'occurrences',occurrences,` +
-        `'first',first_seen_at,'last',last_seen_at,'alerted',alerted_at is not null) from private.payment_problems ` +
+        `'first',first_seen_at,'last',last_seen_at,'alerted',alerted_at is not null,'raised',alert_raised_at,` +
+        `'rearms',alert_rearms) from private.payment_problems ` +
         `where payment_id ${paymentId ? `='${paymentId}'` : "is null"} and reason='${reason}'),'null'::jsonb);`
     );
   const claimAlerts = (limit = 50) => json(service(`select api.claim_payment_alerts(${limit});`));
-  const completeAlerts = (claim) =>
-    Number(q(service(`select api.complete_payment_alerts('${claim}');`)));
+  const completeAlerts = (claim, sent = true) =>
+    Number(q(service(`select api.complete_payment_alerts('${claim}',${sent});`)));
   const claimDigest = (hour = 0, limit = 50) =>
     json(service(`select coalesce(api.claim_payment_digest(${hour},${limit}),'null'::jsonb);`));
   const completeDigest = (claim) => q(service(`select api.complete_payment_digest('${claim}');`));
@@ -143,6 +144,10 @@ try {
     assert.match(rows[0][1], /^payment problem alerts: unexpected state;/);
     assert.match(rows[1][1], /internal\.claim_payment_alerts\(integer\) is not the update's body/);
     q("drop function internal.claim_payment_alerts(integer);");
+    // A table of the same name with other columns: the update refuses it.
+    q("create table private.payment_problems (id uuid primary key, payment_id uuid);");
+    assert.match(fails(step.sql, "55000"), /payment problem table drift/);
+    q("drop table private.payment_problems;");
     assert.equal(fingerprint(), before);
   });
 
@@ -190,10 +195,13 @@ try {
     // A second transaction: first a declined one (summary only), then a
     // successful one raises the mark.
     const twice = payment(`${label}-twice`);
-    assert.equal(record(twice, "transaction_id_mismatch", "notice", false).alert, false);
+    assert.equal(record(twice, "transaction_id_mismatch", "notice", false, "tx-a").alert, false);
     assert.equal(row(twice, "transaction_id_mismatch").needs_alert, false);
-    assert.equal(record(twice, "transaction_id_mismatch", "notice", true).alert, true);
+    assert.equal(row(twice, "transaction_id_mismatch").raised, null);
+    const raised = record(twice, "transaction_id_mismatch", "notice", true, "tx-b");
+    assert.deepEqual({ alert: raised.alert, raised: raised.raised }, { alert: true, raised: true });
     assert.equal(row(twice, "transaction_id_mismatch").needs_alert, true);
+    assert.ok(row(twice, "transaction_id_mismatch").raised);
     // Another reason on the same payment is its own problem.
     assert.equal(record(twice, "multiple_settlements", "status_check", true).new, true);
     // Notices that name no payment: one row per reason, never marked.
@@ -223,15 +231,19 @@ try {
       `'${someone}','amount_mismatch',null,true`,
       `'${someone}','amount_mismatch','notice',null`,
       `'${someone}','Amount_Mismatch','notice',true`,
+      `'${someone}','amount_mismatch','notice',true,''`,
+      `'${someone}','amount_mismatch','notice',true,'${"x".repeat(101)}'`,
     ])
       fails(
-        service(`select api.record_payment_problem(${args});`),
+        service(
+          `select api.record_payment_problem(${args.split(",").length === 4 ? `${args},null` : args});`
+        ),
         "22023",
         /invalid payment problem/
       );
     fails(
       service(
-        `select api.record_payment_problem('${randomUUID()}','amount_mismatch','notice',true);`
+        `select api.record_payment_problem('${randomUUID()}','amount_mismatch','notice',true,null);`
       ),
       "22023",
       /payment problem names no payment/
@@ -242,15 +254,15 @@ try {
     );
   });
 
-  await check("alerts: leased once, recorded once, retried after the lease", () => {
+  await check("alerts: leased once, recorded once; a failed batch comes back unchanged", () => {
     drainAlerts();
     assert.deepEqual(claimAlerts(), { claim: null, problems: [] });
     const a = payment("alert-a");
     const b = payment("alert-b");
     const quiet = payment("alert-quiet");
-    record(a, "amount_mismatch", "notice", true);
-    record(b, "complete_unfulfillable_target", "status_check", true);
-    record(quiet, "site_code_mismatch", "notice", false);
+    record(a, "amount_mismatch", "notice", true, "tx-a");
+    record(b, "complete_unfulfillable_target", "status_check", true, "tx-b");
+    record(quiet, "site_code_mismatch", "notice", false, "tx-q");
     const first = claimAlerts();
     assert.match(first.claim, /^[0-9a-f-]{36}$/);
     assert.deepEqual(
@@ -263,12 +275,12 @@ try {
     const [shown] = first.problems;
     assert.deepEqual(Object.keys(shown).sort(), [
       "amount_cents",
-      "first_seen_at",
       "fulfillment_status",
       "id",
       "merchant_reference",
       "payment_id",
       "product_kind",
+      "raised_at",
       "reason",
       "source",
       "status",
@@ -278,31 +290,101 @@ try {
     assert.match(shown.amount_cents, /^[0-9]+$/);
     // Leased: a second run gets nothing.
     assert.deepEqual(claimAlerts(), { claim: null, problems: [] });
-    // The send failed; once the lease ends they are offered again.
+    // The send failed and the lease ran out. Meanwhile the payment changed and
+    // a new problem arrived: the failed batch comes back first, byte for byte.
+    q(`update private.payments set status='expired' where id='${a}';`);
+    const c = payment("alert-c");
+    record(c, "transaction_reused", "notice", true, "tx-c");
     q(
       `update private.payment_problems set alert_claimed_until=clock_timestamp()-interval '1 second' where alert_claim='${first.claim}';`
     );
-    const second = claimAlerts(1);
-    assert.equal(second.problems.length, 1, "the limit holds, oldest first");
-    assert.equal(second.problems[0].payment_id, a);
-    // A late completion of the first lease records only what is still its own.
-    assert.equal(completeAlerts(first.claim), 1);
-    assert.equal(completeAlerts(second.claim), 1);
-    assert.equal(completeAlerts(second.claim), 0, "a repeated completion changes nothing");
+    const retried = claimAlerts();
+    assert.equal(JSON.stringify(retried), JSON.stringify(first));
+    // Given back at once (no staff address): offered again on the next run.
+    assert.equal(completeAlerts(first.claim, false), 2);
+    assert.equal(JSON.stringify(claimAlerts()), JSON.stringify(first));
+    assert.equal(completeAlerts(first.claim), 2);
+    assert.equal(completeAlerts(first.claim), 0, "a repeated completion changes nothing");
     assert.equal(row(a, "amount_mismatch").alerted, true);
     assert.equal(row(b, "complete_unfulfillable_target").alerted, true);
     assert.equal(row(quiet, "site_code_mismatch").alerted, false);
+    // Then the new problem, in a batch of its own; the limit holds.
+    const next = claimAlerts(1);
+    assert.notEqual(next.claim, first.claim);
+    assert.deepEqual(
+      next.problems.map((p) => p.payment_id),
+      [c]
+    );
+    assert.equal(completeAlerts(next.claim), 1);
     assert.deepEqual(claimAlerts(), { claim: null, problems: [] });
-    // A repeat of an emailed problem is not emailed again.
-    record(a, "amount_mismatch", "status_check", true);
+    // A repeat of an emailed problem from the same transaction is not emailed again.
+    record(a, "amount_mismatch", "status_check", true, "tx-a");
     assert.deepEqual(claimAlerts(), { claim: null, problems: [] });
-    // A marked problem first seen over 7 days ago is left to the summary.
+    // A problem raised over 7 days ago and never emailed is left to the record.
     const old = payment("alert-old");
-    record(old, "transaction_reused", "notice", true);
+    record(old, "transaction_reused", "notice", true, "tx-old");
     q(
-      `update private.payment_problems set first_seen_at=first_seen_at-interval '8 days' where payment_id='${old}';`
+      `update private.payment_problems set alert_raised_at=alert_raised_at-interval '8 days' where payment_id='${old}';`
     );
     assert.deepEqual(claimAlerts(), { claim: null, problems: [] });
+  });
+
+  await check("an alert raised after 7 days is still emailed", () => {
+    drainAlerts();
+    const late = payment("alert-late");
+    // First seen as a declined second attempt (summary only), 8 days ago.
+    record(late, "transaction_id_mismatch", "notice", false, "tx-declined");
+    q(
+      `update private.payment_problems set first_seen_at=first_seen_at-interval '8 days',last_seen_at=last_seen_at-interval '8 days' where payment_id='${late}';`
+    );
+    // Today a successful second payment raises the mark.
+    assert.equal(record(late, "transaction_id_mismatch", "notice", true, "tx-paid").raised, true);
+    const claimed = claimAlerts();
+    assert.deepEqual(
+      claimed.problems.map((p) => p.payment_id),
+      [late]
+    );
+    assert.ok(Date.parse(claimed.problems[0].raised_at) > Date.now() - 60_000);
+    assert.equal(completeAlerts(claimed.claim), 1);
+  });
+
+  await check("another transaction raises an emailed alert again, at most 5 times", () => {
+    drainAlerts();
+    const again = payment("alert-again");
+    record(again, "multiple_settlements", "status_check", true, "tx-1,tx-2");
+    let claimed = claimAlerts();
+    assert.equal(completeAlerts(claimed.claim), 1);
+    // The same set of transactions, seen by every later status check: nothing new.
+    for (let run = 0; run < 3; run++)
+      assert.equal(
+        record(again, "multiple_settlements", "status_check", true, "tx-1,tx-2").raised,
+        false
+      );
+    assert.deepEqual(claimAlerts(), { claim: null, problems: [] });
+    // A third successful transaction: emailed again, in a new batch.
+    const third = record(again, "multiple_settlements", "status_check", true, "tx-1,tx-2,tx-3");
+    assert.equal(third.raised, true);
+    claimed = claimAlerts();
+    assert.deepEqual(
+      claimed.problems.map((p) => p.payment_id),
+      [again]
+    );
+    assert.equal(completeAlerts(claimed.claim), 1);
+    // Bounded: four more raises are emailed, then no more.
+    let emailed = 1;
+    for (let n = 4; n <= 10; n++) {
+      const key = Array.from({ length: n }, (_, i) => `tx-${i + 1}`).join(",");
+      record(again, "multiple_settlements", "status_check", true, key);
+      const batch = claimAlerts();
+      if (batch.claim) {
+        emailed++;
+        completeAlerts(batch.claim);
+      }
+    }
+    assert.equal(emailed, 5);
+    assert.equal(row(again, "multiple_settlements").rearms, 5);
+    // A repeat without a transaction never raises it again.
+    assert.equal(record(again, "multiple_settlements", "status_check", true, null).raised, false);
   });
 
   await check("alert commands refuse bad limits and claims", () => {
@@ -312,11 +394,12 @@ try {
         "22023",
         /invalid payment alert limit/
       );
-    fails(
-      service("select api.complete_payment_alerts(null);"),
-      "22023",
-      /invalid payment alert claim/
-    );
+    for (const args of ["null,true", `'${randomUUID()}',null`])
+      fails(
+        service(`select api.complete_payment_alerts(${args});`),
+        "22023",
+        /invalid payment alert claim/
+      );
     assert.equal(completeAlerts(randomUUID()), 0);
   });
 
@@ -356,8 +439,21 @@ try {
     q(
       `update private.payments set created_at=clock_timestamp()-interval '3 hours' where id='${stale}';`
     );
+    // A marked problem raised over 7 days ago and never emailed is not
+    // counted as waiting for an email.
+    const ancient = payment("summary-ancient");
+    record(ancient, "transaction_reused", "notice", true, "tx-ancient");
+    q(
+      `update private.payment_problems set alert_raised_at=alert_raised_at-interval '8 days' where payment_id='${ancient}';`
+    );
     const flagged = payment("summary-flagged");
-    record(flagged, "multiple_settlements", "status_check", true);
+    record(flagged, "multiple_settlements", "status_check", true, "tx-1,tx-2");
+    const waiting = Number(
+      q(
+        "select count(*) from private.payment_problems where needs_alert and alerted_at is null " +
+          "and alert_raised_at>clock_timestamp()-interval '7 days';"
+      )
+    );
     q(
       "insert into private.provider_events(provider,payload_sha256,merchant_reference,provider_request_id,reported_status,amount_cents,currency,outcome) values " +
         "('ozow',md5('a')||md5('b'),'ref-a','req-a','complete',100,'ZAR','completed')," +
@@ -371,7 +467,7 @@ try {
     );
 
     const day = today();
-    const first = claimDigest(0, 50);
+    const first = claimDigest(0, 1);
     assert.equal(first.day, day);
     assert.match(first.claim, /^[0-9a-f-]{36}$/);
     const span = (Date.parse(first.window_end) - Date.parse(first.window_start)) / 3_600_000;
@@ -381,25 +477,40 @@ try {
     assert.equal(first.stale_pending.total, 1);
     assert.deepEqual(first.stale_pending.payment_ids, [stale]);
     assert.deepEqual(first.outcomes, { completed: 2, not_paid: 1 });
-    assert.ok(first.problems.total >= 1);
-    const top = first.problems.items[0];
-    assert.equal(top.needs_alert, true, "marked problems are listed first");
-    const listed = first.problems.items.find((item) => item.payment_id === flagged);
-    assert.deepEqual(
-      { reason: listed.reason, alerted: listed.alerted, n: listed.occurrences },
-      { reason: "multiple_settlements", alerted: false, n: 1 }
-    );
-    assert.ok(first.unalerted >= 1);
     // The list limit holds; the totals do not change with it.
-    const short = claimDigestAfterLease(first.claim, 1);
-    assert.equal(short.problems.items.length, 1);
-    assert.equal(short.problems.total, first.problems.total);
-    assert.ok(short.not_activated.payment_ids.length <= 1);
+    assert.ok(first.problems.total > 1);
+    assert.equal(first.problems.items.length, 1);
+    const [top] = first.problems.items;
+    assert.deepEqual(
+      {
+        id: top.payment_id,
+        reason: top.reason,
+        alert: top.needs_alert,
+        sent: top.alerted,
+        n: top.occurrences,
+      },
+      { id: flagged, reason: "multiple_settlements", alert: true, sent: false, n: 1 },
+      "marked problems are listed first"
+    );
+    assert.equal(first.unalerted, waiting);
+    assert.ok(waiting >= 1);
+    // The send failed and the lease ran out. Meanwhile more happened: the
+    // retry still gets the same summary, period and all, byte for byte.
+    q(
+      "insert into private.provider_events(provider,payload_sha256,merchant_reference,provider_request_id,reported_status,amount_cents,currency,outcome) values " +
+        "('ozow',md5('g')||md5('h'),'ref-d','req-d','complete',100,'ZAR','completed');"
+    );
+    record(payment("summary-later"), "site_code_mismatch", "notice", false, "tx-later");
+    const retry = claimDigestAfterLease(first.claim, 50);
+    assert.notEqual(retry.claim, first.claim);
+    const { claim: _first, ...firstContent } = first;
+    const { claim: _retry, ...retryContent } = retry;
+    assert.equal(JSON.stringify(retryContent), JSON.stringify(firstContent));
     // Leased: another run the same day gets nothing; once done, nothing more today.
     assert.equal(claimDigest(), null);
     assert.equal(completeDigest(first.claim), "f", "the earlier lease is no longer this summary's");
-    assert.equal(completeDigest(short.claim), "t");
-    assert.equal(completeDigest(short.claim), "f");
+    assert.equal(completeDigest(retry.claim), "t");
+    assert.equal(completeDigest(retry.claim), "f");
     assert.equal(claimDigest(), null);
     assert.equal(
       q(
@@ -442,9 +553,9 @@ try {
     for (const command of COMMANDS) {
       const name = command.replace(/\(.*$/, "");
       const args = {
-        record_payment_problem: "null,'unknown_payment','notice',false",
+        record_payment_problem: "null,'unknown_payment','notice',false,null",
         claim_payment_alerts: "10",
-        complete_payment_alerts: `'${randomUUID()}'`,
+        complete_payment_alerts: `'${randomUUID()}',true`,
         claim_payment_digest: "0,10",
         complete_payment_digest: `'${randomUUID()}'`,
       }[name];

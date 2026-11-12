@@ -421,12 +421,19 @@ async function recordSettlement(
   pay: FoundationPayment,
   outcome: unknown,
   reportedStatus: string | null,
-  source: PaymentProblemSource
+  source: PaymentProblemSource,
+  transaction: string | null
 ) {
   const recorded = (outcome as { outcome?: unknown } | null)?.outcome;
   const reason = settlementProblem(recorded, reportedStatus);
   if (reason)
-    await recordPaymentProblem(service, { paymentId: pay.id, reason, source, reportedStatus });
+    await recordPaymentProblem(service, {
+      paymentId: pay.id,
+      reason,
+      source,
+      reportedStatus,
+      transaction,
+    });
 }
 
 /**
@@ -440,9 +447,15 @@ async function refuseOzowNotice(
   service: FoundationServiceApi,
   reason: string,
   paymentId: string | null,
-  reportedStatus: string | null
+  payload: NormalizedOzowWebhook
 ) {
-  await recordPaymentProblem(service, { paymentId, reason, source: "notice", reportedStatus });
+  await recordPaymentProblem(service, {
+    paymentId,
+    reason,
+    source: "notice",
+    reportedStatus: payload.status,
+    transaction: payload.transactionId,
+  });
   return { success: true, rejected: reason };
 }
 
@@ -457,7 +470,7 @@ export async function applyFoundationOzowNotification(
   const pay = payload.merchantReference
     ? await readFoundationServicePayment(service, { reference: payload.merchantReference })
     : null;
-  if (!pay) return refuseOzowNotice(service, "unknown_payment", null, payload.status);
+  if (!pay) return refuseOzowNotice(service, "unknown_payment", null, payload);
   const refusal = validateOzowConfirmation(confirmationShape(pay), payload);
   if (refusal) {
     if (isRetryableConfirmationRefusal(refusal)) {
@@ -467,10 +480,10 @@ export async function applyFoundationOzowNotification(
       });
       throw new FoundationBillingError(503, "Payment confirmation cannot be checked yet");
     }
-    return refuseOzowNotice(service, confirmationRefusalCode(refusal), pay.id, payload.status);
+    return refuseOzowNotice(service, confirmationRefusalCode(refusal), pay.id, payload);
   }
   const outcome = await applyTransaction(service, pay, payload, rawBody);
-  await recordSettlement(service, pay, outcome, payload.status, "notice");
+  await recordSettlement(service, pay, outcome, payload.status, "notice", payload.transactionId);
   return { success: true, result: outcome };
 }
 
@@ -516,6 +529,7 @@ export async function reconcileFoundationPayment(
         reason,
         source: "status_check",
         reportedStatus: transaction.status,
+        transaction: transaction.transactionId,
       });
       throw new FoundationPaymentCheckError(
         reason,
@@ -533,6 +547,11 @@ export async function reconcileFoundationPayment(
       reason: "multiple_settlements",
       source: "status_check",
       reportedStatus: "successful",
+      // The set of successful transactions: a further one alerts again.
+      transaction: successful
+        .map((entry) => entry.transactionId ?? "")
+        .sort()
+        .join(","),
     });
     throw new FoundationPaymentCheckError(
       "multiple_settlements",
@@ -546,7 +565,14 @@ export async function reconcileFoundationPayment(
       successful[0],
       `reconciliation:${JSON.stringify(successful[0])}`
     );
-    await recordSettlement(service, pay, outcome, successful[0].status, "status_check");
+    await recordSettlement(
+      service,
+      pay,
+      outcome,
+      successful[0].status,
+      "status_check",
+      successful[0].transactionId
+    );
     return { checked: true, pendingTransaction: false, settled: true };
   }
   // Only Successful and Error are final; any other status (Pending,

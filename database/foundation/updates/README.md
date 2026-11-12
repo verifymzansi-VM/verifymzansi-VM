@@ -530,7 +530,8 @@ captured rows, and postgres may not change supabase_admin's defaults.
 
 `20261112080000_payment_problem_alerts.sql` is not applied yet. It needs no
 earlier pending update and changes no existing function, table, grant or API
-command.
+command. It refuses (55000) if either of its tables already exists with other
+columns.
 
 Until now a signed payment notice or a status-check transaction that could not
 be applied was only written to the website's log, and settlement outcomes that
@@ -542,44 +543,57 @@ told staff. From this update:
   row per payment and reason (one row per reason for notices that name no known
   payment), with where it was first found (`notice` or `status_check`), when it
   was first and last seen and how many times. It holds no personal data: the
-  payment id, a reason code from a closed list of 23, and times. Rows go with
-  their payment when the retention sweep deletes it (`on delete cascade`).
+  payment id, a reason code from a closed list of 23, an Ozow transaction key,
+  times and, once an alert is prepared, the payment's reference, amount,
+  statuses and product kind at that moment. Rows go with their payment when the
+  retention sweep deletes it (`on delete cascade`).
 - **Recording.** New service command
-  `api.record_payment_problem(payment, reason, source, alert)`. The website's
-  server calls it when it refuses a signed notice, when the 10-minute status
-  check refuses a transaction or finds two successful ones on one request, and
-  when settlement reports an outcome that needs staff
+  `api.record_payment_problem(payment, reason, source, alert, transaction)`. The
+  website's server calls it when it refuses a signed notice, when the 10-minute
+  status check refuses a transaction or finds two successful ones on one
+  request, and when settlement reports an outcome that needs staff
   (`conflicting_transaction`, `transaction_reused`,
   `complete_unfulfillable_target`, a later Refunded status on a completed
   payment, and the outcomes the website's own checks normally catch first). A
   repeat only moves the last-seen time and the count. `alert` marks a problem
   that needs a person at once; the website decides it (a wrong amount or
-  currency, a second successful payment, money received for something that could
-  not be activated, money returned after activation). A later repeat can raise
-  the mark, never lower it, and a problem with no payment is never marked.
+  currency or a second payment the bank reports successful, money received for
+  something that could not be activated, money returned after activation). A
+  later repeat can raise the mark, never lower it, and the time it was raised is
+  kept; a problem with no payment is never marked. After the alert was emailed,
+  a marked repeat that names another Ozow transaction (for example a third
+  successful payment, or one more transaction in the status check's set) raises
+  it again, at most 5 times per problem; the same transaction never does.
 - **Alerts.** New service commands `api.claim_payment_alerts(limit)` and
-  `api.complete_payment_alerts(claim)`. The email job (every minute) takes a
-  five-minute lease on marked problems not yet emailed and first seen in the
-  last 7 days (oldest first, 1 to 50 a call), sends one email listing them, and
-  records them as sent. A failed send is offered again when the lease ends.
+  `api.complete_payment_alerts(claim, sent)`. The email job (every minute) takes
+  a five-minute lease on marked problems not yet emailed and raised in the last
+  7 days (oldest first, 1 to 50 a call) and stores each payment's state with the
+  batch. A batch whose send failed is offered again first, unchanged (same lease
+  token, same details), so a retry sends the same email under the same key.
+  `sent` records the batch as sent, or gives it back at once (the website does
+  that when no staff address is set, so every run fails until one is).
 - **Daily summary.** New table `private.payment_problem_digests` and service
   commands `api.claim_payment_digest(from hour, limit)` and
   `api.complete_payment_digest(claim)`. Once per South African calendar day,
   from the given hour (the website passes 7), the email job takes a five-minute
-  lease on the day's summary and receives: the problems seen since the end of
+  lease on the day's summary. Its content is computed at the first lease and
+  stored, so a retry gets the same summary: the problems seen since the end of
   the previous summary (at most 7 days back), payments still waiting for staff
   (received but not activated; pending with an Ozow request for over 2 hours),
-  marked problems not emailed yet, and the count of each provider journal
-  outcome in the same period. Summary records older than 400 days are removed
-  when a new one starts.
+  marked problems raised in the last 7 days and not emailed yet, and the count
+  of each provider journal outcome in the same period. Summary records older
+  than 400 days are removed when a new one starts.
 
 The website release in the same pull request logs every problem as
 `Payment problem` with the payment number, reason code and source, and every
 failed status check as `Payment status check failed` with the payment number and
-a reason code; the status-check job's reply lists them in `errors`. The staff
-emails go to the Worker secret `PAYMENT_ALERT_EMAILS` (see `docs/RUNBOOK.md`,
-"Payment alerts"); without it the website logs what it would have sent and keeps
-working.
+a reason code; the status-check job's reply lists them in `errors`. Recording
+never holds up the reply to Ozow by more than three seconds and never changes
+what happens to the payment. The email job sends the staff emails after the
+members' payment messages. They go to the Worker secret `PAYMENT_ALERT_EMAILS`
+(see `docs/RUNBOOK.md`, "Payment alerts"); without it the website logs what it
+would have sent, keeps working, and reports `payment_alert:recipients` (every
+run while an alert waits) or `payment_summary:recipients` (once a day).
 
 **Order: apply first, then deploy.** The website release from the same pull
 request calls the five new commands, and the deploy preflight probes every
@@ -603,6 +617,11 @@ still be deployed or redeployed.
    compare with `../fingerprint.json`, which lists this update under
    `productionCheck.pendingApplication`. Once production's fingerprint matches,
    record it (its register line and `productionCheck`) as described above.
+4. Before the website release is deployed, set the app Worker secret
+   `PAYMENT_ALERT_EMAILS` to one to three staff addresses separated by commas:
+   `pnpm exec wrangler secret put PAYMENT_ALERT_EMAILS --env production`
+   (`docs/RUNBOOK.md`, "Monitoring and Alerts", owner step 5). The first daily
+   summary after 07:00 South African time shows that it works.
 
 The reviewed rollback is
 `../rollback/20261112080000_payment_problem_alerts.down.sql` (only with the
@@ -614,17 +633,23 @@ record; payments and the provider journal are untouched.
 `node --import tsx scripts/test-foundation-payment-alerts.mjs` (part of
 `pnpm db:foundation:lifecycle-test`) proves, on the throwaway database: that the
 preflight is read only, reads "not applied" before and "already applied" after,
-and reports a drifted body; that a premature rollback is refused; one row per
-payment and reason, repeats counted with the first source and time kept, the
-mark raised but never lowered, and notices with no payment kept once per reason
-and never marked; refusal of reasons and sources outside the closed lists and of
-unknown payments; alert leases (once, retried after the lease, a late completion
-records only its own rows, nothing after it is sent, nothing older than 7 days,
-the limit); the daily summary (not before the hour, once a day, the lists and
-counts, the window from the previous summary capped at 7 days, the 400-day
-clean-up); that only `service_role` may run the commands and no API role can
-read the tables; that a payment's problems go with it; and that apply, rollback
-and re-apply return the same fingerprints.
+and reports a drifted body; that the update refuses a table of the same name
+with other columns; that a premature rollback is refused; one row per payment
+and reason, repeats counted with the first source and time kept, the mark raised
+but never lowered, and notices with no payment kept once per reason and never
+marked; refusal of reasons, sources and transaction keys outside the rules and
+of unknown payments; alert leases (once; a failed or given-back batch comes back
+byte for byte before any new batch, even after the payment changed; nothing
+after it is sent; nothing raised over 7 days ago; the limit); that an alert
+raised more than 7 days after the problem was first seen is still emailed; that
+another transaction raises an emailed alert again, at most 5 times, and the same
+transaction never does; the daily summary (not before the hour, once a day, the
+lists and counts, the "not emailed yet" count limited to the last 7 days, a
+retry that gets the same content and period byte for byte, the window from the
+previous summary capped at 7 days, the 400-day clean-up); that only
+`service_role` may run the commands and no API role can read the tables; that a
+payment's problems go with it; and that apply, rollback and re-apply return the
+same fingerprints.
 
 ## The free week starts at the first approved post, 10 November 2026
 

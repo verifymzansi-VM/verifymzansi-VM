@@ -22,13 +22,13 @@ with bodies as (
   select v.sig, v.updated,
     (select md5(replace(p.prosrc, E'\r\n', E'\n')) from pg_proc p where p.oid = to_regprocedure(v.sig)) as body
   from (values
-    ('internal.record_payment_problem(uuid,text,text,boolean)', '2b513a0b36a0f9b23de6731236051bee'),
-    ('api.record_payment_problem(uuid,text,text,boolean)', '5676d2724dab7a2eae4c31be9277161b'),
-    ('internal.claim_payment_alerts(integer)', '418ed26366183586c7f381251cf08bea'),
+    ('internal.record_payment_problem(uuid,text,text,boolean,text)', 'cd1051937fb931de8ced633770d8c9b7'),
+    ('api.record_payment_problem(uuid,text,text,boolean,text)', '39cff72967defbf554dcbdd3d4de1fd8'),
+    ('internal.claim_payment_alerts(integer)', '3c4aab147514a52db39b641419b94b39'),
     ('api.claim_payment_alerts(integer)', 'cc0dafa479115c493baf59f491fd79d4'),
-    ('internal.complete_payment_alerts(uuid)', '141d19ec1b949c3efa74c0563f9570cf'),
-    ('api.complete_payment_alerts(uuid)', '47a83851b87b10fe5b6a65751e92a666'),
-    ('internal.claim_payment_digest(integer,integer)', 'f9cad054994afaf3b6760b189a563d54'),
+    ('internal.complete_payment_alerts(uuid,boolean)', 'f624dcceb9c05527fa43e7f98e8c44d2'),
+    ('api.complete_payment_alerts(uuid,boolean)', '875b589441b17d72f254d2e4f474dcc7'),
+    ('internal.claim_payment_digest(integer,integer)', '4b00aeccb8a082bf08f8e4c189bf47cf'),
     ('api.claim_payment_digest(integer,integer)', 'a14ed70f57c9c3568b7e6041881f1f12'),
     ('internal.complete_payment_digest(uuid)', '6f334b442d5bc8a51f6ee4f51cf8f025'),
     ('api.complete_payment_digest(uuid)', 'f8e68e7bcd1992fb2844d875d3f4bf94')

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { FoundationServiceApi } from "./service-api";
 import { createLogger } from "../utils/logger";
@@ -56,8 +57,6 @@ export const isPaymentProblemReason = (value: string): value is PaymentProblemRe
  * could not be activated, money returned after activation). */
 export type PaymentAnomaly = "wrong_amount" | "paid_twice" | "not_activated" | "refunded";
 const ANOMALIES: Partial<Record<PaymentProblemReason, PaymentAnomaly>> = {
-  amount_mismatch: "wrong_amount",
-  currency_mismatch: "wrong_amount",
   conflicting_transaction: "paid_twice",
   transaction_reused: "paid_twice",
   multiple_settlements: "paid_twice",
@@ -65,18 +64,22 @@ const ANOMALIES: Partial<Record<PaymentProblemReason, PaymentAnomaly>> = {
   refunded_after_completion: "refunded",
 };
 
-/**
- * The anomaly a problem is, or null when it only goes into the daily summary.
- * A transaction other than the one that completed the payment is a second
- * payment only when the bank reports it successful; a declined or pending
- * second attempt is not.
- */
+/** Reasons that need a person only when the bank reports the transaction
+ * successful: money moved. A declined or pending attempt with a wrong amount,
+ * or a declined second attempt, goes into the daily summary only. */
+const WHEN_PAID: Partial<Record<PaymentProblemReason, PaymentAnomaly>> = {
+  amount_mismatch: "wrong_amount",
+  currency_mismatch: "wrong_amount",
+  transaction_id_mismatch: "paid_twice",
+};
+
+/** The anomaly a problem is, or null when it only goes into the daily summary. */
 export function paymentAnomaly(
   reason: PaymentProblemReason,
   reportedStatus?: string | null
 ): PaymentAnomaly | null {
-  if (reason === "transaction_id_mismatch")
-    return reportedStatus?.toLowerCase() === "successful" ? "paid_twice" : null;
+  const whenPaid = WHEN_PAID[reason];
+  if (whenPaid) return reportedStatus?.toLowerCase() === "successful" ? whenPaid : null;
   return ANOMALIES[reason] ?? null;
 }
 
@@ -117,15 +120,28 @@ export interface PaymentProblem {
   source: PaymentProblemSource;
   /** The status the bank reported, when known (see paymentAnomaly). */
   reportedStatus?: string | null;
+  /** The Ozow transaction (or a key for a set of them) that showed the
+   * problem. After the alert was sent, a repeat from another transaction
+   * alerts staff again. */
+  transaction?: string | null;
+}
+
+/** How long recording may hold up a reply (the notice route answers Ozow). */
+const RECORD_TIMEOUT_MS = 3_000;
+
+/** A transaction key within the database's 100 characters. */
+function transactionKey(value: string | null | undefined) {
+  if (!value) return null;
+  return value.length <= 100 ? value : createHash("sha256").update(value).digest("hex");
 }
 
 /**
  * Logs one problem ("Payment problem", with the payment number and reason
- * code) and keeps it in the database. Never throws: a problem that cannot be
- * stored (database unavailable, the update not applied yet, or no service
- * binding) is logged as such and the caller carries on exactly as before.
- * `service` may be a factory, so a caller without a database binding still
- * gets the log line.
+ * code) and keeps it in the database. Never throws and never waits more than
+ * three seconds: a problem that cannot be stored in time (database slow or
+ * unavailable, the update not applied yet, or no service binding) is logged as
+ * such and the caller carries on exactly as before. `service` may be a
+ * factory, so a caller without a database binding still gets the log line.
  */
 export async function recordPaymentProblem(
   service: FoundationServiceApi | (() => FoundationServiceApi),
@@ -142,16 +158,29 @@ export async function recordPaymentProblem(
   };
   (anomaly ? log.error : log.warn)("Payment problem", meta);
   if (!reason) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const api = typeof service === "function" ? service() : service;
-    const { data, error } = await api.rpc("record_payment_problem", {
+    const signal = AbortSignal.timeout(RECORD_TIMEOUT_MS);
+    const request = api.rpc("record_payment_problem", {
       p_payment_id: problem.paymentId,
       p_reason: reason,
       p_source: problem.source,
       p_alert: anomaly !== null,
-    });
+      p_transaction: transactionKey(problem.transaction),
+    }) as PromiseLike<{ data: unknown; error: unknown }> & {
+      abortSignal?: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: unknown }>;
+    };
+    const { data, error } = await Promise.race([
+      typeof request.abortSignal === "function" ? request.abortSignal(signal) : request,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timed out")), RECORD_TIMEOUT_MS);
+      }),
+    ]);
     if (error || !recorded.safeParse(data).success) throw new Error("not recorded");
   } catch {
     log.error("Payment problem could not be recorded", meta);
+  } finally {
+    clearTimeout(timer);
   }
 }

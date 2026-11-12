@@ -392,9 +392,12 @@ export async function runFoundationOperationJobs(
   };
 
   const emails = (async () => {
-    // Staff payment alerts first (at most two sends: new problems, and the
-    // daily summary when due), then payment messages, then privacy-request
-    // notices (legally timed, rare), then every other kind.
+    // Payment messages to members first, then staff payment alerts (at most
+    // two sends: new problems, and the daily summary when due), then
+    // privacy-request notices (legally timed, rare), then every other kind.
+    const payments = await outbox("claim:payment", () => paymentKinds, OUTBOX_RUN_LIMIT);
+    // A loss on the last payment slot is reported before anything else.
+    if (alertDue()) await alertLost();
     try {
       for (const step of await paymentAlerts({
         call,
@@ -406,9 +409,6 @@ export async function runFoundationOperationJobs(
     } catch {
       fail("payment_alert");
     }
-    const payments = await outbox("claim:payment", () => paymentKinds, OUTBOX_RUN_LIMIT);
-    // A loss on the last payment slot is reported before the privacy notices.
-    if (alertDue()) await alertLost();
     for (let i = 0; i < PRIVACY_RUN_LIMIT && timeToClaim(); i++) {
       let privacy;
       try {

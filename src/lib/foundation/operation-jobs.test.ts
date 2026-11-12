@@ -859,8 +859,9 @@ it("passes the trial's end with the trial_started notice, and none from an earli
 });
 
 describe("payment alerts", () => {
-  it("runs the payment alert step before any queued email, with the run's database calls and pacing", async () => {
+  it("runs the staff payment step after member payment messages and before other kinds", async () => {
     const order: string[] = [];
+    queue(job(), job({ id: "00000000-0000-4000-8000-000000000009", kind: "trial_started" }));
     paymentAlerts.mockImplementation(async (context) => {
       order.push("payment alerts");
       expect(context.canClaim()).toBe(true);
@@ -868,12 +869,18 @@ describe("payment alerts", () => {
       await context.pace(async () => order.push("payment alert send"));
       return [];
     });
-    deliver.mockImplementation(async () => {
-      order.push("queued email");
+    deliver.mockImplementation(async (_to, kind) => {
+      order.push(kind);
       return { success: true };
     });
-    expect(await run()).toMatchObject({ claimed: 1, succeeded: 1, failed: [] });
-    expect(order).toEqual(["payment alerts", "payment alert send", "queued email"]);
+    expect(await run()).toMatchObject({ claimed: 2, succeeded: 2, failed: [] });
+    // A slow staff send never holds up a member's payment message.
+    expect(order).toEqual([
+      "payment_completed",
+      "payment alerts",
+      "payment alert send",
+      "trial_started",
+    ]);
     expect(calls("claim_payment_alerts")).toEqual([["claim_payment_alerts", { p_limit: 20 }]]);
   });
 

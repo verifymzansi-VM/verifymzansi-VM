@@ -480,11 +480,12 @@ export type FoundationRuntimeServiceDatabase = {
           p_reason: string;
           p_source: string;
           p_alert: boolean;
+          p_transaction: string | null;
         };
         Returns: Json;
       };
       claim_payment_alerts: { Args: { p_limit: number }; Returns: Json };
-      complete_payment_alerts: { Args: { p_claim: string }; Returns: number };
+      complete_payment_alerts: { Args: { p_claim: string; p_sent: boolean }; Returns: number };
       claim_payment_digest: { Args: { p_from_hour: number; p_limit: number }; Returns: Json };
       complete_payment_digest: { Args: { p_claim: string }; Returns: boolean };
       start_frontend_cipc_email: {

@@ -60,8 +60,12 @@ describe("the reason list", () => {
 
 describe("which problems email staff at once", () => {
   it.each([
-    ["amount_mismatch", null, "wrong_amount"],
-    ["currency_mismatch", "Error", "wrong_amount"],
+    ["amount_mismatch", "Successful", "wrong_amount"],
+    ["currency_mismatch", "successful", "wrong_amount"],
+    // No money moved: summary only.
+    ["amount_mismatch", null, null],
+    ["amount_mismatch", "Error", null],
+    ["currency_mismatch", "Pending", null],
     ["conflicting_transaction", null, "paid_twice"],
     ["transaction_reused", null, "paid_twice"],
     ["multiple_settlements", null, "paid_twice"],
@@ -99,7 +103,63 @@ describe("recordPaymentProblem", () => {
       p_reason: "amount_mismatch",
       p_source: "notice",
       p_alert: true,
+      p_transaction: null,
     });
+  });
+
+  it("passes the transaction, and a key within 100 characters for a long one", async () => {
+    await recordPaymentProblem(service, {
+      paymentId: PAYMENT,
+      reason: "transaction_id_mismatch",
+      source: "notice",
+      reportedStatus: "Successful",
+      transaction: "tx-1",
+    });
+    const long = Array.from({ length: 3 }, (_, i) => `00000000-0000-4000-8000-00000000000${i}`);
+    await recordPaymentProblem(service, {
+      paymentId: PAYMENT,
+      reason: "multiple_settlements",
+      source: "status_check",
+      transaction: long.join(","),
+    });
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_alert: true, p_transaction: "tx-1" });
+    expect(rpc.mock.calls[1][1].p_transaction).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("never holds up its caller for more than three seconds", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      rpc.mockReturnValue(new Promise(() => {}));
+      let settled = false;
+      const pending = recordPaymentProblem(service, {
+        paymentId: PAYMENT,
+        reason: "amount_mismatch",
+        source: "notice",
+        reportedStatus: "Successful",
+      }).then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(2_900);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(200);
+      await pending;
+      expect(logged.error).toHaveBeenCalledWith(
+        "Payment problem could not be recorded",
+        expect.objectContaining({ paymentId: PAYMENT, reason: "amount_mismatch" })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("asks the database call to stop at the same limit when it can", async () => {
+    const abortSignal = vi.fn(async () => ({ data: { new: true, alert: true }, error: null }));
+    rpc.mockReturnValue({ abortSignal });
+    await recordPaymentProblem(service, {
+      paymentId: PAYMENT,
+      reason: "site_code_mismatch",
+      source: "notice",
+    });
+    expect(abortSignal).toHaveBeenCalledExactlyOnceWith(expect.any(AbortSignal));
+    expect(logged.error).not.toHaveBeenCalled();
   });
 
   it("logs a summary-only problem as a warning", async () => {

@@ -122,6 +122,11 @@
           "name": "p_alert",
           "sqlType": "boolean",
           "optional": false
+        },
+        {
+          "name": "p_transaction",
+          "sqlType": "text",
+          "optional": false
         }
       ],
       "returns": "jsonb",
@@ -131,7 +136,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only record by the website's server of a refused payment notice or status-check transaction or a settlement outcome that needs staff; closed reason and source lists, an existing payment or none, one row per payment and reason, repeats only counted; holds no personal data."
+      "authority": "Service-only record by the website's server of a refused payment notice or status-check transaction or a settlement outcome that needs staff; closed reason and source lists, an existing payment or none, one row per payment and reason, repeats only counted; an alert mark only rises, and after it was emailed another Ozow transaction raises it again at most 5 times; holds no personal data."
     },
     {
       "name": "claim_payment_alerts",
@@ -150,7 +155,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only five-minute lease, for the email job, on marked payment problems not yet emailed and first seen in the last 7 days; bounded (1-50), returns payment numbers, reason codes and payment amounts and states, never account or contact details."
+      "authority": "Service-only five-minute lease, for the email job, on marked payment problems not yet emailed and raised in the last 7 days; a batch whose send failed is offered again unchanged first; bounded (1-50), returns payment numbers, reason codes and the payment amounts and states stored when the batch was prepared, never account or contact details."
     },
     {
       "name": "complete_payment_alerts",
@@ -159,6 +164,11 @@
         {
           "name": "p_claim",
           "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_sent",
+          "sqlType": "boolean",
           "optional": false
         }
       ],
@@ -169,7 +179,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only record that the staff email for one lease was sent; only rows of that lease not yet recorded."
+      "authority": "Service-only record that the staff email for one lease was sent, or its return for the next run; only rows of that lease not yet recorded."
     },
     {
       "name": "claim_payment_digest",
@@ -193,7 +203,7 @@
         "authenticated": false,
         "service_role": true
       },
-      "authority": "Service-only five-minute lease, for the email job, on the day's staff payment summary once per South African calendar day from the given hour; returns counts, payment numbers and reason codes, never account or contact details."
+      "authority": "Service-only five-minute lease, for the email job, on the day's staff payment summary once per South African calendar day from the given hour; the content is fixed at the first lease and stored, so a retry gets the same summary; returns counts, payment numbers and reason codes, never account or contact details."
     },
     {
       "name": "complete_payment_digest",

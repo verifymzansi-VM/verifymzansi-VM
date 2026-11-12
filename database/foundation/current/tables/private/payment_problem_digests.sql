@@ -6,8 +6,10 @@ create table private.payment_problem_digests (
   claim uuid,
   claimed_until timestamp with time zone,
   window_end timestamp with time zone,
+  content jsonb,
   done_at timestamp with time zone,
   constraint payment_problem_digests_claim_key UNIQUE (claim),
+  constraint payment_problem_digests_content_check CHECK (jsonb_typeof(content) = 'object'::text),
   constraint payment_problem_digests_pkey PRIMARY KEY (day)
 );
 alter table private.payment_problem_digests owner to postgres;

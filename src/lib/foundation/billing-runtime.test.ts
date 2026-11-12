@@ -308,7 +308,13 @@ it("refuses an unknown merchant reference without creating a payment", async () 
     ],
     [
       "record_payment_problem",
-      { p_payment_id: null, p_reason: "unknown_payment", p_source: "notice", p_alert: false },
+      {
+        p_payment_id: null,
+        p_reason: "unknown_payment",
+        p_source: "notice",
+        p_alert: false,
+        p_transaction: transactionId,
+      },
     ],
   ]);
 });
@@ -818,11 +824,17 @@ it("keeps add-on sales paused with the default and production settings", () => {
 describe("payment problems", () => {
   const recorded = () =>
     machine.mock.calls.filter(([name]) => name === "record_payment_problem").map(([, a]) => a);
-  const problem = (reason: string, source: string, alert: boolean) => ({
+  const problem = (
+    reason: string,
+    source: string,
+    alert: boolean,
+    transaction: string | null = transactionId
+  ) => ({
     p_payment_id: payment,
     p_reason: reason,
     p_source: source,
     p_alert: alert,
+    p_transaction: transaction,
   });
 
   it.each([
@@ -840,6 +852,17 @@ describe("payment problems", () => {
       ...(alert ? { anomaly: "wrong_amount" } : {}),
     });
   });
+
+  it.each([
+    [{ amount: "0.01", status: "Error" }, "amount_mismatch"],
+    [{ currencyCode: "USD", status: "Pending" }, "currency_mismatch"],
+  ])(
+    "a refused notice %j that moved no money is kept for the summary only",
+    async (change, reason) => {
+      await applyFoundationOzowNotification({ ...notification(), ...change }, "signed", service);
+      expect(recorded()).toEqual([problem(reason, "notice", false)]);
+    }
+  );
 
   it.each([
     ["Successful", true],
@@ -948,7 +971,15 @@ describe("payment problems", () => {
       reason: "multiple_settlements",
       message: "Multiple payment settlements require reconciliation",
     });
-    expect(recorded()).toEqual([problem("multiple_settlements", "status_check", true)]);
+    // The key is the set of successful transactions, so a third one alerts again.
+    expect(recorded()).toEqual([
+      problem(
+        "multiple_settlements",
+        "status_check",
+        true,
+        [transactionId, uuid(14)].sort().join(",")
+      ),
+    ]);
     expect(machine.mock.calls.some(([name]) => name === "apply_provider_event")).toBe(false);
   });
 

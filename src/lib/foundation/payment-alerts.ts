@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   sendStaffOperationsEmail,
@@ -26,7 +25,10 @@ import {
  *   payment activity.
  * Both go to PAYMENT_ALERT_EMAILS (one to three addresses, comma separated; a
  * Worker secret). They hold payment numbers, Ozow references, amounts and
- * reason codes, never a member's name or contact details.
+ * reason codes, never a member's name or contact details. Each email is built
+ * only from what the database stored for that batch or day, and its key is the
+ * batch's lease token or the day, so a retry sends the same email under the
+ * same key and the provider never delivers it twice.
  */
 
 const PAYMENT_ALERT_RECIPIENTS_ENV = "PAYMENT_ALERT_EMAILS";
@@ -43,7 +45,8 @@ const log = createLogger("PaymentAlerts");
 
 /**
  * The staff addresses, or null when none is configured (or the setting is not
- * one to three valid addresses). Logged loudly by the caller; nothing about
+ * one to three valid addresses). Read only when there is something to send;
+ * the caller logs it loudly and reports the step as failed. Nothing about
  * payments themselves depends on it.
  */
 export function paymentAlertRecipients(
@@ -94,7 +97,7 @@ const alertClaimSchema = z.object({
         payment_id: z.uuid(),
         reason: z.string().regex(/^[a-z_]{1,64}$/),
         source: z.enum(["notice", "status_check"]),
-        first_seen_at: instant,
+        raised_at: instant,
         merchant_reference: z.string().min(1).max(100),
         amount_cents: z.string().regex(/^[0-9]{1,12}$/),
         status: z.string().regex(/^[a-z_]{1,32}$/),
@@ -177,16 +180,17 @@ function sast(iso: string) {
     hourCycle: "h23",
   }).format(new Date(iso));
 }
-/** The same set of problems always gives the same key and the same email. */
-function alertKey(problems: readonly ClaimedProblem[]) {
-  const ids = problems.map((problem) => problem.id).sort();
-  return `payment-alert/${createHash("sha256").update(ids.join(",")).digest("hex")}`;
-}
 const delivered = (result: SendEmailResult | null) =>
   // A refused repeat of the same key means that earlier request may have gone out.
   result !== null && (result.success || result.outcomeUnknown === true);
 
-export function paymentAlertEmail(recipients: readonly string[], problems: ClaimedProblem[]) {
+/** The email for one leased batch. A retry of the batch gets the same token
+ * and stored details, so the same key and the same email. */
+export function paymentAlertEmail(
+  recipients: readonly string[],
+  claim: string,
+  problems: ClaimedProblem[]
+) {
   const kinds = [
     ...new Set(
       problems.map((problem) => {
@@ -200,7 +204,7 @@ export function paymentAlertEmail(recipients: readonly string[], problems: Claim
   const count = plural(problems.length, "payment");
   return {
     to: recipients,
-    idempotencyKey: alertKey(problems),
+    idempotencyKey: `payment-alert/${claim}`,
     subject: `VerifyMzansi payment alert: ${count} need${problems.length === 1 ? "s" : ""} attention (${kinds.join(", ")})`,
     title: problems.length === 1 ? "A payment needs attention" : "Payments need attention",
     intro:
@@ -213,7 +217,7 @@ export function paymentAlertEmail(recipients: readonly string[], problems: Claim
         ["Amount", rand(problem.amount_cents)],
         ["Payment", `${problem.product_kind}, ${problem.status}, ${problem.fulfillment_status}`],
         ["Found by", SOURCE_WORDS[problem.source]],
-        ["First seen", sast(problem.first_seen_at)],
+        ["Flagged", sast(problem.raised_at)],
       ],
     })),
     closing:
@@ -289,10 +293,12 @@ async function attempt(send: () => Promise<SendEmailResult>) {
 /**
  * The email job's payment step: the alert for new problems, then the daily
  * summary when it is due. Returns the names of the steps that failed (the run
- * is then reported as failed); never throws. Without PAYMENT_ALERT_EMAILS it
- * logs what it would have sent and keeps every payment and email working: the
- * alerts stay unsent (offered again every five minutes for a week), and the
- * day's summary is logged once instead.
+ * is then reported as failed); never throws. The staff addresses are read only
+ * when there is something to send. Without them it logs what it would have
+ * sent and reports `payment_alert:recipients` (every run while an alert waits:
+ * the alert is given back at once, so the job's heartbeat notices) or
+ * `payment_summary:recipients` (once a day: the summary is logged instead).
+ * Payments and every other email keep working.
  */
 export async function runFoundationPaymentAlerts(
   context: PaymentAlertContext,
@@ -300,7 +306,11 @@ export async function runFoundationPaymentAlerts(
 ): Promise<string[]> {
   const failed: string[] = [];
   const send = options.send ?? sendStaffOperationsEmail;
-  const recipients = (options.recipients ?? paymentAlertRecipients)();
+  let recipients: string[] | null | undefined;
+  const staff = () => {
+    if (recipients === undefined) recipients = (options.recipients ?? paymentAlertRecipients)();
+    return recipients;
+  };
 
   if (context.canClaim()) {
     const claimed = await context.call(
@@ -313,21 +323,31 @@ export async function runFoundationPaymentAlerts(
     else if (parsed.data.claim && parsed.data.problems.length) {
       const { claim, problems } = parsed.data;
       const listed = problems.map((p) => ({ paymentId: p.payment_id, reason: p.reason }));
-      if (!recipients) {
-        // Left leased: offered again in five minutes, for a week.
+      const to = staff();
+      if (!to) {
+        // Given back at once: offered again, unchanged, on the next run.
+        failed.push("payment_alert:recipients");
         log.error("Payment alert not emailed: no recipients configured", {
           setting: PAYMENT_ALERT_RECIPIENTS_ENV,
           problems: listed,
         });
+        const back = await context.call("complete_payment_alerts", {
+          p_claim: claim,
+          p_sent: false,
+        });
+        if (back.error) failed.push("payment_alert:complete");
       } else if (
         delivered(
-          await attempt(() => context.pace(() => send(paymentAlertEmail(recipients, problems))))
+          await attempt(() => context.pace(() => send(paymentAlertEmail(to, claim, problems))))
         )
       ) {
-        const done = await context.call("complete_payment_alerts", { p_claim: claim });
+        const done = await context.call("complete_payment_alerts", {
+          p_claim: claim,
+          p_sent: true,
+        });
         if (done.error) failed.push("payment_alert:complete");
       } else {
-        // Offered again when the lease ends (five minutes).
+        // Offered again, unchanged, when the lease ends (five minutes).
         failed.push("payment_alert");
         log.error("Payment alert email failed", { problems: listed });
       }
@@ -351,9 +371,11 @@ export async function runFoundationPaymentAlerts(
         stalePending: digest.stale_pending.total,
         unalerted: digest.unalerted,
       };
+      const to = staff();
       let done = false;
-      if (!recipients) {
+      if (!to) {
         // Logged once a day instead of emailed.
+        failed.push("payment_summary:recipients");
         log.error("Daily payment summary not emailed: no recipients configured", {
           setting: PAYMENT_ALERT_RECIPIENTS_ENV,
           ...counts,
@@ -361,9 +383,10 @@ export async function runFoundationPaymentAlerts(
         done = true;
       } else {
         done = delivered(
-          await attempt(() => context.pace(() => send(paymentSummaryEmail(recipients, digest))))
+          await attempt(() => context.pace(() => send(paymentSummaryEmail(to, digest))))
         );
         if (!done) {
+          // Offered again, unchanged, when the lease ends (five minutes).
           failed.push("payment_summary");
           log.error("Daily payment summary email failed", counts);
         }

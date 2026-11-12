@@ -857,38 +857,50 @@ update `20261112080000_payment_problem_alerts.sql`; see
   code such as `amount_mismatch`, `multiple_settlements` or
   `complete_unfulfillable_target`) and `source` (`notice` or `status_check`),
   plus `anomaly` (`wrong_amount`, `paid_twice`, `not_activated` or `refunded`)
-  when staff are emailed at once. Every failed status check is logged as
+  when staff are emailed at once. A wrong amount or a second transaction is
+  emailed only when the bank reports it successful (money moved); otherwise it
+  is in the daily summary only. Every failed status check is logged as
   `Payment status check failed` with `paymentId` and `reason` (a problem code,
   or `provider_unavailable`, `database_unavailable`, `network_error` and similar
   for outages), and the status-check job's reply lists them in `errors`.
-  `Payment problem could not be recorded` means the database refused or was
-  unavailable; the log line is then the only record.
-- **Email at once.** The email job (every minute) sends one email listing every
-  problem with an `anomaly` not emailed yet: payment number, Ozow reference,
-  amount, payment state, how it was found and when. A failed send is tried again
-  five minutes later and fails that run (`payment_alert`), so the operations
-  heartbeat notices a lasting email outage. Problems first seen more than 7 days
-  ago are not emailed any more; they stay in the daily summary.
+  `Payment problem could not be recorded` means the database refused, was
+  unavailable or did not answer within three seconds; the log line is then the
+  only record.
+- **Email at once.** The email job (every minute), after the members' payment
+  messages, sends one email listing every problem with an `anomaly` not emailed
+  yet: payment number, Ozow reference, amount, payment state, how it was found
+  and when it was flagged. A failed send fails that run (`payment_alert`) and is
+  tried again, as the same email, five minutes later. A problem emailed before
+  is emailed again when another bank transaction shows it (for example a third
+  successful payment), at most five times. A flagged problem that could not be
+  emailed within 7 days (for example while `PAYMENT_ALERT_EMAILS` was unset) is
+  not emailed any more: find it with the query below. There is no
+  acknowledgement yet; that comes with the staff payment tools.
 - **Daily summary.** The first email job run after 07:00 South African time
   sends a summary of the problems seen since the previous summary, the payments
   still waiting for staff (paid but not activated; pending with an Ozow request
-  for over 2 hours), problems not emailed yet and the count of each kind of
-  payment notice and status check. It is sent every day, also when there is
-  nothing to report, which shows the alert path still works.
+  for over 2 hours), problems flagged in the last 7 days and not emailed yet,
+  and the count of each kind of payment notice and status check. It is sent
+  every day, also when there is nothing to report, which shows the alert path
+  still works. A retry after a failed send repeats the same summary.
 - **Recipients.** `PAYMENT_ALERT_EMAILS`, one to three addresses separated by
   commas (the owner first; one or two trusted people later). Everyone listed
-  sees the other addresses. If it is not set, or not one to three valid
-  addresses, nothing is emailed and the app Worker logs
+  sees the other addresses. The setting is read only when there is something to
+  send. If it is not set, or not one to three valid addresses, nothing is
+  emailed: while an alert waits, every email job run logs
   `Payment alert not emailed: no recipients configured` (with the payment
-  numbers and reasons) every five minutes while a problem waits, and
-  `Daily payment summary not emailed: no recipients configured` (with the day's
-  counts) once a day; payments and every other email keep working.
+  numbers and reasons) and fails with `payment_alert:recipients`, so the
+  operations heartbeat stops and its monitor alerts you; once a day the summary
+  is logged instead
+  (`Daily payment summary not emailed: no recipients configured`, with the day's
+  counts) and that run fails with `payment_summary:recipients`. Payments and
+  every other email keep working.
 - **Reading the record.** In the Supabase SQL editor for the London project
   (read only):
 
   ```sql
-  select payment_id, reason, source, needs_alert, alerted_at is not null as emailed,
-    occurrences, first_seen_at, last_seen_at
+  select payment_id, reason, source, needs_alert, alert_raised_at,
+    alerted_at is not null as emailed, occurrences, first_seen_at, last_seen_at
   from private.payment_problems
   order by last_seen_at desc
   limit 50;
@@ -935,9 +947,9 @@ update `20261112080000_payment_problem_alerts.sql`; see
    summary (one to three, separated by commas):
    `pnpm exec wrangler secret put PAYMENT_ALERT_EMAILS --env production`.
    Deploys keep it (it is not in the deploy's secrets file). Apply the database
-   update `20261112080000_payment_problem_alerts.sql` before the release that
-   uses it is deployed. To check the address works, look for the next morning's
-   daily summary.
+   update `20261112080000_payment_problem_alerts.sql` and set this secret before
+   the release that uses them is deployed. To check the address works, look for
+   the next morning's daily summary.
 
 ### When an alert arrives
 

@@ -454,7 +454,13 @@ describe("a correctly signed notice that can never apply", () => {
     expect(machine.mock.calls).toEqual([
       [
         "record_payment_problem",
-        { p_payment_id: null, p_reason: reason, p_source: "notice", p_alert: false },
+        {
+          p_payment_id: null,
+          p_reason: reason,
+          p_source: "notice",
+          p_alert: false,
+          p_transaction: null,
+        },
       ],
     ]);
     expect(warn).toHaveBeenCalledWith("Payment problem", {
@@ -574,7 +580,13 @@ describe("payment problems for staff", () => {
     const response = await notice(signedNotice(fullNotice({ Amount: "500.00" })));
     expect(await response.json()).toEqual({ success: true, rejected: "amount_mismatch" });
     expect(recorded()).toEqual([
-      { p_payment_id: PAYMENT, p_reason: "amount_mismatch", p_source: "notice", p_alert: true },
+      {
+        p_payment_id: PAYMENT,
+        p_reason: "amount_mismatch",
+        p_source: "notice",
+        p_alert: true,
+        p_transaction: TRANSACTION,
+      },
     ]);
     expect(settled()).toEqual([]);
   });
@@ -589,6 +601,7 @@ describe("payment problems for staff", () => {
         p_reason: "transaction_id_mismatch",
         p_source: "notice",
         p_alert: true,
+        p_transaction: TRANSACTION,
       },
     ]);
   });
@@ -609,6 +622,7 @@ describe("payment problems for staff", () => {
         p_reason: "amount_mismatch",
         p_source: "status_check",
         p_alert: true,
+        p_transaction: TRANSACTION,
       },
     ]);
     expect(logged("Payment status check failed", PAYMENT, "amount_mismatch")).toBe(true);
@@ -627,6 +641,7 @@ describe("payment problems for staff", () => {
         p_reason: "multiple_settlements",
         p_source: "status_check",
         p_alert: true,
+        p_transaction: [TRANSACTION, uuid(15)].sort().join(","),
       },
     ]);
     expect(settled()).toEqual([]);

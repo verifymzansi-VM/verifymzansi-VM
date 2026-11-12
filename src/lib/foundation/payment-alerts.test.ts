@@ -27,7 +27,7 @@ const problem = (
   payment_id: uuid(100 + n),
   reason,
   source: "notice" as "notice" | "status_check",
-  first_seen_at: "2026-11-12T07:58:00.123456+00:00",
+  raised_at: "2026-11-12T07:58:00.123456+00:00",
   merchant_reference: `ref${n}`.padEnd(32, "0"),
   amount_cents: "5000",
   status: "pending",
@@ -156,7 +156,7 @@ describe("the alert at once", () => {
     expect(email.subject).toBe(
       "VerifyMzansi payment alert: 2 payments need attention (wrong amount, paid twice)"
     );
-    expect(email.idempotencyKey).toMatch(/^payment-alert\/[0-9a-f]{64}$/);
+    expect(email.idempotencyKey).toBe(`payment-alert/${CLAIM}`);
     expect(email.sections[0]).toEqual({
       heading: "Wrong amount",
       rows: [
@@ -165,36 +165,41 @@ describe("the alert at once", () => {
         ["Amount", "R 50.00"],
         ["Payment", "plan, pending, unfulfilled"],
         ["Found by", "the payment notice"],
-        ["First seen", expect.stringMatching(/12 Nov 2026.*09:58/)],
+        ["Flagged", expect.stringMatching(/12 Nov 2026.*09:58/)],
       ],
     });
-    expect(call).toHaveBeenCalledWith("complete_payment_alerts", { p_claim: CLAIM });
+    expect(call).toHaveBeenCalledWith("complete_payment_alerts", { p_claim: CLAIM, p_sent: true });
   });
 
-  it("gives the same set of problems the same key, whatever the order", () => {
-    const one = paymentAlertEmail(STAFF, [problem(1), problem(2)]);
-    const two = paymentAlertEmail(STAFF, [problem(2), problem(1)]);
-    const other = paymentAlertEmail(STAFF, [problem(1), problem(3)]);
-    expect(one.idempotencyKey).toBe(two.idempotencyKey);
-    expect(other.idempotencyKey).not.toBe(one.idempotencyKey);
+  it("sends a retried batch as the same email under the same key", async () => {
+    // The database offers a batch whose send failed again unchanged.
+    const batch = { claim: CLAIM, problems: [problem(1), problem(2, "conflicting_transaction")] };
+    answers(batch);
+    send.mockResolvedValueOnce({ success: false, error: "provider unavailable" });
+    expect(await run()).toEqual(["payment_alert"]);
+    answers(structuredClone(batch));
+    expect(await run()).toEqual([]);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1][0]).toEqual(send.mock.calls[0][0]);
+    // Another batch (for example a problem raised again) has its own key.
+    expect(paymentAlertEmail(STAFF, uuid(92), [problem(1)]).idempotencyKey).toBe(
+      `payment-alert/${uuid(92)}`
+    );
   });
 
   it("names a second transaction as paid twice, and each anomaly kind once", () => {
-    const email = paymentAlertEmail(
-      ["owner@example.test"],
-      [
-        problem(1, "transaction_id_mismatch"),
-        problem(2, "complete_unfulfillable_target", { source: "status_check" }),
-        problem(3, "refunded_after_completion"),
-        problem(4, "currency_mismatch"),
-        problem(5, "amount_mismatch"),
-      ]
-    );
+    const email = paymentAlertEmail(["owner@example.test"], CLAIM, [
+      problem(1, "transaction_id_mismatch"),
+      problem(2, "complete_unfulfillable_target", { source: "status_check" }),
+      problem(3, "refunded_after_completion"),
+      problem(4, "currency_mismatch"),
+      problem(5, "amount_mismatch"),
+    ]);
     expect(email.subject).toBe(
       "VerifyMzansi payment alert: 5 payments need attention (paid twice, paid but not activated, money returned after activation, wrong amount)"
     );
     expect(email.sections[1].rows).toContainEqual(["Found by", "the 10-minute status check"]);
-    expect(paymentAlertEmail(STAFF, [problem(1)]).subject).toBe(
+    expect(paymentAlertEmail(STAFF, CLAIM, [problem(1)]).subject).toBe(
       "VerifyMzansi payment alert: 1 payment needs attention (wrong amount)"
     );
   });
@@ -220,11 +225,12 @@ describe("the alert at once", () => {
     expect(JSON.stringify(logged.error.mock.calls)).not.toContain("PRIVATE");
   });
 
-  it("without staff addresses, logs the problems loudly and leaves them for later", async () => {
+  it("without staff addresses, fails the step, logs the problems and gives them back at once", async () => {
     answers({ claim: CLAIM, problems: [problem(1)] });
-    expect(await run(null)).toEqual([]);
+    expect(await run(null)).toEqual(["payment_alert:recipients"]);
     expect(send).not.toHaveBeenCalled();
-    expect(names()).not.toContain("complete_payment_alerts");
+    // Given back, so the next run (a minute later) fails too until it is set.
+    expect(call).toHaveBeenCalledWith("complete_payment_alerts", { p_claim: CLAIM, p_sent: false });
     expect(logged.error).toHaveBeenCalledWith(
       "Payment alert not emailed: no recipients configured",
       {
@@ -256,6 +262,16 @@ describe("the alert at once", () => {
         : base(name, args)
     );
     expect(await run()).toEqual(["payment_alert:complete"]);
+  });
+
+  it("reads the staff addresses only when there is something to send", async () => {
+    const recipients = vi.fn(() => null);
+    expect(await runFoundationPaymentAlerts(context, { send, recipients })).toEqual([]);
+    expect(recipients).not.toHaveBeenCalled();
+    expect(logged.error).not.toHaveBeenCalled();
+    answers({ claim: CLAIM, problems: [problem(1)] }, digest());
+    await runFoundationPaymentAlerts(context, { send, recipients });
+    expect(recipients).toHaveBeenCalledOnce();
   });
 
   it("claims nothing when a worst-case send no longer fits", async () => {
@@ -331,16 +347,24 @@ describe("the daily summary", () => {
     );
   });
 
-  it("leaves a summary that could not be sent for the next lease", async () => {
+  it("leaves a summary that could not be sent for the next lease, then sends the same email", async () => {
+    // The database stores the day's content at the first lease and hands the
+    // same content to a retry.
     answers({ claim: null, problems: [] }, digest());
-    send.mockResolvedValue({ success: false });
+    send.mockResolvedValueOnce({ success: false });
     expect(await run()).toEqual(["payment_summary"]);
     expect(names()).not.toContain("complete_payment_digest");
+    answers({ claim: null, problems: [] }, { ...digest(), claim: uuid(93) });
+    expect(await run()).toEqual([]);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1][0]).toEqual(send.mock.calls[0][0]);
+    expect(send.mock.calls[1][0].idempotencyKey).toBe("payment-summary/2026-11-12");
+    expect(call).toHaveBeenCalledWith("complete_payment_digest", { p_claim: uuid(93) });
   });
 
-  it("without staff addresses, logs the day's counts once instead", async () => {
+  it("without staff addresses, logs the day's counts once instead and fails the step", async () => {
     answers({ claim: null, problems: [] }, digest());
-    expect(await run(null)).toEqual([]);
+    expect(await run(null)).toEqual(["payment_summary:recipients"]);
     expect(send).not.toHaveBeenCalled();
     expect(logged.error).toHaveBeenCalledWith(
       "Daily payment summary not emailed: no recipients configured",

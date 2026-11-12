@@ -10,11 +10,20 @@ create table private.payment_problems (
   first_seen_at timestamp with time zone default clock_timestamp() not null,
   last_seen_at timestamp with time zone default clock_timestamp() not null,
   occurrences integer default 1 not null,
+  alert_raised_at timestamp with time zone,
+  alert_transaction text,
+  alert_rearms integer default 0 not null,
   alert_claim uuid,
   alert_claimed_until timestamp with time zone,
+  alert_snapshot jsonb,
   alerted_at timestamp with time zone,
+  constraint payment_problems_alert_rearms_check CHECK (alert_rearms >= 0 AND alert_rearms <= 5),
+  constraint payment_problems_alert_snapshot_check CHECK (jsonb_typeof(alert_snapshot) = 'object'::text),
+  constraint payment_problems_alert_transaction_check CHECK (length(alert_transaction) >= 1 AND length(alert_transaction) <= 100),
   constraint payment_problems_check CHECK (NOT needs_alert OR payment_id IS NOT NULL),
-  constraint payment_problems_check1 CHECK (alerted_at IS NULL OR needs_alert),
+  constraint payment_problems_check1 CHECK (needs_alert = (alert_raised_at IS NOT NULL)),
+  constraint payment_problems_check2 CHECK (alerted_at IS NULL OR needs_alert),
+  constraint payment_problems_check3 CHECK ((alert_claim IS NULL) = (alert_snapshot IS NULL)),
   constraint payment_problems_occurrences_check CHECK (occurrences >= 1),
   constraint payment_problems_once UNIQUE NULLS NOT DISTINCT (payment_id, reason),
   constraint payment_problems_payment_id_fkey FOREIGN KEY (payment_id) REFERENCES private.payments(id) ON DELETE CASCADE,
@@ -25,6 +34,6 @@ create table private.payment_problems (
 alter table private.payment_problems owner to postgres;
 alter table private.payment_problems enable row level security;
 CREATE INDEX payment_problems_alert_claim_idx ON private.payment_problems USING btree (alert_claim) WHERE (alert_claim IS NOT NULL);
-CREATE INDEX payment_problems_alert_due_idx ON private.payment_problems USING btree (first_seen_at) WHERE (needs_alert AND (alerted_at IS NULL));
+CREATE INDEX payment_problems_alert_due_idx ON private.payment_problems USING btree (alert_raised_at) WHERE (needs_alert AND (alerted_at IS NULL));
 CREATE INDEX payment_problems_last_seen_idx ON private.payment_problems USING btree (last_seen_at);
 revoke all on private.payment_problems from public;
