@@ -1,33 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { MockVideoTranscodeError, mockCompressVideoForUpload, mockFetchWithRetry, mockLogWarn } =
-  vi.hoisted(() => {
-    class MockVideoTranscodeError extends Error {
-      constructor(message = "Video transcode failed") {
-        super(message);
-        this.name = "VideoTranscodeError";
-      }
+const { MockVideoTranscodeError, mockCompressVideoForUpload, mockLogWarn } = vi.hoisted(() => {
+  class MockVideoTranscodeError extends Error {
+    constructor(message = "Video transcode failed") {
+      super(message);
+      this.name = "VideoTranscodeError";
     }
+  }
 
-    return {
-      MockVideoTranscodeError,
-      mockCompressVideoForUpload: vi.fn(),
-      mockFetchWithRetry: vi.fn(),
-      mockLogWarn: vi.fn(),
-    };
-  });
+  return {
+    MockVideoTranscodeError,
+    mockCompressVideoForUpload: vi.fn(),
+    mockLogWarn: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/media/compress-before-upload", () => ({
   VideoTranscodeError: MockVideoTranscodeError,
   compressVideoForUpload: mockCompressVideoForUpload,
-}));
-
-vi.mock("@/lib/utils/fetch-retry", () => ({
-  fetchWithRetry: mockFetchWithRetry,
-}));
-
-vi.mock("@/lib/utils/csrf", () => ({
-  withCsrfHeaders: (headers?: HeadersInit) => headers ?? {},
 }));
 
 vi.mock("@/lib/utils/logger", () => ({
@@ -40,10 +30,11 @@ const { prewarmVideoForFastUpload, uploadVideoWithFastPath } =
   await import("@/app/post/_lib/video-fast-upload");
 
 describe("uploadVideoWithFastPath", () => {
-  const putFetch = vi.fn();
+  // No request leaves the module itself: the retired direct-to-storage
+  // routes are never asked for an upload URL.
+  const networkFetch = vi.fn();
 
   it("limits video transfers to two and releases slots after failure", async () => {
-    mockFetchWithRetry.mockResolvedValue({ ok: false, status: 410 });
     const releases: Array<() => void> = [];
     let active = 0;
     let peak = 0;
@@ -82,7 +73,6 @@ describe("uploadVideoWithFastPath", () => {
     "reuses successful and in-flight uploads in %s",
     async (area) => {
       const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-      mockFetchWithRetry.mockResolvedValue({ ok: false, status: 410 });
       const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/saved.mp4");
       const options = { file, area, uploadViaServer };
       await Promise.all([uploadVideoWithFastPath(options), uploadVideoWithFastPath(options)]);
@@ -93,7 +83,6 @@ describe("uploadVideoWithFastPath", () => {
 
   it("retries failed uploads without reusing another area's upload", async () => {
     const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-    mockFetchWithRetry.mockResolvedValue({ ok: false, status: 410 });
     const uploadViaServer = vi
       .fn()
       .mockRejectedValueOnce(new Error("offline"))
@@ -115,127 +104,35 @@ describe("uploadVideoWithFastPath", () => {
     await expect(
       uploadVideoWithFastPath({ file, area: "promotion", uploadViaServer })
     ).rejects.toThrow("50 MB");
-    expect(mockFetchWithRetry).not.toHaveBeenCalled();
-    expect(uploadViaServer).not.toHaveBeenCalled();
-  });
-
-  it("reuses a verified upload when the PUT response was lost", async () => {
-    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-    const uploadViaServer = vi.fn();
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        uploadUrl: "https://upload.example.com/signed",
-        key: "media/clip.mp4",
-        publicUrl: "https://media.example.com/clip.mp4",
-      }),
-    });
-    putFetch.mockRejectedValueOnce(new TypeError("Network response lost"));
-    mockFetchWithRetry.mockResolvedValueOnce({ ok: true });
-    expect(await uploadVideoWithFastPath({ file, area: "listing", uploadViaServer })).toBe(
-      "https://media.example.com/clip.mp4"
-    );
+    expect(networkFetch).not.toHaveBeenCalled();
     expect(uploadViaServer).not.toHaveBeenCalled();
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("fetch", putFetch);
+    vi.stubGlobal("fetch", networkFetch);
     mockCompressVideoForUpload.mockImplementation(async (file: File) => file);
   });
 
-  it("direct uploads prepared MP4 files for fast playback", async () => {
-    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-    const uploadViaServer = vi.fn();
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uploadUrl: "https://upload.example.com/signed",
-        key: "media/promotion/user-1/clip.mp4",
-        publicUrl: "https://media.example.com/clip.mp4",
-      }),
-    });
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ success: true }),
-    });
-    putFetch.mockResolvedValueOnce({ ok: true, status: 200 });
-
-    const url = await uploadVideoWithFastPath({
-      file,
-      area: "promotion",
-      uploadViaServer,
-    });
-
-    expect(url).toBe("https://media.example.com/clip.mp4");
-    expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
-      requireCompatibleOutput: true,
-    });
-    expect(uploadViaServer).not.toHaveBeenCalled();
-    expect(mockFetchWithRetry).toHaveBeenCalledWith(
-      "/api/media/upload-url",
-      expect.objectContaining({
-        method: "POST",
-      })
-    );
-    expect(mockFetchWithRetry).toHaveBeenCalledWith(
-      "/api/media/upload-complete",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          key: "media/promotion/user-1/clip.mp4",
-          publicUrl: "https://media.example.com/clip.mp4",
-          contentType: "video/mp4",
-          size: file.size,
-          area: "promotion",
-        }),
-      })
-    );
-    expect(putFetch).toHaveBeenCalledWith(
-      "https://upload.example.com/signed",
-      expect.objectContaining({
-        method: "PUT",
-        body: file,
-        signal: expect.any(AbortSignal),
-      })
-    );
-  });
-
-  it("falls back to the validated server upload when direct upload is unavailable", async () => {
+  it("sends a prepared video through the validated server upload only", async () => {
     const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
     const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/server.mp4");
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: false,
-      status: 410,
-      json: async () => ({ code: "direct_media_uploads_disabled" }),
-    });
 
-    const url = await uploadVideoWithFastPath({
-      file,
-      area: "business_cover",
-      uploadViaServer,
-    });
+    const url = await uploadVideoWithFastPath({ file, area: "business_cover", uploadViaServer });
 
     expect(url).toBe("https://media.example.com/server.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledWith(file, {
       requireCompatibleOutput: true,
     });
-    expect(putFetch).not.toHaveBeenCalled();
     expect(uploadViaServer).toHaveBeenCalledWith(file);
+    expect(networkFetch).not.toHaveBeenCalled();
   });
 
-  it("transcodes non-web video before falling back to the server upload", async () => {
+  it("transcodes non-web video before the server upload", async () => {
     const original = new File(["video"], "clip.mov", { type: "video/quicktime" });
     const converted = new File(["mp4"], "clip.mp4", { type: "video/mp4" });
     const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/converted.mp4");
     mockCompressVideoForUpload.mockResolvedValueOnce(converted);
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: false,
-      status: 410,
-      json: async () => ({ code: "direct_media_uploads_disabled" }),
-    });
 
     const url = await uploadVideoWithFastPath({
       file: original,
@@ -244,103 +141,14 @@ describe("uploadVideoWithFastPath", () => {
     });
 
     expect(url).toBe("https://media.example.com/converted.mp4");
-    expect(mockCompressVideoForUpload).toHaveBeenCalledWith(original, {
-      requireCompatibleOutput: true,
-    });
     expect(uploadViaServer).toHaveBeenCalledWith(converted);
-  });
-
-  it("falls back to the validated server upload when direct upload verification fails", async () => {
-    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/server.mp4");
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uploadUrl: "https://upload.example.com/signed",
-        key: "media/promotion/user-1/clip.mp4",
-        publicUrl: "https://media.example.com/clip.mp4",
-      }),
-    });
-    putFetch.mockResolvedValueOnce({ ok: true, status: 200 });
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: false,
-      status: 400,
-      json: async () => ({ code: "uploaded_object_mime_mismatch" }),
-    });
-
-    const url = await uploadVideoWithFastPath({
-      file,
-      area: "promotion",
-      uploadViaServer,
-    });
-
-    expect(url).toBe("https://media.example.com/server.mp4");
-    expect(uploadViaServer).toHaveBeenCalledWith(file);
-  });
-
-  it("asks the server to reconcile a failed direct PUT before falling back", async () => {
-    const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/server.mp4");
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uploadUrl: "https://upload.example.com/signed",
-        key: "media/promotion/user-1/clip.mp4",
-        publicUrl: "https://media.example.com/clip.mp4",
-      }),
-    });
-    putFetch.mockResolvedValueOnce({ ok: false, status: 403 });
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      json: async () => ({ code: "uploaded_object_missing" }),
-    });
-
-    const url = await uploadVideoWithFastPath({
-      file,
-      area: "promotion",
-      uploadViaServer,
-    });
-
-    expect(url).toBe("https://media.example.com/server.mp4");
-    expect(mockFetchWithRetry).toHaveBeenLastCalledWith(
-      "/api/media/upload-complete",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          key: "media/promotion/user-1/clip.mp4",
-          publicUrl: "https://media.example.com/clip.mp4",
-          contentType: "video/mp4",
-          size: file.size,
-          area: "promotion",
-        }),
-      })
-    );
-    expect(uploadViaServer).toHaveBeenCalledWith(file);
   });
 
   it("reuses a background-prepared video during submit", async () => {
     const original = new File(["video"], "clip.mp4", { type: "video/mp4" });
     const prepared = new File(["prepared"], "clip.mp4", { type: "video/mp4" });
-    const uploadViaServer = vi.fn();
+    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/prepared.mp4");
     mockCompressVideoForUpload.mockResolvedValueOnce(prepared);
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uploadUrl: "https://upload.example.com/signed",
-        key: "media/promotion/user-1/prepared.mp4",
-        publicUrl: "https://media.example.com/prepared.mp4",
-      }),
-    });
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ success: true }),
-    });
-    putFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
     await prewarmVideoForFastUpload(original);
     const url = await uploadVideoWithFastPath({
@@ -351,46 +159,20 @@ describe("uploadVideoWithFastPath", () => {
 
     expect(url).toBe("https://media.example.com/prepared.mp4");
     expect(mockCompressVideoForUpload).toHaveBeenCalledTimes(1);
-    expect(putFetch).toHaveBeenCalledWith(
-      "https://upload.example.com/signed",
-      expect.objectContaining({
-        method: "PUT",
-        body: prepared,
-        signal: expect.any(AbortSignal),
-      })
-    );
+    expect(uploadViaServer).toHaveBeenCalledWith(prepared);
   });
 
-  it("falls back to server upload when direct storage upload times out", async () => {
+  it("refuses an empty URL from the server upload so the form can retry", async () => {
     const file = new File(["video"], "clip.mp4", { type: "video/mp4" });
-    const uploadViaServer = vi.fn().mockResolvedValue("https://media.example.com/server.mp4");
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        uploadUrl: "https://upload.example.com/signed",
-        key: "media/promotion/user-1/clip.mp4",
-        publicUrl: "https://media.example.com/clip.mp4",
-      }),
-    });
-    putFetch.mockRejectedValueOnce(new DOMException("Timed out", "AbortError"));
-    mockFetchWithRetry.mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-      json: async () => ({ code: "uploaded_object_missing" }),
-    });
-
-    const url = await uploadVideoWithFastPath({
-      file,
-      area: "promotion",
-      uploadViaServer,
-    });
-
-    expect(url).toBe("https://media.example.com/server.mp4");
-    expect(mockFetchWithRetry).toHaveBeenLastCalledWith(
-      "/api/media/upload-complete",
-      expect.objectContaining({ method: "POST" })
+    const uploadViaServer = vi
+      .fn()
+      .mockResolvedValueOnce("")
+      .mockResolvedValue("https://media.example.com/retry.mp4");
+    await expect(
+      uploadVideoWithFastPath({ file, area: "listing", uploadViaServer })
+    ).rejects.toThrow("no URL");
+    expect(await uploadVideoWithFastPath({ file, area: "listing", uploadViaServer })).toBe(
+      "https://media.example.com/retry.mp4"
     );
-    expect(uploadViaServer).toHaveBeenCalledWith(file);
   });
 });

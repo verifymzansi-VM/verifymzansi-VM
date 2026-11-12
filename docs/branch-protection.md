@@ -78,7 +78,9 @@ such a check would block every pull request.
     and were removed; `pnpm test:browser:isolated` stays as a local release
     check.)
   - `Visual regression (chosen frontend)`: compares the main public screens with
-    the approved pictures of the chosen frontend.
+    the approved pictures of the chosen frontend, served from the private local
+    foundation test copy, with the browser in the pinned Playwright image
+    (`scripts/foundation-visual.mjs`).
   - `foundation-native` (workflow "Foundation native"): the native database
     suite. It starts on every pull request to `main`; when a pull request does
     not touch the suite's inputs the job ends green without starting Docker, so

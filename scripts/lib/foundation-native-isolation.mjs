@@ -5,10 +5,10 @@ import path from "node:path";
 import { parse } from "smol-toml";
 import { assertFixturePath } from "./foundation-native-paths.mjs";
 
-export const FIXTURE_MIGRATION = "20261013164726_transport_prototype.sql";
-export const NATIVE_FIXTURE_ID = "backend-foundation-impl";
-export const NATIVE_API_PORT = 55441;
-export const NATIVE_DB_PORT = 55442;
+const FIXTURE_MIGRATION = "20261013164726_transport_prototype.sql";
+const NATIVE_FIXTURE_ID = "backend-foundation-impl";
+const NATIVE_API_PORT = 55441;
+const NATIVE_DB_PORT = 55442;
 export const FIXTURE_MIGRATIONS = {
   [FIXTURE_MIGRATION]: "docs/backend-foundation/prototypes/transport.sql",
   "20261013172810_listing_price_draft_prototype.sql":

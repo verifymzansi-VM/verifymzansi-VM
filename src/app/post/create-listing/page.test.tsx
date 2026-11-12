@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import CreateListingPage from "./page";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import {
+  expectFoundationPostFields,
+  installFoundationPostFetch,
+} from "@/test/foundation-post-transport";
 
 type MockAuthState = {
   user: { id: string; email?: string | null } | null;
@@ -183,6 +187,9 @@ vi.mock("@/lib/utils/format", async (importOriginal) => ({
 describe("CreateListingPage", () => {
   const mockPush = vi.fn();
   const mockToast = vi.fn();
+  let fetchMock: Mock;
+  let postingTermsFetch: Mock;
+  let termsLoaded: () => Promise<void>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -191,10 +198,13 @@ describe("CreateListingPage", () => {
     (useToast as unknown as ReturnType<typeof vi.fn>).mockReturnValue({ toast: mockToast });
     global.URL.createObjectURL = vi.fn(() => "blob:logo-preview");
     global.URL.revokeObjectURL = vi.fn();
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
-    }) as unknown as typeof fetch;
+    ({
+      api: fetchMock,
+      terms: postingTermsFetch,
+      termsLoaded,
+    } = installFoundationPostFetch(
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) })
+    ));
   });
 
   function acceptListingTerms() {
@@ -284,31 +294,30 @@ describe("CreateListingPage", () => {
   });
 
   it("previews and submits an uploaded listing logo", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          const callIndex = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.length;
-          return {
-            ok: true,
-            json: async () =>
-              callIndex === 1
-                ? { urls: ["https://media.verifymzansi.com/listings/logo.jpg"] }
-                : { urls: ["https://media.verifymzansi.com/listings/photo.jpg"], errors: [] },
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: true,
-            json: async () => ({ id: "listing-1" }),
-          };
-        }
-
-        throw new Error(`Unexpected fetch call: ${String(input)}`);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
+        const callIndex = fetchMock.mock.calls.length;
+        return {
+          ok: true,
+          json: async () =>
+            callIndex === 1
+              ? { urls: ["https://media.verifymzansi.com/listings/logo.jpg"] }
+              : { urls: ["https://media.verifymzansi.com/listings/photo.jpg"], errors: [] },
+        };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: true,
+          json: async () => ({ id: "listing-1" }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch call: ${String(input)}`);
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -339,13 +348,11 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
-      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      const calls = fetchMock.mock.calls;
       expect(calls.some((call) => call[0] === "/api/listings")).toBe(true);
     });
 
-    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0] === "/api/listings"
-    );
+    const request = fetchMock.mock.calls.find((call) => call[0] === "/api/listings");
     expect(request).toBeDefined();
     if (!request) {
       throw new Error("Expected /api/listings submission call");
@@ -354,35 +361,37 @@ describe("CreateListingPage", () => {
 
     expect(payload.logo_url).toBe("https://media.verifymzansi.com/listings/logo.jpg");
     expect(payload.images).toEqual(["https://media.verifymzansi.com/listings/photo.jpg"]);
+    expect(payload.termsAccepted).toBe(true);
+    expectFoundationPostFields(payload);
+    expect(postingTermsFetch).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith("/dashboard/listings");
   });
 
   it("blocks saving when the server rejects a selected photo", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          const callIndex = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.length;
-          return {
-            ok: true,
-            json: async () =>
-              callIndex === 1
-                ? { urls: ["https://media.verifymzansi.com/listings/logo.jpg"] }
-                : { urls: [], errors: ["The selected photo was rejected"] },
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: true,
-            json: async () => ({ id: "listing-1" }),
-          };
-        }
-
-        throw new Error(`Unexpected fetch call: ${String(input)}`);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
+        const callIndex = fetchMock.mock.calls.length;
+        return {
+          ok: true,
+          json: async () =>
+            callIndex === 1
+              ? { urls: ["https://media.verifymzansi.com/listings/logo.jpg"] }
+              : { urls: [], errors: ["The selected photo was rejected"] },
+        };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: true,
+          json: async () => ({ id: "listing-1" }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch call: ${String(input)}`);
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -413,38 +422,37 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     expect(await screen.findAllByText("The selected photo was rejected")).not.toHaveLength(0);
-    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = fetchMock.mock.calls;
     expect(calls.some((call) => call[0] === "/api/listings")).toBe(false);
     expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Submit for review" })).toBeEnabled();
   });
 
   it("maps API 422 photo-limit errors to listing media field errors", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Maximum 5 photos allowed on your plan" }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
         return {
           ok: true,
-          json: async () => ({ success: true }),
+          json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
         };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: false,
+          status: 422,
+          json: async () => ({ error: "Maximum 5 photos allowed on your plan" }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -475,31 +483,30 @@ describe("CreateListingPage", () => {
   });
 
   it("maps API 422 video-limit errors to listing media field errors", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: false,
-            status: 422,
-            json: async () => ({ error: "Video upload is not available on your current plan." }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
         return {
           ok: true,
-          json: async () => ({ success: true }),
+          json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
         };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: false,
+          status: 422,
+          json: async () => ({ error: "Video upload is not available on your current plan." }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -529,44 +536,35 @@ describe("CreateListingPage", () => {
     });
   });
 
-  it("uploads listing videos through the shared direct path with validated fallback", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (input === "/api/media/upload-url") {
-          return {
-            ok: false,
-            status: 410,
-            json: async () => ({ code: "direct_media_uploads_disabled" }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          const area = init?.body instanceof FormData ? init.body.get("area") : null;
-          return {
-            ok: true,
-            status: 200,
-            json: async () =>
-              area === "listing_video"
-                ? { urls: ["https://media.verifymzansi.com/listings/clip.mp4"], errors: [] }
-                : { urls: ["https://media.verifymzansi.com/listings/photo.jpg"], errors: [] },
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: true,
-            json: async () => ({ id: "listing-1" }),
-          };
-        }
-
+  it("uploads listing videos through the validated upload endpoint only", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === "/api/media/upload") {
+        const area = init?.body instanceof FormData ? init.body.get("area") : null;
         return {
           ok: true,
-          json: async () => ({ success: true }),
+          status: 200,
+          json: async () =>
+            area === "listing_video"
+              ? { urls: ["https://media.verifymzansi.com/listings/clip.mp4"], errors: [] }
+              : { urls: ["https://media.verifymzansi.com/listings/photo.jpg"], errors: [] },
         };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: true,
+          json: async () => ({ id: "listing-1" }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -590,12 +588,12 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
     await waitFor(() => {
-      const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      const calls = fetchMock.mock.calls;
       expect(calls.some((call) => call[0] === "/api/listings")).toBe(true);
     });
 
-    const calls = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls.some((call) => call[0] === "/api/media/upload-url")).toBe(true);
+    const calls = fetchMock.mock.calls;
+    expect(calls.some((call) => String(call[0]).startsWith("/api/media/upload-"))).toBe(false);
     expect(
       calls.some(
         (call) =>
@@ -612,53 +610,45 @@ describe("CreateListingPage", () => {
     }
     const payload = JSON.parse(request[1].body as string);
     expect(payload.videos).toEqual(["https://media.verifymzansi.com/listings/clip.mp4"]);
+    expectFoundationPostFields(payload);
   });
 
   it("keeps users on the media step with a videos field error when listing video upload fails", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (input === "/api/media/upload-url") {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === "/api/media/upload") {
+        const area = init?.body instanceof FormData ? init.body.get("area") : null;
+        if (area === "listing_video") {
           return {
             ok: false,
-            status: 410,
-            json: async () => ({ code: "direct_media_uploads_disabled" }),
-          };
-        }
-
-        if (input === "/api/media/upload") {
-          const area = init?.body instanceof FormData ? init.body.get("area") : null;
-          if (area === "listing_video") {
-            return {
-              ok: false,
-              status: 400,
-              json: async () => ({
-                success: false,
-                urls: [],
-                errors: ['"clip.mp4": file content does not match declared video type'],
-                traceId: "trace-video-1",
-              }),
-              headers: new Headers(),
-            };
-          }
-
-          return {
-            ok: true,
-            status: 200,
+            status: 400,
             json: async () => ({
-              urls: ["https://media.verifymzansi.com/listings/photo.jpg"],
-              errors: [],
+              success: false,
+              urls: [],
+              errors: ['"clip.mp4": file content does not match declared video type'],
+              traceId: "trace-video-1",
             }),
+            headers: new Headers(),
           };
         }
 
         return {
           ok: true,
-          json: async () => ({ success: true }),
+          status: 200,
+          json: async () => ({
+            urls: ["https://media.verifymzansi.com/listings/photo.jpg"],
+            errors: [],
+          }),
         };
       }
-    );
+
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -693,31 +683,30 @@ describe("CreateListingPage", () => {
   });
 
   it("redirects to complete profile when API returns phone-gate 403 redirectUrl", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: false,
-            status: 403,
-            json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
         return {
           ok: true,
-          json: async () => ({ success: true }),
+          json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
         };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ redirectUrl: "/dashboard/complete-profile" }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -745,31 +734,30 @@ describe("CreateListingPage", () => {
   });
 
   it("shows plan-limit reason when API returns 403 reason", async () => {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
-          };
-        }
-
-        if (input === "/api/listings") {
-          return {
-            ok: false,
-            status: 403,
-            json: async () => ({ reason: "You reached your plan posting limit." }),
-          };
-        }
-
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
         return {
           ok: true,
-          json: async () => ({ success: true }),
+          json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
         };
       }
-    );
+
+      if (input === "/api/listings") {
+        return {
+          ok: false,
+          status: 403,
+          json: async () => ({ reason: "You reached your plan posting limit." }),
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ success: true }),
+      };
+    });
 
     render(<CreateListingPage />);
+    await termsLoaded();
 
     fireEvent.click(screen.getByText("Select Electronics"));
     fireEvent.change(screen.getByLabelText("Title (Required)"), {
@@ -798,20 +786,18 @@ describe("CreateListingPage", () => {
   });
 
   function mockListingSubmitResponse(response: { status: number; body: unknown }) {
-    (global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      async (input: RequestInfo | URL) => {
-        if (input === "/api/media/upload") {
-          return {
-            ok: true,
-            json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
-          };
-        }
-        if (input === "/api/listings") {
-          return { ok: false, status: response.status, json: async () => response.body };
-        }
-        return { ok: true, json: async () => ({ success: true }) };
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      if (input === "/api/media/upload") {
+        return {
+          ok: true,
+          json: async () => ({ urls: ["https://media.verifymzansi.com/listings/photo.jpg"] }),
+        };
       }
-    );
+      if (input === "/api/listings") {
+        return { ok: false, status: response.status, json: async () => response.body };
+      }
+      return { ok: true, json: async () => ({ success: true }) };
+    });
   }
 
   function fillAndSubmitListing() {
@@ -834,11 +820,24 @@ describe("CreateListingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
   }
 
+  it("does not submit before the posting terms have loaded", async () => {
+    postingTermsFetch.mockReturnValue(new Promise(() => {}));
+    mockListingSubmitResponse({ status: 500, body: { error: "unexpected" } });
+
+    render(<CreateListingPage />);
+    fillAndSubmitListing();
+
+    expect(await screen.findByText(/Posting terms are still loading/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((call) => call[0] === "/api/listings")).toBe(false);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it("offers a sign-in link back to this page when the session expired (401)", async () => {
     window.history.pushState({}, "", "/post/create-listing?category=electronics");
     mockListingSubmitResponse({ status: 401, body: { error: "Unauthorized" } });
 
     render(<CreateListingPage />);
+    await termsLoaded();
     fillAndSubmitListing();
 
     const signIn = await screen.findByRole("link", { name: "Sign in" });
@@ -858,6 +857,7 @@ describe("CreateListingPage", () => {
       mockListingSubmitResponse({ status: 403, body: { redirectUrl } });
 
       render(<CreateListingPage />);
+      await termsLoaded();
       fillAndSubmitListing();
 
       await waitFor(() => {

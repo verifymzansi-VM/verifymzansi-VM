@@ -1,14 +1,4 @@
 import { z } from "zod";
-export const foundationRecoveryBindingSchema = z.strictObject({
-  valid: z.literal(true),
-  recoverySessionId: z.uuid(),
-  accountId: z.uuid(),
-});
-
-export const foundationPasswordResetSchema = z
-  .strictObject({ password: z.string().min(12).max(128), confirmPassword: z.string().max(128) })
-  .refine((value) => value.password === value.confirmPassword);
-
 /** The restored reset page sends only the two passwords; the server supplies the
  * recovery session from its own binding (recovery-binding.ts). A client that
  * still sends the id must send the live one. */

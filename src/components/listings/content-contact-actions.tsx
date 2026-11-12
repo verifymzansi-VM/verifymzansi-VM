@@ -19,8 +19,9 @@ import {
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 import { ContentEnquiryAction } from "./content-enquiry-action";
 import { shareContent } from "@/lib/sharing/share-content";
-import { withCsrfHeaders } from "@/lib/utils/csrf";
+import { withCsrfHeaders } from "@/lib/utils/csrf-client";
 import { getDataBackend } from "@/lib/data-backend";
+import { useDialogReturnFocus } from "@/hooks/use-dialog-return-focus";
 
 import type { ContactActionConfig } from "./contact-action-types";
 
@@ -194,6 +195,9 @@ function ContactActionsForTarget({
     }
   }
 
+  const { rememberOpener: rememberReportOpener, onCloseAutoFocus: returnFocusFromReport } =
+    useDialogReturnFocus();
+
   return (
     <>
       <div className="space-y-2">
@@ -286,7 +290,8 @@ function ContactActionsForTarget({
           variant="ghost"
           size="sm"
           className="h-11 gap-1 px-3 text-sm text-muted-foreground sm:h-10 sm:text-xs"
-          onClick={() => {
+          onClick={(event) => {
+            rememberReportOpener(event.currentTarget);
             setReportSent(false);
             setReportError("");
             setReportOpen(true);
@@ -298,7 +303,7 @@ function ContactActionsForTarget({
       </div>
 
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" onCloseAutoFocus={returnFocusFromReport}>
           <DialogHeader>
             <DialogTitle>{config.reportTitle}</DialogTitle>
             <DialogDescription>

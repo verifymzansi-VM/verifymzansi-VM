@@ -40,6 +40,7 @@ import { VerificationStatusCard } from "@/components/dashboard/verification-stat
 import { SuspensionNotice } from "@/components/dashboard/suspension-notice";
 import { getDataBackend } from "@/lib/data-backend";
 import { readSelfReviewSession } from "@/lib/foundation/self-review-session";
+import { readFoundationServerUser } from "@/lib/foundation/server-session";
 import {
   readRestoredOwnerDashboard,
   restoredDashboardResults,
@@ -94,9 +95,10 @@ export default async function DashboardPage({
   }
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Foundation: the account the sign-in gate already verified for this request.
+  const user = foundation
+    ? await readFoundationServerUser()
+    : (await supabase.auth.getUser()).data.user;
 
   if (!user) redirect("/login");
 

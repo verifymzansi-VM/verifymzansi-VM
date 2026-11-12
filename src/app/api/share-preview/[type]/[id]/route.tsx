@@ -1,30 +1,18 @@
 import { ImageResponse } from "next/og";
-import { createPublicClient } from "@/lib/supabase/server";
-import { applyVisibleExpiryFilter } from "@/lib/posting/visibility";
+import { restoredSharePreview } from "@/lib/foundation/marketplace-server";
 import { normalizeMediaUrl } from "@/lib/utils/media-url";
 import { formatZARShort } from "@/lib/utils/format";
 import { uuidSchema } from "@/lib/validations/shared";
 import { checkRateLimit, getClientRateLimitKey } from "@/lib/utils/rate-limit";
+import { createLogger } from "@/lib/utils/logger";
 
+const log = createLogger("SharePreview");
+
+// The link types in shared URLs and the public post kind each one shows.
 const SOURCES = {
-  listing: {
-    table: "listings",
-    columns:
-      "id, title, description, photos, videos, video_thumbnail, price_cents, location_city, location_province",
-    label: "Mzansi Market",
-  },
-  business: {
-    table: "businesses",
-    columns:
-      "id, business_name, description, area, category, cover_photo, cover_video, video_thumbnail, location_city, location_province",
-    label: "Mzansi Business",
-  },
-  promotion: {
-    table: "promotions",
-    columns:
-      "id, title, description, photos, videos, video_thumbnail, price_cents, start_date, location_city, location_province",
-    label: "Tourism & Events",
-  },
+  listing: { kind: "listing", label: "Mzansi Market" },
+  business: { kind: "business", label: "Mzansi Business" },
+  promotion: { kind: "event", label: "Tourism & Events" },
 } as const;
 
 export async function GET(
@@ -46,20 +34,25 @@ export async function GET(
     });
   }
   const source = SOURCES[type as keyof typeof SOURCES];
-  const client = createPublicClient();
-  const { data, error } = await applyVisibleExpiryFilter(
-    client.from(source.table).select(source.columns).eq("id", id).eq("status", "live")
-  ).maybeSingle();
-  if (error || !data)
+  let post: Awaited<ReturnType<typeof restoredSharePreview>>;
+  try {
+    // Public reads only: a post that is not publicly live comes back as null.
+    post = await restoredSharePreview(source.kind, id);
+  } catch (error) {
+    log.warn("Share preview post unavailable", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    return new Response("Preview temporarily unavailable", {
+      status: 503,
+      headers: { "Retry-After": "60", "Cache-Control": "no-store" },
+    });
+  }
+  if (!post)
     return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
-  const post = data as unknown as Record<string, unknown>;
-  const title = String(post.title || post.business_name || source.label).slice(0, 110);
+  const title = String(post.title || source.label).slice(0, 110);
   const location = [post.location_city, post.location_province].filter(Boolean).join(", ");
-  const hasVideo = Boolean(post.cover_video || (Array.isArray(post.videos) && post.videos.length));
-  const photo =
-    post.video_thumbnail ||
-    post.cover_photo ||
-    (Array.isArray(post.photos) ? post.photos[0] : null);
+  const hasVideo = post.has_video;
+  const photo = post.video_thumbnail;
   const origin = process.env.NEXT_PUBLIC_APP_URL || "https://verifymzansi.com";
   let poster: string | undefined;
   if (typeof photo === "string") {
@@ -77,10 +70,7 @@ export async function GET(
     )
       poster = url.href;
   }
-  const section =
-    post.area === "PROMOTIONS_EVENTS" || post.category === "tourism_hospitality"
-      ? "Tourism & Events"
-      : source.label;
+  const section = post.tourism ? "Tourism & Events" : source.label;
   const price =
     typeof post.price_cents === "number" && post.price_cents > 0
       ? formatZARShort(post.price_cents)

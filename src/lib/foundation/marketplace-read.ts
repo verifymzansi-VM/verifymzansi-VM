@@ -1,11 +1,16 @@
 import type { FoundationPublicApi } from "./public-api";
+import { declareNotAvailable, notAvailable } from "./not-available";
 import { readPublicBusinessStickers } from "./business-seen";
 import {
   searchFoundationPresentedCards,
   foundationMediaUrl,
   type FoundationCardPresentation,
 } from "./public-cards";
-import { type FoundationPublicPostDetail } from "./public-post";
+import {
+  readFoundationPublicContactChannels,
+  readFoundationPublicPost,
+  type FoundationPublicPostDetail,
+} from "./public-post";
 import type { FoundationPublicPostCore } from "./public-post-contract";
 import reference from "../domains/taxonomy/reference.json";
 import { buildFoundationPostSearch } from "./post-search";
@@ -18,7 +23,9 @@ import {
 } from "./post-presentation";
 
 export type PublicCollection = "listings" | "businesses" | "promotions";
-export class MarketplaceQueryError extends Error {}
+export class MarketplaceQueryError extends Error {
+  override name = "MarketplaceQueryError";
+}
 
 const normalized = (value: string) =>
   value
@@ -28,6 +35,24 @@ const normalized = (value: string) =>
 export function publicProvinceLabel(id: string) {
   return reference.provinces.find((row) => row.id === id)?.label ?? id;
 }
+
+/** Public post fields the live backend does not provide on any public read. */
+export const PUBLIC_POST_NOT_AVAILABLE = declareNotAvailable({
+  boost_until: notAvailable(null, "public reads carry no paid Boost placement"),
+  featured_until: notAvailable(null, "public reads carry no paid Featured placement"),
+  featured: notAvailable(false, "public reads carry no paid Featured placement"),
+  view_count: notAvailable(null, "views are not stored"),
+  like_count: notAvailable(null, "likes are not stored"),
+  viewer_has_liked: notAvailable(false, "likes are not stored"),
+  location_suburb: notAvailable(null, "posts keep a province and city only"),
+  account_profile: notAvailable(null, "public reads never carry the owner's profile"),
+});
+/** Public post fields only a detail read provides: cards from a collection
+ * read leave them at these placeholders. */
+export const PUBLIC_CARD_NOT_AVAILABLE = declareNotAvailable({
+  seller: notAvailable(null, "the card read carries no seller; the detail read does"),
+  contact_methods: notAvailable([], "the card read carries no contact channels"),
+});
 
 /** Only approved public DTOs enter the restored cards. Missing private/paid
  * facts stay absent; a card never acquires an owner id or a verification badge. */
@@ -71,6 +96,8 @@ export function restoredPublicRow(
     : photo
       ? [photo]
       : [];
+  const missing = PUBLIC_POST_NOT_AVAILABLE.values();
+  const cardOnly = PUBLIC_CARD_NOT_AVAILABLE.values();
   return {
     id: post.id,
     title: post.title,
@@ -95,7 +122,7 @@ export function restoredPublicRow(
     condition: post.condition,
     location_province: publicProvinceLabel(post.province),
     location_city: post.locality,
-    location_suburb: null,
+    location_suburb: missing.location_suburb,
     location_town: null,
     location_address: null,
     created_at: post.published_at,
@@ -111,25 +138,25 @@ export function restoredPublicRow(
     focal_y: firstVideo?.focal_y ?? cover?.focal_y ?? null,
     media_width: videoLayout?.width ?? cover?.width ?? null,
     media_height: videoLayout?.height ?? cover?.height ?? null,
-    boost_until: null,
-    featured_until: null,
-    featured: false,
-    view_count: null,
-    like_count: null,
-    viewer_has_liked: false,
+    boost_until: missing.boost_until,
+    featured_until: missing.featured_until,
+    featured: missing.featured,
+    view_count: missing.view_count,
+    like_count: missing.like_count,
+    viewer_has_liked: missing.viewer_has_liked,
     seller: detail
       ? {
           display_name: detail.seller.public_name,
           account_verification_status: detail.seller.identity_verified ? "verified" : null,
         }
-      : null,
-    account_profile: null,
+      : cardOnly.seller,
+    account_profile: missing.account_profile,
     business_id: null,
     start_date: eventWindow?.starts_at ?? null,
     end_date: eventWindow?.ends_at ?? null,
     status: "live",
     attributes: {},
-    contact_methods: detail?.contact_channels ?? [],
+    contact_methods: detail?.contact_channels ?? cardOnly.contact_methods,
     category_details: null,
     business_details: null,
     service_areas: null,
@@ -141,6 +168,35 @@ export function restoredPublicRow(
     website: null,
     store_number: null,
     ...formFields,
+  };
+}
+
+/** The reads behind a public post page: the post, its contact channels and its
+ * card presentation (business type and form fields). Null when the post is not
+ * public. */
+/** A publicly live post with its presentation, as its detail page reads it.
+ * The link preview asks for one kind and skips the contact-channel read it
+ * does not show. */
+export async function readRestoredPublicDetail(
+  api: FoundationPublicApi,
+  id: string,
+  options: { kind?: FoundationPublicPostCore["kind"]; withContactChannels?: boolean } = {}
+) {
+  const post = await readFoundationPublicPost(api, { id });
+  if (!post || (options.kind && post.kind !== options.kind)) return null;
+  const contact_channels =
+    options.withContactChannels === false
+      ? []
+      : await readFoundationPublicContactChannels(api, { id });
+  const presentation = (
+    await searchFoundationPresentedCards(api, { post_id: id, offset: 0, limit: 1 })
+  ).items[0]?.presentation;
+  if (!presentation) return null;
+  return {
+    ...post,
+    contact_channels,
+    business_type: presentation.business_type,
+    frontend: presentation.frontend,
   };
 }
 

@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "nod
 import path from "node:path";
 
 export const SNAPSHOT_DIR = "database/foundation/current";
-export const APP_SCHEMAS = ["api", "internal", "private"];
+const APP_SCHEMAS = ["api", "internal", "private"];
 const HEADER =
   "-- Generated from the replay of database/foundation by `pnpm db:foundation:snapshot`.\n" +
   "-- Do not edit; change the schema with a reviewed file in database/foundation/updates/.\n";
@@ -31,7 +31,7 @@ const notExtensionMember = (classTable, oid) => `not exists (
   )`;
 
 /** Catalogue queries; each returns one row with a json column `v`. */
-export const SNAPSHOT_QUERIES = {
+const SNAPSHOT_QUERIES = {
   schemas: `select coalesce(json_agg(json_build_object(
       'name', n.nspname,
       'ident', quote_ident(n.nspname),
