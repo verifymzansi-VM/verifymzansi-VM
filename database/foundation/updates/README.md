@@ -79,12 +79,22 @@ preflight then reports the database ahead, and a forward fix is preferred.
 
 ## Members are told when their ID is sent back, 10 November 2026
 
-`20261110173012_verification_returned_notice.sql` is not applied yet. It needs
-`20261110045944_intro_trial_at_first_approval.sql` (it replaces the mail claim
-that update changed) and refuses to run without it. It adds no command and
-changes no API signature, so the website release that uses it also works with a
-database that does not have it: the member then sees the reviewer's reason on
-the verification page, but gets no notice or email.
+`20261110173012_verification_returned_notice.sql` is applied: the coordinator
+applied it to production on 12 November 2026 at about 05:20 UTC, with the
+owner's approval, after the website release that knows the
+`verification_returned` kind (main 3ade4695) was live. Before it, the preflight
+read "reviewed bodies, update not applied" with no identity case sent back, no
+returned notice and no returned email waiting; the update returned no rows;
+afterwards the preflight read "already applied" with the same three counts 0.
+Production's fingerprint then matched the replay through this update in every
+category (`../fingerprint.json`, `productionCheck`), apart from the known
+`schema_grants` item that the Auth hook adds (`knownDifferences`).
+
+It needs `20261110045944_intro_trial_at_first_approval.sql` (it replaces the
+mail claim that update changed) and refuses to run without it. It adds no
+command and changes no API signature, so the website release that uses it also
+works with a database that does not have it: the member then sees the reviewer's
+reason on the verification page, but gets no notice or email.
 
 Until now, when staff sent an identity case back, the reviewer's reason was
 stored and nothing told the member. From this update:
@@ -129,8 +139,13 @@ reverted, run the rollback below first.
 
 ## Staff see how each selfie was taken, 11 November 2026
 
-`20261111184619_selfie_capture_method.sql` is not applied yet. It needs no
-earlier pending update.
+`20261111184619_selfie_capture_method.sql` is applied: the coordinator applied
+it to production on 12 November 2026 at about 05:45 UTC, with the owner's
+approval, before its website release was merged. Before it, the preflight read
+"reviewed bodies, update not applied" with one selfie receipt and none with a
+capture method; the update returned no rows; afterwards the preflight read
+"already applied" with the same counts. Production's fingerprint then matched
+the replay through this update (apart from the known `schema_grants` item).
 
 The verification page sends, with the selfie, how the member's browser says it
 was taken (`camera` for the live camera step, `file_upload` for the "Or upload a
@@ -183,8 +198,14 @@ preflight with the update applied, so they can still be deployed or redeployed.
 
 ## A failed payment start never blocks a member, 11 November 2026
 
-`20261111212320_payment_start_retry.sql` is not applied yet. It needs no earlier
-pending update.
+`20261111212320_payment_start_retry.sql` is applied: the coordinator applied it
+to production on 12 November 2026 at about 06:35 UTC, with the owner's approval,
+before its website release was merged. Before it, the preflight read "reviewed
+bodies, update not applied" with no pending payment without an Ozow request and
+none for the sweep to expire; the update returned no rows; afterwards the
+preflight read "already applied" with both counts 0. Production's fingerprint
+then matched the replay through this update (apart from the known
+`schema_grants` item).
 
 A checkout is one pending payment per member and product. The website leases it
 (`internal.claim_checkout_request`), asks Ozow for a payment request with the
@@ -292,8 +313,14 @@ re-apply return the same fingerprints.
 
 ## Indexes for foreign keys used by deletion, 11 November 2026
 
-`20261111223723_foreign_key_indexes.sql` is not applied yet. It needs no earlier
-pending update and changes no function, grant or API command.
+`20261111223723_foreign_key_indexes.sql` is applied: the coordinator applied it
+to production on 12 November 2026 at about 06:47 UTC, with the owner's approval.
+Before it, the preflight read "not applied ... present 0 of 50" (the 31 tables
+together 280 kB); the update returned no rows; afterwards the preflight read
+"already applied; present 50 of 50". The fingerprint taken after the next update
+(which changes no fingerprinted category) matched the replay through both.
+
+It changes no function, grant or API command.
 
 Postgres does not index the referencing side of a foreign key. When a referenced
 row is deleted, it looks up the referencing rows of every key that points at it,
@@ -398,9 +425,20 @@ rollback and re-apply return the same fingerprints.
 
 ## No default rights in schema public, 11 November 2026
 
-`20261111234521_public_default_privileges.sql` is not applied yet. It needs no
-earlier pending update and changes no function, table, grant on an existing
-object or API command.
+`20261111234521_public_default_privileges.sql` is applied: the coordinator
+applied it to production on 12 November 2026 at about 06:49 UTC, with the
+owner's approval. Before it, the preflight summary read "not applied; matches
+the production capture of 6 November 2026", with no object in `public` outside
+extensions and the nine expected `unchanged` rows for supabase_admin's defaults;
+the update returned no rows; afterwards the summary read "already applied":
+postgres gives `anon`, `authenticated`, `service_role` and PUBLIC nothing on new
+tables, sequences or functions in `public`. supabase_admin's defaults remain, as
+described below. Production's fingerprint after all five updates of 12 November
+matched the replay in every category (`../fingerprint.json`, `productionCheck`),
+apart from the known `schema_grants` item that the Auth hook adds
+(`knownDifferences`).
+
+It changes no function, table, grant on an existing object or API command.
 
 The foundation keeps nothing in schema `public`, yet Postgres keeps default
 privileges there: rights that every new object created by a role in `public`
@@ -1903,10 +1941,39 @@ Dates and times must be real (CI rejects, for example, `2026-02-30`).
   every count 0, after "already applied, trials to restart: 0", production
   fingerprint then matched the replay (section The free week starts at the first
   approved post)
-- `20261110173012_verification_returned_notice.sql`: pending
-- `20261111184619_selfie_capture_method.sql`: pending
-- `20261111212320_payment_start_retry.sql`: pending
-- `20261111223723_foreign_key_indexes.sql`: pending
-- `20261111234521_public_default_privileges.sql`: pending
+- `20261110173012_verification_returned_notice.sql`: applied 2026-11-12 05:20
+  UTC; time approximate, applied by the coordinator with the owner's approval
+  through the Supabase dashboard's query API, from the reviewed file, after the
+  website release that knows the kind (main 3ade4695) was live; preflight before
+  "reviewed bodies, update not applied" with identity cases sent back, returned
+  notices and returned emails not yet sent all 0, after "already applied" with
+  the same counts 0; production fingerprint then matched the replay (section
+  Members are told when their ID is sent back)
+- `20261111184619_selfie_capture_method.sql`: applied 2026-11-12 05:45 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase dashboard's query API, from the reviewed file, before its website
+  release was merged; preflight before "reviewed bodies, update not applied"
+  with selfie receipts 1 and with a capture method 0, after "already applied"
+  with the same counts; production fingerprint then matched the replay (section
+  Staff see how each selfie was taken)
+- `20261111212320_payment_start_retry.sql`: applied 2026-11-12 06:35 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase dashboard's query API, from the reviewed file, before its website
+  release was merged; preflight before "reviewed bodies, update not applied"
+  with pending payments without an Ozow request 0 and to expire 0, after
+  "already applied" with both counts 0; production fingerprint then matched the
+  replay (section A failed payment start never blocks a member)
+- `20261111223723_foreign_key_indexes.sql`: applied 2026-11-12 06:47 UTC; time
+  approximate, applied by the coordinator with the owner's approval through the
+  Supabase dashboard's query API, from the reviewed file; preflight before "not
+  applied" with present 0 of 50, after "already applied; present 50 of 50"
+  (section Indexes for foreign keys used by deletion)
+- `20261111234521_public_default_privileges.sql`: applied 2026-11-12 06:49 UTC;
+  time approximate, applied by the coordinator with the owner's approval through
+  the Supabase dashboard's query API, from the reviewed file; preflight before
+  "not applied; matches the production capture of 6 November 2026" with 0
+  relations and 0 functions in public and the nine expected unchanged
+  supabase_admin rows, after "already applied"; production fingerprint after all
+  five updates matched the replay (section No default rights in schema public)
 
 <!-- applied-register:end -->
