@@ -170,8 +170,10 @@ test.describe("post link preview", () => {
   });
 });
 
+// /api/otp/health is gone too, but sits under the signed-in /api/otp prefix,
+// so a visitor gets 401 there before any route is looked up.
 test.describe("retired routes are gone", () => {
-  for (const path of ["/api/otp/health", "/api/media/upload-url", "/api/media/upload-complete"]) {
+  for (const path of ["/api/media/upload-url", "/api/media/upload-complete"]) {
     test(`${path} answers 404`, async ({ request }) => {
       expect((await request.get(path)).status()).toBe(404);
     });

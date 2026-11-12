@@ -343,6 +343,8 @@ describe("event host business", () => {
     reads();
     expect(await restoredSharePreview("listing", id)).toBeNull();
     expect(await restoredSharePreview("event", id)).toBeNull();
+    // Another kind stops after the post read.
+    expect(rpc.mock.calls.map(([name]) => name)).toEqual(["get_public_post", "get_public_post"]);
     reads({ get_public_post: () => ({ data: null, error: null }) });
     expect(await restoredSharePreview("business", id)).toBeNull();
     reads({

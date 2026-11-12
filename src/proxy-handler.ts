@@ -50,8 +50,6 @@ const PROTECTED_PREFIXES = [
   "/api/otp",
   "/api/leads",
   "/api/media/upload",
-  "/api/media/upload-complete",
-  "/api/media/upload-url",
   "/api/notifications",
   "/api/profile",
 ];
