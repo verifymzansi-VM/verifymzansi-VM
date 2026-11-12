@@ -76,6 +76,11 @@ const REVIEW_CHECKS = [
 
 // A service worker could fetch outside page routing; the allowlist must see every request.
 test.use({ serviceWorkers: "block" });
+/** The one registration reply while sign-up is by invitation only
+ * (FOUNDATION_REGISTRATION_INVITE_ONLY, as in production). */
+const INVITE_ONLY_REPLY =
+  "Registration is by invitation only for now. If this email was invited, check your inbox to continue.";
+
 test.describe.configure({ mode: "serial" });
 
 type Reply = { method: string; path: string; status: number; body: unknown };
@@ -268,13 +273,17 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     await page.locator("#acceptTerms").check();
     await page.getByRole("button", { name: "Create account" }).click();
     await expect.poll(() => reply("/api/auth/register").length).toBe(1);
-    // The hook's refusal reaches the visitor as the generic registration error.
+    // The hook's refusal gets exactly the reply an invited address gets (next
+    // test), so the form never reveals who is invited; the reply says sign-up
+    // is by invitation only.
     expect(reply("/api/auth/register")[0]).toMatchObject({
-      status: 400,
-      body: { error: "Check the registration details and complete the CAPTCHA" },
+      status: 200,
+      body: { ok: true, inviteOnly: true, message: INVITE_ONLY_REPLY },
     });
-    await expect(page.getByText("Registration failed").first()).toBeVisible();
-    await expect(page).toHaveURL(/\/register$/);
+    await page.waitForURL(`${APP_ORIGIN}/login?registered=invite`);
+    await expect(
+      page.getByText(/Registration is by invitation only for now/).first()
+    ).toBeVisible();
     expect(captchaTokens).toEqual(["dev-turnstile-bypass"]);
     expect(queryTestCopy(`select count(*) from auth.users where email = ${sql(email)};`)).toBe("0");
     expect(await mailCountTo(email)).toBe(0);
@@ -301,17 +310,14 @@ test.describe("member signs up, gets verified, posts and publishes", () => {
     await page.getByLabel("Confirm password").fill(member.password);
     await page.locator("#acceptTerms").check();
     await page.getByRole("button", { name: "Create account" }).click();
-    await page.waitForURL(`${APP_ORIGIN}/login?registered=true`);
+    await page.waitForURL(`${APP_ORIGIN}/login?registered=invite`);
     expect(captchaTokens).toEqual(["dev-turnstile-bypass"]);
     await expect
       .poll(() => reply("/api/auth/register"))
       .toEqual([
         expect.objectContaining({
           status: 200,
-          body: {
-            ok: true,
-            message: "If registration is available for this email, check your inbox to continue.",
-          },
+          body: { ok: true, inviteOnly: true, message: INVITE_ONLY_REPLY },
         }),
       ]);
     // The password breach check ran, answered by the copy's fence (proving the

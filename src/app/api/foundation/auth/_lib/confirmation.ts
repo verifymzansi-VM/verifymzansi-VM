@@ -21,6 +21,39 @@ import {
   sealRecoveryBinding,
 } from "@/lib/foundation/recovery-binding";
 
+/** A Google sign-in that has just created the account goes to the phone step
+ * first, as an email sign-up does after confirming (and as the restored site
+ * did). That page sends anyone whose number is already verified straight on.
+ * Older accounts, including email accounts that now add Google, are not new. */
+const NEW_GOOGLE_ACCOUNT_WINDOW_MS = 10 * 60 * 1000;
+const CLOCK_SKEW_MS = 60 * 1000;
+
+export function googleLandingPath(next: string, createdAt: string | null, now = Date.now()) {
+  const created = createdAt ? Date.parse(createdAt) : Number.NaN;
+  if (
+    !Number.isFinite(created) ||
+    now - created > NEW_GOOGLE_ACCOUNT_WINDOW_MS ||
+    created - now > CLOCK_SKEW_MS
+  )
+    return next;
+  if (next === "/" || next === "/dashboard") return FOUNDATION_POST_SIGNUP_PATH;
+  return `${FOUNDATION_POST_SIGNUP_PATH}?${new URLSearchParams({ returnUrl: next })}`;
+}
+
+/** Fixed text of the sign-up guard (internal.acceptance_signup_guard) while
+ * registration is by invitation only. */
+const REGISTRATION_CLOSED_TEXT = "registration is not open yet";
+
+/** Why Auth sent a Google sign-in back without a code, as one of two fixed
+ * login-page reasons. Nothing from the query is echoed back to the page. */
+export function googleRefusalPath(query: URLSearchParams): string | null {
+  if (query.get("oauth") !== "google" || !query.has("error")) return null;
+  if (query.get("error_description")?.toLowerCase().includes(REGISTRATION_CLOSED_TEXT))
+    return "/login?error=registration_closed#";
+  if (query.get("error") === "access_denied") return "/login?error=google_cancelled#";
+  return null;
+}
+
 /** PKCE protects this top-level email navigation; it cannot require the
  * mutation CSRF header used by in-app POSTs. The flow id selects one verifier.
  * Invalid attempts clear verifier state without publishing an unverified session.
@@ -36,6 +69,9 @@ export async function handleFoundationConfirmation(
   let sessionName: string | undefined;
   let retryAfter: number | undefined;
   let binding: ReturnType<typeof sealRecoveryBinding> | undefined;
+  let createdAt: string | null = null;
+  const googleRefusal =
+    purpose === "google" ? googleRefusalPath(request.nextUrl.searchParams) : null;
   try {
     if (
       process.env.FOUNDATION_PASSWORD_AUTH_MODE !== "native-captcha" ||
@@ -79,7 +115,7 @@ export async function handleFoundationConfirmation(
       throw new Error();
     }
     const values = new Map(request.cookies.getAll().map(({ name, value }) => [name, value]));
-    const { api, accountId, recovery } = await confirmFoundationAccount(
+    const confirmed = await confirmFoundationAccount(
       config,
       { code: query.get("code"), flowId: query.get("sb_flow_id") },
       {
@@ -92,6 +128,8 @@ export async function handleFoundationConfirmation(
       undefined,
       purpose
     );
+    const { api, accountId, recovery } = confirmed;
+    createdAt = confirmed.createdAt;
     // Remember, in this browser only, which verified recovery session this
     // link opened; the reset page completes only with that session.
     if (purpose === "recovery") {
@@ -121,13 +159,16 @@ export async function handleFoundationConfirmation(
           ? purpose === "recovery"
             ? `${RECOVERY_PAGE_PATH}?${RECOVERY_LINK_PARAM}=${binding?.marker}`
             : purpose === "google"
-              ? sanitizeReturnUrl(request.nextUrl.searchParams.get("next"))
+              ? googleLandingPath(
+                  sanitizeReturnUrl(request.nextUrl.searchParams.get("next")),
+                  createdAt
+                )
               : FOUNDATION_POST_SIGNUP_PATH
           : // The empty fragment replaces the one Auth put on a refused link
             // (its error details), which browsers otherwise carry along.
             purpose === "recovery"
             ? "/forgot-password?error=recovery_failed#"
-            : "/login?error=auth_callback_failed#",
+            : (googleRefusal ?? "/login?error=auth_callback_failed#"),
         origin
       ),
       303
