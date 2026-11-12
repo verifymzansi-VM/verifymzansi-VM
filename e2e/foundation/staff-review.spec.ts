@@ -13,6 +13,8 @@ import { characterise, KnownBreak, requireOnlyKnownBreak } from "./support/known
 import { endedWithTest } from "./support/route-teardown";
 import {
   browserSessionCookies,
+  caughtMailFor,
+  outboxState,
   queryTestCopy,
   readOutboundAttempts,
   readTestCopy,
@@ -45,20 +47,23 @@ import {
 //   - a report filed by the moderator can never be worked by the moderator
 //     (staff cannot review themselves), and an admin decides it;
 //   - an admin cannot review their own identity case;
-//   - an admin verifies, approves and completes a member's privacy request.
+//   - an admin verifies, approves and completes a member's privacy request;
+//   - the member whose ID was sent back reads the reviewer's reason on the
+//     verification page, has a notice, and receives an email that says only
+//     that the ID was sent back (BL-12, fixed by M2.7).
 //
-// Three steps are broken today and are marked test.fail(), each pinned to its
+// Two steps are broken today and are marked test.fail(), each pinned to its
 // exact known symptom (characterise, support/known-break.ts); any other
 // outcome turns the run red:
-// - "the member whose ID was sent back is told why and notified": BL-12,
-//   fixed by M2.7. The verification page shows generic text instead of the
-//   reviewer's reason, and no email or notice is queued.
 // - "the per-section review queue lists the waiting post": D3B-02, fixed by
 //   M6.3. The section page reads the retired backend for its content queue.
 // - "the operations page shows job health": D5-02, fixed by M5.5. The page
 //   reads retired tables and functions.
 // The tests share the members and run in order; a failure skips the rest, so
 // the marked steps come last.
+//
+// The email job (runOpsJob) delivers the website's own emails to the copy's
+// mail catcher through its loopback relay, which never reaches a provider.
 //
 // Network: browser requests may only reach the copy's website and its local
 // database gateway (anything else is aborted and fails the test), and the
@@ -75,7 +80,6 @@ import {
 const APP_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.appPort}`;
 const API_ORIGIN = `http://127.0.0.1:${E2E_FIXTURE.apiPort}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const BL12 = "BL-12, fixed by M2.7";
 const D3B02 = "D3B-02, fixed by M6.3";
 const D502 = "D5-02, fixed by M5.5";
 const TWO_STEP_PATH = "/staff/two-step";
@@ -88,7 +92,7 @@ const REVIEW_CHECKS = [
 /** The "Glare or blur" retake request the identity review offers. */
 const RETAKE_NOTE =
   "Please retake your photo in even light without glare. Keep the camera steady and make sure the details are sharp.";
-/** Today's generic text on the verification page for an ID that was sent back. */
+/** The verification page's generic text for an ID sent back without a reason. */
 const GENERIC_ID_RETURN =
   "Your ID document was not accepted. Upload a clear photo showing the full document and all details.";
 
@@ -920,45 +924,68 @@ test.describe("staff review with an authenticator", () => {
     expectNoOutboundSince(mark);
   });
 
-  test("the member whose ID was sent back is told why and notified", async ({ context, page }) => {
-    test.fail(true, BL12);
-    await characterise(BL12, async () => {
-      const mark = readOutboundAttempts().length;
-      const { outside, failures } = await guard(context);
-      const returnedAt = queryTestCopy(
-        "select min(r.created_at) from private.verification_return_requests r " +
-          `join private.evidence_cases c on c.id = r.case_id where c.subject_id = '${returned.id}';`
-      );
-      expect(returnedAt).not.toBe("");
-      // Anything queued to tell the member since the ID was sent back.
-      const notices = Number(
-        queryTestCopy(
-          `select (select count(*) from private.outbox_events where owner_id = '${returned.id}' and created_at >= '${returnedAt}') + ` +
-            `(select count(*) from private.notifications where account_id = '${returned.id}' and created_at >= '${returnedAt}');`
-        )
-      );
-      await signInBrowser(context, returned);
-      await page.goto("/verification");
-      const reason = page.getByText(RETAKE_NOTE).first();
-      const generic = page.getByText(GENERIC_ID_RETURN).first();
-      await expect(reason.or(generic).first()).toBeVisible({ timeout: 20_000 });
-      if ((await generic.isVisible()) && !(await reason.isVisible()) && notices === 0) {
-        // BL-12 as recorded: the reviewer's reason is stored, but the page
-        // shows generic text, and no email or notice was queued.
-        expect(failures).toEqual([]);
-        expect(outside).toEqual([]);
-        expectNoOutboundSince(mark);
-        throw new KnownBreak(
-          `${BL12}: the verification page shows generic text instead of the reviewer's reason, and nothing was queued to tell the member`
-        );
-      }
-      // Promised (M2.7): the member reads the reviewer's reason and is told.
-      await expect(reason).toBeVisible();
-      expect(notices).toBeGreaterThan(0);
-      expect(failures).toEqual([]);
-      expect(outside).toEqual([]);
-      expectNoOutboundSince(mark);
+  test("the member whose ID was sent back is told why and notified", async ({
+    context,
+    page,
+    request,
+  }) => {
+    test.setTimeout(120_000);
+    const mark = readOutboundAttempts().length;
+    const { outside, failures } = await guard(context);
+    const returnRequest = queryTestCopy(
+      "select r.id from private.verification_return_requests r " +
+        `join private.evidence_cases c on c.id = r.case_id where c.subject_id = '${returned.id}';`
+    );
+    expect(returnRequest).toMatch(UUID);
+    // A notice in the member's account, pointing at the return request only.
+    expect(
+      queryTestCopy(
+        "select count(*) from private.notifications where kind = 'verification_returned' " +
+          `and account_id = '${returned.id}' and subject_id = '${returnRequest}';`
+      )
+    ).toBe("1");
+    // One email, queued for the email job.
+    const outboxId = queryTestCopy(
+      "select id from private.outbox_events where kind = 'verification_returned' " +
+        `and owner_id = '${returned.id}' and subject_id = '${returnRequest}';`
+    );
+    expect(outboxId).toMatch(UUID);
+
+    // The verification page shows the reviewer's reason, not the generic text.
+    await signInBrowser(context, returned);
+    await page.goto("/verification");
+    await expect(page.getByText(RETAKE_NOTE).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(GENERIC_ID_RETURN)).toHaveCount(0);
+    // The notifications list carries the notice, which leads to that page.
+    const listed = await page.evaluate(async () => {
+      const response = await fetch("/api/notifications", { cache: "no-store" });
+      return { status: response.status, body: await response.json() };
     });
+    expect(listed.status).toBe(200);
+    expect(listed.body.notifications).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Your ID check needs another look",
+          href: "/verification",
+          read: false,
+        }),
+      ])
+    );
+
+    // The email job sends it (at most one email per run, oldest first; an
+    // earlier step's run may already have sent it).
+    for (let run = 0; run < 20 && !outboxState(outboxId).processed; run++)
+      expect((await runOpsJob(request)).retrying).toBe(0);
+    expect(outboxState(outboxId)).toMatchObject({ processed: true, error: null });
+    const mail = await caughtMailFor(returned.email, `foundation-outbox/${outboxId}`);
+    expect(mail.subject).toBe("Your ID check needs another look");
+    expect(mail.text).toContain("/verification");
+    // It says only that the ID was sent back: no reason, name or ID number.
+    for (const kept of [RETAKE_NOTE, "blurry_image", returned.idNumber, returned.lastName])
+      expect(mail.text).not.toContain(kept);
+    expect(failures).toEqual([]);
+    expect(outside).toEqual([]);
+    expectNoOutboundSince(mark);
   });
 
   test("the per-section review queue lists the waiting post", async ({ context, page }) => {
