@@ -14,6 +14,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("../services/email", () => ({
   sendPlatformNotice: vi.fn(),
   sendOutboxFinalFailureAlert: vi.fn(),
+  sendStaffOperationsEmail: vi.fn(),
 }));
 vi.mock("./privacy-notice-job", () => ({ runFoundationPrivacyNotice: vi.fn(async () => "empty") }));
 const privacy = vi.mocked(runFoundationPrivacyNotice);
@@ -21,7 +22,10 @@ const id = "00000000-0000-4000-8000-000000000001";
 const claim = "00000000-0000-4000-8000-000000000002";
 const rpc = vi.fn(),
   deliver = vi.fn(),
-  alertStaff = vi.fn();
+  alertStaff = vi.fn(),
+  // The payment alert step has its own tests (payment-alerts.test.ts); here
+  // it is a stand-in unless a test says otherwise.
+  paymentAlerts = vi.fn();
 const service = { rpc } as unknown as FoundationServiceApi;
 const SWEEPS = [
   "run_post_lifecycle",
@@ -58,13 +62,19 @@ function queue(...items: Array<Record<string, unknown>>) {
   });
 }
 const run = (options = {}) =>
-  runFoundationOperationJobs(service, deliver, { alertStaff, sleep: async () => {}, ...options });
+  runFoundationOperationJobs(service, deliver, {
+    alertStaff,
+    paymentAlerts,
+    sleep: async () => {},
+    ...options,
+  });
 const calls = (name: string) => rpc.mock.calls.filter(([n]) => n === name);
 beforeEach(() => {
   vi.clearAllMocks();
   privacy.mockResolvedValue("empty");
   deliver.mockResolvedValue({ success: true });
   alertStaff.mockResolvedValue({ success: true });
+  paymentAlerts.mockResolvedValue([]);
   queue(job());
 });
 
@@ -639,7 +649,7 @@ describe("last attempt", () => {
     vi.mocked(sendOutboxFinalFailureAlert).mockResolvedValue({ success: true });
     queue(job(last));
     deliver.mockResolvedValue({ success: false });
-    await runFoundationOperationJobs(service, deliver, { sleep: async () => {} });
+    await runFoundationOperationJobs(service, deliver, { paymentAlerts, sleep: async () => {} });
     expect(sendOutboxFinalFailureAlert).toHaveBeenCalledExactlyOnceWith([
       { id, kind: "payment_completed" },
     ]);
@@ -846,4 +856,81 @@ it("passes the trial's end with the trial_started notice, and none from an earli
       { trialEndsAt: null, trialFundsPost: null },
     ],
   ]);
+});
+
+describe("payment alerts", () => {
+  it("runs the staff payment step after member payment messages and before other kinds", async () => {
+    const order: string[] = [];
+    queue(job(), job({ id: "00000000-0000-4000-8000-000000000009", kind: "trial_started" }));
+    paymentAlerts.mockImplementation(async (context) => {
+      order.push("payment alerts");
+      expect(context.canClaim()).toBe(true);
+      await context.call("claim_payment_alerts", { p_limit: 20 }, context.claimSignal);
+      await context.pace(async () => order.push("payment alert send"));
+      return [];
+    });
+    deliver.mockImplementation(async (_to, kind) => {
+      order.push(kind);
+      return { success: true };
+    });
+    expect(await run()).toMatchObject({ claimed: 2, succeeded: 2, failed: [] });
+    // A slow staff send never holds up a member's payment message.
+    expect(order).toEqual([
+      "payment_completed",
+      "payment alerts",
+      "payment alert send",
+      "trial_started",
+    ]);
+    expect(calls("claim_payment_alerts")).toEqual([["claim_payment_alerts", { p_limit: 20 }]]);
+  });
+
+  it("fails the run with the payment step's failed steps, after every other step", async () => {
+    paymentAlerts.mockResolvedValue(["payment_alert", "payment_summary:claim"]);
+    const error = await run().catch((e) => e);
+    expect(error).toBeInstanceOf(OperationJobsIncompleteError);
+    expect(error.failed).toEqual(["payment_alert", "payment_summary:claim"]);
+    expect(error.summary).toMatchObject({ claimed: 1, succeeded: 1 });
+    expect(deliver).toHaveBeenCalledOnce();
+    for (const name of SWEEPS) expect(calls(name)).toHaveLength(1);
+  });
+
+  it("still sends the queued emails when the payment step throws", async () => {
+    paymentAlerts.mockRejectedValue(new Error("PRIVATE_DETAIL"));
+    const error = await run().catch((e) => e);
+    expect(error.failed).toEqual(["payment_alert"]);
+    expect(error.message).not.toContain("PRIVATE");
+    expect(deliver).toHaveBeenCalledOnce();
+  });
+
+  it("offers no claim to the payment step once a worst-case send no longer fits", async () => {
+    let clock = Date.parse("2026-11-12T08:00:00Z");
+    let late: boolean | undefined;
+    paymentAlerts.mockImplementation(async (context) => {
+      clock += 14_000;
+      late = context.canClaim();
+      return [];
+    });
+    await run({ now: () => clock });
+    expect(late).toBe(false);
+  });
+
+  it("by default claims the payment alerts and the daily summary, and sends nothing when there is nothing", async () => {
+    const { sendStaffOperationsEmail } = await import("../services/email");
+    const base = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (name, args) =>
+      name === "claim_payment_alerts"
+        ? { data: { claim: null, problems: [] }, error: null }
+        : name === "claim_payment_digest"
+          ? { data: null, error: null }
+          : base(name, args)
+    );
+    expect(
+      await runFoundationOperationJobs(service, deliver, { alertStaff, sleep: async () => {} })
+    ).toMatchObject({ claimed: 1, succeeded: 1, failed: [] });
+    expect(calls("claim_payment_alerts")).toEqual([["claim_payment_alerts", { p_limit: 20 }]]);
+    expect(calls("claim_payment_digest")).toEqual([
+      ["claim_payment_digest", { p_from_hour: 7, p_limit: 20 }],
+    ]);
+    expect(sendStaffOperationsEmail).not.toHaveBeenCalled();
+  });
 });

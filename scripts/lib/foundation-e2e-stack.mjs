@@ -205,7 +205,7 @@ export function psql(fixture, statement, { user = "postgres" } = {}) {
   return result.stdout.trim();
 }
 
-export const HOOK_GRANTS_FILE = "database/foundation/replay/hosted-auth-hook-grants.sql";
+const HOOK_GRANTS_FILE = "database/foundation/replay/hosted-auth-hook-grants.sql";
 
 /** The hosted platform's Auth hook grant (see the file); idempotent. */
 export function applyHostedHookGrants(fixture) {

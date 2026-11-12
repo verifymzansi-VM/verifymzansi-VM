@@ -42,7 +42,7 @@
     "format:check": "tsx scripts/check-quality.ts format",
     "storybook": "pnpm exec storybook dev -p 6006",
     "storybook:build": "pnpm exec storybook build -o storybook-static",
-    "knip": "pnpm exec knip --config knip.jsonc --tsConfig tsconfig.typecheck.json --reporter compact",
+    "knip": "pnpm exec knip --config knip.jsonc --tsConfig tsconfig.typecheck.json --reporter compact --treat-config-hints-as-errors",
     "jscpd": "pnpm exec jscpd --config .jscpd.json src scripts workers",
     "jscpd:check": "tsx scripts/check-jscpd-budget.ts",
     "depcruise": "pnpm exec depcruise --config .dependency-cruiser.cjs src scripts workers",
@@ -91,7 +91,7 @@
     "db:foundation:snapshot": "node scripts/generate-foundation-snapshot.mjs",
     "db:foundation:api-check": "node scripts/check-foundation-api-drift.mjs",
     "db:foundation:lint": "node scripts/lint-foundation-sql.mjs",
-    "db:foundation:lifecycle-test": "node --import tsx scripts/test-foundation-lifecycle-guards.mjs && node --import tsx scripts/test-foundation-staff-rules.mjs && node --import tsx scripts/test-foundation-selfie-capture.mjs && node --import tsx scripts/test-foundation-payment-start-retry.mjs && node --import tsx scripts/test-foundation-fk-indexes.mjs && node --import tsx scripts/test-foundation-public-default-privileges.mjs",
+    "db:foundation:lifecycle-test": "node --import tsx scripts/test-foundation-lifecycle-guards.mjs && node --import tsx scripts/test-foundation-staff-rules.mjs && node --import tsx scripts/test-foundation-selfie-capture.mjs && node --import tsx scripts/test-foundation-payment-start-retry.mjs && node --import tsx scripts/test-foundation-fk-indexes.mjs && node --import tsx scripts/test-foundation-public-default-privileges.mjs && node --import tsx scripts/test-foundation-payment-alerts.mjs",
     "db:verify-schema": "tsx scripts/check-supabase-schema.ts",
     "preflight": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts",
     "preflight:prod": "tsx scripts/check-node-version.ts && tsx scripts/preflight-check.ts --mode=production",
@@ -114,7 +114,7 @@
     "generate:api-types": "pnpm exec openapi-typescript docs/openapi.json -o src/lib/api/v1.d.ts && pnpm exec prettier --write src/lib/api/v1.d.ts",
     "quality:openapi-drift": "tsx scripts/check-openapi-drift.ts",
     "quality:lighthouse": "node scripts/run-lighthouse.mjs",
-    "test:tooling": "node --import tsx --test scripts/audit-tooling.test.ts scripts/branch-ruleset.test.mjs scripts/foundation-replay.test.mjs scripts/foundation-snapshot.test.mjs scripts/foundation-api-drift.test.mjs scripts/foundation-sql-lint.test.mjs scripts/foundation-e2e-target.test.mjs scripts/minimatch-compat.test.mjs scripts/run-lighthouse.test.mjs scripts/cloudflare-security.test.mjs scripts/checker-fixtures.test.ts scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs docs/backend-foundation/tools/post-field-proposals.test.mjs docs/backend-foundation/tools/apply-field-contracts.test.mjs scripts/foundation-native-lock.test.mjs scripts/foundation-api-contracts.test.mjs scripts/foundation-baseline-http.test.mjs scripts/foundation-baseline-guard.test.mjs scripts/foundation-api-openapi.test.mjs scripts/foundation-native-sql-barrier.test.mjs scripts/lint-staged-scope.test.mjs scripts/sentry-worker-runtime.test.mjs scripts/body-parser-runtime.test.mjs scripts/data-backend-config.test.mjs scripts/foundation-deployment.test.ts scripts/cloudflare-build-fingerprint.test.mjs scripts/source-database-tools.test.mjs scripts/foundation-runtime-api.test.mjs scripts/foundation-update-order.test.mjs scripts/foundation-error-reasons.test.mjs scripts/legacy-surface.test.mjs scripts/visual-diff-summary.test.mjs scripts/foundation-visual.test.mjs scripts/e2e-foundation-summary.test.mjs scripts/foundation-native-failure-summary.test.mjs scripts/next-typecheck-skip.test.mjs scripts/frontend-freeze.test.mjs scripts/foundation-native-isolation.test.mjs scripts/foundation-native-paths.test.mjs scripts/worker-size.test.mjs scripts/historical-docs.test.mjs && pnpm cloudflare:types:companions:check && pnpm test:cloudflare:companions && pnpm test:site-monitor:runtime",
+    "test:tooling": "node --import tsx --test scripts/audit-tooling.test.ts scripts/branch-ruleset.test.mjs scripts/foundation-replay.test.mjs scripts/foundation-snapshot.test.mjs scripts/foundation-api-drift.test.mjs scripts/foundation-sql-lint.test.mjs scripts/foundation-e2e-target.test.mjs scripts/minimatch-compat.test.mjs scripts/run-lighthouse.test.mjs scripts/cloudflare-security.test.mjs scripts/checker-fixtures.test.ts scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs docs/backend-foundation/tools/post-field-proposals.test.mjs docs/backend-foundation/tools/apply-field-contracts.test.mjs scripts/foundation-native-lock.test.mjs scripts/foundation-api-contracts.test.mjs scripts/foundation-baseline-http.test.mjs scripts/foundation-baseline-guard.test.mjs scripts/foundation-api-openapi.test.mjs scripts/foundation-native-sql-barrier.test.mjs scripts/lint-staged-scope.test.mjs scripts/sentry-worker-runtime.test.mjs scripts/body-parser-runtime.test.mjs scripts/data-backend-config.test.mjs scripts/foundation-deployment.test.ts scripts/cloudflare-build-fingerprint.test.mjs scripts/source-database-tools.test.mjs scripts/foundation-runtime-api.test.mjs scripts/foundation-update-order.test.mjs scripts/foundation-error-reasons.test.mjs scripts/legacy-surface.test.mjs scripts/visual-diff-summary.test.mjs scripts/foundation-visual.test.mjs scripts/e2e-foundation-summary.test.mjs scripts/foundation-native-failure-summary.test.mjs scripts/next-typecheck-skip.test.mjs scripts/frontend-freeze.test.mjs scripts/foundation-native-isolation.test.mjs scripts/foundation-native-paths.test.mjs scripts/worker-size.test.mjs scripts/historical-docs.test.mjs scripts/doc-links.test.mjs && pnpm cloudflare:types:companions:check && pnpm test:cloudflare:companions && pnpm test:site-monitor:runtime",
     "test:foundation:local": "node --test scripts/backend-foundation.test.mjs docs/backend-foundation/tools/field-dispositions.test.mjs && node scripts/test-foundation-transport.mjs",
     "test:e2e:foundation": "pnpm exec playwright test --config=playwright.foundation.config.ts",
     "foundation:e2e:down": "node --import tsx scripts/foundation-e2e.mjs down",
@@ -249,8 +249,6 @@
       "path-to-regexp@>=8.0.0 <8.4.0": "8.4.0",
       "form-data@>=4.0.0 <4.0.6": "4.0.6",
       "ws@>=7.0.0 <7.5.13": "7.5.13",
-      "brace-expansion@>=1.0.0 <1.1.21": "1.1.21",
-      "js-yaml@>=3.0.0 <3.15.2": "3.15.2",
       "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
       "undici@>=6.0.0 <6.29.1": "6.29.1",
       "undici@>=7.0.0 <7.30.1": "7.30.1",
@@ -260,8 +258,6 @@
       "tailwindcss": "3.4.19",
       "fast-uri": "3.1.9",
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
-      "fast-xml-builder": "1.2.0",
-      "fast-xml-parser": ">=5.7.0",
       "postcss": "8.5.30",
       "brace-expansion@^5.0.0": "5.0.12",
       "nanoid": "3.3.18",
@@ -273,7 +269,6 @@
       "@types/react": "19.3.0",
       "@types/react-dom": "19.3.0",
       "@babel/core@<7.29.6": "7.29.7",
-      "follow-redirects@<=1.15.11": "1.16.0",
       "body-parser@>=2.0.0 <2.4.0": "2.4.0",
       "@humanfs/node@<0.16.8": "0.16.8",
       "postcss-selector-parser@<7.1.6": "7.1.6",
@@ -289,21 +284,6 @@
       "braces@3.0.3": "patches/braces@3.0.3.patch",
       "@sentry/nextjs@10.75.2": "patches/@sentry__nextjs@10.75.2.patch",
       "minimatch@11.0.1": "patches/minimatch@11.0.1.patch"
-    }
-  },
-  "overrides": {
-    "tailwindcss": "3.4.19",
-    "@aws-sdk/xml-builder": "^3.972.5",
-    "fast-uri": "3.1.9",
-    "esbuild@>=0.27.3 <0.28.1": "0.28.1",
-    "postcss-selector-parser@>=6.1.0 <6.1.3": "6.1.3",
-    "fast-xml-builder": "1.2.0",
-    "fast-xml-parser": ">=5.7.0",
-    "postcss": "$postcss",
-    "brace-expansion@^5.0.0": "5.0.12",
-    "nanoid": "3.3.18",
-    "next": {
-      "sharp": "$sharp"
     }
   }
 }

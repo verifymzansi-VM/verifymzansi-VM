@@ -492,10 +492,15 @@ export async function sessionCookies(
 }
 
 /** The newest message to an address in the local mail catcher, received at
- * or after `after` (ms since the epoch). Requests go only to the local catcher. */
+ * or after `after` (ms since the epoch), optionally only one whose subject
+ * matches. Requests go only to the local catcher. */
 export async function latestMailTo(
   recipient: string,
-  { after = 0, timeoutMs = 20_000 }: { after?: number; timeoutMs?: number } = {}
+  {
+    after = 0,
+    timeoutMs = 20_000,
+    subject,
+  }: { after?: number; timeoutMs?: number; subject?: RegExp } = {}
 ): Promise<CaughtMail> {
   const wanted = recipient.toLowerCase();
   const deadline = Date.now() + timeoutMs;
@@ -509,9 +514,10 @@ export async function latestMailTo(
   while (Date.now() < deadline) {
     const list = await get("/api/v1/messages?limit=100");
     const item = (list.messages ?? []).find(
-      (entry: { ID: string; Created: string; To?: { Address: string }[] }) =>
+      (entry: { ID: string; Created: string; Subject?: string; To?: { Address: string }[] }) =>
         /^[A-Za-z0-9]{8,64}$/.test(entry.ID) &&
         Date.parse(entry.Created) >= after &&
+        (!subject || subject.test(entry.Subject ?? "")) &&
         (entry.To ?? []).some((to) => to.Address.toLowerCase() === wanted)
     );
     if (item) {

@@ -12,3 +12,7 @@
 # failure log test used to prove tokens never reach a log line. Replaced in the
 # next commit by a value built at run time. Exact fingerprint only.
 9af6cab22bb64389d36a9d27fd144a1a2b87e4af:src/lib/utils/request-failure.test.ts:generic-api-key:23
+
+# Test input, not a credential: a made-up fixture value ("playwright-...") in the
+# throwaway browser-test copy's environment. Exact fingerprint only.
+267e45d817f95f5991f9b644886a5c6e90db7bc3:scripts/lib/foundation-e2e-website.mjs:generic-api-key:41

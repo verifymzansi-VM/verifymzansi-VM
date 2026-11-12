@@ -100,6 +100,131 @@
       "authority": "Service-only scheduled sweep run by the payment status job; bounded, repeatable expiry of pending payments with no Ozow request, created over an hour ago and not leased."
     },
     {
+      "name": "record_payment_problem",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_payment_id",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_reason",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_source",
+          "sqlType": "text",
+          "optional": false
+        },
+        {
+          "name": "p_alert",
+          "sqlType": "boolean",
+          "optional": false
+        },
+        {
+          "name": "p_transaction",
+          "sqlType": "text",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record by the website's server of a refused payment notice or status-check transaction or a settlement outcome that needs staff; closed reason and source lists, an existing payment or none, one row per payment and reason, repeats only counted; an alert mark only rises, and after it was emailed another Ozow transaction raises it again at most 5 times; holds no personal data."
+    },
+    {
+      "name": "claim_payment_alerts",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only five-minute lease, for the email job, on marked payment problems not yet emailed and raised in the last 7 days; a batch whose send failed is offered again unchanged first; bounded (1-50), returns payment numbers, reason codes and the payment amounts and states stored when the batch was prepared, never account or contact details."
+    },
+    {
+      "name": "complete_payment_alerts",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        },
+        {
+          "name": "p_sent",
+          "sqlType": "boolean",
+          "optional": false
+        }
+      ],
+      "returns": "integer",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record that the staff email for one lease was sent, or its return for the next run; only rows of that lease not yet recorded."
+    },
+    {
+      "name": "claim_payment_digest",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_from_hour",
+          "sqlType": "integer",
+          "optional": false
+        },
+        {
+          "name": "p_limit",
+          "sqlType": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "jsonb",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only five-minute lease, for the email job, on the day's staff payment summary once per South African calendar day from the given hour; the content is fixed at the first lease and stored, so a retry gets the same summary; returns counts, payment numbers and reason codes, never account or contact details."
+    },
+    {
+      "name": "complete_payment_digest",
+      "updates": ["updates/20261112080000_payment_problem_alerts.sql"],
+      "arguments": [
+        {
+          "name": "p_claim",
+          "sqlType": "uuid",
+          "optional": false
+        }
+      ],
+      "returns": "boolean",
+      "volatility": "v",
+      "execute": {
+        "anon": false,
+        "authenticated": false,
+        "service_role": true
+      },
+      "authority": "Service-only record that the day's staff payment summary was sent (or logged); only the summary of that lease, once."
+    },
+    {
       "name": "get_frontend_staff_payments",
       "updates": ["updates/20261105201822_restored_staff_payments.sql"],
       "arguments": [

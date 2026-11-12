@@ -24,12 +24,12 @@ const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The committed fixture definitions (module imports, not runtime file reads). */
-export function readFixtureFiles() {
+function readFixtureFiles() {
   return { people, posts: postsFixture.posts };
 }
 
 /** HTTP helpers for the local gateway only (asserted on every request). */
-export function localApi(status) {
+function localApi(status) {
   const origin = assertLocalFoundationTarget({ apiUrl: status.apiUrl });
   const request = async (pathname, { method = "POST", body, token, service = false } = {}) => {
     const url = new URL(pathname, origin);
@@ -70,7 +70,7 @@ export function localApi(status) {
 }
 
 /** GoTrue password sign-in, then an authenticator step when a factor is given. */
-export async function signIn(api, { email, password }, factor) {
+async function signIn(api, { email, password }, factor) {
   const login = await api.request("/auth/v1/token?grant_type=password", {
     body: { email, password },
   });

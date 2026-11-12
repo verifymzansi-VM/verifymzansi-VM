@@ -7,6 +7,8 @@ import { test } from "node:test";
 // foundation backend. Remove a path only when the document is rewritten for
 // foundation or deleted.
 const HISTORICAL_DOCS = [
+  "CHANGELOG.md",
+  "LAUNCH-CHECKLIST.md",
   "docs/ARCHITECTURE.md",
   "docs/admin-access-inventory.md",
   "docs/business-verification-spec.md",
