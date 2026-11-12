@@ -32,9 +32,6 @@ export const metadata: Metadata = {
   },
 };
 
-/** Revalidate homepage data every 60 seconds (ISR) */
-export const revalidate = 60;
-
 export default async function HomePage() {
   // The showroom artwork is the LCP element; request it with the response headers.
   preloadShowroomBackground(generatedMzansiShowroomBackground);

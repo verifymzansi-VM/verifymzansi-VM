@@ -95,6 +95,7 @@ export async function HomeMzansiMarketShowcase() {
                 href={`/listing/${l.id}`}
                 imageUrl={displayUrl}
                 posterUrl={poster}
+                isVideo={Boolean(l.videos?.[0])}
                 title={l.title}
                 price={l.price_cents ? l.price_cents / 100 : null}
                 city={l.location_city ?? "South Africa"}

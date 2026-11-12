@@ -3,15 +3,12 @@ import { cache } from "react";
 import { readFoundationServerSession } from "./server-session";
 import { readFrontendReportQueue } from "./report-queue";
 import { readFrontendAreaActivity } from "./area-activity";
-const areas = {
-  MZANSI_MARKET: "market",
-  MZANSI_BUSINESS: "business",
-  PROMOTIONS_EVENTS: "tourism_events",
-} as const;
+import { parseRestoredArea } from "./areas";
 function nativeArea(value?: string) {
   if (value === undefined) return;
-  if (!Object.hasOwn(areas, value)) throw new Error("Unknown program");
-  return areas[value as keyof typeof areas];
+  const area = parseRestoredArea(value);
+  if (!area) throw new Error("Unknown program");
+  return area;
 }
 export const readNativeProgramReports = cache(async (area: string) => {
   const current = await readFoundationServerSession();

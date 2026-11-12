@@ -1,14 +1,14 @@
 /**
- * Custom image loader for Cloudflare Pages / Workers.
+ * Custom image loader for Cloudflare Workers.
  *
  * Cloudflare does not support the default Next.js `/_next/image` endpoint,
  * so we use a custom loader instead of setting `images.unoptimized: true`.
  *
- * Media served from R2 uses pre-generated WebP variants. Other images use
- * Cloudflare Image Resizing when available, or retain their source URL with
- * width/quality query parameters.
- *
- * @see https://developers.cloudflare.com/images/transform-images/transform-via-url/
+ * Media proxy paths ask for a pre-generated WebP variant key; the media route
+ * serves the original file when that variant does not exist. Nothing is
+ * resized on the fly: the zone has no Cloudflare Image Resizing, so this
+ * loader never builds `/cdn-cgi/image/` URLs. Other images keep their source
+ * URL, with width/quality query parameters added.
  */
 
 interface ImageLoaderParams {
@@ -43,13 +43,12 @@ function isImageSource(src: string): boolean {
 }
 
 /**
- * Controls only the Cloudflare /cdn-cgi/image/ path. R2 variants work without
- * this feature and must not depend on a server/client environment flag.
+ * Despite its name, NEXT_PUBLIC_CF_IMAGE_RESIZING does not turn on any
+ * resizing. When "true" (production), same-origin paths without an image
+ * extension are returned unchanged instead of gaining width/quality query
+ * parameters. Media variants never depend on it.
  */
 const CF_RESIZING_ENABLED = process.env.NEXT_PUBLIC_CF_IMAGE_RESIZING === "true";
-
-const MEDIA_HOST = "media.verifymzansi.com";
-const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
 
 /**
  * Pre-generated variant widths (must match VARIANT_WIDTHS in
@@ -57,7 +56,8 @@ const STAGING_MEDIA_HOST = "media-staging.verifymzansi.com";
  * enabled on the zone, so responsive delivery relies on variants generated
  * at upload time. The loader maps a requested width to the nearest variant
  * key; the serve route falls back to the original when the variant object
- * does not exist yet (e.g. media uploaded before variants were introduced).
+ * does not exist (uploads through the new backend do not create variants
+ * yet, so for now those photos are served at full size).
  */
 const VARIANT_WIDTHS = [400, 800, 1600] as const;
 
@@ -109,47 +109,19 @@ export default function cloudflareImageLoader({ src, width, quality }: ImageLoad
     }
   }
 
-  // If Cloudflare Image Resizing is unavailable, retain non-media image URLs.
-  if (!CF_RESIZING_ENABLED) {
-    return withSizeQuery(src, width, resolvedQuality);
-  }
-
-  const cfParams = `width=${width},quality=${resolvedQuality},format=auto`;
-
-  // Keep same-origin relative assets on their native paths. Production is able
-  // to serve these directly, while rewriting them through `/cdn-cgi/image/`
-  // currently returns 404s for both `/images/*` and `/api/media/serve/*`.
-  // Verified 2026-08-08: the verifymzansi.com zone does NOT have Cloudflare
-  // Image Resizing enabled — /cdn-cgi/image/ returns 404 for proxy paths.
-  //
-  // Instead, media proxy images are rewritten to a pre-generated variant key
-  // sized to the requested width (upload-time WebP variants). The serve route
-  // falls back to the original object when the variant does not exist yet.
-  if (!src.startsWith("http://") && !src.startsWith("https://")) {
-    if (!isImageSource(src)) {
-      return src;
-    }
-    return withSizeQuery(src, width, resolvedQuality);
-  }
-
-  // Same-origin CDN URLs (media.verifymzansi.com) — extract the pathname
-  // so Cloudflare can resize them via the zone's /cdn-cgi/image/ endpoint.
-  try {
-    const parsed = new URL(src);
-    if (parsed.hostname === MEDIA_HOST || parsed.hostname === STAGING_MEDIA_HOST) {
-      return `/cdn-cgi/image/${cfParams}${parsed.pathname}${parsed.search}`;
-    }
-  } catch {
-    // Not a valid absolute URL — return original src as a safe fallback.
+  // Same-origin paths without an image extension stay untouched in production
+  // (see CF_RESIZING_ENABLED above).
+  if (
+    CF_RESIZING_ENABLED &&
+    !src.startsWith("http://") &&
+    !src.startsWith("https://") &&
+    !isImageSource(src)
+  ) {
     return src;
   }
 
-  // Absolute remote URLs are left untouched. The current production zone can
-  // resize same-origin paths, but remote sources like Unsplash return 404 when
-  // routed through `/cdn-cgi/image/.../<absolute-url>`.
-  if (src.startsWith("http://") || src.startsWith("https://")) {
-    return withSizeQuery(src, width, resolvedQuality);
-  }
-
+  // Everything else keeps its own URL, absolute ones included (the media host
+  // too: rewriting it to this site's `/cdn-cgi/image/` would point at a path
+  // that does not exist).
   return withSizeQuery(src, width, resolvedQuality);
 }

@@ -43,12 +43,16 @@ export async function createClient(): Promise<SupabaseClient> {
         set(name: string, value: string, options?: CookieOptions) {
           try {
             cookieStore.set({ name, value, ...options });
-          } catch {}
+          } catch {
+            // Server Components cannot set cookies; the proxy refreshes the session.
+          }
         },
         remove(name: string, options?: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options });
-          } catch {}
+          } catch {
+            // Server Components cannot set cookies; the proxy refreshes the session.
+          }
         },
       },
     }) as unknown as SupabaseClient;

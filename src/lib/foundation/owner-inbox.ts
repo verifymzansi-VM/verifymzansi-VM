@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { FoundationAuthenticatedApi } from "./authenticated-api";
 import type { FoundationServiceApi } from "./service-api";
 import { normalizeSaPhone } from "../utils/phone";
+import { lookupDatabaseReason, type FoundationErrorReason } from "./error-reasons";
 
 // Same character rule as internal.plain_text_valid: no control (except newline
 // in multiline text), zero-width or bidirectional override characters. NUL is
@@ -65,6 +66,7 @@ const instant = z
   .pipe(z.iso.datetime({ offset: true }));
 
 export class FoundationInboxError extends Error {
+  override name = "FoundationInboxError";
   constructor(
     readonly reason:
       | "invalid"
@@ -79,7 +81,7 @@ export class FoundationInboxError extends Error {
     super(`Foundation inbox request failed: ${reason}`);
   }
 }
-const refusals = new Map<string, FoundationInboxError["reason"]>([
+const refusals = new Map<FoundationErrorReason, FoundationInboxError["reason"]>([
   ["enquiry_invalid", "invalid"],
   ["inbox_page_invalid", "invalid"],
   ["enquiry_status_invalid", "invalid"],
@@ -103,8 +105,7 @@ async function settle<T>(request: InboxRpc, schema: z.ZodType<T>) {
       throw new FoundationInboxError("unavailable");
     }
   );
-  if (error)
-    throw new FoundationInboxError((error.details && refusals.get(error.details)) || "unavailable");
+  if (error) throw new FoundationInboxError(lookupDatabaseReason(refusals, error) || "unavailable");
   const parsed = schema.safeParse(data);
   if (!parsed.success) throw new FoundationInboxError("unavailable");
   return parsed.data;

@@ -14,6 +14,7 @@ import { createFoundationAuthenticatedApi } from "./authenticated-api";
 import { FOUNDATION_PAGE_SESSION_HEADER, readFoundationPageSession } from "./page-session-handoff";
 
 export class FoundationServerSessionError extends Error {
+  override name = "FoundationServerSessionError";
   constructor(readonly status: 401 | 403 | 503) {
     super("A verified account page session is required");
   }
