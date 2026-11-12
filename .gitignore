@@ -191,3 +191,7 @@ docs/backend-foundation/tools/probe-staff-event-flags-draft.mjs
 # Upstream browser-development tooling is installed locally, outside the site
 # dependency graph. Keep its independent manifests and source out of releases.
 /.agents/skills/next-browser/
+
+# ── Sample posts: local preview only (unapproved businesses never committed) ──
+/src/lib/sample-posts/catalogue.local.json
+/public/sample-posts-local/

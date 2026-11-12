@@ -81,6 +81,19 @@ function validateCloudflareConfig() {
     );
   }
 
+  // Sample-post preview media are git-ignored and for the development server
+  // only. Refuse to bundle them into a Cloudflare build from a local checkout.
+  const localSampleMediaPath = path.join(repoRoot, "public", "sample-posts-local");
+  try {
+    if (fs.readdirSync(localSampleMediaPath).length > 0) {
+      errors.push(
+        "public/sample-posts-local/ contains local sample-post preview media, which must never be deployed. Move it out of public/ (or build from a clean checkout) and run the build again."
+      );
+    }
+  } catch {
+    // The folder does not exist: nothing to check.
+  }
+
   const wranglerToml = readText(wranglerTomlPath);
   if (!wranglerToml) {
     errors.push(`Missing required Cloudflare config: ${wranglerTomlPath}`);

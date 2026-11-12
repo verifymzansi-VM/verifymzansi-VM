@@ -284,4 +284,37 @@ describe("PosterCardShell", () => {
     expect(screen.getByText("Public preview")).toBeInTheDocument();
     expect(screen.getAllByText("Fallback listing")).toHaveLength(2);
   });
+
+  describe("display-only sample posts", () => {
+    const badges = <span>ID reviewed · Phone verified · CIPC registered</span>;
+
+    it.each([
+      ["hero card", { cardVariant: "hero" as const }],
+      ["immersive card", { immersive: true }],
+      ["default card", {}],
+    ])("labels a %s and shows no trust badges or status", (_label, variant) => {
+      render(
+        <PosterCardShell
+          href="/sample/example"
+          title="Sample cakes"
+          mediaUrl="/sample-posts-local/cakes.mp4"
+          statusLabel="Featured"
+          badges={badges}
+          affiliation={<span>Member of a partner organisation</span>}
+          sample
+          {...variant}
+        />
+      );
+      expect(screen.getByText("Sample post · for display only")).toBeInTheDocument();
+      expect(screen.queryByText(/ID reviewed|Phone verified|CIPC/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Featured")).not.toBeInTheDocument();
+      expect(screen.queryByText(/partner organisation/)).not.toBeInTheDocument();
+    });
+
+    it("never shows the sample label on real posts", () => {
+      render(<PosterCardShell href="/listing/x" title="Real post" badges={badges} />);
+      expect(screen.queryByText("Sample post · for display only")).not.toBeInTheDocument();
+      expect(screen.getByText(/ID reviewed/)).toBeInTheDocument();
+    });
+  });
 });
