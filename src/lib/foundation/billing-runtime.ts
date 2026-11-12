@@ -141,6 +141,8 @@ export interface FoundationPendingPayment {
   canCancel: boolean;
 }
 export class FoundationPendingPaymentError extends FoundationBillingError {
+  override name = "FoundationPendingPaymentError";
+
   constructor(readonly pendingPayment: FoundationPendingPayment) {
     super(
       409,
