@@ -41,7 +41,10 @@ async function readResponseBody(response: {
   }
 
   if (typeof response.json === "function") {
-    const data = await response.json().catch(() => undefined);
+    const data = await response.json().catch(() => {
+      // An unreadable body is treated below as an empty reply.
+      return undefined;
+    });
     if (typeof data === "string") {
       return data;
     }

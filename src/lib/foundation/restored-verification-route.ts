@@ -28,6 +28,7 @@ const acknowledged = z.strictObject({
   reused: z.boolean().optional(),
 });
 class VerificationRefusal extends Error {
+  override name = "VerificationRefusal";
   constructor(
     readonly status: number,
     message: string

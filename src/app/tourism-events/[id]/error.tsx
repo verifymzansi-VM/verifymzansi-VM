@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useErrorReference } from "@/hooks/use-error-reference";
 import { CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatePanel, StatePanelPage } from "@/components/shared/state-panel";
@@ -12,6 +13,7 @@ export default function PromotionError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  const reference = useErrorReference(error);
   useEffect(() => {
     console.error("[PromotionError]", error.digest ?? error.message);
   }, [error]);
@@ -31,7 +33,7 @@ export default function PromotionError({
           </>
         }
         showNextSteps
-        footnote={error.digest ? <>Error reference: {error.digest}</> : undefined}
+        footnote={reference ? <>Error reference: {reference}</> : undefined}
       />
     </StatePanelPage>
   );

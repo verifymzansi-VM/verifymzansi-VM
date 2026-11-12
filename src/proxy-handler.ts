@@ -11,6 +11,8 @@ import {
   type CachedProfile,
 } from "@/lib/middleware/auth-gates";
 import { createLogger } from "@/lib/utils/logger";
+import { addReferenceTiming } from "@/lib/utils/request-reference";
+import { logRequestFailure } from "@/lib/utils/request-failure";
 import { createTimeoutFetch } from "@/lib/supabase/fetch-with-timeout";
 import { checkLocalRateLimit, getClientIp } from "@/lib/utils/rate-limit";
 import { isAutomatedUserAgent } from "@/lib/analytics/automated-agent";
@@ -417,17 +419,18 @@ export async function handleMiddlewareRequest(request: NextRequest): Promise<Nex
   try {
     const routeResponse = await routeRequest(request);
     ensureViewerCookie(request, routeResponse);
+    addReferenceTiming(request, routeResponse);
     return withSecurityHeaders(request, routeResponse);
   } catch (error) {
-    logger.error("Middleware request handler failed", {
-      path: request.nextUrl.pathname,
-      error: error instanceof Error ? error.message : String(error),
+    const reference = logRequestFailure(logger, "Middleware request handler failed", {
+      request,
+      error,
     });
 
     const pathname = request.nextUrl.pathname;
     const protectedPage = PROTECTED_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix));
     const fallback = pathname.startsWith("/api/")
-      ? NextResponse.json({ error: "Service temporarily unavailable" }, { status: 503 })
+      ? NextResponse.json({ error: "Service temporarily unavailable", reference }, { status: 503 })
       : protectedPage
         ? new NextResponse("Service temporarily unavailable. Please try again shortly.", {
             status: 503,

@@ -9,6 +9,7 @@ import {
 } from "../services/email";
 import { runFoundationPrivacyNotice } from "./privacy-notice-job";
 import { createLogger } from "../utils/logger";
+import { hasDatabaseMessage } from "./error-reasons";
 
 const log = createLogger("FoundationOperationJobs");
 const kind = z.enum([
@@ -56,7 +57,8 @@ const lifecycleKinds = new Set<Kind>(["post_expired", "post_sold", "post_kept"])
 function refusedNewerKinds(error: { code?: string; message?: string } | null) {
   return (
     error?.code === "22023" &&
-    (error.message === "supported mail kinds required" || error.message === "unsupported mail kind")
+    (hasDatabaseMessage(error, "supportedMailKindsRequired") ||
+      hasDatabaseMessage(error, "unsupportedMailKind"))
   );
 }
 

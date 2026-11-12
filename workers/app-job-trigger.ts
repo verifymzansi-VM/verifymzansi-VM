@@ -58,6 +58,8 @@ export async function triggerBoundAppJob(env: AppBinding, path: JobPath, credent
     throw new Error("App job request failed");
   }
   // Never read, forward or log private upstream response bodies.
-  await response.body?.cancel().catch(() => {});
+  await response.body?.cancel().catch(() => {
+    // Only drains the unread body; the status below decides the result.
+  });
   if (!response.ok) throw new Error(`App job returned HTTP ${response.status}`);
 }
